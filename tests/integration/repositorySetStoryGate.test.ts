@@ -15,6 +15,7 @@ import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
 import { adminDb } from '../helpers/adminDb';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { truncateAuthTables } from '../helpers/db';
+import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 
 // STORY GATE for MOTIR-2725 — the repository SET (Subtask MOTIR-2417).
 //
@@ -79,6 +80,11 @@ async function scenario(email: string, repos = [CORE, AI]) {
       defaultBranch: r.defaultBranch,
       archived: false,
     })),
+  });
+  await linkWorkspaceReposToProject({
+    workspaceId: workspace.id,
+    projectId: project.id,
+    names: repos.map((repo) => repo.name),
   });
   return { user, workspace, project, ctx: { userId: user.id, workspaceId: workspace.id } };
 }
@@ -237,8 +243,8 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
     const delivery = await workItemsService.listRepoDelivery(item.id, row!.targetRepos, fx.ctx);
     // The panel's view…
     expect(delivery).toEqual([
-      { repo: 'motir-core', state: 'delivered', primary: true },
-      { repo: 'motir-ai', state: 'awaiting', primary: false },
+      { repo: 'motir-core', state: 'delivered', primary: true, role: 'other' },
+      { repo: 'motir-ai', state: 'awaiting', primary: false, role: 'other' },
     ]);
     // …and the gate's, which is HOLDING the card. They name the same repository.
     // `implemented` rather than `in_review` since MOTIR-2999 — the pull request
@@ -388,7 +394,7 @@ describe('5 — a `decision` card, and 6 — DISPATCH unchanged', () => {
     expect(row!.type).toBe('decision');
     expect(row!.targetRepos).toEqual(['motir-core']);
     expect(await workItemsService.listRepoDelivery(item.id, row!.targetRepos, fx.ctx)).toEqual([
-      { repo: 'motir-core', state: 'awaiting', primary: true },
+      { repo: 'motir-core', state: 'awaiting', primary: true, role: 'other' },
     ]);
   });
 

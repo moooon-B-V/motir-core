@@ -221,23 +221,10 @@ describe('⚠️ THE FULL LIFECYCLE — link, unlink to ZERO, re-link', () => {
     // …still in the inventory…
     const inventory = await organizationRepoService.listInventory(fx.ctx);
     expect(inventory.map((r) => r.repo.id)).toContain(repoId);
-    // ⚠️ AND `Used by` READS WHAT THE PROJECT HAS CHOSEN, NOT THE LINK COUNT —
-    // MOTIR-4802, CORRECTED BY MOTIR-4821. Removing the only set row takes the
-    // LINK away and does not take the WORK away: the project still names this
-    // repository on a work item (seeded above), so it is still using it and the
-    // disclosure still says so. The link count is zero — asserted above, and it
-    // is what "zero projects" was ever about here.
-    //
-    // ⚠️ THE SEED IS THE ASSERTION, not fixture plumbing. Between MOTIR-4802 and
-    // MOTIR-4821 this line passed with NO work at all, because the ladder named
-    // every set-less project against every connected repository — so it was
-    // agreeing with the over-report exactly as the `toEqual([])` before it had
-    // agreed with the under-report. Delete the seed and it should go back to
-    // `[]`, which is now the honest answer for a project that has neither linked
-    // the repository nor worked in it.
-    expect(inventory.find((r) => r.repo.id === repoId)?.projects.map((p) => p.id)).toEqual([
-      fx.projectId,
-    ]);
+    // `Used by` is the inverse of explicit project links. Removing the final row
+    // therefore removes this project from the disclosure even though a legacy
+    // work-item name remains; names are not an authorization boundary.
+    expect(inventory.find((r) => r.repo.id === repoId)?.projects).toEqual([]);
 
     // …and re-linking it pays nothing, which is what "legal" was protecting.
     await organizationRepoService.linkExistingRepo(

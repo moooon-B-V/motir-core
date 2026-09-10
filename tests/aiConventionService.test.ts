@@ -27,6 +27,7 @@ const { aiConventionService } = await import('@/lib/services/aiConventionService
 const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
+const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
 const { PermissionDeniedError, ProjectNotFoundError } = await import('@/lib/projects/errors');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { EmptyRepoScopeError, UnknownRepoScopeError } = await import('@/lib/codeHealth/errors');
@@ -97,6 +98,20 @@ const THREE_REPOS = [
     archived: false,
   },
 ];
+
+async function linkProjectRepos(
+  projectId: string,
+  ctx: { userId: string; workspaceId: string },
+  names: string[],
+) {
+  for (const name of names) {
+    const repo = await adminDb.githubRepo.findFirstOrThrow({
+      where: { workspaceId: ctx.workspaceId, name },
+    });
+    const row = await projectRepoSetService.addRow(projectId, { role: 'other', name }, ctx);
+    await projectRepoSetService.attachRealizedRepo(row.id, repo.id, ctx);
+  }
+}
 
 function rawAuditSurface(over: Partial<RawCodeAuditSurface> = {}): RawCodeAuditSurface {
   return {
@@ -422,6 +437,11 @@ describe('aiConventionService — project-admin gate', () => {
       },
       repos: THREE_REPOS,
     });
+    await linkProjectRepos(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      THREE_REPOS.map((repo) => repo.name),
+    );
     let n = 0;
     refreshCodeAuditMock.mockImplementation(() => {
       n += 1;
@@ -470,6 +490,46 @@ describe('aiConventionService — project-admin gate', () => {
     ]);
   });
 
+  it('reaudit cannot read or derive over an organisation repo the project did not link', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: 'inst-reaudit-isolation',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: THREE_REPOS,
+    });
+    await linkProjectRepos(project.id, { userId: owner.id, workspaceId: workspace.id }, [
+      'motir-core',
+    ]);
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+    );
+
+    expect(result.repos.map((repo) => repo.repoKey)).toEqual(['moooon/motir-core']);
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+    expect(refreshCodeAuditMock.mock.calls[0]![1]).toEqual({
+      code: {
+        repos: [
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-core',
+            defaultBranch: 'main',
+            indexed: false,
+          },
+        ],
+        repoRef: 'moooon/motir-core',
+      },
+    });
+  });
+
   it('reaudit on a SINGLE-repo project queues exactly one pair (unchanged behaviour)', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
@@ -482,6 +542,9 @@ describe('aiConventionService — project-admin gate', () => {
       },
       repos: [THREE_REPOS[0]!],
     });
+    await linkProjectRepos(project.id, { userId: owner.id, workspaceId: workspace.id }, [
+      THREE_REPOS[0]!.name,
+    ]);
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
 
     const result = await aiConventionService.reaudit(
@@ -513,10 +576,27 @@ describe('aiConventionService — project-admin gate', () => {
     });
   }
 
+  async function connectAndLinkThreeRepos(
+    projectId: string,
+    ctx: { userId: string; workspaceId: string },
+    installationId: string,
+  ) {
+    await connectThreeRepos(ctx.workspaceId, installationId);
+    await linkProjectRepos(
+      projectId,
+      ctx,
+      THREE_REPOS.map((repo) => repo.name),
+    );
+  }
+
   it('reaudit with a repo scope submits ONE pair per named repo and none for the others', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    await connectThreeRepos(workspace.id, 'inst-scope-subset');
+    await connectAndLinkThreeRepos(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      'inst-scope-subset',
+    );
     let n = 0;
     refreshCodeAuditMock.mockImplementation(() => {
       n += 1;
@@ -560,7 +640,11 @@ describe('aiConventionService — project-admin gate', () => {
   it('reaudit with a repo scope collapses a repeated key to one pair', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    await connectThreeRepos(workspace.id, 'inst-scope-dupe');
+    await connectAndLinkThreeRepos(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      'inst-scope-dupe',
+    );
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
 
     const result = await aiConventionService.reaudit(
@@ -577,7 +661,11 @@ describe('aiConventionService — project-admin gate', () => {
   it('reaudit REJECTS a scope naming an unconnected repo and submits NOTHING at all', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    await connectThreeRepos(workspace.id, 'inst-scope-unknown');
+    await connectAndLinkThreeRepos(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      'inst-scope-unknown',
+    );
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
 
     // The scope MIXES a valid member with an invalid one: the valid one must not
@@ -597,7 +685,11 @@ describe('aiConventionService — project-admin gate', () => {
   it('reaudit REJECTS an empty scope rather than treating it as "derive nothing"', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    await connectThreeRepos(workspace.id, 'inst-scope-empty');
+    await connectAndLinkThreeRepos(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      'inst-scope-empty',
+    );
 
     await expect(
       aiConventionService.reaudit(
@@ -613,7 +705,11 @@ describe('aiConventionService — project-admin gate', () => {
   it('reaudit with NO scope produces the identical submit sequence it produces today', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    await connectThreeRepos(workspace.id, 'inst-scope-regression');
+    await connectAndLinkThreeRepos(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      'inst-scope-regression',
+    );
     let n = 0;
     refreshCodeAuditMock.mockImplementation(() => {
       n += 1;

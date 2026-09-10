@@ -30,6 +30,7 @@ import {
   type FakeGh,
 } from '../helpers/cliHarness';
 import { randomToken } from '../helpers/random';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // STORY-CLOSING suite for the Motir CLI (Story 7.9 · Subtask 7.9.5 · MOTIR-883).
@@ -162,7 +163,7 @@ async function connectRepo(
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -174,6 +175,12 @@ async function connectRepo(
       archived: false,
       provider,
     },
+  });
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
   });
 }
 

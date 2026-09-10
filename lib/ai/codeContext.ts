@@ -6,6 +6,8 @@ import { getGitProvider, providerSupportsRepoTarballUrl } from '@/lib/git';
 import type { GitProviderId } from '@/lib/git/types';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { isEstablishedState } from '@/lib/projectRepos/vocabulary';
 import type { CodeGraphIndexState } from '@/lib/codeGraph/indexState';
 import type { CodeRefreshReason } from '@/lib/codeGraph/refreshReason';
 
@@ -121,6 +123,42 @@ export async function resolveCodeContext(ctx: {
         indexed: indexedRefs.includes(repoRef),
       };
     }),
+  };
+}
+
+/** Project-owned job context: only explicit `project_repository` links. */
+export async function resolveProjectCodeContext(ctx: {
+  userId: string;
+  workspaceId: string;
+  projectId: string;
+}): Promise<JobCodeContext | undefined> {
+  const { repos, indexedRefs } = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: ctx.projectId },
+    async (tx) => {
+      const linked = await projectRepoRepository.listByProject(ctx.projectId, ctx.workspaceId, tx);
+      const repos = linked.flatMap((row) => {
+        const repo = row.githubRepo;
+        if (!repo || !isEstablishedState(row.state)) return [];
+        return [
+          {
+            provider: repo.provider,
+            repoRef: `${repo.owner}/${repo.name}`,
+            defaultBranch: repo.defaultBranch,
+          },
+        ];
+      });
+      const indexedRefs = repos.length
+        ? await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx)
+        : [];
+      return { repos, indexedRefs };
+    },
+  );
+  if (repos.length === 0) return undefined;
+  return {
+    repos: repos.map((repo) => ({
+      ...repo,
+      indexed: indexedRefs.includes(repo.repoRef),
+    })),
   };
 }
 

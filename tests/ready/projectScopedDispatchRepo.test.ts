@@ -66,8 +66,8 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** Connect one repo to the fixture's workspace — the 7.10.3 installation mirror
- *  a set row realizes against, and the workspace-scoped compatibility domain. */
+/** Connect one organisation repo through the fixture workspace; it becomes
+ * project-visible only when `establishRepo` links a set row to it. */
 async function connectRepo(
   workspaceId: string,
   name: string,
@@ -161,7 +161,7 @@ async function dispatchOf(fx: WorkItemFixture) {
 
 // ── 1 · the scope ladder ────────────────────────────────────────────────────
 
-describe('resolution scope — the project’s set, else the workspace’s connected repos', () => {
+describe('resolution scope — the project repository set only', () => {
   it("resolves against the PROJECT's single established repo, with no pin", async () => {
     const fx = await makeWorkItemFixture();
     await establishRepo(fx, 'acme-web');
@@ -181,14 +181,12 @@ describe('resolution scope — the project’s set, else the workspace’s conne
     expect((await dispatchOf(fx)).targetRepo).toBe('acme-web');
   });
 
-  it("falls back to the WORKSPACE's single connected repo for a project with NO set", async () => {
-    // The compatibility path: every project that predates `project_repository`
-    // (including Motir's own) must keep routing exactly as it did yesterday.
+  it("does not inherit the WORKSPACE's connected repo when the project has no links", async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx.workspaceId, 'motir-core');
     await makeReady(fx, 'unpinned');
 
-    expect((await dispatchOf(fx)).targetRepo).toBe('motir-core');
+    expect((await dispatchOf(fx)).targetRepo).toBeNull();
   });
 
   it('does NOT fall back once the project HAS a set, even one that resolves to nothing', async () => {
@@ -638,8 +636,8 @@ async function giveProjectItsOwnCode(fx: WorkItemFixture, connectedRepoRef: stri
   });
 }
 
-describe('a project that already has code, gaining its FIRST set row', () => {
-  it('keeps every repository it already had PINNABLE (MOTIR-3086)', async () => {
+describe('a project that arrived with code still obeys explicit links', () => {
+  it('rejects workspace-only pins and accepts its project row', async () => {
     // The reported defect, at the reporter's own base: five repos connected,
     // no set rows, one row added — and from that moment nothing the project
     // already had could be pinned on a card.
@@ -649,21 +647,21 @@ describe('a project that already has code, gaining its FIRST set row', () => {
     }
     await giveProjectItsOwnCode(fx, 'moooon/motir-core');
 
-    // Legal BEFORE the first row — the compatibility rung answers.
-    const before = await makeReady(fx, 'pinned before', 'motir-core');
-    expect(before.targetRepo).toBe('motir-core');
+    await expect(makeReady(fx, 'pinned before', 'motir-core')).rejects.toBeInstanceOf(
+      UnknownTargetRepoError,
+    );
 
     // The DELIBERATE path 3073 does not touch: the user asks Motir to host a new
     // repository alongside the ones they already have.
     await proposeRepo(fx, 'motir-hosted-web');
 
-    // …and the repositories the project already had are STILL pinnable.
-    const after = await makeReady(fx, 'pinned after', 'motir-core');
-    expect(after.targetRepo).toBe('motir-core');
-    // Every one of them, not just the one the onboarding run happens to name —
-    // which is why this is a UNION and not a seed of that single field.
+    await expect(makeReady(fx, 'pinned after', 'motir-core')).rejects.toBeInstanceOf(
+      UnknownTargetRepoError,
+    );
     for (const name of ['motir-ai', 'motir-gateway', 'motir-meta']) {
-      expect((await makeReady(fx, `pinned ${name}`, name)).targetRepo).toBe(name);
+      await expect(makeReady(fx, `pinned ${name}`, name)).rejects.toBeInstanceOf(
+        UnknownTargetRepoError,
+      );
     }
     // The newly-added row is pinnable too — the set is not shadowed by the union.
     expect((await makeReady(fx, 'pinned new', 'motir-hosted-web')).targetRepo).toBe(
@@ -671,7 +669,7 @@ describe('a project that already has code, gaining its FIRST set row', () => {
     );
   });
 
-  it('keeps them in the DISPATCH domain, set rows FIRST', async () => {
+  it('keeps only linked rows in the dispatch domain', async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx.workspaceId, 'motir-core');
     await giveProjectItsOwnCode(fx, 'moooon/motir-core');
@@ -679,11 +677,10 @@ describe('a project that already has code, gaining its FIRST set row', () => {
 
     expect((await listDispatchRepoNames(fx.projectId, fx.ctx)).map((r) => r.name)).toEqual([
       'motir-hosted-web',
-      'motir-core',
     ]);
   });
 
-  it('a pin whose repo is workspace-only resolves with its CLONE coordinates', async () => {
+  it('a workspace-only repo remains unpinnable even when onboarding names it', async () => {
     // The union hands back real `GithubRepo` rows, so the coordinates an agent
     // with no checkout needs survive the switch that used to drop them.
     const fx = await makeWorkItemFixture();
@@ -693,16 +690,12 @@ describe('a project that already has code, gaining its FIRST set row', () => {
     });
     await giveProjectItsOwnCode(fx, 'moooon-B-V/motir-core');
     await proposeRepo(fx, 'motir-hosted-web');
-    await makeReady(fx, 'pinned', 'motir-core');
-
-    expect(await dispatchOf(fx)).toMatchObject({
-      targetRepo: 'motir-core',
-      targetRepoCloneUrl: 'https://github.com/moooon-B-V/motir-core.git',
-      targetRepoDefaultBranch: 'trunk',
-    });
+    await expect(makeReady(fx, 'pinned', 'motir-core')).rejects.toBeInstanceOf(
+      UnknownTargetRepoError,
+    );
   });
 
-  it('stops guessing a single default once the union makes the domain ambiguous', async () => {
+  it('defaults to the single linked row, ignoring workspace-only repositories', async () => {
     // A consequence to state rather than discover: such a project genuinely HAS
     // two repositories, so there is no non-arbitrary single choice — and routing
     // every unpinned card into the just-added hosted repo is the other half of
@@ -713,7 +706,7 @@ describe('a project that already has code, gaining its FIRST set row', () => {
     await establishRepo(fx, 'motir-hosted-web');
     await makeReady(fx, 'unpinned');
 
-    expect((await dispatchOf(fx)).targetRepo).toBeNull();
+    expect((await dispatchOf(fx)).targetRepo).toBe('motir-hosted-web');
   });
 
   it('still REJECTS a name that is in NEITHER domain — the typo', async () => {

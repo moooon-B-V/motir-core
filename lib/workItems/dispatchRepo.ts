@@ -14,113 +14,22 @@ import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepositor
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { ServiceContext } from './serviceContext';
 
-// WHICH REPO an item belongs to, resolved against the PROJECT (Story MOTIR-1775 ·
-// MOTIR-1783). This module owns exactly one thing the shipped policy in
-// `targetRepo.ts` deliberately does not: the SCOPE the domain comes from.
-//
-// MOTIR-1804 shipped the pin, and resolved it against "the workspace's connected
-// repos" — which was the only registry that existed then, and which quietly
-// assumes one project per workspace's repos. MOTIR-1780 gave a project its own
-// repository SET, so the domain becomes:
-//
-//   the PROJECT's set               ← whenever the project has one
-//   the workspace's connected repos ← for a project that has NO set, AND
-//                                     UNDER the set for a project that arrived
-//                                     WITH CODE OF ITS OWN (MOTIR-3086)
-//
-// The second rung is the compatibility path the ADR names explicitly
-// (`docs/decisions/project-repository-set.md`, "Consequences"): every project
-// that predates the table — including Motir's own — has an empty set, and
-// dispatch must keep routing them exactly as it did yesterday.
-//
-// ⚠️ THIS HEADER USED TO END: "It is a fallback for a MISSING set, never a second
-// guess layered under a real one: a project that HAS planned its repositories is
-// answered by that plan alone, even when the plan resolves to nothing." That
-// sentence is AMENDED, not deleted, and the amendment is narrow (ADR amendment
-// 2026-08-19 · MOTIR-3086):
-//
-//   * It is still exactly right for a project BORN IN MOTIR. Such a project's
-//     repositories are the ones its set names, so the set is a complete statement
-//     and layering anything under it would answer with a repository the project
-//     deliberately did not choose — including the sibling project's repo that
-//     workspace-wide validation used to accept.
-//   * It was WRONG for a project that ARRIVED WITH CODE, because the premise it
-//     rests on — that the set is a complete statement of a project's
-//     repositories — is one that project's set is structurally incapable of
-//     making. "I already have code" sends the user to the GitHub CONNECT flow,
-//     which is workspace-level and writes NO set row (`GithubRepo` is keyed on
-//     `workspace_id` and has no `project_id`). So for such a project the set is a
-//     statement about the repositories Motir was asked to PLAN, and answering
-//     "which repositories does this project have?" by it alone answers a
-//     different question. That is what the defect looked like from outside: add
-//     one hosted repository and the four the project already had stopped being
-//     pinnable and stopped being dispatchable, because from the resolver's point
-//     of view there had never been a list — only a fallback, which then correctly
-//     stepped aside.
-//
-// So the rung is CONDITIONED, not unconditional: it is layered under the set
-// exactly when the project has code the set cannot describe, which is the same
-// PROJECT-scoped signal MOTIR-3073's proposer gates on
-// (`lib/projectRepos/ownCode.ts`). A project with no code of its own is answered
-// by its set alone, byte-identically to before.
-//
-// ⚠️ THE LADDER ABOVE NO LONGER LIVES IN THIS FILE — it is
-// `lib/projectRepos/effectiveDomain.ts`'s `resolveEffectiveRepoDomain`, and
-// `resolveDomains` below is a four-line adapter onto it (MOTIR-3126). The reason
-// it moved is worth keeping beside the reason it exists: while the ladder was a
-// PRIVATE function of the dispatch module, no page could ask what it had decided,
-// so `/settings/project/repositories` answered "which repositories does this
-// project have?" from `project_repository` alone and told Motir's own project —
-// five connected repositories, an empty set — that it had none. The history above
-// stays here because it is dispatch's; the DEFINITION is shared.
-//
-// Two domains, one snapshot (see `projectRepoSetService.getRepoNameDomains`):
-//
-//   * DISPATCH domain — established, realized rows. It names a checkout that must
-//     exist right now, so a plan-only row is not in it.
-//   * PIN domain — every row. Authoring records a decision about work that has
-//     not run yet, and the plan names repositories before it creates them, so a
-//     pin at `proposed` is ordinary, not an error. What validation still catches
-//     is the typo and the sibling project's repo.
-//
-// Nothing here opens a transaction of its own beyond the reads it delegates, but
-// every entry point DOES (the set read is workspace-context-scoped for RLS, and
-// the workspace fallback opens its own too) — so, exactly like `targetRepo.ts`,
-// every caller MUST invoke these OUTSIDE its write transaction.
+// WHICH REPOSITORY an item belongs to, resolved only through the project's
+// explicit `project_repository` association (MOTIR-4955). Organisation
+// connectivity supplies candidates for linking and operational index facts; it
+// is never a fallback authorization for authoring or dispatch. The pin domain
+// includes planned rows, while the dispatch domain includes established rows.
 
-/**
- * The repo-name DOMAINS for a project, with the scope ladder already applied.
- *
- * ⚠️ THE LADDER ITSELF LIVES IN `lib/projectRepos/effectiveDomain.ts` NOW, and
- * this is the adapter onto it (MOTIR-3126). It used to be implemented here, as a
- * private function — which is exactly why no PAGE could render what dispatch had
- * decided, and why `/settings/project/repositories` told a project with five
- * connected repositories that it had none. The behaviour is unchanged; what moved
- * is where the one definition lives.
- *
- * What this drops on the floor is the two registries kept SEPARATELY, which the
- * reader returns and dispatch has no use for: a name is a name once it is being
- * resolved to a checkout.
- */
+/** The project row domains, adapted to the shapes dispatch consumes. */
 async function resolveDomains(
   projectId: string,
   ctx: ServiceContext,
 ): Promise<{
-  scope: 'project' | 'workspace';
+  scope: 'project';
   dispatchable: ConnectedRepoName[];
   pinnable: ConnectedRepoName[];
-  /**
-   * The project's own PIN rows when the project HAS a set, else `null`.
-   *
-   * The same values `pinnable` carries, at their un-widened type — a
-   * `ProjectRepoName` knows the `project_repository` row its name came from, and a
-   * `ConnectedRepoName` cannot. The reference model needs that row id, and the
-   * `null` is not a nuisance to code around: it IS the compatibility rung. A
-   * project with no set has no rows to point at, so its pins stay NAMES in
-   * `work_item.targetRepo`, exactly as they are today (ADR
-   * `work-item-repository-set.md` "Amendment 2026-08-18" §A7).
-   */
-  projectRows: ProjectRepoName[] | null;
+  /** The same pinnable values with their project_repository row ids. */
+  projectRows: ProjectRepoName[];
 }> {
   const domain = await resolveEffectiveRepoDomain(projectId, ctx);
   return {
@@ -140,23 +49,20 @@ async function resolveDomains(
  * published shape still hold, produced by the SAME resolution so the two can never
  * describe different repositories.
  *
- * `refs` is EMPTY for a project that has no repository set: there is nothing to
- * point at, and `names` alone is that project's answer (§A7's compatibility rung).
- * The two are therefore never independently meaningful — a caller writes both or
- * neither, from one call.
+ * An empty project set accepts no non-empty name; clearing a pin still yields
+ * empty refs and names. The two forms are never independently meaningful.
  */
 export interface ResolvedRepoPins {
   refs: string[];
   names: string[];
-  scope: 'project' | 'workspace';
+  scope: 'project';
 }
 
 /**
- * The repos an item in this project can be DISPATCHED into — the project's
- * established set, else (no set) the workspace's connected repos.
+ * The established project links an item in this project can be dispatched into.
  *
  * Exported for the surfaces that resolve several items against one domain and for
- * tests that assert the ladder directly; a single item's dispatch should call
+ * tests that assert the project boundary directly; a single item's dispatch should call
  * {@link resolveItemDispatchRepo}, which pairs this with the pin.
  */
 export async function listDispatchRepoNames(
@@ -210,11 +116,6 @@ export async function resolveAuthoredTargetRepoInProject(
  * and it cannot fail, because `toProjectRepoPinNames` de-duplicates the domain by
  * name case-insensitively, so a matched name names exactly one row.
  *
- * `refs` is EMPTY when the project has NO repository set, and that is not a
- * degraded answer: such a project's pins are validated against the workspace's
- * connected repositories and stored as names, exactly as they are today (ADR
- * `work-item-repository-set.md` "Amendment 2026-08-18" §A7's compatibility rung).
- *
  * MUST be called OUTSIDE the caller's write transaction (see the module header).
  */
 export async function resolveAuthoredRepoPinsInProject(
@@ -227,24 +128,13 @@ export async function resolveAuthoredRepoPinsInProject(
   }
   const { scope, pinnable, projectRows } = await resolveDomains(projectId, ctx);
   const names = matchAuthoredTargetRepos(values, pinnable, scope);
-  if (projectRows === null) return { refs: [], names, scope };
   const byName = new Map(projectRows.map((r) => [r.name.toLowerCase(), r.rowId]));
   const refs: string[] = [];
   for (const name of names) {
     const rowId = byName.get(name.toLowerCase());
-    // ⚠️ ALL-OR-NOTHING, and the alignment is the reason (MOTIR-3086). Before the
-    // union every matched name had a row by construction, so `refs` and `names`
-    // always described the same repositories in the same order. A project with
-    // code of its own can now match a name the workspace rung supplied, which has
-    // no `project_repository` row to point at — and skipping it would leave
-    // `refs[0]` naming the row of a DIFFERENT repository than `names[0]`, which is
-    // the primary every dispatch surface routes on.
-    //
-    // So such a pin is expressed as NAMES, which is not a degraded answer: it is
-    // §A7's compatibility rung, the same one that project's pins were on before it
-    // gained its first row. Recording a project's own repositories as rows is what
-    // would promote it onto the reference model — see the ADR amendment's
-    // "what this does NOT fix".
+    // Every accepted name came from a project row. A missing id would mean the
+    // name and reference domains diverged, so fail closed instead of writing a
+    // misaligned primary.
     if (rowId === undefined) return { refs: [], names, scope };
     refs.push(rowId);
   }
@@ -277,7 +167,7 @@ export async function resolveAuthoredRepoRefsInProject(
   const wanted = (refs ?? []).map((r) => (typeof r === 'string' ? r.trim() : '')).filter(Boolean);
   if (wanted.length === 0) return { refs: [], names: [], scope: 'project' };
   const { scope, projectRows } = await resolveDomains(projectId, ctx);
-  const rows = projectRows ?? [];
+  const rows = projectRows;
   const byId = new Map(rows.map((r) => [r.rowId, r]));
   const known = rows.map((r) => `${r.rowId} (${r.name})`);
   const outRefs: string[] = [];
@@ -350,7 +240,7 @@ export async function resolveItemDispatchRepo(
  *
  * The overload every dispatch surface should call. `resolveItemDispatchRepo`
  * above takes a pinned NAME and is kept for the callers that genuinely have only
- * a name (and for the tests that assert the three-rung ladder directly); this one
+ * a name (and for tests that assert the project domain directly); this one
  * takes the ITEM, so a surface cannot accidentally read a column that the
  * reference model no longer fills.
  */

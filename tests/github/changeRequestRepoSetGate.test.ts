@@ -8,6 +8,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 import { linkPrByIdentifier } from '../helpers/prLink';
 
 // MOTIR-2729 — THE REPOSITORY-SET GATE, the third completion gate and the reason
@@ -83,6 +84,11 @@ async function makeScenario(email: string, repos: RepoSpec[], targetRepos: strin
       defaultBranch: r.defaultBranch ?? 'main',
       archived: false,
     })),
+  });
+  await linkWorkspaceReposToProject({
+    workspaceId: workspace.id,
+    projectId: project.id,
+    names: repos.map((repo) => repo.name),
   });
 
   const item = await workItemsService.createWorkItem(

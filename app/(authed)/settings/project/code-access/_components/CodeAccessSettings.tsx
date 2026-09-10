@@ -85,18 +85,8 @@ export interface CodeAccessSettingsProps {
    *  this project work on", which is the question a reader who lands on an empty
    *  code-access pane is usually actually asking (MOTIR-4803). */
   repositoriesHref: string;
-  /**
-   * How many repositories this project's domain gets from the ORGANISATION
-   * rather than from its own `project_repository` set — `resolveEffectiveRepoDomain`'s
-   * `connected.length`, resolved by the page (MOTIR-4803).
-   *
-   * ⚠️ It selects an EMPTY STATE and nothing else. It never adds a row: a
-   * connected repository has no invitation for Motir to report, grant or revoke,
-   * which is exactly why this pane reads the SET and MOTIR-3126 left it there.
-   * What the count buys is the difference between "this project has no code" —
-   * false, and the shipped bug — and "Motir hosts none of it", which is true and
-   * says where the code actually is.
-   */
+  /** Compatibility empty-state input. Always zero after workspace inheritance
+   * was retired; explicit links appear in `initialRepos` (MOTIR-4955). */
   connectedRepoCount: number;
 }
 

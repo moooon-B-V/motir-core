@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { db } from '@/lib/db';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
 import { adminDb } from '../helpers/adminDb';
+import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 
 // The STORY gate for MOTIR-2244 (MOTIR-2252).
 //
@@ -94,6 +95,11 @@ async function project(installationId: string) {
     workspaceId: workspace.id,
     installation: { installationId, accountLogin: 'moooon', accountType: 'Organization' },
     repos: REPOS,
+  });
+  await linkWorkspaceReposToProject({
+    workspaceId: workspace.id,
+    projectId: proj.id,
+    names: REPOS.map((repo) => repo.name),
   });
   return { workspace, owner, project: proj, ctx: { userId: owner.id, workspaceId: workspace.id } };
 }
