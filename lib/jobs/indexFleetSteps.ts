@@ -16,6 +16,7 @@ import type {
   IndexRepoResult,
   IndexTarget,
 } from '@/lib/services/codeGraphIndexService';
+import { requireCurrentIndexTarget } from '@/lib/services/codeGraphIndexService';
 
 // THE INDEX FLEET'S JOB-SIDE DRIVER for `system.code-graph-index` and
 // `system.code-graph-refresh` (Story MOTIR-1981 · MOTIR-2027 · MOTIR-2057), as
@@ -25,7 +26,7 @@ import type {
 // descends from one shape) and §6 (the ledger contract that forces one row per
 // repo).
 //
-//   step  resolve-target                 DB reads only — UNCHANGED
+//   step  resolve-target-v2              DB reads only — `-v2` since MOTIR-5020
 //     ↓   (the three no-op verdicts return here, exactly as before)
 //         assert-fleet-configured        the gate, BEFORE anything is spent
 //   ONE container, for the ORGANISATION (MOTIR-4652 — this was a fan-out over
@@ -80,8 +81,16 @@ import type {
 // the ledger memoizes against, so it must identify the SAME unit of work on every
 // replay; a positional index would silently re-point at another project if the
 // workspace's project list changed between passes. That is also why
-// `resolve-target` stays a memoized step (§13.1 limb 2): its `projectIds` ARE the
-// identity the three below are keyed by.
+// `resolve-target-v2` stays a memoized step (§13.1 limb 2): its
+// `anchorProjectId` IS the identity the three below are keyed by.
+//
+// ⚠️ AND THAT IS WHY ITS ID CARRIES A VERSION NOW (MOTIR-5020). A step id is
+// what the ledger memoizes against, so it must name the same unit of work on
+// every replay — and a unit of work is its SHAPE as well as its subject. When
+// MOTIR-4652 turned this result's `projectIds: string[]` into
+// `anchorProjectId: string` and kept the id, a run resumed across the deploy
+// replayed the old shape into the new reader. Change a field of `IndexTarget`,
+// bump the id in the same commit.
 //
 // ⚠️ THE LEDGER CONTRACT DOES NOT MOVE (§6). Whatever the fan-out does
 // internally — one container per (repo × project), MOTIR-2026 — the JOB still
@@ -146,11 +155,20 @@ export class IndexDispatchFailedError extends Error {
  * ONE cast, at the boundary — the same shape and the same reason as
  * `lib/jobs/engine/runner.ts`'s single cast. Inngest's `step.run` types its
  * result as `Jsonify<T>` (which is what the `as IndexTarget` at the
- * `resolve-target` call site below has always been for), and the engine's shim
+ * `resolve-target-v2` call site below used to be for), and the engine's shim
  * round-trips through JSON on BOTH the first execution and the replay so the two
  * cannot disagree. Every value that crosses this seam is declared
  * JSON-serializable by contract — `IndexAdmission`, `IndexSession` and
  * `IndexDispatchOutcome` all carry ISO strings rather than `Date`s, and say so.
+ *
+ * ⚠️ AND `Jsonify<T>` IS NOT THE ONLY THING SUCH A CAST LAUNDERS (MOTIR-5020).
+ * It re-types the SERIALIZATION of `T`; it says nothing about which REVISION of
+ * the code produced the value, and a memo replayed across a deploy was produced
+ * by a different one. `resolve-target-v2`'s result is therefore narrowed by
+ * {@link requireCurrentIndexTarget} rather than cast — the casts on
+ * `IndexAdmission` / `IndexSession` / `IndexDispatchOutcome` are unchanged and
+ * are covered instead by their ids being keyed on a value the current shape
+ * supplies.
  */
 function stepSeam(ctx: JobContext): SupervisionSteps {
   return {
@@ -171,9 +189,31 @@ export async function runIndexFleetSteps(
   services: JobServices,
   input: IndexRepoInput,
 ): Promise<IndexRepoResult> {
-  const target = (await ctx.step.run('resolve-target', () =>
-    services.codeGraph.resolveIndexTarget(input),
-  )) as IndexTarget;
+  // ⚠️ THE STEP ID CARRIES THE RESULT'S SHAPE, AND `-v2` IS THE FIX FOR AN
+  // OUTAGE (MOTIR-5020). A memo is returned WITHOUT executing its step
+  // (`lib/jobs/engine/step.ts`: look up `(run_id, id)`, return the stored row),
+  // so a run that started under one revision and resumed under the next replays
+  // the OLD result INTO the new code. MOTIR-4652 replaced this step's
+  // `projectIds: string[]` with `anchorProjectId: string` and left the id
+  // alone; a resumed run then carried `anchorProjectId: undefined` down to the
+  // mint, `JSON.stringify` dropped the field, and motir-ai refused it with
+  // `'coreProjectId' must be a non-empty string`.
+  //
+  // Bumping the id is what makes the stale row unreadable. It is safe HERE and
+  // would not be everywhere: `resolveIndexTarget` is DB reads only — no
+  // network, nothing provisioned, nothing claimed — so re-executing it costs a
+  // few selects and creates nothing twice, which is precisely the test
+  // `lib/jobs/engine/step.ts` states for what may be re-run. The steps that DO
+  // provision (`index-admit:` / `index-boot:` / `index-settle:`) keep their ids
+  // and their keys, so a resumed run re-attaches to the container it already
+  // booted rather than billing a second one.
+  //
+  // ⚠️ SO THE RULE IS: CHANGE AN `IndexTarget` FIELD, BUMP THIS ID. The shape
+  // and the id are one decision, and the four months this pair spent agreeing
+  // is what made it easy to change one of them alone.
+  const target = requireCurrentIndexTarget(
+    await ctx.step.run('resolve-target-v2', () => services.codeGraph.resolveIndexTarget(input)),
+  );
   // ⚠️ UNCHANGED, AND BEFORE THE GATE. A vanished tenant / project-less
   // workspace is a clean no-op whose reason IS the run's ledger output — the
   // shipped contract that this job never throws on a tenant that went away. Its
