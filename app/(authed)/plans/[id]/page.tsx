@@ -157,11 +157,20 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
           initialReview={review}
           projectKey={projectKey ?? ''}
           ariaLabel={t('canvasAria')}
-          repositorySet={
-            repoView && projectKey && repoView.set.rows.length > 0
-              ? { projectKey, view: repoView }
-              : null
-          }
+          /* ⚠️ THE ROW COUNT THAT USED TO GATE THIS IS GONE (bug MOTIR-5049).
+              It read `repoView.set.rows.length > 0`, and it was answering the
+              wrong question for TWO consumers at once. This prop feeds the
+              establish BAND *and* — through `PlanDetail.codeOutcomeOf` — the
+              review rail's approved-outcome line, and those ask different
+              things: whether there is anything to ESTABLISH, and whether there
+              is a set to SPEAK OF. A count answered neither, and narrowing it
+              to the band's real predicate here would have taken the rail's line
+              with it, for exactly the population the design says the rail is the
+              whole answer for (`design/repository-set/design-notes.md` §7b).
+              So the set is handed down whenever it exists and each consumer asks
+              its own question: the band asks `setHasEstablishWork`, the rail's
+              `codeOutcomeOf` already returns null for an empty set. */
+          repositorySet={repoView && projectKey ? { projectKey, view: repoView } : null}
         />
       </div>
     </div>

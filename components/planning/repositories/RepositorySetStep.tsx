@@ -21,6 +21,11 @@ import {
   refreshRepositoryAccess,
 } from '@/lib/planning/repositorySetClient';
 import type { ProjectRepoDto, ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
+import {
+  isSettledRow,
+  rowIsReachable,
+  setHasOrganizationRow,
+} from '@/lib/projectRepos/establishStep';
 
 // THE ESTABLISH STEP at plan approval (Story MOTIR-1775 · MOTIR-1782) — the step
 // that gives an approved plan somewhere for its code to live. It takes the CANVAS
@@ -154,9 +159,9 @@ export function RepositorySetStep({
   const outcomeRef = useRef<PlanCodeOutcome | null>(null);
   useEffect(() => {
     if (rows.length === 0) return;
-    const outcome: PlanCodeOutcome = !rows.every(isSettled)
+    const outcome: PlanCodeOutcome = !rows.every(isSettledRow)
       ? 'unfinished'
-      : rows.every(hasAccess)
+      : rows.every(rowIsReachable)
         ? 'ready'
         : 'needs_access';
     if (outcome === outcomeRef.current) return;
@@ -195,7 +200,7 @@ export function RepositorySetStep({
   // the set is SETTLED, which is exactly when the panel starts naming an account.
   // Guarded on `settled` rather than on a panel, so a set that arrives already
   // settled — a reload after establishing — still asks.
-  const settled = rows.length > 0 && rows.every(isSettled);
+  const settled = rows.length > 0 && rows.every(isSettledRow);
   useEffect(() => {
     if (!settled) return;
     const ctrl = new AbortController();
@@ -255,12 +260,27 @@ function DefaultPath({
   onContinue: () => void;
 }) {
   const t = useTranslations('repositorySet');
+  // ⚠️ THE MIXED SET (design §7b, v6 — bug MOTIR-5049). A project can hold a
+  // repository the ORGANISATION already owns beside one Motir is creating:
+  // `organizationRepoService` appends a `connected` / `organization` row to
+  // whatever set the project has. The step is still drawn — there IS a row to
+  // establish — but its two SET-WIDE sentences would otherwise speak for a
+  // repository that is not Motir's to speak for.
+  //
+  // Both edits are SCOPE, not information, and that is what keeps the design's
+  // #151 rule intact: the panel still names no repository, no role, no account,
+  // no count and no rows. "the new code" and "the code it hosts" are narrower
+  // SUBJECTS for the same two sentences, not a disclosure about the set — a
+  // reader with an all-Motir set cannot tell the difference, which is the test a
+  // scope edit has to pass. A set with NO organisation row keeps the unscoped
+  // wording byte for byte.
+  const mixed = setHasOrganizationRow(rows);
   return (
     <>
       <div className="flex flex-col gap-3">
         <SectionLabel label={t('overline')} />
         <h2 className="font-serif text-[28px] leading-tight font-semibold text-(--el-text)">
-          {t('title')}
+          {t(mixed ? 'titleMixed' : 'title')}
         </h2>
         {state === 'idle' ? (
           <p className="text-sm leading-relaxed text-(--el-text-secondary)">{t('lead')}</p>
@@ -311,7 +331,7 @@ function DefaultPath({
       {/* The ownership promise — a STANDING GUARANTEE on the main line, not a
           footnote and not a severity tint: it is a fact about the arrangement,
           which is why it sits on `--el-surface-soft` rather than a hue. */}
-      {state === 'idle' || state === 'ready' ? <OwnershipPromise /> : null}
+      {state === 'idle' || state === 'ready' ? <OwnershipPromise mixed={mixed} /> : null}
 
       {/* THE REPORT (design v5, panel 2's `created` state — MOTIR-5015). Two arms,
           and which one shows is what Motir KNOWS, never a branch the user picks. */}
@@ -498,7 +518,7 @@ function AccessReport({
   );
 }
 
-function OwnershipPromise() {
+function OwnershipPromise({ mixed }: { mixed: boolean }) {
   const t = useTranslations('repositorySet');
   return (
     <div className="flex max-w-prose gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-card-padding)">
@@ -511,7 +531,7 @@ function OwnershipPromise() {
           button: it is a navigation, and the promise is a standing statement
           rather than a control. */}
       <p className="min-w-0 text-sm leading-relaxed text-(--el-text-secondary)">
-        {t.rich('promise', {
+        {t.rich(mixed ? 'promiseMixed' : 'promise', {
           b: (chunks) => <strong className="font-semibold text-(--el-text)">{chunks}</strong>,
         })}{' '}
         <Link
@@ -533,24 +553,15 @@ function StepShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** A row is SETTLED when it has no legal move left (ADR §4.1). `failed` is not
- *  settled — it is resumable at any later visit. */
-function isSettled(row: ProjectRepoDto): boolean {
-  return row.state === 'created' || row.state === 'connected' || row.state === 'skipped';
-}
-
-/**
- * Can the user REACH this row's repository (MOTIR-1900)?
- *
- * TRUE for every row that raises no access question at all — a `connected` row is
- * the user's own repository and a `skipped` row has none — so only a repository
- * MOTIR created and nobody has been invited to counts as unfinished. `invited`
- * counts as reached: Motir has done everything it can, and the remaining step is
- * the user's to take on GitHub.
- */
-function hasAccess(row: ProjectRepoDto): boolean {
-  return row.state !== 'created' || row.access.state !== 'not_invited';
-}
+/* ⚠️ `isSettled` AND `hasAccess` USED TO BE DEFINED HERE, and they were
+   duplicated verbatim inside `PlanDetail.codeOutcomeOf` — two components
+   answering "is this row settled?" from two hand-written copies of the same
+   three-member list, with the REAL answer a third copy in `transitions.ts`.
+   Both now come from `lib/projectRepos/establishStep.ts` as `isSettledRow` /
+   `rowIsReachable` (bug MOTIR-5049). Neither is the predicate that decides
+   whether this step RENDERS: `created` is settled and still the step's work, so
+   establish-work is not the negation of settledness — that module's header
+   carries the split. */
 
 /**
  * The default path's state, derived from the SET — never from a local flag alone,
@@ -564,7 +575,7 @@ function hasAccess(row: ProjectRepoDto): boolean {
 function defaultStateOf(rows: readonly ProjectRepoDto[], running: boolean): DefaultState {
   if (running) return 'working';
   if (rows.length === 0) return 'idle';
-  if (rows.every(isSettled)) return 'ready';
+  if (rows.every(isSettledRow)) return 'ready';
   if (rows.some((r) => r.state === 'failed')) return 'failed';
   return 'idle';
 }
