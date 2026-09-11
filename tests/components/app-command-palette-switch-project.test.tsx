@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // MOTIR-1559 — the ⌘K "Switch to <project>" command must LAND the user on the
-// work-items list (`/items`) after switching, exactly like the sidebar
+// signed-in landing after switching, exactly like the sidebar
 // ProjectSwitcher and the palette's own switchWorkspace handler already do
 // (MOTIR-1312). Before the fix `switchProject` did a bare `router.refresh()`,
 // leaving a stale, old-project-scoped URL / client island in place.
@@ -81,20 +82,21 @@ afterEach(() => {
 });
 
 describe('AppCommandPalette — switchProject landing (MOTIR-1559)', () => {
-  it('navigates to /items after ⌘K-switching to a different project (not a bare refresh)', async () => {
+  it('navigates to the landing after ⌘K-switching to a different project (not a bare refresh)', async () => {
     renderPalette();
     fireEvent.click(screen.getByRole('option', { name: /Switch to Beta Labs/ }));
 
     await waitFor(() => expect(setActiveProjectAction).toHaveBeenCalledWith('proj_beta'));
-    // Push to /items (abandon the stale old-project URL); the action's
+    // Push the landing (abandon the stale old-project URL); the action's
     // revalidatePath (not exercised by this mock) re-seeds the layout
-    // server-side. The regression guard is the push to /items, not a bare refresh.
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/items'));
+    // server-side. The regression guard is the push, not a bare refresh. It
+    // composes from AUTHED_LANDING_PATH (MOTIR-5132) rather than re-typing it.
+    await waitFor(() => expect(push).toHaveBeenCalledWith(AUTHED_LANDING_PATH));
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('refreshes in place (no push) when switching while already on /items', async () => {
-    pathnameValue = '/items';
+  it('refreshes in place (no push) when switching while already on the landing', async () => {
+    pathnameValue = AUTHED_LANDING_PATH;
     renderPalette();
     fireEvent.click(screen.getByRole('option', { name: /Switch to Beta Labs/ }));
 

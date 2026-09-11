@@ -39,12 +39,17 @@ import { IssueQuickViewController } from './_components/IssueQuickViewController
 // service reads) — never Prisma directly. View/sort are parsed through the
 // `issueListView` whitelist so an unknown column never reaches the read. The
 // <Suspense> is keyed by PROJECT + view+sort so a switch/sort re-shows the
-// skeleton while the new order streams — and an org/workspace SWITCH that lands
-// here in place (afterContextSwitchTarget → router.refresh, MOTIR-1312/bug 12)
-// re-keys on the NEW projectId, remounting the lazy-tree client island so it
-// re-seeds from the new tenant's roots instead of showing the old org's items
-// (the page-state client-island contract in CLAUDE.md). Unauthenticated →
-// /sign-in; no active project → a hint.
+// skeleton while the new order streams, re-keying on the NEW projectId and
+// remounting the lazy-tree client island so it re-seeds from the new tenant's
+// roots instead of showing the old org's items (the page-state client-island
+// contract in CLAUDE.md).
+//
+// ⚠️ A CONTEXT SWITCH NO LONGER LANDS HERE (MOTIR-5132): it pushes to the
+// signed-in landing, so a reader who switches while on this page navigates
+// AWAY and this page unmounts entirely. The keys are unchanged and still
+// earn their place — a header-sort and a view change both remount on them,
+// and arriving back here with a different project active re-keys as before.
+// Unauthenticated → /sign-in; no active project → a hint.
 
 export default async function IssuesPage({
   searchParams,

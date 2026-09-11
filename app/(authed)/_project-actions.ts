@@ -47,7 +47,8 @@ export async function setActiveProjectAction(projectId: string): Promise<void> {
   // The active project is DB-backed (WorkspaceMembership.activeProjectId), not a
   // cookie — so, unlike the workspace/org switch, mutating it gives Next no
   // signal to invalidate the client Router Cache. Without this, a caller that
-  // navigates after switching (the switchers push to /items — MOTIR-1559) would
+  // navigates after switching (the switchers push to the signed-in landing —
+  // MOTIR-1559, re-pointed by MOTIR-5132) would
   // re-render the cached authed layout with the OLD active project (stale
   // switcher / nav). revalidatePath invalidates the layout tree so the pushed
   // route re-renders against the new active project, matching how the cookie

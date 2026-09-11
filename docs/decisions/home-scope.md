@@ -252,6 +252,17 @@ So it is now:
   landing (negations excepted: `dashboard/page.tsx` correctly says it is no longer
   one). The second half is MOTIR-3173's own diagnosis turned into an assertion.
 
+  ⚠️ IT HAS GROWN, and the count is deliberately not written here: `/workbench`
+  and `/onboarding` got scans of their own (MOTIR-4782, MOTIR-4403), and so did
+  the accessible NAME of an element pointing at `/dashboard` (MOTIR-4800). The
+  most recent one changed the AXIS rather than adding a value (MOTIR-5132): it
+  reads the CALLERS of the three context-switch server actions and forbids a
+  route literal in the same function, because no value-scan can be written for a
+  destination nobody has thought of yet. `afterContextSwitch.ts` had answered
+  this question with `/items` and `AcceptInviteButton.tsx` with `/dashboard`,
+  and all four value-scans passed on both. Read the file for what it scans
+  today — an enumeration in prose is the same staleness these rules are about.
+
 **What this means for a future change to §2.3.** Moving the landing is now editing
 one constant and reading one guard's failures — not re-deriving a population. And a
 new surface that answers _"where does this reader go next"_ has an owner to import

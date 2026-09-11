@@ -4,12 +4,15 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // MOTIR-1559 — after switching the active PROJECT, the sidebar switcher must
-// LAND the user on the work-items list (`/items`), not do a bare
+// LAND the user on the signed-in landing, not do a bare
 // `router.refresh()` that leaves a stale, old-project-scoped URL / client
 // island in place. This mirrors the org/workspace switchers (MOTIR-1312) via
-// the shared `afterContextSwitchTarget(pathname)` contract: push `/items`
+// the shared `afterContextSwitchTarget(pathname)` contract: push the landing
+// (MOTIR-5132 re-pointed it off a second constant onto AUTHED_LANDING_PATH,
+// which is what these assertions compose from rather than re-typing a route)
 // unless already there, in which case refresh in place.
 
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -71,21 +74,21 @@ afterEach(() => {
 });
 
 describe('ProjectSwitcher — post-switch landing (MOTIR-1559)', () => {
-  it('navigates to /items after switching to a different project (not a bare refresh)', async () => {
+  it('navigates to the landing after switching to a different project (not a bare refresh)', async () => {
     renderSwitcher();
     switchTo('Beta Labs');
 
     await waitFor(() => expect(setActiveProjectAction).toHaveBeenCalledWith('proj_beta'));
-    // The bug was a bare refresh() with NO navigation. The fix pushes to /items
+    // The bug was a bare refresh() with NO navigation. The fix pushes the landing
     // (abandoning the stale old-project URL); the action's revalidatePath (not
     // exercised by this mock) is what re-seeds the layout server-side. The
-    // regression guard is that a push to /items happens and NOT a bare refresh.
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/items'));
+    // regression guard is that a push to the landing happens, NOT a bare refresh.
+    await waitFor(() => expect(push).toHaveBeenCalledWith(AUTHED_LANDING_PATH));
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('refreshes in place (no push) when the switch happens while already on /items', async () => {
-    pathnameValue = '/items';
+  it('refreshes in place (no push) when the switch happens while already on the landing', async () => {
+    pathnameValue = AUTHED_LANDING_PATH;
     renderSwitcher();
     switchTo('Beta Labs');
 

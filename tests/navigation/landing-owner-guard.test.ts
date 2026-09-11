@@ -38,6 +38,24 @@ import { join, relative, resolve, sep } from 'node:path';
 // read. Widening the window is a change to a parameter; the defect was in the
 // axis. The fourth scan reads that axis, and stays as dumb as the rest.
 //
+// MOTIR-5132 added the FIFTH scan, and it is the first one whose axis is the
+// QUESTION rather than an answer. The four above each watch a VALUE — /workbench,
+// /home, /dashboard, /onboarding — so they defend the spelling of an answer and
+// not the asking of it, and both halves of MOTIR-5132's defect walked past all
+// four: `afterContextSwitch.ts` answered "where does a reader land" with
+// `/items`, a value no scan watches, and `AcceptInviteButton.tsx` answered it
+// with `/dashboard` from a callback inside no tag, under a comment reading
+// "then land on the dashboard with it active" — where the word *landing* never
+// appears, so neither the comment scan nor the accessible-name scan can reach it.
+//
+// Widening to a fifth VALUE would have repeated the mistake, because no
+// value-scan can be written for a destination nobody has thought of yet. What IS
+// enumerable is the other side: the acts that END in arriving somewhere. Each is
+// a named function call, greppable and finite, and every one of them must get its
+// destination from the owner rather than name one. So the fifth scan reads the
+// CALLERS of the three context-switch server actions and forbids a route literal
+// in the same function — and stays as dumb as the rest.
+//
 // ⚠️ It is NOT a member of the guards lane, and that is a measurement rather
 // than an omission: `tests/ci-structural-guards-lane.test.ts` derives lane
 // membership from "imports a scanner module and parses the tree with the
@@ -234,6 +252,114 @@ export function nameClaimingTheHome(tag: string): string | null {
     }
   }
   return null;
+}
+
+/**
+ * THE ACTS THAT CHANGE A READER'S CONTEXT (MOTIR-5132) — the three server
+ * actions, by name. Calling one of these is what makes a function a place where
+ * the question *where does the reader go now?* is asked.
+ *
+ * ⚠️ `setActiveProjectAction` and NOT `switchProjectAction`: the project switch
+ * does not follow the other two's naming (`app/(authed)/_project-actions.ts`),
+ * and a list written from the pattern rather than from the tree would have
+ * defended two of the three while reading as though it defended all of them.
+ *
+ * Accepting an invite is not a fourth name — it calls `switchWorkspaceAction`,
+ * which is exactly why this axis reaches it and four value-scans did not.
+ */
+const CONTEXT_SWITCH_ACTIONS = [
+  'switchWorkspaceAction',
+  'switchOrganizationAction',
+  'setActiveProjectAction',
+] as const;
+
+const CALLS_A_CONTEXT_SWITCH = new RegExp(`\\b(?:${CONTEXT_SWITCH_ACTIONS.join('|')})\\s*\\(`);
+
+/**
+ * A ROUTE literal — a quoted path a reader could be sent to. The same shape the
+ * four value-scans use, minus the fixed value: any `'/…'`, `"/…"` or
+ * `` `/…` ``, with an optional query.
+ *
+ * ⚠️ AN API PATH IS NOT A DESTINATION, and the one function this rule exists
+ * for contains one: `AcceptInviteButton` POSTs to `/api/invites/…` three lines
+ * above the `router.push` that was the defect. `/api/…` is excluded by NAME
+ * rather than by a per-file allowlist, because the reason is a property of the
+ * path and not of the file — nobody LANDS on an API route.
+ */
+const ROUTE_LITERAL = /(['"`])(\/[A-Za-z][\w-]*(?:\/[\w-]+)*(?:\?[^'"`]*)?)\1/g;
+const NOT_A_DESTINATION = /^\/api(?:\/|$)/;
+
+/** How far a scan will look for the function a context switch sits inside. */
+const FUNCTION_SPAN = 80;
+
+/**
+ * The start of a function BODY — a declaration, a method, or an arrow. The
+ * switchers all put their action call inside `startTransition(async () => {`,
+ * which is the nearest of these walking back and is the scope the rule wants:
+ * the destination decision lives in the same callback as the switch.
+ */
+const OPENS_A_FUNCTION = /(?:\bfunction\b[^(]*\(|=>\s*\{\s*$|\)\s*\{\s*$)/;
+
+/**
+ * A CONTROL-FLOW block, SKIPPED by the walk-back. `if (!res.ok) {` closes with
+ * `) {` in exactly the shape a multi-line function signature does, and the two
+ * are indistinguishable to the pattern above.
+ *
+ * ⚠️ IT IS NOT A REFINEMENT — without it this rule is inert on the one function
+ * it was written for. `AcceptInviteButton`'s callback guards the failed response
+ * with an `if` block, so the walk-back stopped there, counted that block's braces
+ * shut ABOVE the switch call, and returned null: the scan read the pre-fix
+ * defect and reported nothing. The synthetic fixture below is what caught it,
+ * which is the whole argument for exercising a scan rather than asserting it
+ * passes.
+ */
+const OPENS_A_BLOCK = /^\s*\}?\s*(?:else\s+)?(?:if|for|while|switch|catch)\b/;
+
+/**
+ * The FUNCTION BODY a context-switch call sits inside, or `null` when none can
+ * be delimited. Deliberately dumb, in the register of `openingTagAround`: walk
+ * BACK to the nearest line that opens a function body, then FORWARD counting
+ * braces to its close.
+ *
+ * Every way it can be wrong SHORTENS the region rather than widening it — an
+ * unbalanced brace inside a string ends the body early, and a body longer than
+ * `FUNCTION_SPAN` is abandoned — so it fails toward a MISS and never toward a
+ * false accusation. That is the same trade `withoutArrows` makes above.
+ */
+export function functionBodyAround(code: string[], index: number): string | null {
+  let start = -1;
+  for (let i = index; i >= 0 && index - i <= FUNCTION_SPAN; i -= 1) {
+    const line = code[i] ?? '';
+    if (OPENS_A_BLOCK.test(line)) continue;
+    if (OPENS_A_FUNCTION.test(line)) {
+      start = i;
+      break;
+    }
+  }
+  if (start === -1) return null;
+
+  let depth = 0;
+  for (let i = start; i < code.length && i - start <= FUNCTION_SPAN; i += 1) {
+    for (const ch of code[i] ?? '') {
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+    }
+    if (i > start && depth <= 0) {
+      // The body closed before the call — a different function's.
+      return i < index ? null : code.slice(start, i + 1).join('\n');
+    }
+  }
+  return null;
+}
+
+/** Every route literal named inside `body` that a reader could be sent to. */
+export function destinationsNamedIn(body: string): string[] {
+  const out: string[] = [];
+  for (const match of body.matchAll(ROUTE_LITERAL)) {
+    const path = match[2] ?? '';
+    if (!NOT_A_DESTINATION.test(path)) out.push(path);
+  }
+  return out;
 }
 
 /**
@@ -452,6 +578,36 @@ describe('the landing has ONE owner (MOTIR-3373)', () => {
     ).toEqual([]);
   });
 
+  it('no function that performs a CONTEXT SWITCH names a route of its own (MOTIR-5132)', () => {
+    const offenders: string[] = [];
+
+    for (const file of sourceFiles()) {
+      const rel = relative(ROOT, file).split(sep).join('/');
+      const code = codeLines(file);
+      code.forEach((line, i) => {
+        if (!CALLS_A_CONTEXT_SWITCH.test(line)) return;
+        const body = functionBodyAround(code, i);
+        if (!body) return;
+        for (const route of destinationsNamedIn(body)) {
+          offenders.push(`${rel}:${i + 1} — switches context, then names '${route}'`);
+        }
+      });
+    }
+
+    expect(
+      offenders,
+      'A function that switches the active org / workspace / project decides ' +
+        'WHERE THE READER GOES NEXT, and that answer belongs to ' +
+        'lib/navigation/landing.ts — reached through afterContextSwitchTarget(pathname), ' +
+        'which every switcher already calls. This scan reads the QUESTION rather than ' +
+        'an answer, because the four above read values and both halves of MOTIR-5132 ' +
+        "walked past all of them: afterContextSwitch.ts said '/items' (a value no scan " +
+        "watches) and AcceptInviteButton.tsx said '/dashboard' from a callback in no tag, " +
+        'under a comment that never uses the word landing:\n  ' +
+        offenders.join('\n  '),
+    ).toEqual([]);
+  });
+
   it('every dashboard-name allowlist entry names a file that exists and says WHY (MOTIR-4800)', () => {
     for (const entry of DASHBOARD_NAME_ALLOWLIST) {
       expect(existsSync(join(ROOT, entry.file)), `${entry.file} is allowlisted and absent`).toBe(
@@ -651,5 +807,162 @@ describe('the onboarding scan itself (MOTIR-4403)', () => {
         ),
       ),
     ).toEqual(['aria-label="Home"']);
+  });
+});
+
+// ── The FIFTH scan (MOTIR-5132) ────────────────────────────────────────────
+//
+// The two it exists for are the two halves of MOTIR-5132, so the fixtures ARE
+// those functions: `AcceptInviteButton`'s accept callback, which POSTs to an
+// API route and then pushed `/dashboard`, and a switcher callback that asks the
+// helper. A scan asserted only by an empty offender list over the tree is a
+// scan nobody has watched fire.
+describe('the context-switch scan itself (MOTIR-5132)', () => {
+  const scan = (source: string): string[] => {
+    const code = codeLinesOf(source);
+    const hits: string[] = [];
+    code.forEach((line, i) => {
+      if (!CALLS_A_CONTEXT_SWITCH.test(line)) return;
+      const body = functionBodyAround(code, i);
+      if (!body) return;
+      hits.push(...destinationsNamedIn(body));
+    });
+    return hits;
+  };
+
+  /** The accept callback, parameterised on what it does after the switch. */
+  const acceptInvite = (afterSwitch: string[]): string =>
+    [
+      '  function handleAccept() {',
+      '    setError(undefined);',
+      '    startTransition(async () => {',
+      '      const res = await fetch(`/api/invites/${encodeURIComponent(token)}/accept`, {',
+      "        method: 'POST',",
+      '      });',
+      '      if (!res.ok) {',
+      '        router.refresh();',
+      "        setError(t('inviteAcceptFailed'));",
+      '        return;',
+      '      }',
+      '      const data = (await res.json()) as { workspaceId: string };',
+      '      await switchWorkspaceAction(data.workspaceId);',
+      ...afterSwitch,
+      '    });',
+      '  }',
+    ].join('\n');
+
+  it("FLAGS AcceptInviteButton's pre-fix callback — the element MOTIR-5132 fixed", () => {
+    expect(
+      scan(acceptInvite(["      router.push('/dashboard');", '      router.refresh();'])),
+    ).toEqual(['/dashboard']);
+  });
+
+  it('does NOT flag the SAME callback once it asks the helper', () => {
+    expect(
+      scan(
+        acceptInvite([
+          '      const target = afterContextSwitchTarget(pathname);',
+          '      if (target) router.push(target);',
+          '      else router.refresh();',
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
+  it('does NOT flag the /api path the same callback POSTs to — nobody LANDS on one', () => {
+    // The exclusion is load-bearing rather than decorative: the one function
+    // this rule exists for names an API route three lines above the defect.
+    expect(scan(acceptInvite(['      router.refresh();']))).toEqual([]);
+    expect(destinationsNamedIn("await fetch('/api/invites/x/accept');")).toEqual([]);
+  });
+
+  it('reaches all THREE actions, including the one that is not named switch*', () => {
+    for (const action of [
+      'switchWorkspaceAction',
+      'switchOrganizationAction',
+      'setActiveProjectAction',
+    ]) {
+      expect(
+        scan(
+          [
+            '    startTransition(async () => {',
+            `      await ${action}(id);`,
+            "      router.push('/items');",
+            '    });',
+          ].join('\n'),
+        ),
+        `${action} is a context switch and must be scanned`,
+      ).toEqual(['/items']);
+    }
+  });
+
+  it('does NOT read a route out of a COMMENT — the same line every scan here draws', () => {
+    expect(
+      scan(
+        [
+          '    startTransition(async () => {',
+          '      await switchWorkspaceAction(id);',
+          "      // used to land on '/dashboard' before MOTIR-5132",
+          '      const target = afterContextSwitchTarget(pathname);',
+          '      if (target) router.push(target);',
+          '    });',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('does NOT reach into a NEIGHBOURING function for its route', () => {
+    expect(
+      scan(
+        [
+          '  function handleSwitch(id) {',
+          '    startTransition(async () => {',
+          '      await switchWorkspaceAction(id);',
+          '      const target = afterContextSwitchTarget(pathname);',
+          '      if (target) router.push(target);',
+          '    });',
+          '  }',
+          '',
+          '  function handleSignOut() {',
+          '    startTransition(async () => {',
+          '      await signOut();',
+          "      router.push('/sign-in');",
+          '    });',
+          '  }',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('flags a route named ANYWHERE in the switching function, not only after the call', () => {
+    // The defect shape is "this function decided a destination", and where the
+    // literal sits relative to the action call is not part of it.
+    expect(
+      scan(
+        [
+          '    startTransition(async () => {',
+          "      const to = '/dashboard';",
+          '      await switchOrganizationAction(id);',
+          '      router.push(to);',
+          '    });',
+        ].join('\n'),
+      ),
+    ).toEqual(['/dashboard']);
+  });
+
+  it('the SERVER ACTIONS themselves are not flagged — they perform no navigation', () => {
+    // `_actions.ts` DECLARES switchWorkspaceAction; the declaration line matches
+    // the call regex, and the body must stay clean for that to be harmless.
+    expect(
+      scan(
+        [
+          'export async function switchWorkspaceAction(workspaceId: string): Promise<void> {',
+          '  await setActiveWorkspace(workspaceId);',
+          "  revalidatePath('/', 'layout');",
+          '}',
+        ].join('\n'),
+      ),
+      "revalidatePath('/', 'layout') is not a destination and must not be read as one",
+    ).toEqual([]);
   });
 });

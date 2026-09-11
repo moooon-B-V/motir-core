@@ -176,13 +176,16 @@ export async function IssueTreeSection({
 
   // UNFILTERED tree → the LAZY path (finding #57): load only the first page of
   // ROOTS; children stream in on expand. Keyed by PROJECT + sort: a header-sort
-  // remounts the tree against freshly-sorted roots, and an org/workspace switch
-  // that re-points the active project (afterContextSwitchTarget → router.refresh
-  // in place when already on /items, bug 12) remounts this client island so its
-  // mount-once `useState(initialLevel)` re-seeds from the NEW tenant's roots
-  // rather than keeping the old org's rows (the page-state client-island
-  // contract). The parent <Suspense> is also project-keyed; this is the island's
-  // own data-identity key.
+  // remounts the tree against freshly-sorted roots, and a mount with a different
+  // active project re-seeds this island's mount-once `useState(initialLevel)`
+  // from the NEW tenant's roots rather than keeping the old org's rows (the
+  // page-state client-island contract). The parent <Suspense> is also
+  // project-keyed; this is the island's own data-identity key.
+  //
+  // ⚠️ A CONTEXT SWITCH NO LONGER REFRESHES THIS PAGE IN PLACE (MOTIR-5132):
+  // it pushes to the signed-in landing, so the switch case now unmounts the
+  // island outright instead of relying on the project key to re-seed it. The
+  // key stays because the OTHER remount reasons above are untouched.
   const initialLevel = await workItemsService.listRootIssues(projectId, { sort }, ctx);
   if (initialLevel.total === 0) return empty;
   return withEstimation(

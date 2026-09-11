@@ -43,9 +43,9 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
       setOpen(false);
       // Switching workspace re-points the active project, so the current URL may
       // be scoped to the OLD workspace and client islands won't re-seed on a bare
-      // refresh (MOTIR-1312). Land on the work-items surface — abandoning the
+      // refresh (MOTIR-1312). Land on the signed-in landing — abandoning the
       // stale deep URL + remounting islands — and only refresh in place when
-      // already there.
+      // already there. The destination is the helper's to decide (MOTIR-5132).
       const target = afterContextSwitchTarget(pathname);
       if (target) router.push(target);
       else router.refresh();
