@@ -5,6 +5,12 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ProjectLessonDTO } from '@/lib/dto/projectLessons';
+import {
+  LESSON_PHASES,
+  LESSON_PHASE_REFUSAL,
+  canonicalizeLessonPhases,
+  preprocessLessonPhases,
+} from '@/lib/lessons/phaseAxis';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
@@ -59,7 +65,6 @@ const LESSON_TYPES = [
   'legal',
   'chore',
 ] as const;
-const LESSON_PHASES = ['skeleton', 'deepen'] as const;
 const MISTAKE_TYPES = ['onboarding_planning', 'regular_planning', 'planning_craft'] as const;
 
 const inputSchema = {
@@ -122,11 +127,16 @@ const inputSchema = {
         'stops reaching the chore work it also applies to.',
     ),
   phases: z
-    .array(z.enum(LESSON_PHASES))
+    .preprocess(
+      preprocessLessonPhases,
+      z.array(z.enum([...LESSON_PHASES], { message: LESSON_PHASE_REFUSAL })),
+    )
     .optional()
     .describe(
-      'WHICH PLANNING PHASE this lesson is about: "skeleton" (laying out titles and ' +
-        'dependencies) or "deepen" (writing a card\'s body). Leaving it out means both.',
+      'WHICH PLANNING PHASE this lesson is about: "lay" (laying a level\'s children — shape, ' +
+        'edges, coverage) or "author" (writing one card\'s body — criteria, sizing, claims). ' +
+        'Leaving it out means both. The retired spellings "skeleton" and "deepen" are still ' +
+        'accepted and read as "lay" and "author"; they are removed in a later release.',
     ),
   sourceRef: z
     .string()
@@ -164,7 +174,7 @@ export async function runAddLesson(
     mistakeType: (typeof MISTAKE_TYPES)[number];
     kinds?: (typeof LESSON_KINDS)[number][];
     types?: (typeof LESSON_TYPES)[number][];
-    phases?: (typeof LESSON_PHASES)[number][];
+    phases?: string[];
     sourceRef?: string;
   },
   ctx: ServiceContext,
@@ -179,7 +189,10 @@ export async function runAddLesson(
       howToApply: args.howToApply,
       ...(args.kinds ? { kinds: args.kinds } : {}),
       ...(args.types ? { types: args.types } : {}),
-      ...(args.phases ? { phases: args.phases } : {}),
+      // Canonicalised at the boundary, so a caller still sending `skeleton` /
+      // `deepen` is STORED as `lay` / `author` rather than round-tripping a
+      // retired word into the column (MOTIR-4775).
+      ...(args.phases ? { phases: canonicalizeLessonPhases(args.phases) } : {}),
       ...(args.sourceRef ? { sourceRef: args.sourceRef } : {}),
     });
     return toolOk(

@@ -7,6 +7,12 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 import { RATE_LIMITED_CODE } from '@/lib/rateLimit/guard';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { LessonSearchResult } from '@/lib/dto/projectLessons';
+import {
+  LESSON_PHASES,
+  LESSON_PHASE_REFUSAL,
+  canonicalizeLessonPhases,
+  preprocessLessonPhases,
+} from '@/lib/lessons/phaseAxis';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
@@ -66,7 +72,6 @@ const LESSON_TYPES = [
   'legal',
   'chore',
 ] as const;
-const LESSON_PHASES = ['skeleton', 'deepen'] as const;
 
 const LIMIT_DEFAULT = 8;
 const LIMIT_MAX = 50;
@@ -100,11 +105,16 @@ const inputSchema = {
         'axis unconstrained.',
     ),
   phases: z
-    .array(z.enum(LESSON_PHASES))
+    .preprocess(
+      preprocessLessonPhases,
+      z.array(z.enum([...LESSON_PHASES], { message: LESSON_PHASE_REFUSAL })),
+    )
     .optional()
     .describe(
-      'Which part of a card you are writing: "skeleton" (laying out a level\'s children — ' +
-        'shape, edges, coverage) or "deepen" (writing a body — criteria, sizing, claims). The ' +
+      'Which part of a card you are writing: "lay" (laying a level\'s children — shape, ' +
+        'edges, coverage) or "author" (writing a body — criteria, sizing, claims). The retired ' +
+        'spellings "skeleton" and "deepen" are still accepted and read as "lay" and ' +
+        '"author"; they are removed in a later release. The ' +
         'coordinate only you can supply.',
     ),
   limit: z
@@ -162,7 +172,7 @@ export async function runSearchLessons(
     query: string;
     kinds?: (typeof LESSON_KINDS)[number][];
     types?: (typeof LESSON_TYPES)[number][];
-    phases?: (typeof LESSON_PHASES)[number][];
+    phases?: string[];
     limit?: number;
   },
   ctx: ServiceContext,
@@ -195,7 +205,10 @@ export async function runSearchLessons(
       // filter that matches nothing.
       ...(args.kinds ? { kinds: args.kinds } : {}),
       ...(args.types ? { types: args.types } : {}),
-      ...(args.phases ? { phases: args.phases } : {}),
+      // Canonicalised at the boundary (MOTIR-4775): a caller still sending
+      // `skeleton` / `deepen` searches as `lay` / `author`, so the upstream
+      // only ever sees the current vocabulary.
+      ...(args.phases ? { phases: canonicalizeLessonPhases(args.phases) } : {}),
       ...(args.limit !== undefined ? { limit: args.limit } : {}),
     });
 
@@ -225,8 +238,8 @@ export function registerSearchLessons(server: McpServer, resolveContext: McpCont
         'each with what to do about it — by MEANING, before you plan or build. You get the ' +
         "shared corpus AND this project's own lessons in one answer. " +
         'TWO STEPS, and the second is the one that decides what you get: (1) NARROW by the card ' +
-        'you are working on — its `kinds`, its `types`, and the `phases` you are in (`skeleton` ' +
-        "while laying out a level's children, `deepen` while writing a body); (2) ASK A REAL " +
+        'you are working on — its `kinds`, its `types`, and the `phases` you are in (`lay` ' +
+        "while laying a level's children, `author` while writing a body); (2) ASK A REAL " +
         'QUESTION in `query`. ⚠️ The axes only choose the candidate POOL; the query TEXT then ' +
         'chooses which few arrive. So a vague query returns a handful of near-arbitrary rows out ' +
         'of a correctly-filtered slice — which reads as the mechanism working while it hands you ' +

@@ -3353,6 +3353,10 @@
         "everyCard": "Applies to every work item",
         "notApplied": "Not applied",
         "notRecurred": "Not seen in {days} days",
+        "phase": {
+          "lay": "Laying a level",
+          "author": "Writing a body"
+        },
         "applyingTitle": "Motir is applying this.",
         "applyingBody": "It goes into every plan drafted for this project.",
         "sectionHappened": "What happened",

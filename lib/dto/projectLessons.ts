@@ -1,3 +1,5 @@
+import type { LessonPlanPhase } from '@/lib/lessons/phaseAxis';
+
 // The browser-facing shapes for a project's LESSON LIBRARY (Subtask MOTIR-3337 ·
 // Story MOTIR-3329) — what an admin reads in Settings → Project → AI planning.
 //
@@ -58,7 +60,7 @@ export interface ProjectLessonDTO {
   /** Which card KIND / WORK TYPE / PLAN PHASE it applies to; empty = any. */
   kinds: string[];
   types: string[];
-  phases: string[];
+  phases: LessonPlanPhase[];
   /** Where it came from — a work-item key for a lesson captured after the freeze. */
   sourceRef: string | null;
   /** ISO-8601. */
@@ -154,7 +156,7 @@ export interface RankedLessonDTO {
   /** Which card KIND / WORK TYPE / PLAN PHASE it applies to; empty = any. */
   kinds: string[];
   types: string[];
-  phases: string[];
+  phases: LessonPlanPhase[];
   /** Cosine distance to the query; lower is nearer. */
   distance: number;
 }
