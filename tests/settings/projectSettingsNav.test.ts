@@ -323,6 +323,10 @@ describe('projectSettingsNav registry — grouping', () => {
     ]);
     expect(groups.find((g) => g.group === 'work')?.entries.map((e) => e.id)).toEqual([
       'workflow',
+      // MOTIR-5170 — `approvals` sits directly after `workflow`, and the ORDER is
+      // the assertion: a status graph and an approval gate are the two things that
+      // decide when work may move, so they are neighbours rather than nested.
+      'approvals',
       'board',
       'estimation',
       'fields',
