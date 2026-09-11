@@ -49,8 +49,9 @@ import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 // 1 is about re-READING the edited cell, and nothing here does; the status rail is
 // case 2 (`CLAUDE.md` § *Page state after a mutation*).
 //
-// ⚠️ `turnOnAcceptanceVideoAction` BELOW HAS THE SAME SHAPE AND IS DELIBERATELY
-// NOT FIXED HERE — see its own note.
+// ⚠️ `turnOnAcceptanceVideoAction` BELOW HAD THE SAME SHAPE AND NOW SHIPS THE
+// SAME SERVER HALF (Bug MOTIR-5196) — see its own note for what that card
+// measured.
 
 async function requireContext() {
   const session = await getSession();
@@ -103,32 +104,41 @@ export type TurnOnAcceptanceVideoResult = { ok: true } | { ok: false; error: str
 
 /** Turn acceptance video ON for the org from the panel (the toggle-off admin path).
  *
- * ⚠️ SAME DEFECT CLASS AS `decideAcceptanceAction` ABOVE, AND DELIBERATELY LEFT
- * ALONE (Bug MOTIR-5160, criterion 4). The disposition, in writing:
+ * ⚠️ WHAT MOTIR-5196 MEASURED HERE, AND WHAT IT DID NOT — the note this replaces
+ * recorded the defect as known-and-deferred, and the replacement owes the reader
+ * the result rather than the promise.
  *
- * IT IS THE SAME SHAPE. This action calls one service and returns; it carries no
- * `revalidatePath`, and `AcceptancePanel.turnOn` follows it with a bare
- * `router.refresh()`. The surface it moves is server-rendered — the panel's whole
- * `eligibility` prop is a server read, and turning the toggle on is what swaps
- * State B for State A — so it is case 2 of the page-state contract exactly as the
- * decide path is, and the same second-apply race can drop it.
+ * THE SHAPE WAS THE SAME as `decideAcceptanceAction` above: one service call and
+ * a return, no `revalidatePath`, with `AcceptancePanel.turnOn` following it with
+ * a bare `router.refresh()`. The surface it moves is server-rendered — the
+ * panel's whole `eligibility` prop is a server read, and turning the toggle on is
+ * what swaps State B for State A — so it is case 2 of the page-state contract
+ * exactly as the decide path is, and the same second-apply race can drop it.
  *
- * IT IS NOT FIXED HERE, FOR THE REASON THIS CARD EXISTS. MOTIR-5160 was filed
- * rather than folded into MOTIR-5118's pull request precisely because a drive-by
- * would have shipped an UNVERIFIED change to a second surface in a card whose
- * lesson was about unverified diagnoses. Fixing this one on the way past would
- * repeat that mistake one surface further along: no test drives the toggle-on
- * path in place, this card's guard does not cover it, and a one-line change that
- * nothing can observe is indistinguishable from no change. The remedy owes its
- * own reproduction and its own guard.
+ * THE DEFECT DID NOT REPRODUCE, which is the same answer MOTIR-5160 got one
+ * surface over: `tests/e2e/cloud-acceptance-toggle-repaint.spec.ts` passed 5/5
+ * against this action unfixed (2026-09-12). What the guard DOES prove is that it
+ * can SEE the defect — commenting out `AcceptancePanel.turnOn`'s
+ * `router.refresh()` fails it at the State-A assertion, and not before. So the
+ * fix ships on the same footing MOTIR-5160's did: a mechanism measured on a
+ * sibling, a guard demonstrated able to go red, and no claim that the race was
+ * observed here. Read a green run of that file as "no repaint regression", never
+ * as "the race cannot happen".
  *
- * IT IS TRACKED AS A CARD, NOT AS THIS PARAGRAPH — Bug MOTIR-5196, blocked_by
- * MOTIR-5160 because its fix consumes the `itemIdentifier` threaded here. A
- * deferral that lives only in a comment is read by nobody once the card that
- * wrote it goes Done; a card is in a ready set and can be picked up by anyone. */
-export async function turnOnAcceptanceVideoAction(
-  organizationId: string,
-): Promise<TurnOnAcceptanceVideoResult> {
+ * ⚠️ AND `router.refresh()` STAYS IN THE CALLER. Removing it is a SEPARATE claim
+ * nobody has tested, and on the design gate one tier over it was measured
+ * NECESSARY. It is also what this card's guard breaks to prove itself red-able,
+ * so deleting it would take the detector with it. */
+export async function turnOnAcceptanceVideoAction(input: {
+  organizationId: string;
+  /** The card whose page the panel is on — the path revalidated on success.
+   *  A PARAMETER rather than a lookup, the shape `decideAcceptanceAction` and
+   *  `approvalGateActions.ts` both settled on: the action knows an organisation
+   *  id, the path is the CARD's identifier, and `AcceptancePanel` already holds
+   *  it (MOTIR-5160 threaded it through `AcceptancePanelProps`). */
+  itemIdentifier: string;
+}): Promise<TurnOnAcceptanceVideoResult> {
+  const { organizationId, itemIdentifier } = input;
   const ctx = await requireContext();
   try {
     await organizationsService.setAcceptanceVideoEnabled({
@@ -136,6 +146,12 @@ export async function turnOnAcceptanceVideoAction(
       actorUserId: ctx.userId,
       enabled: true,
     });
+    // The server half, on the action's own response. A REFUSAL revalidates
+    // nothing — the toggle did not move, so no surface did, and re-rendering the
+    // page under a reader about to be shown why their press did not land helps
+    // nobody. That is why this sits on the success branch and the catch below
+    // does not have it.
+    revalidatePath(`/items/${itemIdentifier}`);
     return { ok: true };
   } catch (err) {
     if (err instanceof OrganizationNotFoundError || err instanceof OrgForbiddenError) {

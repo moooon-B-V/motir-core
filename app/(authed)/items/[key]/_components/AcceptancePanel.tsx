@@ -41,9 +41,11 @@ const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const;
 
 export interface AcceptancePanelProps {
   workItemId: string;
-  /** The card whose page this panel is on — the path the decide action
-   *  revalidates on success (Bug MOTIR-5160). The action knows a work-item ID;
-   *  the path is the card's IDENTIFIER, and `LateSections` already holds it. */
+  /** The card whose page this panel is on — the path BOTH of this panel's
+   *  actions revalidate on success (Bug MOTIR-5160 for `decide`, Bug MOTIR-5196
+   *  for `turnOn`). Each action knows an id of its own — a work item, an
+   *  organisation — and neither is the path; the path is the card's IDENTIFIER,
+   *  and `LateSections` already holds it. */
   itemIdentifier: string;
   organizationId: string | null;
   eligibility: AcceptanceVideoEligibilityDTO;
@@ -106,11 +108,19 @@ export function AcceptancePanel({
     if (!organizationId) return;
     setError(null);
     startTransition(async () => {
-      const res = await turnOnAcceptanceVideoAction(organizationId);
+      const res = await turnOnAcceptanceVideoAction({ organizationId, itemIdentifier });
       if (!res.ok) {
         setError(res.error);
         return;
       }
+      // ⚠️ KEPT DELIBERATELY, BESIDE THE ACTION'S OWN `revalidatePath` (Bug
+      // MOTIR-5196) — the same disposition `decide` above carries. Both halves
+      // ship: the action puts the fresh tree on its own response where nothing
+      // can race it, and this reaches the surfaces a server tree does not cover.
+      // Removing it is a SEPARATE claim nobody has tested, and it is also what
+      // this card's guard breaks to prove itself able to go red — commenting it
+      // out fails `tests/e2e/cloud-acceptance-toggle-repaint.spec.ts` at the
+      // State-A assertion.
       router.refresh();
     });
   }
