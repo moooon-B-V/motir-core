@@ -372,6 +372,62 @@ const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
   claim_refused: 'claimed by somebody else, or no longer claimable',
 };
 
+/**
+ * WHAT THIS RUN IS, read off the set it CARRIES (MOTIR-4969).
+ *
+ * ── Why the carried set and not the command ───────────────────────────────
+ * The obvious partition is by lane — a scoped run has a story, an unscoped one
+ * does not — and it is false on the first case anyone tries: `motir run sprint`
+ * IS scoped and its ready set spans parents, so there is no single story for it
+ * to name. What actually decides is the parent partition of the cards the run
+ * carried, which is a property of the work rather than of the words typed.
+ *
+ * ── ONE derivation, two consumers ─────────────────────────────────────────
+ * {@link sessionPrTitle} has computed exactly this partition since MOTIR-2422 to
+ * decide what to CALL the session pull request; MOTIR-4969 needs the same answer
+ * to decide what that pull request DELIVERS. Naming it once is not tidiness: two
+ * copies are free to disagree about what the run is, and the title is the line a
+ * reviewer reads first while the link is what moves the tree — so a divergence
+ * would be invisible in review and consequential at merge.
+ */
+export type SessionPrScope =
+  /**
+   * ONE card, which is therefore the deliverable. Its parent describes something
+   * much larger than what shipped, so nothing here names the parent — the title
+   * would overstate a single subtask as its whole feature, and the link would
+   * close a story on one of its children.
+   */
+  | { arm: 'one-card'; key: string }
+  /**
+   * N cards, EVERY one of them under the same parent: the run built a container,
+   * and the container is what the pull request delivers.
+   */
+  | { arm: 'shared-parent'; key: string }
+  /**
+   * N cards under several parents — or none the set agrees on. There is no
+   * container to name, and inventing one is the failure this arm exists to make
+   * unreachable.
+   */
+  | { arm: 'many-parents' };
+
+export function sessionPrScope(
+  carried: readonly Pick<DispatchRecord, 'key' | 'parentKey'>[],
+): SessionPrScope {
+  const only = carried.length === 1 ? carried[0] : undefined;
+  if (only) return { arm: 'one-card', key: only.key };
+
+  // ⚠️ SHARED means EVERY card, and a `null` counts as a distinct answer. A set
+  // containing a top-level card does not share a parent, so it falls through
+  // rather than naming the story the OTHERS happen to sit under — saying less
+  // beats saying something untrue, and here the untrue thing would be a link.
+  //
+  // An EMPTY set lands here too, and correctly: nothing was carried, so nothing
+  // is delivered.
+  const parents = new Set(carried.map((r) => r.parentKey));
+  const shared = parents.size === 1 ? [...parents][0] : null;
+  return shared ? { arm: 'shared-parent', key: shared } : { arm: 'many-parents' };
+}
+
 /** The PR title for a session branch. Carries a `MOTIR-<n>` only in its
  *  one-card arm, where the claim is true; see
  *  {@link import('./git.js').sessionBranchName} for why a session PR must not
@@ -379,29 +435,23 @@ const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
  *
  *  ⚠️ Since MOTIR-3674 a key here is a LABEL a human reads and nothing more —
  *  Motir does not parse a title, so this string cannot link, mis-link, or move
- *  anything. It is still worth getting right for the reader. */
+ *  anything. It is still worth getting right for the reader.
+ *
+ *  ⚠️ The three arms are {@link sessionPrScope}'s, shared rather than repeated
+ *  (MOTIR-4969) — see there for why the partition is the carried set's. */
 export function sessionPrTitle(
   runId: string,
   carried: readonly Pick<DispatchRecord, 'key' | 'title' | 'parentKey'>[],
 ): string {
   const count = carried.length;
-  const fallback = `Motir auto run ${runId} — ${count} work item${count === 1 ? '' : 's'}`;
+  const scope = sessionPrScope(carried);
 
-  // ⚠️ ONE card: the CARD is the deliverable, and its parent describes something
-  // much larger than what shipped. Naming the story here would overstate a
-  // single subtask as its whole feature.
-  const only = count === 1 ? carried[0] : undefined;
-  if (only) return fitTitle(`${only.key}${only.title ? ` ${only.title}` : ''}`);
-
-  // ⚠️ SHARED means EVERY card, and a `null` counts as a distinct answer. A set
-  // containing a top-level card does not share a parent, so it falls back rather
-  // than naming the story the OTHERS happen to sit under — a title that says
-  // less beats one that says something untrue.
-  const parents = new Set(carried.map((r) => r.parentKey));
-  const shared = parents.size === 1 ? [...parents][0] : null;
-  if (!shared) return fallback;
-
-  return fitTitle(`${shared} — ${count} work items`);
+  if (scope.arm === 'one-card') {
+    const only = carried[0]!;
+    return fitTitle(`${only.key}${only.title ? ` ${only.title}` : ''}`);
+  }
+  if (scope.arm === 'shared-parent') return fitTitle(`${scope.key} — ${count} work items`);
+  return `Motir auto run ${runId} — ${count} work item${count === 1 ? '' : 's'}`;
 }
 
 /**
