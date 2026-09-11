@@ -736,6 +736,29 @@
       .prov-unknown {
         color: var(--el-text-muted);
       }
+      /* ── SUBJECT — the THIRD group, and the only SINGLE-VALUE one (MOTIR-5073)
+         The shape question this card exists to answer: two of the three groups
+         are triples, and a lone value sitting in the same box can read as a
+         triple whose other two rows failed to load. It is kept apart from them
+         by NOT starting with a chip — the two triples both open with a tinted
+         source chip, so a card with no chip at all is visibly a different KIND
+         of field rather than a shorter instance of the same one.
+         MONO, and for the reason this asset already states at `.model`: a
+         subject is an IDENTIFIER — it names the rule pack the planner read
+         (`subject-<name>.md`) — and mono is what this asset uses for an
+         identifier. --el-text rather than --el-text-muted because it is the
+         card's PRIMARY content, not a secondary annotation beneath one.
+         NO per-member tint: subject members are corpus-owned and open-ended, so
+         a colour per member would be a vocabulary this repository cannot
+         enumerate. Plain text is the honest treatment. */
+      .subject-value {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       /* ── Provenance DISCLOSURE — collapsed by default (MOTIR-1688) ─────────
          Mirrors the shipped "Show all custom fields" toggle in
          CustomFieldsSection.tsx: a full-width button, a leading chevron that
@@ -958,9 +981,10 @@
     <!-- ═══ PANEL 2 — EXPANDED, both triples populated ══════════════════════ -->
     <div class="specimen">
       <div class="cap">
-        Expanded — both triples populated. A BYOK-executed item planned via the MCP: the two
-        FieldCards reveal below the open disclosure (chevron rotated). MCP + BYOK expose their model
-        (the user reported their OWN).
+        Expanded — all THREE groups populated. A BYOK-executed item planned via the MCP, on a card
+        whose planner read the <code>jobs</code> subject packs: the FieldCards reveal below the open
+        disclosure (chevron rotated). MCP + BYOK expose their model (the user reported their OWN).
+        Subject is the THIRD group and the only single-value one.
       </div>
       <div class="rail">
         <button class="disc-toggle is-open is-new" aria-expanded="true">
@@ -1002,6 +1026,10 @@
               </div>
             </div>
           </div>
+          <div class="fcard is-new">
+            <div class="head"><span class="flabel">Subject</span></div>
+            <div class="fvalue"><span class="subject-value">jobs</span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1009,10 +1037,12 @@
     <!-- ═══ PANEL 3 — EXPANDED: native (NO model) + unknown implementation ═══ -->
     <div class="specimen">
       <div class="cap">
-        Expanded — NATIVE planning + no execution yet. Native shows ONLY “Native · Motir”: Motir
-        abstracts its own planning model, so the underlying LLM is NEVER exposed (it is recorded
-        server-side for analysis only). The implementation triple is the “—” unknown state — the
-        common case for an item not yet executed.
+        Expanded — NATIVE planning, no execution yet, and NO subject. Native shows ONLY “Native ·
+        Motir”: Motir abstracts its own planning model, so the underlying LLM is NEVER exposed (it
+        is recorded server-side for analysis only). Implementation is the “—” unknown state, and so
+        is Subject — the COMMON case for both, and it stays common: the corpus ships four members
+        and most cards carry none. A subject-less card must read as ORDINARY here, not as
+        incomplete.
       </div>
       <div class="rail">
         <button class="disc-toggle is-open is-new" aria-expanded="true">
@@ -1042,7 +1072,61 @@
             <div class="head"><span class="flabel">Implementation</span></div>
             <div class="fvalue"><span class="prov-unknown">—</span></div>
           </div>
+          <div class="fcard is-new">
+            <div class="head"><span class="flabel">Subject</span></div>
+            <div class="fvalue"><span class="prov-unknown">—</span></div>
+          </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 4 — THE SHAPE QUESTION: one value beside two triples ═════ -->
+    <div class="specimen">
+      <div class="cap">
+        The shape question this surface had to answer. Two groups are TRIPLES that open with a
+        tinted source chip; Subject is a SINGLE VALUE. Set side by side, the Subject card is not a
+        short triple — it starts with no chip at all, so it reads as a different KIND of field
+        rather than as one whose other two rows failed to load. The value is MONO because a subject
+        is an IDENTIFIER: it names the rule pack the planner read, exactly as
+        <code>model</code> above it names an LLM, and this asset already uses mono for identifiers.
+        There is deliberately NO per-member tint — subject members are corpus-owned and open-ended,
+        so a colour per member would be a vocabulary this repository cannot enumerate.
+      </div>
+      <div class="rail">
+        <div class="fcard">
+          <div class="head"><span class="flabel">Planning</span></div>
+          <div class="fvalue">
+            <div class="prov-lines">
+              <span class="pchip t-mcp">
+                <span class="pdot"
+                  ><svg viewBox="0 0 24 24"><use href="#i-terminal" /></svg></span
+                >MCP
+              </span>
+              <div class="prov-meta">
+                <span class="harness">Claude Code</span>
+                <span class="model">claude-opus-4-8</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="fcard is-new">
+          <div class="head"><span class="flabel">Subject</span></div>
+          <div class="fvalue"><span class="subject-value">data</span></div>
+        </div>
+        <div class="fcard is-new">
+          <div class="head"><span class="flabel">Subject</span></div>
+          <div class="fvalue"><span class="prov-unknown">—</span></div>
+        </div>
+      </div>
+      <div class="panel-note">
+        <strong>Read-only, like everything else in this disclosure.</strong> No chevron on the card,
+        no input, no entry affordance — the subject is set by the planning pass that derived it and
+        is never edited by hand. That is the whole reason the field lives HERE rather than beside
+        <code>type</code> in the editable cluster: a control a person can SEE is one they reasonably
+        expect to EDIT, and editing a subject re-points the rule corpus rather than describing the
+        work. Its blank means <em>the corpus has no pack for this</em>, not
+        <em>this work has no subject</em> — which is a false thing to teach a reader who thinks they
+        own the field.
       </div>
     </div>
 

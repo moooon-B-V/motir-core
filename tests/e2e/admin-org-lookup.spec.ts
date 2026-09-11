@@ -45,6 +45,11 @@ test('@smoke platform staff reach the org lookup and an org page; a tenant user 
   //    does not exist for them (`platform-staff-auth.md` §2).
   expect((await page.goto('/admin/tenants'))?.status()).toBe(404);
   expect((await page.goto(`/admin/tenants/${org.id}`))?.status()).toBe(404);
+  // ⚠️ NOT converted and NOT scoped (MOTIR-5115) — `toHaveCount` resolves the WHOLE
+  // match set, so it cannot throw strict mode and this site is not in the defect
+  // class; and the claim is that no 403 body appears ANYWHERE, which is the
+  // no-leak posture the line above asserts. A role or a subtree scope would prove
+  // strictly less. Keeps its inventory row.
   await expect(page.getByText('403')).toHaveCount(0);
 
   // ── Now the same person as platform staff. Granting the standing to the
@@ -56,7 +61,11 @@ test('@smoke platform staff reach the org lookup and an org page; a tenant user 
   expect(lookup?.status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
   // The idle state — the lookup answers a question and shows nothing until asked.
-  await expect(page.getByText('Search for an organization')).toBeVisible();
+  // BY ROLE (MOTIR-5115) — `EmptyState` renders its title as an `<h2>`, and the
+  // accessibility tree excludes the hidden streamed copy a page-rooted `getByText`
+  // would also match (MOTIR-4822's pattern). The `(admin)` layout renders no
+  // `<main>`, so the role is the only remedy here — and it is the better one.
+  await expect(page.getByRole('heading', { name: 'Search for an organization' })).toBeVisible();
 
   // ── The GET form puts the query in the URL, which is the whole argument for
   //    a form over a type-ahead: the result set is linkable and survives a

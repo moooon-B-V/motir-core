@@ -294,3 +294,186 @@ describe('the ledger row carries the SYNC/REBUILD mode, per CONTAINER', () => {
     expect(runs[0]!.output).not.toHaveProperty('indexModes');
   }, 30_000);
 });
+
+// THE CONTAINER'S OWN VERDICT, BESIDE THE OFFER-DERIVED ONE (MOTIR-5058).
+//
+// The describe above proves the OFFER reaches the row. This one proves the row can
+// now also carry what the container DID with that offer — the fact that lives in
+// motir-ai, behind the open/closed boundary, and that nothing on this side could
+// see until this card.
+//
+// ⚠️ THE TWO ARE NOT ONE FIELD MEASURED TWICE, and the third case below is what
+// proves it: a run OFFERED a snapshot whose sync then threw is `sync` on this side
+// — correctly, a snapshot WAS offered — and `build` on the container's. That single
+// disagreement is the entire reason the second field exists, and it is the arm
+// MOTIR-5027's detector currently reads straight through.
+//
+// ⚠️ DRIVEN AT THE FETCH SEAM, NOT BY MOCKING THE CLIENT. What is under test is the
+// WIRE — motir-ai's body shape reaching this ledger row through the real parsing in
+// `fetchCodeGraphRunVerdict` — so faking that function would check the seam from one
+// end and prove the wrong thing.
+//
+// ⚠️ ONE INDEX RUN PER TEST, AND THAT IS A CONSTRAINT RATHER THAN A STYLE. Both
+// `stubIndexFleet` and `containerExitsWith` install a spy that CLOSES OVER the
+// implementation it replaced, so calling either twice in one test body nests the
+// wrappers and the second run recurses until the stack dies. `afterEach`'s
+// `restoreAllMocks` is what makes a per-test install clean; three runs in one `it`
+// is not a longer version of the same thing.
+describe('the ledger row ALSO carries what the CONTAINER did (MOTIR-5058)', () => {
+  type ModeRow = {
+    projectId: string;
+    mode: string;
+    containerMode?: string;
+    containerFallbackReason?: string;
+  };
+
+  /**
+   * Stand up the fleet world with motir-ai answering the run-verdict route with
+   * `body`, and force the OFFER-derived mode to `offer`.
+   *
+   * `body === 'unreachable'` makes the verdict call throw; `body === 'not-found'`
+   * answers 404, which is the OLDER-motir-ai arm. Everything else is serialized as
+   * the response body. Every other route behaves exactly as `stubIndexFleet` left it.
+   */
+  function world(offer: 'sync' | 'rebuild', body: unknown): void {
+    stubIndexFleet();
+    containerExitsWith(0);
+
+    const base = globalThis.fetch as unknown as (
+      url: string,
+      init?: RequestInit,
+    ) => Promise<Response>;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+        if (new URL(String(url)).pathname.endsWith('/v1/code-graph/run/verdict')) {
+          if (body === 'unreachable') throw new Error('motir-ai is unreachable');
+          if (body === 'not-found') return new Response('not found', { status: 404 });
+          return new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        return base(url, init);
+      }),
+    );
+
+    // The OFFER is motir-ai's decision and this suite stubs motir-ai, so it is
+    // driven at the dispatch seam — the same technique, and the same reason, as the
+    // `sync` case in the describe above.
+    const spy = vi.mocked(codeGraphIndexDispatchService.advanceIndexContainer);
+    const withFastBudgets = spy.getMockImplementation()!;
+    spy.mockImplementation(async (runId, input, options) => {
+      const outcome = await withFastBudgets(runId, input, options);
+      if (outcome.outcome !== 'settled') return outcome;
+      return { ...outcome, indexMode: offer };
+    });
+  }
+
+  async function runIndex(slug: string): Promise<ModeRow[]> {
+    const { workspaceId, installationId } = await seedIndexWorkspace(slug, 1);
+    const engine = new JobTestEngine({ function: codeGraphIndex });
+    const { result, error } = (await engine.execute({
+      events: [indexEventFor({ installationId, workspaceId, eventId: `evt-${slug}` })],
+    })) as { result?: unknown; error?: unknown };
+    // Surface the handler's own failure rather than letting it reach the reader as a
+    // status assertion — a run that THREW and a run that DEFERRED both leave the row
+    // at `running`, and only one of them is a defect in this diff.
+    if (error) throw error;
+
+    const output = result as { indexModes?: ModeRow[] };
+    // ALWAYS re-assert against the PERSISTED row, never only the return value — for
+    // the reason the file's header states: `indexEveryProject` throws out of its loop
+    // on every pass but the last, so "computed" and "reached the row" are different
+    // claims and only the second is what an operator reads.
+    const runs = await indexJobRuns();
+    expect(runs[0]!.status).toBe('succeeded');
+    expect(runs[0]!.output).toEqual(output);
+    return output.indexModes!;
+  }
+
+  // ── AC 3 · the three states a row must now tell apart ────────────────────────
+
+  it('NOT OFFERED — a cold build, with nothing to explain', async () => {
+    // No snapshot was granted, so the container built from scratch. Both sides
+    // agree, and the absent reason is itself information: a `build` with no reason
+    // was never offered anything.
+    world('rebuild', { verdict: { indexMode: 'build', fallbackReason: null } });
+
+    expect(await runIndex('cgv-cold')).toEqual([
+      { projectId: expect.any(String), mode: 'rebuild', containerMode: 'build' },
+    ]);
+  }, 30_000);
+
+  it('OFFERED AND SYNCED — the happy path the feature actually promises', async () => {
+    // The two sides agree here too, which is exactly why agreement is not evidence
+    // that the fields are interchangeable: they agree on two of the three arms.
+    world('sync', { verdict: { indexMode: 'sync', fallbackReason: null } });
+
+    expect(await runIndex('cgv-synced')).toEqual([
+      { projectId: expect.any(String), mode: 'sync', containerMode: 'sync' },
+    ]);
+  }, 30_000);
+
+  it('OFFERED AND REBUILT ANYWAY — the blind arm, now on the record with its reason', async () => {
+    // THE CARD. Before this, the row said `sync` and nothing contradicted it: the
+    // offer-derived mode is not wrong — a snapshot WAS offered — it simply cannot
+    // see what happened next. A detector reading it reported healthy through exactly
+    // the failure it existed to catch.
+    world('sync', {
+      verdict: { indexMode: 'build', fallbackReason: 'engine called the snapshot stale' },
+    });
+
+    const rows = await runIndex('cgv-refused');
+    expect(rows).toEqual([
+      {
+        projectId: expect.any(String),
+        mode: 'sync',
+        containerMode: 'build',
+        containerFallbackReason: 'engine called the snapshot stale',
+      },
+    ]);
+    // Said twice deliberately: the two facts are SEPARATELY readable on one row,
+    // neither having overwritten the other. That is criterion 2's whole content.
+    expect(rows[0]!.mode).toBe('sync');
+    expect(rows[0]!.containerMode).toBe('build');
+  }, 30_000);
+
+  // ── AC 4 · the defensive arm, which is what frees the merge order ────────────
+
+  // Four ways motir-ai can fail to answer, one required outcome: the run SUCCEEDS
+  // and the `indexModes` entry is byte-identical to the one written before this
+  // card — `{ projectId, mode }` and nothing else.
+  //
+  // This is the property that makes the two repositories' pull requests free to land
+  // in either order, so it is asserted per failure mode rather than once: a client
+  // that handled three of these and threw on the fourth would pass a single-case test
+  // and fail a production deploy that happened to hit the fourth.
+  it.each([
+    // An OLDER motir-ai: the route does not exist yet. THE merge-order case.
+    ['a 404 from an older motir-ai', 'cgv-404', 'not-found'],
+    // A motir-ai that serves the route and has nothing recorded for this run.
+    ['an explicit absent verdict', 'cgv-empty', { verdict: null }],
+    // One that answers with a verdict object carrying neither field.
+    ['a verdict carrying no fields', 'cgv-fieldless', { verdict: {} }],
+    // One that does not answer at all.
+    ['an unreachable motir-ai', 'cgv-unreachable', 'unreachable'],
+  ])(
+    'leaves the row BYTE-IDENTICAL to today’s on %s',
+    async (_label, slug, body) => {
+      world('rebuild', body);
+
+      const rows = await runIndex(slug as string);
+      // `toEqual` against an exact object is the assertion that matters — a
+      // `toMatchObject` would pass while an undefined-valued key sat on the row.
+      expect(rows).toEqual([{ projectId: expect.any(String), mode: 'rebuild' }]);
+      // And the keys explicitly, because `toEqual` treats an explicitly-undefined
+      // property as absent while `JSON.stringify` onto the ledger does too — so the
+      // one thing neither of them would catch is the shape drifting for a reader of
+      // the TYPE. A defaulted `containerMode` here would be indistinguishable from a
+      // measured one, which is the confusion the field was added to end.
+      expect(Object.keys(rows[0]!).sort()).toEqual(['mode', 'projectId']);
+    },
+    30_000,
+  );
+});
