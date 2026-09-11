@@ -460,6 +460,16 @@ assert in MOTIR-3337).
 | **Applies to every card**  | The chip a lesson with NO axes shows — empty means _unconstrained_ upstream, and three missing chips would read as missing data rather than as universal scope.                                                    |
 | the **retire affordance**  | On hover and on focus. A labelled `Button`, never a bare icon: an unlabelled ban glyph beside a rule reads as “this rule is broken”.                                                                               |
 
+**Only the PHASE axis is LABELLED, and the asymmetry is the point.** A phase chip draws
+`phase Laying a level` or `phase Writing a body` — the two strings in `messages/en.json` under
+`settings.aiPlanning.lessons.phase.lay` / `.author` (Bug MOTIR-4775). `kind` and `type` chips draw
+their value RAW, because those values already ARE the product's own words: a reader who sees `story`
+or `code` on a chip is reading the same noun the board uses. The phase axis is the one whose stored
+values (`lay` / `author`) are internal vocabulary, so it is the one that needs translating at the
+surface. The chips above are drawn with the catalogue's strings rather than with the stored values,
+and `tests/design-lesson-phase-chips.test.ts` asserts the board against the catalogue so the two
+cannot drift apart again (Bug MOTIR-5107).
+
 Row order is `lastOccurredAt` descending — most recently relevant first, which is what the API
 returns. The one filter is the `All · Applied · Not applied` segmented control, because the only
 question a reader has about a list of twelve is which ones are live.

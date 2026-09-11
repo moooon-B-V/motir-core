@@ -155,6 +155,14 @@ export default defineConfig({
       // does with an uncommitted path, so a stub would assert the stub) and
       // fakes the renderer — no database and no browser.
       'tests/scripts/render-design-mock-git.test.ts',
+      // `design-lesson-phase-chips` (MOTIR-5107) reads the lesson library's
+      // board and `messages/en.json` together, and asserts every phase chip is
+      // a string the CATALOGUE holds rather than a literal this spec carries.
+      // The asset had gone on drawing `phase skeleton` for as long as nothing
+      // measured it, so it is here by this lane's own predicate: a design PR is
+      // both the only thing that can break it and the only thing that can fix
+      // it, and it costs a file read and a regex.
+      'tests/design-lesson-phase-chips.test.ts',
     ],
   },
   resolve: {
