@@ -1178,28 +1178,56 @@ would leave two CSS idioms in one board. It reaches the same guarantee the other
 references instead of resolved pixels, the class string quoted beside every rule, and the command
 above.
 
-### The sprite sheet — EXTRACTED vs APPROXIMATE
+### The sprite sheet is EXTRACTED, and a command proves it
 
 A symbol's NAME is exactly the kind of thing a careful reader trusts, and in this sheet it has been
-wrong twice: `#i-x` is lucide `circle-x` under a short name (MOTIR-5007 reached for it and drew a
-circled ⊗ where `RemoveLinkButton` renders a plain `X`), and it was also hand-typed at `r="9"` where
-the package draws `r="10"`.
+wrong three times. `#i-x` is lucide `circle-x` under a short name (MOTIR-5007 reached for it and drew
+a circled ⊗ where `RemoveLinkButton` renders a plain `X`), and it was also hand-typed at `r="9"` where
+the package draws `r="10"`. `#i-repo` carried lucide `book`'s drawing under a repository label, while
+every repository surface in the app renders `FolderGit2`. And `#i-sliders` was drawn VERTICAL — three
+column tracks — while the Details row it labels renders `SlidersHorizontal`.
 
-Diffing every `<symbol>` against `lucide-react@1.16.0` found **19 of 30 drifted**. The six the
-Development row draws — `#i-git-pr`, `#i-git-merge`, `#i-git-closed`, `#i-check`, `#i-x`, `#i-dots` —
-are now emitted from the package, each with a comment naming the file it came from and the
-`PR_STATE_META` / `CI_STATE_META` entry it stands for. **Three of them were not approximations of
-their own icon at all**: `#i-git-pr` was a sketch of lucide `git-pull-request`, a different icon from
-the `GitPullRequestArrow` the component imports.
+Diffing every `<symbol>` against `lucide-react@1.16.0` found **19 of 30 drifted**. MOTIR-5008 took the
+six the Development row draws (`#i-git-pr`, `#i-git-merge`, `#i-git-closed`, `#i-check`, `#i-x`,
+`#i-dots`); **three of them were not approximations of their own icon at all** — `#i-git-pr` was a
+sketch of lucide `git-pull-request`, a different icon from the `GitPullRequestArrow` the component
+imports. MOTIR-5136 took the remaining thirteen.
 
-The remaining thirteen are listed as APPROXIMATE in the sprite sheet's own header, and extracting
-them — plus turning this diff into a reusable predicate — is **MOTIR-5136**. `#i-github` and
-`#i-gitlab` are brand marks and are outside the audit. Re-check any one sprite in one command:
+**All 30 lucide symbols are now emitted from the installed package**, each with a provenance comment
+naming the file it came from and the shipped code the glyph stands for. The resolution of a sprite is
+made against **that shipped code, never against the sprite's id** — the id is the thing that has been
+wrong. Six of the thirteen were settled by a nav registry outright:
+
+| sprite          | lucide               | what resolves it                                                   |
+| --------------- | -------------------- | ------------------------------------------------------------------ |
+| `#i-building`   | `building-2`         | `organizationSettingsNav.ts` — the Organisation row is `Building2` |
+| `#i-git-branch` | `git-branch`         | `organizationSettingsNav.ts` — the Git row is `GitBranch`          |
+| `#i-users`      | `users`              | `organizationSettingsNav.ts` — the Members row is `Users`          |
+| `#i-coins`      | `coins`              | `organizationSettingsNav.ts` — the Usage & cost row is `Coins`     |
+| `#i-sliders`    | `sliders-horizontal` | `projectSettingsNav.ts` — the Details row is `SlidersHorizontal`   |
+| `#i-repo`       | `folder-git-2`       | `projectSettingsNav.ts` — the Repositories row is `FolderGit2`     |
+
+The same two registries independently confirm `#i-shield-check`, `#i-card` and `#i-shield`, which were
+already byte-correct — which is the check on the method, not a coincidence.
+
+**The re-check is a command, not a reading.** This is the half worth more than the thirteen fixes: the
+first three bugs in this class were each found by a person rendering a panel and noticing. Run
 
 ```
-grep -oE '\["(circle|path|line|polyline|rect)".*' \
-  node_modules/lucide-react/dist/esm/icons/circle-x.mjs
+node scripts/audit-mock-sprites.mjs design/github/github.mock.html --strict
 ```
+
+It reads each symbol's provenance comment for the icon it DECLARES, diffs that symbol's shapes against
+the icon's `__iconNode` in the installed package, and exits non-zero on any disagreement. `--strict`
+also fails an UNDECLARED symbol, so a sprite added without provenance cannot pass quietly. It takes any
+mock, so an asset nobody has looked at yet can be swept in one line. Run it after editing a symbol and
+after a `lucide-react` bump.
+
+`#i-github` and `#i-gitlab` are each provider's own brand mark and carry a `NOT-LUCIDE` declaration,
+which is what makes the audit skip them rather than report them unverifiable. `#i-inbox`, `#i-briefcase`
+and `#i-cog` are extracted and correct but are not currently drawn by any panel; they were extracted
+rather than deleted because removing a sprite is a decision about the board's future panels, and this
+card was a measurement.
 
 ### What did NOT change
 
