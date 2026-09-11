@@ -7,6 +7,22 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 
 /*
+ * ── LOCATOR DISCIPLINE (MOTIR-5115) ────────────────────────────────────────
+ *
+ * Every locator this file takes after a navigation is role-based or scoped to
+ * `pane` (the shell's live `<main>`). React keeps the OUTGOING subtree mounted
+ * while the incoming one streams and Playwright resolves locators BEFORE
+ * filtering on visibility, so a page-rooted `getByText` matches both copies and
+ * strict mode fails on a page that is perfectly correct (`CLAUDE.md` § *a
+ * boundary makes every unscoped locator a race*; MOTIR-3725 / MOTIR-3737 are the
+ * first two recorded sites and MOTIR-3725's is this surface's sibling pane).
+ *
+ * Every string this file reads is a `<span>` or a `<p>` inside a `<div>` —
+ * `AddressRow` for a hostname, `Pill` for the status chip, `FormField` for the
+ * refusal and the count — so there is no role to ask for and SCOPING is the
+ * remedy rather than a fallback. Scoping also keeps every assertion BYTE
+ * IDENTICAL, which is what this card is allowed to change and what it is not.
+ *
  * RELEASING A WORKSPACE SUBDOMAIN — the browser-level acceptance
  * (Story MOTIR-4451 · Subtask MOTIR-4457).
  *
@@ -106,6 +122,9 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
   chapter,
   beat,
 }) => {
+  /** The shell's live region — see LOCATOR DISCIPLINE in the header. */
+  const pane = page.getByRole('main');
+
   await chapter('The room, and a claim', async () => {
     await signIn(page, EMAIL, PASSWORD);
     await page.goto(PANE);
@@ -116,7 +135,7 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
 
     await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme');
     await page.getByRole('button', { name: 'Claim subdomain' }).click();
-    await expect(page.getByText(`acme.${BASE}/${identifier}`)).toBeVisible();
+    await expect(pane.getByText(`acme.${BASE}/${identifier}`)).toBeVisible();
     await beat();
   });
 
@@ -134,8 +153,8 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
       await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
       await renamed;
 
-      await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
-      await expect(page.getByText(`acme.${BASE}`, { exact: true })).toBeVisible();
+      await expect(pane.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
+      await expect(pane.getByText(`acme.${BASE}`, { exact: true })).toBeVisible();
       await beat();
     },
   );
@@ -167,8 +186,8 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
     // Still claimed, still the same two rows.
-    await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
-    await expect(page.getByText('Active')).toBeVisible();
+    await expect(pane.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
+    await expect(pane.getByText('Active')).toBeVisible();
     await beat();
   });
 
@@ -180,7 +199,7 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
     // and no trace of the released label (the asset's decision: the reservation
     // holds a digest, so there is no hostname left to show).
     await expect(page.getByRole('button', { name: 'Claim subdomain' })).toBeVisible();
-    await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeHidden();
+    await expect(pane.getByText(`acme-inc.${BASE}/${identifier}`)).toBeHidden();
     await expect(page.getByRole('button', { name: 'Remove' })).toBeHidden();
     await beat();
   });
@@ -193,13 +212,13 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
       // The refusal must be RENDERED, not merely returned.
       await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme-inc');
       await page.getByRole('button', { name: 'Claim subdomain' }).click();
-      await expect(page.getByText(/is already in use/)).toBeVisible();
+      await expect(pane.getByText(/is already in use/)).toBeVisible();
 
       // The retired ALIAS label too — the case a kind-filter mistake would let
       // through, and the one a customer is likeliest to try.
       await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme');
       await page.getByRole('button', { name: 'Claim subdomain' }).click();
-      await expect(page.getByText(/is already in use/)).toBeVisible();
+      await expect(pane.getByText(/is already in use/)).toBeVisible();
       await beat();
     },
   );
@@ -207,13 +226,13 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
   await chapter('A DIFFERENT label is still claimable, so the refusal is specific', async () => {
     await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme-two');
     await page.getByRole('button', { name: 'Claim subdomain' }).click();
-    await expect(page.getByText(`acme-two.${BASE}/${identifier}`)).toBeVisible();
-    await expect(page.getByText('Active')).toBeVisible();
+    await expect(pane.getByText(`acme-two.${BASE}/${identifier}`)).toBeVisible();
+    await expect(pane.getByText('Active')).toBeVisible();
 
     // ⚠️ AND THE CAP DID NOT RESET. Two names were burnt by the release, so the
     // fresh claim starts at three of five — ADR §8 Amendment 2, read off the
     // surface a customer actually sees rather than out of the DTO.
-    await expect(page.getByText('3 renames left.')).toBeVisible();
+    await expect(pane.getByText('3 renames left.')).toBeVisible();
     await beat();
   });
 

@@ -259,7 +259,16 @@ test('the workspace tier gains a door and a rail — and at one workspace, nothi
     // capability.
     await expect(page.getByRole('heading', { name: 'Members', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-    await expect(page.getByText('Leave workspace', { exact: true })).toBeVisible();
+    // ⚠️ SCOPED, not converted (MOTIR-5115) — `DangerZoneCard` renders this one as a
+    // `<p>`, not a heading like its two neighbours, so there is no role to ask for
+    // and `AppLayout`'s `<main>` is the handle. A page-rooted read also matches the
+    // subtree React keeps mounted while the incoming one streams (MOTIR-3725 /
+    // MOTIR-3737). The CLAIM is untouched — `exact: true` on the same string, against
+    // the same matcher — which is what
+    // `docs/decisions/acceptance-receipt-lifecycle.md` freezes about a receipt.
+    await expect(
+      page.getByRole('main').getByText('Leave workspace', { exact: true }),
+    ).toBeVisible();
     await beat();
 
     // The dead-letter queue is reachable FROM HERE — the assertion the fold-in
@@ -270,7 +279,12 @@ test('the workspace tier gains a door and a rail — and at one workspace, nothi
     await expect(dlq).toBeVisible();
     await dlq.click();
     await page.waitForURL(/\/settings\/organization\?tab=dlq/);
-    await expect(page.getByText('Nothing in the dead-letter queue')).toBeVisible();
+    // BY ROLE (MOTIR-5115) — `EmptyState` renders its title as an `<h2>`, so this one
+    // converts outright; the accessibility tree excludes the hidden streamed copy
+    // (MOTIR-4822's pattern, and `CLAUDE.md`'s loading-boundary rule).
+    await expect(
+      page.getByRole('heading', { name: 'Nothing in the dead-letter queue' }),
+    ).toBeVisible();
     await beat();
   });
 
@@ -336,7 +350,11 @@ test('the workspace tier gains a door and a rail — and at one workspace, nothi
     // is the one place it could quietly stop being true.
     await expect(page.getByRole('heading', { name: 'Members', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-    await expect(page.getByText('Leave workspace', { exact: true })).toBeVisible();
+    // Scoped for the same reason as chapter 2's twin (MOTIR-5115), and asserted the
+    // same way — the claim is that these two readers get identical capabilities.
+    await expect(
+      page.getByRole('main').getByText('Leave workspace', { exact: true }),
+    ).toBeVisible();
     await beat();
   });
 });
