@@ -393,6 +393,34 @@ the bottom keeps the rail's primary fields uncluttered. The design (MOTIR-1688) 
 collapsed + expanded states; the display (MOTIR-1693) implements the disclosure (the shipped
 "Show all custom fields" toggle grammar), defaulting closed, appended after the last rail field.
 
+### Amendment 2026-09-10 — the disclosure holds THREE groups (Story MOTIR-5062 · MOTIR-5073)
+
+The paragraph above says the user _"expands to see the **two** triples"_, and that is now false:
+the disclosure holds **Planning · Implementation · Subject**, in that order.
+
+**`subject` is the same KIND of fact as the two triples**, which is why it is here rather than in
+the editable cluster beside `type`: it records WHICH SUBJECT MATTER an authoring pass composed the
+card's rule packs from — a record of how the card came to be planned, not a property of the work.
+Two earlier placements were tried and rejected for one reason worth keeping, because it will be
+proposed again: **a control a person can SEE is one they reasonably expect to EDIT**, and editing a
+subject re-points the rule corpus rather than describing the work. Its value set is _which rule
+packs exist_, so a blank means **the corpus has no pack for this subject** — not that the work has
+none — and a reader who thinks they own the field learns something false from that blank.
+
+**It is the only SINGLE-VALUE group**, and the design (MOTIR-5073) answers the shape question that
+creates: it carries no source chip and renders the member in MONO, because a subject is an
+identifier naming a rule pack, exactly as `model` is an identifier naming an LLM. A lone value in a
+box beside two triples would otherwise read as a triple whose other rows failed to load.
+
+**No per-member tint.** The two `source` chips tint from a CLOSED enum; subject members are
+corpus-owned and open-ended — a member exists iff its pack file exists — so a colour per member
+would be a vocabulary this repository cannot enumerate.
+
+**What is UNCHANGED**, and deliberately: the PLACEMENT (bottom of the rail, after every other
+field), the COLLAPSED default, the READ-ONLY contract (no chevron on the inner cards, no entry
+affordance), and the `—` unknown state. The subject's empty state is the COMMON case and stays
+common, so it renders exactly as the other two groups' do. Decisions 1–6 are untouched.
+
 ---
 
 ## Consequences
