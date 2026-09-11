@@ -68,13 +68,41 @@ export async function seedPendingEvidence(
   });
 }
 
-/** Flip the org-wide acceptance-video toggle (the panel's toggle-off state). */
+/**
+ * Flip the org-wide acceptance-video toggle.
+ *
+ * ⚠️ THIS IS NO LONGER THE SWITCH THE PANEL READS (MOTIR-4925 · MOTIR-5168).
+ * `acceptanceVideoEligibilityService` resolves the toggle from the STORY'S OWN
+ * PROJECT now; the organisation still carries `hasPaidAiPlan`, which is a
+ * different axis and unchanged. This column survives only until MOTIR-5172
+ * vacates the org tier, and it is kept here for the one case that needs the two
+ * tiers to DISAGREE — a test that sets them both cannot say which one it read.
+ */
 export async function setOrgAcceptanceVideo(
   organizationId: string,
   enabled: boolean,
 ): Promise<void> {
   await db.organization.update({
     where: { id: organizationId },
+    data: { acceptanceVideoEnabled: enabled },
+  });
+}
+
+/**
+ * Flip the PROJECT's acceptance-video toggle — the switch that decides whether
+ * the gate exists for this project's stories (MOTIR-4925 · MOTIR-5167 added the
+ * column, MOTIR-5168 made every consumer read it).
+ *
+ * The column carries `@default(true)`, so an unset project is ON: a test wanting
+ * the ON state passes without calling this, and passes for the wrong reason. Call
+ * it in both directions rather than relying on the default.
+ */
+export async function setProjectAcceptanceVideo(
+  projectId: string,
+  enabled: boolean,
+): Promise<void> {
+  await db.project.update({
+    where: { id: projectId },
     data: { acceptanceVideoEnabled: enabled },
   });
 }
