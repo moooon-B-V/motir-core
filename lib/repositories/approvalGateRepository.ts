@@ -417,12 +417,23 @@ export function translateApprovalGateWriteError(err: unknown): never {
     throw new ApprovalGateDecidedImmutableError();
   }
 
-  /* istanbul ignore else -- defensive: an approval_gate write fails either on the partial unique (P2002) or on the immutability trigger, both handled */
+  // Defensive: an `approval_gate` write fails either on the partial unique
+  // (P2002) or on the immutability trigger, and both are handled above — so the
+  // else arm below is unreachable through every shipped caller. The invariant is
+  // pinned by `tests/approval-gate-coverage-floor.test.ts` § 'the repository
+  // translates the write failures it OWNS'.
+  //
+  // ⚠️ This was `/* istanbul ignore else */`, which the **v8** provider this repo
+  // configures does not read — so it suppressed nothing and the arm was counted
+  // as uncovered. A directive that does not suppress is worse than none: it
+  // tells a reader the arm has been dispositioned while the number disagrees.
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
     throw new ApprovalGateAlreadyAwaitingError();
   }
 
-  /* istanbul ignore next -- defensive rethrow: an unrecognised write failure is not this domain's to name */
+  // Defensive rethrow: an unrecognised write failure is not this domain's to
+  // name. Same disposition, and same re-spelling, as the arm above.
+  /* v8 ignore next */
   throw err;
 }
 
@@ -433,7 +444,10 @@ function extractSqlState(err: unknown): string | undefined {
     if (cause && typeof cause === 'object') {
       const c = cause as { code?: unknown; originalCode?: unknown };
       if (typeof c.code === 'string') return c.code;
-      /* istanbul ignore next -- defensive: the @prisma/adapter-pg error exposes `code`; `originalCode` is a fallback for a future driver shape */
+      // Defensive: `@prisma/adapter-pg` exposes `code`; `originalCode` is a
+      // fallback for a future driver shape, so no shipped adapter reaches it.
+      // Same re-spelling as above.
+      /* v8 ignore next */
       if (typeof c.originalCode === 'string') return c.originalCode;
     }
   }
@@ -442,10 +456,13 @@ function extractSqlState(err: unknown): string | undefined {
 
 function extractMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
-  /* istanbul ignore next -- defensive: approval_gate write errors are always Error instances; this guards a non-Error throw */
+  // Defensive: `approval_gate` write errors are always `Error` instances, so
+  // both arms below guard a non-Error throw no shipped path produces. Same
+  // re-spelling as the arms above — `istanbul ignore` is inert under v8.
+  /* v8 ignore next 3 */
   if (err && typeof err === 'object' && 'message' in err) {
     return String((err as { message: unknown }).message);
   }
-  /* istanbul ignore next -- defensive: as above */
+  /* v8 ignore next */
   return '';
 }
