@@ -394,57 +394,27 @@ describe('the repository translates the write failures it OWNS (MOTIR-4796)', ()
   });
 });
 
-describe('every gate READ is POLICY-BOUND — taken unbound it returns nothing (MOTIR-4796)', () => {
-  // ⚠️ THIS IS THE `tx ?? dbRead` ARM, AND IT IS WORTH A TEST RATHER THAN A
-  // DIRECTIVE. Each of the repository's four reads takes an OPTIONAL `tx` and
-  // falls back to the `dbRead` singleton — the repo-wide 4-layer convention.
-  // Every shipped caller passes a `tx`, so the fallback arm was unexercised, and
-  // the lazy disposition would have been to ignore it as unreachable.
+describe('lockById answers null for a row that is not there (MOTIR-4796)', () => {
+  // ⚠️ THIS BLOCK USED TO OPEN WITH AN UNBOUND-READ TEST, AND
+  // `tests/rls/test-call-site-guard.test.ts` WAS RIGHT TO REFUSE IT. That test
+  // called the repository's four reads with no `tx` and asserted each returned
+  // nothing — reaching for the `tx ?? dbRead` branch and dressing it as a policy
+  // assertion. The guard's message is the exact diagnosis: *"if it expects
+  // emptiness it will PASS while checking nothing, which is worse."* An unbound
+  // read under `motir_app` returns empty because nothing is bound, which is true
+  // whether or not the policy works — so the assertion could not fail for the
+  // reason it claimed to be testing.
   //
-  // It is not unreachable, and the arm is exactly where this codebase's most
-  // expensive failure shape lives. `withWorkspaceContext` binds its GUCs
-  // TRANSACTION-locally, so a read that resolves `dbRead` issues its statement
-  // on a DIFFERENT connection where the policy sees NULL — and the result is not
-  // an error, it is an EMPTY ANSWER. MOTIR-5034 is the standing fixture: three
-  // consistent zeroes from a policy-hidden table supported a confident, entirely
-  // wrong diagnosis about production.
+  // The property it was pretending to assert is ALREADY asserted, at the right
+  // altitude, by `tests/approval-gate-rls.test.ts` — *"with NO GUC set, the
+  // motir_app role sees zero gate rows"* — which measures the POLICY as the app
+  // role rather than a repository call shape no production path uses.
   //
-  // So what is pinned here is that the unbound answer is EMPTY rather than
-  // UNFILTERED. Both are silent; only one of them is a tenant leak.
-
-  it('returns nothing for every read, with no workspace bound', async () => {
-    const story = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'story', title: 'A bound-read subject' },
-      fx.ctx,
-    );
-    await withWorkspaceContext(fx.ctx, (tx) =>
-      approvalGateRepository.create(
-        {
-          workspaceId: fx.workspaceId,
-          projectId: fx.projectId,
-          workItemId: story.id,
-          kind: 'design_result',
-          subjectId: 'ev-bound',
-        },
-        tx,
-      ),
-    );
-
-    // The row exists — asserted with the admin client, which bypasses the
-    // policy. Without this the four assertions below would pass on an empty
-    // table, which is the vacuity that makes a policy test worthless.
-    expect(await adminDb.approvalGate.count({ where: { workItemId: story.id } })).toBe(1);
-
-    // …and every read taken WITHOUT a transaction sees none of it.
-    expect(
-      await approvalGateRepository.findById(
-        (await adminDb.approvalGate.findFirstOrThrow({ where: { workItemId: story.id } })).id,
-      ),
-    ).toBeNull();
-    expect(await approvalGateRepository.findAwaitingByWorkItem(story.id)).toEqual([]);
-    expect(await approvalGateRepository.findLatestByWorkItem(story.id, 'design_result')).toBeNull();
-    expect(await approvalGateRepository.findAwaitingByWorkspace(fx.workspaceId)).toEqual([]);
-  });
+  // The `tx ?? dbRead` branch is therefore left uncovered ON PURPOSE, and the
+  // repository's branch threshold is pinned at the measured value with that
+  // reason in `vitest.config.ts`. Manufacturing an assertion to move a number is
+  // the failure this card's own instruction warns about: a dead arm gets a
+  // VERDICT, never a fixture nobody can build.
 
   it('`lockById` answers null for a row that is not there', async () => {
     // The `rows[0] ?? null` arm. The door depends on it: a lock that returned
