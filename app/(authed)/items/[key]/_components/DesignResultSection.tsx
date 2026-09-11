@@ -123,13 +123,26 @@ export function DesignResultSection({
   ];
 
   async function onDecide(decision: GateDecision): Promise<GateRefusal | null> {
-    const result = await decideApprovalGateAction(current!.id, decision);
+    const result = await decideApprovalGateAction({
+      gateId: current!.id,
+      decision,
+      identifier: itemIdentifier,
+    });
     if (!result.ok) return result.refusal;
     setCurrent(result.gate);
     // The SERVER surfaces the decision also moved: the status pill above, and
     // the readiness of every card this one was blocking. `router.refresh()` is
     // the only thing that reaches them, and it cannot reach this component's own
     // state — which is why both halves are here.
+    //
+    // ⚠️ AND IT IS NOT THE ONLY THING THAT REACHES THEM ANY MORE — THE ACTION
+    // REVALIDATES TOO, AND THAT IS THE HALF THAT HAD BEEN MISSING (Bug
+    // MOTIR-5118). Measured: this refresh fires and returns 200 in 113 ms while
+    // the status rail keeps its pre-decision value for twenty seconds — a
+    // SECOND, separate apply that is intermittently lost, not a request that
+    // never happens. The reasoning is written out at `decideApprovalGateAction`.
+    // Both halves stay; `tests/e2e/approval-gate-repaint.spec.ts` fails when
+    // this line is deleted.
     router.refresh();
     return null;
   }
