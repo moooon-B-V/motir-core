@@ -32,8 +32,28 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 // guess. MOTIR-3229's card names the general answer as the eventual direction;
 // it is a redesign of §3, not a bug fix.
 
+// ⚠️ SIX RUNGS, NOT FIVE (MOTIR-5140). `approved` (MOTIR-5139) ships in the
+// default workflow between `in_review` and `done`, and the five-rung ladder
+// mis-ranked it in exactly the way the block above describes for `implemented`:
+// its CATEGORY is `in_progress` and it was not one of the named keys, so
+// `rankOfStatus('approved', …)` returned the IN PROGRESS rank. Two regressions
+// followed from that one number, and neither goes red:
+//
+//   1. the upward recompute DOWNGRADED a parent — a story whose children all
+//      reached `approved` derived to In Progress, where the same children at
+//      `in_review` derived to In Review. The parent went backwards as its
+//      children went forwards.
+//   2. the container-claim gate REFUSED A TRUE CLAIM — an `approved` child
+//      ranked below `CONTAINER_CLAIM_BAR_RANK`, so `childrenBelowClaimBar`
+//      counted it as un-built and `applyStatusTransition` refused the parent's
+//      move with `CONTAINER_HAS_OPEN_CHILDREN`, on a container every one of
+//      whose children had been approved.
+//
+// Same defect, same file, same remedy as MOTIR-3229: a named key pulled out as
+// its own rung. `docs/decisions/status-derivation.md` §3 carries the amendment.
+
 /** The rungs, in ascending order of "how far along". */
-export type LadderRung = 'todo' | 'in_progress' | 'implemented' | 'in_review' | 'done';
+export type LadderRung = 'todo' | 'in_progress' | 'implemented' | 'in_review' | 'approved' | 'done';
 
 /**
  * Where each rung sits on the scale. Comparable integers rather than an ordered
@@ -44,7 +64,8 @@ export const RUNG_RANK: Readonly<Record<LadderRung, number>> = Object.freeze({
   in_progress: 1,
   implemented: 2,
   in_review: 3,
-  done: 4,
+  approved: 4,
+  done: 5,
 });
 
 /**
@@ -58,20 +79,25 @@ export const LADDER: ReadonlyArray<{
   target: { key: string; category: StatusCategoryDto };
 }> = Object.freeze([
   { rung: 'done', target: { key: 'done', category: 'done' } },
+  { rung: 'approved', target: { key: 'approved', category: 'in_progress' } },
   { rung: 'in_review', target: { key: 'in_review', category: 'in_progress' } },
   { rung: 'implemented', target: { key: 'implemented', category: 'in_progress' } },
   { rung: 'in_progress', target: { key: 'in_progress', category: 'in_progress' } },
   { rung: 'todo', target: { key: 'todo', category: 'todo' } },
 ]);
 
-/** The two lifecycle keys the ladder pulls OUT of the `in_progress` category,
- *  because both live in it and neither means what the other does. A project may
- *  have renamed either, so every reader resolves them rather than assuming. */
+/** The THREE lifecycle keys the ladder pulls OUT of the `in_progress` category,
+ *  because all of them live in it and none means what the others do. A project
+ *  may have renamed any, so every reader resolves them rather than assuming. */
 export interface LadderKeys {
   /** The project's In Review status key, or null when it has none. */
   readonly reviewKey: string | null;
   /** The project's Implemented status key, or null when it has none. */
   readonly implementedKey: string | null;
+  /** The project's Approved status key, or null when it has none — MOTIR-5140.
+   *  A project that never got the `approved` backfill passes `null` here and
+   *  ranks exactly as it did before this rung existed. */
+  readonly approvedKey: string | null;
 }
 
 /**
@@ -92,10 +118,13 @@ export function rankOfStatus(
   statuses: ReadonlyArray<{ key: string; category: StatusCategoryDto }>,
   keys: LadderKeys,
 ): number {
-  // The named keys win over the category, and REVIEW wins over IMPLEMENTED on
-  // the (pathological) project that has aliased them onto one key: the higher
+  // The named keys win over the category, and the HIGHER rung wins on the
+  // (pathological) project that has aliased two of them onto one key: the higher
   // rung is the conservative answer for the derivation and the stricter one for
-  // the gate.
+  // the gate. So the tests run in descending rung order — APPROVED, then REVIEW,
+  // then IMPLEMENTED — and adding a rung means adding its test at its own
+  // position rather than at the end.
+  if (keys.approvedKey && statusKey === keys.approvedKey) return RUNG_RANK.approved;
   if (keys.reviewKey && statusKey === keys.reviewKey) return RUNG_RANK.in_review;
   if (keys.implementedKey && statusKey === keys.implementedKey) return RUNG_RANK.implemented;
   const status = statuses.find((s) => s.key === statusKey);
@@ -145,6 +174,13 @@ export function rankOfStatus(
 export const CONTAINER_CLAIM_STATUS_KEYS: ReadonlySet<string> = new Set([
   'implemented',
   'in_review',
+  // MOTIR-5140. A container at `approved` claims its work is built exactly as
+  // one at `in_review` does — a person has said yes to it — so the same
+  // containment applies: it may not be reached while a live child has not.
+  // BY LITERAL KEY, for the reason this set's own note gives above: all three
+  // live in the `in_progress` category, so `resolveStatusKey` would fall back to
+  // `in_progress` itself and the gate would fire on a status that claims nothing.
+  'approved',
 ]);
 
 /**

@@ -3208,7 +3208,11 @@ export const workItemRepository = {
    */
   async aggregateChildrenStatus(
     parentId: string,
-    ladderKeys: { reviewStatusKey: string | null; implementedStatusKey: string | null },
+    ladderKeys: {
+      reviewStatusKey: string | null;
+      implementedStatusKey: string | null;
+      approvedStatusKey?: string | null;
+    },
     tx?: Prisma.TransactionClient,
   ): Promise<{
     total: number;
@@ -3216,16 +3220,22 @@ export const workItemRepository = {
     inProgress: number;
     implemented: number;
     inReview: number;
+    approved: number;
     done: number;
     lastChangedAt: Date | null;
   }> {
     const client = tx ?? dbRead;
     const { reviewStatusKey, implementedStatusKey } = ladderKeys;
+    // MOTIR-5140. OPTIONAL on the parameter so a caller that predates the rung
+    // keeps compiling and keeps its old answer — `null` buckets nothing, which
+    // is exactly how a project without the `approved` backfill behaves.
+    const approvedStatusKey = ladderKeys.approvedStatusKey ?? null;
     const rows = await client.$queryRaw<
       Array<{
         category: string;
         is_review: boolean;
         is_implemented: boolean;
+        is_approved: boolean;
         count: number;
         last_changed_at: Date | null;
       }>
@@ -3236,6 +3246,9 @@ export const workItemRepository = {
              (${implementedStatusKey}::text IS NOT NULL
                AND w."status" = ${implementedStatusKey}::text)
                AS "is_implemented",
+             (${approvedStatusKey}::text IS NOT NULL
+               AND w."status" = ${approvedStatusKey}::text)
+               AS "is_approved",
              COUNT(*)::int AS "count",
              MAX(GREATEST(w."createdAt", w."updatedAt")) AS "last_changed_at"
         FROM "work_item" w
@@ -3244,7 +3257,7 @@ export const workItemRepository = {
         WHERE w."parentId" = ${parentId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
-        GROUP BY ws."category", "is_review", "is_implemented"`;
+        GROUP BY ws."category", "is_review", "is_implemented", "is_approved"`;
 
     const out = {
       total: 0,
@@ -3252,6 +3265,7 @@ export const workItemRepository = {
       inProgress: 0,
       implemented: 0,
       inReview: 0,
+      approved: 0,
       done: 0,
       lastChangedAt: null as Date | null,
     };
@@ -3283,7 +3297,13 @@ export const workItemRepository = {
       // ⚠️ AND `inProgress` NO LONGER COUNTS THEM. A reader asking "has any child
       // started?" must ask `inProgress > 0 || implemented > 0 || inReview > 0` —
       // the same obligation the review split already imposed, now on two buckets.
-      if (r.is_review) out.inReview += r.count;
+      // ⚠️ APPROVED IS TESTED FIRST (MOTIR-5140), which is the same
+      // higher-rung-wins precedence `rankOfStatus` uses — the two orderings are
+      // one decision and must not drift. `approved` outranks `in_review`, so on
+      // the pathological project that aliased them onto one key this bucket
+      // claims the row.
+      if (r.is_approved) out.approved += r.count;
+      else if (r.is_review) out.inReview += r.count;
       else if (r.is_implemented) out.implemented += r.count;
       else if (r.category === 'todo') out.todo += r.count;
       else if (r.category === 'in_progress') out.inProgress += r.count;
