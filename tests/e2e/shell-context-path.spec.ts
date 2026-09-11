@@ -125,9 +125,11 @@ test.describe('the shell’s context path', () => {
 
     await project.click();
     await page.getByRole('button', { name: 'Mobile App' }).click();
-    // the authoritative signal the switch itself uses: it lands on the
-    // work-items surface rather than refreshing in place
-    await page.waitForURL('**/items**');
+    // the authoritative signal the switch itself uses: it NAVIGATES rather than
+    // refreshing in place. ⚠️ The destination moved from the work-items surface
+    // to the signed-in landing (MOTIR-5132) — a switch and a sign-in are the
+    // same act, so they now share one owner.
+    await page.waitForURL('**/workbench**');
     await expect(project).toContainText('Mobile App');
   });
 

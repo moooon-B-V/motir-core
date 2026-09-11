@@ -194,7 +194,13 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   await inviteePage.goto(acceptUrl);
   await expect(inviteePage.getByRole('heading', { name: 'Join Acme Renamed' })).toBeVisible();
   await inviteePage.getByRole('button', { name: 'Accept invite' }).click();
-  await inviteePage.waitForURL('**/dashboard');
+  // ⚠️ Accepting an invite lands on the signed-in landing, not `/dashboard`
+  // (MOTIR-5132): it calls the same server action the workspace switcher does,
+  // so it is a context switch and resolves its destination through the same
+  // owner instead of naming a route of its own. The `/dashboard` wait further
+  // down this file is a LEAVE-workspace redirect — a server redirect on a
+  // different path, untouched by that card.
+  await inviteePage.waitForURL('**/workbench');
 
   // Accepting switches the active workspace to the joined one. The invitee now
   // belongs to two orgs (their own + the owner's) with ONE workspace in each,
