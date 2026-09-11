@@ -138,9 +138,9 @@ export function AppCommandPalette({
     if (workspaceId === activeWorkspaceId) return;
     startTransition(async () => {
       await switchWorkspaceAction(workspaceId);
-      // Land on the work-items surface after a workspace switch so a stale,
+      // Land on the signed-in landing after a workspace switch so a stale,
       // old-workspace-scoped URL / client island doesn't linger (MOTIR-1312);
-      // refresh in place only when already there.
+      // refresh in place only when already there (MOTIR-5132).
       const target = afterContextSwitchTarget(pathname);
       if (target) router.push(target);
       else router.refresh();
@@ -151,11 +151,12 @@ export function AppCommandPalette({
     if (projectId === activeProjectId) return;
     startTransition(async () => {
       await setActiveProjectAction(projectId);
-      // Land on the work-items surface after a project switch so a stale,
+      // Land on the signed-in landing after a project switch so a stale,
       // old-project-scoped URL / client island doesn't linger (MOTIR-1312 /
       // MOTIR-1559); refresh in place only when already there. The action
       // revalidates the layout (it's a DB write, not a cookie), so the pushed
       // route re-renders with the new active project — same as switchWorkspace.
+      // The destination is the helper's to decide (MOTIR-5132).
       const target = afterContextSwitchTarget(pathname);
       if (target) router.push(target);
       else router.refresh();

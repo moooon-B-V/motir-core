@@ -323,7 +323,11 @@ test('@smoke role gating: a non-owner member sees a disabled Replay with a toolt
   await signUp(memberPage, member);
   await memberPage.goto(acceptUrl);
   await memberPage.getByRole('button', { name: 'Accept invite' }).click();
-  await memberPage.waitForURL('**/dashboard');
+  // ⚠️ Accepting an invite lands on the signed-in landing, not `/dashboard`
+  // (MOTIR-5132): it calls the same server action the workspace switcher does,
+  // so it is a context switch and resolves its destination through the same
+  // owner instead of naming a route of its own.
+  await memberPage.waitForURL('**/workbench');
 
   // Seed a DLQ row in the shared workspace so the Replay control renders.
   await seedInviteDlqRow({ workspaceId, to: 'role-gate@example.com', idempotencyKey: 'role-1' });

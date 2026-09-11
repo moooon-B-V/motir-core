@@ -61,12 +61,12 @@ export function ProjectSwitcher({
     startTransition(async () => {
       await setActiveProjectAction(projectId);
       setOpen(false);
-      // Land on the work-items surface after a project switch so a stale,
+      // Land on the signed-in landing after a project switch so a stale,
       // old-project-scoped URL / client island doesn't linger (MOTIR-1312 /
       // MOTIR-1559); refresh in place only when already there. The action
       // revalidates the layout (it's a DB write, not a cookie), so the pushed
       // route re-renders with the new active project — same two-liner as the
-      // workspace/org switchers.
+      // workspace/org switchers. The destination is the helper's (MOTIR-5132).
       const target = afterContextSwitchTarget(pathname);
       if (target) router.push(target);
       else router.refresh();

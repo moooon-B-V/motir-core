@@ -4,11 +4,15 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // MOTIR-1312 — switching the active org must NOT just refresh in place (it leaves
 // the page body on the OLD org: client islands seeded from props don't re-seed,
 // and the URL may be scoped to an old-org entity). It must navigate to the
-// work-items surface, falling back to refresh only when already there. This test
+// signed-in landing, falling back to refresh only when already there. MOTIR-5132
+// moved that destination off a second constant of its own and onto the landing's
+// one owner, so these assertions COMPOSE from AUTHED_LANDING_PATH rather than
+// re-typing a route — a literal here is the same defect one directory over. This test
 // drives the real OrgControl switcher and asserts the navigation, not refresh.
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 const nav = vi.hoisted(() => ({ pathname: '/dashboard' }));
@@ -69,12 +73,12 @@ afterEach(() => {
 });
 
 describe('OrgControl — navigation after switching org (MOTIR-1312)', () => {
-  it('navigates to the work-items surface (does NOT merely refresh in place) from another page', async () => {
+  it('navigates to the signed-in landing (does NOT merely refresh in place) from another page', async () => {
     nav.pathname = '/dashboard';
     renderOrgControl();
     await openMenuAndSwitchToBeacon();
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/items'));
+    await waitFor(() => expect(push).toHaveBeenCalledWith(AUTHED_LANDING_PATH));
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -83,12 +87,12 @@ describe('OrgControl — navigation after switching org (MOTIR-1312)', () => {
     renderOrgControl();
     await openMenuAndSwitchToBeacon();
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/items'));
+    await waitFor(() => expect(push).toHaveBeenCalledWith(AUTHED_LANDING_PATH));
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('refreshes in place when already on the work-items surface', async () => {
-    nav.pathname = '/items';
+  it('refreshes in place when already on the signed-in landing', async () => {
+    nav.pathname = AUTHED_LANDING_PATH;
     renderOrgControl();
     await openMenuAndSwitchToBeacon();
 

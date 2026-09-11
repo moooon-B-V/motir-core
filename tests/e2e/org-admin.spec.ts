@@ -390,7 +390,11 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   const acceptUrl = extractInviteUrl(inviteEmail);
   await pageC.goto(acceptUrl);
   await pageC.getByRole('button', { name: 'Accept invite' }).click();
-  await pageC.waitForURL('**/dashboard');
+  // ⚠️ Accepting an invite lands on the signed-in landing, not `/dashboard`
+  // (MOTIR-5132): it calls the same server action the workspace switcher does,
+  // so it is a context switch and resolves its destination through the same
+  // owner instead of naming a route of its own.
+  await pageC.waitForURL('**/workbench');
 
   // C is now a member of WA and of org A (verify the auto-join wrote the row).
   const cInWa = await db.workspaceMembership.findFirst({

@@ -78,8 +78,9 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
       // Switching org re-points the active workspace + project (the 8.8.28
       // cascade), so the current URL may be scoped to the OLD org and client
       // islands won't re-seed on a bare refresh (MOTIR-1312). Land on the
-      // work-items surface — abandoning the stale deep URL + remounting islands
-      // — and only refresh in place when already there.
+      // signed-in landing — abandoning the stale deep URL + remounting islands
+      // — and only refresh in place when already there. The destination is the
+      // helper's to decide, not this file's (MOTIR-5132).
       const target = afterContextSwitchTarget(pathname);
       if (target) router.push(target);
       else router.refresh();

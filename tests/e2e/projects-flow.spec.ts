@@ -165,13 +165,15 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   );
 
   // 5) Switch back to Mobile App via the switcher. Switching the active project
-  // now LANDS on the work-items list (MOTIR-1559 — the MOTIR-1312 context-switch
+  // LANDS the reader somewhere (MOTIR-1559 — the MOTIR-1312 context-switch
   // landing contract) instead of refreshing in place, so a stale, old-project
-  // URL / client island can't linger. Wait for /items, where the sidebar
-  // switcher reflects the newly-active project.
+  // URL / client island can't linger. ⚠️ WHERE it lands moved from `/items` to
+  // the signed-in landing (MOTIR-5132): a switch and a sign-in are the same act
+  // and now share one owner. Wait for the landing, where the top-bar switcher
+  // reflects the newly-active project.
   await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: /^Mobile App/ }).click();
-  await page.waitForURL('**/items');
+  await page.waitForURL('**/workbench');
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
 
   // 6) Archive — navigate to project settings, open archive modal. The area now
@@ -229,11 +231,13 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   // now lands on the seeded project instead, so that route would have opened
   // the WRONG project's settings and typed MARKE into a confirm field asking
   // for a different identifier. The switcher does not live in the settings
-  // area, so this goes out to `/items` for it.
+  // area, so this goes out to `/items` for it — and the switch then pushes on
+  // to the signed-in landing (MOTIR-5132), which is where the assertion below
+  // reads the top bar.
   await page.goto('/items');
   await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: /^Marketing Site/ }).click();
-  await page.waitForURL('**/items');
+  await page.waitForURL('**/workbench');
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(
     'Marketing Site',
   );
