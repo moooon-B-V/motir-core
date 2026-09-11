@@ -412,14 +412,26 @@ export const approvalGateRepository = {
    * gate side narrows to one project's awaiting rows and the join to
    * `work_item` is by primary key. The old `(workspace_id, state)` index stays
    * for the workspace-tier read MOTIR-2920 will add.
+   *
+   * ⚠️ `tx` IS REQUIRED, UNLIKE ITS NEIGHBOURS' `tx ?? dbRead` — and this is
+   * MOTIR-2797's disposition, applied to a new pair rather than inherited by
+   * habit. `designEvidenceRepository` records the reasoning in full: a fallback
+   * arm with no caller *"was dead code that returned an EMPTY result under
+   * `motir_app` and raised nothing — the exact silent failure this cutover
+   * exists to remove. A branch that cannot be honestly exercised in both role
+   * modes should not exist."* Both callers here are
+   * `approvalGatesService.listAwaitingMe` / `.countAwaitingMe`, which read
+   * INSIDE `withWorkspaceContext` and thread it. Measured, not assumed: calling
+   * this without a `tx` returns `[]` on a populated fixture, because `dbRead` is
+   * a second connection with no `app.workspace_id` bound — an empty queue and no
+   * error, which is the worst answer this surface could give.
    */
   async findAwaitingRoutedTo(
     scope: AwaitingRoutingScope,
     window: { skip: number; take: number },
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<AwaitingGateRow[]> {
-    const client = tx ?? dbRead;
-    return client.approvalGate.findMany({
+    return tx.approvalGate.findMany({
       where: awaitingRoutedToWhere(scope),
       select: AWAITING_GATE_SELECT,
       orderBy: { createdAt: 'asc' },
@@ -441,10 +453,9 @@ export const approvalGateRepository = {
    */
   async countAwaitingRoutedTo(
     scope: AwaitingRoutingScope,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? dbRead;
-    return client.approvalGate.count({ where: awaitingRoutedToWhere(scope) });
+    return tx.approvalGate.count({ where: awaitingRoutedToWhere(scope) });
   },
 };
 

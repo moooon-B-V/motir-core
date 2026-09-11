@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { homeService } from '@/lib/services/homeService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -494,5 +495,37 @@ describe('homeService.tabCounts — the strip badge (MOTIR-4794)', () => {
     });
 
     expect(counts.approvals).toBe(0);
+  });
+});
+
+describe('designEvidenceRepository.findManyByIds — the batch behind the subject summaries', () => {
+  it('returns an EMPTY map for an empty id list, without a round trip', async () => {
+    // ⚠️ THE GUARD HAS A REAL CALLER, which is why it is a branch rather than
+    // defensive code: `summarizeGateSubjects` groups a page's gates by KIND, and
+    // a page whose gates are ALL of an unregistered kind leaves the registered
+    // bucket empty. Without the guard that is `IN ()` — legal SQL, a pointless
+    // round trip, and one more query per page of not-built-yet rows.
+    const rows = await withWorkspaceContext(fx.ctx, (tx) =>
+      designEvidenceRepository.findManyByIds([], tx),
+    );
+
+    expect(rows.size).toBe(0);
+  });
+
+  it('keys the map by ID and OMITS an id that resolves to nothing', async () => {
+    const { item } = await gateOn({ title: 'Has evidence', assigneeId: meCtx.userId });
+    await designEvidence({ id: 'ev-real', workItemId: item.id, commitSha: 'abc1234', assets: 2 });
+
+    const rows = await withWorkspaceContext(fx.ctx, (tx) =>
+      designEvidenceRepository.findManyByIds(['ev-real', 'ev-that-is-gone'], tx),
+    );
+
+    // POSITIVE CONTROL: the row that exists comes back, with its asset COUNT
+    // rather than its assets.
+    expect(rows.get('ev-real')).toMatchObject({ commitSha: 'abc1234', _count: { assets: 2 } });
+    // And the one that does not is ABSENT rather than mapped to a placeholder —
+    // the caller decides what a row with an unresolvable subject says.
+    expect(rows.has('ev-that-is-gone')).toBe(false);
+    expect(rows.size).toBe(1);
   });
 });
