@@ -3390,25 +3390,70 @@ of a concept the plan already has a container for.
 | **4** | **read-only** — a member who may browse but not manage                                                        |
 | **5** | the readers/writers argument and the rejected candidates, drawn beside the thing they justify                 |
 
-**Copy — and it never claims to control recording.** The shipped org-tier card
-says _"Record a short video when a story's E2E passes and attach it to the story
-for review & approval."_ The run records the video either way, and a refused
-publish says so in as many words. The gate switch reads:
+### Copy — the gate is CONDITIONAL, and that is the whole of it
+
+**The switch does not promise a video and does not govern recording. It says
+what the PRESENCE of one means for this project:**
+
+> **IF a story has an acceptance video, it is held for approval — and its status
+> may not be moved by hand until someone gives it.**
+
+**Why the conditional is load-bearing, and not a wording preference.** A video is
+not guaranteed to exist. Motir's own path produces one — the planner plans the
+story, a Motir agent runs it, the run publishes the receipt — but a team that
+plans somewhere else, or runs its own agents, gets no video from that path at
+all. **And they can still publish one**, because the acceptance API and the
+`publish_acceptance_result` MCP tool are open doors that any CI or any agent can
+call (`lib/acceptanceEvidence/publishAuth.ts` ·
+`lib/mcp/tools/publishAcceptanceResult.ts`, both running the one eligibility
+computation). **So the gate cannot be described in terms of a run**: the honest
+rule is _video present ⇒ gate_, whoever put it there, and that is what the
+setting has to say.
+
+Any copy of the form _"when a run produces…"_ is wrong twice over — it promises a
+run that may never happen, and it implies Motir owns the production of something
+anyone can publish. The shipped org-tier card is the worked example of the
+mistake: _"Record a short video when a story's E2E passes and attach it to the
+story for review & approval."_ It describes a recording this flag has never
+governed, on a run it cannot assume.
+
+**The card reads:**
 
 > **Acceptance video approval**
-> When a story's end-to-end run produces a video receipt, hold the story and ask
-> a person to approve it. The run records the video either way — this decides
-> whether anyone is asked to sign it off.
+> A story that has an acceptance video is held until a person approves it — it
+> cannot be finished, and its status cannot be moved by hand, until they do. It
+> makes no difference where the video came from: a Motir agent run publishes one,
+> and so does anything using the acceptance API.
 
 **The state line carries a NAME and a CONSEQUENCE**, because "On" alone does not
 tell a reader what their project just started doing:
 
-| state     | name            | consequence line                                                        |
-| --------- | --------------- | ----------------------------------------------------------------------- |
-| on        | **On**          | A story with a receipt waits for a person to approve it.                |
-| off       | **Off**         | No approval is asked, and no receipt is uploaded.                       |
-| no plan   | **Unavailable** | Your organisation has no paid Motir AI plan, so no receipt is produced. |
-| read-only | **On**          | _(as above)_, plus the footer line below                                |
+| state     | name            | consequence line                                                                      |
+| --------- | --------------- | ------------------------------------------------------------------------------------- |
+| on        | **On**          | Any story with an acceptance video waits for approval — whoever published it.         |
+| off       | **Off**         | No acceptance video is accepted for this project, and no story is held.               |
+| no plan   | **Unavailable** | Your organisation has no paid Motir AI plan, so no acceptance video can be published. |
+| read-only | **On**          | _(as above)_, plus the footer line below                                              |
+
+**OFF is enforced at the PUBLISH doors, not only in the panel** — which is what
+makes the OFF line true for a team outside Motir's path. `publishAuth` and
+`publishAcceptanceResult` both resolve
+`acceptanceVideoEligibilityService` and refuse: **`403
+ACCEPTANCE_VIDEO_INELIGIBLE`** with `reason: toggle_off`, and **`402`** with
+`reason: no_plan`. There is no door that skips the gate — the MCP tool's own
+header says skipping it "is the only way a gate that exists stops meaning
+anything."
+
+> **⚠️ THE SECOND CLAUSE IS NOT THIS EPIC'S TO SHIP, AND MOTIR-4925 MUST NOT
+> SHIP IT ALONE.** _"its status cannot be moved by hand"_ is **MOTIR-4887**'s
+> deliverable (_A GATE OWNS ITS SUBJECT'S STATUS — the manual flip is refused
+> while a decision is pending_), and MOTIR-4949's own scope boundary lists it as
+> a NON-deliverable this gate **inherits as it lands**. So the copy above is the
+> TARGET, and it becomes true when MOTIR-4887 does. **Either sequence MOTIR-4925
+> after MOTIR-4887, or ship the first clause alone and add the second with
+> MOTIR-4887** — a setting that claims a refusal the product does not perform is
+> the same defect as the recording claim it replaces, one clause over. This is a
+> decision for whoever schedules the two; the design states the end state.
 
 Footers: the no-plan state carries _"The plan is bought once, for the
 organisation — not per project."_ + **Upgrade**; the read-only state carries
@@ -3449,6 +3494,12 @@ here was drawn (`AcceptanceVideoCard.tsx` in all four states, with the real
 - the copy keys — `approvals.acceptanceVideo.{title,desc,on,off,unavailable,
 onWhat,offWhat,unavailableWhat,orgPlanNote,readOnlyNote,upgrade}` — replacing
   the `acceptance.card.*` set, whose `desc` is the recording claim;
+- **and `acceptance.states.toggleOff.desc` on the PANEL, which carries the same
+  wrong claim one surface over:** _"Turn it on to record and attach a video
+  receipt when this story's E2E passes."_ It becomes _"Turn it on and any
+  acceptance video published for this story will be held for approval."_ The
+  conditional has to hold on every surface that states the rule, or the one that
+  still promises a recording is the one a reader believes;
 - `settingsHref` on the acceptance panel re-pointed at
   `/settings/project/approvals`, and the `#acceptance-video` anchor retired or
   re-minted against the new room — a link to a page the setting has left is

@@ -12,12 +12,28 @@
       Card: MOTIR-4942 (design), under epic MOTIR-4878 "Approval gates".
       It gates MOTIR-4925 (the switch's code) and informs MOTIR-4949 / MOTIR-4950.
 
-      ⚠️ THIS ASSET SUPERSEDES panel 8 of design/ai-settings/ai-planning-settings.mock.html.
-      That panel drew the same switch in the AI-planning room, on the argument that
-      the receipt is AI-produced. The room decision was withdrawn on 2026-09-09 and
-      its pull request (#2730) closed unmerged. See design-notes.md
+      ⚠️ WHAT THE SWITCH DECIDES, stated before anything else, because the first
+      pass and the shipped copy both got it wrong in the same direction. The gate
+      is CONDITIONAL ON THE PRESENCE OF A VIDEO, not on a run happening:
+      IF a story has an acceptance video, it is held for approval and its status
+      may not be moved by hand. Motir does not promise the video and does not
+      decide who makes it — a planned story run by a Motir agent publishes one,
+      and so does anyone calling the acceptance API or the MCP tool directly. A
+      team that plans elsewhere and runs its own agents can still publish, and
+      then the gate applies to them exactly as it does to anyone else. The switch
+      governs what the PRESENCE of a video means for this project; it has never
+      governed recording.
+
+      ⚠️ THE FIRST PASS OF THIS CARD IS NOT IN THE TREE, AND THAT IS WHY THIS
+      ASSET SUPERSEDES NOTHING. It drew the same switch as panel 8 of
+      design/ai-settings/ai-planning-settings.mock.html, in the AI-planning room,
+      on the argument that the receipt is AI-produced. The room decision was
+      withdrawn on 2026-09-09 and its pull request (#2730) was closed UNMERGED, so
+      neither that panel nor its A1–A11 note amendment ever reached origin/main —
+      verified by grep, 2026-09-11. No superseded-by line is owed anywhere, and
+      design/ai-settings/ is untouched by this card. See design-notes.md
       § "Approvals — the gate switches (MOTIR-4942)" for the argument and the
-      rejected candidates. The ai-settings asset carries a superseded-by line.
+      rejected candidates.
 
       THE ROOM WAS DECIDED FROM THE SWITCH'S READERS AND WRITERS, not from
       resemblance. Grepped on origin/main 2026-09-11:
@@ -1854,16 +1870,18 @@
                   approval</span
                 >
                 <p class="gdesc">
-                  When a story&rsquo;s end-to-end run produces a video receipt, hold the story and
-                  ask a person to approve it. The run records the video either way &mdash; this
-                  decides whether anyone is asked to sign it off.
+                  A story that has an acceptance video is held until a person approves it &mdash; it
+                  cannot be finished, and its status cannot be moved by hand, until they do. It
+                  makes no difference where the video came from: a Motir agent run publishes one,
+                  and so does anything using the acceptance API.
                 </p>
               </div>
               <div class="gcard-body">
                 <span class="gstate">
                   <span class="gstate-name">On</span>
                   <span class="gstate-what"
-                    >A story with a receipt waits for a person to approve it.</span
+                    >Any story with an acceptance video waits for approval &mdash; whoever published
+                    it.</span
                   >
                 </span>
                 <button
@@ -1890,10 +1908,12 @@
 
     <!-- ════════════════ PANEL 1 — ON ════════════════ -->
     <div class="panel-label">
-      1 &middot; <b>The acceptance-video gate &mdash; ON.</b> The copy says what the switch DECIDES
-      and explicitly disclaims the thing it never controlled: the run records the video either way.
-      Compare the shipped org-tier copy, &ldquo;Record a short video when a story&rsquo;s E2E
-      passes&hellip;&rdquo;, which describes a recording this flag does not govern.
+      1 &middot; <b>The acceptance-video gate &mdash; ON.</b> The copy is CONDITIONAL, because the
+      gate is: <b>if a story has an acceptance video, it is held.</b> It does not promise a video,
+      and it does not say where one comes from &mdash; a planned story run by a Motir agent
+      publishes one, and so does anyone calling the acceptance API directly. Compare the shipped
+      org-tier copy, &ldquo;Record a short video when a story&rsquo;s E2E passes&hellip;&rdquo;,
+      which describes a RECORDING this flag has never governed, on a run that may never happen.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1906,16 +1926,18 @@
                 approval</span
               >
               <p class="gdesc">
-                When a story&rsquo;s end-to-end run produces a video receipt, hold the story and ask
-                a person to approve it. The run records the video either way &mdash; this decides
-                whether anyone is asked to sign it off.
+                A story that has an acceptance video is held until a person approves it &mdash; it
+                cannot be finished, and its status cannot be moved by hand, until they do. It makes
+                no difference where the video came from: a Motir agent run publishes one, and so
+                does anything using the acceptance API.
               </p>
             </div>
             <div class="gcard-body">
               <span class="gstate">
                 <span class="gstate-name">On</span>
                 <span class="gstate-what"
-                  >A story with a receipt waits for a person to approve it.</span
+                  >Any story with an acceptance video waits for approval &mdash; whoever published
+                  it.</span
                 >
               </span>
               <button
@@ -1941,9 +1963,14 @@
 
     <!-- ════════════════ PANEL 2 — OFF ════════════════ -->
     <div class="panel-label">
-      2 &middot; <b>OFF.</b> Two consequences, and both are stated: nobody is asked, and nothing is
-      uploaded. A project with the gate off raises no acceptance decision and shows no panel on its
-      stories.
+      2 &middot; <b>OFF.</b> Two consequences, and both are stated: no video is accepted, and no
+      story is held. OFF is enforced at the PUBLISH doors rather than only in the panel &mdash;
+      <span class="mono">publishAuth</span> and
+      <span class="mono">publishAcceptanceResult</span> both run the one eligibility computation and
+      refuse with <span class="mono">403 ACCEPTANCE_VIDEO_INELIGIBLE</span> (<span class="mono"
+        >reason: toggle_off</span
+      >), so a team that publishes from its own CI or straight through the MCP tool is refused there
+      too. There is no door that skips it.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1956,15 +1983,18 @@
                 approval</span
               >
               <p class="gdesc">
-                When a story&rsquo;s end-to-end run produces a video receipt, hold the story and ask
-                a person to approve it. The run records the video either way &mdash; this decides
-                whether anyone is asked to sign it off.
+                A story that has an acceptance video is held until a person approves it &mdash; it
+                cannot be finished, and its status cannot be moved by hand, until they do. It makes
+                no difference where the video came from: a Motir agent run publishes one, and so
+                does anything using the acceptance API.
               </p>
             </div>
             <div class="gcard-body">
               <span class="gstate">
                 <span class="gstate-name">Off</span>
-                <span class="gstate-what">No approval is asked, and no receipt is uploaded.</span>
+                <span class="gstate-what"
+                  >No acceptance video is accepted for this project, and no story is held.</span
+                >
               </span>
               <button
                 class="sw off"
@@ -2000,16 +2030,18 @@
                 approval</span
               >
               <p class="gdesc">
-                When a story&rsquo;s end-to-end run produces a video receipt, hold the story and ask
-                a person to approve it. The run records the video either way &mdash; this decides
-                whether anyone is asked to sign it off.
+                A story that has an acceptance video is held until a person approves it &mdash; it
+                cannot be finished, and its status cannot be moved by hand, until they do. It makes
+                no difference where the video came from: a Motir agent run publishes one, and so
+                does anything using the acceptance API.
               </p>
             </div>
             <div class="gcard-body">
               <span class="gstate">
                 <span class="gstate-name">Unavailable</span>
                 <span class="gstate-what"
-                  >Your organisation has no paid Motir AI plan, so no receipt is produced.</span
+                  >Your organisation has no paid Motir AI plan, so no acceptance video can be
+                  published.</span
                 >
               </span>
               <button
@@ -2058,16 +2090,18 @@
                 approval</span
               >
               <p class="gdesc">
-                When a story&rsquo;s end-to-end run produces a video receipt, hold the story and ask
-                a person to approve it. The run records the video either way &mdash; this decides
-                whether anyone is asked to sign it off.
+                A story that has an acceptance video is held until a person approves it &mdash; it
+                cannot be finished, and its status cannot be moved by hand, until they do. It makes
+                no difference where the video came from: a Motir agent run publishes one, and so
+                does anything using the acceptance API.
               </p>
             </div>
             <div class="gcard-body">
               <span class="gstate">
                 <span class="gstate-name">On</span>
                 <span class="gstate-what"
-                  >A story with a receipt waits for a person to approve it.</span
+                  >Any story with an acceptance video waits for approval &mdash; whoever published
+                  it.</span
                 >
               </span>
               <button
