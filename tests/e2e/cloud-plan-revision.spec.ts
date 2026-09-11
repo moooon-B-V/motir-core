@@ -90,7 +90,11 @@ test('a reviewer asks for a change, and approves the plan they asked for', async
     await expect(row).toBeVisible();
     await row.click();
     await page.waitForURL(`**/plans/${authored.planId}`);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+    // SCOPED TO THE RAIL. The pill is a bare `<span>` in `PlanReviewRail` with
+    // no role to ask for, and `rail()` is a named `complementary` region — so
+    // the scope is resolved through the accessibility tree and cannot pick up
+    // the streamed or outgoing copy a page-rooted read would (MOTIR-3929).
+    await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Ready to review');
     await beat();
   });
 
@@ -110,8 +114,10 @@ test('a reviewer asks for a change, and approves the plan they asked for', async
       for (const title of [authored.storyTitle, ...authored.leafTitles]) {
         await expect(list.getByText(title, { exact: false }).first()).toBeVisible();
       }
-      // Nothing is marked as moved — nobody has revised it.
-      await expect(page.getByText('Revised')).toHaveCount(0);
+      // Nothing is marked as moved — nobody has revised it. SCOPED TO THE LIST:
+      // the badge is a `Pill` in `PlanProposalList` with no role of its own, and
+      // `main` is the live subtree the proposal rows render into.
+      await expect(list.getByText('Revised')).toHaveCount(0);
       await beat();
     },
   );
@@ -151,7 +157,8 @@ test('a reviewer asks for a change, and approves the plan they asked for', async
 
   // ── BEAT 4a — the plan is HELD while the revision runs ───────────────────
   await chapter('While Motir works, Approve is held — and says why', async () => {
-    await expect(page.getByTestId('plan-revision-running')).toBeVisible();
+    // SCOPED TO THE RAIL — a bare `<div>` band in `PlanReviewRail`, no role.
+    await expect(rail(page).getByTestId('plan-revision-running')).toBeVisible();
     await expect(rail(page).getByText('Approve unlocks when the revision lands.')).toBeVisible();
     await expect(rail(page).getByRole('button', { name: /Approve/ })).toBeDisabled();
     await beat();
@@ -198,13 +205,16 @@ test('a reviewer asks for a change, and approves the plan they asked for', async
     async () => {
       // The island polls; the assertion waits on the AUTHORITATIVE read arriving,
       // never on a timeout.
-      await expect(page.getByTestId('plan-revision-running')).toHaveCount(0, { timeout: 30_000 });
+      await expect(rail(page).getByTestId('plan-revision-running')).toHaveCount(0, {
+        timeout: 30_000,
+      });
 
       const list = page.getByRole('main');
       await expect(list.getByText('Payout schedule and cadence').first()).toBeVisible();
       await expect(list.getByText('Payout failure retries')).toHaveCount(0);
       // …and the row that moved says so, where the reviewer is already looking.
-      await expect(page.getByText('Revised').first()).toBeVisible();
+      // SCOPED TO THE LIST, as the counterfactual above is.
+      await expect(list.getByText('Revised').first()).toBeVisible();
       await beat();
 
       // The timeline gained the acts, named to the party that made them — so a
@@ -228,7 +238,7 @@ test('a reviewer asks for a change, and approves the plan they asked for', async
     );
     await approve.click();
     expect((await approved).status()).toBeLessThan(400);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+    await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Approved');
     await beat();
   });
 

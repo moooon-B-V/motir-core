@@ -221,8 +221,17 @@ async function gatePlanRead(page: Page, planId: string): Promise<() => void> {
 
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => page.getByRole('textbox', { name: /Reply, or refine/ });
-const confirmBar = (page: Page) => page.getByTestId('plan-change-confirm-bar');
-const canvas = (page: Page) => page.getByTestId('roadmap-canvas');
+// ⚠️ SCOPED TO `main`, not read off the page (MOTIR-5116). Neither node carries
+// a role — the confirm bar is a bare `<div>` in `PlanningWorkspaceHost` and
+// `roadmap-canvas` is `ProjectRoadmapCanvas`'s wrapper around the
+// `role="application"` viewport — so there is nothing to ask the accessibility
+// tree for, and `main` is the live route subtree. That is what keeps a
+// page-rooted id off React's streamed `<div hidden id="S:0">` copy and off the
+// outgoing subtree a client-side navigation leaves mounted (`CLAUDE.md` § *a
+// boundary makes every unscoped locator a race*).
+const live = (page: Page) => page.getByRole('main');
+const confirmBar = (page: Page) => live(page).getByTestId('plan-change-confirm-bar');
+const canvas = (page: Page) => live(page).getByTestId('roadmap-canvas');
 
 /** Type a turn and send it, waiting on the DOOR's 200 — the turn is a persisted
  *  row written by that call, so its write response is the authoritative "the
@@ -314,7 +323,8 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     ).toBeVisible();
     await expect(rail(page).getByRole('button', { name: 'Add work to an epic' })).toBeVisible();
     await expect(confirmBar(page)).toHaveCount(0);
-    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);
+    // ON THE CANVAS — the diff nodes are drawn inside `roadmap-canvas`.
+    await expect(canvas(page).getByTestId('plan-change-diff-node')).toHaveCount(0);
     await beat();
   });
 
@@ -323,7 +333,9 @@ test('plan change is a conversation — open, describe, refine, approve', async 
 
     // STREAMING: the plan read is held, so the run is parked mid-flight and the
     // rail's live region shows the narration built from the SSE's real frames.
-    await expect(page.getByTestId('plan-change-progress')).toContainText(/proposed so far/);
+    // IN THE RAIL — the live region is a bare `<div aria-live="polite">` in
+    // `PlanChangeRail`; `aria-live` is not a role, so scoping is the remedy.
+    await expect(rail(page).getByTestId('plan-change-progress')).toContainText(/proposed so far/);
     releaseFirstResult();
 
     // REVIEW: the proposal is on the CANVAS, not in a corner dock, and nothing is
@@ -376,7 +388,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     // have reached it) — that half of this block is unchanged and is the half
     // this spec was really pinning.
     await expect(confirmBar(page)).toHaveCount(0);
-    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(3);
+    await expect(canvas(page).getByTestId('plan-change-diff-node')).toHaveCount(3);
     // The outcome is read as the WORD, so a colour-only treatment cannot pass.
     await expect(page.getByTestId('plan-change-outcome').first()).toHaveText('accepted');
     await expect(canvas(page).getByText(REFINED_TITLE, { exact: true })).toBeVisible();

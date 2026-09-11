@@ -182,8 +182,13 @@ test('a run claims a story, and you can watch the whole set advance', async ({
 
   await chapter('the run stops, and the header says why', async () => {
     await closeRun(api, runId, 'drained');
-    // The stop reason in the terminal's OWN words.
-    await expect(page.getByText('the ready set is drained')).toBeVisible();
+    // The stop reason in the terminal's OWN words. SCOPED TO THE DIALOG, not
+    // read off the page: `RunModal`'s header renders it as a bare `<span>`
+    // (`app/(authed)/runs/_components/RunModal.tsx`), so there is no role to ask
+    // for, and a page-rooted read of it races the route subtree the way
+    // MOTIR-4822 did one file over. A portalled dialog is outside the route
+    // segment, so a lingering copy of `/runs` cannot reach into it.
+    await expect(page.getByRole('dialog').getByText('the ready set is drained')).toBeVisible();
     await beat();
   });
 

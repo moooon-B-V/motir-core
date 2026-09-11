@@ -123,6 +123,12 @@ const tabStrip = (page: Page) => page.getByRole('group', { name: 'Filter plans b
 const tab = (page: Page, name: string) => tabStrip(page).getByRole('button', { name });
 const planRows = (page: Page) => page.getByRole('list', { name: 'Plans' }).getByRole('listitem');
 const rowFor = (page: Page, planId: string) => page.locator(`a[href="/plans/${planId}"]`);
+/** The plan review rail — a named `complementary` landmark, so scoping through it
+ *  resolves in the accessibility tree (MOTIR-5116). */
+const rail = (page: Page) => page.getByRole('complementary', { name: 'Plan review' });
+/** `PlanProposalList`'s scroller. A bare `<div>`, so it keeps its id and is
+ *  scoped to the live route subtree instead. */
+const proposalList = (page: Page) => page.getByRole('main').getByTestId('plan-proposal-list');
 
 /** Scroll `<main>` — the shell's one scroller — to its bottom. An ACTION, and the
  *  signal it produces is awaited by the caller. */
@@ -325,7 +331,12 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
     await switcher.getByRole('button', { name: 'List' }).click();
     await page.waitForURL(`**/plans/${seed.detailPlanId}?view=list`);
 
-    const list = page.getByTestId('plan-proposal-list');
+    // SCOPED TO `main`: `PlanProposalList`'s scroller is a bare `<div>` with no
+    // role to ask for, and `main` is the live route subtree — which is what
+    // keeps a page-rooted id off React's streamed `<div hidden id="S:0">` copy
+    // and off the outgoing subtree a client-side navigation leaves mounted
+    // (`CLAUDE.md` § *a boundary makes every unscoped locator a race*).
+    const list = proposalList(page);
     await expect(list).toBeVisible();
     // The two sections the plan actually has, and the proposals in them by name.
     await expect(list).toContainText('Adds');
@@ -336,7 +347,7 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
 
     // The URL is the single source of truth, so a RELOAD keeps the view…
     await page.reload();
-    await expect(page.getByTestId('plan-proposal-list')).toBeVisible();
+    await expect(proposalList(page)).toBeVisible();
 
     // …and BACK returns to the canvas, because switching pushed history rather
     // than replacing it.
@@ -355,7 +366,10 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
 
     // The rail's ONE live control while generating — a real affordance, not a
     // ghost beside a disabled Approve.
-    const discard = page.getByTestId('plan-discard');
+    // BY ROLE: the discard control is a shipped `Button` in `PlanReviewRail`, so
+    // the accessibility tree excludes the streamed and outgoing copies
+    // (MOTIR-3929). `exact` keeps it off the confirm dialog's own copy.
+    const discard = rail(page).getByRole('button', { name: 'Discard this plan', exact: true });
     await expect(discard).toBeEnabled();
     await discard.click();
 
@@ -372,11 +386,16 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
     // `decisionReason` is what keeps the two distinguishable for ever — an
     // implementation that reused the review copy would pass a status assertion
     // and lose the distinction the column exists for.
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Declined');
+    // SCOPED TO THE RAIL — the pill is a bare `<span>` and the reason line a
+    // paragraph, both in `PlanReviewRail`; neither carries a role, and the rail
+    // is a named `complementary` region.
+    await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Declined');
     await expect(
-      page.getByText('Plan discarded before it finished — your work items are unchanged'),
+      rail(page).getByText('Plan discarded before it finished — your work items are unchanged'),
     ).toBeVisible();
-    await expect(page.getByText('Plan declined — your tree was left untouched')).toHaveCount(0);
+    await expect(rail(page).getByText('Plan declined — your tree was left untouched')).toHaveCount(
+      0,
+    );
     await beat();
 
     // And it left the tab it was stuck in, which is the reader-visible half of
@@ -418,8 +437,10 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
 
   // ── EMPTY, one altitude down: the LIST view of a plan with nothing to list ──
   await page.goto(`/plans/${seed.emptyPlanId}?view=list`);
-  await expect(page.getByText('No proposals')).toBeVisible();
-  await expect(page.getByTestId('plan-proposal-list')).toHaveCount(0);
+  // SCOPED TO `main` — the empty title is a `<p>` in `PlanProposalList`, not the
+  // `EmptyState` heading MOTIR-4822 converted, so there is no role to ask for.
+  await expect(page.getByRole('main').getByText('No proposals')).toBeVisible();
+  await expect(proposalList(page)).toHaveCount(0);
 
   // ── THE SHRINK, IN BOTH DIRECTIONS ────────────────────────────────────────
   //
@@ -466,7 +487,7 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   // shipped service, from outside the browser, exactly as a colleague in another
   // tab would take it. The click that follows genuinely 409s.
   await page.goto(`/plans/${seed.concurrentlyDecidedPlanId}`);
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+  await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Ready to review');
 
   await plansService.declinePlan(seed.concurrentlyDecidedPlanId, {
     userId: seed.userId,
@@ -478,16 +499,14 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   // ⚠️ A 409 IS NOT AN ERROR ON THIS SURFACE (MOTIR-3240). The plan moved between
   // render and click and the decision was still made, so the rail shows the
   // plan's REAL state — never "that didn't work" printed above the answer.
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Declined');
-  await expect(page.getByText('Plan declined — your tree was left untouched')).toBeVisible();
+  await expect(rail(page).getByTestId('plan-status-pill')).toContainText('Declined');
+  await expect(rail(page).getByText('Plan declined — your tree was left untouched')).toBeVisible();
   // ⚠️ SCOPED TO THE RAIL, because a bare `getByRole('alert')` is never zero in an
   // App Router document: Next mounts `#__next-route-announcer__` with
   // `role="alert"` after the first client navigation and leaves it there for the
   // life of the page. The rail is where the error would be, and it is the only
   // place the assertion means anything.
-  await expect(
-    page.getByRole('complementary', { name: 'Plan review' }).getByRole('alert'),
-  ).toHaveCount(0);
+  await expect(rail(page).getByRole('alert')).toHaveCount(0);
 
   // The verdict is `afterEach`'s: `pageErrors` empty for this whole walk.
 });

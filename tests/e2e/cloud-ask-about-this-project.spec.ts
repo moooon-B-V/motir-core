@@ -67,9 +67,18 @@ const orb = (page: Page) => page.getByRole('button', { name: 'Motir AI' });
 const calloutPanel = (page: Page) => page.getByRole('dialog', { name: 'Motir AI' });
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => page.getByRole('textbox', { name: /Reply, or refine/ });
-const confirmBar = (page: Page) => page.getByTestId('plan-change-confirm-bar');
-const canvasFooter = (page: Page) => page.getByTestId('plan-change-canvas-footer');
-const canvas = (page: Page) => page.getByTestId('roadmap-canvas');
+// ⚠️ SCOPED TO `main`, not read off the page (MOTIR-5116). None of these three
+// nodes carries a role — the confirm bar and the footer are bare `<div>`s in
+// `PlanningWorkspaceHost`, and `roadmap-canvas` is `ProjectRoadmapCanvas`'s outer
+// wrapper around the `role="application"` viewport — so there is nothing to ask
+// the accessibility tree for. `main` is the live route subtree, which is what
+// keeps a page-rooted id off React's streamed `<div hidden id="S:0">` copy and
+// off the outgoing subtree a client-side navigation leaves mounted
+// (`CLAUDE.md` § *a boundary makes every unscoped locator a race*).
+const live = (page: Page) => page.getByRole('main');
+const confirmBar = (page: Page) => live(page).getByTestId('plan-change-confirm-bar');
+const canvasFooter = (page: Page) => live(page).getByTestId('plan-change-canvas-footer');
+const canvas = (page: Page) => live(page).getByTestId('roadmap-canvas');
 const answers = (page: Page) => rail(page).getByTestId('plan-change-report');
 
 /**
@@ -216,7 +225,8 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     await expect(answers(page)).toContainText('Two are waiting on work that has not started');
     // The citation is the SHIPPED work-item chip, not a treatment invented here.
     await expect(answers(page).getByText(seed.notifKey, { exact: true })).toBeVisible();
-    await expect(page.getByTestId('plan-change-citation-count')).toContainText(
+    // In the RAIL — a `<p>` in `PlanChangeRail`, no role of its own.
+    await expect(rail(page).getByTestId('plan-change-citation-count')).toContainText(
       'Answered from 1 work item',
     );
     await beat();
@@ -226,7 +236,8 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     // The no-mutation claim, checked on the TREE rather than on the absence of a
     // bar: the roadmap still shows the project as saved, with no diff on it.
     await expect(confirmBar(page)).toHaveCount(0);
-    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);
+    // ON THE CANVAS — the diff nodes are drawn inside `roadmap-canvas`.
+    await expect(canvas(page).getByTestId('plan-change-diff-node')).toHaveCount(0);
     await expect(page.locator('[data-diff-state="add"]')).toHaveCount(0);
     await expect(canvasFooter(page)).toContainText('Nothing proposed');
     await beat();

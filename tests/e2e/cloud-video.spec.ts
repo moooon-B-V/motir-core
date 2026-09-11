@@ -1,4 +1,4 @@
-import { request as apiRequest } from '@playwright/test';
+import { request as apiRequest, type Page } from '@playwright/test';
 import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 import {
@@ -21,6 +21,18 @@ import {
 // validating itself. Every persisted-state assertion waits on the AUTHORITATIVE
 // signal (the reconciled response / a committed reload), never a waitForTimeout
 // or an optimistic-only assert (the CLAUDE.md E2E discipline).
+
+// ── Locators ─────────────────────────────────────────────────────────────────
+//
+// MOTIR-5116: every page-rooted read in this file addresses a `Pill` or a body
+// `<span>` with no role of its own, so the remedy is a SCOPE rather than a role.
+// Both scopes below are themselves resolved through the accessibility tree,
+// which is what buys them the immunity a page-rooted locator lacks.
+
+/** The item page's live route subtree — the acceptance panel streams inside it. */
+const acceptance = (page: Page) => page.getByRole('main');
+/** `BoardContainer`'s scroll row: `role="group"` + `aria-label`. */
+const boardRegion = (page: Page) => page.getByRole('group', { name: 'Board columns' });
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -62,7 +74,11 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
     });
     // The chaptered player + the gate buttons are present (State A).
     await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
-    await expect(page.getByText('Open the story')).toBeVisible(); // a chapter marker
+    // BY ROLE: a chapter marker is a `<button>` in `AcceptancePanel`'s chapter
+    // list, so the accessibility tree excludes the streamed copy that a
+    // page-rooted `getByText` resolves (MOTIR-4822). The name matches on a
+    // substring, so the marker's index and timestamp do not interfere.
+    await expect(page.getByRole('button', { name: 'Open the story' })).toBeVisible();
   });
   await beat();
 
@@ -70,14 +86,19 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
     await page.getByRole('button', { name: 'Approve', exact: true }).click();
     // Authoritative: the server response reconciles the panel to the Approved
     // pill (the response IS the confirmation — the inline-edit rule).
-    await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+    // SCOPED TO `main`: the pill is a `Pill` with no role of its own, and the
+    // item page streams its late stack behind an in-page `<Suspense>`, so React
+    // leaves a resolved copy in `<div hidden id="S:0">` at the end of `<body>` —
+    // outside `main`, which is what this scope drops (`CLAUDE.md` § *a boundary
+    // makes every unscoped locator a race*).
+    await expect(acceptance(page).getByText('Approved', { exact: true })).toBeVisible();
   });
   await beat();
 
   await chapter('The story is Done', async () => {
     // Committed-state read: reload and confirm the story reached Done.
     await page.reload();
-    await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+    await expect(acceptance(page).getByText('Approved', { exact: true })).toBeVisible();
     const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
     expect(persisted.status).toBe('done');
   });
@@ -129,7 +150,8 @@ test('paid + on → Request changes sends the story back to In Progress', async 
 
   await page.goto(`/items/${story.identifier}`);
   await page.getByRole('button', { name: 'Request changes' }).click();
-  await expect(page.getByText('Changes requested', { exact: true })).toBeVisible();
+  // SCOPED TO `main` — a `Pill` on the streamed acceptance panel, no role.
+  await expect(acceptance(page).getByText('Changes requested', { exact: true })).toBeVisible();
   await page.reload();
   const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
   expect(persisted.status).toBe('in_progress');
@@ -196,12 +218,16 @@ test('the board shows the "Awaiting acceptance" badge, cleared on approve', asyn
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);
 
   await page.goto(`/boards`);
-  await expect(page.getByText('Awaiting acceptance')).toBeVisible();
+  // SCOPED TO THE BOARD: the badge is a `Pill` on a `BoardCard`, so there is no
+  // role to ask for — but `BoardContainer`'s scroll row IS `role="group"` +
+  // `aria-label`, and reading the badge through it also says what the assertion
+  // is actually about (the badge is ON THE BOARD).
+  await expect(boardRegion(page).getByText('Awaiting acceptance')).toBeVisible();
 
   // Approve from the detail page, then the badge clears on the board.
   await page.goto(`/items/${story.identifier}`);
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
-  await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+  await expect(acceptance(page).getByText('Approved', { exact: true })).toBeVisible();
   await page.goto(`/boards`);
-  await expect(page.getByText('Awaiting acceptance')).toHaveCount(0);
+  await expect(boardRegion(page).getByText('Awaiting acceptance')).toHaveCount(0);
 });

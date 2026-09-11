@@ -289,9 +289,15 @@ const rail = (page: Page) => workspace(page).getByRole('complementary', { name: 
 const composer = (page: Page) => rail(page).getByRole('textbox');
 const confirmBar = (page: Page) => workspace(page).getByTestId('plan-change-confirm-bar');
 const railReview = (page: Page) => workspace(page).getByTestId('plan-change-review');
-/** NOT scoped: the door lives on the ITEM PAGE, which is what opens the overlay
- *  — and the last chapter reads it with the workspace closed. */
-const entrance = (page: Page) => page.getByTestId('work-item-plan-entrance');
+/** The item page's live route subtree, underneath any overlay. */
+const itemPage = (page: Page) => page.getByRole('main');
+/** The door lives on the ITEM PAGE, which is what opens the overlay — and the
+ *  last chapter reads it with the workspace closed. So it is scoped to `main`
+ *  rather than to `workspace()` (MOTIR-5116): `main` is the item page's own live
+ *  subtree, so the locator says which surface the door is on and still resolves
+ *  with the overlay open. It keeps its id rather than taking its `link` role,
+ *  because its accessible name is what two of the assertions below MEASURE. */
+const entrance = (page: Page) => itemPage(page).getByTestId('work-item-plan-entrance');
 const addFrames = (page: Page) => workspace(page).locator('[data-diff-state="add"]');
 /** A committed or proposed CARD on the canvas, by its title. */
 const canvasTitle = (page: Page, title: string) =>
@@ -437,7 +443,7 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
     // The item starts childless — so the door reads PLAN, not Re-plan, and the
     // detail page has no child section at all (a leaf renders none).
-    await expect(page.getByText('Child work items')).toHaveCount(0);
+    await expect(itemPage(page).getByText('Child work items')).toHaveCount(0);
     await expect(entrance(page)).toHaveAttribute('data-mode', 'plan');
     await expect(entrance(page)).toHaveAccessibleName(`Plan ${seed.notifKey}`);
 
@@ -448,14 +454,18 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     // chip is the contextual one (not the project-wide plan change).
     await expect(rail(page)).toBeVisible();
     await expect(rail(page).getByText(`Opened in the context of ${seed.notifKey}.`)).toBeVisible();
-    await expect(page.getByTestId('planning-mode-chip')).toHaveText('in context');
+    // IN THE RAIL — a `Pill` in `PlanChangeRail`, no role of its own.
+    await expect(rail(page).getByTestId('planning-mode-chip')).toHaveText('in context');
 
     // The EMPTY state: a thread with no turns is not a blank screen — the canvas
     // already draws the plan, and there is nothing pending to confirm.
-    await expect(page.getByTestId('roadmap-canvas')).toBeVisible();
+    // IN THE OVERLAY — `ProjectRoadmapCanvas`'s wrapper around the
+    // `role="application"` viewport carries no role, so it is scoped to the
+    // dialog, exactly as `confirmBar` and `railReview` above already are.
+    await expect(workspace(page).getByTestId('roadmap-canvas')).toBeVisible();
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(railReview(page)).toHaveCount(0);
-    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);
+    await expect(workspace(page).getByTestId('plan-change-diff-node')).toHaveCount(0);
   });
   await dwell(page);
 
@@ -464,7 +474,8 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
 
     // STREAMING: the plan read is held, so the run is parked mid-flight and the
     // rail's live region shows the narration built from the SSE's real frames.
-    await expect(page.getByTestId('plan-change-progress')).toContainText(/proposed so far/);
+    // IN THE RAIL — a bare `<div aria-live="polite">`; `aria-live` is not a role.
+    await expect(rail(page).getByTestId('plan-change-progress')).toContainText(/proposed so far/);
     releasePlanRead();
 
     // REVIEW — with the engine's proposals, NOT the `EMPTY` state. The absence of
@@ -551,10 +562,13 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     // Where the user started — the children are now the item's own.
     await page.goto(`/items/${seed.notifKey}`);
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
-    const childSection = page.getByText('Child work items');
+    // SCOPED TO THE ITEM PAGE — these are body copy and child-row links with no
+    // role of their own, and the page streams its late stack behind an in-page
+    // `<Suspense>`, so a page-rooted read can resolve React's hidden `S:0` copy.
+    const childSection = itemPage(page).getByText('Child work items');
     await expect(childSection).toBeVisible();
-    await expect(page.getByText(DIGEST, { exact: true })).toBeVisible();
-    await expect(page.getByText(TOASTS, { exact: true })).toBeVisible();
+    await expect(itemPage(page).getByText(DIGEST, { exact: true })).toBeVisible();
+    await expect(itemPage(page).getByText(TOASTS, { exact: true })).toBeVisible();
     // The door now reads Re-plan: the item has children (MOTIR-910's two faces).
     await expect(entrance(page)).toHaveAttribute('data-mode', 'replan');
   });
@@ -606,7 +620,8 @@ test('a SIBLING under the anchor’s parent goes through the same confirm', asyn
       .getByRole('button', { name: `${seed.authEpicKey} · Authentication` }),
   ).toHaveAttribute('aria-current', 'page');
   await expect(addFrames(page)).toHaveCount(1);
-  await expect(page.getByText(SIBLING, { exact: true })).toBeVisible();
+  // ON THE CANVAS — the file's own helper, scoped to the overlay.
+  await expect(canvasTitle(page, SIBLING)).toBeVisible();
 
   // Still nothing written before the confirm.
   expect(await childTitlesOf(authEpicId)).toEqual(['Login UI', 'Password Reset']);
