@@ -37,8 +37,18 @@ export const aiPlanningRailEntry = (page: Page): Locator =>
     .getByRole('navigation', { name: 'Project settings' })
     .getByRole('link', { name: 'AI planning' });
 
-/** The settings panel the AI-planning page renders — the arrival landmark. */
-export const aiPlanningPanel = (page: Page): Locator => page.getByTestId('ai-planning-settings');
+/** The settings panel the AI-planning page renders — the arrival landmark.
+ *
+ * SCOPED to `main` (MOTIR-5114), not converted: the panel is a bare `<div>` and
+ * carries no role to ask for, so the honest move is a live subtree rather than
+ * an invented role. The scope is what excludes React's hidden `S:0` streaming
+ * staging block, which is portalled to the END OF BODY and so is not under
+ * `main` at all — the MOTIR-3929 shape. It does NOT replace the settle below:
+ * `settle.ts` records that the whole route SEGMENT doubles, one copy under
+ * `#main` and one not, so scoping narrows that window without closing it. The
+ * two answer different duplicate shapes and both are kept. */
+export const aiPlanningPanel = (page: Page): Locator =>
+  page.getByRole('main').getByTestId('ai-planning-settings');
 
 /**
  * Reach AI-planning settings the way a person does — BY CLICKING, from
@@ -99,9 +109,19 @@ export const aiPlanningSaveButton = (page: Page): Locator =>
  * savedCadence up…</span>` — so a non-exact `getByText` matches the title AND
  * the announcement the moment a second toast stacks, and trips strict mode. The
  * title node holds the string alone; the announcer never does.
+ *
+ * SCOPED to the toast VIEWPORT (MOTIR-5114). The title is a `RadixToast.Title`
+ * with no role of its own, so there is nothing to convert to; what there IS is a
+ * container. `ToastViewport` renders `role="region"` named `Notifications
+ * ({hotkey})` and the toasts are its `<ol>` children, while `ToastAnnounce`
+ * renders through a `Portal` onto `document.body` — so the region EXCLUDES the
+ * announcer structurally rather than by string shape. `exact` stays regardless:
+ * it is a second guard, and dropping it would be an assertion change.
  */
 export const aiPlanningSavedToast = (page: Page): Locator =>
-  page.getByText('AI planning settings saved', { exact: true });
+  page
+    .getByRole('region', { name: /^Notifications/ })
+    .getByText('AI planning settings saved', { exact: true });
 
 /** Press Save on a SETTLED panel. */
 export async function clickAiPlanningSave(page: Page): Promise<void> {

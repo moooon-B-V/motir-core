@@ -62,21 +62,36 @@ jobs:
     # load — the same job is 1.7 min with a warm layer cache and 5.4 with a cold
     # one". THAT SENTENCE WAS FALSE, and it is corrected rather than deleted
     # because a ceiling nobody can re-derive is a ceiling the next reader invents
-    # (MOTIR-5124). **No run of this job restores a layer cache from an earlier
-    # run — every build here is cold**, on a pull request exactly as in the merge
-    # queue. `cache-from: type=gha,scope=ci-runner` is real and the import line
-    # appears in every log, but it imports NOTHING: a GitHub Actions cache is
-    # readable only from the ref that wrote it or from the DEFAULT branch, and
-    # `ci.yml`'s `runner-image` job carries `github.event_name != 'push'`, so no
-    # run on `refs/heads/main` has ever written this scope. Read back off the
-    # repository's live cache list on 2026-09-11: `refs/heads/main` holds only
-    # `actions/cache@v4` entries (node-modules, pnpm-store, corepack, prisma,
-    # playwright, codeql) and NO buildx index at all, while every `index-*`
-    # buildx entry sits under an ephemeral `gh-readonly-queue/main/pr-<n>-<sha>`
-    # ref that is reclaimed with its branch. The `#N CACHED` layers a reader
-    # finds in a green log are from the job's SECOND build — `Export an OCI
-    # layout to measure`, which hits the cache the FIRST build wrote seconds
-    # earlier in the same run, and says nothing about the run before it.
+    # (MOTIR-5124).
+    #
+    # ⚠️ AND THE SENTENCE THAT REPLACED IT WAS ALSO WRONG, IN THE OTHER
+    # DIRECTION — CORRECTED AGAIN HERE RATHER THAN DELETED (MOTIR-5126). It read
+    # "**No run of this job restores a layer cache from an earlier run — every
+    # build here is cold**". That is FALSE, and the falsifying run was already
+    # inside the sample it was written from: run 34586771845 restored `#9`,
+    # `#11`–`#15` in its FIRST build and finished `Build the image` in **35 s**.
+    #
+    # The true rule is the one the old text used half of: a GitHub Actions cache
+    # is readable from **the ref that WROTE it, or from the DEFAULT branch**.
+    # Both halves matter. The second half is why 34586771845 was warm — the
+    # merge queue re-formed the group on an identical base sha, so the same
+    # branch NAME occurred twice and the second run read what the first wrote:
+    #
+    #   34583080235  09:13:14  1036 s  COLD — wrote the scope
+    #   34586771845  09:57:05    35 s  WARM — read it back, same ref
+    #
+    # ⚠️ SO THE DEFECT IS NARROWER AND WORSE THAN "IT NEVER WORKS": it works
+    # only when the identical ref recurs, which is a re-run or a regrouped queue
+    # entry — LUCK, not a mechanism. Every genuinely new ref is cold by
+    # construction, and that is most of them. A cache that works sometimes, for
+    # reasons nobody chose, is one people reason about as though it works.
+    #
+    # The `#N CACHED` layers a reader finds in a green log are USUALLY from the
+    # job's SECOND build — `Export an OCI layout to measure`, which hits the
+    # cache the FIRST build wrote seconds earlier in the same run. Read the LINE
+    # NUMBERS: `CACHED` before the second `importing cache manifest` line is a
+    # real restore; after it is not. Grepping for `CACHED` cannot tell them
+    # apart, and that is how both wrong sentences above got written.
     #
     # ⚠️ SO THE SPREAD IS RUNNER NETWORK THROUGHPUT, and that is why 20 STAYS
     # rather than being re-derived. Three cold builds of the same Dockerfile,
@@ -108,11 +123,17 @@ jobs:
     # move already made twice; it lowers probability and leaves the class."* A
     # ceiling is a bound on a wedged build, not a budget for a degraded network.
     #
-    # ⚠️ SO WHAT ACTUALLY FIXES IT IS THE CACHE, AND THAT IS MOTIR-5126. A
-    # restored layer cache makes `#9` and `#12` `CACHED` and takes apt off the
-    # critical path entirely — the mirror stops being able to decide whether this
-    # lane passes. Until then every build here is cold by construction (above),
-    # and cold means apt-bound.
+    # ⚠️ SO WHAT ACTUALLY FIXES IT IS THE CACHE, AND THAT IS MOTIR-5126, NOW
+    # SHIPPED — see the block beside `cache-to:` below. A restored layer cache
+    # makes `#9` and `#12` `CACHED` and takes apt off the critical path
+    # entirely; the mirror stops being able to decide whether this lane passes.
+    # The 1036 s / 35 s pair above is the same Dockerfile on the same branch,
+    # cold against warm, and that 30x is what a readable scope buys.
+    #
+    # ⚠️ THE CEILING STAYS AT 20 ANYWAY. A warm build does not need it and a
+    # cold one is not saved by it (the third row above needed roughly an hour),
+    # so nothing here re-derives it — and the first build after an image input
+    # changes is still cold-ish and still apt-bound.
     #
     # MOTIR-5124 narrowed WHICH batches reach this build — `ci.yml`'s `changes`
     # job now classifies a `merge_group` batch instead of waving it through, so a
@@ -150,6 +171,80 @@ jobs:
       # The context is `infra/ci-runner`, NOT the repo root: the image contains
       # nothing from motir-core's tree, and a root context would ship the whole
       # checkout into a container that runs customer code.
+      # ── THE CACHE SCOPE, AND WHO IS ALLOWED TO READ IT (MOTIR-5126) ────────
+      #
+      # THE FACT THIS RESTS ON: a GitHub Actions cache entry is readable from
+      # the ref that WROTE it, or from the repository's DEFAULT branch. Nothing
+      # else. So `refs/heads/main` is the only scope every other ref can read,
+      # and a `cache-from` naming a scope no `main` run ever wrote imports
+      # nothing — silently, because `#N importing cache manifest from gha:<id>`
+      # / `DONE 0.0s` prints identically whether the scope holds a manifest or
+      # is empty.
+      #
+      # NOT a documentation claim — this repository demonstrates both halves:
+      #   • the DEFAULT-BRANCH half: `Linux-corepack-11.2.2` and
+      #     `Linux-pnpm-store-…` live on `refs/heads/main` and a `pull_request`
+      #     run restores them (run 34582658507, `Lint + Prettier`). Same cache
+      #     service, different client.
+      #   • the SAME-REF half: 34583080235 (1036 s) then 34586771845 (35 s), one
+      #     queue branch name that recurred. See the ceiling block above.
+      #
+      # WHAT WAS WRONG: every writer of a buildx scope here sat on an ephemeral
+      # or non-default ref — `ci.yml` carried `github.event_name != 'push'`, and
+      # the two release workflows are tag-triggered — so `refs/heads/main` held
+      # no buildx index at all, and no ref could read another's. Verified off
+      # the live list on 2026-09-11:
+      #
+      #   gh api --paginate \
+      #     "/repos/moooon-B-V/motir-core/actions/caches?per_page=100" \
+      #     --jq '.actions_caches[] | select(.ref=="refs/heads/main") | .key'
+      #
+      # returned the six `actions/cache@v4` entries and two orphan
+      # `buildkit-blob-…` rows — and NO `index-*`. A blob without an index is
+      # unreachable, so that is an empty scope with debris in it.
+      #
+      # THE FIX: a THIRD entry point — `.github/workflows/image-cache-main.yml`
+      # — calls this workflow on a push to `main` with `publish: false`, purely
+      # to WRITE the scope this `cache-to:` names. The directives below are
+      # untouched, and `ci.yml` keeps its `!= 'push'` gates.
+      #
+      # ⚠️ WHY A SEPARATE WORKFLOW RATHER THAN DROPPING THAT `!= 'push'`, which
+      # was the obvious change: `ci.yml` groups concurrency on
+      # `${{ github.workflow }}-${{ github.ref }}` and does NOT cancel on a push
+      # (MOTIR-3106), so its push runs QUEUE — and `deploy` is in them. Anything
+      # added to that lane joins the critical path of the NEXT merge's release,
+      # and the sandbox matrix carries a 50-minute per-profile ceiling. It would
+      # have re-created MOTIR-3106's defect in its slow form: a delayed deploy
+      # rather than a starved one, which nothing reports.
+      #
+      # ⚠️ THE OTHER DECISION, because both answers are defensible and the next
+      # reader should not have to re-derive it: the write is GATED on the image
+      # inputs (an `on.push.paths:` filter carrying the same set as `ci.yml`'s
+      # `images` classifier), NOT run on every push.
+      #   • Cost. Ungated, every merge pays a full sandbox matrix to refresh a
+      #     scope whose inputs did not change. Gated, the write happens exactly
+      #     when the previous scope went stale anyway — and that build is itself
+      #     warm off the previous write rather than cold.
+      #   • The quiet-stretch risk is real and SELF-HEALING. GHA evicts an entry
+      #     after 7 days without access, so a fortnight with no image-input
+      #     change lets `main`'s scope go cold. It costs exactly one cold build:
+      #     the same gate means no pull request runs these lanes in that stretch
+      #     either, so nothing wanted the scope while it was absent, and the next
+      #     image-touching merge rewrites it.
+      #   • Budget. The per-repository cache allowance is 10 GB and the sandbox
+      #     blobs are hundreds of MB each, so writing every scope on every merge
+      #     competes with the entries this change exists to KEEP — LRU eviction
+      #     would be choosing between them. Gating keeps the long-lived copies
+      #     few and constantly read.
+      # If the scope is ever found cold on a busy week, that is the gate being
+      # too narrow: widen the path set (both copies — they are pinned to each
+      # other by a test), never drop the gate.
+      #
+      # `tests/ci-changed-paths-gate.test.ts` pins the load-bearing halves —
+      # that the writer runs on `main`, that its path set equals the classifier's,
+      # and that it has its own concurrency group. Without them a quiet edit puts
+      # the cache back to unreadable with every log line and every directive
+      # below still looking exactly as it does now.
       - name: Build the image
         uses: docker/build-push-action@v6
         with:

@@ -117,6 +117,18 @@ const EVERY_STATE: { name: string; v: ProjectRepoEstablishViewDto }[] = [
     ),
   },
   {
+    // ⚠️ ARM C (bug MOTIR-5036) — the account IS known and GitHub refused, so
+    // every invitable row stays `not_invited`. It belongs here for a reason the
+    // other ready states do not have: it is the ONE arm that puts an identifier
+    // on screen, so it is the one with something to leak beside the account it
+    // is allowed to name. A `created` row carries the realized repository, which
+    // is what makes the `repositor` / name assertions load-bearing here.
+    name: 'ready · refused',
+    v: view([row({ state: 'created', established: true, realizedRepo: REALIZED })], {
+      githubLogin: 'yuezhu',
+    }),
+  },
+  {
     name: 'failed',
     v: view([row({ state: 'failed', failureReason: 'GitHub declined the request' })]),
   },
@@ -172,12 +184,23 @@ describe('the post-approval step’s vocabulary cannot come back', () => {
   });
 
   it('offers exactly ONE forward action per state — never a choice about repositories', () => {
+    // ⚠️ ADDRESSED BY NAME, NEVER BY INDEX. `EVERY_STATE` is an enumeration this
+    // file's own header invites the next person to GROW, and a positional
+    // reference into it silently starts asserting about a different state the
+    // moment one is inserted above it — a green test measuring the wrong thing.
+    const state = (name: string) => {
+      const found = EVERY_STATE.find((s) => s.name === name);
+      if (!found) throw new Error(`no state named "${name}" in EVERY_STATE`);
+      return found.v;
+    };
+
     // idle: Continue, and nothing beside it.
+    const idle = state('idle');
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, json: async () => EVERY_STATE[0]!.v }) as unknown as Response),
+      vi.fn(async () => ({ ok: true, json: async () => idle }) as unknown as Response),
     );
-    renderStep(EVERY_STATE[0]!.v);
+    renderStep(idle);
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
     cleanup();
@@ -185,11 +208,12 @@ describe('the post-approval step’s vocabulary cannot come back', () => {
     // failed: Try again, and nothing beside it. This is the panel the deleted
     // door appeared on TWICE, and the second site is the one a deletion that
     // reads only the first leaves behind.
+    const failed = state('failed');
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, json: async () => EVERY_STATE[4]!.v }) as unknown as Response),
+      vi.fn(async () => ({ ok: true, json: async () => failed }) as unknown as Response),
     );
-    renderStep(EVERY_STATE[4]!.v);
+    renderStep(failed);
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });

@@ -188,7 +188,12 @@ describe('8.8.29 — last-active project seam (write actions ↔ read resolver)'
     await workspacesService.createWorkspace({ name: 'Seed WS', ownerUserId: user.id });
     actAs(user);
 
-    const created = await createWorkspaceAction('Fresh');
+    // MOTIR-5130 — the action now answers with a RESULT, so a §4.4 cap refusal
+    // can travel as a value instead of a 500. The success arm carries the same
+    // summary DTO this seam always read.
+    const result = await createWorkspaceAction('Fresh');
+    if (!result.ok) throw new Error(`expected a created workspace, got: ${result.error}`);
+    const created = result.workspace;
 
     expect(cookieJar.get(WORKSPACE_COOKIE_NAME)).toBe(created.id);
     const pointer = await pointerOf(user.id);

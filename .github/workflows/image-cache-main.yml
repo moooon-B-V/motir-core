@@ -1,0 +1,127 @@
+# Warm the DEFAULT-BRANCH buildx layer cache (MOTIR-5126)
+#
+# ── THE FACT THIS WORKFLOW EXISTS FOR ────────────────────────────────────────
+#
+# A GitHub Actions cache entry is readable from **the ref that WROTE it, or from
+# the repository's DEFAULT branch**. Nothing else. So `refs/heads/main` is the
+# only scope every other ref is allowed to read — and until this file, nothing
+# in this repository ever wrote a buildx scope there:
+#
+#   ci.yml → sandbox / runner-image   `pull_request` / `merge_group`, and both
+#                                     carried `github.event_name != 'push'`
+#   release-runner-image.yml          `push: tags: ['runner-v*']`
+#   release-sandbox.yml               `push: tags: ['cli-v*']`
+#
+# A pull request writes `refs/pull/<n>/merge`; a queue entry writes
+# `refs/heads/gh-readonly-queue/main/pr-<n>-<sha>`, which is deleted with its
+# branch and reclaimed. A tag is not the default branch either. So every scope
+# was written somewhere no later run could read, and `cache-from` imported
+# nothing.
+#
+# ⚠️ IT IS "COLD ON EVERY NEW REF", NOT "COLD ALWAYS", AND THE DIFFERENCE IS THE
+# WHOLE DEFECT. The same-ref half of the rule does fire: when the merge queue
+# re-forms a group on an unchanged base sha the identical branch NAME recurs,
+# and the second run reads what the first wrote —
+#
+#   34583080235  09:13:14  Build the image  1036 s   COLD, wrote the scope
+#   34586771845  09:57:05  Build the image    35 s   WARM, read it back
+#
+# — which is a 30x gap on one Dockerfile, obtained by luck. A cache that works
+# when a ref happens to repeat is one people reason about as though it works.
+#
+# The default-branch half is demonstrated in this repository too, by the OTHER
+# cache client: `Linux-corepack-11.2.2` and `Linux-pnpm-store-…` live on
+# `refs/heads/main` and a `pull_request` run restores them (run 34582658507,
+# `Lint + Prettier`). Same cache service — only the buildx scopes had no writer.
+#
+# ── WHY A SEPARATE WORKFLOW, AND NOT `!= 'push'` REMOVED FROM `ci.yml` ───────
+#
+# That was the obvious change and it is the wrong one. `ci.yml` sets
+# `concurrency: group: ${{ github.workflow }}-${{ github.ref }}` with
+# `cancel-in-progress` FALSE on a push (MOTIR-3106 — cancelling there starved
+# the deploy). A concurrency group with no cancellation QUEUES: run N+1 stays
+# pending until run N finishes. `deploy` lives in that run, so anything added to
+# the push lane is added to the critical path of the NEXT merge's release — and
+# the sandbox matrix is the most expensive thing in `ci.yml` (a 50-minute
+# per-profile ceiling). It would have re-created MOTIR-3106's defect in its slow
+# form: not a starved deploy, a delayed one, which no check reports.
+#
+# Here the cache write has its OWN concurrency group, so it cannot queue behind
+# or ahead of a release, and `ci.yml` keeps its `!= 'push'` gates untouched.
+#
+# ── WHAT THIS IS NOT ─────────────────────────────────────────────────────────
+#
+# NOT a gate. It verifies nothing, and nothing may be made to depend on it: the
+# merge was already gated by the queue entry, which ran these very workflows
+# against the composed tree. It is not in `deploy`'s `needs` and must never be —
+# a red build here means the next pull request pays for a cold build, not that a
+# release should stop. `publish: false` and the absence of `packages: write`
+# mean it cannot push an image even if it tried; the release lanes remain
+# `release-runner-image.yml` and `release-sandbox.yml`, on their own tags.
+
+name: Image cache (main)
+
+on:
+  push:
+    branches: [main]
+    # ⚠️ THE SAME SET `ci.yml`'s `changes` JOB USES FOR `images`, IN GLOB FORM —
+    # and the two are pinned together rather than trusted to stay in step.
+    # `tests/ci-changed-paths-gate.test.ts` re-derives this list from that shell
+    # `case` and fails when they diverge, because two path lists in two
+    # languages in two files is exactly the shape that drifts silently: the
+    # symptom of drift here is not a red check, it is a cold build weeks later.
+    #
+    # It is deliberately a `paths:` filter rather than a `changes`-style job:
+    # this workflow has no other lane to gate, so a whole job to compute one
+    # boolean would be a second implementation of the predicate rather than a
+    # second copy of the list.
+    paths:
+      - 'packages/**'
+      - 'prisma/**'
+      - 'infra/ci-runner/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - '.npmrc'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/sandbox-images.yml'
+      - '.github/workflows/runner-image.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/buildx/**'
+      # This file itself: a change to what it builds or when must refresh the
+      # scope it is responsible for.
+      - '.github/workflows/image-cache-main.yml'
+
+# ⚠️ `cancel-in-progress: true` HERE IS SAFE, AND IT IS THE OPPOSITE OF THE CALL
+# `ci.yml` MAKES ON A PUSH — read both before changing either. What MOTIR-3106
+# lost to cancellation was a DEPLOY: every cancelled run dropped a migration
+# obligation onto the next one, which was then cancelled in turn. This workflow
+# produces no release and gates nothing, so cancelling it loses only a cache
+# write that the newer `main` is about to redo better — and without it a burst
+# of merges queues a chain of builds, each writing a scope the next immediately
+# supersedes.
+concurrency:
+  group: image-cache-main
+  cancel-in-progress: true
+
+jobs:
+  # Both jobs call the SAME reusable workflows `ci.yml` calls, so the layers
+  # written here are the layers a pull request will ask for. A bespoke build
+  # would warm a cache nothing reads — the one-definition-two-entry-points shape
+  # both image workflows already document, with this as a third entry point.
+  sandbox:
+    name: Sandbox images
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sandbox-images.yml
+    with:
+      publish: false
+
+  runner-image:
+    name: Runner image
+    permissions:
+      contents: read
+    uses: ./.github/workflows/runner-image.yml
+    with:
+      publish: false

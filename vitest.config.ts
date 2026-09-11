@@ -2012,6 +2012,27 @@ export default defineConfig({
         // The `/planning` FORWARD. A route-group path is entered as `app/**/…`
         // (the note above) — `app/(authed)/planning/page.tsx` resolves to nothing.
         'app/**/planning/page.tsx',
+        // ── Story MOTIR-4778 · APPROVAL GATES — the assembled surface ────────
+        // Subtask MOTIR-4796, the story's own vitest gate. This surface shipped
+        // across seven cards and was in NO coverage `include` at all, so it was
+        // absent from the report and ungated — the state the per-file gate
+        // exists to make impossible for exactly this kind of multi-card surface.
+        //
+        // MEASURED on this branch before being pinned, per this list's own rule.
+        // The set went 92.06 / 83.62 / 95.08 / 93.44 (stmts / branches / funcs /
+        // lines) to 99.19 / 95.49 / 100 / 100, with every arm that remains
+        // uncovered carrying a written verdict — a `v8 ignore` citing the test
+        // that pins its invariant, or a pinned threshold naming why the obvious
+        // test is one the RLS call-site guard forbids.
+        'lib/services/approvalGatesService.ts',
+        'lib/repositories/approvalGateRepository.ts',
+        'lib/approvalGates/registry.ts',
+        'lib/approvalGates/designResultHandler.ts',
+        'lib/approvalGates/errors.ts',
+        'lib/approvalGates/refusals.ts',
+        'lib/mappers/approvalGateMappers.ts',
+        'components/approvals/ApprovalGateControl.tsx',
+        'components/approvals/portRenderStatus.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2022,6 +2043,70 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-4778 · APPROVAL GATES (Subtask MOTIR-4796) ───────────
+        // Pinned at the project floor after measuring each on this branch. Seven
+        // of the nine came out at 100 on all four axes; the two that did not are
+        // noted below with what remains and why.
+        'lib/approvalGates/registry.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/approvalGates/designResultHandler.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/approvalGates/refusals.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mappers/approvalGateMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/approvals/portRenderStatus.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // 100 / 98.07 / 100 / 100. The two residual branches are the confirm
+        // band's optional copy slots, which a kind may leave unset.
+        'components/approvals/ApprovalGateControl.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ⚠️ BRANCHES PINNED AT 85, WITH A REASON; the other three are 100.
+        // The five residual branches are the four reads' `tx ?? dbRead`
+        // fallbacks plus the driver-shape `originalCode` fallback. Every shipped
+        // caller passes a `tx`, so the `dbRead` side of each is unexercised.
+        //
+        // It is pinned rather than covered BECAUSE THE OBVIOUS TEST IS ONE THE
+        // REPOSITORY FORBIDS. A test calling these reads unbound and asserting
+        // they return nothing was written, and
+        // `tests/rls/test-call-site-guard.test.ts` refused it by name: under
+        // `motir_app` an unbound read returns empty because nothing is bound,
+        // so such an assertion "will PASS while checking nothing, which is
+        // worse". The policy property it was reaching for is already asserted
+        // at the right altitude by `tests/approval-gate-rls.test.ts`.
+        //
+        // So the arm gets a VERDICT rather than a fixture — this card's own
+        // rule — and the number stays honest about what is measured.
+        'lib/repositories/approvalGateRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 85,
+          statements: 90,
+        },
+        // 95.83 / 93.02 / 100 / 100. The residual statements are the door's
+        // post-lock tenant re-check — defence in depth the pre-read makes
+        // unreachable, marked at the arm with the test that pins its invariant.
+        'lib/services/approvalGatesService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-4725 · the planning workspace as an OVERLAY ──────────
         // Pinned at the project floor after measuring each on this branch
         // (MOTIR-4733). Statements/lines/functions came out at 100 across the
