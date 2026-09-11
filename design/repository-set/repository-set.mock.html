@@ -1652,8 +1652,8 @@
            PANEL 2 — THE DEFAULT PATH'S THREE STATES
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 2 · <b>The default path has three states</b> — working, ready (in two arms), and
-        couldn't finish
+        Panel 2 · <b>The default path has three states</b> — working, ready (in THREE arms since
+        v7), and couldn't finish
       </div>
       <p class="panel-note">
         The ADR's six per-row states are the <b>model</b>; this path renders only what the user can
@@ -1685,11 +1685,12 @@
         <code class="mono">continue</code> outright when the project has no repository). So the
         invitation is now SENT at establish, as MOTIR-1900 already specified it —
         <i>"a side effect after commit, degrading gracefully"</i> — and this state REPORTS it.
-        <b>Two arms, and both are drawn</b>: the account is known (A), or there is none to invite
-        (B). <b>A report is not a silent surface</b> — arm A still offers
-        <b>Use a different account</b>, because a mechanism that shows you which account got access
-        and gives you no way to correct it is worse than one that asks. What left is the ASK for the
-        identity, not the ability to fix it.
+        <b>THREE arms since v7, and all three are drawn</b>: something was sent (A), there is no
+        account to invite (B), or Motir had one and <b>GitHub refused</b> (C).
+        <b>A report is not a silent surface</b> — arm A still offers <b>Use a different account</b>,
+        because a mechanism that shows you which account got access and gives you no way to correct
+        it is worse than one that asks. What left is the ASK for the identity, not the ability to
+        fix it.
       </p>
       <p class="panel-note">
         <b>Arm B's words are the RAIL's words, by construction.</b>
@@ -1705,6 +1706,25 @@
           class="mono"
           >settings.codeAccess.state.notInvitedSelf</code
         >).
+      </p>
+      <p class="panel-note">
+        <b>v7 · arm C, and why arm B could not keep answering for it.</b> Arm B's guard is
+        <code class="mono">!login || !anyInvited</code> — a two-disjunct SHAPE test — while its
+        caption said <i>"no connected identity"</i>. A GitHub refusal satisfies the second disjunct:
+        nothing is stamped on one (<code class="mono">grantAccess</code> counts a row-level refusal
+        and never throws; <code class="mono">deriveAccessState(null)</code> is
+        <code class="mono">not_invited</code>), so the panel told a user whose account Motir knows
+        that Motir does not know it. <b>The three arms are now predicates, in this order</b>: B when
+        <code class="mono">view.githubLogin === null</code>; <b>C</b> when it is non-null and every
+        INVITABLE row (<code class="mono">state === 'created'</code>) is
+        <code class="mono">not_invited</code>; A otherwise. The connected login is what makes C
+        sufficient — since v5 the invitation is sent <i>at establish</i>, so a set that reached
+        <code class="mono">created</code> while Motir held an identity has already had its
+        invitation attempted. <b>The severity ruling is untouched</b>: an invitation failure never
+        fails a row, so C keeps the success line, the promise, arm B's ink and icon, and arm B's
+        door — <code class="mono">/settings/project/code-access</code>, which branches
+        <code class="mono">not_invited</code> on the DTO's own <code class="mono">reason</code> and
+        offers <b>Invite</b> for exactly this state.
       </p>
       <div class="panel gallery">
         <div class="state">
@@ -1789,8 +1809,10 @@
           <div class="cap">
             <code>created</code> · <b>arm B — no connected identity</b
             ><span
-              >Nothing was sent, and nothing is asked for HERE. One quiet line says so, in the
-              rail's own words, with the door to the surface that owns it.</span
+              >There is no account to invite: <code class="mono">view.githubLogin</code> is
+              <code class="mono">null</code>. One quiet line says so, in the rail's own words, with
+              the door to the surface that owns it. <b>v7 narrowed this arm</b> — until then its
+              guard also caught the refusal beside it.</span
             >
           </div>
           <div class="step hero" style="max-width: 30rem">
@@ -1814,6 +1836,52 @@
               <svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg>
               <span>
                 Motir doesn't know your GitHub account yet.
+                <a class="link door" href="#">Finish setting up access</a>
+              </span>
+            </p>
+            <div class="hero-cta">
+              <button class="btn btn-primary" type="button">Go to my backlog</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="state">
+          <div class="cap">
+            <code>created</code> · <b>arm C — GitHub REFUSED (v7)</b
+            ><span
+              >Motir HAS the account, sent the invitation at establish, and GitHub turned it down
+              (<code class="mono">403</code>). Nothing is stamped on a refusal, so every invitable
+              row stays <code class="mono">not_invited</code> — which is the graceful degradation
+              working, not a failure.
+              <b>Same frame, same promise, same door as arm B; one different sentence.</b> It names
+              the account Motir TRIED (<code class="mono">view.githubLogin</code>, never
+              <code class="mono">row.access.login</code>, which a refusal leaves
+              <code class="mono">null</code>), and it carries no status code and no repository
+              name.</span
+            >
+          </div>
+          <div class="step hero" style="max-width: 30rem">
+            <div class="step-head">
+              <div class="eyebrow">Your project's code</div>
+              <h3 class="hero-h">Motir will host your code</h3>
+            </div>
+            <div class="status-line ok">
+              <svg class="i lg"><use href="#i-circle-check-big" /></svg>
+              Your code is ready
+            </div>
+            <div class="promise">
+              <svg class="i lg"><use href="#i-lock" /></svg>
+              <span>
+                <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                whenever you want.
+                <a class="link door" href="#">How moving it works</a>
+              </span>
+            </div>
+            <p class="access-note" role="status">
+              <svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg>
+              <span>
+                Motir couldn't give @yuezhu access to your code yet — GitHub turned the invitation
+                down.
                 <a class="link door" href="#">Finish setting up access</a>
               </span>
             </p>

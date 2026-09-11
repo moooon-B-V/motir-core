@@ -31,32 +31,69 @@ import {
  * How many consecutive `rebuild` runs a repository may record before this probe
  * calls it broken.
  *
- * ⚠️ **CHOSEN, NOT DERIVED — and that is a statement about the data, not an
- * admission of laziness.** The threshold ought to sit above normal noise, and
- * on the day this shipped there was no normal to sit above: read from
- * production 2026-09-10 over 1298 code-graph runs (899 succeeded), the ledger
- * held **91 mode observations across 5 repositories, 100% `rebuild`, zero
- * `sync`** — the consecutive-rebuild streak WAS the entire mode-carrying
- * history of every repository (motir-core 31, motir-ai 13, motir-meta 6,
- * motir-marketing 4, motir-gateway 1). MOTIR-5031 reached the same reading
- * independently the same day (73 of 73).
+ * **CALIBRATED 2026-09-11 (MOTIR-5059) — KEPT at 5, and now against a
+ * distribution that contains both modes.** MOTIR-5027 shipped this as an openly
+ * CHOSEN number because the ledger then held 91 mode observations, 100%
+ * `rebuild` and zero `sync`: there was no normal for a threshold to sit above.
+ * MOTIR-5028 established a `sync` in production on 2026-09-10, and this is the
+ * re-read.
  *
- * So the legitimate case a threshold is supposed to clear — a genuine engine
- * bump forcing exactly ONE rebuild per repository, or an occasional pruned
- * snapshot forcing another — **has never once been observed here**, and a number
- * fitted to this distribution would be a number fitted to the outage.
+ * **The reading**, over the SAME population this probe reads — `job_run` where
+ * `function_id IN ('system.code-graph-refresh','system.code-graph-index')` AND
+ * **`status = 'succeeded'`** (the success predicate), newest-first, limit 2000,
+ * kept where `output.indexed === true` and `output.repoRef` is a string, mode
+ * collapsed by `runMode` below:
  *
- * 5 is therefore reasoned rather than measured: comfortably above the
- * one-rebuild-per-bump case and above an occasional prune landing near it, and
- * far below the hundreds of runs either recorded incident actually spanned.
- * Erring HIGH is deliberate — the failure mode of a low threshold is a check
- * that fires on legitimate bumps, and a check that cries wolf is a check
- * somebody silences.
+ * | repository | succeeded | carried a mode | streak | `sync` |
+ * |---|---|---|---|---|
+ * | motir-core | 549 | 45 | 0 | 12 |
+ * | motir-ai | 210 | 20 | 0 | 6 |
+ * | motir-meta | 92 | 8 | 0 | 2 |
+ * | motir-marketing | 44 | 4 | **4** | 0 |
+ * | motir-gateway | 16 | 1 | 1 | 0 |
+ * | starter | 11 | 0 | 0 | 0 |
  *
- * **MOTIR-5059 is the card that calibrates this from data**, once MOTIR-5028 has
- * established in production that a `sync` can happen at all. Until it runs, this
- * number is an argument and not a measurement, and it says so here so that no
- * reader mistakes the measurement quoted above for its derivation.
+ * 922 index rows, 78 carrying a mode (844 still carry none), **20 `sync` and 58
+ * `rebuild`** — where the reading this number shipped on had 91 `rebuild` and
+ * zero `sync`.
+ *
+ * ⚠️ **AND THE ONE-REBUILD-PER-BUMP CASE, DISPOSED OF AGAINST THE DATA RATHER
+ * THAN ASSERTED — the two predicates give different answers and BOTH are
+ * reported, because only the second is evidence.**
+ *
+ *  - **Rebuild episodes BOUNDED by a `sync` on both sides: ZERO.** Every rebuild
+ *    episode in the ledger is still open at the old end — each repository has
+ *    exactly ONE `rebuild` → `sync` transition in its whole history, the
+ *    2026-09-10 recovery. So under the strict reading there are **no
+ *    single-rebuild episodes at all**, and this comment says so rather than
+ *    claiming the case is covered.
+ *  - **Rebuilds inside the BUMP WINDOW** — after MOTIR-5026's re-pin at
+ *    23:03:47Z, before that repository's first `sync`: motir-core **1**
+ *    (23:14:31Z), motir-ai **1** (23:06:03Z), motir-meta **0** (it did not run
+ *    inside the window). **n = 2, both of length 1** — the legitimate case
+ *    finally observed, and it cost exactly the one rebuild MOTIR-5027 argued it
+ *    would.
+ *
+ * So the separation the threshold has to make is now measured at both ends:
+ * the largest observed LEGITIMATE episode is **1**, and the smallest observed
+ * DEFECT episode is **4** (motir-marketing). 5 sits above both.
+ *
+ * **Why it is not lowered into that gap.** motir-marketing reads 4 TODAY and
+ * motir-gateway 1, both with zero syncs — not because either is broken now, but
+ * because neither has refreshed since the fix landed (their newest mode-carrying
+ * runs are 2026-09-10T11:25Z and 2026-09-09T21:28Z). A threshold of 4 would be
+ * LOUD on motir-marketing this morning over a defect that is already repaired,
+ * which is precisely the fires-on-a-state-nobody-can-act-on failure the original
+ * reasoning erred high to avoid. 5 is the smallest value that clears both the
+ * observed legitimate episode and the largest stale streak the recovery has not
+ * yet swept.
+ *
+ * **What this reading still cannot say**, stated so no later reader mistakes it
+ * for more than it is: a pruned-snapshot rebuild has never been observed here at
+ * all, so the second legitimate mechanism remains unmeasured; and MOTIR-5030
+ * (motir-ai#445, merged 23:25:44Z) removed the engine-version comparison that
+ * produced the bump rebuild in the first place, so the mechanism the n = 2
+ * observation measures may not recur by that route.
  */
 export const INDEX_REBUILD_STREAK_THRESHOLD = 5;
 

@@ -225,7 +225,36 @@ export type IndexMode = 'sync' | 'rebuild';
 export interface IndexModeRecord {
   /** WHICH container's mode this is — the second half of `(repo × project)`. */
   readonly projectId: string;
+  /**
+   * ⚠️ THE OFFER-DERIVED MODE, AND ITS MEANING IS UNCHANGED BY MOTIR-5058. It
+   * still answers, and only answers, *was a snapshot OFFERED to this run*. The
+   * two fields below sit BESIDE it; nothing overwrites or reinterprets this one.
+   */
   readonly mode: IndexMode;
+  /**
+   * WHAT THE CONTAINER ITSELF DID (MOTIR-5058) — read back from motir-ai after
+   * the run settled, and absent when it could not be.
+   *
+   * ⚠️ THE VOCABULARY IS DIFFERENT ON PURPOSE: `build`, not `rebuild`. The two
+   * fields answer two different questions and a reader who assumes they are the
+   * same field twice will draw the exact wrong conclusion, so they are not even
+   * spelled alike. See {@link IndexMode}'s own note — *"motir-ai knows the
+   * difference and this side deliberately does not ask"* was true until this
+   * card, which is when asking became its own decision and was taken.
+   *
+   * ⚠️ ABSENT IS NOT `build`. It means motir-ai had nothing to report or could
+   * not be asked — an older deployment, a run that reported no verdict, a lost
+   * write, a failed call. Defaulting it reproduces the false confidence the pair
+   * exists to remove.
+   */
+  readonly containerMode?: 'sync' | 'build';
+  /**
+   * WHY a run that WAS handed a snapshot rebuilt anyway — the container's own
+   * reason (the sync threw, or its engine called the snapshot stale). Present
+   * only alongside a `containerMode` of `build`, and only when a snapshot was
+   * offered: a cold build was never offered one and has nothing to explain.
+   */
+  readonly containerFallbackReason?: string;
 }
 
 /**
@@ -244,6 +273,37 @@ export interface IndexModeRecord {
  * from the boot memo, not from clock arithmetic — so folding it in would discard
  * the mode precisely when the timings are unavailable. Two arrays keyed by
  * `projectId` cost a reader one join and never lose a fact.
+ *
+ * ⚠️ AND AN `indexModes` ROW NOW CARRIES **TWO** MODES, WHICH IS NOT REDUNDANCY
+ * (MOTIR-5058). They answer different questions, they are produced on different
+ * sides of the open/closed boundary, and keeping both is the entire point of the
+ * card that added the second — so this block says what each one MEANS, because
+ * the next reader's instinct will be to simplify one of them away:
+ *
+ *   • **`mode`** (`sync` / `rebuild`) — DERIVED HERE, from whether motir-ai
+ *     granted this run a previous snapshot. It answers ***was a snapshot
+ *     OFFERED***. It is free: `credential.previousSnapshotUrl`'s presence IS the
+ *     mode, so nothing extra crosses the boundary to obtain it.
+ *   • **`containerMode`** (`sync` / `build`) + **`containerFallbackReason`** —
+ *     REPORTED BY THE CONTAINER and read back from motir-ai. They answer ***what
+ *     the run actually DID with that offer***, and why it rebuilt when it did.
+ *
+ * **They disagree on exactly one arm, and that arm is why this exists.** A run
+ * offered a snapshot whose incremental sync then threw — or whose engine refused
+ * an index older than its own extraction — rebuilds from scratch and is recorded
+ * here as `mode: 'sync'`, because a snapshot *was* offered. `containerMode:
+ * 'build'` with a reason is the only thing on this ledger that contradicts it.
+ * Collapsing the pair restores a ledger that says `sync` about a run that
+ * rebuilt, which is the defect MOTIR-5055 records and MOTIR-5027's detector
+ * reads straight through.
+ *
+ * ⚠️ **AND THE CONTAINER HALF IS OPTIONAL BY CONSTRUCTION, NEVER DEFAULTED.**
+ * It is read after the run settles, over a route an older motir-ai does not
+ * serve, by a client that returns `null` for every failure (`motirAiClient`'s
+ * `fetchCodeGraphRunVerdict`). Absent therefore means *nobody told us*, which is
+ * not the same as `build` and must never be read as it — a defaulted value here
+ * would be indistinguishable from a measured one, which is the precise confusion
+ * the second field was added to end.
  */
 export type IndexRepoResult =
   | { indexed: false; reason: IndexSkipReason }

@@ -174,7 +174,15 @@ test('a reader behind the current version is held, records their agreement, and 
   // ── 3. Agreeing records the CURRENT versions and lets them through ───────
   await agree.click();
   await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
-  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
+  // ⚠️ SCOPED (MOTIR-5115) — the marker sits on a `<div>`, so there is no role to
+  // ask for, and a settle target is exactly the locator the double-mount class
+  // bites: it is read the instant a navigation lands, while React still has the
+  // outgoing subtree mounted (MOTIR-3725 / MOTIR-3737). `AppLayout`'s `<main>` is
+  // the live region. Converting to the `<h1>` inside the marker would assert
+  // something else, so the addressing moves and the claim does not.
+  await expect(page.getByRole('main').getByTestId('workbench-page')).toBeVisible({
+    timeout: 30_000,
+  });
 
   // ⚠️ READ THE RECORD BACK, not just the redirect. Being let through proves the
   // gate re-read; it does not prove a row was written, and the row is the whole
@@ -197,5 +205,8 @@ test('a reader behind the current version is held, records their agreement, and 
   // ── 4. The prompt does not recur ─────────────────────────────────────────
   await enterTheApp(page);
   expect(new URL(page.url()).pathname, 'the interstitial came back').toContain(POST_AUTH_LANDING);
-  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
+  // Scoped for the same reason as step 3's twin (MOTIR-5115).
+  await expect(page.getByRole('main').getByTestId('workbench-page')).toBeVisible({
+    timeout: 30_000,
+  });
 });
