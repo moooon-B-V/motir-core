@@ -3,6 +3,8 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { remeasureFirst } from './rls/remeasureFirst';
+
 // MOTIR-5037 — the guard that makes a SIXTH duplicate-locator site unwritable.
 //
 // ── The defect ─────────────────────────────────────────────────────────────
@@ -50,6 +52,20 @@ import { describe, expect, it } from 'vitest';
 // it is hand-shrunk. Pointing the guard at the evidence file instead would make
 // `node scripts/enumerate-page-locators.mjs --worktree --out …` the one-command
 // way to silence it — a ratchet you can re-cut is a rubber stamp.
+//
+// ── The RE-MEASURE preamble, and why this guard needed MOTIR-5207 to get it ─
+// This allow-list is a RATCHET, so it is a measurement of a population taken on
+// a BRANCH — and `docs/decisions/ratchet-constant-staleness.md` already decided
+// what a ratchet's failure message owes its reader. It did not reach here: the
+// enrolment rule scanned for a named NUMBER under `tests/rls/`, and this ratchet
+// is a SET in `tests/helpers/`. So this guard shipped saying `NEW` about
+// thirty-two locators that had been on `main` for four hours, and PR #2818 lost
+// two merge-queue slots to proving that nobody had written them.
+//
+// Every message below therefore opens with `remeasureFirst`, and the staleness
+// meta-guard now enforces that on every message this file can print — it enrols
+// this guard by deriving its CONTRACT (the `{count, ids}` JSON beside this
+// file) rather than by a name. See `tests/rls/ratchetScan.ts`.
 //
 // That separation is not theoretical. Measured while seeding this list: the
 // committed inventory was generated at `0cdd700da` and last committed at
@@ -127,6 +143,11 @@ export function pageRootedAlertCounts(rows: readonly AlertRow[]): AlertRow[] {
   return rows.filter((r) => r.isCount && !r.narrowed);
 }
 
+/** This guard runs in the STRUCTURAL GUARD lane, so `pnpm vitest run
+ *  tests/e2e-page-rooted-locators.test.ts` under the root config would not run
+ *  it at all — the root config EXCLUDES every lane member. */
+const RATCHET = 'pageRootedLocatorAllowList.json';
+
 const REMEDY =
   'Use `page.getByRole(<role>, { name })` — the accessibility tree excludes the streamed and ' +
   'outgoing copies, which is the whole of why this class cannot touch it. Where the node carries ' +
@@ -150,7 +171,10 @@ describe('no NEW page-rooted strict locator enters tests/e2e (MOTIR-5037)', () =
     // an allow-list that lists nothing.
     expect(result.filesScanned).toBeGreaterThan(200);
     expect(result.totals.rows).toBeGreaterThan(1_000);
-    expect(result.totals.unresolved, 'the scanner failed to parse a call').toBe(0);
+    expect(
+      result.totals.unresolved,
+      remeasureFirst(RATCHET) + 'the scanner failed to parse a call',
+    ).toBe(0);
   });
 
   it('the allow-list is the standing debt and nothing else — no exempt row was banked', () => {
@@ -168,8 +192,11 @@ describe('no NEW page-rooted strict locator enters tests/e2e (MOTIR-5037)', () =
 
     expect(
       offenders,
-      `These page-rooted strict locators are NEW — they are in tests/e2e and not in the ` +
-        `allow-list, so this guard is the first thing to see them.\n\n${WHY}\n\n${REMEDY}\n\n` +
+      remeasureFirst(RATCHET) +
+        `These page-rooted strict locators are in tests/e2e and NOT in the allow-list.\n\n` +
+        `⚠️ That does NOT make them new, and this message used to say it did. A locator four ` +
+        `hours old on \`main\` reaches this guard for the first time on the COMPOSED tree, which ` +
+        `is why the first paragraph above is the one to act on.\n\n${WHY}\n\n${REMEDY}\n\n` +
         `Do NOT regenerate tests/helpers/pageRootedLocatorAllowList.json to make this pass: the ` +
         `list is a ratchet and may only shrink. Fix the locator.`,
     ).toEqual([]);
@@ -180,7 +207,8 @@ describe('no NEW page-rooted strict locator enters tests/e2e (MOTIR-5037)', () =
 
     expect(
       stale,
-      `These allow-list entries no longer match anything in tests/e2e — the site was converted, ` +
+      remeasureFirst(RATCHET) +
+        `These allow-list entries no longer match anything in tests/e2e — the site was converted, ` +
         `renamed or deleted. DELETE each line from ` +
         `tests/helpers/pageRootedLocatorAllowList.json. This half is what makes the list a debt ` +
         `somebody eventually empties rather than one that fossilises: a list that merely may not ` +
@@ -195,7 +223,8 @@ describe('no NEW page-rooted strict locator enters tests/e2e (MOTIR-5037)', () =
 
     expect(
       counts,
-      `A page-level count against role="alert" can never pass: Radix's Toast.Provider keeps an ` +
+      remeasureFirst(RATCHET) +
+        `A page-level count against role="alert" can never pass: Radix's Toast.Provider keeps an ` +
         `EMPTY live region mounted for the life of the authed shell, so the count is never zero ` +
         `and never only yours. Scope the count to the container that owns the toast, or assert on ` +
         `the toast's own text inside it. MOTIR-5035 measured this arm at ZERO sites, so this ` +

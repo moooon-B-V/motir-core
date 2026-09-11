@@ -2,7 +2,16 @@ import path from 'node:path';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { RATCHET_NAME, exposedRatchets, scanRatchets, type Ratchet } from './ratchetScan';
+import {
+  RATCHET_NAME,
+  exposedRatchets,
+  exposedSetRatchets,
+  guardMessages,
+  scanRatchets,
+  scanSetRatchets,
+  type Ratchet,
+  type SetRatchet,
+} from './ratchetScan';
 import { remeasureFirst } from './remeasureFirst';
 
 // The META-GUARD (MOTIR-2941) — a ratchet over the ratchets.
@@ -37,6 +46,22 @@ import { remeasureFirst } from './remeasureFirst';
 // transcribed into the source tree, which is the thing that goes stale. So the
 // enumeration is a scan, this guard is its consumer, and a ratchet added
 // tomorrow is enrolled by being named, with no list to remember to update.
+
+// ── MOTIR-5207: "enrolled by being named" was a narrower net than it read as ─
+// The sentence above is the ADR's, and it was true of what the scanner could
+// see: a NUMBER, under `tests/rls/`. MOTIR-5037's ratchet is a SET
+// (`tests/helpers/pageRootedLocatorAllowList.json`) in another directory, so it
+// was never enrolled, shipped with no preamble, and spent two merge-queue slots
+// telling a runner that thirty-two locators were NEW when they had been on
+// `main` for four hours.
+//
+// So enrolment now answers "which GUARD holds a baseline a sibling's merge can
+// move?" in two derived shapes — a ratchet CONSTANT anywhere under `tests/`,
+// and a CONTRACT file declaring a `count` — and the obligation follows the
+// shape. A constant's assertions are attributed through the comparator that
+// READS it, exactly as before; a contract has no comparator to follow, so the
+// obligation is every message its guard can print. Both are in `ratchetScan.ts`,
+// and neither introduces a list.
 
 const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/ratchets');
 
@@ -75,6 +100,22 @@ describe('the ratchet scanner rules on every shape', () => {
     // would demand a re-measure preamble on a parser's recursion limit.
     expect(found).not.toContain('FIXTURE_MAX_HOPS');
     expect(found.every((n) => RATCHET_NAME.test(n))).toBe(true);
+  });
+
+  it('does not enrol a correctly-named number that is not a population COUNT', () => {
+    // MOTIR-5207. `FIXTURE_GEOMETRY_FLOOR = 0.8` is suffixed, module-scoped and
+    // read by a floor comparator — every surface property of a ratchet. It is
+    // not one, because a population is counted in whole things: the real
+    // instance is `ARRIVAL_FLOOR` in `cloud-roadmap-arrival.spec.ts`, the
+    // design's legibility floor, and `origin/main` cannot adjudicate a scale.
+    //
+    // This is the widened ROOT's own safety rail. Under the flat `tests/rls/`
+    // walk nothing outside one directory could be swept in at all; now that the
+    // scan reaches `tests/e2e/`, the rule that keeps geometry out has to be
+    // DERIVED — an integer test — rather than a name nobody remembers to add.
+    const found = scanRatchets(FIXTURE);
+    expect(found.map((r) => r.name)).not.toContain('FIXTURE_GEOMETRY_FLOOR');
+    expect(found.every((r) => Number.isInteger(r.value) && r.value >= 0)).toBe(true);
   });
 
   it('reads the message through a modifier chain rather than reporting none', () => {
@@ -120,6 +161,12 @@ describe('the ratchets over the real guards', () => {
       'BARE_TRANSACTION_CEILING',
       'GATED_BARE_TRANSACTION_CEILING',
       'RAW_CEILING',
+      // ⚠️ The NINTH, and it is why the root widening is not tidiness
+      // (MOTIR-5207). It has been live in `tests/navigation/` since MOTIR-3449,
+      // one directory outside the old flat walk, and was therefore invisible to
+      // every assertion in this file — a ceiling over 87 pages whose failure
+      // printed a bare array diff and no instruction at all.
+      'SERIAL_READ_CEILING',
       'UNBOUND_CALL_SITE_CEILING',
       'UNCONVERTED_E2E_CEILING',
       'UNCONVERTED_VITEST_CEILING',
@@ -212,6 +259,33 @@ describe('the preamble itself', () => {
     expect(text).toContain('git worktree add ../recheck origin/main');
     expect(text).toContain('MOTIR-2939');
     expect(text).toMatch(/before looking for a culprit/i);
+    // The lane's command, not `pnpm vitest run tests/rls/` — which MOTIR-3144
+    // made unable to run these guards at all when it moved them out of the root
+    // config's `include`, and which this preamble went on printing for months
+    // (MOTIR-5207).
+    expect(text).toContain('pnpm test:guards');
+  });
+
+  it('prints the RE-RUN command it was given, so a guard outside the lane is reachable', () => {
+    // MOTIR-5207. A preamble whose command does not run the failing guard is a
+    // re-measure instruction the reader cannot follow — which is most of what
+    // the instruction was for. `SERIAL_READ_CEILING` runs in the sharded root
+    // job, not the guards lane, so it passes its own.
+    const text = remeasureFirst('SOME_CEILING', 'pnpm vitest run tests/navigation/some.test.ts');
+
+    expect(text).toContain('pnpm vitest run tests/navigation/some.test.ts');
+    expect(text).not.toContain('pnpm test:guards');
+  });
+
+  it('names the MERGE QUEUE, because that is where a stale baseline now fails', () => {
+    // The ADR's AMENDMENT (2026-09-12): the queue builds the COMPOSED tree, so
+    // it is the first thing to meet a stale baseline — and it reports that as an
+    // EJECTION, which is harder to read than a red check, not easier. A reader
+    // who only ever meets this message in a queue rejection needs it to say so.
+    const text = remeasureFirst('SOME_CEILING');
+
+    expect(text).toMatch(/merge queue/i);
+    expect(text).toContain('MOTIR-5207');
   });
 
   it('leads with the instruction rather than burying it', () => {
@@ -222,5 +296,125 @@ describe('the preamble itself', () => {
 
     expect(first).toMatch(/FIRST/);
     expect(first).toMatch(/MAY NOT BE YOUR CHANGE/);
+  });
+});
+
+describe('the CONTRACT ratchets — the shape enrolment by NAME could not see (MOTIR-5207)', () => {
+  const describeSet = (r: SetRatchet): string => `${r.file} (count ${r.count})`;
+
+  describe('the scanner rules on the fixture pair', () => {
+    it('enrols the CONTRACT and not the EVIDENCE beside it', () => {
+      // The distinction MOTIR-5037's guard argues for in prose, falling out of
+      // the shape instead: `fixtureAllowList.json` declares a `count` and an
+      // array of exactly that length — a committed population measurement —
+      // while `fixtureEvidence.json` is a regenerated snapshot and declares no
+      // `count` at all. The real pair is `pageRootedLocatorAllowList.json`
+      // (hand-shrunk, the ratchet) beside `pageLocatorInventory.json` (re-run,
+      // "DATED EVIDENCE, not a contract" in its own note).
+      const found = scanSetRatchets(FIXTURE);
+
+      expect(found.map((r) => `${r.name}=${r.count}`)).toEqual(['fixtureAllowList.json=3']);
+    });
+
+    it('DERIVES the guard from the source that names the contract, not from a list', () => {
+      // Nothing registers `fixtureContractGuard.ts` anywhere. It is found
+      // because it contains the contract's path as a string — which is the only
+      // way a guard can read a contract at all, so it cannot be forgotten the
+      // way a registration can.
+      const [contract] = scanSetRatchets(FIXTURE);
+
+      expect(contract?.guards).toEqual(['tests/rls/__fixtures__/ratchets/fixtureContractGuard.ts']);
+    });
+
+    it('reports a message WITHOUT the preamble, and skips one that is not a message', () => {
+      // The three cases in one file, which is the shape the rule must rule on: a
+      // compliant message, a real message with no preamble (what MOTIR-5037's
+      // guard shipped), and an `expect` with no message argument — out of scope
+      // because it accuses nobody, the same ground the scanner gives for a bare
+      // numeric sanity floor.
+      const messages = guardMessages('tests/rls/__fixtures__/ratchets/fixtureContractGuard.ts');
+
+      expect(messages.map((m) => m.message.includes('remeasureFirst'))).toEqual([true, false]);
+    });
+  });
+
+  describe('over the real contracts', () => {
+    let sets: readonly SetRatchet[];
+    let exposedSets: readonly SetRatchet[];
+    beforeAll(() => {
+      sets = scanSetRatchets();
+      exposedSets = exposedSetRatchets();
+    }, 60_000);
+
+    it('finds the contracts — derived, so a contract written tomorrow is enrolled', () => {
+      // Paths only, never counts: a count is exactly what a sibling merging
+      // beneath us moves, and pinning one here would re-commit the defect this
+      // file exists to close, one level up. Same reason the constant
+      // enumeration above carries names and no values.
+      expect(sets.map((r) => r.file).sort()).toEqual([
+        'tests/helpers/pageRootedLocatorAllowList.json',
+      ]);
+    });
+
+    it('every contract is actually read by a guard', () => {
+      const orphans = sets.filter((r) => r.guards.length === 0);
+
+      expect(
+        orphans.map(describeSet),
+        `A contract file declares a population that no test reads. It is documentation ` +
+          `wearing a ratchet's clothes: nothing will fail when it stops describing the tree. ` +
+          `Either assert it, or delete it and put the measurement where a reader can see it ` +
+          `is not enforced.`,
+      ).toEqual([]);
+    });
+
+    it('every NON-EMPTY contract guard opens EVERY message with the re-measure preamble', () => {
+      const missing = exposedSets.flatMap((r) =>
+        r.guards.flatMap((guard) =>
+          guardMessages(guard)
+            .filter((m) => !m.message.includes('remeasureFirst'))
+            .map((m) => `${m.file}:${m.line} (contract ${r.file}, count ${r.count})`),
+        ),
+      );
+
+      expect(
+        missing,
+        `A guard holding a CONTRACT ratchet prints a failure message that does not open with ` +
+          `\`remeasureFirst(…)\` (\`tests/rls/remeasureFirst.ts\`).\n\n` +
+          `Its contract is a population measured on a BRANCH, so the first thing any of its ` +
+          `messages owes the reader is that the movement may not be theirs. That is not ` +
+          `hypothetical and it is not the numeric ratchets' story borrowed: MOTIR-5037's ` +
+          `allow-list shipped without this, told a runner that thirty-two locators were NEW ` +
+          `when they had been on \`main\` for four hours, and cost PR #2818 two merge-queue ` +
+          `slots (runs 34643738460 / 34646088683).\n\n` +
+          `Concatenate it at the FRONT of the message:\n\n` +
+          `    const PREAMBLE = remeasureFirst('yourContract.json');\n` +
+          `    expect(offenders, PREAMBLE + \`…\`).toEqual([]);\n\n` +
+          `⚠️ EVERY message, not only the one you expect to fail. A contract guard has no ` +
+          `comparator for the scanner to attribute an assertion through — the offender list is ` +
+          `computed in one statement and asserted in the next — so the obligation is the whole ` +
+          `file. An \`expect\` with NO message argument is out of scope: it accuses nobody.\n\n` +
+          `A contract whose \`count\` is 0 is exempt, for the same reason a zero ceiling is.\n\n` +
+          `See \`docs/decisions/ratchet-constant-staleness.md\` (AMENDMENT, 2026-09-12) for why ` +
+          `the merge queue does NOT retire this rule.`,
+      ).toEqual([]);
+    });
+
+    it('at least one contract is exposed, so a green run is not a vacuous one', () => {
+      // The same failure mode the constant half guards against, and it has an
+      // extra door here: the contract scan derives its guard by SOURCE TEXT, so
+      // a refactor that moves a path into a constant in another module would
+      // empty `guards` silently. The orphan assertion above catches that one;
+      // this catches the scan finding no contract at all.
+      expect(
+        exposedSets.length,
+        `No non-empty CONTRACT ratchet remains under \`tests/\`. If that is real, every ` +
+          `contract-shaped debt has been paid down and this half of the class is CLOSED: ` +
+          `delete this block and \`scanSetRatchets\` and record the closure in ` +
+          `\`docs/decisions/ratchet-constant-staleness.md\`. If it is not real, the scanner has ` +
+          `stopped seeing the contracts — which is the failure mode a ratchet over ratchets ` +
+          `has, and the reason this assertion exists.`,
+      ).toBeGreaterThan(0);
+    });
   });
 });
