@@ -132,6 +132,7 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
     implementationSource: null,
     implementationHarness: null,
     implementationModel: null,
+    subject: null,
     archivedAt: null,
     createdAt: '2026-06-01T14:45:00.000Z',
     updatedAt: '2026-06-03T09:30:00.000Z',

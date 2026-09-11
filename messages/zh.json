@@ -1271,6 +1271,7 @@
     "provenance": "溯源",
     "provenancePlanning": "规划",
     "provenanceImplementation": "实现",
+    "provenanceSubject": "主题",
     "provenanceSourceNative": "原生",
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "手动",

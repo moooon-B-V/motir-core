@@ -477,6 +477,7 @@ const workItemDto = {
   implementationSource: null,
   implementationHarness: null,
   implementationModel: null,
+  subject: null,
   archivedAt: null,
   createdAt: '2026-08-05T16:05:35.168Z',
   updatedAt: '2026-08-06T00:36:35.928Z',

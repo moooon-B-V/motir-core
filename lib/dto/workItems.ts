@@ -225,6 +225,22 @@ export interface WorkItemDto {
   implementationSource: WorkItemImplementationSourceDto | null;
   implementationHarness: string | null;
   implementationModel: string | null;
+  /**
+   * WHICH SUBJECT MATTER the planner composed this card's rule packs from (Story
+   * MOTIR-5062 · MOTIR-5074) — the fourth selector coordinate, and the READ half
+   * of the column MOTIR-5065 persists. It joins the two triples above because it
+   * is the same KIND of fact: a record of how the card came to be PLANNED, not a
+   * property of the work. The rail draws it as the third `Provenance` group.
+   *
+   * ⚠️ A BARE `string`, NOT a closed union, and that is deliberate rather than
+   * lax. The member vocabulary IS the rule-pack file set in motir-meta — a member
+   * exists iff `subject-<name>.md` does — so motir-core cannot enumerate it
+   * without putting a schema change in front of every new pack. The consequence
+   * the renderer has to honour: a value this build has never heard of is LEGAL
+   * and must render as its own text (never blank, never a lookup with a
+   * fallback). `null` is the common case and stays common.
+   */
+  subject: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;

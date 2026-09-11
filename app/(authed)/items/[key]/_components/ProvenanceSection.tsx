@@ -17,6 +17,12 @@ import { FieldCard } from './FieldCard';
 // (source · harness · model) and Implementation (source · harness · model) —
 // each "—" when null (the common case: no execution yet, or a pre-feature item).
 //
+// THREE groups since Story MOTIR-5062 · MOTIR-5074: Planning · Implementation ·
+// Subject, in that order. The third is a SINGLE VALUE rather than a triple and is
+// drawn differently on purpose — see `SubjectCard` below, which carries the whole
+// argument. The ADR amendment landed with the design card (MOTIR-5073); Decision 7
+// no longer says "the two triples".
+//
 // COLLAPSED BY DEFAULT, at the BOTTOM of the rail (ADR Decision 7): provenance is
 // secondary metadata, so it renders as a single closed "Provenance" disclosure
 // (the shipped "Show all custom fields" toggle grammar in CustomFieldsSection.tsx
@@ -134,6 +140,44 @@ function TripleCard({
   );
 }
 
+/** The SUBJECT group — the third, and the only SINGLE-VALUE one (Story MOTIR-5062
+ *  · MOTIR-5074), per `design/work-items/provenance.mock.html` panels 5–7.
+ *
+ *  ⚠️ IT DELIBERATELY DOES NOT REUSE `TripleCard`, AND THE DIFFERENCES ARE THE
+ *  DESIGN'S ANSWER TO ITS OWN CENTRAL QUESTION. A lone value sitting in the same
+ *  box as two triples reads as a triple whose other two rows failed to load, so
+ *  the asset keeps them apart on the axis a reader notices first:
+ *
+ *  • NO CHIP AT ALL — both triples open with a tinted source chip, so a card with
+ *    none is visibly a different KIND of field rather than a shorter instance of
+ *    the same one.
+ *  • MONO, at `--el-text` — a subject is an IDENTIFIER (it names the rule pack the
+ *    planner read, `subject-<name>.md`), which is what this surface already uses
+ *    mono for at the model line. `--el-text` and not `--el-text-muted` because it
+ *    is the card's PRIMARY content, not an annotation beneath one.
+ *  • NO per-member tint, and this is the one to not "fix". The two triples tint
+ *    from a `Record` over a CLOSED union so a new member is a compile error (see
+ *    the note above `PLANNING_SOURCE_META`). Subject members are corpus-owned and
+ *    OPEN — a member exists iff a pack file exists — so they cannot key a `Record`,
+ *    and a lookup with a runtime fallback here would rebuild the exact blank-chip
+ *    failure that note memorialises. Plain text is the honest treatment, and an
+ *    unrecognised member therefore renders as itself.
+ *
+ *  `—` when absent, identical to the triples' unknown state: the corpus ships four
+ *  members, so most cards carry none and must read as ORDINARY rather than broken.
+ */
+function SubjectCard({ label, subject }: { label: string; subject: string | null }) {
+  return (
+    <FieldCard label={label} editable={false}>
+      {subject ? (
+        <span className="truncate font-mono text-[13px] text-(--el-text)">{subject}</span>
+      ) : (
+        <span className="text-(--el-text-muted)">—</span>
+      )}
+    </FieldCard>
+  );
+}
+
 export function ProvenanceSection({ item }: { item: WorkItemDto }) {
   const t = useTranslations('issueViews');
   const [open, setOpen] = useState(false);
@@ -189,6 +233,7 @@ export function ProvenanceSection({ item }: { item: WorkItemDto }) {
             harness={item.implementationHarness}
             model={item.implementationModel}
           />
+          <SubjectCard label={t('provenanceSubject')} subject={item.subject} />
         </div>
       ) : null}
     </div>
