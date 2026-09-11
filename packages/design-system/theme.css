@@ -3992,6 +3992,15 @@
   --color-warning: #dd5b00;
   --el-priority-high: var(--color-warning);
   --el-sidebar-item-bg-hover: #eeede9;
+  /* MOTIR-5139 — carried here because `evergreen` OVERRIDES it. A token this
+     block omits leaks from the ANCESTOR into a scoped `motir` tile, so an
+     evergreen page previewing the motir palette would paint its Approved chip
+     evergreen. That is the exact failure `scopedPreviewIsolation`'s
+     "the base palette block covers every token ANY palette overrides" forbids,
+     and it caught this omission. Light arm only: the value is built from
+     `--color-success` and `--color-ink`, both of which flip with the theme, so
+     the global dark block overrides nothing for it to re-assert. */
+  --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
   --el-status-blocked: var(--color-warning);
   --el-status-cancelled: var(--color-steel);
   --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
