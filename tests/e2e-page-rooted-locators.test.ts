@@ -74,6 +74,10 @@ interface Row {
 interface AlertRow {
   file: string;
   line: number;
+  /** The call's argument as written, e.g. `'alert'` — null when the scanner
+   *  could not close the call. The failure message prints it, so the locator a
+   *  reader has to go and find is the one they actually typed. */
+  arg: string | null;
   narrowed: string | null;
   isCount: boolean;
 }
@@ -282,9 +286,15 @@ describe('the guard BITES — demonstrated against the real scanner, not assumed
 
   it('the alert arm distinguishes a COUNT from a narrowed locator', () => {
     const rows: AlertRow[] = [
-      { file: 'x.spec.ts', line: 1, narrowed: null, isCount: true },
-      { file: 'x.spec.ts', line: 2, narrowed: '.filter({ hasText: … })', isCount: true },
-      { file: 'x.spec.ts', line: 3, narrowed: null, isCount: false },
+      { file: 'x.spec.ts', line: 1, arg: "'alert'", narrowed: null, isCount: true },
+      {
+        file: 'x.spec.ts',
+        line: 2,
+        arg: "'alert'",
+        narrowed: '.filter({ hasText: … })',
+        isCount: true,
+      },
+      { file: 'x.spec.ts', line: 3, arg: "'alert'", narrowed: null, isCount: false },
     ];
     expect(pageRootedAlertCounts(rows).map((r) => r.line)).toEqual([1]);
   });
