@@ -305,6 +305,49 @@ generated at base `0cdd700d` and reports 1151 ruled, against 1157 today. That is
 the file behaving as documented — _"DATED EVIDENCE, not a contract … Re-run it
 rather than hand-editing a row"_ — and the guard's seeding step, not a defect.
 
+### ADDENDUM (2026-09-11) — the seed was re-measured once, and the window proved itself again
+
+Every figure above is measured at `65116fb19` and stays that way; this section is
+appended rather than woven in, because a dated record that gets rewritten is no
+longer evidence. **The allow-list MOTIR-5037 actually ships carries 1189 ids, not
+1157**, and this is why.
+
+The section above predicted a seventh site within days. It took **seven minutes**.
+MOTIR-5037 was queued at 19:47:23Z; `da24c99fc` (#2811) had merged at 19:46:57Z and
+`c7c8f22a9` (#2809) just before it, between them adding two specs the seed had
+never seen:
+
+| spec                                           | card       | ruled sites |
+| ---------------------------------------------- | ---------- | ----------- |
+| `tests/e2e/acceptance-approved-status.spec.ts` | MOTIR-4905 | 24          |
+| `tests/e2e/acceptance-approvals-tab.spec.ts`   | MOTIR-4879 | 8           |
+
+Nothing was wrong with either pull request, and the guard was green on its own
+branch both times it was queued. The merge queue builds the branch MERGED INTO
+`main`, so the composed tree — the only tree carrying all three — first existed
+inside the queue, and the guard failed there twice (bases `6df778b41`, then
+`da24c99fc`), 32 rows unlisted each time.
+
+**The seed was re-measured to `da24c99fc` and the 32 banked.** That is not a row
+being added to a live ratchet — it is the baseline being finished. Those 32 sites
+were on `main` BEFORE this guard existed, so they are standing debt by the same
+definition as the other 1157; seeded without them, the guard would have been red on
+`main` the day it shipped, which is the outcome its own header set out to avoid.
+**The ratchet binds from the moment MOTIR-5037 merges.** After that the table below
+is the rule, without exception.
+
+This is the second recorded instance of the class in
+[`ratchet-constant-staleness.md`](./ratchet-constant-staleness.md), and it behaved
+exactly as that ADR's accepted option 3 says it does: the guard was not misfiring,
+the population really had moved, and the fix was a human re-measurement at
+`origin/main`.
+
+⚠️ **That ADR's rejected option (2) says "there is no merge queue in this repo
+today." There is one now** — it is what caught this, and it is where both failures
+were observed. By that ADR's own terms ("if a merge queue ever lands, this decision
+is superseded"), its preamble convention is due a re-read. Not taken here: it
+reaches every ratchet under `tests/rls/` and is not this card's to decide.
+
 ### What a future reader should do, by case
 
 | you are…                                        | do this                                                                                                                              |
@@ -313,7 +356,7 @@ rather than hand-editing a row"_ — and the guard's seeding step, not a defect.
 | writing a NEW spec                              | never write a page-rooted `getByTestId` / `getByText` / `getByLabel` / `getByPlaceholder` assertion; the guard will refuse a new row |
 | holding an ABSENCE assertion (`toHaveCount(0)`) | leave it page-rooted, and say so in a comment beside it — scoping it proves less                                                     |
 | looking at 1157 and reaching for a sweep        | read this record; the disposition is taken                                                                                           |
-| about to add a row to the allow-list            | you cannot. The list only shrinks                                                                                                    |
+| about to add a row to the allow-list            | you cannot. The list only shrinks — the ONE re-measurement, taken before the guard landed, is the ADDENDUM above and is closed       |
 
 ### No code changes with this decision
 
