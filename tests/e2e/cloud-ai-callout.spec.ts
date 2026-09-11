@@ -90,9 +90,21 @@ const planRow = (page: Page) => callout(page).getByRole('link', { name: /Plan wi
 const pillLinks = (page: Page) => page.getByRole('link', { name: 'Plan with AI', exact: true });
 /** Every link whose name CONTAINS "Plan with AI" — pill + the menu row when open. */
 const planLinks = (page: Page) => page.getByRole('link', { name: /Plan with AI/ });
-/** SCOPED to `main` (MOTIR-5114) — the canvas root is a bare `<div>` with no
- *  role, so a live subtree is the remedy rather than an invented one. */
-const canvas = (page: Page) => page.getByRole('main').getByTestId('roadmap-canvas');
+/**
+ * The planning workspace itself — a full-size `Modal`, i.e. a Radix dialog.
+ *
+ * Named by its own sr-only title, `planningWorkspace.canvasAria` =
+ * `"{project} plan"`, which is what tells it from the CALLOUT dialog above
+ * (`Motir AI`). Both are `role="dialog"`; only the name separates them.
+ */
+const workspace = (page: Page) => page.getByRole('dialog', { name: / plan$/ });
+/** SCOPED to the workspace dialog (MOTIR-5114) — the canvas root is a bare
+ *  `<div>` with no role, so it takes a live subtree rather than an invented
+ *  role. **Not `main`:** this test's own name says the workspace opens OVER the
+ *  page, and it means it literally — `PlanningWorkspaceOverlay` is mounted by
+ *  `app/(authed)/layout.tsx` and renders through `Dialog.Portal`, so the canvas
+ *  is a sibling of `<main>` in the body, never a descendant of it. */
+const canvas = (page: Page) => workspace(page).getByTestId('roadmap-canvas');
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 /**
  * The page-level heading proving the authed shell is up right after `signIn()`.
