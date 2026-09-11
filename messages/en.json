@@ -576,6 +576,7 @@
       "implemented": "Implemented",
       "planning": "Planning",
       "in_review": "In Review",
+      "approved": "Approved",
       "done": "Done",
       "cancelled": "Cancelled"
     },

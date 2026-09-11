@@ -3346,6 +3346,16 @@
      not a [data-palette='motir'] block: same as --el-status-implemented above —
      <html> carries no data-appearance-scope, so the base layer IS how the
      browser reaches these values. */
+  /* A person's YES, and NOT yet shipped (MOTIR-5139). The `done` green one ink
+     step deeper: same family, because it is the same answer one rung earlier;
+     deeper, because it has not merged. MEASURED rather than chosen — it clears
+     `tests/theme/statusHueSeparation.test.ts`'s ΔE2000 floor of 10 in all ten
+     palettes x both themes, global minimum 11.6 (amber/dark vs planning), and
+     sits 14.2-42.6 from `done` itself. The 30% ratio is the interior of the
+     window: 35% lands on the floor at 10.1, 25% collides with `implemented` in
+     citrine at 9.8. Contrast 9.54-13.72:1 on card/surface/page.
+     See design/boards/design-notes.md § "Approved — the ninth board column". */
+  --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
   --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
   --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
   --el-status-cancelled: var(--color-steel); /* terminal grey — not red (cancel ≠ error) */
@@ -4483,6 +4493,13 @@
      as a deep jade against the grass done. Separation ΔE 19.2; contrast 10.9:1
      surface / 12.2:1 card. */
   --el-status-in-review: #1d3b31; /* Radix Jade 12 — deep jade step */
+  /* Approved (MOTIR-5139) — the ONE palette the base deep-green cannot clear:
+     Evergreen's `in_review` is a deep jade, at ΔE 6.9 light / 3.6 dark. It takes
+     Evergreen's own unspent violet accent instead, measured at 14.3 / 12.3.
+     Declared in BOTH themes: `[data-palette]` and the base `[data-theme='dark']`
+     TIE on specificity and the palette block comes later, so a light-only
+     override silently leaks onto the dark canvas. */
+  --el-status-approved: color-mix(in srgb, var(--color-accent) 40%, var(--color-ink));
 
   /* cancelled is unchanged in light (ΔE 17.9 from todo); re-asserted to pair
      the dark override below — see the cascade note in the dark block. */
@@ -4553,6 +4570,13 @@
      (which keeps the pair ~12 apart). cancelled takes the palette's own next
      step up, --color-slate. ΔE 22.4; contrast 7.1:1 / 7.7:1. */
   --el-status-in-review: #adf0d4; /* Radix Jade 12 dark — pale jade step */
+  /* Approved (MOTIR-5139) — the ONE palette the base deep-green cannot clear:
+     Evergreen's `in_review` is a deep jade, at ΔE 6.9 light / 3.6 dark. It takes
+     Evergreen's own unspent violet accent instead, measured at 14.3 / 12.3.
+     Declared in BOTH themes: `[data-palette]` and the base `[data-theme='dark']`
+     TIE on specificity and the palette block comes later, so a light-only
+     override silently leaks onto the dark canvas. */
+  --el-status-approved: color-mix(in srgb, var(--color-accent) 40%, var(--color-ink));
   --el-status-cancelled: #9aaaa1; /* Evergreen's own slate — the next neutral step */
 }
 

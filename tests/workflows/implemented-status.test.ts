@@ -121,6 +121,13 @@ describe('the status a fresh project is seeded with', () => {
     // (`design/boards/implemented-column.mock.html`, panel 1). The path every
     // card walks takes the visible slot. Asserting the whole order rather than a
     // position string, because the position is an opaque fractional index.
+    //
+    // ⚠️ MOTIR-5139 added `approved` at slot 7 and this assertion's CLAIM is
+    // unchanged by it: the insert is AFTER `implemented`, so slot 4 is still
+    // slot 4 and the invariant this test pins still holds. Only the enumeration
+    // grew. The fold was RE-MEASURED at nine columns rather than assumed —
+    // `design/boards/approved-column.mock.html`, panel 1 — and the count of
+    // fully-visible columns is unchanged at every viewport.
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
     expect(wf.statuses.map((s) => s.key)).toEqual([
       'todo',
@@ -129,9 +136,13 @@ describe('the status a fresh project is seeded with', () => {
       'implemented',
       'planning',
       'in_review',
+      'approved',
       'done',
       'cancelled',
     ]);
+    // The invariant itself, stated as an index so a later insert cannot quietly
+    // move it while the list above is mechanically extended.
+    expect(wf.statuses.findIndex((s) => s.key === 'implemented')).toBe(3);
   });
 
   it('has a board column of its own — a status with nowhere to put its cards is not shipped', async () => {

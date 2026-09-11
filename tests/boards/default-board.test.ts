@@ -40,6 +40,7 @@ describe('buildDefaultBoard', () => {
       'Implemented',
       'Planning',
       'In Review',
+      'Approved',
       'Done',
       'Cancelled',
     ]);
@@ -51,6 +52,7 @@ describe('buildDefaultBoard', () => {
       ['implemented'],
       ['planning'],
       ['in_review'],
+      ['approved'],
       ['done'],
       ['cancelled'],
     ]);
@@ -59,15 +61,20 @@ describe('buildDefaultBoard', () => {
   });
 
   it('orders columns by status.position regardless of input order (defensive sort)', () => {
+    // Addressed BY KEY rather than by index (MOTIR-5139): the positional form
+    // silently re-pointed every comment when `approved` was inserted at 6, which
+    // is a shuffle that still passes while testing something else.
+    const byKey = (key: string) => defaultStatusDtos.find((s) => s.key === key)!;
     const shuffled = [
-      defaultStatusDtos[6]!, // done
-      defaultStatusDtos[0]!, // todo
-      defaultStatusDtos[2]!, // in_progress
-      defaultStatusDtos[7]!, // cancelled
-      defaultStatusDtos[4]!, // planning
-      defaultStatusDtos[1]!, // blocked
-      defaultStatusDtos[5]!, // in_review
-      defaultStatusDtos[3]!, // implemented
+      byKey('done'),
+      byKey('todo'),
+      byKey('approved'),
+      byKey('in_progress'),
+      byKey('cancelled'),
+      byKey('planning'),
+      byKey('blocked'),
+      byKey('in_review'),
+      byKey('implemented'),
     ];
     const spec = buildDefaultBoard(shuffled);
     expect(spec.columns.map((c) => c.statusKeys[0])).toEqual([
@@ -77,6 +84,7 @@ describe('buildDefaultBoard', () => {
       'implemented',
       'planning',
       'in_review',
+      'approved',
       'done',
       'cancelled',
     ]);
@@ -89,7 +97,7 @@ describe('buildDefaultBoard', () => {
     expect(input.map((s) => s.key)).toEqual(snapshot);
   });
 
-  it('matches the canonical eight-column default (snapshot)', () => {
+  it('matches the canonical nine-column default (snapshot)', () => {
     // Snapshot the meaningful projection — name, type, and each column's label
     // + mapped keys. The opaque fractional-index `position` is an
     // implementation detail of the workflow seed (asserted to mirror the status
@@ -138,6 +146,12 @@ describe('buildDefaultBoard', () => {
             "name": "In Review",
             "statusKeys": [
               "in_review",
+            ],
+          },
+          {
+            "name": "Approved",
+            "statusKeys": [
+              "approved",
             ],
           },
           {
