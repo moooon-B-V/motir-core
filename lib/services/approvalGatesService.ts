@@ -313,6 +313,27 @@ export const approvalGatesService = {
       // Tenant gate FIRST, exactly as `applyStatusTransition` does it: a
       // cross-workspace row is indistinguishable from a never-existed one, and
       // must not leak through a state or permission error.
+      //
+      // ⚠️ DEFENCE IN DEPTH, AND UNREACHABLE BY MEASUREMENT RATHER THAN BY
+      // ARGUMENT (MOTIR-4796). Every route to it is closed one step earlier:
+      // the PRE-READ above performs the same two reads under the same workspace
+      // GUC and returns `ApprovalGateNotFoundError` when either comes back
+      // empty, and RLS is what makes them come back empty. Even the one shape
+      // that gets PAST the gate's own policy — a gate carrying this workspace's
+      // id whose work item belongs to another, which nothing in the schema
+      // forbids — is refused there, because the item read is the one that fails.
+      //
+      // It is kept because the door must not depend on the pre-read staying
+      // correct: this is the check that runs UNDER THE LOCK, and the pre-read's
+      // own note says every field the decision turns on is re-derived here and
+      // never carried over. Removing it would make that sentence false.
+      //
+      // The invariant — that a mismatched pair is refused, and refused as a
+      // not-found rather than as a permission or state error — is pinned by
+      // `tests/approval-gate-coverage-floor.test.ts` § 'decide — the POST-LOCK
+      // tenant gate', which builds exactly that row with the admin client and
+      // asserts the refusal plus that nothing was written.
+      /* v8 ignore next 3 */
       if (!item || item.workspaceId !== ctx.workspaceId) {
         throw new ApprovalGateNotFoundError(input.gateId);
       }

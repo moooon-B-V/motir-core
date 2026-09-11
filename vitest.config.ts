@@ -2012,6 +2012,26 @@ export default defineConfig({
         // The `/planning` FORWARD. A route-group path is entered as `app/**/…`
         // (the note above) — `app/(authed)/planning/page.tsx` resolves to nothing.
         'app/**/planning/page.tsx',
+        // ── Story MOTIR-4778 · APPROVAL GATES — the assembled surface ────────
+        // Subtask MOTIR-4796, the story's own vitest gate. This surface shipped
+        // across seven cards and was in NO coverage `include` at all, so it was
+        // absent from the report and ungated — the state the per-file gate
+        // exists to make impossible for exactly this kind of multi-card surface.
+        //
+        // MEASURED on this branch before being pinned, per this list's own rule.
+        // The set went 92.06 / 83.62 / 95.08 / 93.44 (stmts / branches / funcs /
+        // lines) to 99.19 / 97.29 / 100 / 100, with every arm that remains
+        // uncovered carrying a written verdict and a `v8 ignore` citing the test
+        // that pins its invariant.
+        'lib/services/approvalGatesService.ts',
+        'lib/repositories/approvalGateRepository.ts',
+        'lib/approvalGates/registry.ts',
+        'lib/approvalGates/designResultHandler.ts',
+        'lib/approvalGates/errors.ts',
+        'lib/approvalGates/refusals.ts',
+        'lib/mappers/approvalGateMappers.ts',
+        'components/approvals/ApprovalGateControl.tsx',
+        'components/approvals/portRenderStatus.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2022,6 +2042,57 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-4778 · APPROVAL GATES (Subtask MOTIR-4796) ───────────
+        // Pinned at the project floor after measuring each on this branch. Seven
+        // of the nine came out at 100 on all four axes; the two that did not are
+        // noted below with what remains and why.
+        'lib/approvalGates/registry.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/approvalGates/designResultHandler.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/approvalGates/refusals.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mappers/approvalGateMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/approvals/portRenderStatus.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // 100 / 98.07 / 100 / 100. The two residual branches are the confirm
+        // band's optional copy slots, which a kind may leave unset.
+        'components/approvals/ApprovalGateControl.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // 100 / 97.14 / 100 / 100. The one residual branch is the driver-shape
+        // `originalCode` fallback, which carries a `v8 ignore` and whose
+        // invariant is pinned by the translator tests.
+        'lib/repositories/approvalGateRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // 95.83 / 93.02 / 100 / 100. The residual statements are the door's
+        // post-lock tenant re-check — defence in depth the pre-read makes
+        // unreachable, marked at the arm with the test that pins its invariant.
+        'lib/services/approvalGatesService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-4725 · the planning workspace as an OVERLAY ──────────
         // Pinned at the project floor after measuring each on this branch
         // (MOTIR-4733). Statements/lines/functions came out at 100 across the
