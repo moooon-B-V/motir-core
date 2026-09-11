@@ -279,6 +279,14 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
         'WHO WROTE THE PROPOSAL, not a field of the card — a modify proposes no provenance ' +
         'of its own, and the plan already records its own harness and model.',
     },
+    subject: {
+      addOnly:
+        'MOTIR-5065 — WHICH RULE PACKS THE PASS READ, not a field of the card. It joins this ' +
+        "arm on `planningProvenance`'s terms rather than a new one: `PlanItemPatch` has no " +
+        "`subject` twin, so a `modify` proposes none, and reporting the TARGET's would credit " +
+        "this pass with a coordinate an earlier pass derived — `explanationSource`'s failure " +
+        'mode, one field over.',
+    },
   };
 
   it('states an op disposition for EVERY proposed field', () => {
@@ -330,9 +338,15 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // is a second SPELLING of a value this DTO already reports as names one field
     // up — so on a `modify` there is nothing for it to say that `targetRepos` is
     // not already saying better.
+    // `subject` is the FIFTH (MOTIR-5065), and it is the only one that joins an
+    // existing reason rather than bringing its own: it is provenance, exactly as
+    // `planningProvenance` is — a record of what the PASS read, not of what the
+    // card IS. That the arm now has two provenance members is the point; the
+    // three others are each here for a different reason, stated at their fields.
     expect(addOnly.sort()).toEqual([
       'explanationSource',
       'planningProvenance',
+      'subject',
       'targetRepositories',
       'targetRepositoryRef',
       'todos',

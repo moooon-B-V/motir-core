@@ -253,6 +253,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children.',
                 },
+                subject: {
+                  type: 'string',
+                  description:
+                    'WHICH SUBJECT MATTER to compose this leaf’s rule packs from — the FOURTH selector coordinate, `pack(phase, kind, type, subject)`. DERIVE IT AT `lay`, beside `type`, so the coordinate is written BEFORE an authoring pass composes its prompt: a value written afterwards is a default rather than a selector. OMIT IT when no member clearly fits — a wrong member composes rules whose situation cannot occur for this card while looking deliberate, and omission is the right answer far more often than the vocabulary suggests. A leaf has ONE subject: wanting two is a SPLIT signal, exactly as wanting two repositories is. MEMBERSHIP IS NOT VALIDATED HERE — the vocabulary is the rule-pack file set, so a well-formed unrecognised member is accepted and refused one hop later by the rule-pack resolver. Shape only: a lowercase slug of at most 32 characters. Refused on a container kind.',
+                },
               },
               required: ['title'],
               additionalProperties: false,
@@ -2062,6 +2067,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: ['string', 'null'],
         description:
           '`add` only: re-pin the PORTABLE half of the pin — a ROLE of the project’s repository set, validated against the closed role vocabulary rather than the project’s rows; `null` unpins it. This is the pin an ONBOARDING plan actually carries, because its repositories do not exist yet.',
+      },
+      subject: {
+        type: ['string', 'null'],
+        description:
+          '`add` only: re-pin the SUBJECT coordinate — which rule packs an authoring pass composes for this leaf. An explicit `null` unpins it. Correctable here and NOT on the deepen turn, deliberately: a subject says where the card sits in the RULE CORPUS rather than what it says, so it is settled at the `lay` beside `type` and the repo pin. Re-validated by the same shape and container checks the append runs; membership is not checked here in either door.',
       },
       patch: {
         anyOf: [

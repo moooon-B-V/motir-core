@@ -301,6 +301,22 @@ function correctionFrom(
             : null) as CorrectProposalInput['targetRepoRole'],
         }
       : {}),
+    // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065) — structural, and
+    // correctable for the same reason the role is: it is settled at the `lay`,
+    // so the deepen turn may not touch it and nothing else could fix a
+    // mis-derived one short of a whole new plan.
+    //
+    // Sparse like its neighbours: absent leaves it alone, an explicit `null`
+    // unpins. The VALUE is narrowed by `plansService.correctProposal` against
+    // the same SHAPE and container checks the append runs — never against a
+    // member list, which this repository deliberately does not hold.
+    ...('subject' in b
+      ? {
+          subject: (typeof b.subject === 'string'
+            ? b.subject
+            : null) as CorrectProposalInput['subject'],
+        }
+      : {}),
     // ⚠️ `modifyPatch`, NOT `patch` — and the rename is the bug fix, not a
     // preference. On THIS route `patch` has meant the CONTENT bag since the
     // deepen seam shipped (`patch.title`, `patch.descriptionMd`, …), while a

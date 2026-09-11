@@ -456,7 +456,29 @@ export type PlanGrammarViolation =
    * ready set. The interactive `move_to_parent` has a human watching it; an
    * approve has nobody, which is why the plan path is the one that must refuse.
    */
-  | 'parent_terminal';
+  | 'parent_terminal'
+  /**
+   * An `add` proposing a `subject` that is not a well-formed slug (Story
+   * MOTIR-5062 · MOTIR-5065) — the twin of `unknown_type`, and owed by this
+   * module's own argument for re-checking `kind` and `type`: the approved set can
+   * be edited between generation and approve, so the proposal is not trusted.
+   *
+   * ⚠️ IT IS A SHAPE VIOLATION, NEVER A MEMBERSHIP ONE, and the difference is the
+   * story's central decision rather than a looseness here. The subject vocabulary
+   * IS the rule-pack file set in `motir-meta`, so this repository does not hold
+   * the list and cannot: a well-formed but UNRECOGNISED member is accepted and
+   * refused one hop later, by the planner's own resolver. What this refuses is a
+   * value that could not name a `subject-<name>.md` file at all.
+   */
+  | 'malformed_subject'
+  /**
+   * An `add` proposing a `subject` on a CONTAINER kind (Story MOTIR-5062 ·
+   * MOTIR-5065) — the mirror of the existing refusal of a `type` on an
+   * `epic` / `story`, and a KIND question, which unlike the vocabulary IS this
+   * repository's domain. Which rule packs a card composes is decided for the LEAF
+   * that gets authored; a container's rules come from its own kind pack.
+   */
+  | 'subject_on_container';
 
 /**
  * Every {@link PlanGrammarViolation} member, ENUMERABLE AT RUNTIME (MOTIR-3936).
@@ -475,6 +497,8 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   unknown_type: true,
   parent_depth_limit: true,
   parent_terminal: true,
+  malformed_subject: true,
+  subject_on_container: true,
 };
 
 /** {@link PlanGrammarViolation}'s members as an array — see the record above. */

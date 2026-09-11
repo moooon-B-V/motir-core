@@ -26,7 +26,9 @@
 // tree byte-identical, so every check completes before the first write.
 
 import { assertValidParent, isIssueType, type IssueType } from '@/lib/issues/parentRules';
-import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { isWorkItemType, WORK_ITEM_TYPES, TYPEABLE_KINDS } from '@/lib/issues/executorDefaults';
+import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
+import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import { isTempRef, tempRefId, TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
@@ -54,7 +56,14 @@ export interface ProposalNode {
    * proposal on a rejected cycle has no work-item key yet, so its title is the
    * only identity a message can give a reader.
    */
-  proposedFields: { kind?: string | null; type?: string | null; title?: string | null } | null;
+  proposedFields: {
+    kind?: string | null;
+    type?: string | null;
+    title?: string | null;
+    /** The SUBJECT coordinate (MOTIR-5065) — shape- and kind-checked here; its
+     *  MEMBERSHIP is deliberately not this repository's to know. */
+    subject?: string | null;
+  } | null;
   /**
    * `modify` only — the gate reads the edge refs, and (MOTIR-3859) the
    * `parentRef` a re-parent travels on. `undefined` and `null` are DIFFERENT
@@ -200,6 +209,54 @@ function assertProposedTypeKnown(item: ProposalNode): void {
     item.id,
     `Proposal ${item.id} proposes type "${String(type)}", which is not a valid work type. Legal members: ${WORK_ITEM_TYPES.join(', ')}.`,
   );
+}
+
+/**
+ * The proposed `subject` — the fourth planning-rule selector coordinate — checked
+ * for SHAPE and for the one KIND rule this repository owns (Story MOTIR-5062 ·
+ * MOTIR-5065).
+ *
+ * The twin of {@link assertProposedTypeKnown} directly above, and owed by the same
+ * argument this module's header makes: the approved set can be edited between
+ * generation and approve (`updateProposal`), so nothing the planner self-checked
+ * is trusted here.
+ *
+ * ⚠️ TWO CHECKS, AND WHAT IS DELIBERATELY ABSENT IS THE THIRD.
+ *
+ *   · SHAPE — a bounded lowercase slug (`lib/plans/subjectShape.ts`). A value that
+ *     could not name a `subject-<name>.md` rule pack could not be a member however
+ *     the corpus grows, so refusing it costs nothing and keeps the column clean.
+ *   · KIND — refused on a container, mirroring `type`. Which packs a card composes
+ *     is decided for the LEAF that gets authored.
+ *   · MEMBERSHIP — **NOT CHECKED, ON PURPOSE.** The vocabulary IS the pack file
+ *     set in `motir-meta`, mirrored by motir-ai's `PACKS_BY_SUBJECT`, so this
+ *     repository holding the list would put a schema change, a migration and a
+ *     platform deploy in front of every new rule pack. A well-formed unrecognised
+ *     member persists here and is refused by the RESOLVER, one hop later, which is
+ *     the system that owns the vocabulary. That cost is stated rather than hidden,
+ *     and `tests/plans/proposedSubject.test.ts` pins the acceptance deliberately so
+ *     a later reader does not "fix" it into a vocabulary check.
+ */
+function assertProposedSubjectValid(item: ProposalNode): void {
+  const subject = item.proposedFields?.subject;
+  if (subject == null || subject === '') return;
+
+  if (!isWellFormedSubject(subject)) {
+    throw new PlanGrammarError(
+      'malformed_subject',
+      item.id,
+      `Proposal ${item.id} proposes subject "${String(subject)}", which is not a well-formed subject. ${describeSubjectShape()}`,
+    );
+  }
+
+  const kind = item.proposedFields?.kind;
+  if (kind != null && kind !== '' && !TYPEABLE_KINDS.has(kind as WorkItemKindDto)) {
+    throw new PlanGrammarError(
+      'subject_on_container',
+      item.id,
+      `Proposal ${item.id} proposes subject "${subject}" on a \`${kind}\`, which is a container. A subject selects the rule packs an AUTHORING pass composes for a LEAF; a container's rules come from its own kind. Move the subject onto the leaf that carries the work.`,
+    );
+  }
 }
 
 /**
@@ -878,6 +935,10 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     //     2: a malformed plan should fail with the most specific reason, and a
     //     bad `type` is a property of the proposal alone — it needs no graph.
     assertProposedTypeKnown(item);
+    // 3a-bis. The proposed `subject` is well-formed and is not on a container
+    //     (MOTIR-5065). Same tier and same argument as the `type` check above —
+    //     a property of the proposal alone, needing no graph.
+    assertProposedSubjectValid(item);
     const childKind = issueKindOf(item);
     const parentKind = effectiveParentKind(item, addsById, liveById);
     try {

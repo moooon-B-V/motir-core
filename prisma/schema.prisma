@@ -2005,6 +2005,25 @@ model WorkItem {
   implementationSource  WorkItemImplementationSource?
   implementationHarness String?
   implementationModel   String?
+  // WHICH SUBJECT MATTER the planner composed this card's rule packs from (Story
+  // MOTIR-5062 · MOTIR-5065) — the FOURTH selector coordinate, beside the three
+  // planning columns above because it is the same KIND of fact: a record of how
+  // this card came to be planned, not a property of the work. Read-only wherever
+  // it appears; the rail draws it as the third `Provenance` group (MOTIR-5074).
+  //
+  // ⚠️ OPEN free-text, NOT an enum, and that is the story's central decision
+  // rather than a shortcut. The member vocabulary IS the rule-pack file set —
+  // a member exists iff `prompts/plan-rules/subject-<name>.md` exists in
+  // motir-meta — so adding one is a pack file plus a regenerate. An enum here
+  // would put a schema change, a migration and a platform deploy in front of
+  // every new rule pack, which is exactly the cost the design exists to avoid.
+  // This column therefore validates SHAPE (a bounded lowercase slug) and never
+  // MEMBERSHIP: an unrecognised but well-formed member persists and is refused
+  // one hop later, at motir-ai's resolver, which is the system that owns the
+  // vocabulary. Same posture as `planningHarness` / `planningModel` directly
+  // above, for the same reason stated there (fast-moving names, no migration
+  // per member).
+  subject               String?
   // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
   // TIME estimate above; both columns coexist and the project's `estimationStatistic`
   // config picks which one is THE planning estimate the surfaces display + roll up.

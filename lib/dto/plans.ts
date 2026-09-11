@@ -336,6 +336,37 @@ export interface PlanItemProposedFields {
    * motir-ai's `SHARED_PLANNING_RULES` — not in this field's validator.
    */
   todos?: ProposedTodoInput[] | null;
+  /**
+   * WHICH SUBJECT MATTER the planner composed this card's rule packs from
+   * (Story MOTIR-5062 · MOTIR-5065) — the FOURTH coordinate of
+   * `pack(phase, kind, type, subject)`, DERIVED BY THE PLANNER AT `lay` and read
+   * by an `author` session, so it is settled at the APPEND exactly as `type`,
+   * `parentRef` and the repo pin are.
+   *
+   * ⚠️ TOP-LEVEL, NOT A MEMBER OF {@link planningProvenance}, and the parity
+   * guard is the reason. `tests/dto/planReviewFieldParity.test.ts` reads this
+   * interface's TOP-LEVEL keys and holds `PlanReviewItemDto` against them, so a
+   * field tucked inside the provenance object is invisible to it. That file
+   * records `planningProvenance` itself reaching the proposal and not the review
+   * model with nothing going red — so nesting is not a hypothetical way to lose
+   * this field, it is the documented one.
+   *
+   * ⚠️ SHAPE IS VALIDATED, MEMBERSHIP IS NOT (`lib/plans/subjectShape.ts`). A
+   * member exists iff `prompts/plan-rules/subject-<name>.md` exists in the
+   * corpus, so this repository never carries the list: a well-formed but
+   * unrecognised value is ACCEPTED here and refused one hop later, at motir-ai's
+   * `resolvePlanningRulePacks`. Deliberate — a closed enum here would put a
+   * migration and a platform deploy in front of every new rule pack, and the
+   * value's only producer is the system that owns the vocabulary.
+   *
+   * REFUSED on a CONTAINER kind, mirroring `type`: which packs a card composes
+   * is a leaf question, and a KIND question is this repository's domain.
+   *
+   * OPTIONAL in BOTH directions — a proposal carrying none materializes exactly
+   * as it did before this field existed, which is what makes the axis purely
+   * additive.
+   */
+  subject?: string | null;
 }
 
 /**
@@ -830,6 +861,22 @@ export interface CorrectProposalInput extends UpdateProposalInput {
   /** `modify` only — REPLACES the patch. The op that carries a dependency edit,
    *  and the one no door could touch at all before this. */
   patch?: PlanItemPatch | null;
+  /**
+   * `add` only — the SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065); `null`
+   * unpins it.
+   *
+   * ⚠️ IT IS A CORRECTION KEY AND NOT A DEEPEN KEY, and that split is AMENDMENT 3
+   * D3's rule applied rather than an oversight. `subject` is settled at the `lay`,
+   * beside `type`, `parentRef` and the repo pin — it says which RULES an authoring
+   * pass reads, which is a fact about where the card SITS in the corpus rather
+   * than about what it SAYS — so a deepen may not touch it and a correction may.
+   *
+   * Without this key a mis-derived subject would be unfixable short of a whole new
+   * plan, which is precisely the cost AMENDMENT 8's doors exist to remove.
+   * Re-validated by the same shape and container checks the append runs, so a
+   * correction cannot introduce a subject the append would have refused.
+   */
+  subject?: string | null;
 }
 
 /**
@@ -879,6 +926,7 @@ export const CORRECT_PROPOSAL_KEYS = [
   'targetRepositories',
   'targetRepositoryRef',
   'targetRepoRole',
+  'subject',
   'patch',
 ] as const;
 
