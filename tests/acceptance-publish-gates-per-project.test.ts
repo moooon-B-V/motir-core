@@ -27,6 +27,29 @@ import { makeWorkItemFixture } from './fixtures/workItemFixtures';
 // `no_plan` and the switch would never be consulted. Its own suites cover the plan
 // resolution.
 
+// ⚠️ THE OBJECT STORE IS CONFIGURED, NOT MOCKED. The ON half of each pair runs
+// past the gate into `createUploadTokens`, which mints a presigned PUT — and
+// `lib/blob/s3.ts` refuses to build a client without these. Presigning is local
+// crypto (`getSignedUrl` touches no network), so real values for a `.invalid`
+// endpoint carry the whole path with nothing to intercept; the sibling
+// `tests/export/dataExportDownload.test.ts` makes the same call one layer down.
+// A `mintPrivateUploadToken` stub would work too and is what
+// `tests/mcp/publishAcceptanceResultTool.test.ts` does — it asserts the MINT,
+// so it needs a fake it can read. This file asserts the GATE, and the mint is
+// only the proof the gate let go, so the fewer seams standing between the
+// verdict and the assertion the better. Set before the imports below, because
+// every env read in `s3.ts` is lazy but the client is cached on first use.
+const S3_ENV = {
+  MOTIR_S3_ENDPOINT: 'https://s3.test.invalid',
+  MOTIR_S3_REGION: 'auto',
+  MOTIR_S3_ACCESS_KEY_ID: 'test-access-key',
+  MOTIR_S3_SECRET_ACCESS_KEY: 'test-secret-key',
+  MOTIR_S3_PRIVATE_BUCKET: 'motir-private',
+  MOTIR_S3_PUBLIC_BUCKET: 'motir-public',
+  MOTIR_S3_PUBLIC_BASE_URL: 'https://s3.test.invalid/motir-public',
+} as const;
+Object.assign(process.env, S3_ENV);
+
 const aiAccess = vi.hoisted(() => ({ current: null as AiAccessDTO | null }));
 
 vi.mock('@/lib/services/billingService', () => ({
@@ -40,6 +63,7 @@ const { runCreateAcceptanceUpload } = await import('@/lib/mcp/tools/publishAccep
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { projectsService } = await import('@/lib/services/projectsService');
+const { resetS3ClientForTests } = await import('@/lib/blob/s3');
 
 let fx: Awaited<ReturnType<typeof makeWorkItemFixture>>;
 let orgId: string;
@@ -113,6 +137,13 @@ async function ciRequest(): Promise<Request> {
 }
 
 beforeEach(async () => {
+  // Re-asserted per test, not just at import: `tests/attachments/blob-uploader.test.ts`
+  // DELETES these in its `afterEach`, and a vitest worker runs many files in one
+  // process — so whether this file's module-scope assign still stands depends on
+  // which shard put which neighbour before it. `tests/export/dataExportDownload.test.ts`
+  // carries the same two lines for the same reason.
+  resetS3ClientForTests();
+  Object.assign(process.env, S3_ENV);
   seq = 0;
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "acceptance_evidence", "attachment", "work_item" RESTART IDENTITY CASCADE',
