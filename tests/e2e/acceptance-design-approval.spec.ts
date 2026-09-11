@@ -1,21 +1,13 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn, startSignedOut } from './_helpers/shell-session';
-import { servePrivateObjectStore } from './_helpers/object-store';
 import {
-  IMAGE_SOURCE_PATH,
-  MOCK_HTML,
-  MOCK_SOURCE_PATH,
   NOTE_BODY,
   NOTE_HEADING,
-  NOTE_MD,
-  NOTE_SOURCE_PATH,
-  PNG_BYTES,
+  openAgentSession,
+  publishDesignResult,
   seedDesignApproval,
+  servePublishedMock,
   type DesignApprovalSeed,
 } from './_helpers/design-approval-seed';
 
@@ -86,49 +78,6 @@ import {
 
 test.describe.configure({ timeout: 240_000 });
 
-const b64 = (b: Buffer) => b.toString('base64');
-
-/** Open an MCP session as an AGENT would — a bearer, no cookie, no session. */
-async function agentSession(token: string, baseURL: string): Promise<Client> {
-  const client = new Client({ name: 'design-approval-e2e', version: '0.0.0' });
-  const transport = new StreamableHTTPClientTransport(new URL('/api/mcp', baseURL), {
-    requestInit: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  await client.connect(transport);
-  return client;
-}
-
-function publish(client: Client, key: string): Promise<CallToolResult> {
-  return client.callTool({
-    name: 'publish_design_result',
-    arguments: {
-      key,
-      assets: [
-        {
-          kind: 'mock',
-          sourcePath: MOCK_SOURCE_PATH,
-          contentType: 'text/html',
-          contentBase64: b64(Buffer.from(MOCK_HTML)),
-        },
-        {
-          kind: 'image',
-          sourcePath: IMAGE_SOURCE_PATH,
-          contentType: 'image/png',
-          contentBase64: b64(PNG_BYTES),
-        },
-        {
-          kind: 'note_file',
-          sourcePath: NOTE_SOURCE_PATH,
-          contentType: 'text/markdown',
-          contentBase64: b64(Buffer.from(NOTE_MD)),
-        },
-      ],
-      noteMd: NOTE_MD,
-      producedByKey: key,
-    },
-  }) as Promise<CallToolResult>;
-}
-
 test.describe('a published design waits, the control clears it, and the work it held starts', () => {
   let seed: DesignApprovalSeed;
 
@@ -147,38 +96,17 @@ test.describe('a published design waits, the control clears it, and the work it 
     // The receipt belongs to the STORY, not to this subtask.
     acceptanceStory('MOTIR-4778');
 
-    await servePrivateObjectStore(page);
-
-    // ⚠️ THE MOCK'S BYTES ARE SERVED AT THE APP'S CONTENT ROUTE, and the reason
-    // is a browser limitation rather than a shortcut — `design-result.spec.ts`
-    // and `design-result-publish.spec.ts` both document it. The mock renders in
-    // a frame with `sandbox=""`, so its document loads into an OPAQUE origin;
-    // the content route's 302 is interceptable, but the fetch that FOLLOWS it is
-    // made by the frame against the store host and escapes `page.route`
-    // entirely, dying `ERR_NAME_NOT_RESOLVED` against the `.invalid` TLD. A
-    // receipt someone WATCHES must not show a broken frame for a feature that
-    // works. Nothing this spec is about is stubbed: the publish is real, the
-    // decision is real, and the `.png` keeps its real content-route →
-    // signed-URL → store hop, which is why non-HTML passes straight through.
-    await page.route('**/api/attachments/*/content', async (route) => {
-      const response = await route.fetch({ maxRedirects: 0 });
-      const location = response.headers()['location'] ?? '';
-      if (location.includes('.html')) {
-        await route.fulfill({
-          status: 200,
-          headers: { 'content-type': 'text/html' },
-          body: MOCK_HTML,
-        });
-        return;
-      }
-      await route.fulfill({ response });
-    });
+    // The published mock's bytes, served at the app's content route so the
+    // sandboxed frame can render them — and so the frame offers its verbs at all.
+    // The why is at `servePublishedMock`; it moved there with this code so the
+    // regression guard shares one copy (MOTIR-5118).
+    await servePublishedMock(page);
 
     await chapter('An agent publishes the design — one call, a bearer, no browser', async () => {
       // The gate is not seeded: publishing is what CREATES it, with its subject
       // pinned to these bytes and its question routed to the card's assignee.
-      const client = await agentSession(seed.token, baseURL!);
-      const result = await publish(client, seed.designKey);
+      const client = await openAgentSession(seed.token, baseURL!);
+      const result = await publishDesignResult(client, seed.designKey);
       expect(result.isError ?? false, JSON.stringify(result.content)).toBe(false);
       await client.close();
     });
@@ -286,26 +214,17 @@ test.describe('a published design waits, the control clears it, and the work it 
     });
 
     await chapter('The design card is Done, and the record says which version', async () => {
-      // ⚠️ THE RELOAD IS AN AUTHORITATIVE COMMITTED-STATE READ, AND IT IS HERE
-      // BECAUSE THE IN-PLACE REFRESH DOES NOT REACH THIS RAIL — a real defect,
-      // filed as its own bug, NOT a wait this spec was missing.
+      // ⚠️ NO RELOAD — THE DEFECT IT WORKED AROUND IS FIXED (MOTIR-5118). This
+      // chapter opened with `await page.reload()` and a block explaining that
+      // the in-place refresh does not reach this rail. It does reach it; it was
+      // not sufficient on its own, because the fresh tree arrived on a second
+      // apply that intermittently went missing. `decideApprovalGateAction` now
+      // revalidates this page on its own response, and the standing guard is
+      // `tests/e2e/approval-gate-repaint.spec.ts`.
       //
-      // Measured on this spec's first run: the decide transaction wrote
-      // `work_item.status = 'done'` and `completed_at` at 01:00:53.125Z, and the
-      // page still rendered **In Progress** in the core-fields rail 27 seconds
-      // later, with the record band's version and files lines missing for the
-      // same reason. `decideApprovalGateAction` calls no `revalidatePath` (its
-      // sibling `createLinkAction` does), so the only thing meant to repaint the
-      // server-rendered rail is `DesignResultSection`'s own `router.refresh()`,
-      // and it does not. That is the page-state contract's CASE 2 failing.
-      //
-      // A 20-second `toHaveText` is already a wait on that refresh, so waiting
-      // harder is not the remedy — and weakening the assertion to match what the
-      // page happens to show would delete the only detector this has. So the
-      // spec asserts the REAL claim (the card is Done, the bytes are pinned)
-      // against a committed read, and the staleness is carried by the bug rather
-      // than absorbed here.
-      await page.reload();
+      // So the receipt is stronger rather than merely shorter: a reviewer
+      // watching the clip sees the card reach Done on the page they are already
+      // looking at, which is what pressing Approve actually does.
       // At rest the status is a `StatusPill`, not a combobox — the picker only
       // exists while that field is being edited.
       await expect(page.getByText('Done', { exact: true })).toBeVisible();

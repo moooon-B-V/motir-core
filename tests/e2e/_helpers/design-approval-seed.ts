@@ -1,3 +1,8 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { Page } from '@playwright/test';
+
 import { adminDb } from '@/tests/helpers/adminDb';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -5,6 +10,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { createTestPerson } from './testPerson';
+import { servePrivateObjectStore } from './object-store';
 
 // THE DESIGN-APPROVAL seed (Story MOTIR-4778 · Subtask MOTIR-4797).
 //
@@ -226,4 +232,94 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
     password: DESIGN_APPROVAL_PASSWORD,
     token: minted.token,
   };
+}
+
+// ── THE PUBLISH, AND THE PORT'S BYTES ───────────────────────────────────────
+// Both halves of "get an AWAITING gate in front of a browser", extracted here
+// (Bug MOTIR-5118) so the specs that need that shape share one copy. The
+// comments below moved with the code from `acceptance-design-approval.spec.ts`,
+// which paid for them.
+
+/** Open an MCP session as an AGENT would — a bearer, no cookie, no session. */
+export async function openAgentSession(token: string, baseURL: string): Promise<Client> {
+  const client = new Client({ name: 'design-approval-e2e', version: '0.0.0' });
+  const transport = new StreamableHTTPClientTransport(new URL('/api/mcp', baseURL), {
+    requestInit: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  await client.connect(transport);
+  return client;
+}
+
+/**
+ * Publish the seed's design result onto `key` through the REAL tool.
+ *
+ * ⚠️ THE GATE IS NOT SEEDED — publishing is what CREATES it, with its subject
+ * pinned to these bytes and its question routed to the card's assignee. See
+ * this file's header.
+ */
+export async function publishDesignResult(client: Client, key: string): Promise<CallToolResult> {
+  return client.callTool({
+    name: 'publish_design_result',
+    arguments: {
+      key,
+      assets: [
+        {
+          kind: 'mock',
+          sourcePath: MOCK_SOURCE_PATH,
+          contentType: 'text/html',
+          contentBase64: Buffer.from(MOCK_HTML).toString('base64'),
+        },
+        {
+          kind: 'image',
+          sourcePath: IMAGE_SOURCE_PATH,
+          contentType: 'image/png',
+          contentBase64: PNG_BYTES.toString('base64'),
+        },
+        {
+          kind: 'note_file',
+          sourcePath: NOTE_SOURCE_PATH,
+          contentType: 'text/markdown',
+          contentBase64: Buffer.from(NOTE_MD).toString('base64'),
+        },
+      ],
+      noteMd: NOTE_MD,
+      producedByKey: key,
+    },
+  }) as Promise<CallToolResult>;
+}
+
+/**
+ * Serve the published mock's bytes at the app's content route.
+ *
+ * ⚠️ THIS IS A BROWSER LIMITATION RATHER THAN A SHORTCUT — `design-result.spec.ts`
+ * and `design-result-publish.spec.ts` both document it. The mock renders in a
+ * frame with `sandbox=""`, so its document loads into an OPAQUE origin; the
+ * content route's 302 is interceptable, but the fetch that FOLLOWS it is made by
+ * the frame against the store host and escapes `page.route` entirely, dying
+ * `ERR_NAME_NOT_RESOLVED` against the `.invalid` TLD.
+ *
+ * ⚠️ AND IT IS LOAD-BEARING FOR THE VERBS, not only for what a reader sees:
+ * `ApprovalGateControl` withholds every verb until the port reports `'rendered'`
+ * (`components/approvals/portRenderStatus.tsx` — *"you cannot approve what is
+ * not yet on screen"*), so a spec that skips this never gets an Approve button.
+ *
+ * Nothing a spec is about is stubbed: the publish is real, the decision is real,
+ * and the `.png` keeps its real content-route → signed-URL → store hop, which is
+ * why non-HTML passes straight through.
+ */
+export async function servePublishedMock(page: Page): Promise<void> {
+  await servePrivateObjectStore(page);
+  await page.route('**/api/attachments/*/content', async (route) => {
+    const response = await route.fetch({ maxRedirects: 0 });
+    const location = response.headers()['location'] ?? '';
+    if (location.includes('.html')) {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        body: MOCK_HTML,
+      });
+      return;
+    }
+    await route.fulfill({ response });
+  });
 }
