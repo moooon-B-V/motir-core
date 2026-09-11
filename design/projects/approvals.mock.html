@@ -2124,12 +2124,22 @@
         <b>Also a correction.</b> Rendered from its own source, the shipped card&rsquo;s
         <span class="mono">canManage: false</span> state is byte-identical to its admin state except
         that the switch will not move &mdash; no explanation anywhere. A disabled control with no
-        reason reads as a bug. The footer line is the whole fix. <br />⚠️ The RAIL row still needs
-        its own answer: the registry gates this entry on <span class="mono">workflow:manage</span>,
-        so a plain member does not see the row at all and reaches this state only by deep link.
-        Making the row browse-visible and the WRITE admin-only is the AI-planning entry&rsquo;s
-        shape and was retired by the 2026-08-08 amendment; this asset follows the amendment and does
-        not re-open it.
+        reason reads as a bug. The footer line is the whole fix. <br />⚠️
+        <b
+          >The RAIL row has its answer now &mdash; DECIDED (Yue, 2026-09-11): this room is SEEN by a
+          member and CHANGED by an admin.</b
+        >
+        The entry takes TWO keys: <span class="mono">viewPermission: 'project:browse'</span> opens
+        the row and the destination, <span class="mono">permission: 'workflow:manage'</span> stays
+        what the switch requires. As shipped there is only one key, and
+        <span class="mono">app/(authed)/settings/project/_guard.tsx</span> reads that same key to
+        refuse the destination &mdash; so today a member sees no row AND is refused the deep link,
+        and this panel draws a state nothing can reach. The second key is MOTIR-5193&rsquo;s to
+        build. <br />This does not re-open the 2026-08-08 amendment: its rule hides a room the actor
+        &ldquo;has no path to <em>and no need to know exists</em>&rdquo;, and approvals is the first
+        room to fail the first test and pass the second &mdash; what a project asks of you decides
+        whether your own finished work waits. design-notes.md &sect;6 carries the whole argument,
+        the two rejected shapes, and the consequence for every other room.
       </p>
     </div>
 
