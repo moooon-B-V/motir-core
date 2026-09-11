@@ -263,8 +263,19 @@ jobs:
   # ⚠️ BOTH DEFAULT TO `true`, AND THAT DIRECTION IS THE WHOLE SAFETY ARGUMENT.
   # A predicate that fails open costs a wasted lane; one that fails closed
   # merges untested code, which is the defect this job was written to remove.
-  # So a non-pull_request event, an unavailable base commit, a failed `git
-  # diff`, or an empty file set all run EVERYTHING.
+  # So an event that carries no base/head, an unavailable base commit, a failed
+  # `git diff`, or an empty file set all run EVERYTHING.
+  #
+  # ⚠️ "CARRIES NO BASE/HEAD" IS NARROWER THAN "IS NOT A PULL REQUEST", AND THAT
+  # IS THE WHOLE OF MOTIR-5124. The early return used to be
+  # `[ "$EVENT" != 'pull_request' ]`, so EVERY merge-queue entry took the
+  # fail-open arm and ran every lane — including the runner-image build, on
+  # batches that cannot touch a container image. A `merge_group` payload carries
+  # its own `base_sha` and `head_sha`; it was being treated as though it had
+  # none. The direction is UNCHANGED and this job does not reverse it: what
+  # changed is that an event with a real base is now diffed rather than waved
+  # through. `tests/ci-changed-paths-gate.test.ts` executes this script against a
+  # real base/head pair for both events, and against the fail-open arms.
   changes:
     name: What changed
     runs-on: ubuntu-latest
@@ -291,6 +302,17 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # ── The MERGE QUEUE carries its own base and head (MOTIR-5124) ──────
+          #
+          # A `merge_group` payload names `base_sha` (the tip of `main` the queue
+          # branch was built on) and `head_sha` (the batch's tip), so a queue
+          # entry is NOT an event "whose diff cannot be determined" — it is one
+          # whose diff nothing was reading. The queue branch GitHub builds is
+          # `gh-readonly-queue/main/pr-<n>-<base_sha>`, which encodes the same
+          # base in its own name; `base_sha` is an ancestor of `head_sha`, so the
+          # three-dot diff below is the batch's own change set.
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
 
@@ -300,15 +322,40 @@ jobs:
             echo "app=$1 images=$2"
           }
 
-          if [ "$EVENT" != 'pull_request' ]; then
-            echo 'Not a pull request — every lane runs.'
+          # Resolve the pair to diff FROM THE EVENT, and fail open on any event
+          # that does not carry one. The catch-all arm is the same fail-open the
+          # `!= 'pull_request'` test used to be — a push, a dispatch, anything
+          # added later — and it is deliberately the DEFAULT rather than a list
+          # to extend: an unclassifiable event still runs everything.
+          case "$EVENT" in
+            pull_request)
+              base=$BASE_SHA
+              head=$HEAD_SHA
+              ;;
+            merge_group)
+              base=$MERGE_BASE_SHA
+              head=$MERGE_HEAD_SHA
+              ;;
+            *)
+              base=''
+              head=''
+              ;;
+          esac
+
+          # Empty covers BOTH the unclassifiable event above and a recognised one
+          # whose payload did not carry the shas — an absent field renders as the
+          # empty string, and a `git diff ...` on it would compare the working
+          # tree against itself and answer "nothing changed", which is the
+          # fail-CLOSED direction.
+          if [ -z "$base" ] || [ -z "$head" ]; then
+            echo "::warning::No base/head commit for event '$EVENT' — running every lane."
             emit true true
             exit 0
           fi
 
           # Capture first, THEN test. A `git diff | while` pipeline would hide
           # the diff's own exit status, which is the thing being guarded on.
-          if ! files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA"); then
+          if ! files=$(git diff --name-only "$base...$head"); then
             echo '::warning::Could not diff against the merge base — running every lane.'
             emit true true
             exit 0

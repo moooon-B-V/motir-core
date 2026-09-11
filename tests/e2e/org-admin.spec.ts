@@ -54,6 +54,15 @@ test.afterAll(async () => {
 // Sign up a brand-new user via the two-step credentials flow → auto-provisioned
 // org + default workspace, landing on /dashboard with a session cookie set. The
 // rate limiter is gated OFF for the E2E dev server, so a single click is enough.
+/**
+ * The live subtree on the SIGNED-OUT pages (MOTIR-5115). `AuthShell`'s `<main>`
+ * carries no `id`, so this file's `page.locator('#main')` — the shell's region,
+ * used from the authed chapters below — cannot reach it; the role query can, and
+ * it is the stronger of the two anyway because the accessibility tree excludes
+ * the hidden streamed copy outright.
+ */
+const livePane = (page: Page) => page.getByRole('main');
+
 async function signUp(page: Page, email: string): Promise<void> {
   await startSignedOut(page);
   await page.goto('/sign-up');
@@ -65,7 +74,12 @@ async function signUp(page: Page, email: string): Promise<void> {
   // stable handle (the exception the file header names). Harmless here — the
   // class needs two copies of a subtree in ONE document, and this is the first
   // paint of a fresh one.
-  await page.getByPlaceholder('Create a password').fill(PASSWORD);
+  //
+  // MOTIR-5115 takes the SECOND remedy rather than leaving it at that: `AuthShell`
+  // renders exactly one `<main>`, so the placeholder is scoped to the live subtree
+  // and leaves the page-rooted population. The exception above still stands — it is
+  // about the ROLE, and scoping is not a role.
+  await livePane(page).getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
   // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); this
   // helper keeps its contract by settling there and navigating on.
@@ -137,6 +151,11 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   // — are absent here. The cloud-on billing surface (checkout / paywall / gates)
   // is covered by the dedicated 8.1.10 billing E2E.
   await expect(page.locator('a[href="/settings/organization/billing"]')).toHaveCount(0);
+  // ⚠️ NOT converted and NOT scoped (MOTIR-5115) — `toHaveCount` resolves the WHOLE
+  // match set, so it cannot throw strict mode and neither of these is in the defect
+  // class; and each asserts the string is absent from the DOCUMENT, which a role or
+  // a subtree scope would narrow. Both keep their inventory rows. (MOTIR-5056
+  // recorded the same disposition for its own four survivors.)
   await expect(page.getByText('Coming soon')).toHaveCount(0);
   // Single org → no switch-org section.
   await expect(page.getByText('Switch organization')).toHaveCount(0);
@@ -213,7 +232,11 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   // The roster now renders (2 people); Dee appears with org role Member. Anchor
   // on Dee's unique role combobox: the success toast renders as an <li> naming
   // the same email, so an `li`/text match would collide in strict mode.
-  await expect(page.getByText('2 people')).toBeVisible();
+  //
+  // ⚠️ Scoped to `#main` (MOTIR-5115), the same remedy the pager chapter below
+  // already applies: a roster count is a `<span>` with no role to ask for, and an
+  // unscoped read matches the subtree React is still unmounting.
+  await expect(page.locator('#main').getByText('2 people')).toBeVisible();
   const roleCombo = page.getByRole('combobox', { name: 'Organization role for Dee Member' });
   await expect(roleCombo).toBeVisible();
   const deeRow = page.locator('li').filter({ has: roleCombo });
@@ -308,6 +331,8 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   await expect(prev).toBeDisabled();
   await expect(next).toBeEnabled();
   // The highest-id member is on page 2 — absent from page 1 (proves not-load-all).
+  // ⚠️ NOT converted and NOT scoped (MOTIR-5115): a `toHaveCount` absence over the
+  // document, as above. Keeps its inventory row.
   await expect(page.getByText('Pager Member 10', { exact: true })).toHaveCount(0);
 
   // Next → page 2 (await the fetch, never race the count).

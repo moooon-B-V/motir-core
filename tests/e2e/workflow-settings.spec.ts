@@ -70,7 +70,12 @@ test('owner manages the workflow: defaults protected, custom status add + rename
 
   // Its "Color" action opens a recolor-only form — no Label field to rename.
   await reviewRow.getByRole('button', { name: 'Change color of In Review' }).click();
-  await expect(page.getByText('only its color can be changed')).toBeVisible();
+  // ⚠️ SCOPED to the dialog (MOTIR-5115) — the note is a `<p>` inside the recolor
+  // `Modal`, so there is no role to ask for, and a page-rooted read also matches the
+  // subtree React keeps mounted while the incoming one streams (MOTIR-3725 /
+  // MOTIR-3737). The dialog is the tightest live container available, and it is
+  // where this string is supposed to be.
+  await expect(page.getByRole('dialog').getByText('only its color can be changed')).toBeVisible();
   // MOTIR-5056: NOT converted. A `toHaveCount` assertion resolves the whole match
   // set, so it cannot throw strict mode — this site is not in the defect class — and
   // narrowing it to a role would weaken what the absence assertion proves.
@@ -103,7 +108,12 @@ test('owner manages the workflow: defaults protected, custom status add + rename
 
   // Flip policy mode to Open and confirm the banner.
   await page.getByRole('button', { name: 'Open', exact: true }).click();
-  await expect(page.getByText('Open mode: any status can transition to any other.')).toBeVisible();
+  // ⚠️ SCOPED (MOTIR-5115) — the policy description is a `<p>` beside its `<h2>`, so
+  // the heading has the role and this line does not. `AppLayout`'s `<main>` is the
+  // live region.
+  await expect(
+    page.getByRole('main').getByText('Open mode: any status can transition to any other.'),
+  ).toBeVisible();
 });
 
 // Finding #47: the workflow route shipped with no nav entry point and was

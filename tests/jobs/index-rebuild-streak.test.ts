@@ -135,6 +135,29 @@ describe('the rebuild-streak probe', () => {
     expect(verdict.entries[0]).toMatchObject({ consecutiveRebuilds: 0 });
   });
 
+  it('PINS the calibrated threshold at 5 — MOTIR-5059, and the number is not free to drift', async () => {
+    // ⚠️ The boundary case below drives the constant, so it passes for ANY
+    // value and pins none. That was right while the number was openly chosen;
+    // it is not right now that it rests on a reading (the 2026-09-11 reading in
+    // `indexRebuildStreakService.ts`, whose separation is: largest observed
+    // LEGITIMATE rebuild episode 1, smallest observed DEFECT episode 4).
+    // Changing 5 should be a diff that edits this line and the reasoning beside
+    // the constant together, not a one-character edit nothing notices.
+    expect(INDEX_REBUILD_STREAK_THRESHOLD).toBe(5);
+
+    // And the boundary asserted against the LITERAL, so the claim "a repository
+    // at 5 is loud and one at 4 is not" is checked independently of the symbol.
+    for (let i = 0; i < 4; i += 1) await seedRun({ modes: ['rebuild'] });
+    expect((await indexRebuildStreakService.check()).verdict).toBe('ok');
+
+    await seedRun({ modes: ['rebuild'] });
+    const at5 = await indexRebuildStreakService.check();
+    expect(at5.verdict).toBe('rebuilding');
+    if (at5.verdict !== 'rebuilding') throw new Error('unreachable');
+    expect(at5.offenders[0]).toMatchObject({ consecutiveRebuilds: 5, state: 'rebuilding' });
+    expect(at5.threshold).toBe(5);
+  });
+
   it(`is LOUD at ${INDEX_REBUILD_STREAK_THRESHOLD} consecutive rebuilds and SILENT at one fewer`, async () => {
     // AC 3 — the boundary itself, asserted from both sides so the threshold is
     // a tested value rather than a bare number.

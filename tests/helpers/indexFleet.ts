@@ -142,6 +142,22 @@ export function stubIndexFleet(): void {
             nextOffset: null,
           });
         }
+        // ⚠️ THE RUN-VERDICT READ ANSWERS "NOTHING RECORDED", WHICH IS THIS
+        // WORLD'S HONEST STATE (MOTIR-5058). A settled run now asks motir-ai what
+        // the CONTAINER itself reported, and this fixture has no container — the
+        // orchestrator is fake and nothing ever posted a verdict. Answering
+        // `{ verdict: null }` says exactly that.
+        //
+        // ⚠️ AND IT MUST BE MATCHED EXPLICITLY, because the fall-through below is
+        // the CREDENTIAL MINT: without this branch the verdict read would receive
+        // a 201 carrying a `credential`, and `fetchCodeGraphRunVerdict` would
+        // correctly find no verdict in it and return null. Same answer, arrived at
+        // by accident — and a fixture that is right by accident stops being right
+        // the moment either shape changes. A suite that wants a verdict wraps this
+        // stub and answers this path itself.
+        if (parsed.pathname.endsWith('/v1/code-graph/run/verdict')) {
+          return json(200, { verdict: null });
+        }
         // ⚠️ THE MINT HONOURS `ttlSeconds`, INCLUDING ITS CLAMP (MOTIR-4923).
         // motir-ai's `clampTtlSeconds` defaults to fifteen minutes and bounds a
         // request to [60, 3600]; a fixture that answered a flat fifteen minutes

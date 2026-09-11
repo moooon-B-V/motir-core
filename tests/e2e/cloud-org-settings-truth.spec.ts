@@ -61,9 +61,15 @@ test('the organization settings page offers no address it cannot resolve, and no
     // The shipped sign-up flow, matching tests/e2e/org-admin.spec.ts exactly —
     // an email step, then a password step whose button is "Create account".
     await page.goto('/sign-up');
-    await page.getByPlaceholder('Email address').fill(OWNER_EMAIL);
+    // ⚠️ BY ROLE / SCOPED (MOTIR-5115) — this file is the FIRST recorded site of the
+    // double-mount locator class (MOTIR-3725), so its own page-rooted locators go
+    // the way that incident established. The email field is an `input[type="email"]`
+    // carrying `aria-label`, so it has a role to ask for; the password field has no
+    // implicit ARIA role at all (MOTIR-3737's documented exception) and is scoped to
+    // `AuthShell`'s `<main>` instead.
+    await page.getByRole('textbox', { name: 'Email address' }).fill(OWNER_EMAIL);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByPlaceholder('Create a password').fill(PASSWORD);
+    await page.getByRole('main').getByPlaceholder('Create a password').fill(PASSWORD);
     await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
     // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); this
     // helper keeps its contract by settling there and navigating on.
@@ -96,6 +102,11 @@ test('the organization settings page offers no address it cannot resolve, and no
     // MOTIR-5056: NOT converted. A `toHaveCount` assertion resolves the whole match
     // set, so it cannot throw strict mode — this site is not in the defect class — and
     // narrowing it to a role would weaken what the absence assertion proves.
+    //
+    // MOTIR-5115 reaches the same verdict for the THREE `getByText` twins below, on
+    // the same two grounds, and they keep their inventory rows for the same reason:
+    // the claim is that the row is absent from the DOCUMENT, which is what makes this
+    // chapter's absence legible, and a subtree scope would prove strictly less.
     await expect(page.getByLabel('Organization URL')).toHaveCount(0);
     await expect(page.getByText('Organization URL', { exact: true })).toHaveCount(0);
     await expect(page.getByText('motir.co/', { exact: false })).toHaveCount(0);
