@@ -90,7 +90,9 @@ const planRow = (page: Page) => callout(page).getByRole('link', { name: /Plan wi
 const pillLinks = (page: Page) => page.getByRole('link', { name: 'Plan with AI', exact: true });
 /** Every link whose name CONTAINS "Plan with AI" — pill + the menu row when open. */
 const planLinks = (page: Page) => page.getByRole('link', { name: /Plan with AI/ });
-const canvas = (page: Page) => page.getByTestId('roadmap-canvas');
+/** SCOPED to `main` (MOTIR-5114) — the canvas root is a bare `<div>` with no
+ *  role, so a live subtree is the remedy rather than an invented one. */
+const canvas = (page: Page) => page.getByRole('main').getByTestId('roadmap-canvas');
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 /**
  * The page-level heading proving the authed shell is up right after `signIn()`.
