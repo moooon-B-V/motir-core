@@ -1249,3 +1249,150 @@ describe('buildWorkItemLevel — a blocker the plan MOVES ONTO this level', () =
     expect(built.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'firm' }]);
   });
 });
+
+// ── A CARD THE PLAN MOVES OFF THE LEVEL (bug MOTIR-5006) ─────────────────────
+//
+// The two blocks above are this plan shape read from the DESTINATION. This one
+// reads it from the ORIGIN, and it is the field neither of them is about: not the
+// card's arrows or its skin, but whether the card is on the level at all.
+//
+// `planReviewService`'s `parentNodeIdOf` reports a re-parented card at its NEW
+// parent — correctly, and for a reason its own comment states: drawing it in its
+// old level *"would be the plan review showing the approver the opposite of what
+// approving does."* The consequence at the origin was never taken: the card fell
+// out of `proposalsAtLevel`, so nothing re-skinned it, nothing dropped it, and it
+// sat among its siblings with its committed arrows intact — indistinguishable
+// from a card nobody proposed to touch, on a level whose membership may be the
+// plan's whole subject.
+//
+// THE DISPOSITION, stated in full in `mergePlanLevel`'s own comment: the card
+// leaves the level and its edges take the OFF-LEVEL path. That is what the level
+// looks like after approve — no such child, and a cross-container blocker where
+// the arrow used to be — and it is the rule MOTIR-4098 already settled here for a
+// removed edge (*"the graph draws what approving would LEAVE BEHIND"*), applied to
+// the stronger claim a NODE makes.
+//
+// At the SOURCE, like MOTIR-4952 and for its reason: the `crossBlocked` ring is
+// baked into the dependent's rendered content and the anchor is minted before the
+// merge runs, so neither is reachable from `mergePlanLevel`.
+describe('buildWorkItemLevel — a card the plan MOVES OFF this level', () => {
+  function level(over: Partial<RoadmapLevelData> = {}): RoadmapLevelData {
+    return {
+      items: [
+        {
+          id: 'wi_stays',
+          parentId: 'parent_1',
+          identifier: 'MOTIR-1',
+          title: 'The child that stays',
+          kind: 'subtask',
+          status: 'todo',
+          hasChildren: false,
+        },
+        {
+          id: 'wi_leaving',
+          parentId: 'parent_1',
+          identifier: 'MOTIR-2',
+          title: 'The child the plan moves out',
+          kind: 'subtask',
+          status: 'todo',
+          hasChildren: false,
+        },
+      ],
+      edges: [{ blockedId: 'wi_stays', blockerId: 'wi_leaving' }],
+      offLevelBlockers: [],
+      ...over,
+    };
+  }
+
+  /** The `modify` that re-parents `wi_leaving` onto some OTHER level. */
+  function relocating(): PlanReviewItemDto {
+    return item({
+      planItemId: 'p_leaving',
+      nodeId: 'wi_leaving',
+      op: 'modify',
+      identifier: 'MOTIR-2',
+      title: 'The child the plan moves out',
+      parentNodeId: 'parent_2',
+      status: 'todo',
+    });
+  }
+
+  it('takes the departing card OFF the level it is leaving', () => {
+    // Criterion 1. Before this, both nodes were drawn and the departing one still
+    // carried the COMMITTED content the read supplied — not a `PlanItemNode` — so
+    // nothing on the level said it was going anywhere.
+    const merged = mergePlanLevel(
+      buildWorkItemLevel(level(), { departingIds: new Set(['wi_leaving']) }),
+      [relocating()],
+      'parent_1',
+    );
+
+    expect(merged.nodes.map((n) => n.id)).toEqual(['wi_stays', 'wi_leaving']);
+    // …and the second is the ghost ANCHOR, not a child: an anchor is minted
+    // `parentId: null` and is not drillable, where the committed row was a child
+    // of `parent_1`.
+    const anchor = merged.nodes.find((n) => n.id === 'wi_leaving')!;
+    expect(anchor.parentId).toBeNull();
+    expect(anchor.drillable).toBe(false);
+    expect(anchor.searchText).toBe('MOTIR-2 The child the plan moves out');
+  });
+
+  it('draws the edge to a card that stays as the cross-container tangle', () => {
+    // Criterion 2 — the nodes and the arrows cannot disagree about whether the
+    // card is there. The edge is NOT kept as the within-level `pending` arrow it
+    // was, and it is not dropped either: it is what the level draws after approve.
+    const built = buildWorkItemLevel(level(), { departingIds: new Set(['wi_leaving']) });
+
+    expect(built.deps).toEqual([{ from: 'wi_leaving', to: 'wi_stays', variant: 'cross' }]);
+    renderWithIntl(<>{built.nodes[0]!.content}</>);
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+  });
+
+  it('drops an edge whose BLOCKED end is the one departing', () => {
+    // The other direction. After approve the blocked card is not on this level, so
+    // neither is its arrow — the same answer the roadmap read gives unaided, which
+    // is why no new branch is needed for it.
+    const built = buildWorkItemLevel(
+      level({ edges: [{ blockedId: 'wi_leaving', blockerId: 'wi_stays' }] }),
+      { departingIds: new Set(['wi_leaving']) },
+    );
+
+    expect(built.deps).toEqual([]);
+    expect(built.nodes.map((n) => n.id)).toEqual(['wi_stays']);
+  });
+
+  it('leaves a `modify` that does NOT re-parent exactly where it was', () => {
+    // The control criterion 4 asks for. The narrowing keys on the proposal's
+    // `parentNodeId` DIFFERING from the level being built, never on the card being
+    // named by the plan — so an ordinary in-place `modify` is untouched: both
+    // children stay, the committed arrow stays within the level, and the target is
+    // re-skinned as the proposal.
+    const inPlace = item({
+      planItemId: 'p_stays',
+      nodeId: 'wi_leaving',
+      op: 'modify',
+      identifier: 'MOTIR-2',
+      title: 'The child the plan re-titles',
+      parentNodeId: 'parent_1',
+      status: 'todo',
+    });
+    const merged = mergePlanLevel(
+      buildWorkItemLevel(level(), { departingIds: new Set() }),
+      [inPlace],
+      'parent_1',
+    );
+
+    expect(merged.nodes.map((n) => n.id)).toEqual(['wi_stays', 'wi_leaving']);
+    expect(merged.nodes.find((n) => n.id === 'wi_leaving')!.parentId).toBe('parent_1');
+    expect(merged.deps).toEqual([{ from: 'wi_leaving', to: 'wi_stays', variant: 'pending' }]);
+  });
+
+  it('is inert when no plan supplies the set — every consumer but the review canvas', () => {
+    // Absent / empty is the pre-MOTIR-5006 behaviour, which is what keeps the
+    // roadmap, the onboarding canvas and the plan-change canvas untouched.
+    const built = buildWorkItemLevel(level());
+
+    expect(built.nodes.map((n) => n.id)).toEqual(['wi_stays', 'wi_leaving']);
+    expect(built.deps).toEqual([{ from: 'wi_leaving', to: 'wi_stays', variant: 'pending' }]);
+  });
+});
