@@ -65,12 +65,14 @@ export function toApprovalQueueRowDto(
   row: AwaitingGateRow,
   subject: ApprovalGateSubjectSummaryDTO | null,
   canDecide: boolean,
+  routedToName: string | null,
 ): ApprovalQueueRowDto {
   return {
     gateId: row.id,
     kind: row.kind,
     state: 'awaiting',
     canDecide,
+    routedToName,
     waitingSince: row.createdAt.toISOString(),
     workItem: {
       id: row.workItem.id,
