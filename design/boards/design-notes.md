@@ -17,6 +17,7 @@ same primitives — no Pencil→code gap.
 | **Scrum board (sprint view)**         | **`scrum.mock.html`** (HTML mockup)              | EXTENDS the board surface — the SCRUM variant: the same 3.2/3.3 board scoped to a board's active sprint, under a **sprint header** (name + state · goal-with-reveal · dates + time remaining · committed/completed/remaining points · complete-sprint entry point) + **per-column point totals**. The 3.2.1 board mockup drew the Kanban surface only — the sprint header / points / no-active-sprint state / complete-sprint affordance were unspecified (== no design), so the 4.5.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. Multi-panel: full scrum board · sprint-header anatomy (Tooltip reveal) · no-active-sprint EmptyState (→ Backlog) · edge states ("—" unestimated · "Ended" overdue · loading skeleton) · column-header slot coexistence. Gates 4.5.3. See "Scrum board (Story 4.5)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Board filtering (toolbar Filter)**  | **`board-filter.mock.html`** (HTML mockup)       | EXTENDS the board surface — wires the permanently-DISABLED `[Filter]` seam (`page.tsx` `filterComingSoon`) into a working board filter, and points the 3.8.4 over-cap banner's "Refine filter" CTA at it. REUSES the shipped /items filter primitives verbatim (`IssueFilterBar` quick popover · `IssueAdvancedFilter`/`FilterConditionBuilder` builder · `SavedFilterDropdown` + `IssueAppliedFilterBar` picker + applied name-chip) — anchored on the BOARD toolbar, board-scoped + URL-addressable. The board mocks draw `[Filter]` only as a disabled seam; the enabled affordance + the on-board composition + the active-filter summary + the filtered/filtered-EMPTY states + coexistence with the 3.3 group-by Segmented and the 3.8 banner are unspecified (== no design), so the 6.15.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. **Also adds the NET-NEW Work type facet to the shared `IssueFilterBar`** (the `WorkItemType` field was reachable only via `[Advanced]`; owned by subtask 6.15.5 — benefits `/items` too). Multi-panel: closed · quick-Filter popover open (incl. the Work type facet) · Saved dropdown open · active (summary + re-projected board) · filtered-EMPTY · over-cap coexistence. Gates 6.15.3 / 6.15.5. See "Board filtering (Story 6.15)" below. |
 | **Implemented column + status chip**  | **`implemented-column.mock.html`** (HTML mockup) | EXTENDS the board surface — the **eighth** default-workflow status (`implemented`, between In Progress and In Review) and the chip it renders as. The board mocks are drawn at six columns and predate `planning` (MOTIR-2425), and the shipped status chip is keyed on the lifecycle CATEGORY, so a new `in_progress`-category status renders byte-identically to In Progress / Planning / In Review — unspecified (== no design), so the MOTIR-3002 design gate produces this. Multi-panel: the board at eight columns · the fold, measured · the chip today · the chip as specified (`--el-status-implemented` + the `CircleEllipsis` glyph) · the three surfaces (list · detail picker · board) · CI at Implemented. Gates MOTIR-3003. See "Implemented — the eighth board column" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Approved column + status chip**     | **`approved-column.mock.html`** (HTML mockup)    | EXTENDS the board surface — the **ninth** default-workflow status (`approved`, between In Review and Done, in the `in_progress` category) and the chip it renders as. Nothing in `design/` draws a workflow-status `approved`, and `design/boards/` draws the board at EIGHT columns; the shipped chip resolves a tone by KEY with exactly one entry (`implemented`), so a new `in_progress`-category status renders byte-identically to In Progress / Planning / In Review — unspecified (== no design), so the MOTIR-5138 design gate produces this. Multi-panel: the board at nine columns · the fold re-measured against eight · the chip today · the chip as specified with `--el-status-approved` measured across ten palettes · the three other surfaces (list · picker · canvas) · where a ninth status reaches. Gates MOTIR-5139 / MOTIR-5141. See "Approved — the ninth board column" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 The board is a **pure consumer** of the Story-3.1 board API
 (`GET …/board` → `BoardProjectionDto`; `GET …/board/columns/[id]/cards` → the
@@ -1532,3 +1533,366 @@ own members. The only change this surface takes from the story is the boundary t
 and the switcher paint before the filter chrome resolves.
 
 **A route boundary is declined as a preference** — `/boards` does not call `notFound()`.
+
+---
+
+# Approved — the ninth board column (Story MOTIR-4905 · MOTIR-5138)
+
+Design reference for the **`approved` status**: a new default-workflow status
+between In Review and Done, in the **`in_progress` category**, the board column it
+arrives in, and the chip it renders as on every surface a status is shown. Asset:
+**`approved-column.mock.html`** (+ `approved-column.png`). It is the source of
+truth for **MOTIR-5139** (the status, its edges and the backfill) and
+**MOTIR-5141** (the chip, the token, the canvas tint and the glyph).
+
+It **EXTENDS** `design/boards/board.mock.html` (3.2.1) and
+`design/boards/implemented-column.mock.html` (MOTIR-3002), which is this asset's
+template in both shape and method. It redraws neither: no column, card, lane,
+load behaviour or drag affordance changes here. What is new is **one column, one
+chip tone, one canvas tint and one glyph**.
+
+## Where `approved` goes — slot 7, and the slot-4 invariant survives
+
+The slot is settled by the record, not by this asset:
+[MOTIR-4911](motir:cmtt4oguv000ihutxbryd9iz2) amended
+`docs/decisions/approval-gates.md` to put `approved` between `in_review` and
+`done`. This asset measures the CONSEQUENCE and leaves the decision alone.
+
+- **`approved` is inserted immediately after `in_review`, before `done`** — slot
+  7 of nine. **Nothing existing is reordered.** This is ONE insert, the same
+  shape `planning` and `implemented` used: position `in_review.position || 'F'`,
+  which sorts between `in_review` and `done` with no write to any other status.
+- **The eighth column's invariant HOLDS.** That section pinned _"`implemented`
+  occupies slot 4. A later status inserted before it moves it to slot 5, which
+  the table above says is off-screen."_ This insert is at slot 7, **after**
+  `implemented`, so it does not move it. Re-measured below rather than asserted.
+
+## The fold — RE-MEASURED at nine columns, against eight
+
+| Viewport                    | Rail  | Content | Fully visible (8 → 9) | Implemented (slot 4) | Approved (slot 7) | Scroll distance (8 → 9) |
+| --------------------------- | ----- | ------- | --------------------- | -------------------- | ----------------- | ----------------------- |
+| 1280 × 800                  | 240px | 976px   | 3 → 3                 | 64px sliver          | off-screen        | 1440px → 1744px         |
+| 1366 × 768                  | 240px | 1062px  | 3 → 3                 | 150px sliver         | off-screen        | 1354px → 1658px         |
+| 1440 × 900                  | 240px | 1136px  | 3 → 3                 | 224px sliver         | off-screen        | 1280px → 1584px         |
+| 1512 × 982                  | 240px | 1208px  | 4 → 4                 | **FULL**             | off-screen        | 1208px → 1512px         |
+| 1920 × 1080                 | 240px | 1616px  | 5 → 5                 | **FULL**             | off-screen        | 800px → 1104px          |
+| 1440 × 900 · rail collapsed | 56px  | 1320px  | 4 → 4                 | **FULL**             | off-screen        | 1096px → 1400px         |
+
+Read off a Chromium render at each content width, every column's
+`getBoundingClientRect()` compared to the scroll frame's box — not derived. The
+inputs are the shipped ones: a column is `w-72` (288px, `shrink-0`) in a `gap-4`
+row (`app/(authed)/boards/_components/BoardColumn.tsx` ·
+`app/(authed)/boards/_components/BoardContainer.tsx`), inside the shell's
+`lg:px-8` gutters beside a 240px rail — 56px collapsed
+(`components/ui/AppLayout.tsx` · `app/(authed)/layout.tsx`). Each column costs
+**304px**. The board is measured at EIGHT and at NINE so the delta is the
+finding rather than the absolute.
+
+> The slot-4 figures are 1px larger than the eighth column's own table (64 vs 63,
+> 150 vs 149, 224 vs 223). That is border-box accounting in the measuring frame,
+> not a layout change: the geometry, the formula and every verdict are identical.
+
+**What gives: nothing, and that is the finding.** The fully-visible column count
+is **unchanged at every measured viewport** — 3 → 3, 4 → 4, 5 → 5.
+`approved` at slot 7 is off-screen everywhere, exactly as `done` and `cancelled`
+already were at slots 7 and 8 before it. **The only cost is +304px of scroll
+distance**, one column's worth. The board's existing answers to a long board are
+unchanged and are enough: the rail collapses, the board scrolls and snaps
+(`snap-x snap-proximity`), and Epic 6's board filter narrows it.
+
+**The invariant for the build cards, restated for the next insert:** `approved`
+occupies slot 7 and `implemented` still occupies slot 4. A status inserted
+BEFORE `implemented` still moves it to the off-screen slot 5 — that remains a
+fold decision, not a position string.
+
+## The chip — `--el-status-approved`, MEASURED
+
+**The defect first, and it is not the one the card described.** The shipped
+`StatusPill` (`components/issues/StatusPill.tsx`) resolves a tone by status KEY
+and falls back to the lifecycle CATEGORY, and its `TONE_BY_STATUS_KEY` holds
+**exactly one** entry — `implemented`. So a new `in_progress`-category status
+renders byte-identically to In Progress, Planning and In Review. Panel 2 draws
+that from the real component: all four resolve to `bg-(--el-tint-sky)`.
+
+> **⚠️ AMENDMENT on the record.** MOTIR-5138's own description names the collapse
+> set as _"In Progress, Planning, **Implemented** and In Review"_. `implemented`
+> is the one status that does NOT collapse — MOTIR-3103 gave it the only
+> per-status tone, which is precisely why it exists. The real set is **In
+> Progress · Planning · In Review**, which `approved` would join. Nothing else in
+> the card changes: the conclusion (a category-only treatment is unacceptable
+> here) is unaffected, and the count of statuses rendering one chip is still four
+> once `approved` lands.
+>
+> **And In Progress / Planning / In Review stay collapsed with each other.** That
+> is the pre-existing gap the eighth column's asset recorded as _"a separate card,
+> owned by nobody yet"_, and this story does not close it.
+
+**The token.**
+
+```css
+--el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+```
+
+The `done` green, one ink step deeper. **Approved is the same family as Done
+because it is the same answer one rung earlier; it is DEEPER because it has not
+shipped.** It rides Tier-0 `--color-success` and `--color-ink` — never a literal
+— so every palette re-skins it with no per-palette block, which is what the
+`--el-status-*` block's own header prescribes.
+
+**Measured, not proposed**, through `tests/theme/statusHueSeparation.test.ts`'s
+own resolver (`loadTokenLayer` / `resolveValue` / `deltaE2000` / `contrast`), so
+the numbers below are the numbers that suite will compute:
+
+| Palette       | light     | dark      | nearest status, ΔE2000 | vs `done`, ΔE2000 | min contrast |
+| ------------- | --------- | --------- | ---------------------- | ----------------- | ------------ |
+| motir (base)  | `#1a4623` | `#b2dfbd` | 28.2                   | 20.1              | 9.92         |
+| cobalt        | `#123b37` | `#b1e1d0` | 16.5                   | 16.7              | 10.95        |
+| graphite      | `#17382b` | `#b5dec9` | 17.4                   | 17.4              | 11.24        |
+| **evergreen** | `#40366c` | `#cec7f0` | 12.3                   | 38.8              | 9.54         |
+| spectrum      | `#194031` | `#b5dfd0` | 15.3                   | 17.4              | 10.41        |
+| amber         | `#143d31` | `#a8e2ce` | **11.6**               | 15.5              | 10.87        |
+| sienna        | `#1d3c2c` | `#bbe6c3` | 14.7                   | 14.7              | 10.73        |
+| garnet        | `#0f3124` | `#b5e1cd` | 13.9                   | 16.1              | 12.11        |
+| citrine       | `#0c2b27` | `#cbe3c7` | 14.3                   | 18.3              | 12.59        |
+| candy         | `#243c2c` | `#c9e5cf` | 14.2                   | 14.2              | 10.35        |
+
+**All twenty palette × theme contexts clear the suite's floor of ΔE2000 10.**
+Global minimum **11.6** (amber/dark vs `planning`); against `done` specifically
+the range is **14.2 – 42.6**. Contrast is **9.54 – 13.72:1** on `--el-card`,
+`--el-surface` and `--el-page-bg`, against the 3:1 bar — so no
+`KNOWN_SUB_BAR` entry is owed.
+
+> **The ratio was chosen by sweep, not by eye.** At 35% the worst pair is ΔE 10.1
+> — on the floor, the same razor margin citrine's `implemented` carries. At 25%
+> citrine/light collides with `implemented` at 9.8. **30% is the interior of that
+> window**, at 11.6. A palette change that moves `--color-success` or
+> `--color-ink` needs re-measuring rather than nudging.
+
+**ONE palette needs an override.** `evergreen` is green-and-jade throughout, and
+its `in_review` is a deep jade a deep green cannot clear (6.9 light / 3.6 dark).
+It takes its own unspent violet:
+
+```css
+[data-palette='evergreen'] {
+  --el-status-approved: color-mix(in srgb, var(--color-accent) 40%, var(--color-ink));
+}
+[data-theme='dark'] [data-palette='evergreen']:not([data-theme]),
+[data-palette='evergreen'][data-theme='dark'] {
+  --el-status-approved: color-mix(in srgb, var(--color-accent) 40%, var(--color-ink));
+}
+```
+
+**Declared in BOTH themes**, which is not a formality: `[data-palette='x']` and
+the base `[data-theme='dark']` tie on specificity and the palette blocks come
+later, so a status override written only in a palette's light block silently
+leaks onto its dark canvas. That suite's cascade-pairing test enforces it, which
+is why several shipped blocks carry what looks like a no-op. Measured at 14.3 /
+12.3.
+
+**This is one override where `implemented` needed five** — the deep-green step
+is unspent in nine of the ten palettes.
+
+### ⚠️ The CHIP is a different measurement from the DOT — with a control
+
+The floor above is on the **dot**, which paints the hue at full strength. A
+**chip** is that hue at **14% over `--el-surface`**, so every chip in this product
+compresses into a narrow band. Approved's chip is nearest `done`'s at **ΔE2000
+5.7** (sienna/light), with `--el-text-strong` ink at **7.59 – 11.97:1**.
+
+That number is meaningless without a control, so: **the chip set the product
+ALREADY ships has a global minimum of ΔE 2.8** (citrine/dark, `planned` vs
+`in-progress`). **Approved's worst pair is twice as separated as the worst pair
+on the board today.**
+
+**This is why the glyph is load-bearing rather than decorative.** At 14% no
+status on this ramp is told apart by tint alone — the position `StatusPill`'s own
+header already takes. **Do not read the dot's ΔE 11.6 as a claim about the chip.**
+
+### The chip's recipe, element by element
+
+| Element                          | Colour                                                                 | Shape                                  |
+| -------------------------------- | ---------------------------------------------------------------------- | -------------------------------------- |
+| Approved chip fill               | `color-mix(in srgb, var(--el-status-approved) 14%, var(--el-surface))` | `--radius-badge`, `--spacing-chip-x/y` |
+| Approved chip ink                | `--el-text-strong`                                                     | —                                      |
+| Approved chip border             | `transparent` (as every other `Pill` tone)                             | —                                      |
+| Approved chip glyph              | `currentColor` (`CircleCheck`, `h-3 w-3`, `aria-hidden`)               | —                                      |
+| Status DOT (picker / filter)     | `var(--el-status-approved)` at full strength                           | `rounded-full`, 10px                   |
+| Canvas node chip                 | `--el-tint-sage` fill, `--el-text-strong` ink, `CircleCheck`           | the canvas chip's own shape            |
+| Column header, card, count badge | unchanged — `--el-surface` / `--el-border` / `--el-count-bg`           | `--radius-card` / `--radius-badge`     |
+
+### The glyph, and the labels
+
+**`approved` carries `CircleCheck`; `done` keeps `Check`.** The same mark,
+formalised — a person put a ring around it — and it joins the `Circle*`
+vocabulary this ramp already speaks (`CircleDot` · `CircleDotDashed` ·
+`CircleEllipsis` · `CircleDashed`). Finding #35 forbids resting a state on colour
+alone, and at a 14% tint that is not a formality but the actual mechanism.
+**In Review stays unglyphed**, as it is today.
+
+**Labels: `en` “Approved”, `zh` “已批准”.** Not a new coinage — that is the exact
+string this product already ships for an approval, in `acceptance.status.approved`
+and `planReview.status_approved`.
+
+## The dot — `STATUS_KEY_EL.approved` is owed alongside the token
+
+`statusDotColor` (`lib/workflows/statusColor.ts`) resolves by status KEY and falls
+back to the CATEGORY. **Without a `STATUS_KEY_EL` entry the Approved option dot is
+`--el-status-in-progress`** and is indistinguishable from In Progress and In
+Review **in the one control a person uses to SET the status**. Panel 4 draws the
+real `StatusPicker` and the blue dot is visible in it. This is the same collapse
+MOTIR-1273 un-did for `in_review` and MOTIR-2425 re-avoided for `planning`:
+
+```ts
+STATUS_KEY_EL.approved = '--el-status-approved';
+```
+
+## The canvas — the `--el-tint-*` family is EXHAUSTED, and `approved` is what breaks it
+
+The canvas node speaks a DIFFERENT chip language from the item page: the flat
+six-member `--el-tint-*` family, deliberately, because those are PALETTE tokens
+whose author keeps them mutually distinct (`design/roadmap/design-notes.md`;
+`lib/workflows/canvasStatusMeta.ts`). All six are spent — peach `blocked`, sky
+`in_progress`, rose `implemented`, yellow `planning`, lavender `in_review`, mint
+`done` — with `--el-muted` carrying `todo` and `cancelled`. That module's own
+comment records `planning` taking _"the one remaining unspent tint."_
+
+**So a SEVENTH tint is specified:**
+
+```css
+--el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+```
+
+with the `CircleCheck` glyph. Measured against the other six plus `--el-muted`
+across all twenty contexts: **worst ΔE2000 6.0** (amber/light vs `--el-tint-mint`)
+against this family's own floor of **2** (`MIN_DELTA_E_TINT`,
+`tests/theme/familyHueSeparation.test.ts`), and worst ink contrast **6.43:1** for
+`--el-text-strong`.
+
+> **⚠️ THIS IS AN OBLIGATION MOTIR-5141 MUST ABSORB, AND IT IS NOT A ONE-LINER.**
+> A new `--el-tint-*` row is a PALETTE token, so it is declared in the base and
+> checked across ten palettes, and `design/roadmap/design-notes.md` owes a
+> one-line amendment naming the seventh member of a family its own notes describe
+> as six. **Falling through to the category instead is not an option:** that
+> resolves to `--el-tint-sky` and collides with In Progress on the canvas — the
+> same defect, on the surface where MOTIR-3170 last fixed it.
+>
+> **And the tint family is NOT under a measured floor the way the status ramp is.**
+> `familyHueSeparation.test.ts` measures priority, label, avatar and selection —
+> not `--el-tint-*`. So the ΔE 6.0 above is a measurement this asset performed by
+> hand, and nothing in CI will re-perform it when a palette moves.
+
+## The three surfaces, and where a ninth status reaches
+
+- **The list row** — `StatusValue` renders `StatusPill`, so the `/items` Status
+  cell takes the new tone with no further work.
+- **The item page's status control** — `StatusPicker` is a `Combobox` over the
+  LEGAL targets under the project's `restricted` policy. Panel 4 draws it open at
+  **In Review**, so its option list IS this story's declared edge set: Approved,
+  Done, In Progress, Blocked, Cancelled.
+- **The board** — a board card carries **no** status chip, because the COLUMN is
+  the status. The Approved chip therefore appears where the board's own status
+  chip appears: the quick view a card opens, and the column header.
+
+| Surface                | What it renders the status through     | Verdict                                                           |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| Swimlanes              | The same `BoardColumn`, once per lane  | No layout change — a lane is a row of the same columns            |
+| Scrum board            | The same columns under a sprint header | No layout change — the header is chrome over the reused board     |
+| Board config (admin)   | A column ↔ status mapping row          | One more mapping row; the backfill gives every project the column |
+| Unmapped-statuses tray | Any status with no column              | Empty for `approved` — the backfill maps it                       |
+
+**`approved` has NO surface of its own and adds NO entry affordance.** It has no
+route, no nav item and no button; it appears inside surfaces a person already
+reaches — `design/boards/board.mock.html` (the board),
+`design/work-items/` (the item page's status control) and `design/roadmap/` (the
+canvas node). There is no access path to draw because there is no new door.
+
+**The cardinality constraint this mock must not contradict:** a project's status
+set is per-project and customisable, so the asset draws nine columns as the
+DEFAULT workflow's shape and **never as a fixed count**.
+
+## What this asset does NOT specify (named, so nobody infers it)
+
+1. **Un-collapsing In Progress / Planning / In Review from each other.** Three
+   statuses still share one chip; giving each its own tone is a real improvement
+   and a change to every status chip on every surface. It was already named as
+   out of scope by the eighth column's asset and is still owned by nobody.
+2. **Anything that WRITES `approved`.** No gate, no Approve button, no decide
+   door, no GitHub sync. MOTIR-4905's own boundary is explicit that the status
+   creates no gate; the gate stories are `blocked_by` it.
+3. **The ladder rung, the rollup and the readiness consequence** — MOTIR-5140's,
+   and `docs/decisions/status-derivation.md`'s. Not drawn here at all.
+4. **`design/roadmap/`'s amendment** for the seventh tint. Named above as an
+   obligation; the amendment itself belongs with the card that ships the token.
+
+## How this asset was produced (reproduce it, don't cite it)
+
+Nothing here was redrawn from a reading of the code. Every column, card, chip,
+list row and picker is the **real component's own markup**, and the stylesheet is
+Tailwind's **real compiled output** — so the asset cannot drift from what the app
+renders. The harness is temporary by construction (a design PR ships `design/**`
+only), so it is reproduced here rather than cited:
+
+1. **Dump the markup.** A throwaway spec under `tests/components/` renders
+   `BoardColumn` (once per status, with real `BoardCardDto` fixtures),
+   `StatusPill` (once per status) and `StatusPicker` (`autoOpen`) through the
+   repo's own `renderWithIntl` helper (`tests/helpers/renderWithIntl.tsx`), and
+   `writeFileSync`s `container.innerHTML` per state, calling RTL's `cleanup()`
+   between renders. The open `Combobox` listbox is PORTALED, so that one dumps
+   `document.body.innerHTML`. Fixture shapes are the ones
+   `tests/components/board-column.test.tsx` already uses.
+2. **Run it under a throwaway Vitest config** — `environment: 'happy-dom'`, the
+   `actEnvironment` setup file only (the root config's `perWorkerDb` provisions a
+   Postgres per worker), and the `@` + `server-only` aliases copied from the root
+   config. Some imported modules read env at import time, so it runs with
+   placeholder `DATABASE_URL` / `BETTER_AUTH_SECRET` / `GOOGLE_CLIENT_*`; no
+   database is touched.
+3. **Measure the hue.** A second throwaway spec imports `loadTokenLayer`,
+   `declaredIn`, `resolveValue` (`tests/theme/paletteCascade.ts`) and
+   `deltaE2000` / `contrast` / `mixSrgb` (`tests/theme/colorMetrics.ts`) — the
+   SAME resolver `statusHueSeparation.test.ts` uses — and sweeps candidate
+   expressions across `PALETTE_IDS × {light, dark}`. Every figure in this section
+   comes from that sweep, including the ratio search and the shipped-chip control.
+4. **Measure the fold.** A Playwright Chromium script builds a frame at the
+   shipped geometry (288px `shrink-0` columns in a 16px-gap `overflow-x` row),
+   sets the viewport to each content width, and reads every column's
+   `getBoundingClientRect()` against the frame's box — at eight columns and at
+   nine.
+5. **Compile the real CSS.** `@import 'tailwindcss' source(none);` + `@source`
+   the assembled page + `@import '@motir/design-system/theme.css'`, through
+   `@tailwindcss/postcss`. ~127KB carrying the Tier-0, dark-flip and Tier-3
+   layers verbatim, inlined into the mock — the mock's stylesheet IS Tailwind's
+   real output, so no token is ever retyped.
+6. **Assemble, `prettier --write`, then render** — the PNG is exported AFTER the
+   format pass with `node scripts/render-design-mock.mjs
+design/boards/approved-column.mock.html --width 2960`.
+
+**The edits made to the dumped markup are two, and both are called out at the
+point of use:** the SPECIFIED Approved chip (its tone and glyph do not exist in
+`Pill` / `StatusPill` yet — building them is MOTIR-5141's), and a
+presentation-only `position: static` on the portaled listbox so it renders inside
+its panel on a static sheet instead of at the viewport origin.
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): the new `--el-status-approved`
+  and `--el-tint-sage`, both mapped to Tier-0 `--color-*` steps and never a
+  literal; the 14% `color-mix` chip tint over `--el-surface` with
+  `--el-text-strong` ink; and the reused `--el-status-*` ramp for the dots. No
+  raw hex, `rgb()`, named colour or fixed `rounded-*` / `p-*` / `h-*` appears in
+  the product markup of the mock. The hex values in this note's tables are
+  MEASUREMENTS of resolved tokens, not authored colours.
+- **Shape** via element-semantic tokens — `--radius-badge` + `--spacing-chip-x/y`
+  for the chip, `--radius-card` for the column and the open menu,
+  `--radius-control` + `--spacing-control-x/y` for the picker's option rows.
+  `rounded-full` only on the genuinely-circular status dot.
+- **Not colour alone** (finding #35): Approved pairs its tint with the
+  `CircleCheck` glyph and its label; the glyph is `aria-hidden`, so the accessible
+  name stays the status label. At a 14% tint this is the actual mechanism — see
+  the chip control above.
+- **AA**: every chip carries `--el-text-strong` on a 14% tint over
+  `--el-surface`, measured at 7.59 – 11.97:1. The board chrome in this asset uses
+  `--el-text` and `--el-text-secondary` only — never `--el-text-muted` on
+  `--el-surface`, and never `--el-text-faint` for anything that carries meaning.
+- **The picker** keeps the shipped `role="combobox"` / `role="listbox"` /
+  `role="option"` structure and its `aria-activedescendant`; the ninth status adds
+  an option, not a control.
