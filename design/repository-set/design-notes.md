@@ -24,6 +24,14 @@ it. It is the layout source of truth for **MOTIR-1782** (the approval-step UI) a
 > reused**, so every existing citation of them still resolves. A reader arriving from MOTIR-1782 or
 > MOTIR-1900 looking for the connect prompt should start at §0.1.
 >
+> **⚠️ AND v7 ADDS THE THIRD `created` ARM — read §4 before building `AccessReport`.** The
+> `created` state was drawn with TWO arms, _the account is known_ and _there is no identity_, and
+> there is a third: the account IS known, the invitation went out, and **GitHub refused it**. The
+> row stays `not_invited` (MOTIR-1900's graceful degradation, working as designed), so arm B's
+> condition matches and its sentence — _"Motir doesn't know your GitHub account yet"_ — is false
+> about the reader. §4 draws the refused arm and states all three conditions as predicates over the
+> DTO.
+>
 > **⚠️ AND v6 ADDS THE POPULATION THIS STEP IS NOT FOR — read §7b before building anything that
 > renders the step.** A project whose repository set arrived ALREADY SETTLED — every row
 > `connected`, because the repositories are the organisation's and onboarding connected them — gets
@@ -48,6 +56,12 @@ design/repository-set/repository-set.mock.html` — viewport **1200 × 900** at
   verdict was again **EXACT**, so the whole difference between the v5 export and this one is Panel 9
   and none of it is environment drift. The committed height rose from **11496** to **15274** — one
   panel's worth. This surface ships no `<name>.dark.png`, so one board is the complete set.
+- **v7 render settings for `repository-set.png`:** the same command and the same viewport
+  **1200 × 900** at `deviceScaleFactor: 2`, exporting **2400 × 16698**. The exporter's baseline
+  verdict was again **EXACT** (`EXACT light 1200x900@2x committed=2400x15274 new=2400x16698`), so
+  the whole difference between the v6 export and this one is §4's arm C and none of it is
+  environment drift. The committed height rose from **15274** to **16698** — one `created` arm's
+  worth.
 - **Scope:** pixels and copy only. No React, no route, no `en.json` entries — those are
   MOTIR-1782's / MOTIR-1900's / MOTIR-1939's. **v6 adds no code and no strings either**: it
   SPECIFIES `titleMixed` / `promiseMixed` (§10) and the draw predicate (§7b), and MOTIR-5049 builds
@@ -83,20 +97,70 @@ code", the rows, the roles, the derivation's "why", the full per-row state machi
 
 ## 0.1 · Revision history — this asset has been re-scoped THREE times, and all three are recorded
 
-| Version                | What it drew                                                                                                                     | Why it changed                                                                                                                       |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **v1**                 | One question: "where should your code live?", one choice                                                                         | The repo count is decided by the architecture, not by the user — a single choice cannot express a set                                |
-| **v2**                 | The derived set, as editable rows, as the default surface                                                                        | Yue at design review: **too technical.** A founder cannot judge whether three repositories is right — `notes.html` #151, second time |
-| **v3**                 | "Motir will host your code" as the default; the rows behind "I already have code"                                                | Right shape, wrong era — see below                                                                                                   |
-| **v4 (this revision)** | Same default, plus the **access step**; the account-creation branch deleted; the main line re-inverted                           | The ADR's ownership amendment (MOTIR-1893) + the access gap it opened (MOTIR-1900) + drawing a post-Epic-9 audience as today's user  |
-| **v5**                 | HOSTED-ONLY and SILENT — panels 0, 1, 1b, 2 and 8; §5 and §6 superseded; `created` REPORTS                                       | MOTIR-4753 gave the repository question to ONBOARDING in September; nothing swept this asset — MOTIR-5011                            |
-| **v6 (current)**       | **Panel 9 — a SETTLED set draws NO step**; panel 1 gains the MIXED-set arm; panel 2's `connected` _"cannot occur"_ row corrected | v5 removed the step's ability to PRODUCE a `connected` row and read that as the step never being SHOWN one — MOTIR-5050              |
+| Version                | What it drew                                                                                                                                | Why it changed                                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1**                 | One question: "where should your code live?", one choice                                                                                    | The repo count is decided by the architecture, not by the user — a single choice cannot express a set                                                                       |
+| **v2**                 | The derived set, as editable rows, as the default surface                                                                                   | Yue at design review: **too technical.** A founder cannot judge whether three repositories is right — `notes.html` #151, second time                                        |
+| **v3**                 | "Motir will host your code" as the default; the rows behind "I already have code"                                                           | Right shape, wrong era — see below                                                                                                                                          |
+| **v4 (this revision)** | Same default, plus the **access step**; the account-creation branch deleted; the main line re-inverted                                      | The ADR's ownership amendment (MOTIR-1893) + the access gap it opened (MOTIR-1900) + drawing a post-Epic-9 audience as today's user                                         |
+| **v5**                 | HOSTED-ONLY and SILENT — panels 0, 1, 1b, 2 and 8; §5 and §6 superseded; `created` REPORTS                                                  | MOTIR-4753 gave the repository question to ONBOARDING in September; nothing swept this asset — MOTIR-5011                                                                   |
+| **v6**                 | **Panel 9 — a SETTLED set draws NO step**; panel 1 gains the MIXED-set arm; panel 2's `connected` _"cannot occur"_ row corrected            | v5 removed the step's ability to PRODUCE a `connected` row and read that as the step never being SHOWN one — MOTIR-5050                                                     |
+| **v7 (current)**       | **§4's `created` gains a THIRD arm** — the account is known and GitHub REFUSED. Arm B's condition is re-stated as a predicate, not as prose | Arm B was written for _"no identity"_ and guarded on `!login \|\| !anyInvited`, so a refusal fell into it and told the reader something false about themselves — MOTIR-5038 |
 
 **⚠️ v4's row still says "(this revision)", and it is left standing rather than corrected.** The
 rows are the record of what each revision decided, and editing an earlier one to keep a label
 accurate is how a revision history stops being evidence. Read the LAST row as the current revision;
 v6 is it. (v5's row lost only its `(current)` marker, for the same reason: the marker is not part of
 what that revision decided.)
+
+### What v7 changed, and why (MOTIR-5038, 2026-09-11)
+
+**`created` was drawn with two arms and the product has three states.** v5 wrote the arms as _the
+account is known_ (A) and _there is no identity_ (B), and both are right about the situations they
+were drawn for — nobody made a mistake writing arm B. The third situation is: **Motir HAS the
+account, sent the invitation at establish, and GitHub refused it** (`HTTP 403: Must have admin rights
+to Repository.`). Nothing is stamped on a refusal, so the row stays `not_invited` — which is
+MOTIR-1900's graceful degradation working exactly as specified — and arm B's guard,
+`!login || !anyInvited`, is satisfied by its second disjunct. The panel then tells the reader
+_"Motir doesn't know your GitHub account yet"_, which is a fact about THEM, and it is untrue.
+
+**The state is not a defect to design away, and that was checked rather than assumed.** The question
+to ask before drawing a state the product produces is whether the MODEL allows it: a state the model
+forbids is a defect to fix, and drawing it ratifies it. Here the model allows it deliberately — ADR
+§4.2's _"a side effect after commit, degrading gracefully"_ is the rule that PRODUCES it, §5 records
+it as LIVE and load-bearing, and MOTIR-5016 built a notification for it. So the state is supported
+and the COPY is the defect.
+
+**The fix is a condition, not a sentence.** Arm B's condition was written in prose (_"no identity"_)
+while its guard was a two-disjunct shape test, and the drift between those is the whole bug. v7
+states all three arms as predicates over `ProjectRepoEstablishViewDto`, so the next reader checks the
+drawing against the DTO instead of against a paraphrase.
+
+**The sibling surface already asks the right question, which is why no new instrument is needed.**
+`/settings/project/code-access` renders the same fact and branches on the DTO's own
+`reason === 'no_github_identity'` — `notInvitedSelf` when there is no account, `notInvitedReady`
+(**"@{login} is ready to be invited"**) plus an **Invite** control when there is one. Two surfaces,
+one fact; one of them asks _is there an identity?_ and the other asks _did anything get sent?_. v7
+brings this surface onto the first question.
+
+**⚠️ THE SEVERITY RULING IS UNTOUCHED, AND ARM C IS DRAWN INSIDE IT.** An invitation failure never
+fails a row; the repositories are real, the plan is safe, and the main line still says _"Your code is
+ready"_ with the ownership promise under it. Arm C changes one sentence and nothing else: **no red
+tint, no `failed` panel, no GitHub status code, no repository name, and the same door.** What it must
+not become is a second failure state four inches from a success line.
+
+**⚠️ TWO AMENDMENTS TO MOTIR-5038's OWN TEXT, ON THE RECORD.**
+
+1. **The card cites the _"only user-visible consequence"_ sentence as §7's; it is not.** It lives in
+   §0.1's _v5 supersedes PART of MOTIR-1900_ block and again in §5's supersession table. Both are
+   amended above, and §7 is re-read and needs no change — its subject is whether the REPORT survives
+   Epic 9, and the answer is unaffected by which arm the report shows.
+2. **The card's predicate says _"every row `not_invited`"_; v7 narrows it to every INVITABLE row.**
+   v6 landed the MIXED set (§7b) five hours after this card was authored, so the card could not have
+   said it: a `connected` row is the organisation's, `needsCollaboratorInvite` is `state ===
+'created'` only, and such a row is `not_invited` for ever by construction. Quantifying over every
+   row would make arm C's condition turn on rows nothing will ever invite to. The narrowing is
+   strictly safer and changes no case the card described.
 
 ### Why v5 left this gap — the distinction it turned on (kept, because the next reviser will face it)
 
@@ -241,12 +305,12 @@ what it needs:
 
 **2 · §5's access step (panels 3–4) is SUPERSEDED as a PROMPT, and survives as ROW STATE.**
 
-| What §5 held                                                                                           | Where it goes                                                                                                                    | Why                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Panel 3 — the connect prompt** (`accessTitle` / `accessLead` / `accessWhichAccount` / `accessLater`) | **Deleted.** Onboarding's `connect` step is where the identity is obtained                                                       | Motir already has the account by the time a plan can be approved; asking again is the defect                                    |
-| **Panel 3b — the `IdentityHeader`**                                                                    | **Kept, moved into §4's `created` arm A**                                                                                        | It was never the ask — it is the REPORT, and the report is the thing v5 is adding                                               |
-| **Panel 4 — the per-row invitation states** (`invited` · `accepted` · `not invited`)                   | **`/settings/project/code-access`**, which already draws all three per person and per repository (`settings.codeAccess.state.*`) | Nothing about the states changes; what goes is a second surface drawing them. Verified against the shipped key set, not assumed |
-| **`notInvitedDetail`**                                                                                 | **Kept, on §4's `created` arm B**                                                                                                | The one row-state string this surface still needs, because arm B IS that state at set level                                     |
+| What §5 held                                                                                           | Where it goes                                                                                                                    | Why                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Panel 3 — the connect prompt** (`accessTitle` / `accessLead` / `accessWhichAccount` / `accessLater`) | **Deleted.** Onboarding's `connect` step is where the identity is obtained                                                       | Motir already has the account by the time a plan can be approved; asking again is the defect                                                                                                                              |
+| **Panel 3b — the `IdentityHeader`**                                                                    | **Kept, moved into §4's `created` arm A**                                                                                        | It was never the ask — it is the REPORT, and the report is the thing v5 is adding                                                                                                                                         |
+| **Panel 4 — the per-row invitation states** (`invited` · `accepted` · `not invited`)                   | **`/settings/project/code-access`**, which already draws all three per person and per repository (`settings.codeAccess.state.*`) | Nothing about the states changes; what goes is a second surface drawing them. Verified against the shipped key set, not assumed                                                                                           |
+| **`notInvitedDetail`**                                                                                 | **Kept, on §4's `created` arm B**                                                                                                | The one row-state string this surface still needs, because arm B IS that state at set level. **v7: it is no longer the ONLY one** — `not_invited` at set level has two causes, and `notInvitedRefusedDetail` is the other |
 
 **3 · §6's technical path (panels 5–7) LEAVES for `design/onboarding-migrate/`.** Its subject —
 connecting a repository the user already owns — is onboarding's. **v5 records the move and removes
@@ -289,7 +353,12 @@ it, so the prompt has no trigger left on this surface.
 - **The re-send**, and **the graceful degradation** — _"a side effect after commit"_: an invitation
   failure never fails the row, because creation already succeeded. v5 leans on this harder than v4
   did, since establish now carries the invite, and it is what makes MOTIR-5016's refusal
-  notification the only user-visible consequence of a refusal.
+  notification the only ADDED user-visible consequence of a refusal. **⚠️ v7 AMENDS THIS — it read
+  "the only user-visible consequence", which is false and is the sentence that made the gap
+  invisible.** A refusal has ALWAYS had a second consequence on this very surface: the row stays
+  `not_invited`, which is a state §4's `created` panel renders. The sentence was true about what
+  MOTIR-5016 ADDS and was read as a claim that the panel says nothing — when what the panel actually
+  did was say the wrong thing. See §4's arm C.
 - **Which account gets access** — connected, never typed, and therefore SHOWN (§5's own subsection,
   which is why the `IdentityHeader` survives the panel it was drawn in).
 
@@ -448,6 +517,53 @@ whether it should be on screen — `app/(authed)/plans/[id]/page.tsx` decides, a
 `seedSource`. That is MOTIR-5049's fix and not this asset's to make; it is named here because §7b's
 rule is stated as a predicate over rows, and the place that predicate has to LAND is that line.
 
+### ⚠️ v7 · WHAT THE STEP RENDERS WHEN GITHUB REFUSES — read off `origin/main` `78579f21d`
+
+Same instrument as v6's block above, and for the same reason: the state needs a seeded tenant whose
+GitHub call is refused, and what decides it is a GUARD rather than a pixel. **Every row names the
+gate, so one `grep` per row checks it.** Four elements render for a user whose invitation GitHub
+turned down, and **one of them is false — the one that is about the reader**:
+
+| Element                                                                            | Gate in shipped code                                                   | After a REFUSAL                                                                                    |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `SectionLabel` **"Your project's code"** + `<h2>` **"Motir will host your code"**  | **NONE — rendered unconditionally**                                    | TRUE — Motir did host it                                                                           |
+| ✅ **"Your code is ready"**                                                        | `state === 'ready'`                                                    | **TRUE, and it must stay true** — the repository exists and nothing was rolled back                |
+| 🔒 **"It's yours. Motir keeps it safe and private…"**                              | `state === 'idle' \|\| state === 'ready'`                              | TRUE                                                                                               |
+| ⚠️ **"Motir doesn't know your GitHub account yet"** + **Finish setting up access** | `state === 'ready'`, `AccessReport` arm B on `!login \|\| !anyInvited` | **FALSE.** Motir knows the account — it is `view.githubLogin`, and it is the account it just tried |
+
+**Why the row stays `not_invited`, from the WRITE path rather than from a fixture.**
+`projectRepoAccessService.grantAccess` stamps NOTHING on a refusal — _"a row-level GitHub refusal is
+counted, never thrown"_, and its result carries a transient `failed` COUNT that no persisted column
+mirrors. `lib/projectRepos/access.ts` says the same thing from the read side: absence is a state, and
+`deriveAccessState(null)` is `not_invited`, _"the same answer as a row whose invite attempt failed
+before it could be stamped."_ So `anyInvited` is false, arm B fires, and **the co-occurrence is
+guaranteed rather than incidental** — exactly the form v6's block used, for the same reason it used
+it.
+
+**The DISCRIMINATOR is already on the view, and no new field is owed.** The step holds TWO logins and
+they answer different questions:
+
+| Field              | What it is                                                                                 | After a refusal |
+| ------------------ | ------------------------------------------------------------------------------------------ | --------------- |
+| `view.githubLogin` | _"The actor's connected GitHub login (grant 1), or null when not connected."_              | **the login**   |
+| `row.access.login` | _"The GitHub login that was invited, or null when none has been"_ — stamped at invite time | **null**        |
+
+**Arm C reads the first and arm A reads the second**, and a builder who reaches for `access.login` to
+name _"the account Motir tried"_ renders an empty string — which is why this table is here and not
+left to be inferred.
+
+**And the DOOR was checked, not assumed.** `CodeAccessSettings.tsx` branches on
+`person.reason === 'no_github_identity'`: with a login present and nothing sent it renders **"Not
+invited yet"** · **"@{login} is ready to be invited"** and an **Invite** control. So
+`/settings/project/code-access` is a correct and actionable destination for arm C, not merely a
+plausible one — which is what §4 needed before it could keep the door unchanged.
+
+**No new render was shot for v7, same form and a narrower reason than v6's.** Arm C composes ONE
+element — `.access-note`, arm B's own `<p role="status">` — with different copy, and that element was
+mirrored from the shipped `AccessReport` in v5 and is unchanged on `origin/main` since. What a render
+would add is a photograph of a sentence this note already quotes; what it could NOT settle is the
+guard, which is the whole finding, and which the table above settles by reading it.
+
 ---
 
 ## 3. Placement and the access path
@@ -536,14 +652,15 @@ also the only place the count is spoken (**Set up 2 repositories**).
 **Panel 2 — three states, in plain language.** The ADR's six per-row states are the _model_; this
 path renders only what the user can act on:
 
-| ADR state                              | Default path                                                                                             | Forward path                                                             |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `creating`                             | **"Setting up your code…"** — one `role="status"` line for the whole set                                 | (resolves)                                                               |
-| `created` · **arm A** (identity known) | **"Your code is ready"** + the ownership promise + the `IdentityHeader` naming the invited account       | **Go to my backlog** · _Open the invitation_ · _Use a different account_ |
-| `created` · **arm B** (no identity)    | the same, plus one `role="status"` line: _"Motir doesn't know your GitHub account yet"_ + its door       | **Go to my backlog** · _Finish setting up access_                        |
-| `failed`                               | **"Motir couldn't finish setting up your code"** + what it costs (nothing yet)                           | **Try again**                                                            |
-| `proposed`                             | **cannot occur** — nothing is proposed for approval on this path                                         | —                                                                        |
-| `connected` · `skipped` (v6)           | **THE STEP IS NOT DRAWN.** This path no longer PRODUCES either state, but it is shown them — see **§7b** | none; the canvas has the pane                                            |
+| ADR state                                    | Default path                                                                                                                                           | Forward path                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `creating`                                   | **"Setting up your code…"** — one `role="status"` line for the whole set                                                                               | (resolves)                                                               |
+| `created` · **arm A** (something was sent)   | **"Your code is ready"** + the ownership promise + the `IdentityHeader` naming the invited account                                                     | **Go to my backlog** · _Open the invitation_ · _Use a different account_ |
+| `created` · **arm B** (no connected account) | the same, plus one `role="status"` line: _"Motir doesn't know your GitHub account yet"_ + its door                                                     | **Go to my backlog** · _Finish setting up access_                        |
+| `created` · **arm C** (v7 — REFUSED)         | the same, plus one `role="status"` line: _"Motir couldn't give @{login} access to your code yet — GitHub turned the invitation down."_ + the SAME door | **Go to my backlog** · _Finish setting up access_                        |
+| `failed`                                     | **"Motir couldn't finish setting up your code"** + what it costs (nothing yet)                                                                         | **Try again**                                                            |
+| `proposed`                                   | **cannot occur** — nothing is proposed for approval on this path                                                                                       | —                                                                        |
+| `connected` · `skipped` (v6)                 | **THE STEP IS NOT DRAWN.** This path no longer PRODUCES either state, but it is shown them — see **§7b**                                               | none; the canvas has the pane                                            |
 
 **No per-repository progress, no repository name in the error, no GitHub status code** on this path.
 The failure copy names the consequence in the user's terms — _"Your plan is safe in your backlog.
@@ -555,11 +672,54 @@ the one state that CONTINUED — into the access prompt — because the code exi
 had to be asked for the account to invite. Motir now has that account before the plan can be
 approved at all, so the invitation is sent at establish and this state says what happened.
 
-**The two arms are not a branch the user chooses; they are what Motir knows.** Arm A is the
+**The three arms are not a branch the user chooses; they are what Motir knows.** Arm A is the
 overwhelmingly common one — a project reaches plan approval through onboarding, and onboarding is
 where GitHub was connected. Arm B exists because "connected" is a property of the ACTOR, not of the
 project: a teammate who did not run onboarding can approve a plan, and inventing an invitation for
 an account Motir does not have would be worse than saying so.
+
+**⚠️ v7 · ARM C — the account is known and GITHUB REFUSED, and until v7 arm B was answering for it.**
+
+**The three conditions, as predicates over `ProjectRepoEstablishViewDto` — checked in this order.**
+Let `invitable` be the rows the product can actually invite to: `row.state === 'created'`
+(`needsCollaboratorInvite`; a `connected` row is the organisation's and is never invited to, a
+`skipped` / `failed` row has no repository behind it).
+
+| Arm   | Condition                                                                              | Reading                                        |
+| ----- | -------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **B** | `view.githubLogin === null`                                                            | there is no account to invite                  |
+| **C** | `view.githubLogin !== null` ∧ `invitable.every(r => r.access.state === 'not_invited')` | Motir had an account, tried, and nothing stuck |
+| **A** | otherwise — some invitable row is `invited` or `accepted`                              | an invitation is out, or has been taken up     |
+
+**Why C's condition is SUFFICIENT, said plainly, because it is the one claim here worth disputing.**
+`not_invited` is not a record of a refusal — nothing is stamped on one (§2's v7 block) — so on its
+own it cannot tell _refused_ from _never attempted_. The connected login is what closes that: since
+v5 the invitation is **sent at establish**, in the same pass that creates the rows, so a set that
+reached `created` while Motir held an identity has ALREADY had its invitation attempted. A known
+account with nothing sent therefore has one explanation. **Arm C claims exactly that and no more** —
+which is why its sentence says what Motir could not do rather than what GitHub's response was.
+
+**Why arm C is drawn with arm B's treatment and not a louder one.** The arms are mutually exclusive
+and only one is ever on screen, so the DISTINCTION the reader needs is carried entirely by the
+sentence; a second hue would be a severity claim, and the severity here is settled — an invitation
+failure never fails a row, so this must not read as a failed setup. Same `.access-note`, same
+`--el-warning` `TriangleAlert`, same `--el-text-secondary` ink, same door. **The settings surface
+tints ITS refusal `--el-danger`, and that is right there and wrong here**: that row is a work list
+you went to in order to fix something, and this line sits four inches under _"Your code is ready"_.
+
+**Arm C's door is arm B's door, and that is a decision with a reason.** Both point at
+`/settings/project/code-access` with the label `repositorySet.outcomeNeedsAccess`, because it is the
+surface that OWNS the repair and it already distinguishes the two states correctly — it renders **"@{login}
+is ready to be invited"** with an **Invite** control for exactly arm C's state, and
+_"Motir doesn't know your GitHub account yet"_ for arm B's (§2's v7 block has the branch). The rail
+agrees for free: `codeOutcomeOf` resolves both arms to `needs_access`, which is true of both, so the
+rail needs no change and none is proposed.
+
+**What arm C must never say.** No GitHub status code, no repository name — the same rule the `failed`
+state above carries, and for the same reason: a person reading this screen has no repository in mind
+yet. The one identifier it DOES carry is the account, because the account is the thing the reader can
+act on, and because a sentence about access that names no account cannot be checked by the person it
+is about.
 
 **Arm B says it in the rail's own words, by REUSING its key.** `PlanDetail.codeOutcomeOf` already
 resolves a `created` row with `access.state === 'not_invited'` to `needs_access`, and
@@ -586,13 +746,13 @@ had.
 > would delete the reasons along with the panels. **Read it as history plus three live rules**, not
 > as a specification of a surface:
 >
-> | What §5 held                                  | Status in v5                                                                                                                                                                                                |
-> | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-> | **Panel 3, the connect PROMPT**               | **GONE.** The identity is obtained by onboarding's `connect` step; the invitation is sent at establish. Nothing on this step asks for an account                                                            |
-> | **Panel 3b, the `IdentityHeader`**            | **LIVE, relocated** into §4's `created` arm A — it was always the REPORT rather than the ask                                                                                                                |
-> | **_Which account gets access_ (below)**       | **LIVE, unchanged.** Connected, never typed, and therefore SHOWN. It is why arm A keeps **Use a different account**                                                                                         |
-> | **Panel 4, the per-row invitation states**    | **LIVE, relocated** to `/settings/project/code-access`, which draws all three per person and per repository. `notInvitedDetail` also stays here, as arm B's line                                            |
-> | **_An invitation failure never fails a row_** | **LIVE, and load-bearing.** Establish now carries the invite, so this is what keeps a refusal from costing the user their repositories — and MOTIR-5016's notification is its only user-visible consequence |
+> | What §5 held                                  | Status in v5                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+> | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **Panel 3, the connect PROMPT**               | **GONE.** The identity is obtained by onboarding's `connect` step; the invitation is sent at establish. Nothing on this step asks for an account                                                                                                                                                                                                                                                                                                                          |
+> | **Panel 3b, the `IdentityHeader`**            | **LIVE, relocated** into §4's `created` arm A — it was always the REPORT rather than the ask                                                                                                                                                                                                                                                                                                                                                                              |
+> | **_Which account gets access_ (below)**       | **LIVE, unchanged.** Connected, never typed, and therefore SHOWN. It is why arm A keeps **Use a different account**                                                                                                                                                                                                                                                                                                                                                       |
+> | **Panel 4, the per-row invitation states**    | **LIVE, relocated** to `/settings/project/code-access`, which draws all three per person and per repository — and which branches `not_invited` on the DTO's `reason`, so it distinguishes arm B's cause from arm C's. `notInvitedDetail` also stays here, as arm B's line                                                                                                                                                                                                 |
+> | **_An invitation failure never fails a row_** | **LIVE, and load-bearing.** Establish now carries the invite, so this is what keeps a refusal from costing the user their repositories — and MOTIR-5016's notification is its only ADDED user-visible consequence. **v7: "only" was wrong.** Not failing the row means the row stays `not_invited`, and §4's `created` panel RENDERS that state — so the refusal was always visible there, in arm B's words, which are about a different situation. §4's arm C is the fix |
 >
 > **The teammate-access gap below (MOTIR-1910) is NOT closed by v5** and is not narrowed by it
 > either: v5 moves where the owner's own invitation is reported, and invites nobody new.
@@ -977,26 +1137,27 @@ itself is light-only**, which is this repo's convention for `design/*.mock.html`
 generated light token block, not the dark one); that is a property of the mock, not a gap in the
 design.
 
-| Element                                                           | Token                                                                |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Step pane (behind the step)                                       | `--el-canvas`                                                        |
-| Row container · rail card                                         | `--el-card` · `--el-surface` / `--el-surface-soft`                   |
-| Statement / body / helper ink                                     | `--el-text` · `--el-text-secondary` · `--el-text-helper`             |
-| Overline                                                          | `--el-text-eyebrow`                                                  |
-| **Ownership promise** · its border · its icon                     | `--el-surface-soft` · `--el-border-soft` · `--el-icon-muted`         |
-| Field · combobox                                                  | `--el-page-bg` fill · `--el-input-border` · `--el-text-muted` prefix |
-| Primary action                                                    | `--el-accent` / `--el-accent-text`                                   |
-| Quiet secondaries and links                                       | `--el-link`                                                          |
-| "ready" state icon · `created` row                                | `--el-success` · `--el-success-surface`                              |
-| **`invited`** icon · **`accepted`** icon · **`not invited`** icon | `--el-info` · `--el-success` · `--el-warning`                        |
-| **v5 · `created` arm B's line** (`.access-note`) · its icon       | `--el-text-secondary` · `--el-warning`                               |
-| Invitation state WORD (on a tinted row)                           | `--el-text-strong`                                                   |
-| `connected` row · its icon                                        | `--el-notice-info-bg` · `--el-info`                                  |
-| failure icon · `failed` row · its ink                             | `--el-danger` · `--el-danger-surface` · `--el-danger-surface-text`   |
-| `skipped` row · its icon                                          | `--el-surface-soft` · `--el-icon-muted`                              |
-| The "why" callout · its sparkle                                   | `--el-callout-bg` · `--el-accent-on-surface`                         |
-| Role chip                                                         | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`          |
-| Rail status pill (Approved)                                       | `--el-tint-mint` + `--el-text-strong` (the shipped `STATUS_TINT`)    |
+| Element                                                                | Token                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step pane (behind the step)                                            | `--el-canvas`                                                                                                                                                                                                                      |
+| Row container · rail card                                              | `--el-card` · `--el-surface` / `--el-surface-soft`                                                                                                                                                                                 |
+| Statement / body / helper ink                                          | `--el-text` · `--el-text-secondary` · `--el-text-helper`                                                                                                                                                                           |
+| Overline                                                               | `--el-text-eyebrow`                                                                                                                                                                                                                |
+| **Ownership promise** · its border · its icon                          | `--el-surface-soft` · `--el-border-soft` · `--el-icon-muted`                                                                                                                                                                       |
+| Field · combobox                                                       | `--el-page-bg` fill · `--el-input-border` · `--el-text-muted` prefix                                                                                                                                                               |
+| Primary action                                                         | `--el-accent` / `--el-accent-text`                                                                                                                                                                                                 |
+| Quiet secondaries and links                                            | `--el-link`                                                                                                                                                                                                                        |
+| "ready" state icon · `created` row                                     | `--el-success` · `--el-success-surface`                                                                                                                                                                                            |
+| **`invited`** icon · **`accepted`** icon · **`not invited`** icon      | `--el-info` · `--el-success` · `--el-warning`                                                                                                                                                                                      |
+| **v5 · `created` arm B's line** (`.access-note`) · its icon            | `--el-text-secondary` · `--el-warning`                                                                                                                                                                                             |
+| **v7 · `created` arm C's line** (`.access-note`) · its icon · its door | `--el-text-secondary` · `--el-warning` · `--el-link` (`--el-link-pressed` hover) — **arm B's, deliberately identical**; no new hue, no container, no shape token, because the element is a bare `<p role="status">` on `--el-card` |
+| Invitation state WORD (on a tinted row)                                | `--el-text-strong`                                                                                                                                                                                                                 |
+| `connected` row · its icon                                             | `--el-notice-info-bg` · `--el-info`                                                                                                                                                                                                |
+| failure icon · `failed` row · its ink                                  | `--el-danger` · `--el-danger-surface` · `--el-danger-surface-text`                                                                                                                                                                 |
+| `skipped` row · its icon                                               | `--el-surface-soft` · `--el-icon-muted`                                                                                                                                                                                            |
+| The "why" callout · its sparkle                                        | `--el-callout-bg` · `--el-accent-on-surface`                                                                                                                                                                                       |
+| Role chip                                                              | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                                                                                                                                        |
+| Rail status pill (Approved)                                            | `--el-tint-mint` + `--el-text-strong` (the shipped `STATUS_TINT`)                                                                                                                                                                  |
 
 | Surface                                             | Shape token                                                            |
 | --------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -1045,26 +1206,27 @@ Namespace **`repositorySet`**. MOTIR-1782 / MOTIR-1900 add these to `messages/en
 
 ### The access step (MOTIR-1900)
 
-| Key                  | String                                                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `accessTitle`        | Get access to your code                                                                                                                                             |
-| `accessLead`         | Your code is private — only you and Motir can see it. Connect GitHub and Motir will invite you to it, so you can open it, clone it, and point your own agent at it. |
-| `connectGithub`      | Connect GitHub                                                                                                                                                      |
-| `accessLater`        | Later                                                                                                                                                               |
-| `accessWhichAccount` | Motir invites the GitHub account you connect — you'll see which one.                                                                                                |
-| `invitedTitle`       | You're invited to your code                                                                                                                                         |
-| `identityVerified`   | Verified _(reuses `github.identity.verified` — the shipped `IdentityHeader`'s success pill)_                                                                        |
-| `identityCaption`    | This is the account Motir invited                                                                                                                                   |
-| `useOtherAccount`    | Use a different account _(re-runs the connect; it does NOT open a username field)_                                                                                  |
-| `invitedDetail`      | Accept the invitation on GitHub and your code is yours to clone.                                                                                                    |
-| `openInvitation`     | Open the invitation                                                                                                                                                 |
-| `stateInvited`       | Invitation sent                                                                                                                                                     |
-| `invitedRowDetail`   | to {login}, waiting to be accepted on GitHub                                                                                                                        |
-| `resendInvitation`   | Resend invitation                                                                                                                                                   |
-| `stateAccepted`      | You have access                                                                                                                                                     |
-| `acceptedRowDetail`  | {login} can clone and push to this repository                                                                                                                       |
-| `stateNotInvited`    | Not invited yet                                                                                                                                                     |
-| `notInvitedDetail`   | Motir doesn't know your GitHub account yet                                                                                                                          |
+| Key                            | String                                                                                                                                                                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accessTitle`                  | Get access to your code                                                                                                                                                                                                    |
+| `accessLead`                   | Your code is private — only you and Motir can see it. Connect GitHub and Motir will invite you to it, so you can open it, clone it, and point your own agent at it.                                                        |
+| `connectGithub`                | Connect GitHub                                                                                                                                                                                                             |
+| `accessLater`                  | Later                                                                                                                                                                                                                      |
+| `accessWhichAccount`           | Motir invites the GitHub account you connect — you'll see which one.                                                                                                                                                       |
+| `invitedTitle`                 | You're invited to your code                                                                                                                                                                                                |
+| `identityVerified`             | Verified _(reuses `github.identity.verified` — the shipped `IdentityHeader`'s success pill)_                                                                                                                               |
+| `identityCaption`              | This is the account Motir invited                                                                                                                                                                                          |
+| `useOtherAccount`              | Use a different account _(re-runs the connect; it does NOT open a username field)_                                                                                                                                         |
+| `invitedDetail`                | Accept the invitation on GitHub and your code is yours to clone.                                                                                                                                                           |
+| `openInvitation`               | Open the invitation                                                                                                                                                                                                        |
+| `stateInvited`                 | Invitation sent                                                                                                                                                                                                            |
+| `invitedRowDetail`             | to {login}, waiting to be accepted on GitHub                                                                                                                                                                               |
+| `resendInvitation`             | Resend invitation                                                                                                                                                                                                          |
+| `stateAccepted`                | You have access                                                                                                                                                                                                            |
+| `acceptedRowDetail`            | {login} can clone and push to this repository                                                                                                                                                                              |
+| `stateNotInvited`              | Not invited yet                                                                                                                                                                                                            |
+| `notInvitedDetail`             | Motir doesn't know your GitHub account yet                                                                                                                                                                                 |
+| `notInvitedRefusedDetail` (v7) | Motir couldn't give @{login} access to your code yet — GitHub turned the invitation down. _(§4 arm C. `{login}` is `view.githubLogin` — the account Motir TRIED — never `row.access.login`, which a refusal leaves null.)_ |
 
 ### The technical path
 
@@ -1146,17 +1308,18 @@ looking at.
 
 #### A · SURVIVES on the v5 step
 
-| Key                                                                        | Where in v5                                                                                         |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `overline` · `title` · `lead` · `promise` · `promiseDoor` · `continueCta`  | panel 1 / 1b — the whole default screen                                                             |
-| `titleMixed` · `promiseMixed` (v6, **NOT YET IN THE CATALOG**)             | panel 1 — the MIXED-set arm ONLY (§7b); an all-Motir set keeps `title` / `promise` byte for byte    |
-| `working` · `workingDetail`                                                | panel 2 `creating`                                                                                  |
-| `ready` · `goToBacklog`                                                    | panel 2 `created`, BOTH arms                                                                        |
-| `identityCaption` · `useOtherAccount` · `invitedDetail` · `openInvitation` | panel 2 `created` **arm A** — the report                                                            |
-| `notInvitedDetail`                                                         | panel 2 `created` **arm B** — the line                                                              |
-| `outcomeNeedsAccess`                                                       | **arm B's door label AND the rail's outcome** — one key, two places, which is what makes them agree |
-| `setupFailed` · `setupFailedDetail` · `tryAgain`                           | panel 2 `failed`                                                                                    |
-| `actionError`                                                              | the establish action's own failure                                                                  |
+| Key                                                                        | Where in v5                                                                                                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `overline` · `title` · `lead` · `promise` · `promiseDoor` · `continueCta`  | panel 1 / 1b — the whole default screen                                                                                                                |
+| `titleMixed` · `promiseMixed` (v6, **NOT YET IN THE CATALOG**)             | panel 1 — the MIXED-set arm ONLY (§7b); an all-Motir set keeps `title` / `promise` byte for byte                                                       |
+| `working` · `workingDetail`                                                | panel 2 `creating`                                                                                                                                     |
+| `ready` · `goToBacklog`                                                    | panel 2 `created`, BOTH arms                                                                                                                           |
+| `identityCaption` · `useOtherAccount` · `invitedDetail` · `openInvitation` | panel 2 `created` **arm A** — the report                                                                                                               |
+| `notInvitedDetail`                                                         | panel 2 `created` **arm B** — the line                                                                                                                 |
+| `notInvitedRefusedDetail` (v7, **NOT YET IN THE CATALOG**)                 | panel 2 `created` **arm C** — the line. MOTIR-5036 adds it to `messages/en.json` AND `messages/zh.json` (the i18n-catalog parity test fails otherwise) |
+| `outcomeNeedsAccess`                                                       | **arms B AND C's door label AND the rail's outcome** — one key, three places, which is what makes them agree (v7)                                      |
+| `setupFailed` · `setupFailedDetail` · `tryAgain`                           | panel 2 `failed`                                                                                                                                       |
+| `actionError`                                                              | the establish action's own failure                                                                                                                     |
 
 `identityVerified` is **not a key** and never was — arm A's badge reuses the shipped
 `github.identity.verified` from `IdentityHeader`. The v4 table listed it as one; it is corrected in
@@ -1268,6 +1431,14 @@ two things (the superstring-label class). Checked programmatically against all 4
   `--el-text-strong` / `--el-danger-surface-text` ink so AA holds in both themes. The three
   invitation states are `Mail` / `BadgeCheck` / `UserPlus` **plus** a word, so `invited` and
   `accepted` are distinguishable without hue.
+- **v7 · the `created` arms are distinguished by their SENTENCE, never by hue**, which is what
+  finding #35 asks for and is also why arms B and C share a treatment: they are mutually exclusive,
+  only one is ever rendered, and the icon is the same `TriangleAlert` in `--el-warning` either way.
+  Arm C's ink is `--el-text-secondary` on `--el-card`, the pair arm B already ships, so its contrast
+  is arm B's — **measured rather than assumed**, both themes, from the resolved Tier-0 values:
+  light `#5d5b54` on `#ffffff` = **6.80:1**, dark `#a4a097` on `#0f0f0f` = **7.35:1**. AA at any
+  size in both; AAA in dark and just under it in light. It is `--el-text-secondary` and NOT
+  `--el-text-muted` deliberately — the line is a statement about the reader's access, not a caption.
 - **`role="status"`** on the default path's _Setting up your code…_, on each `not invited` row, and
   on the partial summary; **`role="alert"`** on the default path's failure sentence and on each
   failed row's reason — the row that failed announces itself, not the whole step.
