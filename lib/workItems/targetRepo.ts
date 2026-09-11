@@ -2,7 +2,6 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { normalizeRepoName } from './repoName';
 import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { bindOrganizationContext } from '@/lib/organizations/context';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import {
   ArchivedTargetRepoError,
@@ -100,12 +99,21 @@ export interface ConnectedRepoName {
  * connected ONCE, to the organisation (Story MOTIR-4669), so asking the
  * workspace returned rows only in the one workspace the App was installed from
  * and came back EMPTY everywhere else with the connection plainly present. The
- * read is org-scoped in both halves that matter — `listByOrganization`'s `where`,
- * and `bindOrganizationContext` turning on `github_repo_org_read` (MOTIR-4677),
- * whose own doc comment names the trap: under a plain `withWorkspaceContext` this
- * read silently returns a SUBSET, which looks like a short list rather than a bug.
- * Nothing about the WRITE arms changes — the column stays the repository's home,
- * the decision MOTIR-4649 drew.
+ * read is org-scoped by `listByOrganization`'s `where`, and admitted by
+ * `github_repo_org_read` (MOTIR-4677). Nothing about the WRITE arms changes —
+ * the column stays the repository's home, the decision MOTIR-4649 drew.
+ *
+ * ⚠️ AND IT DELIBERATELY DOES **NOT** BIND `app.organization_id`. That arm reads
+ * `app_caller_organization_id()`, which resolves the organisation from the bound
+ * WORKSPACE — the migration adding it says so outright, because
+ * `withWorkspaceContext` binds no org GUC and "every path this story is about"
+ * is that one. So the binding buys nothing here and costs something real: it
+ * would put this transaction's workspace-keyed reads into
+ * `tests/rls/org-context-arm-guard.test.ts`'s swept population, where the honest
+ * verdict is "not org-spanning" — a row in a table whose headline is that it is
+ * empty. Measured under the `motir_app` role in
+ * `tests/github/prLinkOrganisationTenancy.test.ts` (*the org read arm under a
+ * WORKSPACE-only context*), including the userless service form.
  *
  * ⚠️ THIS IS NO LONGER THE `targetRepo` DOMAIN, and the sentence that said so
  * was the most expensive line in this file. It read "empty when the workspace has
@@ -132,7 +140,6 @@ export async function listConnectedRepoNames(ctx: ServiceContext): Promise<Conne
     async (tx) => {
       // Trusted resolution off the workspace ROW, never request input.
       const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
-      await bindOrganizationContext(tx, organizationId);
       return githubRepoRepository.listByOrganization(organizationId, tx);
     },
   );

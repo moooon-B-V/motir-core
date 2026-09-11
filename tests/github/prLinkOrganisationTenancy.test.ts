@@ -1,6 +1,4 @@
 import { Prisma } from '@/generated/prisma/client';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -618,43 +616,47 @@ describe('no write path is widened — the `FOR ALL` policies are untouched', ()
   });
 });
 
-// ── THE COPY the widened gate makes true ────────────────────────────────────
+// ── WHY NOTHING BINDS `app.organization_id` — the measurement ───────────────
+//
+// The service methods above read the organisation's rows under a plain
+// `withWorkspaceContext` / `withWorkspaceServiceContext` and bind NO org GUC.
+// That is a deliberate choice and this block is its evidence: the org read arms
+// resolve the organisation from the bound WORKSPACE via
+// `app_caller_organization_id()`, exactly as `20260905214500_github_org_read_arms`
+// says they were designed to ("a policy that only compared organization_id to
+// that GUC would therefore admit nothing on the ordinary request path, which is
+// every path this story is about").
+//
+// Binding one anyway would be harmless to READ and expensive to OWN: it would
+// put these transactions' workspace-keyed reads (`work_item`,
+// `work_item_delivery`) into the population swept by
+// `tests/rls/org-context-arm-guard.test.ts`, whose three dispositions are bind
+// the right thing / arm the table / adjudicate — and the honest answer for them
+// is none of those, because they are not org-spanning reads at all.
+//
+// Under `motir_app`, so the arm is live rather than bypassed.
 
-describe('`github.development.notConnected` names the tenant the gate actually checks', () => {
-  const ROOT = process.cwd();
-
-  it('says ORGANISATION in both catalogues, agreeing with `design/github/design-notes.md` §5c', () => {
-    // The design of record has specified "for this organisation" since MOTIR-4672
-    // (merged 2026-09-05). MOTIR-5150 kept "workspace" DELIBERATELY, because that
-    // was the true statement about the gate as it stood, and filed this card —
-    // which is why widening the gate and changing the copy are one card.
-    const en = JSON.parse(readFileSync(join(ROOT, 'messages/en.json'), 'utf8'));
-    const zh = JSON.parse(readFileSync(join(ROOT, 'messages/zh.json'), 'utf8'));
-
-    expect(en.github.development.notConnected).toContain('this organisation');
-    expect(en.github.development.notConnected).not.toContain('this workspace');
-    expect(zh.github.development.notConnected).toContain('此组织');
-    expect(zh.github.development.notConnected).not.toContain('此工作区');
-
-    // The ADDRESS is `tests/i18n-settings-address.test.ts`'s assertion
-    // (MOTIR-5150) and gains nothing here — but it must survive this edit, so
-    // the tenant change is pinned beside it rather than in place of it.
-    expect(en.github.development.notConnected).toContain('Settings → Organisation → Git');
-    expect(zh.github.development.notConnected).toContain('设置 → 组织 → Git');
+describe('the org read arm under a WORKSPACE-only context', () => {
+  it('admits the organisation`s repositories with NO app.organization_id bound', async () => {
+    const seen = await asAppRole(
+      { userId: one.userId, workspaceId: one.siblingWorkspaceId },
+      (tx) => tx.githubRepo.findMany({ where: { organizationId: one.organizationId } }),
+    );
+    expect(seen.map((r) => r.name).sort()).toEqual(['motir-ai', 'motir-core']);
   });
 
-  it('matches the sentence the design asset specifies, verbatim', () => {
-    const notes = readFileSync(join(ROOT, 'design/github/design-notes.md'), 'utf8');
-    const en = JSON.parse(readFileSync(join(ROOT, 'messages/en.json'), 'utf8'));
+  it('admits the organisation`s pull requests with NO app.organization_id bound', async () => {
+    const seen = await asAppRole(
+      { userId: one.userId, workspaceId: one.siblingWorkspaceId },
+      (tx) => tx.githubPullRequest.findMany({}),
+    );
+    expect(seen.map((r) => r.id)).toEqual([corePrId]);
+  });
 
-    // Not a paraphrase check: the asset carries the string, so the catalogue and
-    // the design can be compared directly. This is what makes them stop
-    // disagreeing rather than agreeing by coincidence.
-    //
-    // Whitespace is collapsed on BOTH sides because the asset is prose wrapped
-    // at 80 columns — the sentence spans two lines there and one here, and a
-    // line break is not a disagreement about copy.
-    const collapse = (s: string) => s.replace(/\s+/g, ' ');
-    expect(collapse(notes)).toContain(collapse(en.github.development.notConnected));
+  it('and a USERLESS workspace-service context resolves it too', async () => {
+    const seen = await asAppRole({ workspaceId: one.siblingWorkspaceId }, (tx) =>
+      tx.githubRepo.findMany({ where: { organizationId: one.organizationId } }),
+    );
+    expect(seen.map((r) => r.name).sort()).toEqual(['motir-ai', 'motir-core']);
   });
 });

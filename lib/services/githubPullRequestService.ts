@@ -1,6 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { bindOrganizationContext } from '@/lib/organizations/context';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -78,7 +77,16 @@ export const githubPullRequestService = {
     query: string,
     ctx: ServiceContext,
   ): Promise<PullRequestLinkCandidateDto[]> {
-    // ⚠️ TWO TIERS IN ONE TRANSACTION, and the split is the whole of MOTIR-5152.
+    // ⚠️ TWO TIERS IN ONE TRANSACTION, and NOTHING BINDS `app.organization_id`.
+    // The org read arms resolve the organisation from the bound WORKSPACE
+    // (`app_caller_organization_id()`), which is what the migration adding them
+    // was written for — `withWorkspaceContext` binds no org GUC. Binding one
+    // would buy nothing and would drag this transaction's workspace-keyed reads
+    // (`work_item`, `work_item_delivery`) into the swept population of
+    // `tests/rls/org-context-arm-guard.test.ts`, where the honest verdict is
+    // that they are not org-spanning at all. Measured under `motir_app` in
+    // `tests/github/prLinkOrganisationTenancy.test.ts`.
+    //
     // The ITEM gate stays WORKSPACE-scoped — `work_item` has no org read arm and
     // must not get one here, so a cross-workspace id still reads as absent. The
     // REPOSITORY read is ORGANISATION-scoped, because a repository is connected
@@ -92,10 +100,8 @@ export const githubPullRequestService = {
       const item = await workItemRepository.findById(currentItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(currentItemId);
-      // Trusted resolution off the workspace ROW, never request input — the
-      // constraint `bindOrganizationContext` documents for itself.
+      // Trusted resolution off the workspace ROW, never request input.
       const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
-      await bindOrganizationContext(tx, organizationId);
       return {
         connected: await githubRepoRepository.listByOrganization(organizationId, tx),
         organizationId,
@@ -107,13 +113,11 @@ export const githubPullRequestService = {
     // ONE transaction for both reads: the delivery table's only tenant gate is an
     // RLS policy on `app.workspace_id`, so a read outside the bound context comes
     // back EMPTY rather than raising — every candidate would then look unlinked.
-    // The org GUC is bound ALONGSIDE it, not instead of it: `github_pull_request`
-    // has an org read arm and `work_item_delivery` / `work_item` do not, so this
-    // one transaction reads candidates across the organisation while the chip's
-    // identifiers stay scoped to this workspace — which is exactly the pair of
-    // answers the picker wants.
+    // ⚠️ AND NOTHING BINDS `app.organization_id` — see the note on the gate
+    // above. The candidates come back across the organisation anyway, while the
+    // chip's identifiers stay scoped to this workspace, which is exactly the
+    // pair of answers the picker wants.
     const { rows, deliveredBy } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
-      await bindOrganizationContext(tx, organizationId);
       const found = await githubPullRequestRepository.searchCandidates(
         organizationId,
         query,
@@ -178,7 +182,6 @@ export const githubPullRequestService = {
         throw new WorkItemNotFoundError(currentItemId);
 
       const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
-      await bindOrganizationContext(tx, organizationId);
 
       const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
       // The REPO row is the tenant (MOTIR-1931), not its installation — and the
@@ -461,7 +464,6 @@ export const githubPullRequestService = {
         throw new WorkItemNotFoundError(workItemId);
 
       const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
-      await bindOrganizationContext(tx, organizationId);
 
       const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
       // The REPO row is the tenant (MOTIR-1931), never its installation, at the
