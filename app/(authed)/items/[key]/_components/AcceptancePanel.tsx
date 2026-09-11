@@ -41,6 +41,10 @@ const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const;
 
 export interface AcceptancePanelProps {
   workItemId: string;
+  /** The card whose page this panel is on — the path the decide action
+   *  revalidates on success (Bug MOTIR-5160). The action knows a work-item ID;
+   *  the path is the card's IDENTIFIER, and `LateSections` already holds it. */
+  itemIdentifier: string;
   organizationId: string | null;
   eligibility: AcceptanceVideoEligibilityDTO;
   initialEvidence: AcceptanceEvidenceDTO | null;
@@ -53,6 +57,7 @@ const SETTINGS_ANCHOR = '#acceptance-video';
 
 export function AcceptancePanel({
   workItemId,
+  itemIdentifier,
   organizationId,
   eligibility,
   initialEvidence,
@@ -71,7 +76,7 @@ export function AcceptancePanel({
   function decide(decision: 'approve' | 'request_changes') {
     setError(null);
     startTransition(async () => {
-      const res = await decideAcceptanceAction(workItemId, decision);
+      const res = await decideAcceptanceAction({ workItemId, itemIdentifier, decision });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -79,6 +84,16 @@ export function AcceptancePanel({
       setEvidence(res.evidence); // reconcile from the authoritative response
       // The story's status pill is server-rendered elsewhere on the page → refresh
       // THAT surface (never the panel's own optimistic state).
+      //
+      // ⚠️ KEPT DELIBERATELY, BESIDE THE ACTION'S OWN `revalidatePath` (Bug
+      // MOTIR-5160). Both halves ship: the action puts the fresh tree on its own
+      // response where nothing can race it, and this reaches the surfaces a
+      // server tree does not cover. Removing it is a SEPARATE claim nobody has
+      // tested — and on the design gate one tier over it was measured NECESSARY,
+      // so it is not a line to tidy away. It is also what this card's guard
+      // breaks to prove itself able to go red: deleting it fails both tests in
+      // `tests/e2e/cloud-acceptance-repaint.spec.ts` at the status-rail
+      // assertion (23.4 s / 22.7 s, measured 2026-09-11).
       router.refresh();
       toast({
         variant: 'success',
