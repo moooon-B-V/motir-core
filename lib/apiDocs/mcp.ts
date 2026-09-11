@@ -736,7 +736,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   add_lesson: {
     summary:
       'Record a lesson for this project, so later plans for it are given the lesson. This project only.',
-    descriptionFingerprint: '0089c4f1139f',
+    // Re-pinned by MOTIR-5081: the description gained the FOURTH routing axis,
+    // `subject`, and says why it is SCALAR where the other three are sets. The
+    // summary is unchanged because it still says the same thing — it pitches
+    // what the tool is FOR and never enumerated the axes, so nothing in it went
+    // stale. Taken from the live handshake the gate prints, never computed by
+    // hand.
+    descriptionFingerprint: '6aaebd8fe579',
   },
   search_lessons: {
     summary:
