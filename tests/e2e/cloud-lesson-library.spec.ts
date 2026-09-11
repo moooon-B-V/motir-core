@@ -101,8 +101,19 @@ function writeEmptyLibrary(): void {
 }
 
 const railEntry = (page: Page) => page.getByRole('link', { name: 'AI planning' });
-const doorCard = (page: Page) => page.getByTestId('lesson-library-card');
-const doorLink = (page: Page) => page.getByTestId('lesson-library-link');
+/** SCOPED to `main` (MOTIR-5114) — `SettingsCard` renders a `<section>` with a
+ *  heading but no `aria-labelledby`, and an unnamed section has no role to ask
+ *  for, so the container is the remedy. The card only ever renders inside the
+ *  settings page's `main`, so the zero-count claim below is unchanged. */
+const doorCard = (page: Page) => page.getByRole('main').getByTestId('lesson-library-card');
+/** BY ROLE (MOTIR-5114) — a `<Link>` whose text is its accessible name. The
+ *  count is in the string, so the name is matched by shape. */
+const doorLink = (page: Page) => page.getByRole('link', { name: /^View all \d+ lessons$/ });
+/** SCOPED to `main` (MOTIR-5114) — a `lesson-row` is a bare `<div>` container
+ *  (MOTIR-3346 split the link and the button out of it), with no role. */
+const lessonRows = (page: Page) => page.getByRole('main').getByTestId('lesson-row');
+/** SCOPED to `main` (MOTIR-5114) — the count line is a bare `<p>`. */
+const lessonsCount = (page: Page) => page.getByRole('main').getByTestId('lessons-count');
 
 // Reaching AI-planning settings the way a person does — by clicking — is
 // `_helpers/ai-planning-settings.ts`'s `openAiPlanningSettings`, imported above.
@@ -147,8 +158,8 @@ test('an admin reaches the lessons from settings and reads one in full', async (
   await expect(page.getByRole('heading', { name: 'What Motir has learned' })).toBeVisible();
 
   // 4 · The seeded lessons are listed, with the count line.
-  await expect(page.getByTestId('lessons-count')).toContainText('12 lessons');
-  const rows = page.getByTestId('lesson-row');
+  await expect(lessonsCount(page)).toContainText('12 lessons');
+  const rows = lessonRows(page);
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toContainText(TAKEAWAY);
   // Both numbers, as prose.
@@ -180,13 +191,17 @@ test('an admin reaches the lessons from settings and reads one in full', async (
   ]) {
     await expect(page.getByRole('heading', { name: label })).toBeVisible();
   }
-  await expect(page.getByText(/A dependency written as a phrase is invisible/)).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText(/A dependency written as a phrase is invisible/),
+  ).toBeVisible();
   // Its provenance, and the state it is in.
-  await expect(page.getByText('MOTIR-2848')).toBeVisible();
-  await expect(page.getByTestId('lesson-applying')).toBeVisible();
+  await expect(page.getByRole('main').getByText('MOTIR-2848')).toBeVisible();
+  // SCOPED, not converted: the callout carries `role="status"` but no
+  // accessible name, so `getByRole('status')` would be broader than the id.
+  await expect(page.getByRole('main').getByTestId('lesson-applying')).toBeVisible();
 
   // 6 · Back the way we came.
-  await page.getByTestId('lesson-back').click();
+  await page.getByRole('link', { name: 'What Motir has learned' }).click();
   await expect(page).toHaveURL(/\/settings\/project\/ai-planning\/lessons$/);
 });
 
@@ -198,8 +213,8 @@ test('the two not-applied states are told apart on the row', async ({ page }) =>
   await openAiPlanningSettings(page);
   await doorLink(page).click();
 
-  const aged = page.getByTestId('lesson-row').filter({ hasText: AGED_TAKEAWAY });
-  const off = page.getByTestId('lesson-row').filter({ hasText: RETIRED_TAKEAWAY });
+  const aged = lessonRows(page).filter({ hasText: AGED_TAKEAWAY });
+  const off = lessonRows(page).filter({ hasText: RETIRED_TAKEAWAY });
   await expect(aged).toContainText('Not seen in 90 days');
   await expect(off).toContainText('Not applied');
   // Neither is mistakable for the other, and neither is hidden.
@@ -244,7 +259,7 @@ test('a project with no lessons gets the designed empty screen, not a blank pane
   const emptyBody = emptyHeading.locator('..');
   await expect(emptyBody.getByText(/Motir writes down the correction/)).toBeVisible();
   await expect(emptyBody.getByText(/Recording can be switched off/)).toBeVisible();
-  await expect(page.getByTestId('lesson-row')).toHaveCount(0);
+  await expect(lessonRows(page)).toHaveCount(0);
 });
 
 test('a non-admin never sees the door, and the route refuses a typed URL', async ({ page }) => {
@@ -277,7 +292,7 @@ test('a non-admin never sees the door, and the route refuses a typed URL', async
 
   // …nor the library behind it.
   await page.goto('/settings/project/ai-planning/lessons');
-  await expect(page.getByTestId('lesson-row')).toHaveCount(0);
+  await expect(lessonRows(page)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'What Motir has learned' })).toHaveCount(0);
 
   // 3 · And the DETAIL route, by a real lesson id the admin can open — so this
