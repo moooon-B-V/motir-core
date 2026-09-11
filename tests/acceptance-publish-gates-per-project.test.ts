@@ -39,6 +39,7 @@ const { authorizeAcceptancePublish } = await import('@/lib/acceptanceEvidence/pu
 const { runCreateAcceptanceUpload } = await import('@/lib/mcp/tools/publishAcceptanceResult');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
+const { projectsService } = await import('@/lib/services/projectsService');
 
 let fx: Awaited<ReturnType<typeof makeWorkItemFixture>>;
 let orgId: string;
@@ -59,17 +60,33 @@ function access(partial: Partial<AiAccessDTO>): AiAccessDTO {
   };
 }
 
-/** A second project in the fixture's own workspace, with its gate switch set. */
+/**
+ * A second project in the fixture's own workspace, with its gate switch set.
+ *
+ * ⚠️ THROUGH `projectsService.createProject`, NEVER a bare `project.create`. A
+ * project is not just a row: `createProject` also seeds its DEFAULT WORKFLOW in
+ * the same transaction, and `workItemsService.createWorkItem` reads that
+ * workflow for the item's initial status. A hand-inserted row therefore looks
+ * complete right up until `storyIn` below, which fails with
+ * `NoInitialStatusError: … has no initial workflow status (corrupt seed)` —
+ * a message that reads like a broken fixture file and is actually a project
+ * created past the service that makes one usable.
+ *
+ * The switch is set afterwards because the column is NOT a create-time input:
+ * it carries `@default(true)` and its only writers are the migration's backfill
+ * and `approvalGateSettingsService`. Writing it here with `adminDb` is the
+ * fixture doing what an admin would later do through the settings room.
+ */
 async function projectWithSwitch(enabled: boolean) {
   const n = seq++;
-  return adminDb.project.create({
-    data: {
-      name: `Gate P${n}`,
-      slug: `gate-p-${n}`,
-      identifier: `GP${n}`,
-      workspaceId: fx.workspaceId,
-      acceptanceVideoEnabled: enabled,
-    },
+  const project = await projectsService.createProject({
+    workspaceId: fx.workspaceId,
+    actorUserId: fx.ownerId,
+    name: `Gate P${n}`,
+  });
+  return adminDb.project.update({
+    where: { id: project.id },
+    data: { acceptanceVideoEnabled: enabled },
   });
 }
 
