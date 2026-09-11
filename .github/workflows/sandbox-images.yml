@@ -72,6 +72,31 @@ jobs:
       # builder image, the `# syntax=` frontend and this Dockerfile's `FROM
       # node:…` base all come from a mirror rather than Docker Hub anonymously.
       - uses: ./.github/actions/buildx
+      # ── THE CACHE SCOPES HERE ARE COVERED BY MOTIR-5126, NOT EXCLUDED ──────
+      #
+      # This lane had the identical defect as `runner-image.yml` — every scope
+      # below was written to an ephemeral ref and reclaimed with it — so it takes
+      # the identical fix: `.github/workflows/image-cache-main.yml` calls this
+      # workflow on a push to `main` with `publish: false`, which WRITES every
+      # scope below under `refs/heads/main`, the only ref every other ref is
+      # allowed to read.
+      #
+      # ⚠️ IT IS NAMED HERE RATHER THAN LEFT TO THE OTHER FILE BECAUSE SILENCE
+      # IN THIS ONE WOULD READ AS A WHOLE FIX. All eleven scopes on this lane —
+      # `sandbox-base`, `sandbox-base-multiarch`, and `sandbox-<profile>` /
+      # `sandbox-<profile>-multiarch` per profile — were being written to an
+      # ephemeral ref and reclaimed with it, and this is the most expensive lane
+      # in the repository, so a half-fix that warmed only the runner image would
+      # have left the larger cost untouched while looking complete.
+      #
+      # The mechanism, the evidence it rests on, why it is a separate workflow
+      # rather than a relaxed `ci.yml` gate, and the every-push-vs-image-touching
+      # decision are recorded ONCE — in `runner-image.yml` beside its own
+      # `cache-to:`, and in the writer's own header — rather than copied here,
+      # because two copies of a rule drift and then disagree. The one fact worth
+      # repeating is the one that protects THIS lane's cost: the writer is gated
+      # on the image inputs, so this matrix runs on an image-touching merge and
+      # not on every merge.
       - name: Build the base image
         uses: docker/build-push-action@v6
         with:
