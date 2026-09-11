@@ -237,6 +237,33 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── FORWARD-LOOKING: the Approvals room, drawn before its route lands ─────
+  //  MOTIR-4942 designs `Project settings → Approvals`
+  //  (`design/projects/approvals.mock.html`), the room that holds the switches
+  //  deciding which approval gates a project raises. Its FIRST inhabitant is the
+  //  acceptance-video gate, and the route is built by MOTIR-4925 — a design gates
+  //  its code card, so the asset necessarily names an address the app does not
+  //  serve yet. This is the ordinary design-before-code case, not a stale asset.
+  //
+  //  ⚠️ THESE ROWS DELETE THEMSELVES when `app/(authed)/settings/project/approvals/page.tsx`
+  //  lands: the `carries no KNOWN entry that has stopped applying` arm below goes
+  //  red on an exemption that no longer matches anything, so MOTIR-4925 removes
+  //  them as part of its own diff rather than leaving three silent exemptions.
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/approvals',
+    why: 'Forward-looking: the Approvals room this asset DESIGNS. The route is built by MOTIR-4925, which this design gates; delete this row when that page lands.',
+  },
+  {
+    file: 'design/work-items/acceptance-panel.mock.html',
+    address: '/settings/project/approvals',
+    why: "Forward-looking: panel G4 draws the acceptance panel's turn-on link pointing at the room MOTIR-4942 designs, because MOTIR-4949 criterion 5 requires the link to follow the switch to the project tier. Delete this row when MOTIR-4925 lands the page.",
+  },
+  {
+    file: 'design/work-items/design-notes.md',
+    address: '/settings/project/approvals',
+    why: 'Forward-looking: the same link, specified in prose beside the panel that draws it. Delete this row when MOTIR-4925 lands the page.',
+  },
   // ── An address named as HISTORY, by the asset that retires it ─────────────
   // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
   // Code health, the code index and Git were three things in two rail sections
@@ -1429,6 +1456,19 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // inherited: the run that finds a class is not the run that clears it.
 // MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── FORWARD-LOOKING: the Approvals route, named by the design that gates it ──
+  //  MOTIR-4942's notes tell MOTIR-4925 which file to create. A design asset
+  //  naming the route its own code card will add is the design-before-code case,
+  //  not a citation of something that vanished.
+  //
+  //  ⚠️ THIS ROW DELETES ITSELF when the page lands — the `carries no KNOWN_PATHS
+  //  entry that has stopped applying` arm turns "that card shipped" into a red
+  //  test rather than a stale exemption.
+  {
+    file: 'design/projects/design-notes.md',
+    path: 'app/(authed)/settings/project/approvals/page.tsx',
+    why: 'Forward-looking: the route MOTIR-4925 creates, named by the design that gates it so the build card knows where the page goes. Delete this row when that file lands.',
+  },
   // ── SAMPLE AGENT OUTPUT, not a citation (Story MOTIR-1789 · MOTIR-3893) ──
   //  The run modal's LOG pane draws what a coding agent actually prints, and an
   //  agent prints file paths — so the console's sample lines look exactly like

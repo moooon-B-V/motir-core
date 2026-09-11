@@ -6439,3 +6439,112 @@ a family of look-alikes.
 | **MOTIR-4879** (the Approvals tab)          | **GIVES** the frame a row composes or links to. **TAKES nothing.**                                                                                                                                                                                                                            |
 | **MOTIR-693** (9.2 hosted review)           | **GIVES** the frame its review UI composes rather than drawing its own, per ADR §5.                                                                                                                                                                                                           |
 | **MOTIR-2664** (`design-result.mock.html`)  | **neither** — `done`; composed and cited as the port's contents, not redrawn.                                                                                                                                                                                                                 |
+
+---
+
+## ⭐ The ACCEPTANCE gate, in the ONE approve language (MOTIR-4942 — `acceptance-panel.mock.html`, panels G1–G5)
+
+**Amendment to _Acceptance video (Story MOTIR-1627)_, and a consumer of _THE
+UNIVERSAL APPROVAL FRAME_ above.** Once MOTIR-4950 registers
+`acceptance_result` as a gate KIND, the acceptance panel stops being a bespoke
+surface with two buttons on the end and becomes the same frame every other gate
+kind renders in. Panels **G1–G5** of `acceptance-panel.mock.html` draw that.
+
+Card: **MOTIR-4942**, under epic **MOTIR-4878**. The frame itself is
+**MOTIR-4778 / MOTIR-4789**'s and is not redrawn — this section says what the
+ACCEPTANCE kind supplies to it.
+
+### What the kind supplies to the frame
+
+The frame is presentational plus one action; a kind supplies the PORT's contents
+and a few labels. For `acceptance_result`:
+
+| frame prop             | acceptance's answer                                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kindLabel` (band 1)   | **Acceptance video**                                                                                                                                                                                      |
+| `subjectMeta` (band 1) | _Published 6 minutes ago · run `4821`_ — the CI run, which is this subject's version identifier                                                                                                           |
+| **`port`** (band 2)    | the receipt, **unchanged**: the player, the scrubber with chapter ticks, the chapter list from `chapters[]`, the assertion summary, and the provenance chips (`commitSha` · `ciRunUrl` · `producedByKey`) |
+| `verbs` (band 3)       | **Request changes** (secondary, no confirm) · **Approve** (primary, confirms)                                                                                                                             |
+| `consequence`          | _"Approving finishes `MOTIR-4949`. Nothing else does."_                                                                                                                                                   |
+| `confirmConsequences`  | records the decision with the time and this run · keeps this run's video so the decision stays watchable · moves the story to Done, starting the items waiting on it                                      |
+| `filesKept`            | the receipt's video — drawn as **"run 4821 kept"** in state `E`                                                                                                                                           |
+| `routedToLabel`        | the story's assignee, for state `B`                                                                                                                                                                       |
+
+### What actually changes on screen, and what does not
+
+- **The verbs were ALREADY below the subject** in the shipped panel. That
+  ordering is right and survives; the frame does not move it.
+- **Approve moves to the RIGHT** of the pair. The frame's primary verb is its
+  rightmost; the shipped panel puts Approve first.
+- **Band 1 is new** — which version is being decided, and its state.
+- **The consequence sentence is new**, and it is the one the acceptance idiom
+  never said: _Approve is what finishes the story._ A reviewer pressing it should
+  be told so before they press, not after.
+- **The confirm band is new** (G2), inline **over the verbs**, never a modal — a
+  modal would take the receipt off screen at the moment the reader wants one last
+  look. Approve confirms because it is terminal for this kind; Request changes
+  does not, because a reversible act asked twice is friction rather than care.
+- **The decided RECORD is new** (G3). The panel has `approvedById` and
+  `approvedAt` today and renders neither. The frame draws ADR
+  `approval-gates.md` §6a's audit set: who, when, under which authority, through
+  which surface, and whether the bytes were kept.
+  **`filesKept` is nullable and null renders NOTHING** — _not asked_ and _not
+  kept_ must not collapse onto the one surface built to be checkable.
+
+### The PORT's mechanics — and why the acceptance receipt is the case that proves them
+
+`design-notes.md` § _THE UNIVERSAL APPROVAL FRAME_ insists the port's mechanics
+are the design and not a detail. **An acceptance receipt is the subject that
+demonstrates all three at once**, because a 16:9 player plus its chapter list is
+taller than any ceiling that still leaves the verbs on screen:
+
+- a **FLOOR** (196px), so a subject is never a sliver;
+- a **CEILING** (420px) with its own scroll, so a tall subject never pushes the
+  verbs off screen — **G1–G4 draw the receipt genuinely CLIPPED at it**, which is
+  the truth;
+- **Expand** (G5), for a subject that deserves the whole viewport.
+
+> **⚠️ The ceiling SCROLLS; it must never SQUASH, and this is an implementation
+> note because the mock hit it first.** The port is a flex column, so its
+> children shrink to fit by default: without `flex: none` on them the receipt is
+> silently compressed to 420px and the verbs sit under a squashed sliver — which
+> is the button-first cut the frame was built to reject, arrived at by accident
+> rather than by decision. `.port > * { flex: none }` in the mock; the component
+> owes the same.
+
+### State OFF — the absence that is not the same absence
+
+Panel **G4** draws two absences side by side, because they are different:
+
+- **`B` · awaiting, not yours to decide** — the gate is up, someone else owes the
+  decision. **The port stays live**; only the verbs go. A reader who may not
+  decide can still watch what is being decided.
+- **OFF · this project raises no acceptance gate** — no decision, no receipt, no
+  panel. What remains is the way BACK to the switch, and **it points at the
+  project room**: `/settings/project/approvals`, drawn as the turn-on row with
+  its switch and its link.
+
+> **⚠️ The turn-on action and its link follow the switch** (MOTIR-4949 criterion
+> 5). Today `settingsHref` plus the `#acceptance-video` anchor point at
+> `/settings/organization`, which after MOTIR-4925 no longer holds the control. A
+> link to a page the setting has left is worse than no link, because it looks
+> like it worked.
+
+### Primitives and token roles
+
+The frame's own vocabulary, copied **by name** from `approval-control.mock.html`
+so the two assets cannot drift — `.frame` / `.frameHead` / `.port` / `.frameFoot`
+/ `.confirm` / `.record`, with `.pill-await` on `--el-tint-yellow` and `.pill-ok`
+on `--el-tint-mint`, both inked `--el-text-strong`. The receipt inside the port
+is the shipped panel's own markup, unchanged. Ink throughout is `--el-text` /
+`--el-text-strong` / `--el-text-secondary`; `--el-text-identifier` for the
+monospace run and item keys. Radius `--radius-card` / `--radius-input` /
+`--radius-control` / `--radius-badge`; elevation `--shadow-card`.
+
+### Out of scope here
+
+The gate MECHANISM, the routing model, the authority model and the state set are
+MOTIR-4778's and are not reopened. The Approvals tab (MOTIR-4879), the `approved`
+status (MOTIR-4905), the manual-flip refusal (MOTIR-4887) and the waiting
+indicator (MOTIR-4908) are each their own story — this gate inherits them as they
+land, which is the whole point of joining the contract.
