@@ -8,6 +8,8 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
+import { EntitlementExceededError } from '@/lib/billing/errors';
+import type { EntitlementKind } from '@/lib/billing/entitlements';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
@@ -49,6 +51,20 @@ export async function switchWorkspaceAction(workspaceId: string): Promise<void> 
 }
 
 /**
+ * The answer `createWorkspaceAction` gives. A §4.4 CAP REFUSAL is a legitimate
+ * business-rule answer, not a fault, so it travels as a VALUE (MOTIR-5130) —
+ * the same shape `items/actions.ts` `createIssueAction` already returns for the
+ * §4.1 work-item cap. `entitlement` is the discriminator
+ * `lib/billing/entitlements.ts` calls "the field on `EntitlementExceededError`
+ * the UI keys its upgrade" prompt from; it is carried across the boundary so the
+ * prompt (8.1.7/8.1.8) has something to key on, even though today's callers only
+ * render `error`.
+ */
+export type CreateWorkspaceResult =
+  | { ok: true; workspace: WorkspaceSummaryDTO }
+  | { ok: false; error: string; entitlement: EntitlementKind };
+
+/**
  * Create a new workspace under the ACTIVE organization and switch to it (Story
  * 6.10.5 — the org menu's "New workspace" entry, the discoverable path to
  * reveal tier 2). The active org comes from the org cookie (resolved + membership-
@@ -60,7 +76,7 @@ export async function switchWorkspaceAction(workspaceId: string): Promise<void> 
  * (The copy-on-create config clone — making the new workspace open already
  * configured like the source — is Subtask 6.10.9, layered on this path later.)
  */
-export async function createWorkspaceAction(name: string): Promise<WorkspaceSummaryDTO> {
+export async function createWorkspaceAction(name: string): Promise<CreateWorkspaceResult> {
   const session = await getSession();
   if (!session) throw new Error('UNAUTHENTICATED');
 
@@ -74,11 +90,27 @@ export async function createWorkspaceAction(name: string): Promise<WorkspaceSumm
     orgCookie,
   );
 
-  const { workspace } = await workspacesService.createWorkspace({
-    name: trimmed,
-    ownerUserId: session.user.id,
-    organizationId: activeOrg?.organization.id,
-  });
+  // MOTIR-5130 — the §4.4 cap (`entitlementsService.assertWithinWorkspaceCap`)
+  // throws a TYPED `EntitlementExceededError` carrying the plan's limit and the
+  // upgrade discriminator. Letting it escape a Server Action renders a 500,
+  // which makes the opposite claim to the true one: a 500 says Motir
+  // malfunctioned, where in fact the cap worked and the plan has a ceiling. The
+  // `try` wraps ONLY this call, and only this error class is converted — every
+  // other fault (including `CapLockUnavailableError`, which IS a server-side
+  // invariant failure and maps to 500 by design) propagates untouched.
+  let workspace;
+  try {
+    ({ workspace } = await workspacesService.createWorkspace({
+      name: trimmed,
+      ownerUserId: session.user.id,
+      organizationId: activeOrg?.organization.id,
+    }));
+  } catch (err) {
+    if (err instanceof EntitlementExceededError) {
+      return { ok: false, error: err.message, entitlement: err.entitlement };
+    }
+    throw err;
+  }
 
   cookieStore.set(WORKSPACE_COOKIE_NAME, workspace.id, COOKIE_OPTIONS);
 
@@ -113,7 +145,7 @@ export async function createWorkspaceAction(name: string): Promise<WorkspaceSumm
   // workspace had none until the reader created one).
   await projectsService.recordLastActiveProjectForWorkspace(session.user.id, workspace.id);
 
-  return toWorkspaceSummaryDTO(workspace);
+  return { ok: true, workspace: toWorkspaceSummaryDTO(workspace) };
 }
 
 /**
