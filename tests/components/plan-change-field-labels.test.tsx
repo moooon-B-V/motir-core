@@ -119,6 +119,7 @@ function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto 
     targetRepoRole: null,
     executor: null,
     planningProvenance: null,
+    subject: null,
     status: 'todo',
     statusLabel: null,
     statusCategory: null,

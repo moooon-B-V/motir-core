@@ -44,6 +44,12 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     targetRepoRole: null,
     executor: null,
     planningProvenance: null,
+    // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065) — `null` by default,
+    // which is the common case and stays common: the corpus ships four members and
+    // most proposals carry none. It must be PRESENT here rather than merely
+    // optional in the override, because `...over` spreads a `Partial` and TypeScript
+    // only drops `undefined` from a spread key the target already declares.
+    subject: null,
     status: null,
     statusLabel: null,
     statusCategory: null,

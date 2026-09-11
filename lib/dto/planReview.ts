@@ -528,6 +528,30 @@ export interface PlanReviewItemDto {
   targetRepoRole: string | null;
   executor: string | null;
   planningProvenance: { source?: string; harness?: string | null; model?: string | null } | null;
+  /**
+   * WHICH SUBJECT MATTER the pass composed this card's rule packs from (Story
+   * MOTIR-5062 · MOTIR-5065) — the fourth selector coordinate, reported to the
+   * reviewer BESIDE `planningProvenance` because it is the same kind of fact.
+   *
+   * ⚠️ `add`-ONLY, and it joins the arm for {@link planningProvenance}'s reason
+   * rather than a new one: it describes the PASS, not the card. A `modify`
+   * proposes no subject of its own — `PlanItemPatch` has no twin — so reporting
+   * the target's would attribute a coordinate derived by an earlier pass to this
+   * one, which is `explanationSource`'s failure mode exactly.
+   *
+   * WHY IT IS ON THIS SURFACE AT ALL, stated because it was decided against two
+   * alternatives: hiding it leaves a pass that composed the wrong rules with no
+   * record of why, and putting it on the CARD as an editable field teaches a
+   * reader something false — its value set is *which pack files exist*, so a
+   * blank means the corpus has no pack for this subject, not that the work has
+   * none. The review surface puts it in front of the one person who can act on
+   * it, at the one moment acting is cheap: before approve.
+   *
+   * Null where the proposal carries none, which is the common case and stays
+   * common — the corpus ships four members and most cards will carry no subject
+   * for a long time.
+   */
+  subject: string | null;
   /** The target's current status key — null for an un-materialized `add` (it is
    *  not a work item yet); the live status for every proposal that has one. */
   status: string | null;

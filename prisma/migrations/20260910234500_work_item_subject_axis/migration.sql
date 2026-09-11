@@ -1,0 +1,19 @@
+-- The SUBJECT axis (Story MOTIR-5062 · MOTIR-5065).
+--
+-- The fourth coordinate of the planner's rule-pack selector,
+-- `pack(phase, kind, type, subject)`. It records WHICH SUBJECT MATTER an
+-- authoring pass composed this card's rules from, so it sits with the three
+-- `planning_*` provenance columns rather than with the card's own attributes:
+-- it is a fact about how the card came to be planned, not about the work.
+--
+-- TEXT and nullable, deliberately, and NOT an enum. The member vocabulary IS
+-- the rule-pack file set in motir-meta — a member exists iff
+-- `prompts/plan-rules/subject-<name>.md` exists — so an enum here would put a
+-- migration and a platform deploy in front of every new rule pack. This column
+-- therefore holds a SHAPE-validated slug and never a checked member; an
+-- unrecognised one is refused a hop later, by the planner's own resolver.
+--
+-- Nullable is the common case and stays common: the corpus ships four members
+-- and most cards carry no subject, which is what makes the axis purely additive.
+-- AlterTable
+ALTER TABLE "work_item" ADD COLUMN     "subject" TEXT;

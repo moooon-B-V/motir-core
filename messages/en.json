@@ -1271,6 +1271,7 @@
     "provenance": "Provenance",
     "provenancePlanning": "Planning",
     "provenanceImplementation": "Implementation",
+    "provenanceSubject": "Subject",
     "provenanceSourceNative": "Native",
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "Manual",

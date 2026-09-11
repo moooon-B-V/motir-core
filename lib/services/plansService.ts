@@ -38,6 +38,9 @@ import {
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
+import { TYPEABLE_KINDS } from '@/lib/issues/executorDefaults';
+import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
@@ -1431,6 +1434,32 @@ function assertKnownRepoRole(role: unknown, planItemId: string | null, label: st
 }
 
 /**
+ * The CORRECTION door's `subject` check (Story MOTIR-5062 · MOTIR-5065) — the
+ * same two questions `validateProposals`' `assertProposedSubjectValid` asks at the
+ * append, asked again here because a correction is a second write boundary and a
+ * proposal corrected past a gate the append enforced would reach approve
+ * malformed.
+ *
+ * ⚠️ SHAPE AND KIND ONLY. Membership is not checked in this repository at all —
+ * the subject vocabulary IS the rule-pack file set, so a well-formed but
+ * unrecognised member is accepted here and refused by the planner's own resolver.
+ * That is the story's decision, not a gap: a closed list here would put a
+ * migration and a platform deploy in front of every new rule pack.
+ */
+function assertCorrectedSubjectValid(subject: string, kind: string, planItemId: string): void {
+  if (!isWellFormedSubject(subject)) {
+    throw new InvalidProposalError(
+      `Proposal ${planItemId} sets subject \`${subject}\`, which is not a well-formed subject. ${describeSubjectShape()}`,
+    );
+  }
+  if (!TYPEABLE_KINDS.has(kind as WorkItemKindDto)) {
+    throw new InvalidProposalError(
+      `Proposal ${planItemId} sets subject \`${subject}\` on a \`${kind}\`, which is a container. A subject selects the rule packs an authoring pass composes for a LEAF; a container's rules come from its own kind.`,
+    );
+  }
+}
+
+/**
  * Validate EVERY proposal's role and return the DISTINCT roles the plan's `add`
  * proposals pin, deduped and ordered by FIRST APPEARANCE in the plan — ADR
  * §0.1.1's signal, handed to `proposeRepositorySet` as `itemRoles`.
@@ -1643,6 +1672,17 @@ async function materialize(
         'native') as WorkItemCreateInput['planningSource'],
       planningHarness: pf.planningProvenance?.harness ?? 'Motir',
       planningModel: pf.planningProvenance?.model ?? null,
+      // WHICH SUBJECT MATTER the pass composed this card's rule packs from
+      // (Story MOTIR-5062 · MOTIR-5065) — the fourth selector coordinate,
+      // written beside the three planning columns above because it is the same
+      // kind of fact. SHAPE-validated at the append and again in
+      // `validateProposals` (`malformed_subject` / `subject_on_container`);
+      // MEMBERSHIP is deliberately not checked in this repository, so an
+      // unrecognised but well-formed member persists here and is refused by
+      // motir-ai's rule-pack resolver, the system that owns the vocabulary.
+      // Absent = the proposal carried none, which stores `null` exactly as it
+      // did before the field existed — the axis is purely additive.
+      subject: pf.subject ?? null,
       type: (pf.type as WorkItemCreateInput['type']) ?? null,
       executor: (pf.executor as WorkItemCreateInput['executor']) ?? null,
       // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates
@@ -4001,6 +4041,33 @@ export const plansService = {
               proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
             );
             next.targetRepoRole = input.targetRepoRole;
+          }
+          // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065), applied HERE
+          // and NOT in `mergeProposedFields` for exactly the reason the repo pin
+          // is: that helper is the DEEPEN turn's merge, and a subject is settled
+          // at the `lay` beside `type` and the pin — it says which RULES an
+          // authoring pass reads, which is where the card sits in the corpus
+          // rather than what it says. So a deepen may not touch it and a
+          // correction may, which is AMENDMENT 3 D3's rule applied rather than an
+          // exception to it.
+          //
+          // Re-validated by the SAME shape and container checks the append runs,
+          // so a correction cannot introduce a subject the append would have
+          // refused. `undefined` leaves it alone and an explicit `null` unpins.
+          // MEMBERSHIP is not checked here, in either door — the vocabulary is
+          // the rule-pack file set, and this repository deliberately does not
+          // hold it.
+          if (input.subject !== undefined) {
+            if (input.subject === null) {
+              delete next.subject;
+            } else {
+              assertCorrectedSubjectValid(
+                input.subject,
+                next.kind ?? DEFAULT_PROPOSED_KIND,
+                item.id,
+              );
+              next.subject = input.subject;
+            }
           }
           if (!next.title?.trim()) {
             throw new InvalidProposalError('An `add` proposal requires a non-empty title.');

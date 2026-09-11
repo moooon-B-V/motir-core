@@ -129,6 +129,14 @@ export function toWorkItemDto(
     implementationSource: row.implementationSource,
     implementationHarness: row.implementationHarness,
     implementationModel: row.implementationModel,
+    // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5074) — passed through
+    // VERBATIM, with no strip and no normalisation. Note it does NOT inherit the
+    // native-model strip directly above: that exists because Motir abstracts its
+    // own model, whereas the subject names a rule pack in the open corpus and is
+    // the same fact whoever planned the card. There is nothing here to hide and
+    // nothing to collapse — an unrecognised member reaches the rail intact,
+    // because the rail is where a person would first notice one.
+    subject: row.subject,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

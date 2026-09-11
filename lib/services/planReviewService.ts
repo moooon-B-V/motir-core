@@ -954,6 +954,13 @@ export const planReviewService = {
         // `proposedValue` because that function's parameter is a patch key.
         executor: item.op === 'add' ? (proposed?.executor ?? null) : (target?.executor ?? null),
         planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
+        // ⚠️ `add`-ONLY, on `planningProvenance`'s own terms (Story MOTIR-5062 ·
+        // MOTIR-5065): the subject describes the PASS that derived it, not the
+        // card. `PlanItemPatch` has no `subject` twin, so a `modify` proposes
+        // none — and reporting the TARGET's here would credit this pass with a
+        // coordinate an earlier one derived, which is the `explanationSource`
+        // mistake one field up. The op-axis guard is where that is written down.
+        subject: item.op === 'add' ? (proposed?.subject ?? null) : null,
         // Same rule, same source, same read (MOTIR-3160): a materialized `add`
         // has a live status because it is a live work item. Populating the
         // identifier off `target` and leaving the status null would split one

@@ -384,6 +384,11 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     // MOTIR-4924) — the same landing place and transport as the SET forms.
     targetRepositoryRef: 'proposedFields.targetRepositoryRef',
     targetRepoRole: 'proposedFields.targetRepoRole',
+    // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065) — the same landing
+    // place and the same transport as the role beside it, and structural for the
+    // same reason: it is settled at the `lay`, so the deepen turn cannot reach it
+    // and only a correction can.
+    subject: 'proposedFields.subject',
     // `modify` ONLY, and mutually exclusive with an `add`'s content bag — the
     // service refuses the two together by design. Its own transport (the
     // `modifyPatch` rename) is asserted by the `a modify's patch rides
@@ -409,11 +414,20 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
       // what makes it pinnable this early, and it is the pin an ONBOARDING plan
       // carries.
       targetRepoRole: 'api',
+      // A well-formed member. Membership is NOT checked at either write boundary
+      // in this repository — the vocabulary is the rule-pack file set — so what
+      // this asserts is the TRANSPORT: the key survives the parser into
+      // `proposedFields`, which is the whole point of this guard.
+      subject: 'jobs',
     });
     expect(res.status).toBe(200);
 
     const stored = await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } });
-    expect(stored.proposedFields).toMatchObject({ ...CONTENT_SAMPLE, targetRepoRole: 'api' });
+    expect(stored.proposedFields).toMatchObject({
+      ...CONTENT_SAMPLE,
+      targetRepoRole: 'api',
+      subject: 'jobs',
+    });
     expect(stored.parentRef).toBe(`planItem:${firstId}`);
     expect(stored.blockedByRefs).toEqual([`planItem:${firstId}`]);
   });
