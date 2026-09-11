@@ -26,6 +26,7 @@ import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
+import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -78,6 +79,9 @@ export const jobServices = {
   ciRunnerBoot: ciRunnerBootService,
   jobScheduleHealth: jobScheduleHealthService,
   fleetPreflight: fleetPreflightService,
+  // The rebuild-streak probe (MOTIR-5027) — the daily check's fifth, and the
+  // only one that reads the LEDGER rather than a registry or an address.
+  indexRebuildStreak: indexRebuildStreakService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,
