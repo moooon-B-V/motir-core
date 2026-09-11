@@ -99,6 +99,49 @@ describe('the axes — an empty one is NOT drawn', () => {
   });
 });
 
+// MOTIR-4775 — the PHASE axis is the one axis whose stored value is not a word
+// the product uses anywhere else, so it is the one axis that gets a label.
+describe('the PHASE axis renders a label, never the stored value', () => {
+  it('draws "Laying a level" / "Writing a body" for the two values', () => {
+    renderWithIntl(<LessonRow lesson={lesson({ phases: ['lay'] })} href="/x" copy={copy} />);
+    expect(screen.getByText('phase')).toBeTruthy();
+    expect(screen.getByText('Laying a level')).toBeTruthy();
+    // THE assertion: the stored value never reaches the reader.
+    expect(screen.queryByText('lay')).toBeNull();
+
+    cleanup();
+    renderWithIntl(<LessonRow lesson={lesson({ phases: ['author'] })} href="/x" copy={copy} />);
+    expect(screen.getByText('Writing a body')).toBeTruthy();
+    expect(screen.queryByText('author')).toBeNull();
+  });
+
+  it("leaves the kind and type axes UNLABELLED — they are already the product's words", () => {
+    // The asymmetry is deliberate, so it is pinned. A reader seeing `story` on a
+    // chip reads the same noun the board uses; relabelling it would invent a
+    // second vocabulary for something that already had one.
+    renderWithIntl(
+      <LessonRow
+        lesson={lesson({ kinds: ['story'], types: ['code'], phases: [] })}
+        href="/x"
+        copy={copy}
+      />,
+    );
+    expect(screen.getByText('story')).toBeTruthy();
+    expect(screen.getByText('code')).toBeTruthy();
+  });
+
+  it('falls back to the RAW value for a phase the catalogue does not label', () => {
+    // The store is motir-ai's, so the DTO's union is a claim about it rather
+    // than a guarantee. A value this build has never heard of must be VISIBLE —
+    // printing it raw is what makes a vocabulary drift findable, where a blank
+    // chip or a thrown missing-key would hide it.
+    renderWithIntl(
+      <LessonRow lesson={lesson({ phases: ['reticulating'] as never })} href="/x" copy={copy} />,
+    );
+    expect(screen.getByText('reticulating')).toBeTruthy();
+  });
+});
+
 describe('the two numbers, and how they are worded', () => {
   it('says "seen once" and "seen twice" rather than "seen 1 times"', () => {
     renderWithIntl(<LessonRow lesson={lesson({ recurrenceCount: 1 })} href="/x" copy={copy} />);
@@ -270,17 +313,35 @@ describe('THE DOOR card', () => {
 
 describe('i18n — every key the surface reads exists in BOTH catalogs', () => {
   it('en and zh carry the same lesson keys, none blank', () => {
-    const en = enMessages.settings.aiPlanning.lessons as Record<string, string>;
-    const zh = zhMessages.settings.aiPlanning.lessons as Record<string, string>;
-    expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
-    for (const [key, value] of Object.entries(zh)) {
-      expect(String(value).trim(), `zh.${key} is blank`).not.toBe('');
+    // ⚠️ `Record<string, unknown>`, not `Record<string, string>` — the block is
+    // no longer flat. `phase` is a NESTED object of the two axis labels
+    // (MOTIR-4775), so the leaf walk below recurses instead of assuming every
+    // value is a string; a flat cast here was a type error the moment it landed.
+    const en = enMessages.settings.aiPlanning.lessons as Record<string, unknown>;
+    const zh = zhMessages.settings.aiPlanning.lessons as Record<string, unknown>;
+    const leaves = (o: Record<string, unknown>, prefix = ''): [string, string][] =>
+      Object.entries(o).flatMap(([key, value]) =>
+        typeof value === 'string'
+          ? [[prefix + key, value] as [string, string]]
+          : leaves(value as Record<string, unknown>, `${prefix}${key}.`),
+      );
+    expect(
+      leaves(en)
+        .map(([k]) => k)
+        .sort(),
+    ).toEqual(
+      leaves(zh)
+        .map(([k]) => k)
+        .sort(),
+    );
+    for (const [key, value] of leaves(zh)) {
+      expect(value.trim(), `zh.${key} is blank`).not.toBe('');
     }
   });
 
   it('keeps the placeholders the surface interpolates', () => {
-    const en = enMessages.settings.aiPlanning.lessons as Record<string, string>;
-    const zh = zhMessages.settings.aiPlanning.lessons as Record<string, string>;
+    const en = enMessages.settings.aiPlanning.lessons as unknown as Record<string, string>;
+    const zh = zhMessages.settings.aiPlanning.lessons as unknown as Record<string, string>;
     for (const key of ['viewAll', 'count', 'lastSeen', 'seenTimes', 'notRecurred']) {
       const placeholders = (s: string) => (s.match(/\{(\w+)\}/g) ?? []).sort();
       expect(placeholders(zh[key]!), `zh.${key}`).toEqual(placeholders(en[key]!));

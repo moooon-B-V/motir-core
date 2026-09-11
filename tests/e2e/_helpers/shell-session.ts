@@ -303,7 +303,7 @@ export async function createFirstProject(page: Page, name: string): Promise<void
   await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
-  await page.getByLabel('Project name').fill(name);
+  await page.getByRole('textbox', { name: 'Project name' }).fill(name);
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
   await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible({
     timeout: 5_000,

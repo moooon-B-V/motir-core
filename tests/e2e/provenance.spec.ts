@@ -92,7 +92,7 @@ test('MOTIR-1685: provenance on the work-item detail — manual · mcp · native
   await chapter('Create a work item in the UI → planning provenance reads Manual', async () => {
     await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
-    await page.getByLabel('Title').fill('A hand-made item');
+    await page.getByRole('textbox', { name: 'Title' }).fill('A hand-made item');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
     // The modal's Create button unmounts on the 2xx create — the deterministic signal.
     await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeHidden();

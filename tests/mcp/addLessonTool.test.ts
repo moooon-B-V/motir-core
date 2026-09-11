@@ -216,7 +216,7 @@ describe('add_lesson — the axes round-trip as stored', () => {
   it('sends the axes it was given', async () => {
     const fx = await makeWorkItemFixture();
     const upstream = stubUpstream(() =>
-      jsonResponse(wireLesson({ kinds: ['story'], types: ['code'], phases: ['deepen'] }), 201),
+      jsonResponse(wireLesson({ kinds: ['story'], types: ['code'], phases: ['author'] }), 201),
     );
 
     await runAddLesson(
@@ -225,7 +225,7 @@ describe('add_lesson — the axes round-trip as stored', () => {
         ...INPUT,
         kinds: ['story'],
         types: ['code'],
-        phases: ['deepen'],
+        phases: ['author'],
       },
       fx.ctx,
     );
@@ -233,6 +233,26 @@ describe('add_lesson — the axes round-trip as stored', () => {
     const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
     expect(body['kinds']).toEqual(['story']);
     expect(body['types']).toEqual(['code']);
-    expect(body['phases']).toEqual(['deepen']);
+    expect(body['phases']).toEqual(['author']);
+  });
+
+  // MOTIR-4775 — the WRITE door needs the same one-release grace the search
+  // door gets, because the same callers reach both with the same vocabulary.
+  // Asserted on the UPSTREAM BODY: what must never happen is a retired word
+  // being persisted into the column, which is what forwarding it unmapped would
+  // do the moment motir-ai drops its own alias map.
+  it('canonicalises a RETIRED spelling before it is persisted', async () => {
+    const fx = await makeWorkItemFixture();
+    const upstream = stubUpstream(() =>
+      jsonResponse(wireLesson({ kinds: [], types: [], phases: ['lay'] }), 201),
+    );
+
+    await runAddLesson(
+      { projectKey: fx.projectIdentifier, ...INPUT, phases: ['skeleton'] },
+      fx.ctx,
+    );
+
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    expect(body['phases']).toEqual(['lay']);
   });
 });

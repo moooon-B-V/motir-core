@@ -122,7 +122,7 @@ async function createTypedTask(
   args: { title: string; workType: string; assert: () => Promise<void> },
 ): Promise<void> {
   await page.getByRole('button', { name: 'Create work item' }).click();
-  await page.getByLabel('Title').fill(args.title);
+  await page.getByRole('textbox', { name: 'Title' }).fill(args.title);
   // Kind defaults to Task (a leaf) so the Work type picker is present; set it
   // explicitly anyway. `exact` — "Type" is a substring of "Work type".
   await page.getByRole('combobox', { name: 'Type', exact: true }).click();
@@ -209,7 +209,7 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
   // ── 3. LEAF-ONLY — the Work type control is ABSENT for a container kind ──────
   await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
-  await page.getByLabel('Title').fill('A story has no work type');
+  await page.getByRole('textbox', { name: 'Title' }).fill('A story has no work type');
   await page.getByRole('combobox', { name: 'Type', exact: true }).click();
   await page.getByRole('option', { name: 'Story', exact: true }).click();
   await expect(

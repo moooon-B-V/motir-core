@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { drainScope, readScopeEdges, type ScopeDrainInput } from '../src/commands/scopeDrain.js';
-import { closeOutRepos } from '../src/commands/auto.js';
+import { closeOutContainer, closeOutRepos } from '../src/commands/auto.js';
 import { orderClaimedSet, unsatisfiedBlockers, type ScopeEdges } from '../src/scopedRun.js';
 import { autoExitCode, renderAutoSummary, type AutoSummary } from '../src/autoLoop.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
@@ -90,6 +90,10 @@ interface Fake {
   dispatched: string[];
   /** Whether each prompt read carried a session-branch seed, in order. */
   promptSeeds: boolean[];
+  /** Every CONTAINER link the drain declared, `<KEY>@<url>` (MOTIR-4969). */
+  links: string[];
+  /** Every status move the drain asked for, `<KEY>:<status>` (MOTIR-4969). */
+  transitions: string[];
   stderr: string;
   root: string;
 }
@@ -150,6 +154,17 @@ function client(): MotirClient {
       return {};
     },
     reportImplementation: async () => ({}),
+    // MOTIR-4969 — the CONTAINER link the drain now declares when its carried
+    // set shares a parent. Recorded rather than counted in `calls`, so the
+    // drain's existing call-order assertions are untouched.
+    linkPullRequest: async (args: { key: string; url?: string }) => {
+      fake.links.push(`${args.key}@${args.url ?? '?'}`);
+      return undefined;
+    },
+    transitionStatus: async (args: { key: string; status: string }) => {
+      fake.transitions.push(`${args.key}:${args.status}`);
+      return {};
+    },
     getWorkItem: async (key: string) => ({
       item: { identifier: key, status: replanned.has(key) ? 'planning' : 'in_review' },
     }),
@@ -204,7 +219,15 @@ beforeEach(() => {
   process.env['MOTIR_CONFIG_HOME'] = home;
   const root = mkdtempSync(join(tmpdir(), 'motir-drain-'));
   mkdirSync(join(root, 'motir-core'), { recursive: true });
-  fake = { calls: [], dispatched: [], promptSeeds: [], stderr: '', root };
+  fake = {
+    calls: [],
+    dispatched: [],
+    promptSeeds: [],
+    links: [],
+    transitions: [],
+    stderr: '',
+    root,
+  };
   replanned = new Set();
   claimRefuses = new Set();
   repoSets = {};
@@ -660,6 +683,60 @@ describe('the scoped drain’s summary goes through the same draft close-out', (
     // pull request is a DRAFT and is NOT readied while a child is outstanding.
     expect(summary.prs[0]).toMatchObject({ outcome: 'existing', draft: true });
     expect(renderAutoSummary(summary)).toContain('PROD-1 is NOT finished');
+  });
+});
+
+// ── the STORY BINDING (MOTIR-4969) ─────────────────────────────────────────
+//
+// ⚠️ ASSERTED FROM THE DRAIN'S OWN LOOP, for the reason the block above this one
+// states: the eager open was written for THIS lane and shipped only on the other
+// one, because the test that proved it drove `runAutoLoop`. The link rides the
+// same helper on the same trigger, so it inherits that lesson rather than
+// re-learning it. The per-ARM assertions are in `test/sessionPrContainer.test.ts`.
+
+describe('the scoped drain declares what its session pull request delivers', () => {
+  it('links the claimed container once its carried set shares a parent', async () => {
+    const { run } = recordingGit();
+
+    await drive([member('PROD-2'), member('PROD-3')], { 'PROD-3': ['PROD-2'] }, { run });
+
+    // ONE link, not one per card: the container is the deliverable, and the
+    // merge cascades DOWN to the children from it.
+    expect(fake.links).toEqual(['PROD-1@https://github.test/pull/9001']);
+  });
+
+  it('links NOTHING while the drain has landed only one card', async () => {
+    // A set of one is indistinguishable from a leaf run, and naming the story
+    // there would close it on a single child.
+    const { run } = recordingGit();
+
+    await drive([member('PROD-2')], { 'PROD-2': [] }, { run });
+
+    expect(fake.links).toEqual([]);
+  });
+
+  it('the DRAIN itself flips no container — that is the close-out’s, in order', async () => {
+    // ⚠️ THE ORDER IS THE RULE. The container is told it is built only after
+    // every repository's pull request has its final title and body and has been
+    // marked ready, which is `closeOutRepos` followed by `closeOutContainer`. A
+    // drain that moved the status itself would claim the run finished while the
+    // pull request still said "0 work items".
+    const { run } = recordingGit();
+
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3')],
+      { 'PROD-3': ['PROD-2'] },
+      {
+        run,
+      },
+    );
+
+    expect(fake.transitions).toEqual([]);
+
+    closeOutRepos(summary, run);
+    await closeOutContainer(session().client, summary);
+
+    expect(fake.transitions).toEqual(['PROD-1:implemented']);
   });
 });
 

@@ -124,7 +124,7 @@ test('@smoke @-mention a work item → live chip + relates_to → peek, live ren
 
   // ── 1. @-mention the target in the edit-form Description editor ────────────
   await page.goto(`/items/${source.identifier}/edit`);
-  const description = page.getByLabel('Description');
+  const description = page.getByRole('textbox', { name: 'Description' });
   await expect(description).toBeVisible();
   await description.click();
   await page.keyboard.type('See ');

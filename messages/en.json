@@ -3353,6 +3353,10 @@
         "everyCard": "Applies to every work item",
         "notApplied": "Not applied",
         "notRecurred": "Not seen in {days} days",
+        "phase": {
+          "lay": "Laying a level",
+          "author": "Writing a body"
+        },
         "applyingTitle": "Motir is applying this.",
         "applyingBody": "It goes into every plan drafted for this project.",
         "sectionHappened": "What happened",
@@ -7005,8 +7009,10 @@
   "repositorySet": {
     "overline": "Your project's code",
     "title": "Motir will host your code",
+    "titleMixed": "Motir will host the new code",
     "lead": "Your project's code lives with Motir, ready for your agents to start work.",
     "promise": "<b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub whenever you want.",
+    "promiseMixed": "<b>It's yours.</b> Motir keeps the code it hosts safe and private — move it to your own GitHub whenever you want.",
     "continueCta": "Continue",
     "working": "Setting up your code…",
     "workingDetail": "This takes a few seconds. Your plan is already in your backlog — you can leave this page.",
@@ -7887,6 +7893,16 @@
     "verb": {
       "approve": "Approve",
       "requestChanges": "Request changes"
+    },
+    "port": {
+      "label": "The subject being decided",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "verbsReturn": "The verbs return when the subject renders.",
+      "failed": {
+        "title": "You cannot approve what cannot be shown.",
+        "next": "Retry above, or ask the agent to republish."
+      }
     },
     "waitingOn": "Waiting on {name}.",
     "theAssignee": "this work item's assignee",

@@ -24,7 +24,7 @@ import {
 import { orderClaimedSet } from '../scopedRun.js';
 import { drainScope } from './scopeDrain.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
-import { closeOutRepos, parseMax, requireAgent } from './auto.js';
+import { closeOutContainer, closeOutRepos, parseMax, requireAgent } from './auto.js';
 import {
   autoOnlyFlagError,
   findingsPolicyOf,
@@ -842,6 +842,14 @@ export async function runCommand(
       // multi-repo scope that is one PER REPO, and the summary names each — "one
       // pull request, one CI run" is exactly true for a single-repo scope only.
       closeOutRepos(summary, run, open);
+      // ⚠️ THEN THE CONTAINER (MOTIR-4969), and only then. The close-out above
+      // is what rewrites every repository's pull request and marks it ready; the
+      // story is told it is built afterwards, so a run that dies in between
+      // leaves drafts AND a container that is not Implemented — the pair that is
+      // true. It re-reads the same `open` the close-out did, through
+      // `summary.outstanding`, so the two cannot disagree about whether a child
+      // is missing.
+      await closeOutContainer(client, summary);
       // Each repository's session pull request, with the outcome the close-out
       // reported — `opened` · `existing` · `failed` · `empty`. Whether it was
       // left a DRAFT rides on the report too, and it is the thing a person

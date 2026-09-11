@@ -141,7 +141,7 @@ test('@smoke renders the canonical detail page (header · rendered Markdown · c
   await expect(page.getByTestId('item-identifier')).toHaveText(item.identifier);
 
   // Rendered Markdown (not raw source): a real anchor, bold, and inline code.
-  const desc = page.getByLabel('Work item description');
+  const desc = page.getByRole('main').getByLabel('Work item description');
   await expect(desc.getByRole('link', { name: 'docs' })).toHaveAttribute(
     'href',
     'https://example.com/guide',
@@ -301,7 +301,7 @@ test('@smoke a wide markdown table scrolls inside the description column instead
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/items/${item.identifier}`);
 
-  const prose = page.getByLabel('Work item description');
+  const prose = page.getByRole('main').getByLabel('Work item description');
   await expect(prose.locator('table')).toBeVisible();
 
   const wrap = prose.locator('.motir-table-wrap');
@@ -686,7 +686,7 @@ test('@smoke create with a link (2.4.10): the link is written atomically with th
 
   await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
-  await page.getByLabel('Title').fill('Created with a link');
+  await page.getByRole('textbox', { name: 'Title' }).fill('Created with a link');
 
   // The Linked-issues section: search the target (default "Blocked by") + Add.
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
@@ -720,7 +720,7 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
 
   await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
-  await page.getByLabel('Title').fill('No links after all');
+  await page.getByRole('textbox', { name: 'Title' }).fill('No links after all');
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await searchLinkPicker(page, 'Not actually');
   await page.getByRole('option', { name: /Not actually linked/ }).click();

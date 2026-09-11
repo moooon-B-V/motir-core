@@ -47,7 +47,14 @@ export async function decideApprovalGateAction(
 ): Promise<DecideGateActionResult> {
   const ctx = await requireContext();
   try {
-    const { gate } = await approvalGatesService.decide({ gateId, decision, noteMd }, ctx);
+    const { gate } = await approvalGatesService.decide(
+      // `ui` — a SERVER ACTION is a person pressing the control in Motir. It is
+      // the audit's strongest claim (ADR §6a: *"a human click must be
+      // distinguishable from a programmatic call"*), so it is stated at the one
+      // call site that actually knows it rather than defaulted in the door.
+      { gateId, decision, noteMd, source: 'ui' },
+      ctx,
+    );
     return { ok: true, gate };
   } catch (err) {
     // The shared project gate's two refusals. A non-browser reads NOT_FOUND and

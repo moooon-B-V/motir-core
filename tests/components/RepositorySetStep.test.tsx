@@ -485,3 +485,60 @@ describe('a READY set REPORTS the invitation rather than asking for one', () => 
    Postgres: `tests/projectRepos/projectRepoAccessService.test.ts` asserts the
    invite per created row, the no-identity arm, the refusal that does not damage
    the repository, and the accepted-record skip. */
+
+// ── THE MIXED SET (bug MOTIR-5049 · design §7b, v6) — what the step may CLAIM ──
+//
+// A project can hold a repository the ORGANISATION already owns beside one Motir
+// is creating: `organizationRepoService` appends a `connected` / `organization`
+// row to whatever set the project has. The step is still drawn — there IS a row
+// to establish — but two of its elements are SET-WIDE sentences, and over a
+// mixed set they speak for a repository that is not Motir's to speak for.
+//
+// ⚠️ THE TWO PREDICATES ARE DIFFERENT AND BOTH ARE PINNED HERE. `state` decides
+// whether the step APPEARS (that half is `plan-detail-settled-set.test.tsx`);
+// `seedSource` decides what it may CLAIM. A build that read one for the other
+// would pass one of these files and fail the other.
+describe('the MIXED set scopes the two set-wide sentences (MOTIR-5049)', () => {
+  const orgRow = () =>
+    row({
+      id: 'r-org',
+      role: 'shared',
+      name: 'atlas-shared',
+      state: 'connected',
+      seedSource: 'organization',
+    });
+  const motirRow = () => row({ id: 'r-web', role: 'web', name: 'atlas-web' });
+
+  it('scopes the TITLE and the PROMISE when the set also holds an organisation row', () => {
+    renderStep(view([orgRow(), motirRow()]));
+
+    expect(screen.getByText('Motir will host the new code')).toBeTruthy();
+    expect(screen.queryByText('Motir will host your code')).toBeNull();
+    // The promise is SHOWN, not suppressed — it is a standing guarantee about
+    // the rows Motir DOES host, and dropping it would take that guarantee off
+    // the half of the set it is true of.
+    expect(screen.getByText(/Motir keeps the code it hosts safe and private/)).toBeTruthy();
+    expect(screen.queryByText(/Motir keeps it safe and private/)).toBeNull();
+  });
+
+  it("keeps the UNSCOPED wording byte for byte when no row is the organisation's", () => {
+    // The common case, and the test a scope edit has to pass: a reader with an
+    // all-Motir set cannot tell that the mixed arm exists.
+    renderStep(view([motirRow()]));
+
+    expect(screen.getByText('Motir will host your code')).toBeTruthy();
+    expect(screen.queryByText('Motir will host the new code')).toBeNull();
+    expect(screen.getByText(/Motir keeps it safe and private/)).toBeTruthy();
+  });
+
+  it('still names NO repository, role, account or count on a mixed set', () => {
+    // §7b: "Both edits are SCOPE, not information." The #151 rule is unchanged —
+    // the scoped strings are narrower SUBJECTS, never a disclosure about the set.
+    const { container } = renderStep(view([orgRow(), motirRow()]));
+    const text = container.textContent ?? '';
+
+    for (const leak of ['atlas-shared', 'atlas-web', 'organization', 'shared', '2', 'two']) {
+      expect(text.includes(leak)).toBe(false);
+    }
+  });
+});

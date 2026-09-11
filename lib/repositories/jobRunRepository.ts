@@ -312,6 +312,42 @@ export const jobRunRepository = {
   },
 
   /**
+   * Every SUCCEEDED code-graph index run, newest first, across ALL workspaces
+   * (MOTIR-5027) — the population the rebuild-streak probe reads.
+   *
+   * Like `listAll` and `findLatestStartedAtByEventNames` it carries no workspace
+   * filter, so the caller MUST supply a `withSystemContext` tx: `system.*` jobs
+   * write `workspace_id IS NULL` and that is the only RLS branch which admits
+   * those rows. Without it this returns ZERO rows and no error, which is
+   * indistinguishable from "the feature never ran" — the wrong conclusion in
+   * the expensive direction.
+   *
+   * ⚠️ BOTH FUNCTION IDS, deliberately. `system.code-graph-refresh` is the
+   * push-driven refresh and `system.code-graph-index` the onboarding index; both
+   * write `indexModes` through the same `finishIndexRun`, and a streak computed
+   * over only one of them would be broken by the other's runs without ever
+   * saying so.
+   *
+   * ⚠️ `status: 'succeeded'` IS THE PREDICATE, and it is load-bearing. A failed
+   * run records no mode at all, so admitting one would insert a hole in the
+   * streak that reads exactly like a `sync`.
+   */
+  async listSucceededCodeGraphRuns(
+    tx: Prisma.TransactionClient,
+    limit = 2000,
+  ): Promise<Array<{ startedAt: Date; output: Prisma.JsonValue | null }>> {
+    return tx.jobRun.findMany({
+      where: {
+        functionId: { in: ['system.code-graph-refresh', 'system.code-graph-index'] },
+        status: 'succeeded',
+      },
+      select: { startedAt: true, output: true },
+      orderBy: { startedAt: 'desc' },
+      take: limit,
+    });
+  },
+
+  /**
    * The most recent run of one event name, across ALL workspaces (MOTIR-1167).
    *
    * The operator console's "Last health check" signal: the `job_run` row for

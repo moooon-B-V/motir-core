@@ -85,7 +85,7 @@ function rankedRow(over: Record<string, unknown> = {}): Record<string, unknown> 
     scope: 'global',
     kinds: [],
     types: ['code'],
-    phases: ['deepen'],
+    phases: ['author'],
     distance: 0.12,
     ...over,
   };

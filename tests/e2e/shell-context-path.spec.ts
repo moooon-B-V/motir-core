@@ -118,7 +118,7 @@ test.describe('the shell’s context path', () => {
     await project.click();
     await page.getByRole('button', { name: 'Create project' }).click();
     await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
-    await page.getByLabel('Project name').fill('Marketing Site');
+    await page.getByRole('textbox', { name: 'Project name' }).fill('Marketing Site');
     await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
     await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible();
     await expect(project).toContainText('Marketing Site');

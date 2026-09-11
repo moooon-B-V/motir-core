@@ -272,9 +272,16 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
       // cannot complete that container or cascade `done` onto children that have
       // not been built. Bug MOTIR-3268's hold carried that invariant by opening
       // nothing at all; the draft carries it without withholding CI.
+      //
+      // ⚠️ AND IT IS ALSO WHAT LINKS IT (MOTIR-4969). A scoped run over a story
+      // carries that story's children, so the parent partition of `records` is
+      // `shared-parent` from the second landed card onward and the session pull
+      // request declares the STORY it delivers. The arm is read off the carried
+      // set rather than off this lane's name — `motir run sprint` comes through
+      // here too, spans parents, and must invent no story.
       if (landedWork(record)) {
-        for (const session of repo ?? []) {
-          ensureRepoPullRequest(session, runId, run);
+        for (const repoSession of repo ?? []) {
+          await ensureRepoPullRequest(repoSession, runId, run, { client, carried: records });
         }
       }
 

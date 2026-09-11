@@ -81,6 +81,12 @@ export async function POST(
         gateId,
         decision,
         noteMd: typeof body.noteMd === 'string' ? body.noteMd : null,
+        // `api` — a token called the REST API (ADR §6a). NOT `ui`, even though a
+        // browser can reach this route: the record answers *how did the decision
+        // arrive*, and this door authenticates a caller rather than witnessing a
+        // click. An MCP tool deciding a gate would say `mcp` here, and the
+        // GitHub sync `github` (§6b's amendment); neither exists yet.
+        source: 'api',
       },
       ctx,
     );

@@ -109,7 +109,7 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
 
   // The proposed items render on the canvas (with a stale badge on the drifted
   // ones) — the canvas MOUNTS the proposed PlanItems, it doesn't redraw a tree.
-  await expect(page.getByLabel('Proposed plan canvas')).toBeVisible();
+  await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
   await expect(page.getByTestId('plan-item-node').first()).toBeVisible();
   await expect(page.getByTestId('stale-badge').first()).toBeVisible();
 

@@ -210,7 +210,7 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
-    await page.getByLabel('Title').fill('Editable issue');
+    await page.getByRole('textbox', { name: 'Title' }).fill('Editable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
     const toast = page.getByText(/^\S+ created$/);
@@ -246,7 +246,7 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
-    await page.getByLabel('Title').fill('Detail-view issue');
+    await page.getByRole('textbox', { name: 'Title' }).fill('Detail-view issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
     const toast = page.getByText(/^\S+ created$/);
@@ -283,7 +283,7 @@ test.describe('@a11y shell accessibility', () => {
 
     await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
-    await page.getByLabel('Title').fill('Linkable issue');
+    await page.getByRole('textbox', { name: 'Title' }).fill('Linkable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
     const toast = page.getByText(/^\S+ created$/);

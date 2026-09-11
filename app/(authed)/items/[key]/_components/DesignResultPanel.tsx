@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { AttachmentPreview, type PreviewableAttachment } from './AttachmentPreview';
+import { useReportPortRenderStatus } from '@/components/approvals/portRenderStatus';
 import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 
 // The Design result panel (Story MOTIR-2664 · Subtask MOTIR-2670), built to
@@ -53,6 +54,19 @@ import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence
  * cannot drift apart (MOTIR-3510).
  */
 const FRAME_HEIGHT = 'h-[32rem]';
+
+/**
+ * How long the reachability probe may say nothing before the frame is treated as
+ * failed (MOTIR-5032).
+ *
+ * It exists because `fetch` has two outcomes and the port has three: a probe
+ * that never settles is neither ready nor failed, and before the approval frame
+ * gated its verbs on the port that third case merely showed a permanent
+ * "loading" strip. Sized generously — this is a HEAD-shaped request to an
+ * object-store redirect, not a page load, so anything past a few seconds is a
+ * host that is not going to answer rather than a slow one.
+ */
+const PROBE_TIMEOUT_MS = 10_000;
 
 export interface DesignResultPanelProps {
   evidence: DesignEvidenceDTO | null;
@@ -142,8 +156,30 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
     // retry handler resets it before bumping `attempt` — so the effect only ever
     // reports an OUTCOME, which is what keeps it out of the set-state-in-effect
     // rule the act environment enforces.
+    //
+    // ⚠️ THE TIMEOUT IS THE THIRD OUTCOME, AND IT IS THE ONE A PROMISE CANNOT
+    // GIVE YOU (MOTIR-5032). `fetch` settles or rejects; it does not report
+    // "still nothing". A probe against a wedged object-store host therefore left
+    // this frame at `'loading'` FOR EVER — harmless while the panel was
+    // read-only, and not harmless once the approval frame gates its verbs on
+    // this state: a port stuck rendering is a decision nobody can ever make and
+    // a reader with no explanation. Whichever of the three lands first wins;
+    // `cancelled` makes the losers no-ops.
+    const timer = setTimeout(() => {
+      if (!cancelled) setState('failed');
+    }, PROBE_TIMEOUT_MS);
+    // ⚠️ DISARMED THE MOMENT THE PROBE SETTLES, IN BOTH ARMS — clearing it only
+    // in the effect's cleanup is not enough, and the difference is a real
+    // defect rather than tidiness. A successful probe does not re-run the
+    // effect, so a timer cleared only on cleanup stays armed over a frame that
+    // has already loaded and fires `'failed'` ten seconds later — retracting a
+    // rendered port and, now that the verbs are gated on it, taking a live
+    // decision away from a reader looking straight at its subject. Caught by
+    // `design-result-port-report.test.ts`'s "does NOT fire the timeout once the
+    // probe has settled".
     fetch(url, { method: 'GET', redirect: 'manual' })
       .then((res) => {
+        clearTimeout(timer);
         if (cancelled) return;
         // `type: 'opaqueredirect'` (the 302 we expect) reports `ok: false` and
         // `status: 0`, so treat any non-error settlement as reachable and let
@@ -151,12 +187,28 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
         setState(res.type === 'opaqueredirect' || res.ok ? 'ready' : 'failed');
       })
       .catch(() => {
+        clearTimeout(timer);
         if (!cancelled) setState('failed');
       });
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [url, attempt]);
+
+  // ⚠️ REPORTED TO THE APPROVAL FRAME ABOVE (MOTIR-5032) — the probe's own three
+  // outcomes, and nothing else.
+  //
+  // The `!url` case is NOT reported here, and that is a reachability fact rather
+  // than an oversight: the only call site filters on it
+  // (`assets.filter((a) => a.kind === 'mock' && a.url)`), so a url-less mock
+  // never reaches this component and an arm for it would be dead branch. The
+  // asset whose blob HAS been reclaimed is a real case and is answered one level
+  // up, in the panel's own `hasSubject` report, which is where the filter leaves
+  // it. The `return null` below stays as the defensive floor it already was.
+  useReportPortRenderStatus(
+    state === 'ready' ? 'rendered' : state === 'failed' ? 'failed' : 'rendering',
+  );
 
   if (!url) return null;
 
@@ -222,6 +274,23 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
 export function DesignResultPanel({ evidence, isDesignCard }: DesignResultPanelProps) {
   const t = useTranslations('designResult');
   const [preview, setPreview] = useState<PreviewableAttachment | null>(null);
+
+  // ⚠️ THE PANEL'S OWN REPORT TO THE APPROVAL FRAME — the "resolver returned the
+  // subject as unavailable" arm of state `X` (MOTIR-5032). The `MockFrame`
+  // report above answers for a subject that FAILED TO LOAD; this answers for one
+  // that is not there to load.
+  //
+  // Nothing published, or an evidence row with no note and not one asset
+  // carrying a URL, means there is NOTHING in band 2 to look at. As a read-only
+  // panel that is a perfectly good state and says so ("Nothing published yet").
+  // Under a gate it is the worst state to leave a live Approve button in, so the
+  // frame is told. Reported unconditionally and before the early return below,
+  // per the rules of hooks; a panel rendered OUTSIDE a frame has no listener and
+  // this is inert (`DesignResultSection`'s `if (!current) return port` path).
+  const hasSubject =
+    evidence !== null &&
+    (Boolean(evidence.noteMd) || evidence.assets.some((asset) => Boolean(asset.url)));
+  useReportPortRenderStatus(hasSubject ? 'rendered' : 'failed');
 
   // ── Nothing published yet ──────────────────────────────────────────────────
   // The most-seen state for a long while: every design subtask that shipped

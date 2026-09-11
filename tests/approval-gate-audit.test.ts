@@ -212,11 +212,21 @@ describe('a DECIDED gate is IMMUTABLE', () => {
     const gate = await withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.create(baseGate('subj-decide-twice'), tx),
     );
+    // The audit set rides the deciding write itself (MOTIR-5046) — it is not
+    // optional on this signature, and this literal is the shape the door now
+    // sends. What the columns SAY is asserted in
+    // `tests/approval-gate-audit-write.test.ts`, through the real door; here
+    // they are present only because the repository requires them.
     const decision = {
       state: 'approved' as const,
       decidedById: fx.ownerId,
       decidedAt: new Date(),
       noteMd: 'Ships as drawn.',
+      subjectVersion: 'sha-decide-twice',
+      decidedByLabel: 'Zhu Yue <owner@example.com>',
+      decidedUnderAuthority: 'assignee' as const,
+      decisionSource: 'ui' as const,
+      outcomeRef: 'done',
     };
 
     // The real door's write, through the real repository method. `decide` carries

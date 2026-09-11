@@ -115,9 +115,9 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
       phases: {
         type: 'array',
-        items: { type: 'string', enum: ['skeleton', 'deepen'] },
+        items: { type: 'string', enum: ['lay', 'author'] },
         description:
-          'WHICH PLANNING PHASE this lesson is about: "skeleton" (laying out titles and dependencies) or "deepen" (writing a card\'s body). Leaving it out means both.',
+          'WHICH PLANNING PHASE this lesson is about: "lay" (laying a level\'s children — shape, edges, coverage) or "author" (writing one card\'s body — criteria, sizing, claims). Leaving it out means both. The retired spellings "skeleton" and "deepen" are still accepted and read as "lay" and "author"; they are removed in a later release.',
       },
       sourceRef: {
         type: 'string',
@@ -1442,9 +1442,9 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
       phases: {
         type: 'array',
-        items: { type: 'string', enum: ['skeleton', 'deepen'] },
+        items: { type: 'string', enum: ['lay', 'author'] },
         description:
-          'Which part of a card you are writing: "skeleton" (laying out a level\'s children — shape, edges, coverage) or "deepen" (writing a body — criteria, sizing, claims). The coordinate only you can supply.',
+          'Which part of a card you are writing: "lay" (laying a level\'s children — shape, edges, coverage) or "author" (writing a body — criteria, sizing, claims). The retired spellings "skeleton" and "deepen" are still accepted and read as "lay" and "author"; they are removed in a later release. The coordinate only you can supply.',
       },
       limit: {
         type: 'integer',

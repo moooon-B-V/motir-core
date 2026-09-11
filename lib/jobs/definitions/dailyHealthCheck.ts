@@ -2,6 +2,7 @@ import { defineJob } from '../defineJob';
 import type { ScheduleHealthReportDTO } from '@/lib/dto/jobSchedules';
 import type { FleetBootableVerdict } from '@/lib/orchestrator';
 import type { ContainerAiAddressVerdict } from '@/lib/ai/containerAiAddress';
+import type { IndexRebuildStreakVerdictDTO } from '@/lib/dto/indexRebuildStreak';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
@@ -68,6 +69,27 @@ import type { ContainerAiAddressVerdict } from '@/lib/ai/containerAiAddress';
 // probe asks the other one. It is here for the reason every probe in this job is
 // here — the fault's entire history is having had no loud surface.
 //
+// As of MOTIR-5027 it carries a FIFTH probe, and it is the first one that reads
+// the LEDGER rather than a registry or an address — and the first that asks
+// whether a feature is DOING what it claims rather than whether a run
+// SUCCEEDED. The four above all ask a question about capability: can a container
+// boot, can it reach anything. "Build once, sync forever" is a claim about WHICH
+// of two paths a successful run took, so a deployment that rebuilds the entire
+// graph on every single run satisfies every one of them — correctly, because
+// none of them was asking. It ran that way twice: 2026-08-21 → 09-04
+// (MOTIR-4415) and 2026-08-21 → 09-10 (MOTIR-5009), both found by accident by a
+// person reading logs for something else. The mode had been on the ledger since
+// MOTIR-4945 with no reader; this is the reader. Same reason as every probe
+// above it — the fault's entire history is having had no loud surface.
+//
+// ⚠️ AND IT IS THE FIRST PROBE HERE WITH A DECLARED BLIND SPOT. motir-core
+// records whether it OFFERED a snapshot, not what the container did with one, so
+// a run that was offered one and rebuilt anyway is recorded as `sync` and is
+// invisible to this check. That boundary rides on the verdict and in the error
+// message (`INDEX_REBUILD_STREAK_BLIND_SPOT`), and MOTIR-5058 is the card that
+// closes the arm. Do not let a later reader take a green verdict here for a
+// guarantee it was never able to make.
+//
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
 // tick dead-letters immediately rather than retrying. That is also what makes
@@ -105,6 +127,14 @@ export interface DailyHealthCheckResult {
    *  that does not reports `not_applicable` beside a `not_applicable`
    *  `indexFleet`. */
   indexContainerAi: ContainerAiAddressVerdict;
+  /** Whether any repository has been denied a snapshot N consecutive times
+   *  (MOTIR-5027) — recorded on the healthy tick too, so the ledger answers
+   *  "was the index still incremental yesterday?". It is the first probe here
+   *  that reads the LEDGER rather than a registry or an address, and the first
+   *  that asks whether a feature is DOING what it claims rather than whether a
+   *  run succeeded. Its `blindSpot` rides on every arm; read it before drawing
+   *  any conclusion from a green one. */
+  indexRebuildStreak: IndexRebuildStreakVerdictDTO;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -220,6 +250,43 @@ export class IndexContainerAiAddressError extends Error {
   }
 }
 
+/**
+ * Thrown when a repository's index has been REBUILDING from scratch for the
+ * threshold number of consecutive runs (MOTIR-5027) — the assertion "build
+ * once, sync forever" never had.
+ *
+ * A SEPARATE error from the three above, and the message is the reason. Those
+ * send an operator to a registry or to a Fly secret because a container cannot
+ * BOOT or cannot REACH anything. This one fires when every container booted
+ * perfectly, reached motir-ai, built a real graph and published it — and did the
+ * expensive thing every single time. Nothing else in this job can be red for
+ * that, which is the entire defect: MOTIR-4415 and MOTIR-5009 each ran for
+ * weeks with every probe here green.
+ *
+ * ⚠️ THE MESSAGE CARRIES THE BLIND SPOT, and that is not padding. The DLQ row's
+ * `failure` is the whole of what a human reads, and a reader who takes this
+ * check to mean *the index is incremental* will read its silence as a guarantee
+ * it cannot make. So the sentence that says what it did NOT measure travels with
+ * the sentence that says what it did.
+ */
+export class IndexRebuildStreakError extends Error {
+  constructor(readonly verdict: Extract<IndexRebuildStreakVerdictDTO, { verdict: 'rebuilding' }>) {
+    const offenders = verdict.offenders
+      .map((o) => `${o.repoRef} (${o.consecutiveRebuilds} of its last ${o.modeRuns} runs)`)
+      .join(', ');
+    super(
+      `${verdict.offenders.length} repositor${verdict.offenders.length === 1 ? 'y has' : 'ies have'} ` +
+        `rebuilt the code graph from scratch on ${verdict.threshold}+ consecutive runs: ${offenders}. ` +
+        `"Build once, sync forever" is off — every one of those runs paid a full re-parse. ` +
+        `Two systems to fork on: ${verdict.candidates.join(' AND ')}. ` +
+        `Start with \`fly logs -a motir-ai\` for the withholding line, and compare ` +
+        `MOTIR_INDEXER_IMAGE's engine against the \`CodeRepo.codegraphVersion\` rows. ` +
+        `⚠️ SCOPE: ${verdict.blindSpot}`,
+    );
+    this.name = 'IndexRebuildStreakError';
+  }
+}
+
 export const dailyHealthCheck = defineJob(
   {
     id: 'system.daily-health-check',
@@ -247,6 +314,9 @@ export const dailyHealthCheck = defineJob(
     );
     const indexContainerAi = await ctx.step.run('index-container-ai-address', () =>
       services.fleetPreflight.checkIndexContainerAiAddress(),
+    );
+    const indexRebuildStreak = await ctx.step.run('index-rebuild-streak', () =>
+      services.indexRebuildStreak.check(),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
@@ -286,6 +356,30 @@ export const dailyHealthCheck = defineJob(
       throw new IndexContainerAiAddressError(indexContainerAi);
     }
 
-    return { ...DAILY_HEALTH_CHECK_PAYLOAD, schedules, fleet, indexFleet, indexContainerAi };
+    // The LEDGER probe, reported last and on the same terms as every one above
+    // it: only the DEFINITE arm is loud. `not_applicable` is a deployment that
+    // has never indexed, and `ok` can still carry `unknownRepoRefs` — repos
+    // whose runs recorded no mode at all, which is UNMEASURED rather than
+    // healthy and is deliberately not an alarm.
+    //
+    // ⚠️ WHY `unknown` IS NOT LOUD, stated because the opposite reading is
+    // reasonable and wrong. On the day this shipped 844 of 899 succeeded runs
+    // carried no mode, so failing on it would dead-letter this job every
+    // morning over a state no operator can act on — and a check that cries wolf
+    // is a check somebody silences, which is how MOTIR-3606 spent 23 days red
+    // with nobody reading it. It is REPORTED on the row instead, in its own
+    // field, so a reader can see what was not measured without being paged.
+    if (indexRebuildStreak.verdict === 'rebuilding') {
+      throw new IndexRebuildStreakError(indexRebuildStreak);
+    }
+
+    return {
+      ...DAILY_HEALTH_CHECK_PAYLOAD,
+      schedules,
+      fleet,
+      indexFleet,
+      indexContainerAi,
+      indexRebuildStreak,
+    };
   },
 );

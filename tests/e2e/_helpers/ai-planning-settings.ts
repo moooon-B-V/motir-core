@@ -33,7 +33,9 @@ import { expectSettledVisible } from './settle';
 
 /** The settings rail's own AI-planning row, scoped to the rail (defect 2). */
 export const aiPlanningRailEntry = (page: Page): Locator =>
-  page.getByLabel('Project settings').getByRole('link', { name: 'AI planning' });
+  page
+    .getByRole('navigation', { name: 'Project settings' })
+    .getByRole('link', { name: 'AI planning' });
 
 /** The settings panel the AI-planning page renders — the arrival landmark. */
 export const aiPlanningPanel = (page: Page): Locator => page.getByTestId('ai-planning-settings');

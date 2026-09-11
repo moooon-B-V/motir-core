@@ -101,8 +101,8 @@ test('the AI group carries both plan keys, and a role can hold author without de
   await openRolesList(page);
   await page.getByTestId('create-role').click();
   await page.waitForURL('**/settings/project/roles/new');
-  await page.getByLabel('Name').fill(ROLE_NAME);
-  await page.getByLabel('Start from').selectOption('member');
+  await page.getByRole('textbox', { name: 'Name' }).fill(ROLE_NAME);
+  await page.getByRole('combobox', { name: 'Start from' }).selectOption('member');
 
   // The switch that carried the escalation. Unticking it is the act that was
   // impossible before this card: under the old model the only way to withhold

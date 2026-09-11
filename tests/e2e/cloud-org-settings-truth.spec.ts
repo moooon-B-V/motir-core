@@ -93,6 +93,9 @@ test('the organization settings page offers no address it cannot resolve, and no
 
     // The absence, checked three independent ways. Any one of these surviving
     // would mean the row is still on the page in some form.
+    // MOTIR-5056: NOT converted. A `toHaveCount` assertion resolves the whole match
+    // set, so it cannot throw strict mode — this site is not in the defect class — and
+    // narrowing it to a role would weaken what the absence assertion proves.
     await expect(page.getByLabel('Organization URL')).toHaveCount(0);
     await expect(page.getByText('Organization URL', { exact: true })).toHaveCount(0);
     await expect(page.getByText('motir.co/', { exact: false })).toHaveCount(0);
@@ -111,7 +114,7 @@ test('the organization settings page offers no address it cannot resolve, and no
     const saved = page.waitForResponse(
       (r) => /\/api\/organizations\//.test(r.url()) && r.request().method() === 'PATCH',
     );
-    await page.getByLabel('Organization name').fill('moooon B.V.');
+    await page.getByRole('textbox', { name: 'Organization name' }).fill('moooon B.V.');
     // Let the new value sit in the field before the click, so the recording
     // shows what is being saved rather than a blur-and-jump.
     await beat();
@@ -208,6 +211,9 @@ test('the organization settings page offers no address it cannot resolve, and no
     // A closing beat so the recording ends on a readable frame rather than
     // cutting on the last click.
     await expect(page.getByRole('heading', { name: 'Organization settings' })).toBeVisible();
+    // MOTIR-5056: NOT converted. A `toHaveCount` assertion resolves the whole match
+    // set, so it cannot throw strict mode — this site is not in the defect class — and
+    // narrowing it to a role would weaken what the absence assertion proves.
     await expect(page.getByLabel('Organization URL')).toHaveCount(0);
   });
 });
