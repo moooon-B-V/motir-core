@@ -131,7 +131,14 @@ const REMEDY =
   'Use `page.getByRole(<role>, { name })` — the accessibility tree excludes the streamed and ' +
   'outgoing copies, which is the whole of why this class cannot touch it. Where the node carries ' +
   'no role, scope to the LIVE subtree instead (a dialog, a named region, `page.getByRole("main")`). ' +
-  '`.first()` / `.nth()` / `.last()` also resolve to one element and are exempt by name.';
+  '`.first()` / `.nth()` / `.last()` also resolve to one element and are exempt by name.\n\n' +
+  '⚠️ IF YOUR ASSERTION IS A `toHaveCount`, THIS GUARD IS NOT ABOUT YOU AND SHOULD NOT HAVE ' +
+  'FIRED — the matcher resolves the whole match set rather than asking for one element, so strict ' +
+  'mode has nothing to violate, and MOTIR-5186 made the scanner exempt it. Scoping an absence ' +
+  'assertion would make it prove strictly LESS, because the claim is that the string is absent ' +
+  'from the DOCUMENT. If you are reading this beside a `toHaveCount` line, the TAIL PARSE missed ' +
+  'your shape (a locator bound to a `const` and counted further down is a known limit) — widen ' +
+  '`endsInCountAssertion` in scripts/enumerate-page-locators.mjs rather than converting the site.';
 
 const WHY =
   'A page-rooted strict locator can match a node you never put there: React keeps the PREVIOUS ' +
@@ -227,6 +234,12 @@ describe('the guard BITES — demonstrated against the real scanner, not assumed
           "await expect(page.getByText('a locator nobody should write')).toBeVisible();",
           "await page.getByTestId('motir-5037-probe').click();",
           "await expect(page.getByRole('alert')).toHaveCount(0);",
+          // MOTIR-5186 — the three COUNT shapes, none of which is an offender.
+          // A count resolves the whole match set, so strict mode cannot fire;
+          // these must be seen by the scanner and marked exempt, NOT skipped.
+          "await expect(page.getByText('an absence nobody should convert')).toHaveCount(0);",
+          "await expect(page.getByTestId('motir-5186-msg'), 'with a message').toHaveCount(2);",
+          "await expect(page.getByTestId('motir-5186-chain').getByText('inner')).toHaveCount(0);",
           '',
         ].join('\n'),
       );
@@ -248,6 +261,21 @@ describe('the guard BITES — demonstrated against the real scanner, not assumed
       expect(
         pageRootedAlertCounts(sabotaged.alertAudit.rows).filter((r) => isProbe(r.file)),
       ).toHaveLength(1);
+
+      // MOTIR-5186 — a `toHaveCount` site is NOT an offender. The assertion
+      // above already says the probe's three count lines did not join `caught`,
+      // but an absence proves nothing on its own: a scanner that stopped SEEING
+      // them would satisfy it just as well. So assert what they positively ARE —
+      // enumerated, and carrying the exemption — which is also the property the
+      // allow-list's "no exempt row was banked" assertion reads.
+      const probeCounts = sabotaged.rows.filter(
+        (r) => isProbe(r.file) && r.exempt === '.toHaveCount()',
+      );
+      expect(probeCounts.map((r) => r.arg).sort()).toEqual([
+        "'an absence nobody should convert'",
+        "'motir-5186-chain'",
+        "'motir-5186-msg'",
+      ]);
 
       // GREEN again the moment it is gone — the other half of the demonstration,
       // and the half that proves the red was the probe rather than the weather.

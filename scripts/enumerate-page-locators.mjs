@@ -58,6 +58,72 @@ const METHODS = ['getByTestId', 'getByText', 'getByLabel', 'getByPlaceholder'];
  *  guaranteeing one element, so a filtered locator still throws strict mode. */
 const RESOLVERS = ['first', 'nth', 'last'];
 
+/** The FOURTH exemption, and it is the SAME mechanism as the three above rather
+ *  than a new rule (MOTIR-5186). Strict mode fires when a locator that must
+ *  resolve to ONE element resolves to several. `.first()` / `.nth()` / `.last()`
+ *  are exempt because they pick one; **`toHaveCount` is exempt because it never
+ *  asks for one** — the matcher resolves the WHOLE match set and asserts its
+ *  size, so a duplicated subtree changes the NUMBER rather than throwing. There
+ *  is nothing for strict mode to violate.
+ *
+ *  It was applied to three of its four instances for a period, and the fourth is
+ *  the most common: 169 of 1189 ruled rows at `faeb26e61`. The cost of leaving it
+ *  out was not cosmetic — the allow-list overstated the convertible debt by 14%,
+ *  and a NEW absence assertion was UNWRITABLE, because the guard refused it as a
+ *  new page-rooted site while `docs/decisions/page-rooted-locator-disposition.md`
+ *  told its author to leave it page-rooted and the allow-list may only shrink.
+ *
+ *  ⚠️ Converting one would also make the test prove strictly LESS: the claim is
+ *  that a string is absent from the DOCUMENT, and a role filter or a subtree
+ *  scope narrows exactly the thing being quantified over.
+ *
+ *  ⚠️ Read on the PARSED TAIL, never on the raw line. A line regex reproduces the
+ *  proxy this exemption's own population was first estimated with — it matches a
+ *  neighbouring `toHaveCount` that belongs to a different locator, and misses one
+ *  the formatter wrapped. `usageOf`'s own comment records the same limit. */
+const COUNT_MATCHER = /^\s*(?:,[\s\S]*?)?\)\s*\.\s*(?:not\s*\.\s*)?toHaveCount\s*\(/;
+
+/** Locator BUILDERS, which compose lazily into one selector and resolve nothing.
+ *  A chain of them before the matcher therefore cannot throw either, so the
+ *  count check skips them — `page.getByTestId(X).getByText(Y)` counted is as
+ *  immune as `page.getByText(Y)` counted. */
+const CHAINED = [
+  'getByRole',
+  'getByTestId',
+  'getByText',
+  'getByLabel',
+  'getByPlaceholder',
+  'getByTitle',
+  'getByAltText',
+  'locator',
+  'filter',
+  'and',
+  'or',
+];
+
+/** Does this locator's tail end in a `toHaveCount` assertion on the locator?
+ *
+ *  Three shapes occur in this suite, all of them the same assertion:
+ *    `expect(page.getByText(X)).toHaveCount(0)`          → `).toHaveCount(`
+ *    `expect(page.getByText(X), 'msg').toHaveCount(0)`   → `, 'msg').toHaveCount(`
+ *    `expect(page.getByTestId(X).getByText(Y)).toHaveCount(0)` → a chain, then the above
+ *
+ *  The leading `)` is `expect(`'s own close, which is why the check runs on the
+ *  ASSERTION rather than only on the locator chain. */
+function endsInCountAssertion(tail) {
+  let rest = tail;
+  for (let hop = 0; hop <= CHAINED.length; hop++) {
+    if (COUNT_MATCHER.test(rest)) return true;
+    const chained = /^\s*\.\s*([A-Za-z]\w*)\s*\(/.exec(rest);
+    if (!chained || !CHAINED.includes(chained[1])) return false;
+    const open = chained[0].length - 1;
+    const end = endOfCall(rest, open);
+    if (end === -1) return false;
+    rest = rest.slice(end);
+  }
+  return false;
+}
+
 const args = process.argv.slice(2);
 const argOf = (name, fallback) => {
   const i = args.indexOf(name);
@@ -205,6 +271,14 @@ for (const file of files) {
         const tail = end === -1 ? '' : joined.text.slice(end);
 
         const resolver = RESOLVERS.find((r) => new RegExp(`^\\s*\\.\\s*${r}\\s*\\(`).test(tail));
+        // The resolver arm wins the LABEL when both hold — `.first()` is the
+        // narrower statement about the locator, and it is what the allow-list's
+        // 132 existing exempt rows already say.
+        const exempt = resolver
+          ? `.${resolver}()`
+          : endsInCountAssertion(tail)
+            ? '.toHaveCount()'
+            : null;
 
         const key = `${file}::${method}::${arg ?? '<multiline>'}`;
         const n = (seen.get(key) ?? 0) + 1;
@@ -217,7 +291,7 @@ for (const file of files) {
           arg,
           occurrence: n,
           line: i + 1,
-          exempt: resolver ? `.${resolver}()` : null,
+          exempt,
           usage: ACTIONS.test(tail) ? 'action' : usageOf(line, at),
           wrapped: joined.text !== line,
           unresolved: end === -1,
@@ -281,6 +355,14 @@ const inventory = {
     'hand-editing a row. MOTIR-5037 seeds its allow-list from `rows` and asserts',
     'it tight in both directions, so a row that stops describing the tree must be',
     'REMOVED by whoever fixed the site — which is the ratchet.',
+    '⚠️ THE COUNT ARM JOINED THE EXEMPTION ON 2026-09-11 (MOTIR-5186): a',
+    'page-rooted locator whose parsed tail ends in a `toHaveCount` assertion is',
+    'now `exempt: ".toHaveCount()"`, on the SAME mechanism as `.first()` /',
+    '`.nth()` / `.last()` — the matcher resolves the whole match set instead of',
+    'asking for one element, so strict mode has nothing to violate. It moved 169',
+    'of 1189 ruled rows (14.2%, 78 files) out of the ruled set at faeb26e61;',
+    '`totals.ruled` and `byMethod.*.ruled` drop by exactly that and `totals.rows`',
+    'is unchanged, because an exempt row is enumerated rather than dropped.',
   ].join(' '),
   remedy:
     "getByRole(<role>, { name }) — the accessibility tree excludes the streamed and outgoing copies. Where the node carries no role, scope to a live subtree instead (a dialog, a named region, page.getByRole('main')).",
