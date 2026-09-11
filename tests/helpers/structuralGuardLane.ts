@@ -343,6 +343,19 @@ export const STRUCTURAL_GUARD_SPECS = [
   // — hence the `SELF_WALKING_MEMBERS` entry beside this one in
   // `tests/ci-structural-guards-lane.test.ts`.
   'tests/e2e-acceptance-lane-imports.test.ts',
+  // ── tests/ — the PAGE-ROOTED LOCATOR ratchet (MOTIR-5037) ─────────────────
+  // A whole-tree read of `tests/e2e/**` — 277 files — asking which locators are
+  // page-rooted and strict. It reaches the tree through a SUBPROCESS
+  // (`scripts/enumerate-page-locators.mjs --worktree`, the one predicate it
+  // shares with `tests/helpers/pageLocatorInventory.json`) rather than through
+  // `readdirSync` or `git ls-files` in its own source, so `entryPointsIn` cannot
+  // see it and the derivation cannot either — hence the `SELF_WALKING_MEMBERS`
+  // entry beside this one in `tests/ci-structural-guards-lane.test.ts`.
+  //
+  // It opens no database and renders nothing; it imports `node:child_process`,
+  // `node:fs` and `node:path` only, so it carries no coverage into the merged
+  // report. ~0.15 s per scan, three scans.
+  'tests/e2e-page-rooted-locators.test.ts',
 ] as const;
 
 /**
