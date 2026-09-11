@@ -3291,3 +3291,175 @@ the design worktree before the pull request, which is the only lane whose specs
 read `design/**` and therefore the one an asset-only diff would otherwise never
 trigger. The temp render harness used for the shipped-card screenshot was deleted
 before it ran: an asset citing its own generator fails the address guard.
+
+---
+
+## ⭐ Approvals — the gate switches (MOTIR-4942 — `approvals.mock.html`)
+
+**A new project-settings ROOM: `Project settings → Approvals`, at
+`/settings/project/approvals`, holding the switches that decide which approval
+gates this project raises.** Its first and only inhabitant is the
+**acceptance-video gate**; the asset is `approvals.mock.html` + `approvals.png`.
+
+Card: **MOTIR-4942**, a design task under epic **MOTIR-4878** (_Approval gates_).
+It gates **MOTIR-4925** (the switch's code) and informs **MOTIR-4949** /
+**MOTIR-4950**.
+
+> **⚠️ This card's FIRST pass is not in the tree.** It placed the same control in
+> `automation ▸ AI planning` and drew it as panel 8 of
+> `design/ai-settings/ai-planning-settings.mock.html`, with an A1–A11 amendment to
+> that area's notes. The room decision was withdrawn on 2026-09-09 and pull
+> request #2730 was closed **unmerged**, so neither file ever reached `origin/main`
+> — verified by grep on 2026-09-11. **Nothing is superseded, and no superseded-by
+> line is owed**; `design/ai-settings/` is untouched by this card. The withdrawn
+> argument is recorded below under _Rejected candidates_ because the reasoning is
+> the useful part, not the drawing.
+
+### 1. WHERE it lives, and how that was decided
+
+**The room was decided from the switch's READERS and WRITERS, never from what it
+resembles.** Grepped on `origin/main`, 2026-09-11:
+
+|             |                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Readers** | `lib/services/acceptanceVideoEligibilityService.ts` — the ONE computation of `hasPaidAiPlan AND the toggle`, and the only direct reader. Its consumers: `AcceptancePanel` (the item page), `lib/acceptanceEvidence/publishAuth.ts` (the CI publish gate), `lib/mcp/tools/publishAcceptanceResult.ts` (the MCP publish gate). Once MOTIR-4950 registers the kind, the `acceptance_result` gate's own creation path joins them. |
+| **Writers** | this control, and the acceptance panel's own **Turn on** action — whose `settingsHref` + `#acceptance-video` anchor follow the switch to the project (MOTIR-4949 criterion 5).                                                                                                                                                                                                                                                |
+
+Nothing in planning, board, estimation, fields or components touches it, in
+either direction. **What those consumers add up to is an approval gate** — the
+concept MOTIR-4878 exists for — so the switch belongs with the gates.
+
+**And it is a ROOM rather than one card bolted onto an existing page**, because a
+SECOND project-tier gate switch is already decided:
+`docs/decisions/approval-gates.md` §7 moves `Workspace.subtaskPrMergeMode` to
+`Project.prMergeMode`, where `manual` **raises** a `pull_request_merge` gate and
+`auto` raises none — the same sentence this switch says, about a different kind.
+§7 also asks for _"a deep link from the approval surface… to the switch that
+stops asking them"_, and that link needs somewhere to land.
+
+**Registry entry** (`lib/settings/projectSettingsNav.ts`), which is the whole of
+the wiring — the rail, the ⌘K deep link and the route↔registry totality test all
+follow from it, with no layout change:
+
+```ts
+{
+  id: 'approvals',
+  group: 'work',                       // directly after `workflow`
+  href: '/settings/project/approvals',
+  icon: ShieldCheck,
+  labelKey: 'nav.approvals',
+  permission: 'workflow:manage',
+}
+```
+
+**Why `group: 'work'`, after Workflow.** A status graph and an approval gate are
+the two things in Motir that decide when work may move; they are neighbours.
+**Why `workflow:manage` and not a new key.** It is the shipped key for _may you
+configure how work moves through this project_, and this card has no warrant to
+add a permission to the catalog. A dedicated `gate:manage` is a reasonable later
+split — the same shape as `ai:configure` / `lesson:view` — and is explicitly NOT
+decided here.
+
+### 2. Rejected candidates, and why each fails
+
+- **`automation ▸ AI planning`** — the first pass's answer, withdrawn. Nothing in
+  the planning path reads the flag; the room configures the PLANNER; and its
+  `ai:configure` gate would make _"may this project ask for acceptance
+  approval"_ depend on _"may this person configure the planner"_.
+- **`work ▸ Estimation`** — chosen by resemblance to a small project-scoped
+  toggle. Estimation reads nothing here.
+- **A row inside `work ▸ Workflow`** — the closest call. The workflow room is
+  about the status GRAPH; a gate is a decision a PERSON makes that the graph then
+  obeys. Folding one into the other loses the distinction the epic exists to
+  draw, so the two stay neighbours instead.
+
+**The general lesson, and it is the one this card was re-subjected for:** decide
+where a setting lives by tracing its readers and writers in code, never by which
+surface it resembles. A survey of existing rooms can only return a room, so it
+returns the best-fitting one and never the finding that the value is an instance
+of a concept the plan already has a container for.
+
+### 3. The surface — panels and states
+
+| panel | what it draws                                                                                                 |
+| ----- | ------------------------------------------------------------------------------------------------------------- |
+| **0** | **the DOOR** — the project-settings rail with `Work ▸ Approvals` ACTIVE. The access path is drawn, not named. |
+| **1** | the acceptance-video gate switch, **ON**                                                                      |
+| **2** | **OFF**                                                                                                       |
+| **3** | **no paid AI plan** — disabled, the entitlement explained, Upgrade                                            |
+| **4** | **read-only** — a member who may browse but not manage                                                        |
+| **5** | the readers/writers argument and the rejected candidates, drawn beside the thing they justify                 |
+
+**Copy — and it never claims to control recording.** The shipped org-tier card
+says _"Record a short video when a story's E2E passes and attach it to the story
+for review & approval."_ The run records the video either way, and a refused
+publish says so in as many words. The gate switch reads:
+
+> **Acceptance video approval**
+> When a story's end-to-end run produces a video receipt, hold the story and ask
+> a person to approve it. The run records the video either way — this decides
+> whether anyone is asked to sign it off.
+
+**The state line carries a NAME and a CONSEQUENCE**, because "On" alone does not
+tell a reader what their project just started doing:
+
+| state     | name            | consequence line                                                        |
+| --------- | --------------- | ----------------------------------------------------------------------- |
+| on        | **On**          | A story with a receipt waits for a person to approve it.                |
+| off       | **Off**         | No approval is asked, and no receipt is uploaded.                       |
+| no plan   | **Unavailable** | Your organisation has no paid Motir AI plan, so no receipt is produced. |
+| read-only | **On**          | _(as above)_, plus the footer line below                                |
+
+Footers: the no-plan state carries _"The plan is bought once, for the
+organisation — not per project."_ + **Upgrade**; the read-only state carries
+_"Only a project admin can change this. You are seeing what this project has
+chosen."_
+
+**Primitives and token roles.** `Card` (header / body / footer slots — the same
+composition `AcceptanceVideoCard.tsx` already uses) · `Switch` · `Button`
+(primary, for Upgrade) · `Pill` for the rail's own chrome. Ink: title
+`--el-text`; description and state gloss `--el-text-secondary` — **never**
+`--el-text-muted`, which fails AA on every surface this card lands on. The OFF
+track is `--el-border-strong`, deliberately not a danger colour: a project that
+does not ask for acceptance approval has not done anything wrong. Radius
+`--radius-card` / `--radius-badge`; padding `--spacing-chip-*`; elevation
+`--shadow-card`.
+
+### 4. What the CODE owes — read against SHIPPED REALITY
+
+The current org-tier control was rendered from its own source before anything
+here was drawn (`AcceptanceVideoCard.tsx` in all four states, with the real
+`globals.css`). Two defects fell out of that render, and **MOTIR-4925 owes both**:
+
+1. **The no-plan state contradicts itself.** The label is computed from
+   `enabled`, the switch from `enabled && hasPlan` — so with no plan the card
+   prints **"On"** beside a switch that is **off**. The two disagree on the one
+   screen a reader would use to check. In this design the entitlement decides
+   BOTH, and the state is named _Unavailable_.
+2. **The read-only state explains nothing.** `canManage: false` renders
+   byte-identical to the admin state except that the switch will not move. A
+   disabled control with no reason reads as a bug. The footer line is the whole
+   fix.
+
+**The rest of what MOTIR-4925 and MOTIR-4950 owe the code:**
+
+- the registry entry above, and its `nav.approvals` message key (`en` + `zh`);
+- the route `app/(authed)/settings/project/approvals/page.tsx`, gated on
+  `workflow:manage`, so the route↔registry totality test stays green;
+- the copy keys — `approvals.acceptanceVideo.{title,desc,on,off,unavailable,
+onWhat,offWhat,unavailableWhat,orgPlanNote,readOnlyNote,upgrade}` — replacing
+  the `acceptance.card.*` set, whose `desc` is the recording claim;
+- `settingsHref` on the acceptance panel re-pointed at
+  `/settings/project/approvals`, and the `#acceptance-video` anchor retired or
+  re-minted against the new room — a link to a page the setting has left is
+  worse than no link, because it looks like it worked;
+- **the org page's new card order**, which is the losing end and is drawn in
+  `design/org-admin/` — see that area's notes.
+
+### 5. Explicitly OUT of scope here
+
+The merge-mode switch (ADR §7) is **not drawn**: it is MOTIR-4882's to design and
+build, and drawing a second card this asset would be inventing is not how a room
+earns its place. The room is justified by the readers and writers in §1. Also out
+of scope: the entitlement's tier (it stays with the organisation), what a run
+records, the video's pacing, and the storage caps.
