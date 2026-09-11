@@ -325,6 +325,13 @@ describe('the ledger row ALSO carries what the CONTAINER did (MOTIR-5058)', () =
     mode: string;
     containerMode?: string;
     containerFallbackReason?: string;
+    containerTimings?: {
+      totalMs?: number;
+      unaccountedMs?: number;
+      peakRssMb?: number;
+      phasesMs?: Record<string, number>;
+      syncCounts?: Record<string, number>;
+    };
   };
 
   /**
@@ -476,4 +483,145 @@ describe('the ledger row ALSO carries what the CONTAINER did (MOTIR-5058)', () =
     },
     30_000,
   );
+
+  // ── WHAT THE RUN COST (MOTIR-5101) ──────────────────────────────────────────
+  //
+  // The row above says what the container DID. These say what it COST, and the
+  // reason they had to cross the boundary is that this side's own number cannot
+  // answer the question: `job_run.duration_ms` spans machine create, image pull,
+  // a fixed 15 000 ms detect cap and teardown — 31 513 ms and 58 738 ms on two
+  // runs eighteen minutes apart, a swing 62% the size of the effect.
+
+  it('carries the CONTAINER’s timings, beside `coreTimings` and never merged into it', async () => {
+    // AC 4, and the failure it guards is a MERGE rather than a miss. The two
+    // fields are both "timings" for the same refresh and a later reader's
+    // instinct is to unify them — but `coreTimings` is THIS side's provisioning
+    // overhead and this is the span inside the container, and adding them
+    // produces the very number that says incremental indexing saves nothing.
+    // That is the collision MOTIR-5055 records, one field over.
+    world('sync', {
+      verdict: {
+        indexMode: 'sync',
+        fallbackReason: null,
+        timings: {
+          totalMs: 50_203,
+          unaccountedMs: 118,
+          peakRssMb: 888,
+          phasesMs: { build: 21_331, fetch: 4_120 },
+          syncCounts: { filesChecked: 4580, filesModified: 12 },
+        },
+      },
+    });
+
+    const { workspaceId, installationId } = await seedIndexWorkspace('cgv-timed', 1);
+    const engine = new JobTestEngine({ function: codeGraphIndex });
+    const { result, error } = (await engine.execute({
+      events: [indexEventFor({ installationId, workspaceId, eventId: 'evt-cgv-timed' })],
+    })) as { result?: unknown; error?: unknown };
+    if (error) throw error;
+
+    const output = result as {
+      coreTimings?: { projectId: string; phasesMs: Record<string, number> }[];
+      indexModes?: ModeRow[];
+    };
+
+    // The container's own reading, intact.
+    expect(output.indexModes![0]!.containerTimings).toEqual({
+      totalMs: 50_203,
+      unaccountedMs: 118,
+      peakRssMb: 888,
+      phasesMs: { build: 21_331, fetch: 4_120 },
+      syncCounts: { filesChecked: 4580, filesModified: 12 },
+    });
+
+    // ⚠️ AND `coreTimings` IS STILL THERE, STILL ITS OWN ARRAY, AND STILL
+    // MEASURING SOMETHING ELSE. Its phases are the CORE-side spans MOTIR-4413
+    // named; the container's are the container's. Neither array's phase names
+    // appear in the other, which is the mechanical form of "not conflated".
+    expect(Object.keys(output.coreTimings![0]!.phasesMs).sort()).toEqual([
+      'admissionWait',
+      'boot',
+      'pollToDetect',
+    ]);
+    const containerPhases = Object.keys(output.indexModes![0]!.containerTimings!.phasesMs!);
+    for (const phase of containerPhases) {
+      expect(output.coreTimings![0]!.phasesMs).not.toHaveProperty(phase);
+    }
+
+    // And both survived the JSON round trip onto the row an operator reads.
+    const runs = await indexJobRuns();
+    expect(runs[0]!.status).toBe('succeeded');
+    expect(runs[0]!.output).toEqual(output);
+  }, 30_000);
+
+  it('a verdict WITH a mode but NO timings adds no timings key at all', async () => {
+    // AC 5's narrow arm, and the one the `it.each` above cannot reach: there the
+    // whole verdict is absent, so any bug in the timings path is masked by the
+    // verdict path already returning null. Here motir-ai answers normally and
+    // simply has no timings for this run — which is EVERY row written between
+    // MOTIR-5122 and this card, i.e. the whole of the store's history.
+    //
+    // The mode must still land, and the timings key must be absent rather than
+    // present-and-empty: `containerTimings: {}` would be a run announcing it had
+    // measured itself and found nothing.
+    world('sync', { verdict: { indexMode: 'sync', fallbackReason: null } });
+
+    const rows = await runIndex('cgv-untimed');
+    expect(rows).toEqual([{ projectId: expect.any(String), mode: 'sync', containerMode: 'sync' }]);
+    expect(Object.keys(rows[0]!).sort()).toEqual(['containerMode', 'mode', 'projectId']);
+  }, 30_000);
+
+  it('carries a PARTIAL reading — the fields a run did not report are absent, not zero', async () => {
+    // The fields arrive INDEPENDENTLY: the sync counts exist only on a run that
+    // synced, and `peakRssMb` only from a container new enough to send it, which
+    // is none of them before MOTIR-5101 extended the wire. So a run reporting
+    // `totalMs` alone is an ordinary state, not a degenerate one.
+    //
+    // Every absent field must be OMITTED rather than written as `0`: this row is
+    // JSON on a durable ledger, and a zero is indistinguishable from a
+    // measurement — the confusion the whole MOTIR-5055 → MOTIR-5122 → MOTIR-5058
+    // chain exists to remove, in its cheapest possible form.
+    world('sync', {
+      verdict: {
+        indexMode: 'sync',
+        fallbackReason: null,
+        timings: { totalMs: 50_203 },
+      },
+    });
+
+    const rows = await runIndex('cgv-partial');
+    expect(rows[0]!.containerTimings).toEqual({ totalMs: 50_203 });
+    // The key set explicitly: `toEqual` treats an explicitly-undefined property
+    // as absent, so it alone would pass while `peakRssMb: undefined` sat on the
+    // object and serialised onto the row.
+    expect(Object.keys(rows[0]!.containerTimings!)).toEqual(['totalMs']);
+  }, 30_000);
+
+  it('ignores a MALFORMED timings object rather than writing it to the ledger', async () => {
+    // The body crosses the open/closed boundary and lands on a durable row, so a
+    // field of the wrong type must become absent — never a coerced number. A
+    // string `totalMs` written through would be indistinguishable, to every later
+    // reader of the series, from a measured one.
+    world('rebuild', {
+      verdict: {
+        indexMode: 'build',
+        fallbackReason: null,
+        timings: {
+          totalMs: 'fast',
+          unaccountedMs: null,
+          peakRssMb: 888,
+          phasesMs: ['not', 'a', 'map'],
+          syncCounts: { filesChecked: 'lots', nodesUpdated: 7 },
+        },
+      },
+    });
+
+    const rows = await runIndex('cgv-malformed');
+    // Only the two well-formed readings survive — the valid `peakRssMb`, and the
+    // one numeric count out of a map whose other entry was a string.
+    expect(rows[0]!.containerTimings).toEqual({
+      peakRssMb: 888,
+      syncCounts: { nodesUpdated: 7 },
+    });
+  }, 30_000);
 });

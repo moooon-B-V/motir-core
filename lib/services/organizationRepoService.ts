@@ -352,8 +352,23 @@ export const organizationRepoService = {
     // MOTIR-4955: "Used by" is the inverse of the explicit project link, not
     // the inverse of a permissive dispatch fallback. Resolve names and apply the
     // existing per-workspace browse filter.
+    //
+    // ⚠️ AND LIVE PROJECTS ONLY (MOTIR-5131) — `findManyLiveByIds`, not
+    // `findManyByIds`. Archiving does not remove the `project_repository` link
+    // (correctly: `ProjectRepo.githubRepo` is `onDelete: SetNull` precisely so a
+    // project's plan for a repository outlives the connection), so the link leg
+    // still names archived projects and nothing downstream used to drop them.
+    // `filterBrowsable` below is an ACCESS filter, not a LIFECYCLE one — it was
+    // the only filter in this chain, and a reviewer checking that the list is
+    // filtered finds a filter and moves on. That is how this survived the two
+    // prior corrections to this same sentence, both of which were about TENANCY.
+    //
+    // The fix is at the RESOLUTION step rather than at either call site, because
+    // `listInventory` composes this read so the count and the disconnect dialog
+    // are literally the same list (see its doc block). Correcting the count at a
+    // call site would have restored the number and quietly broken that property.
     const explicitProjects = await withSystemContext((tx) =>
-      projectRepository.findManyByIds(linkedProjectIds, tx),
+      projectRepository.findManyLiveByIds(linkedProjectIds, tx),
     );
     const explicitByWorkspace = new Map<string, Project[]>();
     for (const project of explicitProjects) {
@@ -542,6 +557,18 @@ export const organizationRepoService = {
         return links.map((l) => l.projectId);
       },
     );
+    // ⚠️ ARCHIVED PROJECTS ARE INCLUDED HERE, AND THAT IS NOT AN OVERSIGHT
+    // (MOTIR-5131). `listRepositoryUsage` reads `findManyLiveByIds` so the count
+    // and the disconnect DIALOG stop naming archived projects; this enumeration
+    // drives the link CLEAR and the code-graph OFFBOARDING, and an archived
+    // project's derived graph still exists. Filtering it here would leave that
+    // graph an unreachable orphan — the exact failure MOTIR-2166 and
+    // `docs/decisions/code-graph-index-fleet.md` §14.3 are about.
+    //
+    // So the asymmetry is deliberate and load-bearing: the DIALOG discloses live
+    // impact, because that is what an admin is weighing; the ACT still reaches
+    // every row, because bookkeeping about derived data must not skip the dead.
+    // Do not unify the two reads.
     const affected = await withSystemContext(async (tx) => {
       const projects = await projectRepository.findManyByIds(projectIds, tx);
       const byWorkspace = new Map<string, string[]>();
