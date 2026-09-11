@@ -2033,6 +2033,16 @@ export default defineConfig({
         'lib/mappers/approvalGateMappers.ts',
         'components/approvals/ApprovalGateControl.tsx',
         'components/approvals/portRenderStatus.tsx',
+        // Bug MOTIR-5150 — the PR-REFERENCE parser the link picker's query
+        // grammar gained. A pure function with one job, so it is measured and
+        // pinned here, per the note at the top of this list.
+        //
+        // ⚠️ `lib/repositories/githubPullRequestRepository.ts` is deliberately
+        // NOT added. This card widened one method of it by an arm; gating the
+        // whole repository on that is the trap the `changeRequestCiFeedback.ts`
+        // note above names. The arm's own branches are covered by
+        // `tests/github/explicitPrLink.test.ts`.
+        'lib/github/prReferenceQuery.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -4043,6 +4053,16 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/organization/billing/_components/searchFigures.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Bug MOTIR-5150 — MEASURED on this branch at 100 statements / 100
+        // branches / 100 functions / 100 lines by
+        // `tests/github/prReferenceQuery.test.ts`, then pinned at the list's
+        // ordinary floor rather than at the measurement.
+        'lib/github/prReferenceQuery.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

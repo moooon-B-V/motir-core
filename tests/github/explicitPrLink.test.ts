@@ -423,6 +423,217 @@ describe('githubPullRequestService.searchLinkCandidates (MOTIR-1596)', () => {
   });
 });
 
+// MOTIR-5150 — a pull request can be found by its REFERENCE, not only by a
+// substring of its title / owner / name and not only by a bare number.
+//
+// ⚠️ THE FIXTURE IS WHAT MAKES THESE LOAD-BEARING, so it is built deliberately:
+// the repository is `zeta-labs/widgets` and the pull request is titled "Tighten
+// the provisioning gate", so NO query below is a substring of the title, the
+// owner or the name. The four pre-existing `contains` clauses therefore cannot
+// satisfy a single one of them — revert the reference arm and every assertion in
+// the first four tests fails. (That is the check the card asks for: a passing
+// test that the old grammar could also have passed proves nothing.)
+//
+// The second repository, `zeta-labs/widgets-internal`, carries a pull request
+// with the SAME number. It is what separates `equals` from `contains` — and it
+// is also the concrete reason the bare-number form was never sufficient.
+const INST_C = 'inst-explicit-c';
+const REPO_C_PUBLIC = '9303';
+const REPO_C_INTERNAL = '9304';
+
+/** A workspace whose installation carries TWO repositories, one of them a
+ *  name-PREFIX of the other. `persistInstallation` reconciles its repo set, so
+ *  both are passed in one call rather than in two. */
+async function makeTwoRepoScenario(email: string) {
+  const user = await usersService.createUser({ email, password: PASSWORD, name: 'Own' });
+  const { workspace } = await workspacesService.createWorkspace({
+    name: 'Zeta',
+    ownerUserId: user.id,
+  });
+  const project = await projectsService.createProject({
+    workspaceId: workspace.id,
+    actorUserId: user.id,
+    name: 'Zeta',
+    identifier: 'ZETA',
+  });
+  await githubInstallationService.persistInstallation({
+    workspaceId: workspace.id,
+    installation: {
+      installationId: INST_C,
+      accountLogin: 'zeta-labs',
+      accountType: 'Organization',
+    },
+    repos: [
+      {
+        providerRepoId: REPO_C_PUBLIC,
+        owner: 'zeta-labs',
+        name: 'widgets',
+        defaultBranch: 'main',
+        archived: false,
+      },
+      {
+        providerRepoId: REPO_C_INTERNAL,
+        owner: 'zeta-labs',
+        name: 'widgets-internal',
+        defaultBranch: 'main',
+        archived: false,
+      },
+    ],
+  });
+  return { user, workspace, project, ctx: { userId: user.id, workspaceId: workspace.id } };
+}
+
+/** Ingest a PR and resolve its row by (repo, number) — `ingestPr` above keys on
+ *  the number alone, which cannot tell two repositories' #466 apart. */
+async function ingestPrInRepo(opts: {
+  repoProviderId: string;
+  number: number;
+  headBranch: string;
+  title: string;
+}): Promise<string> {
+  await githubWebhookService.handleEvent(
+    'pull_request',
+    prEvent({ installationId: INST_C, ...opts }),
+  );
+  const repo = await adminDb.githubRepo.findFirstOrThrow({
+    where: { repoId: opts.repoProviderId },
+  });
+  const row = await adminDb.githubPullRequest.findFirstOrThrow({
+    where: { repoId: repo.id, number: opts.number },
+  });
+  return row.id;
+}
+
+/** The fixture both halves of this describe share: two repositories, each with a
+ *  pull request numbered 466, and an asking item to search from. */
+async function seedReferenceFixture(email: string) {
+  const s = await makeTwoRepoScenario(email);
+  const asking = await workItemsService.createWorkItem(
+    { projectId: s.project.id, kind: 'task', title: 'Asking' },
+    s.ctx,
+  );
+  const publicPr = await ingestPrInRepo({
+    repoProviderId: REPO_C_PUBLIC,
+    number: 466,
+    headBranch: 'feature/provisioning-gate',
+    title: 'Tighten the provisioning gate',
+  });
+  const internalPr = await ingestPrInRepo({
+    repoProviderId: REPO_C_INTERNAL,
+    number: 466,
+    headBranch: 'feature/internal-gate',
+    title: 'Internal gate tightening',
+  });
+  return { ...s, asking, publicPr, internalPr };
+}
+
+describe('searchLinkCandidates — a pull-request REFERENCE (MOTIR-5150)', () => {
+  it('finds the pull request by the URL a person pasted', async () => {
+    const f = await seedReferenceFixture('ref-url@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(
+      f.asking.id,
+      'https://github.com/zeta-labs/widgets/pull/466',
+      f.ctx,
+    );
+    expect(results.map((r) => r.id)).toEqual([f.publicPr]);
+  });
+
+  it('finds it by owner/name#n', async () => {
+    const f = await seedReferenceFixture('ref-owner-name@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(
+      f.asking.id,
+      'zeta-labs/widgets#466',
+      f.ctx,
+    );
+    expect(results.map((r) => r.id)).toEqual([f.publicPr]);
+  });
+
+  it('finds it by name#n — and `widgets` does NOT reach `widgets-internal`', async () => {
+    const f = await seedReferenceFixture('ref-name@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(
+      f.asking.id,
+      'widgets#466',
+      f.ctx,
+    );
+    // The whole point of matching a coordinate with `equals` rather than
+    // `contains`: a repository whose name merely STARTS with the one named is a
+    // different repository.
+    expect(results.map((r) => r.id)).toEqual([f.publicPr]);
+  });
+
+  it('finds both repositories’ #466 by the bare #n form — the form that cannot disambiguate', async () => {
+    const f = await seedReferenceFixture('ref-hash@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(f.asking.id, '#466', f.ctx);
+    expect(results.map((r) => r.id).sort()).toEqual([f.publicPr, f.internalPr].sort());
+  });
+
+  it('a coordinate naming a repository in ANOTHER workspace returns no candidate', async () => {
+    const mine = await makeScenario({
+      email: 'ref-xws-mine@example.com',
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+    });
+    // A second workspace with the repository the coordinate names, and a pull
+    // request in it. Nothing about the coordinate is wrong — the workspace gate
+    // is what refuses it, which is the tenancy decision staying where it was.
+    const theirs = await seedReferenceFixture('ref-xws-theirs@example.com');
+    expect(theirs.publicPr).toBeTruthy();
+    const item = await workItemsService.createWorkItem(
+      { projectId: mine.project.id, kind: 'task', title: 'Mine' },
+      mine.ctx,
+    );
+    for (const query of [
+      'https://github.com/zeta-labs/widgets/pull/466',
+      'zeta-labs/widgets#466',
+      'widgets#466',
+      '#466',
+    ]) {
+      expect(
+        await githubPullRequestService.searchLinkCandidates(item.id, query, mine.ctx),
+        query,
+      ).toEqual([]);
+    }
+  });
+});
+
+describe('searchLinkCandidates — the free-text grammar is UNCHANGED (MOTIR-5150)', () => {
+  it('still matches a substring of the TITLE', async () => {
+    const f = await seedReferenceFixture('free-title@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(
+      f.asking.id,
+      'provisioning',
+      f.ctx,
+    );
+    expect(results.map((r) => r.id)).toEqual([f.publicPr]);
+  });
+
+  it('still matches a substring of the repo OWNER', async () => {
+    const f = await seedReferenceFixture('free-owner@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(
+      f.asking.id,
+      'zeta-labs',
+      f.ctx,
+    );
+    expect(results.map((r) => r.id).sort()).toEqual([f.publicPr, f.internalPr].sort());
+  });
+
+  it('still matches a substring of the repo NAME — `contains`, so both repositories', async () => {
+    const f = await seedReferenceFixture('free-name@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(
+      f.asking.id,
+      'widgets',
+      f.ctx,
+    );
+    expect(results.map((r) => r.id).sort()).toEqual([f.publicPr, f.internalPr].sort());
+  });
+
+  it('still matches a BARE number', async () => {
+    const f = await seedReferenceFixture('free-number@example.com');
+    const results = await githubPullRequestService.searchLinkCandidates(f.asking.id, '466', f.ctx);
+    expect(results.map((r) => r.id).sort()).toEqual([f.publicPr, f.internalPr].sort());
+  });
+});
+
 describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', () => {
   it('survives a later PR event whose branch never names the key', async () => {
     const s = await makeScenario({
