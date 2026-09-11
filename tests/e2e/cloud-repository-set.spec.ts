@@ -94,12 +94,26 @@ test.describe.configure({ timeout: 300_000 });
 
 // ── Locators, all scoped ─────────────────────────────────────────────────────
 
+// ⚠️ EVERYTHING ON THIS SURFACE IS READ THROUGH `live()` (MOTIR-5116). The plan
+// detail page renders BOTH halves this spec counts — `RepositorySetStep`'s status
+// line and `PlanReviewRail`'s outcome — inside the shell's `<main>`, and neither
+// carries a role of its own. That matters more here than anywhere else in this
+// sweep, because most of the assertions below are COUNTS of a string that
+// legitimately appears twice: React's streamed `<div hidden id="S:0">` copy and
+// the outgoing subtree a client-side navigation leaves mounted would not trip
+// strict mode on a `toHaveCount`, they would silently DOUBLE the number it reads
+// (`CLAUDE.md` § *a boundary makes every unscoped locator a race*). Scoping to
+// `main` — itself resolved through the accessibility tree — is what keeps a
+// count a count.
+/** The plan detail page's live route subtree: the step AND the rail. */
+const live = (page: Page) => page.getByRole('main');
+
 /** The default path's single status line (`repo-setup-status`). */
-const setupStatus = (page: Page) => page.getByTestId('repo-setup-status');
+const setupStatus = (page: Page) => live(page).getByTestId('repo-setup-status');
 
 /** The `created` panel's REPORT — either arm (`repo-access-report`, MOTIR-5015).
  *  Arm A names the invited account; arm B says nobody has been invited yet. */
-const accessReport = (page: Page) => page.getByTestId('repo-access-report');
+const accessReport = (page: Page) => live(page).getByTestId('repo-access-report');
 
 // ⚠️ NO `repo-row-*` LOCATOR ANY MORE. `RepositoryRow` was deleted with the
 // technical path (MOTIR-5014), so there is no per-row surface on this route at
@@ -125,7 +139,7 @@ async function approvePlan(page: Page, seed: RepositorySetSeed): Promise<void> {
   expect((await approved).status(), 'the approve write succeeded').toBe(200);
   // The rail is now read-only and says so — the plan is safe BEFORE anything
   // about code is asked (ADR §4.3), which is the honesty the step depends on.
-  await expect(page.getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
+  await expect(live(page).getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
 
   // ⚠️ TEMPORARY, AND IT IS COVERING A REAL DEFECT — MOTIR-1947.
   //
@@ -137,7 +151,7 @@ async function approvePlan(page: Page, seed: RepositorySetSeed): Promise<void> {
   // lines** — every assertion after this point is unchanged either way, so their
   // removal is that fix's own regression test.
   await page.goto(`/plans/${seed.planId}`);
-  await expect(page.getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
+  await expect(live(page).getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
 }
 
 /**
@@ -264,7 +278,9 @@ test('approve a plan with two parts, get a repository for each, and be INVITED w
 
   await chapter('It’s yours — Motir says so, before it is asked', async () => {
     await expect(page.getByText(/It's yours\./).first()).toBeVisible();
-    await expect(page.getByText(/move it to your own GitHub whenever you want/)).toBeVisible();
+    await expect(
+      live(page).getByText(/move it to your own GitHub whenever you want/),
+    ).toBeVisible();
     await beat();
   });
 
@@ -274,8 +290,8 @@ test('approve a plan with two parts, get a repository for each, and be INVITED w
     // `Connect GitHub` to somebody who connected GitHub months ago.
     await expect(accessReport(page)).toBeVisible();
     await expect(accessReport(page).getByText(REPO_SET_LOGIN)).toBeVisible();
-    await expect(page.getByText('This is the account Motir invited')).toBeVisible();
-    await expect(page.getByText(/Accept the invitation on GitHub/)).toBeVisible();
+    await expect(live(page).getByText('This is the account Motir invited')).toBeVisible();
+    await expect(live(page).getByText(/Accept the invitation on GitHub/)).toBeVisible();
     // A report is not a silent surface: the account stays correctable, because a
     // typed handle could invite a stranger to a private repository.
     await expect(page.getByRole('link', { name: 'Use a different account' })).toBeVisible();
@@ -357,15 +373,15 @@ test('NO connected identity: nothing claims an invitation, and the rail says wha
   // ⚠️ AND IT SAYS IT IN THE RAIL'S OWN WORDS, because the panel's door reuses
   // `repositorySet.outcomeNeedsAccess` rather than restating the string. Two on
   // the page: the panel's door and the rail's outcome.
-  await expect(page.getByText('Finish setting up access', { exact: true })).toHaveCount(2);
+  await expect(live(page).getByText('Finish setting up access', { exact: true })).toHaveCount(2);
   const door = page.getByRole('link', { name: 'Finish setting up access' });
   await expect(door).toHaveAttribute('href', '/settings/project/code-access');
   // Nothing was sent, so nothing claims it was.
   expect(collaboratorInvites(), 'no identity, no invitation').toHaveLength(0);
-  await expect(page.getByText('This is the account Motir invited')).toHaveCount(0);
+  await expect(live(page).getByText('This is the account Motir invited')).toHaveCount(0);
   // The rail must not claim the code is ready: the step's own line says it, and
   // the rail's says the opposite — exactly one of the two identical strings.
-  await expect(page.getByText('Your code is ready')).toHaveCount(1);
+  await expect(live(page).getByText('Your code is ready')).toHaveCount(1);
   // …and still no ask, on the arm where an ask would be most tempting.
   await expect(page.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);
 });
@@ -383,8 +399,8 @@ test('the rail flips to “Your code is ready” once the invitation goes out', 
   await establish(page);
 
   // Created, but nobody has been invited — the rail must not claim it is ready.
-  await expect(page.getByText('Finish setting up access', { exact: true })).toHaveCount(2);
-  await expect(page.getByText('Your code is ready')).toHaveCount(1);
+  await expect(live(page).getByText('Finish setting up access', { exact: true })).toHaveCount(2);
+  await expect(live(page).getByText('Your code is ready')).toHaveCount(1);
 
   // ⚠️ THE RECOVERY PATH, AND IT IS NO LONGER ON THIS SURFACE (MOTIR-5015). The
   // user connects an identity wherever they connect it, and the invitation is
@@ -406,8 +422,8 @@ test('the rail flips to “Your code is ready” once the invitation goes out', 
   await page.goto(`/plans/${seed.planId}`);
   // Now BOTH the step's status line and the rail's outcome read "Your code is
   // ready" — the one place those two identical strings legitimately co-occur.
-  await expect(page.getByText('Your code is ready')).toHaveCount(2);
-  await expect(page.getByText('Finish setting up access', { exact: true })).toHaveCount(0);
+  await expect(live(page).getByText('Your code is ready')).toHaveCount(2);
+  await expect(live(page).getByText('Finish setting up access', { exact: true })).toHaveCount(0);
   await expect(accessReport(page).getByText(REPO_SET_LOGIN)).toBeVisible();
 });
 
@@ -549,8 +565,8 @@ test('a GitHub refusal does not cost the user their code — the repositories st
   // life of the shell — it is how a toast is announced — so `getByRole('alert')`
   // is ≥ 1 on every authed page and a `toHaveCount(0)` against it can never pass.
   // The step's failure arm is the thing being denied, so it is what gets named.
-  await expect(page.getByText("Motir couldn't finish setting up your code")).toHaveCount(0);
-  await expect(page.getByText(/Your plan is safe in your backlog/)).toHaveCount(0);
+  await expect(live(page).getByText("Motir couldn't finish setting up your code")).toHaveCount(0);
+  await expect(live(page).getByText(/Your plan is safe in your backlog/)).toHaveCount(0);
 });
 
 /* ⚠️ SIX TESTS WERE REMOVED BY MOTIR-5018, NOT WEAKENED — each drove a surface

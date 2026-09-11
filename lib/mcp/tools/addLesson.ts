@@ -138,6 +138,24 @@ const inputSchema = {
         'Leaving it out means both. The retired spellings "skeleton" and "deepen" are still ' +
         'accepted and read as "lay" and "author"; they are removed in a later release.',
     ),
+  subject: z
+    .string()
+    .optional()
+    .describe(
+      'WHICH SUBJECT MATTER this lesson is about — the FOURTH routing axis, mirroring the ' +
+        "rule-pack selector's fourth coordinate so the two corpora stay reachable by one " +
+        'question. Leaving it out means "every subject", and that is the right answer far more ' +
+        'often than the vocabulary suggests: a WRONG subject is worse than none, because it makes ' +
+        'the lesson unreachable from every card it actually applies to, while an untagged one ' +
+        'still reaches all of them. ⚠️ SCALAR, unlike the three axes above — a lesson carries ONE ' +
+        'subject or none, never a list, and a payload sending several is REFUSED rather than ' +
+        'coerced (a card wanting two subjects is a SPLIT signal, so a lesson captured from one ' +
+        'cannot inherit a multiplicity its source never had). A lesson that genuinely applies ' +
+        'across subjects carries NONE — it is more general than either, which is what omitting ' +
+        'this says. MEMBERSHIP IS NOT VALIDATED: the vocabulary is the rule-pack file set, so a ' +
+        'well-formed unrecognised member is accepted and simply never matches a subject-narrowed ' +
+        'query. Shape only: a lowercase slug.',
+    ),
   sourceRef: z
     .string()
     .optional()
@@ -154,6 +172,9 @@ function summarize(projectKey: string, lesson: ProjectLessonDTO): string {
     lesson.kinds.length > 0 ? `kinds ${lesson.kinds.join('/')}` : null,
     lesson.types.length > 0 ? `types ${lesson.types.join('/')}` : null,
     lesson.phases.length > 0 ? `phases ${lesson.phases.join('/')}` : null,
+    // SCALAR, so the test is presence rather than length — and an absent one is
+    // omitted entirely, which is what makes the fallback below read correctly.
+    lesson.subject ? `subject ${lesson.subject}` : null,
   ].filter(Boolean);
   const routing = axes.length > 0 ? axes.join(' · ') : 'applies to every card';
   return [
@@ -175,6 +196,9 @@ export async function runAddLesson(
     kinds?: (typeof LESSON_KINDS)[number][];
     types?: (typeof LESSON_TYPES)[number][];
     phases?: string[];
+    // SCALAR — one value or none. The schema above types it `z.string()`, so a
+    // caller sending an array is refused by zod before this runs.
+    subject?: string;
     sourceRef?: string;
   },
   ctx: ServiceContext,
@@ -193,6 +217,9 @@ export async function runAddLesson(
       // `deepen` is STORED as `lay` / `author` rather than round-tripping a
       // retired word into the column (MOTIR-4775).
       ...(args.phases ? { phases: canonicalizeLessonPhases(args.phases) } : {}),
+      // TRIMMED, and an empty/whitespace-only value is the UNCONSTRAINED case
+      // rather than a member named "" that could never match anything.
+      ...(args.subject && args.subject.trim().length > 0 ? { subject: args.subject.trim() } : {}),
       ...(args.sourceRef ? { sourceRef: args.sourceRef } : {}),
     });
     return toolOk(
@@ -208,6 +235,7 @@ export async function runAddLesson(
         kinds: lesson.kinds,
         types: lesson.types,
         phases: lesson.phases,
+        subject: lesson.subject,
         sourceRef: lesson.sourceRef,
       }),
     );
@@ -232,7 +260,7 @@ export function registerAddLesson(server: McpServer, resolveContext: McpContextR
         'what just happened. ' +
         'It belongs to THIS project only — it is never shared with any other project, and it is ' +
         'not a way to change how Motir plans in general. ' +
-        'The three routing axes (kinds, types, phases) decide which future plans are shown it; ' +
+        'The four routing axes (kinds, types, phases, subject) decide which future plans are shown it; ' +
         'leaving an axis out means "applies to everything on that axis", which is occasionally ' +
         'right and usually means the lesson surfaces where it does not belong. ' +
         'DO NOT add one for: a one-off that will not recur; something an existing lesson already ' +

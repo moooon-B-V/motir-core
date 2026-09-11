@@ -2264,41 +2264,53 @@
   <body>
     <!-- ═══ shared SVG symbol defs (stroke=currentColor — inherits the element's --el-* colour) ═══ -->
     <!--
-      ⚠️ WHICH OF THESE SPRITES IS EXTRACTED, AND WHICH IS A DRAWING (MOTIR-5008).
-      A symbol's NAME is exactly the kind of thing a careful reader is entitled to
-      trust, and in this sheet it has twice been wrong — so the sheet says which
-      is which rather than leaving the next reader to find out by rendering one.
+      ⚠️ EVERY LUCIDE SPRITE ON THIS SHEET IS EXTRACTED FROM THE INSTALLED
+      PACKAGE, AND A COMMAND CHECKS IT (MOTIR-5008, completed by MOTIR-5136).
 
-      EXTRACTED from the installed `lucide-react@1.16.0` — byte-identical to what
-      the app renders, and each carries its own provenance comment:
-        · the six the Development row uses — #i-git-pr (GitPullRequestArrow),
-          #i-git-merge (GitMerge), #i-git-closed (GitPullRequestClosed),
-          #i-check (CircleCheck), #i-x (CircleX), #i-dots (CircleEllipsis)
-        · and, already correct before this card: #i-close (X), #i-external
-          (ExternalLink), #i-plus, #i-arrow-left, #i-user, #i-shield-check,
-          #i-chevron-down, #i-chevron-right, #i-shield, #i-card, #i-activity
+      A symbol's NAME is exactly the kind of thing a careful reader is entitled
+      to trust, and in this sheet it was wrong three times — `#i-x` is lucide
+      `circle-x` under a short name (MOTIR-5007), `#i-repo` was lucide `book`'s
+      drawing sitting under a repository label, and `#i-sliders` was drawn
+      VERTICAL while the nav it labels renders the horizontal icon. None was
+      caught by a guard; each was caught by somebody rendering a panel and
+      looking at it.
 
-      APPROXIMATE — hand-drawn, and NOT to be copied as icon data:
-        #i-repo · #i-badge-check · #i-alert · #i-inbox · #i-briefcase · #i-users ·
-        #i-sliders · #i-building · #i-coins · #i-git-branch · #i-layers · #i-clock ·
-        #i-cog
-      They read correctly at the sizes this board draws them and none of them is a
-      Development-row glyph, so this card names them rather than redrawing thirteen
-      icons across every panel (criterion 4 — a measurement correction, not a
-      redesign). Extracting them, and turning this audit into a reusable predicate,
-      is MOTIR-5136.
+      So the sheet no longer asks to be trusted. All 30 lucide symbols carry
+      shape data emitted from `lucide-react@1.16.0` plus a provenance comment
+      naming the package file and the shipped code the glyph stands for, and
+      the audit below re-checks every one of them against the installed
+      package on demand:
 
-      #i-github and #i-gitlab are BRAND marks and are not lucide at all — they come
-      from each provider's own mark and are outside the audit.
+        node scripts/audit-mock-sprites.mjs design/github/github.mock.html --strict
 
-      Re-check any one of them against the installed package in one command:
-        grep -oE '\["(circle|path|line|polyline|rect)".*' \
-          node_modules/lucide-react/dist/esm/icons/circle-x.mjs
-      design-notes.md § "The Development rows are DERIVED, not drawn" carries the
-      same command for the row measurements.
+      It reads each symbol's provenance comment for the icon it DECLARES —
+      never its id, which is the thing that has been wrong — and diffs the
+      symbol's shapes against that icon's `__iconNode`. Exit 0 means no drift.
+      Run it after any edit to a symbol, and after a `lucide-react` bump.
+
+      NOT LUCIDE, and outside the audit by declaration: #i-github and #i-gitlab
+      are each provider's own brand mark, from their own kit. They carry a
+      `NOT-LUCIDE` provenance comment, which is what makes the audit skip them
+      rather than report them as unverifiable.
+
+      NOTHING ON THIS SHEET IS HAND-DRAWN ANY MORE. If you add a sprite, take
+      it from the package and give it a provenance comment — `--strict` fails
+      on a symbol that has none, so an undeclared addition cannot pass quietly.
+
+      Three sprites are currently DECLARED AND CORRECT BUT UNREFERENCED by any
+      panel — #i-inbox, #i-briefcase and #i-cog. They are extracted rather than
+      deleted because removing a sprite is a decision about the board's future
+      panels, not a measurement; MOTIR-5136 was the latter.
+
+      design-notes.md § "The sprite sheet is EXTRACTED, and a command proves it"
+      carries the same command.
     -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
+        <!-- lucide `arrow-left` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/arrow-left.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-arrow-left"
@@ -2311,6 +2323,10 @@
           <path d="m12 19-7-7 7-7" />
           <path d="M19 12H5" />
         </symbol>
+        <!-- NOT-LUCIDE — GitHub's own Octocat mark, from the GitHub logo kit.
+             A brand mark is its owner's artwork and has no package to be checked
+             against, so the sprite audit skips it by this declaration rather than
+             reporting it as unverifiable. -->
         <symbol viewBox="0 0 24 24" id="i-github" fill="currentColor" stroke="none">
           <path
             d="M12 1.5A10.5 10.5 0 0 0 8.68 22c.53.1.72-.23.72-.5v-1.9c-2.92.64-3.54-1.25-3.54-1.25-.48-1.22-1.17-1.54-1.17-1.54-.95-.65.07-.64.07-.64 1.06.07 1.61 1.09 1.61 1.09.94 1.6 2.46 1.14 3.06.87.1-.68.37-1.14.67-1.4-2.33-.27-4.78-1.16-4.78-5.18 0-1.15.41-2.08 1.08-2.82-.11-.27-.47-1.34.1-2.79 0 0 .88-.28 2.88 1.07a10 10 0 0 1 5.24 0c2-1.35 2.88-1.07 2.88-1.07.57 1.45.21 2.52.1 2.79.68.74 1.08 1.67 1.08 2.82 0 4.03-2.45 4.91-4.79 5.17.38.33.71.97.71 1.96v2.9c0 .28.19.61.72.5A10.5 10.5 0 0 0 12 1.5Z"
@@ -2440,6 +2456,10 @@
           <path d="m15 9-6 6" />
           <path d="m9 9 6 6" />
         </symbol>
+        <!-- lucide `plus` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/plus.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-plus"
@@ -2473,6 +2493,10 @@
           <path d="M12 12h.01" />
           <path d="M7 12h.01" />
         </symbol>
+        <!-- lucide `external-link` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/external-link.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-external"
@@ -2486,6 +2510,14 @@
           <path d="M10 14 21 3" />
           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
         </symbol>
+        <!-- lucide `folder-git-2` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/folder-git-2.mjs), not hand-typed.
+             It is what lib/settings/projectSettingsNav.ts's Repositories row = FolderGit2, and every
+             repository surface in the app (RepositoryInventory, RepositoriesRoom,
+             AddRepositoryPicker, OrganizationRepositories) imports the same icon
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — it was lucide `book`'s drawing under a repository's name — the id was a
+             hint and the hint was wrong.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-repo"
@@ -2495,9 +2527,19 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
         </symbol>
+        <!-- lucide `badge-check` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/badge-check.mjs), not hand-typed.
+             It is what settings/organization/git/page.tsx and gitSettingsPrimitives.tsx render
+             BadgeCheck for the Connected chip
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the tick was right and the badge outline was a hand approximation.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-badge-check"
@@ -2508,10 +2550,14 @@
           stroke-linejoin="round"
         >
           <path
-            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.78 4.78 4 4 0 0 1-6.74 0 4 4 0 0 1-4.78-4.78 4 4 0 0 1 0-6.75Z"
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
           />
           <path d="m9 12 2 2 4-4" />
         </symbol>
+        <!-- lucide `user` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/user.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-user"
@@ -2524,6 +2570,12 @@
           <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
           <circle cx="12" cy="7" r="4" />
         </symbol>
+        <!-- lucide `triangle-alert` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/triangle-alert.mjs), not hand-typed.
+             It is what RepositoriesRoom.tsx and TakeoverRow.tsx render TriangleAlert
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the two strokes were hand-merged into a single `d` (`M12 9v4M12 17h.01`),
+             which the package draws as two paths.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-alert"
@@ -2533,23 +2585,36 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" />
-          <path d="M12 9v4M12 17h.01" />
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
         </symbol>
+        <!-- lucide `inbox` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/inbox.mjs), not hand-typed.
+             It is what Inbox is the icon seven shipped surfaces import for an inbox/queue
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the tray lip was hand-typed as a path where the package uses a `polyline`.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-inbox"
           fill="none"
           stroke="currentColor"
-          stroke-width="1.75"
+          stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
           <path
             d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
           />
         </symbol>
+        <!-- lucide `briefcase` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/briefcase.mjs), not hand-typed.
+             It is what no shipped consumer — this sprite is not drawn on this board (see the
+             sheet header); the drawing is unambiguously lucide `briefcase`
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the body sat at y=7 and the handle at M16 21V5; the package uses y=6 and
+             M16 20V4.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-briefcase"
@@ -2559,9 +2624,14 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <rect width="20" height="14" x="2" y="7" rx="2" />
-          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+          <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+          <rect width="20" height="14" x="2" y="6" rx="2" />
         </symbol>
+        <!-- lucide `users` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/users.mjs), not hand-typed.
+             It is what lib/settings/organizationSettingsNav.ts's Members row = Users
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the second figure was a hand approximation of the package outline.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-users"
@@ -2572,9 +2642,17 @@
           stroke-linejoin="round"
         >
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
           <circle cx="9" cy="7" r="4" />
-          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
         </symbol>
+        <!-- lucide `sliders-horizontal` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/sliders-horizontal.mjs), not hand-typed.
+             It is what lib/settings/projectSettingsNav.ts's Details row = SlidersHorizontal
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — ⚠️ the sprite was drawn VERTICAL (three column tracks) while the nav it
+             labels renders the HORIZONTAL icon — the clearest case on this sheet of
+             a drawing that had drifted into a different icon altogether.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-sliders"
@@ -2584,23 +2662,30 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <line x1="4" x2="4" y1="21" y2="14" />
-          <line x1="4" x2="4" y1="10" y2="3" />
-          <line x1="12" x2="12" y1="21" y2="12" />
-          <line x1="12" x2="12" y1="8" y2="3" />
-          <line x1="20" x2="20" y1="21" y2="16" />
-          <line x1="20" x2="20" y1="12" y2="3" />
-          <line x1="2" x2="6" y1="14" y2="14" />
-          <line x1="10" x2="14" y1="8" y2="8" />
-          <line x1="18" x2="22" y1="16" y2="16" />
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
         </symbol>
-        <!-- ══ AMENDMENT MOTIR-4672 — glyphs the ORGANISATION tier needs ══ -->
+        <!-- NOT-LUCIDE — GitLab's own tanuki mark, from the GitLab press kit.
+             A brand mark is its owner's artwork and has no package to be checked
+             against, so the sprite audit skips it by this declaration rather than
+             reporting it as unverifiable. -->
         <symbol viewBox="0 0 24 24" id="i-gitlab" fill="currentColor" stroke="none">
           <path
             d="m23.955 13.587-1.342-4.135-2.664-8.189a.455.455 0 0 0-.867 0L16.418 9.45H7.582L4.919 1.263a.455.455 0 0 0-.867 0L1.386 9.452.044 13.587a.924.924 0 0 0 .331 1.023L12 23.054l11.625-8.443a.92.92 0 0 0 .33-1.024"
           />
         </symbol>
-        <!-- ══ ADDED by MOTIR-4673's follow-up — the area rail's own glyphs ══ -->
+        <!-- lucide `building-2` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/building-2.mjs), not hand-typed.
+             It is what lib/settings/organizationSettingsNav.ts's Organisation row = Building2
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — a hand-drawn tower; the package draws a different massing entirely.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-building"
@@ -2610,14 +2695,16 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
-          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
-          <path d="M10 6h4" />
-          <path d="M10 10h4" />
-          <path d="M10 14h4" />
-          <path d="M10 18h4" />
+          <path d="M10 12h4" />
+          <path d="M10 8h4" />
+          <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+          <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" />
+          <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
         </symbol>
+        <!-- lucide `shield-check` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/shield-check.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-shield-check"
@@ -2632,6 +2719,11 @@
           />
           <path d="m9 12 2 2 4-4" />
         </symbol>
+        <!-- lucide `coins` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/coins.mjs), not hand-typed.
+             It is what lib/settings/organizationSettingsNav.ts's Usage & cost row = Coins
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — two hand-drawn ellipses where the package draws two circles and two arcs.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-coins"
@@ -2641,11 +2733,16 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <circle cx="8" cy="8" r="6" />
-          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
-          <path d="M7 6h1v4" />
-          <path d="m16.71 13.88.7.71-2.82 2.82" />
+          <path d="M13.744 17.736a6 6 0 1 1-7.48-7.48" />
+          <path d="M15 6h1v4" />
+          <path d="m6.134 14.768.866-.5 2 3.464" />
+          <circle cx="16" cy="8" r="6" />
         </symbol>
+        <!-- lucide `git-branch` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/git-branch.mjs), not hand-typed.
+             It is what lib/settings/organizationSettingsNav.ts's Git row = GitBranch
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the branch arc was hand-typed and the node radii were off.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-git-branch"
@@ -2655,11 +2752,14 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <line x1="6" x2="6" y1="3" y2="15" />
+          <path d="M15 6a9 9 0 0 0-9 9V3" />
           <circle cx="18" cy="6" r="3" />
           <circle cx="6" cy="18" r="3" />
-          <path d="M18 9a9 9 0 0 1-9 9" />
         </symbol>
+        <!-- lucide `chevron-down` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/chevron-down.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-chevron-down"
@@ -2671,6 +2771,10 @@
         >
           <path d="m6 9 6 6 6-6" />
         </symbol>
+        <!-- lucide `chevron-right` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/chevron-right.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-chevron-right"
@@ -2682,6 +2786,12 @@
         >
           <path d="m9 18 6-6-6-6" />
         </symbol>
+        <!-- lucide `layers` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/layers.mjs), not hand-typed.
+             It is what components/planning/PlanPreview.tsx renders Layers; here the fact row it
+             marks is about the PROJECTS that lose a repository
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — two hand-drawn stacked diamonds; the package draws three layers.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-layers"
@@ -2692,12 +2802,16 @@
           stroke-linejoin="round"
         >
           <path
-            d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
           />
-          <path
-            d="m6.08 10.37-3.5 1.6a1 1 0 0 0 0 1.81l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9a1 1 0 0 0 0-1.83l-3.5-1.59"
-          />
+          <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+          <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
         </symbol>
+        <!-- lucide `clock` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/clock.mjs), not hand-typed.
+             It is what TakeoverModal.tsx and TakeoverRow.tsx render Clock
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the hands were a `polyline`; the package draws one path `M12 6v6l4 2`.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-clock"
@@ -2708,8 +2822,12 @@
           stroke-linejoin="round"
         >
           <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
+          <path d="M12 6v6l4 2" />
         </symbol>
+        <!-- lucide `shield` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/shield.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-shield"
@@ -2723,6 +2841,10 @@
             d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
           />
         </symbol>
+        <!-- lucide `credit-card` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/credit-card.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-card"
@@ -2735,6 +2857,10 @@
           <rect width="20" height="14" x="2" y="5" rx="2" />
           <line x1="2" x2="22" y1="10" y2="10" />
         </symbol>
+        <!-- lucide `activity` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/activity.mjs). It was already byte-identical to the package;
+             MOTIR-5136 added this declaration so the sprite audit can CHECK it
+             rather than leave it unverifiable. -->
         <symbol
           viewBox="0 0 24 24"
           id="i-activity"
@@ -2748,6 +2874,13 @@
             d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
           />
         </symbol>
+        <!-- lucide `settings` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/settings.mjs), not hand-typed.
+             It is what no shipped consumer — this sprite is not drawn on this board (see the
+             sheet header); the drawing is `circle r="3"` plus a gear ring, which is
+             lucide `settings` rather than the busier lucide `cog`
+             renders, so the glyph in this asset and the glyph on the surface are
+             the same drawing. (MOTIR-5136 — the gear ring was hand-typed.) -->
         <symbol
           viewBox="0 0 24 24"
           id="i-cog"
@@ -2757,10 +2890,10 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <circle cx="12" cy="12" r="3" />
           <path
-            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
           />
+          <circle cx="12" cy="12" r="3" />
         </symbol>
       </defs>
     </svg>

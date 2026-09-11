@@ -57,6 +57,8 @@ function lesson(over: Partial<ProjectLessonDTO> = {}): ProjectLessonDTO {
     kinds: [],
     types: [],
     phases: [],
+    // The fourth axis (MOTIR-5081) — SCALAR, and null means unconstrained.
+    subject: null,
     sourceRef: 'MOTIR-2848',
     createdAt: '2026-05-14T00:00:00.000Z',
     lastOccurredAt: '2026-08-21T00:00:00.000Z',

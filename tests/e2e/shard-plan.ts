@@ -524,6 +524,13 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'data-subject-request-journey.spec.ts': 8.5,
   'delivery-set.spec.ts': 12.0,
   'dashboards.spec.ts': 13.9,
+  // MOTIR-5118. Measured LOCALLY (3.3 s + 1.5 s over the two tests, on this
+  // box), not from a green CI run — there is no CI run of it yet, and the
+  // header's own instruction is to re-measure from the next green
+  // `playwright-report-bulk-*` artifact. A local number is the honest
+  // placeholder; a 0 would not be, since 0 in this table means *contributes no
+  // tests to a bulk leg*, which is false of this spec.
+  'approval-gate-repaint.spec.ts': 4.8,
   'design-result.spec.ts': 9.2,
   'design-result-publish.spec.ts': 8.0,
   'epic2-acceptance.spec.ts': 7.4,

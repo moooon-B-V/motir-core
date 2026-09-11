@@ -6,6 +6,7 @@ import {
   type GithubRepo,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import { parsePullRequestReference } from '@/lib/github/prReferenceQuery';
 
 // GitHub pull-request repository — single Prisma operations on the
 // `github_pull_request` table (Story 7.10 · MOTIR-891). `repoId` is the INTERNAL
@@ -375,7 +376,9 @@ export const githubPullRequestRepository = {
 
   /** Candidate PRs for the explicit-link picker (MOTIR-1596): the workspace's
    *  ingested PRs (installation → repo → PR), matched by title / repo owner+name
-   *  / number, newest-updated first, bounded to `take`. Includes each PR's repo
+   *  / number **or by a PR REFERENCE the query names** (MOTIR-5150 — a pasted
+   *  URL, `owner/name#n`, `name#n`, `#n`; see `lib/github/prReferenceQuery.ts`),
+   *  newest-updated first, bounded to `take`. Includes each PR's repo
    *  Read-only path → `db`; `workspaceId` is the explicit tenant gate
    *  (finding #26 — RLS is inert under the dev/CI superuser).
    *
@@ -401,6 +404,34 @@ export const githubPullRequestRepository = {
       { repo: { is: { name: { contains: trimmed, mode: 'insensitive' } } } },
     ];
     if (asNumber !== null && Number.isSafeInteger(asNumber)) match.push({ number: asNumber });
+    // MOTIR-5150 — the PR-REFERENCE arm, ADDED to the four above rather than
+    // replacing them. Every clause so far asks whether a COLUMN contains the
+    // query, so the one thing a person linking a pull request actually holds —
+    // its URL — matched nothing: a URL is not all digits and no title, owner or
+    // name contains it. A parsed reference matches EXACTLY instead, which is
+    // also what makes `owner/name#n` unambiguous where a bare number is not.
+    const reference = parsePullRequestReference(trimmed);
+    if (reference) {
+      match.push({
+        number: reference.number,
+        ...(reference.owner || reference.name
+          ? {
+              repo: {
+                is: {
+                  // `equals` + insensitive, not `contains`: a coordinate names one
+                  // repository, and `acme` must not reach `acme-internal`.
+                  ...(reference.owner
+                    ? { owner: { equals: reference.owner, mode: 'insensitive' as const } }
+                    : {}),
+                  ...(reference.name
+                    ? { name: { equals: reference.name, mode: 'insensitive' as const } }
+                    : {}),
+                },
+              },
+            }
+          : {}),
+      });
+    }
     return client.githubPullRequest.findMany({
       // Gate on the REPO row's own `workspace_id` (MOTIR-1931), not a join through
       // the installation: a PR on a repo Motir created sits behind the shared

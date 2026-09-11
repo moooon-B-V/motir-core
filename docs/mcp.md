@@ -1054,10 +1054,19 @@ bound to the acting project: it is never shared with another project, and there
 is **no argument through which a caller can create a global lesson** — the
 corpus every project reads is Motir's own and is curated through migrations.
 
-The three routing axes (`kinds` / `types` / `phases`) decide which later plans
-are shown it. **An omitted axis means "everything on that axis"**, which is
-occasionally right and usually the reason a lesson turns up where it does not
-belong — so leaving one out is a decision to make, not a field to skip.
+The four routing axes (`kinds` / `types` / `phases` / `subject`) decide which
+later plans are shown it. **An omitted axis means "everything on that axis"**,
+which is occasionally right and usually the reason a lesson turns up where it
+does not belong — so leaving one out is a decision to make, not a field to skip.
+
+⚠️ **`subject` is SCALAR where the other three are sets** — a lesson carries one
+subject or none, never a list, and a payload sending several is **refused rather
+than coerced** (a card wanting two subjects is a split signal, so a lesson
+captured from one cannot inherit a multiplicity its source never had). A lesson
+that genuinely applies across subjects carries **none**: it is more general than
+either, which is what omitting the axis says. Its membership is **not validated**
+— the vocabulary is the rule-pack file set, so a well-formed unrecognised member
+is accepted and simply never matches a subject-narrowed query.
 
 **Do not add one** for a one-off that will not recur, for something an existing
 lesson already covers (read the project's lessons first), or for a product
@@ -1078,6 +1087,7 @@ planner calls during a run.
 | `kinds`       | string[] | no       | `epic` · `story` · `task` · `bug` · `subtask`. Omitted = every kind.               |
 | `types`       | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = every type.              |
 | `phases`      | string[] | no       | `lay` · `author`. Omitted = both. (`skeleton` · `deepen` still accepted.)          |
+| `subject`     | string   | no       | **SCALAR, not a list.** Which subject matter. Omitted = every subject.             |
 | `sourceRef`   | string   | no       | Provenance, and the idempotency key — a repeat returns the existing lesson.        |
 
 Requires the lesson-library-change permission (`lesson:manage`) — the same key

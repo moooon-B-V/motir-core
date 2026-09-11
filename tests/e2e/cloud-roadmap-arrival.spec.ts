@@ -45,6 +45,32 @@ const roadmapNav = (page: Page) =>
   page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Roadmap' });
 const breadcrumb = (page: Page) => page.getByRole('navigation', { name: 'Breadcrumb' });
 const scopeToggle = (page: Page) => page.getByRole('group', { name: 'Roadmap scope' });
+// ── MOTIR-5116: the canvas hooks, addressed by ROLE where there is one and
+// SCOPED to the live route subtree where there is not. A page-rooted read of any
+// of these resolves React's streamed `<div hidden id="S:0">` copy and the
+// outgoing subtree a client-side navigation leaves mounted (`CLAUDE.md` § *a
+// boundary makes every unscoped locator a race*); a role, or a scope that is
+// itself a role, is what excludes both.
+/** `ProjectRoadmapCanvas`'s outer wrapper. A bare `<div>` around the
+ *  `role="application"` viewport, and the box the geometry assertions measure —
+ *  so it keeps its id and takes `main` as its scope. `main` IS in the
+ *  accessibility tree on this route: `/roadmap` is a page, not an overlay. */
+const canvasFrame = (page: Page) => page.getByRole('main').getByTestId('roadmap-canvas');
+/** The `PlanningCanvas` viewport. It DOES carry `role="application"`, but NOT a
+ *  fixed name: `ProjectRoadmapCanvas` renders `ariaLabel ?? t('ariaDefault')`,
+ *  and the roadmap route passes its own — the failure artifact's ARIA snapshot
+ *  reads `application "Wide Roadmap roadmap"`, i.e. the SEED's project name.
+ *  `'Project roadmap'` is the fallback this route never reaches, so addressing
+ *  it by that name matched nothing and took the `billing-cloud` leg red. Binding
+ *  the locator to the seed's project name instead would just move the coupling,
+ *  so the id stays and takes the canvas frame as its scope. */
+const canvasApp = (page: Page) => canvasFrame(page).getByTestId('planning-canvas');
+/** The dependency legend panel, and its collapse control. The control is a real
+ *  `<button>`, but its accessible name FLIPS with the state these assertions are
+ *  measuring ('Hide…' / 'Show…'), so addressing it by name would make the
+ *  locator track the very thing under test. It keeps its id, scoped to the panel. */
+const edgeLegend = (page: Page) => canvasFrame(page).getByTestId('edge-legend');
+const edgeLegendToggle = (page: Page) => edgeLegend(page).getByTestId('edge-legend-toggle');
 
 const isRoadmapGet = (url: string) => url.includes('/api/projects/') && url.includes('/roadmap');
 const levelLoad = (page: Page, pred: (url: string) => boolean) =>
@@ -68,14 +94,17 @@ async function pinWorkspace(page: Page, workspaceId: string): Promise<void> {
 async function drillInto(page: Page, title: string): Promise<void> {
   await page.getByText(title, { exact: true }).first().click();
   const loaded = drillLoad(page);
-  await page.getByTestId('drill-button').click();
+  // BY ROLE — the drill affordance is a `<button>` with a stable `aria-label`.
+  await page.getByRole('button', { name: "Open this item's children" }).click();
   await loaded;
 }
 
 /** The canvas's world transform, read off the shipped `canvas-world` element —
  *  the scale the level actually ARRIVED at, not one recomputed by the test. */
 async function arrivalScale(page: Page): Promise<number> {
-  const t = await page.getByTestId('canvas-world').evaluate((el) => getComputedStyle(el).transform);
+  const t = await canvasFrame(page)
+    .getByTestId('canvas-world')
+    .evaluate((el) => getComputedStyle(el).transform);
   // `matrix(a, b, c, d, tx, ty)` — a uniform scale, so `a` is it.
   const m = /matrix\(([-\d.]+)/.exec(t);
   if (!m) throw new Error(`canvas world has no matrix transform: ${t}`);
@@ -109,7 +138,7 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
     await nav.click();
     await page.waitForURL('**/roadmap');
     await loaded;
-    await expect(page.getByTestId('planning-canvas')).toBeVisible();
+    await expect(canvasApp(page)).toBeVisible();
     await expect(page.getByText(seed.frontierEpicTitle, { exact: true }).first()).toBeVisible();
     // The canonical root URL carries no `item` param at all.
     expect(new URL(page.url()).searchParams.get('item')).toBeNull();
@@ -125,7 +154,7 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
     // …and the frontier card — the work that is happening — is what you land on.
     const here = page.locator('[data-node-state="here"]').first();
     await expect(here).toBeVisible();
-    const frame = await page.getByTestId('roadmap-canvas').boundingBox();
+    const frame = await canvasFrame(page).boundingBox();
     const card = await here.boundingBox();
     expect(frame && card).toBeTruthy();
     const cardCentreY = card!.y + card!.height / 2;
@@ -160,7 +189,11 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
     await expect(page.getByText(seed.drillChildTitle, { exact: true }).first()).toBeVisible();
     await expect(breadcrumb(page)).toContainText(seed.drillEpicTitle);
     // NOT the project root: the sibling epics are not on this level.
-    await expect(page.getByText(seed.frontierEpicTitle, { exact: true })).toHaveCount(0);
+    // SCOPED TO THE CANVAS: the claim is about what this LEVEL draws, and a
+    // sibling epic's title is canvas node text with no role of its own.
+    await expect(canvasFrame(page).getByText(seed.frontierEpicTitle, { exact: true })).toHaveCount(
+      0,
+    );
     await beat();
   });
 
@@ -194,7 +227,7 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
   // ── 6. The canvas reaches the bottom ─────────────────────────────────────
   await chapter('The canvas fills the fold', async () => {
     const viewport = page.viewportSize()!;
-    const frame = (await page.getByTestId('roadmap-canvas').boundingBox())!;
+    const frame = (await canvasFrame(page).boundingBox())!;
     // Within the window, and hard against its bottom edge.
     expect(frame.y + frame.height).toBeLessThanOrEqual(viewport.height + 1);
     expect(viewport.height - (frame.y + frame.height)).toBeLessThan(8);
@@ -208,7 +241,7 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
   });
 
   await chapter('…and every control is inside it, clear of the orb', async () => {
-    const frame = (await page.getByTestId('roadmap-canvas').boundingBox())!;
+    const frame = (await canvasFrame(page).boundingBox())!;
     // The floating Plan-with-AI orb, by its own stable hook (`data-depth="key"`
     // on a fixed bottom-right button, MOTIR-3522). Absent when AI planning is
     // unconfigured — in which case the shell reserves 1.5rem instead of 6rem and
@@ -219,7 +252,7 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
       .boundingBox()
       .catch(() => null);
     for (const control of ['edge-legend', 'locate-button']) {
-      const locator = page.getByTestId(control);
+      const locator = canvasFrame(page).getByTestId(control);
       // ⚠️ COUNT first. `boundingBox()` WAITS for the element rather than
       // answering `null`, so a `if (!box) continue` on a control this level does
       // not render hangs until the test timeout — which is what the first run of
@@ -242,21 +275,21 @@ test('the roadmap remembers the level, fills the fold, and arrives readable', as
     // The seed puts a real `is_blocked_by` edge on this level precisely so the
     // legend renders here — a walk that skipped this chapter would record none of
     // the refinement it exists to show.
-    const legend = page.getByTestId('edge-legend');
+    const legend = edgeLegend(page);
     await expect(legend).toContainText('Dependencies');
-    await page.getByTestId('edge-legend-toggle').click();
-    await expect(page.getByTestId('edge-legend-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await edgeLegendToggle(page).click();
+    await expect(edgeLegendToggle(page)).toHaveAttribute('aria-expanded', 'false');
     await expect(legend).toContainText('Dependencies');
     await beat();
 
     const loaded = drillLoad(page);
     await page.reload();
     await loaded;
-    await expect(page.getByTestId('edge-legend-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(edgeLegendToggle(page)).toHaveAttribute('aria-expanded', 'false');
     await beat();
 
-    await page.getByTestId('edge-legend-toggle').click();
-    await expect(page.getByTestId('edge-legend-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await edgeLegendToggle(page).click();
+    await expect(edgeLegendToggle(page)).toHaveAttribute('aria-expanded', 'true');
     await expect(legend).toContainText('blocks');
   });
 
@@ -290,7 +323,7 @@ test('an ?item= that cannot resolve opens the ROOT level, with no error surface'
 
   // The root level, silently: a stale link is not a failure, it is a level that
   // no longer exists.
-  await expect(page.getByTestId('planning-canvas')).toBeVisible();
+  await expect(canvasApp(page)).toBeVisible();
   await expect(page.getByText(seed.frontierEpicTitle, { exact: true }).first()).toBeVisible();
   await expect(breadcrumb(page)).toHaveCount(0);
 
@@ -302,5 +335,12 @@ test('an ?item= that cannot resolve opens the ROOT level, with no error surface'
   const roadmap = page.getByRole('main');
   await expect(roadmap.getByRole('alert')).toHaveCount(0);
   // …and nothing anywhere names the key that did not resolve.
+  // NEITHER CONVERTED NOR SCOPED, deliberately (MOTIR-5116). The claim is that
+  // NOTHING ANYWHERE names the key that did not resolve — breadcrumb, title,
+  // toast, shell included — so scoping it to a subtree would narrow the very
+  // thing asserted, and the text has no role in any of those places. It is also
+  // structurally immune to the defect this sweep is about: `toHaveCount` retries
+  // on the count and never trips strict mode (`_helpers/settle.ts`). Its
+  // inventory row is KEPT.
   await expect(page.getByText('WIDE-999999')).toHaveCount(0);
 });

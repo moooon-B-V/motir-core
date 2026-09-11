@@ -102,6 +102,10 @@ function toLessonDTO(raw: RawLesson): ProjectLessonDTO {
     // to make visible, so it is carried through and the badge renderer falls back
     // to printing it raw.
     phases: (raw.phases ?? []) as ProjectLessonDTO['phases'],
+    // SCALAR, and NOT cast to a union: the vocabulary is the rule-pack file set
+    // rather than an enum either repository declares, so there is nothing to
+    // narrow to and an unrecognised member is carried through as written.
+    subject: raw.subject ?? null,
     sourceRef: raw.sourceRef,
     createdAt: raw.createdAt,
     lastOccurredAt: raw.lastOccurredAt,
@@ -346,6 +350,8 @@ export const projectLessonsService = {
       kinds?: string[];
       types?: string[];
       phases?: string[];
+      // SCALAR — one value or none, never a list (MOTIR-5081).
+      subject?: string;
       sourceRef?: string;
     },
   ): Promise<ProjectLessonDTO> {
@@ -370,6 +376,7 @@ export const projectLessonsService = {
       ...(input.kinds ? { kinds: input.kinds } : {}),
       ...(input.types ? { types: input.types } : {}),
       ...(input.phases ? { phases: input.phases } : {}),
+      ...(input.subject ? { subject: input.subject } : {}),
       ...(input.sourceRef ? { sourceRef: input.sourceRef } : {}),
     });
     return toLessonDTO(raw);
