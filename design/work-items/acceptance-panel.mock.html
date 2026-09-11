@@ -696,6 +696,13 @@
         background: var(--el-muted);
         cursor: pointer;
       }
+      /* the OFF track — G4's turn-on row draws the switch before it is pressed. */
+      .sw.off {
+        background: var(--el-border-strong);
+      }
+      .sw.off::after {
+        left: 2px;
+      }
       .sw .kn {
         position: absolute;
         top: 1px;
@@ -834,6 +841,186 @@
       .breadcrumb b {
         color: var(--el-text-secondary);
         font-weight: 600;
+      }
+
+      /* ══ THE UNIVERSAL APPROVAL FRAME (MOTIR-4942) ════════════════════════
+         Copied by NAME from design/work-items/approval-control.mock.html so the
+         two assets cannot drift: the acceptance gate is the SAME control, not a
+         look-alike. Three bands — header · PORT · verbs — and the verbs are
+         BELOW the port, always, because you decide after you look. */
+      .frame {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .frameHead {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .frameWhat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .frameKind {
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .frameMeta {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .key {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .port {
+        position: relative;
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+        min-height: 196px;
+        max-height: 420px;
+        overflow: auto;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      /* ⚠️ The ceiling SCROLLS; it must never SQUASH. Without this the flex
+         column shrinks the subject to fit, which silently reproduces the
+         button-first cut the frame was built to reject — the receipt becomes a
+         sliver and the verbs sit under nothing. */
+      .port > * {
+        flex: none;
+      }
+      .port.is-expanded {
+        max-height: none;
+      }
+      .portExpand {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        z-index: 1;
+      }
+      .frameFoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+      }
+      .footWhy {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .verbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .confirm {
+        background: var(--el-tint-lavender);
+        border-top: 1px solid var(--el-border);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .confirm strong {
+        color: var(--el-text-strong);
+      }
+      .confirm ul {
+        margin: 6px 0 0;
+        padding-left: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .record {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding: 11px 14px;
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .record b {
+        font-weight: 620;
+        color: var(--el-text);
+      }
+      .avatar {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .pill-await {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill-ok {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .stateCap {
+        font-size: 12.5px;
+        font-weight: 620;
+        color: var(--el-text);
+        margin: 0 0 8px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+      .gone {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-muted);
+        padding: 22px 20px;
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
       }
     </style>
   </head>
@@ -1394,6 +1581,488 @@
           </div>
         </div>
       </section>
+    </div>
+    <!-- ════════════ PANEL G1 — the receipt, IN THE SHARED FRAME ════════════ -->
+    <div class="panel-label">
+      G1 &middot; <b>The SAME decision, in the ONE approve language</b> (MOTIR-4942, under epic
+      MOTIR-4878). Once MOTIR-4950 registers <code>acceptance_result</code> as a gate KIND, this
+      panel stops being a bespoke surface with two buttons on the end and becomes the
+      <b>universal approval frame</b> that design, decision and merge gates already use:
+      <b>band 1</b> what you are looking at and its state &middot; <b>band 2</b> THE PORT, the
+      subject rendered &middot; <b>band 3</b> the verbs, BELOW the port. The receipt itself is
+      unchanged &mdash; it moves INTO the port.
+    </div>
+    <div class="panel">
+      <div class="row-of">
+        <div>
+          <p class="stateCap">A &middot; awaiting &mdash; yours to decide</p>
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Acceptance video</span>
+                <span class="frameMeta"
+                  >Published 6 minutes ago &middot; run <span class="key">4821</span></span
+                >
+              </div>
+              <span class="pill pill-await"
+                ><svg><use href="#i-clock" /></svg>Awaiting you</span
+              >
+            </div>
+            <div class="port">
+              <button class="portExpand" type="button">Expand</button>
+              <div class="player">
+                <div class="player-frame">
+                  <span class="frame-cap">MOTIR-4949 &middot; acceptance run</span>
+                  <span class="play"
+                    ><svg><use href="#i-play" /></svg
+                  ></span>
+                  <span class="frame-dur">0:00 / 0:48</span>
+                </div>
+                <div class="scrub">
+                  <span class="fill"></span>
+                  <span class="tick" style="left: 8%"></span>
+                  <span class="tick" style="left: 34%"></span>
+                  <span class="tick" style="left: 62%"></span>
+                  <span class="tick" style="left: 83%"></span>
+                </div>
+                <div class="chapters">
+                  <div class="chap is-active">
+                    <span class="n">1</span> Open the story detail <span class="t">0:00</span>
+                  </div>
+                  <div class="chap">
+                    <span class="n">2</span> Turn the gate on <span class="t">0:16</span>
+                  </div>
+                  <div class="chap">
+                    <span class="n">3</span> Reviewer watches + approves <span class="t">0:30</span>
+                  </div>
+                  <div class="chap">
+                    <span class="n">4</span> Story moves to Done <span class="t">0:40</span>
+                  </div>
+                </div>
+              </div>
+              <div class="summary">
+                <svg><use href="#i-check-circle" /></svg>
+                <span><strong>12 assertions passed</strong> &middot; 0 failed</span>
+              </div>
+              <div class="prov">
+                <span class="chip"
+                  ><svg><use href="#i-commit" /></svg>a981c09</span
+                >
+                <span class="chip is-link"
+                  ><svg><use href="#i-external" /></svg>CI run #4821</span
+                >
+                <span class="chip">by MOTIR-4952</span>
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy"
+                >Approving finishes <span class="key">MOTIR-4949</span>. Nothing else does.</span
+              >
+              <span class="verbs">
+                <button class="btn btn-secondary">
+                  <svg><use href="#i-revise" /></svg>Request changes
+                </button>
+                <button class="btn btn-primary">
+                  <svg><use href="#i-check" /></svg>Approve
+                </button>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        <b>What actually changes, and what does not.</b> The verbs were ALREADY below the subject in
+        the shipped panel &mdash; that ordering is right and survives. What the frame adds is
+        everything around them: a header saying WHICH version is being decided and what state it is
+        in, a consequence sentence beside the verbs, the confirm band below (G2), and the decided
+        RECORD (G3) &mdash; none of which the acceptance-only idiom has.
+        <b>Approve moves to the right</b> of the pair, because the frame's primary verb is its
+        rightmost; the shipped panel has Approve first.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL G2 — the CONFIRM band ════════════ -->
+    <div class="panel-label">
+      G2 &middot; <b>Confirming.</b> Approving an acceptance receipt is TERMINAL for this kind, so
+      it confirms; Request changes does not, because a reversible act asked twice is friction rather
+      than care. An inline band <b>over the verbs</b>, never a modal &mdash; a modal would take the
+      receipt off screen at the moment the reader wants one last look.
+    </div>
+    <div class="panel">
+      <div class="row-of">
+        <div class="frame">
+          <div class="frameHead">
+            <div class="frameWhat">
+              <span class="frameKind">Acceptance video</span>
+              <span class="frameMeta"
+                >Published 6 minutes ago &middot; run <span class="key">4821</span></span
+              >
+            </div>
+            <span class="pill pill-await"
+              ><svg><use href="#i-clock" /></svg>Awaiting you</span
+            >
+          </div>
+          <div class="port">
+            <button class="portExpand" type="button">Expand</button>
+            <div class="player">
+              <div class="player-frame">
+                <span class="frame-cap">MOTIR-4949 &middot; acceptance run</span>
+                <span class="play"
+                  ><svg><use href="#i-play" /></svg
+                ></span>
+                <span class="frame-dur">0:00 / 0:48</span>
+              </div>
+              <div class="scrub">
+                <span class="fill"></span>
+                <span class="tick" style="left: 8%"></span>
+                <span class="tick" style="left: 34%"></span>
+                <span class="tick" style="left: 62%"></span>
+                <span class="tick" style="left: 83%"></span>
+              </div>
+              <div class="chapters">
+                <div class="chap is-active">
+                  <span class="n">1</span> Open the story detail <span class="t">0:00</span>
+                </div>
+                <div class="chap">
+                  <span class="n">2</span> Turn the gate on <span class="t">0:16</span>
+                </div>
+                <div class="chap">
+                  <span class="n">3</span> Reviewer watches + approves <span class="t">0:30</span>
+                </div>
+                <div class="chap">
+                  <span class="n">4</span> Story moves to Done <span class="t">0:40</span>
+                </div>
+              </div>
+            </div>
+            <div class="summary">
+              <svg><use href="#i-check-circle" /></svg>
+              <span><strong>12 assertions passed</strong> &middot; 0 failed</span>
+            </div>
+            <div class="prov">
+              <span class="chip"
+                ><svg><use href="#i-commit" /></svg>a981c09</span
+              >
+              <span class="chip is-link"
+                ><svg><use href="#i-external" /></svg>CI run #4821</span
+              >
+              <span class="chip">by MOTIR-4952</span>
+            </div>
+          </div>
+          <div class="confirm">
+            <div>
+              <strong>Approving this receipt will:</strong>
+              <ul>
+                <li>record that you approved it, with the time and this run;</li>
+                <li>keep this run&rsquo;s video, so the decision stays watchable;</li>
+                <li>
+                  move <span class="key">MOTIR-4949</span> to Done, starting 2 work items waiting on
+                  it.
+                </li>
+              </ul>
+            </div>
+            <span class="verbs">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-primary">Yes, approve</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        The third line is the one the acceptance idiom never said.
+        <b>Approve is what finishes the story</b>, and a reviewer pressing it should be told so
+        before they do, not after.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL G3 — DECIDED, and the audit face ════════════ -->
+    <div class="panel-label">
+      G3 &middot; <b>Approved.</b> The verbs are gone and the RECORD takes their place: who decided,
+      when, under which authority, through which surface, and whether the bytes were kept. This is
+      ADR <code>approval-gates.md</code> &sect;6a&rsquo;s audit set, rendered by the shared frame
+      &mdash; the acceptance panel has <code>approvedById</code> and <code>approvedAt</code> today
+      and shows neither.
+    </div>
+    <div class="panel">
+      <div class="row-of">
+        <div class="frame">
+          <div class="frameHead">
+            <div class="frameWhat">
+              <span class="frameKind">Acceptance video</span>
+              <span class="frameMeta"
+                >Published 6 minutes ago &middot; run <span class="key">4821</span></span
+              >
+            </div>
+            <span class="pill pill-ok"
+              ><svg><use href="#i-check-circle" /></svg>Approved</span
+            >
+          </div>
+          <div class="port">
+            <button class="portExpand" type="button">Expand</button>
+            <div class="player">
+              <div class="player-frame">
+                <span class="frame-cap">MOTIR-4949 &middot; acceptance run</span>
+                <span class="play"
+                  ><svg><use href="#i-play" /></svg
+                ></span>
+                <span class="frame-dur">0:00 / 0:48</span>
+              </div>
+              <div class="scrub">
+                <span class="fill"></span>
+                <span class="tick" style="left: 8%"></span>
+                <span class="tick" style="left: 34%"></span>
+                <span class="tick" style="left: 62%"></span>
+                <span class="tick" style="left: 83%"></span>
+              </div>
+              <div class="chapters">
+                <div class="chap is-active">
+                  <span class="n">1</span> Open the story detail <span class="t">0:00</span>
+                </div>
+                <div class="chap">
+                  <span class="n">2</span> Turn the gate on <span class="t">0:16</span>
+                </div>
+                <div class="chap">
+                  <span class="n">3</span> Reviewer watches + approves <span class="t">0:30</span>
+                </div>
+                <div class="chap">
+                  <span class="n">4</span> Story moves to Done <span class="t">0:40</span>
+                </div>
+              </div>
+            </div>
+            <div class="summary">
+              <svg><use href="#i-check-circle" /></svg>
+              <span><strong>12 assertions passed</strong> &middot; 0 failed</span>
+            </div>
+            <div class="prov">
+              <span class="chip"
+                ><svg><use href="#i-commit" /></svg>a981c09</span
+              >
+              <span class="chip is-link"
+                ><svg><use href="#i-external" /></svg>CI run #4821</span
+              >
+              <span class="chip">by MOTIR-4952</span>
+            </div>
+          </div>
+          <div class="record">
+            <span><span class="avatar">ZY</span> <b>Zhu Yue</b> approved this</span>
+            <span>11 Sept 2026, 09:42</span>
+            <span>as the story&rsquo;s <b>assignee</b></span>
+            <span>from the <b>item page</b></span>
+            <span class="pill pill-ok"
+              ><svg><use href="#i-check" /></svg>run 4821 kept</span
+            >
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        <b>&ldquo;run 4821 kept&rdquo; is supplied by the KIND, and is nullable.</b> Retention is a
+        fact about the SUBJECT, not about the gate &mdash; a design&rsquo;s answer is its pinned
+        evidence, an acceptance receipt&rsquo;s is its video &mdash; and a kind that retains nothing
+        draws no line at all. Null renders NOTHING: <i>not asked</i> and <i>not kept</i>
+        must not collapse onto one surface built to be checkable.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL G4 — not yours, and gate OFF ════════════ -->
+    <div class="panel-label">
+      G4 &middot; <b>Two absences, and they are not the same absence.</b> LEFT: the gate is up and
+      someone else owes the decision &mdash; the port stays live, only the verbs go. RIGHT: this
+      project&rsquo;s switch is OFF, so there is no gate, no receipt and no panel; what remains is
+      the way back to the switch.
+    </div>
+    <div class="panel">
+      <div class="grid2">
+        <div>
+          <p class="stateCap">B &middot; awaiting &mdash; not yours to decide</p>
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Acceptance video</span>
+                <span class="frameMeta"
+                  >Published 6 minutes ago &middot; run <span class="key">4821</span></span
+                >
+              </div>
+              <span class="pill pill-await"
+                ><svg><use href="#i-clock" /></svg>Awaiting Mara S.</span
+              >
+            </div>
+            <div class="port">
+              <button class="portExpand" type="button">Expand</button>
+              <div class="player">
+                <div class="player-frame">
+                  <span class="frame-cap">MOTIR-4949 &middot; acceptance run</span>
+                  <span class="play"
+                    ><svg><use href="#i-play" /></svg
+                  ></span>
+                  <span class="frame-dur">0:00 / 0:48</span>
+                </div>
+                <div class="scrub">
+                  <span class="fill"></span>
+                  <span class="tick" style="left: 8%"></span>
+                  <span class="tick" style="left: 34%"></span>
+                  <span class="tick" style="left: 62%"></span>
+                  <span class="tick" style="left: 83%"></span>
+                </div>
+                <div class="chapters">
+                  <div class="chap is-active">
+                    <span class="n">1</span> Open the story detail <span class="t">0:00</span>
+                  </div>
+                  <div class="chap">
+                    <span class="n">2</span> Turn the gate on <span class="t">0:16</span>
+                  </div>
+                  <div class="chap">
+                    <span class="n">3</span> Reviewer watches + approves <span class="t">0:30</span>
+                  </div>
+                  <div class="chap">
+                    <span class="n">4</span> Story moves to Done <span class="t">0:40</span>
+                  </div>
+                </div>
+              </div>
+              <div class="summary">
+                <svg><use href="#i-check-circle" /></svg>
+                <span><strong>12 assertions passed</strong> &middot; 0 failed</span>
+              </div>
+              <div class="prov">
+                <span class="chip"
+                  ><svg><use href="#i-commit" /></svg>a981c09</span
+                >
+                <span class="chip is-link"
+                  ><svg><use href="#i-external" /></svg>CI run #4821</span
+                >
+                <span class="chip">by MOTIR-4952</span>
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy"
+                >Waiting on <b>Mara S.</b> &mdash; this story&rsquo;s assignee.</span
+              >
+            </div>
+          </div>
+          <p class="panel-note">
+            <b>The port is still there.</b> A reader who may not decide can still watch what is
+            being decided &mdash; only the verbs are absent.
+          </p>
+        </div>
+        <div>
+          <p class="stateCap">OFF &middot; this project raises no acceptance gate</p>
+          <div class="gone">
+            <b>Nothing here, and that is the project&rsquo;s choice.</b><br />
+            No decision is raised, no receipt is uploaded, and this story finishes the ordinary way.
+          </div>
+          <div class="set-card" style="margin-top: 14px">
+            <div class="set-row">
+              <span
+                ><b>Acceptance video approval</b><br /><span class="mini-label"
+                  >Off for this project</span
+                ></span
+              >
+              <span class="turnon">
+                <button class="sw off" aria-label="Turn on" aria-pressed="false"></button>
+                <a class="btn btn-link" href="/settings/project/approvals"
+                  ><svg><use href="#i-settings" /></svg>Project settings &rsaquo; Approvals</a
+                >
+              </span>
+            </div>
+          </div>
+          <p class="panel-note">
+            <b>The turn-on action and its link FOLLOW the switch to the project</b>
+            (MOTIR-4949 criterion 5). Today <code>settingsHref</code> plus the
+            <code>#acceptance-video</code> anchor point at <code>/settings/organization</code>,
+            which after MOTIR-4925 no longer holds the control &mdash; a link to a page the setting
+            has left is worse than no link, because it looks like it worked.
+          </p>
+        </div>
+      </div>
+    </div>
+    <!-- ════════════ PANEL G5 — the port EXPANDED ════════════ -->
+    <div class="panel-label">
+      G5 &middot; <b>Expand</b> &mdash; the same frame with the port&rsquo;s ceiling lifted. An
+      acceptance receipt is the subject that most needs it: a 16:9 player plus its chapter list is
+      taller than any ceiling that still leaves the verbs on screen, so panels G1&ndash;G4 show the
+      receipt CLIPPED at 420px with its own scroll, which is the truth. The ceiling is not polish
+      &mdash; it is what keeps the verbs below the port AND above the fold at the same time.
+    </div>
+    <div class="panel">
+      <div class="row-of">
+        <div class="frame">
+          <div class="frameHead">
+            <div class="frameWhat">
+              <span class="frameKind">Acceptance video</span>
+              <span class="frameMeta"
+                >Published 6 minutes ago &middot; run <span class="key">4821</span></span
+              >
+            </div>
+            <span class="pill pill-await"
+              ><svg><use href="#i-clock" /></svg>Awaiting you</span
+            >
+          </div>
+          <div class="port is-expanded">
+            <button class="portExpand" type="button">Collapse</button>
+            <div class="player">
+              <div class="player-frame">
+                <span class="frame-cap">MOTIR-1627 · acceptance run</span>
+                <span class="play"
+                  ><svg><use href="#i-play" /></svg
+                ></span>
+                <span class="frame-dur">0:00 / 0:48</span>
+              </div>
+              <div class="scrub">
+                <span class="fill"></span>
+                <span class="tick" style="left: 8%"></span>
+                <span class="tick" style="left: 34%"></span>
+                <span class="tick" style="left: 62%"></span>
+                <span class="tick" style="left: 83%"></span>
+              </div>
+              <div class="chapters">
+                <div class="chap is-active">
+                  <span class="n">1</span> Open the story detail <span class="t">0:00</span>
+                </div>
+                <div class="chap">
+                  <span class="n">2</span> Turn the gate on <span class="t">0:16</span>
+                </div>
+                <div class="chap">
+                  <span class="n">3</span> Reviewer watches + approves <span class="t">0:30</span>
+                </div>
+                <div class="chap">
+                  <span class="n">4</span> Story moves to Done <span class="t">0:40</span>
+                </div>
+              </div>
+            </div>
+            <div class="summary">
+              <svg><use href="#i-check-circle" /></svg>
+              <span><strong>12 assertions passed</strong> · 0 failed</span>
+            </div>
+            <div class="prov">
+              <span class="chip"
+                ><svg><use href="#i-commit" /></svg>a981c09</span
+              >
+              <span class="chip is-link"
+                ><svg><use href="#i-external" /></svg>CI run #4821</span
+              >
+              <span class="chip">by MOTIR-4952</span>
+            </div>
+          </div>
+          <div class="frameFoot">
+            <span class="footWhy"
+              >Approving finishes <span class="key">MOTIR-4949</span>. Nothing else does.</span
+            >
+            <span class="verbs">
+              <button class="btn btn-secondary">
+                <svg><use href="#i-revise" /></svg>Request changes
+              </button>
+              <button class="btn btn-primary">
+                <svg><use href="#i-check" /></svg>Approve
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        <b>Three mechanics, one job.</b> A FLOOR (196px) so a subject is never a sliver; a CEILING
+        (420px) with its own scroll so a tall subject never pushes the verbs off screen; and
+        <b>Expand</b> for a subject that deserves the whole viewport. All three exist to protect the
+        one ordering the frame is built on &mdash; the verbs sit below the port &mdash; and the
+        acceptance receipt is the case that proves each of them.
+      </p>
     </div>
   </body>
 </html>

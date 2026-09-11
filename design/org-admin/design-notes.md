@@ -1028,3 +1028,44 @@ panel is about.
   and it is surfaced as a planning proposal rather than absorbed here.
 - **Moving `WorkspaceFoldInSection`, or anything else off the index page** — a §6d decision, and
   Panel 7's whole claim is that nothing moves.
+
+---
+
+## ⚠️ AMENDMENT (2026-09-11, MOTIR-4942) — panel 7b: the organisation page LOSES the acceptance-video card
+
+**`AcceptanceVideoCard` leaves `/settings/organization`.** MOTIR-4925 moves the
+acceptance-video switch to the project tier, into the new
+`Project settings → Approvals` room (`design/projects/design-notes.md`
+§ _Approvals — the gate switches_). Panel **7b** of `org-admin.mock.html` is
+amended to draw the page **as it will stand**: the section stack, in order,
+without that card.
+
+### The order, read off the page rather than remembered
+
+```
+OrgGeneralCard            admin
+BillingCard               admin · cloud only   (isCloudBilling())
+WorkspaceFoldInSection    workspace membership
+JobRunsFoldInSection      workspace membership
+DangerZoneCard            admin
+```
+
+Each keeps its own §6d per-SECTION gate. The row filter in panel 7c decides which
+ROWS exist; it does not touch what is inside one.
+
+> **⚠️ The list this panel used to carry was STALE IN TWO WAYS, and both are
+> corrected.** It read _`OrgGeneralCard · AcceptanceVideoCard · BillingCard ·
+WorkspaceFoldInSection · DangerZoneCard`_. Read off
+> `app/(authed)/settings/organization/page.tsx` on `origin/main` (2026-09-11), the
+> page renders **Billing BEFORE Acceptance**, and it has a fifth section —
+> **`JobRunsFoldInSection`** — that the list omitted entirely. A card order is
+> exactly the kind of claim a prose stub records once and nobody re-reads, which
+> is why this amendment draws the stack instead of listing it.
+
+### What does NOT move
+
+**The ENTITLEMENT stays at the organisation.** `hasPaidAiPlan` is bought once,
+for the organisation, and `acceptanceVideoEligibilityService` still reads it from
+here — only the SWITCH moves. That is why the project-tier control has a
+_no paid plan_ state at all, and why its footer says the plan is bought once for
+the organisation rather than offering to buy one per project.

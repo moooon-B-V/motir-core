@@ -10,6 +10,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { organizationRepoService } from '@/lib/services/organizationRepoService';
+import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
@@ -286,6 +287,123 @@ describe('`Used by N projects` — ONE read, two consumers', () => {
 
     const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
     expect(usage.find((u) => u.githubRepoId === repoGitlab)?.projects).toHaveLength(2);
+  });
+});
+
+// ⚠️ ACCESS IS NOT LIFECYCLE (MOTIR-5131). `listRepositoryUsage` had exactly one
+// filter in it — `filterBrowsable` — and it answers *may this actor SEE the
+// project*, never *is the project still alive*. The two narrow a list for
+// similar-sounding reasons, which is why two earlier corrections to this same
+// sentence (MOTIR-4955, MOTIR-4997) both went past it: a reviewer checking that
+// the list is filtered finds a filter and moves on.
+//
+// The cost lands on the DISCONNECT dialog, which enumerates who is affected by a
+// destructive act. Naming a project archived months ago inflates the blast radius
+// and teaches the reader that the list is approximate — the one property a
+// confirmation dialog cannot afford.
+describe('`Used by N projects` — an ARCHIVED project is not a user (MOTIR-5131)', () => {
+  /** A second live project in the MAIN workspace, so the archive is not the last-project case. */
+  async function siblingProject(identifier: string) {
+    const project = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: `Sibling ${identifier}`,
+      identifier,
+    });
+    return project;
+  }
+
+  async function archive(projectId: string) {
+    await projectsService.archiveProject({
+      projectId,
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+    });
+    // Archive enqueues its own windowed offboarding; this file counts enqueues.
+    enqueueSpy.mockClear();
+  }
+
+  it('a repository linked to two live projects and one archived reports TWO', async () => {
+    const live = await siblingProject('LIVE');
+    const dead = await siblingProject('DEAD');
+    await link(fx.projectId, repoGitlab, fx.ctx);
+    await link(live.id, repoGitlab, fx.ctx, 'gw-live');
+    await link(dead.id, repoGitlab, fx.ctx, 'gw-dead');
+
+    const before = await organizationRepoService.listRepositoryUsage(fx.ctx);
+    expect(before.find((u) => u.githubRepoId === repoGitlab)?.projects).toHaveLength(3);
+
+    await archive(dead.id);
+
+    const after = await organizationRepoService.listRepositoryUsage(fx.ctx);
+    const row = after.find((u) => u.githubRepoId === repoGitlab);
+    expect(row?.projects).toHaveLength(2);
+    expect(new Set(row?.projects.map((p) => p.id))).toEqual(new Set([fx.projectId, live.id]));
+  });
+
+  it('⚠️ BOTH consumers narrow together — the inventory row and the dialog read ONE list', async () => {
+    // `listInventory` composes `listRepositoryUsage` precisely so the count a
+    // person reads at rest and the names the dialog enumerates cannot disagree.
+    // Fixing the count at the call site would have restored the number and
+    // quietly broken that property, so it is asserted on both consumers rather
+    // than on the one that was reported.
+    const live = await siblingProject('LIVE');
+    const dead = await siblingProject('DEAD');
+    await link(fx.projectId, repoGitlab, fx.ctx);
+    await link(live.id, repoGitlab, fx.ctx, 'gw-live');
+    await link(dead.id, repoGitlab, fx.ctx, 'gw-dead');
+    await archive(dead.id);
+
+    const [usage, inventory] = await Promise.all([
+      organizationRepoService.listRepositoryUsage(fx.ctx),
+      organizationRepoService.listInventory(fx.ctx),
+    ]);
+    const usageRow = usage.find((u) => u.githubRepoId === repoGitlab);
+    const inventoryRow = inventory.find((r) => r.repo.id === repoGitlab);
+
+    expect(inventoryRow?.projects.map((p) => p.id)).toEqual(usageRow?.projects.map((p) => p.id));
+    expect(inventoryRow?.projects).toHaveLength(2);
+    expect(inventoryRow?.projects.map((p) => p.id)).not.toContain(dead.id);
+  });
+
+  it('the `project_repository` LINK survives the archive — only the reading of it changes', async () => {
+    // `ProjectRepo.githubRepo` is `onDelete: SetNull` precisely so a project's
+    // plan for a repository outlives the connection. The data is correct and this
+    // card must not start deleting anything: the product has no un-archive path,
+    // so a deletion here would be as irreversible as the archive that caused it.
+    const dead = await siblingProject('DEAD');
+    await link(dead.id, repoGitlab, fx.ctx, 'gw-dead');
+    await archive(dead.id);
+
+    const links = await adminDb.projectRepo.findMany({ where: { projectId: dead.id } });
+    expect(links).toHaveLength(1);
+    expect(links[0]?.githubRepoId).toBe(repoGitlab);
+  });
+
+  it('⚠️ the DISCONNECT still clears and offboards the ARCHIVED project — the dialog narrows, the ACT does not', async () => {
+    // THE REASON THE PREDICATE IS NOT ON `findManyByIds`. Its other caller is
+    // `disconnectFromOrganisation`, whose enumeration drives the link clear AND
+    // the code-graph offboarding — and an archived project's graph still exists.
+    // Filtering it there would leave that graph an unreachable orphan, which is
+    // the exact failure `code-graph-index-fleet.md` §14.3 and MOTIR-2166 are
+    // about. So the two callers read DIFFERENT methods, deliberately.
+    const dead = await siblingProject('DEAD');
+    await link(fx.projectId, repoGitlab, fx.ctx);
+    await link(dead.id, repoGitlab, fx.ctx, 'gw-dead');
+    await archive(dead.id);
+
+    // The dialog has already stopped naming it…
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+    expect(usage.find((u) => u.githubRepoId === repoGitlab)?.projects).toHaveLength(1);
+
+    // …and the act still reaches it.
+    const result = await organizationRepoService.disconnectFromOrganisation(repoGitlab, fx.ctx);
+    expect(result.clearedLinks).toBe(2);
+    expect(enqueueSpy).toHaveBeenCalled();
+    const offboardedProjectIds = enqueueSpy.mock.calls.flatMap(
+      (call: unknown[]) => (call[0] as { coreProjectIds: string[] }).coreProjectIds,
+    );
+    expect(offboardedProjectIds).toContain(dead.id);
   });
 });
 
