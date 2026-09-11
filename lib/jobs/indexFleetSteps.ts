@@ -1,4 +1,4 @@
-import { fetchCodeGraphRunVerdict } from '@/lib/ai/motirAiClient';
+import { fetchCodeGraphRunVerdict, type CodeGraphRunVerdict } from '@/lib/ai/motirAiClient';
 import { indexFleetConfig } from '@/lib/orchestrator';
 import type {
   IndexDispatchOutcome,
@@ -458,6 +458,11 @@ async function indexEveryProject(
         runId: ctx.runId,
       });
 
+      // Built before the push so the spread below stays readable, and DROPPED
+      // ENTIRELY when every field is absent: a `containerTimings: {}` on a
+      // ledger row would say "measured, and empty" about a run nobody measured.
+      const containerTimings = compactTimings(verdict?.timings);
+
       indexModes.push({
         projectId,
         mode: outcome.indexMode,
@@ -467,11 +472,46 @@ async function indexEveryProject(
         // reader of the type.
         ...(verdict?.indexMode ? { containerMode: verdict.indexMode } : {}),
         ...(verdict?.fallbackReason ? { containerFallbackReason: verdict.fallbackReason } : {}),
+        // ⚠️ AND WHAT THE RUN COST (MOTIR-5101) — spread-or-omit on the same
+        // rule as the two above, and BESIDE `coreTimings` rather than merged
+        // into it. `coreTimings` is this side's provisioning overhead and this
+        // is the span inside the container; the overhead swings by more than
+        // half the effect being measured, so conflating them produces a number
+        // that reports the feature as worthless (`IndexModeRecord`'s own note).
+        ...(containerTimings ? { containerTimings } : {}),
       });
     }
   }
 
   return { coreTimings, indexModes };
+}
+
+/**
+ * The client's nullable timing shape → the ledger's omit-when-absent one
+ * (MOTIR-5101), or `undefined` when the run reported nothing.
+ *
+ * ⚠️ THE CONVERSION EXISTS BECAUSE THE TWO SIDES SPELL "ABSENT" DIFFERENTLY, and
+ * getting that wrong is how a null reaches a JSON ledger row as a value. The
+ * client reports `null` per field, because a wire contract has to distinguish
+ * *absent* from *zero* explicitly. `job_run.output` is stored JSON, where an
+ * explicit `null` and an omitted key render the same but READ differently to a
+ * person — so this side omits.
+ *
+ * A run that reported nothing returns `undefined` and contributes no key at all,
+ * which keeps the row byte-identical to the one written before this card.
+ */
+function compactTimings(
+  timings: CodeGraphRunVerdict['timings'] | undefined,
+): NonNullable<IndexModeRecord['containerTimings']> | undefined {
+  if (!timings) return undefined;
+  const compact = {
+    ...(timings.totalMs !== null ? { totalMs: timings.totalMs } : {}),
+    ...(timings.unaccountedMs !== null ? { unaccountedMs: timings.unaccountedMs } : {}),
+    ...(timings.peakRssMb !== null ? { peakRssMb: timings.peakRssMb } : {}),
+    ...(timings.phasesMs !== null ? { phasesMs: timings.phasesMs } : {}),
+    ...(timings.syncCounts !== null ? { syncCounts: timings.syncCounts } : {}),
+  };
+  return Object.keys(compact).length > 0 ? compact : undefined;
 }
 
 /**
