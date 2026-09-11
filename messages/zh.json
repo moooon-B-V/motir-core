@@ -6197,7 +6197,7 @@
       "linkedTo": "已关联到 {key}",
       "deliversN": "交付 {count} 个工作项",
       "linkAction": "关联",
-      "notConnected": "此工作区尚未连接 GitHub。请在「设置 → 组织 → Git」中进行连接。",
+      "notConnected": "此组织尚未连接 GitHub。请在「设置 → 组织 → Git」中进行连接。",
       "prNotFound": "找不到该拉取请求。",
       "autoLinkCaptionManual": "使用此处的“+关联拉取请求”，或通过 MCP 调用 <mono>link_pull_request</mono> 进行关联。",
       "intoBase": "合并到 {base}",

@@ -2,6 +2,8 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { normalizeRepoName } from './repoName';
 import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { bindOrganizationContext } from '@/lib/organizations/context';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import {
   ArchivedTargetRepoError,
   ConflictingTargetRepoInputError,
@@ -88,17 +90,51 @@ export interface ConnectedRepoName {
 }
 
 /**
- * The workspace's connected repos, as the names a `targetRepo` may reference.
- * De-duplicated by NAME (two owners can expose the same repo name; the CLI
- * checks both out at `<root>/<name>`, so they are one checkout identity as far
- * as dispatch is concerned — first by the repository's stable owner/name order
- * wins). Empty when the workspace has no connection, which makes every non-null
- * pin invalid — the honest outcome: attribution is meaningless with no repos.
+ * The ORGANISATION's connected repositories, de-duplicated by NAME (two owners
+ * can expose the same repo name; the CLI checks both out at `<root>/<name>`, so
+ * they are one checkout identity as far as dispatch is concerned — first by the
+ * repository's stable owner/name order wins). Empty when the ORGANISATION has no
+ * connection at all.
+ *
+ * ⚠️ THE ORGANISATION, NOT THE WORKSPACE, SINCE MOTIR-5152. A repository is
+ * connected ONCE, to the organisation (Story MOTIR-4669), so asking the
+ * workspace returned rows only in the one workspace the App was installed from
+ * and came back EMPTY everywhere else with the connection plainly present. The
+ * read is org-scoped in both halves that matter — `listByOrganization`'s `where`,
+ * and `bindOrganizationContext` turning on `github_repo_org_read` (MOTIR-4677),
+ * whose own doc comment names the trap: under a plain `withWorkspaceContext` this
+ * read silently returns a SUBSET, which looks like a short list rather than a bug.
+ * Nothing about the WRITE arms changes — the column stays the repository's home,
+ * the decision MOTIR-4649 drew.
+ *
+ * ⚠️ THIS IS NO LONGER THE `targetRepo` DOMAIN, and the sentence that said so
+ * was the most expensive line in this file. It read "empty when the workspace has
+ * no connection, which makes every non-null pin invalid", and it was true until
+ * **MOTIR-4955** (merged 2026-09-10) made the PROJECT's repository set the
+ * isolation boundary: a pin is now validated against
+ * `projectRepoSetService.getRepoNameDomains` via `resolveEffectiveRepoDomain`,
+ * which never inherits the tenant's connected repositories. The stale comment
+ * outlived its consumer by a day and was then read as a live symptom by the card
+ * that filed this fix (MOTIR-5152), which asserted that every `targetRepo` pin
+ * was invalid in a sibling workspace. It is not — an unlinked repository is
+ * rejected in EVERY workspace, including the installing one, and that is the
+ * isolation MOTIR-4955 intends.
+ *
+ * The ONE production consumer is `proseGraphAdvisoryService`'s repo-straddle
+ * check, and that is where the defect above actually landed: with an empty
+ * candidate list `likely-repo-straddle` cannot fire, so in every workspace but
+ * the installing one the advisory was SILENTLY off — a guard that reports
+ * nothing and a guard that finds nothing are the same observation from outside.
  */
 export async function listConnectedRepoNames(ctx: ServiceContext): Promise<ConnectedRepoName[]> {
   const repos = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    (tx) => githubRepoRepository.listByWorkspace(ctx.workspaceId, tx),
+    async (tx) => {
+      // Trusted resolution off the workspace ROW, never request input.
+      const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+      await bindOrganizationContext(tx, organizationId);
+      return githubRepoRepository.listByOrganization(organizationId, tx);
+    },
   );
   const byName = new Map<string, ConnectedRepoName>();
   for (const repo of repos) {
