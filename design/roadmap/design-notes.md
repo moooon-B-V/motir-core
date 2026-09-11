@@ -790,7 +790,37 @@ and is deliberately distinct from each existing signal by **hue + shape**:
 | **Ready** (new) | "Ready" pill + 3px left accent bar               | `--el-success`  |
 | "You are here"  | accent BORDER + accent map-pin pill              | `--el-accent`   |
 | dependency flag | red chip ("blocked elsewhere" / "not in sprint") | `--el-danger`   |
-| status pill     | tinted chip (To do / In progress / Done)         | per-status tint |
+| status pill     | tinted chip, per STATUS (see below)              | per-status tint |
+
+> **⚠️ AMENDMENT — 2026-09-11, MOTIR-5141. THE STATUS PILL IS PER-STATUS, AND THE TINT
+> FAMILY GAINED A SEVENTH MEMBER.** The row above said _"To do / In progress / Done"_,
+> which was the canvas's whole status vocabulary when it was written. It is not any more:
+> `lib/workflows/canvasStatusMeta.ts` resolves the chip by status KEY first and by
+> lifecycle CATEGORY second, and the default workflow now ships NINE statuses. The mapping
+> it renders:
+>
+> | status               | glyph                      | tint                          |
+> | -------------------- | -------------------------- | ----------------------------- |
+> | `todo` · `cancelled` | `CircleDashed` · `XCircle` | `--el-muted` (the quiet chip) |
+> | `blocked`            | `Ban`                      | `--el-tint-peach`             |
+> | `in_progress`        | `CircleDot`                | `--el-tint-sky`               |
+> | `implemented`        | `CircleEllipsis`           | `--el-tint-rose`              |
+> | `planning`           | `CircleDotDashed`          | `--el-tint-yellow`            |
+> | `in_review`          | `Eye`                      | `--el-tint-lavender`          |
+> | **`approved`**       | **`CircleCheck`**          | **`--el-tint-sage`** ← new    |
+> | `done`               | `Check`                    | `--el-tint-mint`              |
+>
+> **`--el-tint-sage` is the SEVENTH member of a family that had six**, and it was added
+> because the six were fully spent — `canvasStatusMeta.ts`'s header records `planning`
+> taking _"the one remaining unspent tint"_. Borrowing a tint another status holds would
+> re-create `MOTIR-3170`, the bug filed when the canvas rendered two statuses as one. The
+> value is measured in `design/boards/design-notes.md` § _Approved — the ninth board
+> column_: worst ΔE2000 6.0 against the other six plus `--el-muted` across all twenty
+> palette × theme contexts. ⚠️ **No suite enforces that floor for this family**, so it is a
+> hand measurement and a palette change does not re-run it.
+>
+> A status with no row of its own still falls back to its CATEGORY, and an unrecognised one
+> to the neutral chip — an honest unknown rather than an impersonation of To Do.
 
 An in-progress or done node is NOT ready (already started/finished); a to-do with an
 open blocker is NOT ready (the dim "To do" pill stays). The mock's panel 1 shows the

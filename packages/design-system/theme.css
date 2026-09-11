@@ -3277,6 +3277,28 @@
   --el-tint-lavender: var(--color-tint-lavender);
   --el-tint-sky: var(--color-tint-sky);
   --el-tint-yellow: var(--color-tint-yellow);
+  /* THE SEVENTH TINT (MOTIR-5140 · MOTIR-5141). The canvas status chip speaks
+     this flat family (`lib/workflows/canvasStatusMeta.ts`), and all six above
+     were spent — that module's own header records `planning` taking "the one
+     remaining unspent tint". `approved` is the status that breaks it.
+
+     ⚠️ IT IS A `color-mix` AND NOT A `var(--color-tint-*)` ALIAS, WHICH IS THE
+     ONE PLACE IT DEPARTS FROM ITS SIX SIBLINGS, DELIBERATELY. There is no
+     Tier-0 `--color-tint-sage`, and adding one would oblige every palette block
+     to declare it — a palette that did not would leave this token resolving to
+     a DANGLING var, which `paletteTokenCoverage` fails on by name. Riding
+     `--color-success` + `--color-surface` instead re-skins per palette for free
+     (both are declared in all nine non-base blocks) and needs no palette edit.
+
+     MEASURED, per the design asset: worst ΔE2000 6.0 against the other six plus
+     `--el-muted` across all twenty palette x theme contexts (amber/light vs
+     `--el-tint-mint`), against this family's floor of 2 (`MIN_DELTA_E_TINT`);
+     worst `--el-text-strong` ink contrast 6.43:1. ⚠️ That floor is NOT enforced
+     for this family — `familyHueSeparation.test.ts` covers priority, label,
+     avatar and selection, not the tints — so the number is a hand measurement
+     and nothing in CI re-performs it when a palette moves.
+     See design/boards/design-notes.md § "Approved — the ninth board column". */
+  --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
 
   /* ── Status hues (MOTIR-1273 · 1266.2 — un-collapse the workflow statuses) ──
      Each workflow status renders its dot/icon in its OWN hue, so in_review /

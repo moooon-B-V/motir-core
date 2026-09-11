@@ -1,6 +1,7 @@
 import {
   Ban,
   Check,
+  CircleCheck,
   CircleDashed,
   CircleDot,
   CircleDotDashed,
@@ -106,6 +107,19 @@ const META_BY_KEY: Record<string, CanvasStatusMeta> = {
     text: 'text-(--el-text-strong)',
   },
   in_review: { icon: Eye, tint: 'bg-(--el-tint-lavender)', text: 'text-(--el-text-strong)' },
+  // A person's YES (MOTIR-5141). ⚠️ THE SIX-TINT FAMILY WAS SPENT — this
+  // module's own header records `planning` taking "the one remaining unspent
+  // tint" — so `approved` takes a SEVENTH, `--el-tint-sage`, added to the base
+  // token block for it. That is the in-LANGUAGE answer the header asks for; the
+  // alternative it warns against is switching the canvas to the item page's
+  // `color-mix` recipe, which would be a language change.
+  //
+  // Borrowing a tint another status already holds was the third option and is
+  // the one that is actually forbidden: it re-creates MOTIR-3170 exactly — two
+  // statuses rendering as one on the canvas. `CircleCheck` against `done`'s
+  // bare `Check` is the same distinction the item-page chip draws, so the two
+  // surfaces tell the same story about the same pair.
+  approved: { icon: CircleCheck, tint: 'bg-(--el-tint-sage)', text: 'text-(--el-text-strong)' },
   done: { icon: Check, tint: 'bg-(--el-tint-mint)', text: 'text-(--el-text-strong)' },
   cancelled: { ...NEUTRAL, icon: XCircle },
 };

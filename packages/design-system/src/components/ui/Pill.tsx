@@ -69,6 +69,17 @@ const pillVariants = cva(
         // and finding #35 forbids resting a state on colour alone.
         implemented:
           'bg-[color-mix(in_srgb,var(--el-status-implemented)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
+        // A person's YES, and not yet shipped (MOTIR-5141). The SECOND
+        // per-status tone, on the same documented recipe `implemented` uses
+        // rather than a second one — `--el-status-approved` is the `done` green
+        // one ink step deeper, measured at ΔE2000 >= 10 against every other
+        // status hue in all ten palettes. Like `implemented` it carries a GLYPH
+        // (`CircleCheck`, in `StatusPill`), because a 14% tint is a subtle mark
+        // and finding #35 forbids resting a state on colour alone — and here it
+        // does more work than usual: at 14% the whole ramp compresses, and this
+        // chip's nearest neighbour is `done`'s.
+        approved:
+          'bg-[color-mix(in_srgb,var(--el-status-approved)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
         done: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
       },
       severity: {
