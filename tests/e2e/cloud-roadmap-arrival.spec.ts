@@ -51,12 +51,20 @@ const scopeToggle = (page: Page) => page.getByRole('group', { name: 'Roadmap sco
 // outgoing subtree a client-side navigation leaves mounted (`CLAUDE.md` § *a
 // boundary makes every unscoped locator a race*); a role, or a scope that is
 // itself a role, is what excludes both.
-/** The `PlanningCanvas` viewport — `role="application"` + `aria-label`. */
-const canvasApp = (page: Page) => page.getByRole('application', { name: 'Project roadmap' });
-/** `ProjectRoadmapCanvas`'s outer wrapper. A bare `<div>` around the viewport
- *  above, and the box the geometry assertions measure — so it keeps its id and
- *  takes `main` as its scope. */
+/** `ProjectRoadmapCanvas`'s outer wrapper. A bare `<div>` around the
+ *  `role="application"` viewport, and the box the geometry assertions measure —
+ *  so it keeps its id and takes `main` as its scope. `main` IS in the
+ *  accessibility tree on this route: `/roadmap` is a page, not an overlay. */
 const canvasFrame = (page: Page) => page.getByRole('main').getByTestId('roadmap-canvas');
+/** The `PlanningCanvas` viewport. It DOES carry `role="application"`, but NOT a
+ *  fixed name: `ProjectRoadmapCanvas` renders `ariaLabel ?? t('ariaDefault')`,
+ *  and the roadmap route passes its own — the failure artifact's ARIA snapshot
+ *  reads `application "Wide Roadmap roadmap"`, i.e. the SEED's project name.
+ *  `'Project roadmap'` is the fallback this route never reaches, so addressing
+ *  it by that name matched nothing and took the `billing-cloud` leg red. Binding
+ *  the locator to the seed's project name instead would just move the coupling,
+ *  so the id stays and takes the canvas frame as its scope. */
+const canvasApp = (page: Page) => canvasFrame(page).getByTestId('planning-canvas');
 /** The dependency legend panel, and its collapse control. The control is a real
  *  `<button>`, but its accessible name FLIPS with the state these assertions are
  *  measuring ('Hide…' / 'Show…'), so addressing it by name would make the

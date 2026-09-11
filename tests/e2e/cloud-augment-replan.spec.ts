@@ -184,7 +184,15 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
   // so the row has a role to ask for — and the accessibility tree excludes the
   // streamed and outgoing copies a page-rooted `getByText` would resolve
   // (MOTIR-4822 / MOTIR-3929).
-  const proposal = (title: string) => page.getByRole('listitem', { name: title });
+  //
+  // ⚠️ FILTERED BY TEXT, NOT NAMED — `listitem` is NOT a name-from-content role,
+  // so it computes no accessible name at all and `getByRole('listitem', { name })`
+  // matches NOTHING however exactly the text reads. The failure artifact shows
+  // the rows present as `listitem: In-app notifications task` while the named
+  // locator found zero. `filter({ hasText })` is what reads a roled row's
+  // content, and it keeps the row (not the page) as the thing addressed.
+  const proposal = (title: string) =>
+    page.getByRole('main').getByRole('listitem').filter({ hasText: title });
   await expect(proposal('In-app notifications')).toBeVisible({ timeout: 15_000 });
   await expect(proposal('Email notifications')).toBeVisible();
   await expect(proposal('Push notifications')).toBeVisible();

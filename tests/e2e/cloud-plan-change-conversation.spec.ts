@@ -221,17 +221,25 @@ async function gatePlanRead(page: Page, planId: string): Promise<() => void> {
 
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => page.getByRole('textbox', { name: /Reply, or refine/ });
-// ⚠️ SCOPED TO `main`, not read off the page (MOTIR-5116). Neither node carries
-// a role — the confirm bar is a bare `<div>` in `PlanningWorkspaceHost` and
-// `roadmap-canvas` is `ProjectRoadmapCanvas`'s wrapper around the
-// `role="application"` viewport — so there is nothing to ask the accessibility
-// tree for, and `main` is the live route subtree. That is what keeps a
-// page-rooted id off React's streamed `<div hidden id="S:0">` copy and off the
-// outgoing subtree a client-side navigation leaves mounted (`CLAUDE.md` § *a
-// boundary makes every unscoped locator a race*).
-const live = (page: Page) => page.getByRole('main');
-const confirmBar = (page: Page) => live(page).getByTestId('plan-change-confirm-bar');
-const canvas = (page: Page) => live(page).getByTestId('roadmap-canvas');
+// ⚠️ SCOPED TO THE DIALOG, not to `main` and not read off the page (MOTIR-5116).
+// None of these nodes carries a role of its own — the confirm bar and the footer
+// are bare `<div>`s in `PlanningWorkspaceHost`, and `roadmap-canvas` is
+// `ProjectRoadmapCanvas`'s outer wrapper around the `role="application"`
+// viewport — so a SCOPE is the remedy rather than a role.
+//
+// ⚠️ AND THE SCOPE IS THE DIALOG BECAUSE `main` FAILS CLOSED HERE. The planning
+// workspace is a full-screen OVERLAY (see this file's own header), and Radix
+// marks everything outside an open modal `aria-hidden` — so `<main>` leaves the
+// accessibility tree entirely and `getByRole('main')` matches ZERO for as long
+// as the workspace is open. Measured, not reasoned: scoping these to `main`
+// took the `billing-cloud` leg red with `element(s) not found`, and the failure
+// artifact's ARIA snapshot carries a `dialog` and no `main` at all.
+//
+// The dialog is the live subtree, and a portalled overlay is also somewhere a
+// lingering route-level subtree cannot reach into (`_helpers/settle.ts`).
+const workspace = (page: Page) => page.getByRole('dialog', { name: /plan/i });
+const confirmBar = (page: Page) => workspace(page).getByTestId('plan-change-confirm-bar');
+const canvas = (page: Page) => workspace(page).getByTestId('roadmap-canvas');
 
 /** Type a turn and send it, waiting on the DOOR's 200 — the turn is a persisted
  *  row written by that call, so its write response is the authoritative "the

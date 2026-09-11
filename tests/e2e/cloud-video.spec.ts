@@ -150,8 +150,19 @@ test('paid + on → Request changes sends the story back to In Progress', async 
 
   await page.goto(`/items/${story.identifier}`);
   await page.getByRole('button', { name: 'Request changes' }).click();
-  // SCOPED TO `main` — a `Pill` on the streamed acceptance panel, no role.
-  await expect(acceptance(page).getByText('Changes requested', { exact: true })).toBeVisible();
+  // ⚠️ THIS ASSERTION IS ABOUT THE TOAST, AND ALWAYS WAS — now it says so.
+  // `acceptance.toast.changesRequested` and `acceptance.status.changesRequested`
+  // are the SAME STRING, and only the toast is ever on screen here: the panel's
+  // `changes_requested` pill sits behind the `canDecide` arm, which is still
+  // true for a reviewer who may decide again, so the pill never renders. The
+  // toast does, portalled to the end of `<body>` by Radix's viewport — outside
+  // `<main>`, which is why scoping it there found nothing and took the
+  // `billing-cloud` leg red. `getByRole('status')` is what Radix gives a toast
+  // root, it is this tree's own convention for addressing one (`import.spec.ts`,
+  // `cloud-audit-coverage.spec.ts`), and a portal is unreachable by a lingering
+  // route subtree — so this is a stronger locator than the page-rooted original,
+  // not a retreat to it.
+  await expect(page.getByRole('status').filter({ hasText: 'Changes requested' })).toBeVisible();
   await page.reload();
   const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
   expect(persisted.status).toBe('in_progress');
