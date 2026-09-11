@@ -119,6 +119,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'WHICH PLANNING PHASE this lesson is about: "lay" (laying a level\'s children — shape, edges, coverage) or "author" (writing one card\'s body — criteria, sizing, claims). Leaving it out means both. The retired spellings "skeleton" and "deepen" are still accepted and read as "lay" and "author"; they are removed in a later release.',
       },
+      subject: {
+        type: 'string',
+        description:
+          'WHICH SUBJECT MATTER this lesson is about — the FOURTH routing axis, mirroring the rule-pack selector\'s fourth coordinate so the two corpora stay reachable by one question. Leaving it out means "every subject", and that is the right answer far more often than the vocabulary suggests: a WRONG subject is worse than none, because it makes the lesson unreachable from every card it actually applies to, while an untagged one still reaches all of them. ⚠️ SCALAR, unlike the three axes above — a lesson carries ONE subject or none, never a list, and a payload sending several is REFUSED rather than coerced (a card wanting two subjects is a SPLIT signal, so a lesson captured from one cannot inherit a multiplicity its source never had). A lesson that genuinely applies across subjects carries NONE — it is more general than either, which is what omitting this says. MEMBERSHIP IS NOT VALIDATED: the vocabulary is the rule-pack file set, so a well-formed unrecognised member is accepted and simply never matches a subject-narrowed query. Shape only: a lowercase slug.',
+      },
       sourceRef: {
         type: 'string',
         description:

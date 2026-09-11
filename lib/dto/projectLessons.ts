@@ -61,6 +61,11 @@ export interface ProjectLessonDTO {
   kinds: string[];
   types: string[];
   phases: LessonPlanPhase[];
+  /**
+   * WHICH SUBJECT MATTER it applies to — the fourth axis, and the only SCALAR
+   * one. `null` means unconstrained, exactly as an empty array does above.
+   */
+  subject: string | null;
   /** Where it came from — a work-item key for a lesson captured after the freeze. */
   sourceRef: string | null;
   /** ISO-8601. */

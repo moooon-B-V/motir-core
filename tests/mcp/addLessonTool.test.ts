@@ -236,6 +236,82 @@ describe('add_lesson — the axes round-trip as stored', () => {
     expect(body['phases']).toEqual(['author']);
   });
 
+  // ── MOTIR-5081 — the FOURTH axis, and the one that is SCALAR ─────────────
+
+  it('sends a single `subject` and reports it back as stored', async () => {
+    const fx = await makeWorkItemFixture();
+    const upstream = stubUpstream(() =>
+      jsonResponse(wireLesson({ kinds: [], types: [], phases: [], subject: 'jobs' }), 201),
+    );
+
+    const result = await runAddLesson(
+      { projectKey: fx.projectIdentifier, ...INPUT, subject: 'jobs' },
+      fx.ctx,
+    );
+
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    expect(body['subject']).toBe('jobs');
+    expect(result.structuredContent).toMatchObject({ subject: 'jobs' });
+    // The summary names it, for the same reason the three axes are named: a
+    // value in a payload is easy to miss, and the routing is the whole point.
+    const text = (result.content as Array<{ text?: string }>)[0]?.text ?? '';
+    expect(text).toContain('subject jobs');
+  });
+
+  it('OMITTING it behaves exactly as today — no subject on the wire, and the summary still says "every card"', async () => {
+    // The additive property. A caller that has never heard of this axis must be
+    // unaffected, which means the key is ABSENT from the body rather than sent
+    // as null — the upstream treats absent as unconstrained and this keeps the
+    // two agreeing.
+    const fx = await makeWorkItemFixture();
+    const upstream = stubUpstream(() =>
+      jsonResponse(wireLesson({ kinds: [], types: [], phases: [] }), 201),
+    );
+
+    const result = await runAddLesson({ projectKey: fx.projectIdentifier, ...INPUT }, fx.ctx);
+
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    expect('subject' in body).toBe(false);
+    const text = (result.content as Array<{ text?: string }>)[0]?.text ?? '';
+    expect(text).toContain('applies to every card');
+  });
+
+  it('a whitespace-only subject is the UNCONSTRAINED case, not a member named "  "', async () => {
+    const fx = await makeWorkItemFixture();
+    const upstream = stubUpstream(() =>
+      jsonResponse(wireLesson({ kinds: [], types: [], phases: [] }), 201),
+    );
+
+    await runAddLesson({ projectKey: fx.projectIdentifier, ...INPUT, subject: '   ' }, fx.ctx);
+
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    expect('subject' in body).toBe(false);
+  });
+
+  it('an UNRECOGNISED but well-formed member is ACCEPTED and travels — membership is the corpus\u2019s to police', async () => {
+    // Deliberate, and named here with its reason rather than left to be
+    // discovered: the vocabulary is the rule-pack FILE SET, which this
+    // repository mirrors rather than owns, so a member newer than this deploy
+    // must not be refused at the door. It is harmless downstream — the store
+    // matches it against the untagged corpus and nothing else.
+    const fx = await makeWorkItemFixture();
+    const upstream = stubUpstream(() =>
+      jsonResponse(
+        wireLesson({ kinds: [], types: [], phases: [], subject: 'not-a-real-pack' }),
+        201,
+      ),
+    );
+
+    const result = await runAddLesson(
+      { projectKey: fx.projectIdentifier, ...INPUT, subject: 'not-a-real-pack' },
+      fx.ctx,
+    );
+
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    expect(body['subject']).toBe('not-a-real-pack');
+    expect(result.structuredContent).toMatchObject({ subject: 'not-a-real-pack' });
+  });
+
   // MOTIR-4775 — the WRITE door needs the same one-release grace the search
   // door gets, because the same callers reach both with the same vocabulary.
   // Asserted on the UPSTREAM BODY: what must never happen is a retired word
