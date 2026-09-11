@@ -1261,6 +1261,7 @@ export interface RawLesson {
   humanOverrideBy?: string | null;
   /** The retire-by-non-recurrence window, in days, THIS row was judged against. */
   retentionDays?: number;
+  subject?: string | null;
 }
 
 export interface RawLessonPage {
@@ -1342,6 +1343,8 @@ export interface CreateLessonRequest {
   types?: string[];
   phases?: string[];
   sourceRef?: string;
+  /** The SCALAR fourth routing axis (MOTIR-5081). Omitted = unconstrained. */
+  subject?: string;
 }
 
 // POST /v1/lessons — ADD one lesson to THIS project's own store (Story
