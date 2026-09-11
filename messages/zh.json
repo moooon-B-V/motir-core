@@ -7318,7 +7318,7 @@
       "notBuiltYet": "尚未实现",
       "kind": {
         "design_result": "设计成果",
-        "decision_approval": "决策",
+        "decision_approval": "决策审批",
         "pull_request_approval": "合并请求审批",
         "pull_request_merge": "合并请求合并"
       },

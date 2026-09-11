@@ -7322,7 +7322,7 @@
       "notBuiltYet": "Not built yet",
       "kind": {
         "design_result": "Design result",
-        "decision_approval": "Decision",
+        "decision_approval": "Decision approval",
         "pull_request_approval": "Pull-request approval",
         "pull_request_merge": "Pull-request merge"
       },
