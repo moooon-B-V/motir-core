@@ -48,7 +48,7 @@ function rankedRow(over: Partial<RawRankedLesson> = {}): RawRankedLesson {
     scope: 'global',
     kinds: [],
     types: ['code'],
-    phases: ['deepen'],
+    phases: ['author'],
     distance: 0.12,
     ...over,
   };
@@ -120,13 +120,13 @@ describe('the client — same envelope, auth and error conventions as its neighb
       query: 'q',
       kinds: ['bug'],
       types: ['code'],
-      phases: ['skeleton'],
+      phases: ['lay'],
       limit: 5,
     });
     expect(sentBody(fetchMock)).toMatchObject({
       kinds: ['bug'],
       types: ['code'],
-      phases: ['skeleton'],
+      phases: ['lay'],
       limit: 5,
     });
   });

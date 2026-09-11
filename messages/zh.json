@@ -3353,6 +3353,10 @@
         "everyCard": "适用于所有工作项",
         "notApplied": "未生效",
         "notRecurred": "{days} 天内未再出现",
+        "phase": {
+          "lay": "铺开层级",
+          "author": "撰写正文"
+        },
         "applyingTitle": "Motir 正在应用这条经验。",
         "applyingBody": "它会进入为本项目起草的每一份计划。",
         "sectionHappened": "发生了什么",

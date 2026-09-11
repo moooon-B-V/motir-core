@@ -69,7 +69,7 @@ function writeLessons(): void {
             howToApply: 'Name the work by its key and wire the dependency.',
             kinds: ['story'],
             types: ['code'],
-            phases: ['skeleton'],
+            phases: ['lay'],
             sourceRef: 'MOTIR-2848',
             recurrenceCount: 4,
           },
@@ -156,6 +156,12 @@ test('an admin reaches the lessons from settings and reads one in full', async (
   // The axes, each carrying its axis name.
   await expect(rows.first()).toContainText('kind');
   await expect(rows.first()).toContainText('story');
+  // MOTIR-4775 — the PHASE axis is LABELLED, so the library never prints the
+  // stored `lay` / `author` at a reader. Asserted here as well as in the
+  // component test, because this is the only place the catalogue, the copy
+  // factory and the chip are exercised together in a real render.
+  await expect(rows.first()).toContainText('Laying a level');
+  await expect(rows.first()).not.toContainText('phaselay');
 
   // 5 · Open one and read it — the reasoning, not a summary of it.
   //

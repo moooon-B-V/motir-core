@@ -63,6 +63,39 @@ export interface LessonRowCopy {
   everyCard: string;
   notApplied: string;
   notRecurred: (days: number) => string;
+  /**
+   * The PLAN-PHASE axis's user-facing label (Bug MOTIR-4775) — *Laying a level*
+   * / *Writing a body*, never the stored `lay` / `author`.
+   *
+   * ⚠️ ONLY the phase axis is labelled, and that asymmetry is the point. `kind`
+   * and `type` values ARE the product's own words — a reader who sees `story` or
+   * `code` on a chip reads the same noun the board uses. The phase axis is the
+   * planner's internal vocabulary, so printing it raw told a reader the planner
+   * has words the product never translated.
+   *
+   * Returns the raw value for anything it does not recognise, so a vocabulary
+   * the store grows past this build is VISIBLE rather than silently prettified.
+   */
+  phaseLabel: (value: string) => string;
+}
+
+/**
+ * The axis chips a lesson shows, in the order the design fixes — kind, then
+ * type, then phase (`design/ai-settings/design-notes.md` §L4).
+ *
+ * ⚠️ SHARED because the LIST and the DETAIL both draw them, and each used to
+ * build its own array. The two are the same lesson, so a label applied to one
+ * and not the other is the drift this helper removes.
+ */
+export function lessonAxisChips(
+  lesson: Pick<ProjectLessonDTO, 'kinds' | 'types' | 'phases'>,
+  copy: Pick<LessonRowCopy, 'phaseLabel'>,
+): { axis: string; value: string }[] {
+  return [
+    ...lesson.kinds.map((value) => ({ axis: 'kind', value })),
+    ...lesson.types.map((value) => ({ axis: 'type', value })),
+    ...lesson.phases.map((value) => ({ axis: 'phase', value: copy.phaseLabel(value) })),
+  ];
 }
 
 /**
@@ -105,11 +138,7 @@ export function LessonRow({
   action?: ReactNode;
 }) {
   const notApplied = lesson.injectionBlock !== null;
-  const axes: { axis: string; value: string }[] = [
-    ...lesson.kinds.map((value) => ({ axis: 'kind', value })),
-    ...lesson.types.map((value) => ({ axis: 'type', value })),
-    ...lesson.phases.map((value) => ({ axis: 'phase', value })),
-  ];
+  const axes = lessonAxisChips(lesson, copy);
   return (
     <div
       data-testid="lesson-row"

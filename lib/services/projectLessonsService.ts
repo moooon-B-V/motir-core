@@ -95,7 +95,13 @@ function toLessonDTO(raw: RawLesson): ProjectLessonDTO {
     howToApply: raw.howToApply,
     kinds: raw.kinds ?? [],
     types: raw.types ?? [],
-    phases: raw.phases ?? [],
+    // ⚠️ A CAST, and deliberately not a filter (MOTIR-4775). `LessonPlanPhase`
+    // mirrors motir-ai's enum; the column is upstream's, so the union is a CLAIM
+    // about what the store holds rather than a guarantee about it. Dropping an
+    // unrecognised value here would hide a vocabulary drift the library is meant
+    // to make visible, so it is carried through and the badge renderer falls back
+    // to printing it raw.
+    phases: (raw.phases ?? []) as ProjectLessonDTO['phases'],
     sourceRef: raw.sourceRef,
     createdAt: raw.createdAt,
     lastOccurredAt: raw.lastOccurredAt,
@@ -169,7 +175,13 @@ function toRankedLessonDTO(raw: RawRankedLesson): RankedLessonDTO {
     scope: raw.scope,
     kinds: raw.kinds ?? [],
     types: raw.types ?? [],
-    phases: raw.phases ?? [],
+    // ⚠️ A CAST, and deliberately not a filter (MOTIR-4775). `LessonPlanPhase`
+    // mirrors motir-ai's enum; the column is upstream's, so the union is a CLAIM
+    // about what the store holds rather than a guarantee about it. Dropping an
+    // unrecognised value here would hide a vocabulary drift the library is meant
+    // to make visible, so it is carried through and the badge renderer falls back
+    // to printing it raw.
+    phases: (raw.phases ?? []) as RankedLessonDTO['phases'],
     distance: raw.distance,
   };
 }

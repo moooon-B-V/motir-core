@@ -7,7 +7,12 @@ import { getActiveProject } from '@/lib/projects';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import { guardSettingsPage } from '../../../_guard';
 import { canManageLessonLibrary, guardLessonLibrary } from '../../_components/lessonAccess';
-import { AxisChip, EveryCardChip, NotAppliedBadge } from '../../_components/LessonRow';
+import {
+  AxisChip,
+  EveryCardChip,
+  NotAppliedBadge,
+  lessonAxisChips,
+} from '../../_components/LessonRow';
 import { lessonApplyCopy, lessonRowCopy } from '../../_components/lessonCopy';
 import { LessonDetailStatus } from '../../_components/LessonDetailStatus';
 
@@ -57,11 +62,7 @@ export default async function ProjectLessonPage({ params }: RouteParams) {
 
   const copy = lessonRowCopy(t, (iso) => format.relativeTime(new Date(iso)));
   const applyCopy = lessonApplyCopy(t, lesson);
-  const axes = [
-    ...lesson.kinds.map((value) => ({ axis: 'kind', value })),
-    ...lesson.types.map((value) => ({ axis: 'type', value })),
-    ...lesson.phases.map((value) => ({ axis: 'phase', value })),
-  ];
+  const axes = lessonAxisChips(lesson, copy);
   const sections = [
     { label: t('aiPlanning.lessons.sectionHappened'), body: lesson.body },
     { label: t('aiPlanning.lessons.sectionMatters'), body: lesson.why },
