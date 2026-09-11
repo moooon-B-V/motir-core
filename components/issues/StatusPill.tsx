@@ -1,4 +1,4 @@
-import { CircleEllipsis } from 'lucide-react';
+import { CircleCheck, CircleEllipsis } from 'lucide-react';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 
@@ -37,6 +37,11 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 /** The PER-STATUS tones. A key in here wins over its category (below). */
 const TONE_BY_STATUS_KEY: Record<string, NonNullable<PillProps['status']>> = {
   implemented: 'implemented',
+  // MOTIR-5141 — the SECOND per-status tone, for the same reason as the first.
+  // `approved` sits in the `in_progress` category beside In Progress, Planning
+  // and In Review, so without this row a person cannot tell A PERSON SAID YES
+  // from NOBODY HAS LOOKED YET, which is the whole point of the status.
+  approved: 'approved',
 };
 
 /** The per-CATEGORY fallback — the mapping every status had before, unchanged,
@@ -69,6 +74,11 @@ const NEUTRAL_STATUS_KEYS: ReadonlySet<string> = new Set(['cancelled']);
 /** The glyph a status carries in addition to its label, or none. */
 const GLYPH_BY_STATUS_KEY: Record<string, typeof CircleEllipsis> = {
   implemented: CircleEllipsis,
+  // `CircleCheck` against `done`'s bare `Check`: the same mark, formalised — a
+  // person put a ring around it. It joins the `Circle*` vocabulary this ramp
+  // already speaks, and it is load-bearing rather than decorative: `approved`
+  // and `done` are the two closest chips in the set at a 14% tint.
+  approved: CircleCheck,
 };
 
 /**

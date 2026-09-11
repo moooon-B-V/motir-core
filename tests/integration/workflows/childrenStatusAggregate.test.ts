@@ -84,6 +84,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 0,
       implemented: 0,
       inReview: 0,
+      approved: 0,
       done: 0,
       lastChangedAt: null,
     });
@@ -109,6 +110,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 1,
       implemented: 0,
       inReview: 1,
+      approved: 0,
       done: 2,
       lastChangedAt: expect.any(Date),
     });
@@ -149,6 +151,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 1,
       implemented: 0,
       inReview: 0,
+      approved: 0,
       done: 0,
       lastChangedAt: expect.any(Date),
     });
@@ -184,6 +187,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 0,
       implemented: 0,
       inReview: 0,
+      approved: 0,
       done: 1,
       lastChangedAt: expect.any(Date),
     });
@@ -221,6 +225,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 1,
       implemented: 0,
       inReview: 1,
+      approved: 0,
       done: 0,
       lastChangedAt: expect.any(Date),
     });
@@ -240,6 +245,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 2,
       implemented: 0,
       inReview: 0,
+      approved: 0,
       done: 0,
       lastChangedAt: expect.any(Date),
     });
@@ -269,6 +275,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 1,
       implemented: 2,
       inReview: 0,
+      approved: 0,
       done: 0,
       lastChangedAt: expect.any(Date),
     });
@@ -293,6 +300,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 2,
       implemented: 0,
       inReview: 0,
+      approved: 0,
       done: 0,
       lastChangedAt: expect.any(Date),
     });
@@ -321,6 +329,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 0,
       implemented: 0,
       inReview: 1,
+      approved: 0,
       done: 0,
       lastChangedAt: expect.any(Date),
     });

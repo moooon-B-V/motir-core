@@ -302,12 +302,20 @@ export const parentStatusRollupService = {
       key: 'implemented',
       category: 'in_progress',
     });
+    // THE THIRD split-out key (MOTIR-5140): `approved` shares the same category
+    // as the two above, so without being told which key it is neither the
+    // aggregate nor the rank can tell it from a plain in-progress status — and a
+    // parent whose children were all approved derived BACKWARDS to In Progress.
+    const approvedKey = await workflowsService.resolveStatusKey(projectId, workspaceId, {
+      key: 'approved',
+      category: 'in_progress',
+    });
     // The project's status vocabulary, read ONCE. `rankOfStatus` is a pure
     // function over it (MOTIR-3229) — it used to issue a `getStatusByKey` per
     // comparison from inside the locked transaction below, which is one query per
     // rung per pass for an answer that never changes within a pass.
     const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
-    const ladderKeys = { reviewKey, implementedKey };
+    const ladderKeys = { reviewKey, implementedKey, approvedKey };
     // ⚠️ A DEGENERATE PROJECT CAN ALIAS THE TWO RUNGS ONTO ONE KEY. With no
     // `implemented` status of its own, `resolveStatusKey` falls back to the first
     // `in_progress`-category status — which on such a project is also what the
@@ -332,7 +340,11 @@ export const parentStatusRollupService = {
 
       const agg = await workItemRepository.aggregateChildrenStatus(
         parentId,
-        { reviewStatusKey: reviewKey, implementedStatusKey: implementedKey },
+        {
+          reviewStatusKey: reviewKey,
+          implementedStatusKey: implementedKey,
+          approvedStatusKey: approvedKey,
+        },
         tx,
       );
       const rungs = matchingRungs(agg);
@@ -649,22 +661,34 @@ function matchingRungs(agg: {
   inProgress: number;
   implemented: number;
   inReview: number;
+  approved: number;
   done: number;
 }): Array<(typeof LADDER)[number]> {
   if (agg.total === 0) return [];
-  const started = agg.inProgress + agg.implemented + agg.inReview;
+  const started = agg.inProgress + agg.implemented + agg.inReview + agg.approved;
   const out: Array<(typeof LADDER)[number]> = [];
   if (agg.done === agg.total) out.push(rungEntry('done'));
-  if (agg.inReview > 0 && agg.done + agg.inReview === agg.total) out.push(rungEntry('in_review'));
+  // THE `approved` RUNG (MOTIR-5140) — "everything below me has been APPROVED".
+  // Each clause below sums every bucket at-or-ABOVE its own rung, so inserting a
+  // rung means adding its clause AND widening every clause beneath it; a rung
+  // added without that widening silently stops its lower neighbours matching.
+  if (agg.approved > 0 && agg.done + agg.approved === agg.total) out.push(rungEntry('approved'));
+  if (agg.inReview > 0 && agg.done + agg.approved + agg.inReview === agg.total) {
+    out.push(rungEntry('in_review'));
+  }
   // THE `implemented` RUNG (MOTIR-3229) — "everything below me is BUILT". Every
   // child is implemented-or-better and at least one is at `implemented` itself;
   // the `at least one` clause is what the in-review rung above has, and for the
   // same reason: without it an all-in-review set would match here too and the
   // first-match-wins scan would be the only thing separating them.
-  if (agg.implemented > 0 && agg.done + agg.inReview + agg.implemented === agg.total) {
+  if (
+    agg.implemented > 0 &&
+    agg.done + agg.approved + agg.inReview + agg.implemented === agg.total
+  ) {
     out.push(rungEntry('implemented'));
   }
-  // ⚠️ `started` IS THE THREE BUCKETS, NOT `inProgress` ALONE. The aggregate
+  // ⚠️ `started` IS THE FOUR BUCKETS, NOT `inProgress` ALONE (four since
+  // MOTIR-5140 added `approved`). The aggregate
   // splits `implemented` and `inReview` OUT of the in-progress category, so
   // asking `inProgress > 0` alone would answer "nothing has started" for a
   // parent whose every child is implemented — the exact reading MOTIR-3229 is

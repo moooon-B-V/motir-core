@@ -82,6 +82,44 @@ const STATUS_ORDER: ReadonlyArray<Omit<DefaultStatusSpec, 'position'>> = [
   // implementation one.
   { key: 'planning', label: 'Planning', category: 'in_progress', isInitial: false },
   { key: 'in_review', label: 'In Review', category: 'in_progress', isInitial: false },
+  // ⚠️ THE CATEGORY IS THE MECHANISM, A THIRD TIME (MOTIR-5139), and here it is
+  // the whole of the story rather than one of its consequences. A person's YES
+  // is a state the product could not express: an approved card either sat at
+  // `in_review`, which reads as NOBODY HAS LOOKED AT IT, or jumped to `done`,
+  // which claims it merged. Both are false. GitHub models the same split — a
+  // pull request is approved, and separately merged.
+  //
+  // `in_progress` is what makes "approved" mean "a person said yes and it has
+  // NOT shipped", and it is load-bearing in three places that all read the
+  // CATEGORY and never the key: an `approved` card stays OPEN in every count,
+  // report, filter and board; `parentStatusRollupService` does not complete a
+  // container out of it; and its dependents stay blocked, because
+  // `lib/workItems/blockerReadiness.ts`'s `isOpenBlocker` asks whether the
+  // blocker's status is in its project's `category = 'done'` set. Only `done`
+  // and `cancelled` are terminal. Put this anywhere else and NOTHING ERRORS —
+  // the board renders, the migration applies, the tests pass — while every
+  // parent completes early, every open-items count under-reports, and every
+  // dependent becomes claimable against work that has not shipped.
+  //
+  // ⚠️ ORDER: between `in_review` and `done`, which is the RECORD's decision
+  // (`docs/decisions/approval-gates.md`, as amended by MOTIR-4911) and not a
+  // preference. The fold consequence was re-measured rather than assumed
+  // (`design/boards/approved-column.mock.html`, panel 1): at slot 7 the count of
+  // fully-visible columns is unchanged at every viewport, `approved` is
+  // off-screen exactly as `done` and `cancelled` already were, and the only cost
+  // is one column of scroll. Crucially the insert is AFTER `implemented`, so the
+  // eighth column's slot-4 invariant survives.
+  //
+  // ⚠️ VOCABULARY — `approved` is already a word in this repository, on FOUR
+  // other entities: `ApprovalGateState.approved`, `AcceptanceEvidenceStatus
+  // .approved`, `PlanStatus.approved` and the device-grant `approved`. None is
+  // on `work_item.status`, so nothing collides. But the approval-gate code now
+  // holds two `approved`s one hop apart, and they are NOT the same fact: the
+  // GATE's is a DECISION a person recorded, this one is the card STATUS that
+  // decision causes. A gate can be approved while the card is still `in_review`
+  // — that is the ordinary state of a card whose pull request has not merged,
+  // because the merge is the single writer of `done`.
+  { key: 'approved', label: 'Approved', category: 'in_progress', isInitial: false },
   { key: 'done', label: 'Done', category: 'done', isInitial: false },
   // Terminal "won't do / duplicate / out-of-scope"; counted as resolved by
   // finding #21's readiness predicate via category = 'done'.
@@ -129,6 +167,20 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // TWENTY-NINE — again with a backfill of the status, its edges and a board
 // column. Each of the seven is justified beside it below; the tally is amended
 // here rather than left stale, which is the convention this comment exists for.
+// MOTIR-5139 adds `approved` and FOUR more (one in, three out), bringing the
+// total to THIRTY-THREE — again with a backfill of the status, its edges and a
+// board column.
+//
+// ⚠️ THREE of those four are the record's (`docs/decisions/approval-gates.md` as
+// amended by MOTIR-4911); the FOURTH is this file's own convention, and it is
+// flagged rather than smuggled. The record enumerates the LIFECYCLE path —
+// `in_review → approved`, `approved → done`, `approved → in_progress` — and says
+// nothing about cancellation, because that is not what it is about. This
+// constant's convention IS about it: cancellation is legal from every
+// non-terminal state, and all eight existing statuses follow it without
+// exception. `approved` is non-terminal by construction, so `approved →
+// cancelled` ships. If that omission was deliberate rather than incidental, the
+// edge is one line to strike and the tally becomes 32.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
@@ -214,4 +266,28 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   ['implemented', 'blocked'],
   ['implemented', 'cancelled'],
   ['implemented', 'done'],
+
+  // `approved` (MOTIR-5139) — a person's YES, between CI's verdict and the
+  // merge. ONE edge in and THREE out.
+  //
+  // ⚠️ `implemented → approved` is deliberately ABSENT, and
+  // `tests/workflows/defaultWorkflow.test.ts` asserts that absence rather than
+  // trusting this list to stay short. Under this project's `restricted` policy
+  // an undeclared hop is a 422, and this is the one that would let CI be
+  // skipped: `implemented` means the branch is pushed and NOTHING has been
+  // compiled. CI speaks before a person does, so the only way into `approved`
+  // is through `in_review`, which is the status CI itself writes on green.
+  ['in_review', 'approved'],
+  // The merge lands. This is the edge, not the writer: `changeRequestStatusSync`
+  // resolves a status by CATEGORY on merge, and `approved` is `in_progress`, so
+  // a merge still targets `done` and this hop is what makes it legal.
+  ['approved', 'done'],
+  // Work pulled back after approval — a review that changed its mind, a defect
+  // found before the merge. Without it an approved card has no way back and the
+  // only exit is `done`, which would make approval irreversible.
+  ['approved', 'in_progress'],
+  // The FOURTH edge, and the one the record does not enumerate — see the
+  // convention note in this constant's header. Cancellation is legal from every
+  // non-terminal state; `approved` is non-terminal.
+  ['approved', 'cancelled'],
 ];

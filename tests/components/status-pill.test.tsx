@@ -57,6 +57,66 @@ describe('the tone is per-STATUS first, per-category second', () => {
   });
 });
 
+describe('APPROVED — the second per-status tone (MOTIR-5141)', () => {
+  it('gives `approved` its own tone, and no other default status takes it', () => {
+    expect(statusPillTone('approved', 'in_progress')).toBe('approved');
+    for (const status of DEFAULT_STATUSES) {
+      if (status.key === 'approved') continue;
+      expect(statusPillTone(status.key, status.category)).not.toBe('approved');
+    }
+  });
+
+  it('renders Approved DIFFERENTLY from every status it shares a category with', () => {
+    // The card's acceptance bar, as one assertion. `approved` sits in the
+    // `in_progress` category beside four others; without its own tone a person
+    // could not tell A PERSON SAID YES from NOBODY HAS LOOKED YET.
+    render(
+      <>
+        <StatusPill statusKey="approved" category="in_progress" label="Approved" />
+        <StatusPill statusKey="in_progress" category="in_progress" label="In Progress" />
+        <StatusPill statusKey="planning" category="in_progress" label="Planning" />
+        <StatusPill statusKey="in_review" category="in_progress" label="In Review" />
+        <StatusPill statusKey="implemented" category="in_progress" label="Implemented" />
+      </>,
+    );
+    const approved = chipFor('Approved').className;
+    for (const label of ['In Progress', 'Planning', 'In Review', 'Implemented']) {
+      expect(chipFor(label).className).not.toBe(approved);
+    }
+  });
+
+  it('is distinct from DONE too — the pair the glyph exists to separate', () => {
+    // `approved` and `done` are the two closest chips in the set at a 14% tint,
+    // and they are the pair a reader is most likely to confuse: both mean yes.
+    render(
+      <>
+        <StatusPill statusKey="approved" category="in_progress" label="Approved" />
+        <StatusPill statusKey="done" category="done" label="Done" />
+      </>,
+    );
+    expect(chipFor('Approved').className).not.toBe(chipFor('Done').className);
+  });
+
+  it('paints the Approved tint from the status token, never a literal', () => {
+    render(<StatusPill statusKey="approved" category="in_progress" label="Approved" />);
+    const className = chipFor('Approved').className;
+    expect(className).toContain('var(--el-status-approved)');
+    expect(className).toContain('var(--el-surface)');
+    expect(className).toContain('text-(--el-text-strong)');
+    expect(className).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(className).not.toMatch(/\brgba?\(/);
+  });
+
+  it('carries a glyph, aria-hidden, so the accessible name stays the LABEL', () => {
+    render(<StatusPill statusKey="approved" category="in_progress" label="Approved" />);
+    const chip = chipFor('Approved');
+    const glyph = chip.querySelector('svg');
+    expect(glyph).not.toBeNull();
+    expect(glyph!.getAttribute('aria-hidden')).toBe('true');
+    expect(chip.textContent).toBe('Approved');
+  });
+});
+
 describe('the rendered chip', () => {
   it('renders Implemented DIFFERENTLY from the three statuses it shares a category with', () => {
     // The whole point of the card, as one assertion: four statuses, four chips

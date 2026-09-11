@@ -76,7 +76,20 @@ export const githubRepoRepository = {
    *  the installation: a repo Motir CREATES for this workspace sits behind the
    *  shared provisioning installation, which is bound to no workspace at all — the
    *  old join dropped every such repo from the set, so a created repo was not a
-   *  legal `targetRepo` and no agent could be told to build in it. */
+   *  legal `targetRepo` and no agent could be told to build in it.
+   *
+   *  ⚠️ IT HAS NO PRODUCTION CALLER LEFT, AND THAT IS THE POINT — do not reach
+   *  for it as "the repository read" (MOTIR-5152). Its two consumers were the
+   *  PR-link picker's connectivity gate and the `targetRepo` domain, and both
+   *  were BUGS: a repository is connected once to the ORGANISATION (Story
+   *  MOTIR-4669), so this read answered a question about the tier a repository is
+   *  connected FROM and returned nothing in every other workspace of that org.
+   *  Both now call {@link listByOrganization}. What survives here is the narrow,
+   *  still-true question — *which repositories were connected from THIS
+   *  workspace* — which is the tenancy invariant MOTIR-1931 drew and what
+   *  `tests/github/sharedInstallationTenancy.test.ts` asserts, so the method is
+   *  kept rather than deleted. If you are about to add a caller, check first that
+   *  you do not mean the organisation. */
   async listByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<GithubRepo[]> {
     return tx.githubRepo.findMany({
       where: { workspaceId },

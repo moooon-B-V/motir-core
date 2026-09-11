@@ -68,6 +68,10 @@ function renderPanel(props: Parameters<typeof AcceptancePanel>[0]) {
 
 const baseProps = {
   workItemId: 'wi_1',
+  // The card's IDENTIFIER, distinct from its id on purpose: the decide action
+  // revalidates `/items/<identifier>`, and passing the id would build a path
+  // that 404s while every assertion here still passed (Bug MOTIR-5160).
+  itemIdentifier: 'MOTIR-1',
   organizationId: 'org_1',
   settingsHref: '/settings/organization',
 };
@@ -101,7 +105,18 @@ describe('AcceptancePanel', () => {
       canDecide: true,
     });
     fireEvent.click(screen.getByRole('button', { name: /approve/i }));
-    await waitFor(() => expect(decideAcceptanceAction).toHaveBeenCalledWith('wi_1', 'approve'));
+    // ⚠️ THE IDENTIFIER IS PART OF THE CONTRACT NOW, so it is asserted rather
+    // than spread past (Bug MOTIR-5160). The action revalidates the card's path
+    // on its success branch, and the path comes from THIS argument — a panel
+    // that stopped passing it would still approve, still reconcile, and silently
+    // stop repainting the page.
+    await waitFor(() =>
+      expect(decideAcceptanceAction).toHaveBeenCalledWith({
+        workItemId: 'wi_1',
+        itemIdentifier: 'MOTIR-1',
+        decision: 'approve',
+      }),
+    );
     // After approval the buttons are gone and the Approved pill shows.
     await waitFor(() => expect(screen.getByText('Approved')).toBeTruthy());
     expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();

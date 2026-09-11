@@ -209,6 +209,7 @@ export async function LateUpperSections({
         <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
           <AcceptancePanel
             workItemId={itemId}
+            itemIdentifier={itemIdentifier}
             organizationId={r.acceptanceEligibility.organizationId}
             eligibility={r.acceptanceEligibility}
             initialEvidence={r.acceptanceEvidence}

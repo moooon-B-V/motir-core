@@ -576,6 +576,7 @@
       "implemented": "已实现",
       "planning": "规划中",
       "in_review": "评审中",
+      "approved": "已批准",
       "done": "已完成",
       "cancelled": "已取消"
     },
@@ -6203,7 +6204,7 @@
       "linkedTo": "已关联到 {key}",
       "deliversN": "交付 {count} 个工作项",
       "linkAction": "关联",
-      "notConnected": "此工作区尚未连接 GitHub。请在「设置 → 组织 → Git」中进行连接。",
+      "notConnected": "此组织尚未连接 GitHub。请在「设置 → 组织 → Git」中进行连接。",
       "prNotFound": "找不到该拉取请求。",
       "autoLinkCaptionManual": "使用此处的“+关联拉取请求”，或通过 MCP 调用 <mono>link_pull_request</mono> 进行关联。",
       "intoBase": "合并到 {base}",
@@ -7309,6 +7310,26 @@
         "title": "没有等待你审批的工作",
         "body": "需要你签字确认才能继续的工作会显示在这里。"
       }
+    },
+    "approvals": {
+      "columns": {
+        "subject": "等待你处理",
+        "workItem": "工作项",
+        "waited": "已等待"
+      },
+      "review": "查看",
+      "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
+      "noVersion": "无版本号",
+      "subjectGone": "此项针对的设计已不存在",
+      "notRenderable": "Motir 暂不支持展示此类型",
+      "notBuiltYet": "尚未实现",
+      "kind": {
+        "design_result": "设计成果",
+        "decision_approval": "决策审批",
+        "pull_request_approval": "合并请求审批",
+        "pull_request_merge": "合并请求合并"
+      },
+      "reviewRow": "查看 {key} {title}"
     }
   },
   "platformAdmin": {

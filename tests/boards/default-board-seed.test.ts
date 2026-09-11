@@ -27,6 +27,8 @@ const WORKFLOW_ORDER = [
   'Implemented',
   'Planning',
   'In Review',
+  // MOTIR-5139 — a person's YES, between review and the merge.
+  'Approved',
   'Done',
   'Cancelled',
 ];
@@ -71,7 +73,7 @@ describe('createProject seeds the default board (same transaction)', () => {
     expect(boards[0]?.workspaceId).toBe(workspaceId);
   });
 
-  it('seeds eight columns in workflow order, each mapped 1:1 to its status', async () => {
+  it('seeds one column per workflow status, in order, each mapped 1:1', async () => {
     const { userId, workspaceId } = await makeWorkspaceAndUser();
     const project = await projectsService.createProject({
       workspaceId,

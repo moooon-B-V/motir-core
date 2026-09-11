@@ -12,6 +12,7 @@ import {
   type HomeWorkItemRow,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
@@ -358,7 +359,7 @@ export const homeService = {
   async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await activeProjectScope(ctx, tx);
-      const [toDo, inProgress, recentlyFinished, watching] = await Promise.all([
+      const [toDo, inProgress, recentlyFinished, watching, approvals] = await Promise.all([
         workItemRepository.countByAssigneeOrReporterInWorkspace(
           ctx.userId,
           ctx.workspaceId,
@@ -381,15 +382,31 @@ export const homeService = {
           tx,
         ),
         watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
+        // THE APPROVALS COUNT (MOTIR-4794), no longer hardwired to `0`.
+        //
+        // ⚠️ IT IS THE LIST'S OWN PREDICATE, reached through the same repository
+        // builder `listAwaitingMe` uses — not a second count written beside it.
+        // The strip's badge and the tab's rows are two reads of ONE question, so
+        // a copy of the predicate here is a copy that can drift, and a badge
+        // saying `3` above a list of two is exactly what that looks like from
+        // the reader's side.
+        //
+        // ⚠️ AND IT IS DELIBERATELY **NOT** `homeService`'s membership `OR`.
+        // The four tabs beside it answer *what is MINE* with assignee-OR-reporter;
+        // a decision queue routes to exactly one recipient (`assigneeId ??
+        // reporterId`, ADR §2), so this number is counted on the gate's own
+        // predicate. Two tabs in one strip meaning two different things by "me"
+        // is the divergence that ADR records itself refusing to "fix" back.
+        approvalGateRepository.countAwaitingRoutedTo(
+          { projectIds: projectScopes.map((scope) => scope.projectId), userId: ctx.userId },
+          tx,
+        ),
       ]);
       return {
         toDo,
         inProgress,
         recentlyFinished,
-        // The sibling story's number (MOTIR-4778). This story draws the slot
-        // and ships nothing behind it, so the honest value is zero rather than
-        // an absent field the strip would have to special-case.
-        approvals: 0,
+        approvals,
         watching,
         // Transitional — `/home`'s two-tab strip, until MOTIR-4782 replaces it.
         // Derived from the two above rather than counted again, so the old
