@@ -120,6 +120,18 @@
 
 ---
 
+- **Amended:** 2026-09-11 (Yue · Story MOTIR-4905 · Subtask MOTIR-5140) — **the ladder
+  gains a SIXTH rung, `approved`, between `in_review` and `done`.** MOTIR-5139 added
+  `approved` to the default workflow in the `in_progress` CATEGORY, and §3's five-rung
+  ladder ranked it as plain in-progress because it was not one of the named lifecycle
+  keys — so a parent whose children had all been APPROVED derived BACKWARDS to In
+  Progress, and the §3b container-completeness gate refused that parent's claim to be
+  built. §3's rung table gains a row, §3b's claim set gains `approved`, and
+  `LadderKeys` gains a third resolved key. The bar itself is unchanged.
+  **No work item is exempt**, and a project whose workflow has no `approved` status is
+  unaffected — its third key resolves to null and every rank is what it was.
+  **Amendment consumed by:** MOTIR-5142 (the story's vitest gate), MOTIR-5143 (E2E).
+
 ## Context
 
 A work item's status and its children's statuses are, today, **completely
@@ -215,12 +227,17 @@ would force such a team to lose the safe half to escape the risky half.
 Each toggle is read **inside its own direction's service**, so one direction being off
 never suppresses the other.
 
-### 3. The UPWARD direction: a RECOMPUTE over a four-rung ladder (child → parent)
+### 3. The UPWARD direction: a RECOMPUTE over a ~~four~~ **six**-rung ladder (child → parent)
 
 _Amended 2026-08-17 (MOTIR-2888 / MOTIR-2889). The rung set gained a fourth row, the
 rung-3 condition dropped its clause about where the parent currently stands, and the
 whole evaluation became a **recompute** rather than a climb — see §5's first bullet for
 the semantics and the paragraph below for the mechanism._
+
+_Amended 2026-09-11 (MOTIR-5140). The rung set gained a **sixth** row, `approved`, between
+`in_review` and `done` — see the table below and the paragraph after it. The struck word in
+this section's own heading is kept rather than removed so that a reader arriving from an
+older citation lands on the correction._
 
 _Amended again 2026-08-17 (MOTIR-2901). The FORWARD arm applies the recompute by **walking**
 the ladder rather than taking one hop with a fallback: the single-hop rule stranded a parent
@@ -235,14 +252,35 @@ parent stands, backward if it is behind. Evaluated against the **direct**,
 non-archived, non-triaged children of the parent whose child set changed. Rungs, highest
 first — **the first matching rung wins**:
 
-| Rung            | Condition on the children's aggregate                                                                         | Parent target                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **done**        | **every** child is in a `done`-category status                                                                | the `done` status (prefer key `done`, else first `done`-category)                      |
-| **in-review**   | every child is in `in_review` **or** a `done`-category status, **and** ≥ 1 is in `in_review`                  | the `in_review` status (prefer key `in_review`, else first `in_progress`-category)     |
-| **implemented** | every child is `implemented`-or-better (`implemented` / `in_review` / done), **and** ≥ 1 is at `implemented`  | the `implemented` status (prefer key `implemented`, else first `in_progress`-category) |
-| **in-progress** | ≥ 1 child has STARTED — i.e. sits in an `in_progress`-category status (`in_review` and `implemented` both do) | the `in_progress` status (prefer key `in_progress`, else first `in_progress`-category) |
-| **todo**        | **no rung above matches** — i.e. ≥ 1 child is in a `todo`-category status and none has started                | the `todo` status (prefer key `todo`, else first `todo`-category)                      |
-| —               | **no children at all**                                                                                        | **no derivation** — the parent is not touched                                          |
+| Rung            | Condition on the children's aggregate                                                                                     | Parent target                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **done**        | **every** child is in a `done`-category status                                                                            | the `done` status (prefer key `done`, else first `done`-category)                      |
+| **approved**    | every child is `approved` **or** a `done`-category status, **and** ≥ 1 is at `approved`                                   | the `approved` status (prefer key `approved`, else first `in_progress`-category)       |
+| **in-review**   | every child is `in_review`-or-better (`in_review` / `approved` / done), **and** ≥ 1 is in `in_review`                     | the `in_review` status (prefer key `in_review`, else first `in_progress`-category)     |
+| **implemented** | every child is `implemented`-or-better (`implemented` / `in_review` / `approved` / done), **and** ≥ 1 is at `implemented` | the `implemented` status (prefer key `implemented`, else first `in_progress`-category) |
+| **in-progress** | ≥ 1 child has STARTED — i.e. sits in an `in_progress`-category status (`in_review`, `implemented` and `approved` all do)  | the `in_progress` status (prefer key `in_progress`, else first `in_progress`-category) |
+| **todo**        | **no rung above matches** — i.e. ≥ 1 child is in a `todo`-category status and none has started                            | the `todo` status (prefer key `todo`, else first `todo`-category)                      |
+| —               | **no children at all**                                                                                                    | **no derivation** — the parent is not touched                                          |
+
+**The `approved` rung is MOTIR-5140's** _(added 2026-09-11)_. `approved` (MOTIR-5139) is an
+`in_progress`-CATEGORY status, so before this rung `rankOfStatus` returned the IN PROGRESS
+rank for it and **two things broke at once, neither of them loudly**:
+
+1. **The recompute DOWNGRADED a parent.** A story whose children had all reached `approved`
+   derived to **In Progress** — where the same children at `in_review` derived to In Review.
+   The parent moved backwards as its children moved forwards.
+2. **The §3b gate REFUSED A TRUE CLAIM.** An `approved` child ranked below
+   `CONTAINER_CLAIM_BAR_RANK`, so `childrenBelowClaimBar` counted it as un-built and
+   `applyStatusTransition` refused the parent's move to `implemented` / `in_review` with
+   `CONTAINER_HAS_OPEN_CHILDREN` — on a container every one of whose children had been
+   approved by a person.
+
+This is the same defect MOTIR-3229 fixed one status earlier, in the same file, with the same
+remedy: a named lifecycle key pulled OUT of the category as its own rung. **Each rung's
+condition counts every bucket at-or-ABOVE its own**, so inserting a rung widens every
+condition beneath it — a rung added without that widening silently stops its lower
+neighbours matching. **`CONTAINER_CLAIM_BAR_RANK` is unchanged** and is now correct rather
+than merely unchanged: an approved child ranks above it and clears.
 
 **The `implemented` rung is MOTIR-3229's** _(added 2026-08-20)_. `implemented`
 (MOTIR-3003) is an `in_progress`-CATEGORY status, so before this rung the ladder had
@@ -428,12 +466,19 @@ Three constraints that are decisions, not detail:
 
 ### 3b. The container-completeness GATE — a CLAIM is refused at the transition _(added 2026-08-20)_
 
+_Amended 2026-09-11 (MOTIR-5140). The claim set gains a third member, **`approved`**, and
+the BAR is unchanged — see the rule below._
+
 §3 and §3a are about what a parent's status is DERIVED to be. This is about what a
 parent is allowed to CLAIM, and it is a different mechanism because derivation
 structurally cannot enforce it.
 
-**The rule.** An item with live children may not enter **`implemented`** or
-**`in_review`** while any of those children is below `implemented` on §3's ladder. The
+**The rule.** An item with live children may not enter **`implemented`**, **`in_review`**
+or **`approved`** while any of those children is below `implemented` on §3's ladder.
+(`approved` joined the set in MOTIR-5140: a container at `approved` claims its work is
+built exactly as one at `in_review` does — a person has said yes to it — so the same
+containment applies. The BAR stays at `implemented`: an approved CHILD is above it and
+clears, which is the half that was broken before the sixth rung existed.) The
 refusal is `CONTAINER_HAS_OPEN_CHILDREN` (422), raised by
 `workItemsService.applyStatusTransition` — the single choke-point every status change
 passes through — and it NAMES the children that are not landed.

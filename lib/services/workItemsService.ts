@@ -2552,6 +2552,10 @@ export const workItemsService = {
         const open = childrenBelowClaimBar(children, statuses, {
           reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
           implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
+          // MOTIR-5140 — the third split-out rung. Without it an `approved`
+          // child ranks as plain in-progress and this gate refuses a container
+          // whose every child has been approved.
+          approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
         });
         if (open.length > 0) {
           throw new ContainerHasOpenChildrenError(

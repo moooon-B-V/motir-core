@@ -197,12 +197,52 @@ describe('a container cannot CLAIM it is built while a child is not', () => {
   });
 });
 
+describe('APPROVED is itself a CLAIM rung (MOTIR-5140)', () => {
+  it('REFUSES a container moving to `approved` while a child is not built', async () => {
+    // The containment the other two claim rungs already carry, extended to the
+    // third: a container at `approved` claims its work is built exactly as one
+    // at `in_review` does — a person has said yes to it — so it may not be
+    // reached while a live child has not.
+    const fx = await makeStory(['implemented', 'todo']);
+    // The ONLY declared edge into `approved` is `in_review → approved`
+    // (MOTIR-5139), so seed the row there directly — otherwise the transition
+    // validator refuses first and this asserts the wrong gate.
+    await adminDb.workItem.update({ where: { id: fx.storyId }, data: { status: 'in_review' } });
+
+    await expect(
+      workItemsService.updateStatus(fx.storyId, 'approved', fx.ctx),
+    ).rejects.toBeInstanceOf(ContainerHasOpenChildrenError);
+    expect(await statusOf(fx)).toBe('in_review');
+  });
+});
+
 describe('what the gate deliberately does NOT refuse', () => {
   it('ALLOWS the claim once every child is implemented-or-better', async () => {
     const fx = await makeStory(['implemented', 'in_review', 'done', 'cancelled']);
 
     expect((await workItemsService.updateStatus(fx.storyId, 'implemented', fx.ctx)).status).toBe(
       'implemented',
+    );
+  });
+
+  it('ALLOWS the claim while a child sits at APPROVED (MOTIR-5140)', async () => {
+    // THE SECOND REGRESSION the sixth rung fixes. `approved` is an
+    // in_progress-CATEGORY status, so before the rung existed it ranked as plain
+    // in-progress, `childrenBelowClaimBar` counted it as un-built, and this
+    // refused with CONTAINER_HAS_OPEN_CHILDREN — on a container every one of
+    // whose children had been APPROVED by a person. Approved is above the bar.
+    const fx = await makeStory(['approved', 'approved']);
+
+    expect((await workItemsService.updateStatus(fx.storyId, 'implemented', fx.ctx)).status).toBe(
+      'implemented',
+    );
+  });
+
+  it('ALLOWS `in_review` over an approved child too — both claim rungs', async () => {
+    const fx = await makeStory(['approved', 'done']);
+
+    expect((await workItemsService.updateStatus(fx.storyId, 'in_review', fx.ctx)).status).toBe(
+      'in_review',
     );
   });
 

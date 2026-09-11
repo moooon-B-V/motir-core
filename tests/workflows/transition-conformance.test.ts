@@ -37,7 +37,7 @@ const EDGES: Array<[string, string]> = DEFAULT_TRANSITIONS.map(([from, to]) => [
 const edgeKey = (from: string, to: string): string => `${from}>${to}`;
 const EDGE_SET = new Set(EDGES.map(([from, to]) => edgeKey(from, to)));
 
-// The full 6×6 grid, partitioned by membership in the default edge set.
+// The full 9×9 grid, partitioned by membership in the default edge set.
 const ALL_PAIRS: Array<[string, string]> = STATUS_KEYS.flatMap((from) =>
   STATUS_KEYS.map((to): [string, string] => [from, to]),
 );
@@ -114,7 +114,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
   // This is the guard the card's "delete one edge → suite fails" step exercises:
   // the seed and the behavioral sweep both read DEFAULT_TRANSITIONS, so only a
   // pin against literals catches an edit to the constant itself.
-  it('declares exactly the eight default statuses', () => {
+  it('declares exactly the nine default statuses', () => {
     expect(STATUS_KEYS).toEqual([
       'todo',
       'blocked',
@@ -129,12 +129,17 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
       // every other key is: adding a status has to be a deliberate edit here.
       'planning',
       'in_review',
+      // MOTIR-5139 — a person's YES: approved, and not yet shipped. Same reason
+      // as every other key here, and one more: its CATEGORY (`in_progress`) is
+      // the whole claim of the story, so a status added without a deliberate
+      // edit to this pin is exactly the change that must not slip through.
+      'approved',
       'done',
       'cancelled',
     ]);
   });
 
-  it('declares exactly the twenty-nine default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003)', () => {
+  it('declares exactly the thirty-three default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -180,20 +185,30 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'implemented>blocked',
         'implemented>cancelled',
         'implemented>done',
+        // MOTIR-5139: a person's YES. ONE in and THREE out. Deliberately NOT
+        // from `implemented` — that hop would let a person approve past a build
+        // that never ran, so the only way in is through `in_review`, the status
+        // CI itself writes on green. The absence is asserted twice: by name in
+        // `approved-status.test.ts`, and here by `implemented>approved` falling
+        // into NON_EDGES, which the restricted sweep below refuses one by one.
+        'in_review>approved',
+        'approved>done',
+        'approved>in_progress',
+        'approved>cancelled',
       ]),
     );
-    expect(EDGES).toHaveLength(29);
+    expect(EDGES).toHaveLength(33);
   });
 
-  it('partitions the 8×8 grid into 29 edges + 8 self-loops + 27 non-edges', () => {
+  it('partitions the 9×9 grid into 33 edges + 9 self-loops + 39 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(27);
+    expect(NON_EDGES).toHaveLength(39);
   });
 });
 
-describe('restricted mode — every default edge is accepted (the full 29-edge sweep)', () => {
+describe('restricted mode — every default edge is accepted (the full 33-edge sweep)', () => {
   it.each(EDGES)(
     '%s → %s transitions and records exactly one "updated" revision',
     async (from, to) => {

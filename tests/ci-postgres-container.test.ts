@@ -80,6 +80,10 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // shared action rather than declared as a service, exactly like its
       // neighbours.
       'ci.yml:story-4753-coverage',
+      // MOTIR-5142's story coverage floor, for the same reason as its neighbour
+      // above: the rollup, the children aggregate and the story gate all run
+      // against a real database.
+      'ci.yml:story-4905-coverage',
       'ci.yml:test',
     ]);
   });
