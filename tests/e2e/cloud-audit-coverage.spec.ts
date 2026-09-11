@@ -277,6 +277,11 @@ test('a FAILED coverage read shows no banner and no error strip', async ({ page 
   // A planning workspace must not gain an error banner because a background
   // read timed out — the workspace is intact and simply says nothing.
   await expect(banner(page)).toHaveCount(0);
+  // ⚠️ NOT converted and NOT scoped (MOTIR-5115) — `toHaveCount` resolves the WHOLE
+  // match set, so it cannot throw strict mode and this site is not in the defect
+  // class; and the claim is that NO failure copy appears anywhere in the document,
+  // which is the whole point of the chapter. A role or a subtree scope would prove
+  // strictly less. Keeps its inventory row.
   await expect(page.getByText(/couldn.t load|something went wrong/i)).toHaveCount(0);
   await expect(exitChrome(page)).toBeVisible();
 });

@@ -199,7 +199,12 @@ test('the /items List pager clears the orb at the end of a scrolled page, and Ne
 
   await page.goto('/items?view=list');
   await expect(page.getByRole('table', { name: 'Work Items' })).toBeVisible();
-  await expect(page.getByText(`Showing 1–50 of ${SEEDED_ITEMS}`)).toBeVisible();
+  // ⚠️ SCOPED (MOTIR-5115) — a pager label is a `<span>` with no role to ask for,
+  // and a page-rooted read also matches the subtree React keeps mounted while the
+  // next page streams, so strict mode fails on a correct page (MOTIR-3725 /
+  // MOTIR-3737, whose audit scoped this exact shape — "a count and a pager label
+  // carry no role"). `AppLayout`'s `<main>` is the live region.
+  await expect(page.getByRole('main').getByText(`Showing 1–50 of ${SEEDED_ITEMS}`)).toBeVisible();
 
   const next = page.getByRole('button', { name: 'Next page' });
   await expectReceivesItsOwnClick(page, next, '/items pager Next page');
@@ -208,7 +213,9 @@ test('the /items List pager clears the orb at the end of a scrolled page, and Ne
   // callout does not open. (A click that reached the orb would open the dialog.)
   await next.click();
   await page.waitForURL((url) => url.searchParams.get('page') === '2');
-  await expect(page.getByText(`Showing 51–${SEEDED_ITEMS} of ${SEEDED_ITEMS}`)).toBeVisible();
+  await expect(
+    page.getByRole('main').getByText(`Showing 51–${SEEDED_ITEMS} of ${SEEDED_ITEMS}`),
+  ).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Motir AI' })).toHaveCount(0);
 });
 
@@ -230,7 +237,8 @@ test("the Workbench pager's Next clears the orb at the end of a scrolled page", 
   //
   // The seed puts all 65 items in To do (creator = reporter) and the Workbench
   // pages at 25, so page one ends in a live footer.
-  await expect(page.getByText(`Showing 1–25 of ${SEEDED_ITEMS}`)).toBeVisible();
+  // Scoped for the same reason as the `/items` case above (MOTIR-5115).
+  await expect(page.getByRole('main').getByText(`Showing 1–25 of ${SEEDED_ITEMS}`)).toBeVisible();
   const next = page.getByRole('button', { name: 'Next page' });
   await expectReceivesItsOwnClick(page, next, '/workbench pager Next page');
 
@@ -238,7 +246,7 @@ test("the Workbench pager's Next clears the orb at the end of a scrolled page", 
   // not open. (A click that reached the orb would open the dialog.)
   await next.click();
   await page.waitForURL((url) => url.searchParams.get('page') === '2');
-  await expect(page.getByText(`Showing 26–50 of ${SEEDED_ITEMS}`)).toBeVisible();
+  await expect(page.getByRole('main').getByText(`Showing 26–50 of ${SEEDED_ITEMS}`)).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Motir AI' })).toHaveCount(0);
 });
 

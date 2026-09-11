@@ -40,12 +40,32 @@ test.afterAll(async () => {
 // retry-click rapidly — each click is another counted POST that would
 // re-poison the bucket. One click, then if throttled wait > window, then
 // one more click.
+/**
+ * The live subtree this file reads through — see MOTIR-5115's notes at each
+ * site. `AuthShell` and `AppLayout` each render exactly one `<main>`, which is
+ * the region React swaps, so ONE helper serves the signed-out and signed-in
+ * halves of this walk. Scoping to it is the remedy `CLAUDE.md` names beside
+ * `getByRole` for a node that has no role of its own.
+ */
+const livePane = (page: Page) => page.getByRole('main');
+
 async function signUp(page: Page, email: string): Promise<void> {
   await startSignedOut(page);
   await page.goto('/sign-up');
-  await page.getByPlaceholder('Email address').fill(email);
+  // ⚠️ BY ROLE / SCOPED (MOTIR-5115) — a page-rooted `getBy*` matches the
+  // OUTGOING subtree React keeps mounted while the incoming one streams, and
+  // Playwright resolves locators BEFORE filtering on visibility, so strict mode
+  // fails on a page that is perfectly correct (MOTIR-3725 / MOTIR-3737;
+  // `CLAUDE.md` § *a boundary makes every unscoped locator a race*). The email
+  // field carries `aria-label` on an `input[type="email"]`, so it has a role to
+  // ask for — this is MOTIR-3737's own worked conversion.
+  await page.getByRole('textbox', { name: 'Email address' }).fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByPlaceholder('Create a password').fill(PASSWORD);
+  // ⚠️ SCOPED, NOT CONVERTED — `input[type="password"]` has NO implicit ARIA
+  // role, so `getByRole('textbox')` never matches it (MOTIR-3737's documented
+  // exception). `AuthShell` renders a `<main>`, so scoping to the live subtree is
+  // the second remedy rather than a fallback.
+  await livePane(page).getByPlaceholder('Create a password').fill(PASSWORD);
 
   // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871), not on the
   // signed-in landing. This helper's contract is "leave the caller in the app",
@@ -54,7 +74,9 @@ async function signUp(page: Page, email: string): Promise<void> {
   // loop is about the RATE LIMIT and is unchanged; only the URL it waits for
   // moved, because the wait is what tells a throttled click from a landed one.
   const createButton = page.getByRole('button', { name: /^(Create account|Creating account…)$/ });
-  const rateLimitAlert = page.getByText('Something went wrong. Please try again.');
+  // Scoped for the same reason as the two fields above — `FormAlert` is a `<p>`
+  // with no name of its own to query by, so the live subtree is the handle.
+  const rateLimitAlert = livePane(page).getByText('Something went wrong. Please try again.');
 
   for (let attempt = 0; attempt < 3; attempt++) {
     await createButton.click();
@@ -191,8 +213,8 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
 
   // ─── Owner now sees the invitee in the members list ───
   await gotoAuthed(page, '/settings/workspace');
-  await expect(page.getByText('2 members')).toBeVisible();
-  const inviteeRowEmail = page.getByText(INVITEE_EMAIL);
+  await expect(livePane(page).getByText('2 members')).toBeVisible();
+  const inviteeRowEmail = livePane(page).getByText(INVITEE_EMAIL);
   await inviteeRowEmail.scrollIntoViewIfNeeded();
   await expect(inviteeRowEmail).toBeVisible();
 
@@ -235,7 +257,11 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
 
   // Owner's members list is back to just themselves.
   await gotoAuthed(page, '/settings/workspace');
-  await expect(page.getByText(/^1 member$/)).toBeVisible();
+  await expect(livePane(page).getByText(/^1 member$/)).toBeVisible();
+  // ⚠️ NOT scoped (MOTIR-5115): `toHaveCount` resolves the WHOLE match set, so it
+  // cannot throw strict mode and this site is not in the defect class — and the
+  // claim is that the invitee is nowhere in the DOCUMENT, so narrowing it to the
+  // live subtree would prove strictly less. Keeps its inventory row.
   await expect(page.getByText(INVITEE_EMAIL)).toHaveCount(0);
 
   // ─── Owner deletes "Acme Renamed" via double-confirmation ───

@@ -3971,12 +3971,78 @@ shipped component.
    the `—` unknown implementation (an item not yet executed).
 4. **Source legend** — all six `source` values with glyph, tint, and gloss.
 
+### THE THIRD GROUP — `Subject` (Story MOTIR-5062 · MOTIR-5073)
+
+The disclosure now holds **three** groups, in this order: **Planning ·
+Implementation · Subject**. `subject` is the fourth coordinate of the planner's
+rule-pack selector — it records WHICH SUBJECT MATTER an authoring pass composed
+this card's rules from — so it is the same KIND of fact as the two triples above
+it: a record of how the card came to be planned, not a property of the work.
+
+**Why it is here and not beside `type`.** Every earlier placement failed the same
+test, and the reason is worth keeping because it will be re-proposed: a control a
+person can SEE is one they reasonably expect to EDIT, and editing a subject
+re-points the rule corpus rather than describing the work. Worse, its value set is
+_which rule packs exist_, so a blank means **the corpus has no pack for this
+subject** — not that the work has none. Put that next to `type` in the editable
+cluster and a reader learns something false and then tries to correct it. This
+disclosure is the one place on the card where none of that applies: everything in
+it is read-only by construction, set by seams rather than by people, and collapsed
+because it is secondary.
+
+**The SHAPE, which is the real design question.** Two of the three groups are
+TRIPLES that open with a tinted source chip; Subject is a **single value**. A lone
+value in the same box can read as a triple whose other two rows failed to load, so
+the treatment keeps them apart on the axis a reader notices first:
+
+- **No chip, at all.** Both triples open with one, so a card with none is visibly
+  a different KIND of field rather than a shorter instance of the same one.
+- **Mono** (`--font-mono`, 13px, `--el-text`). A subject is an IDENTIFIER — it
+  names the rule pack the planner read (`subject-<name>.md`) — and this asset
+  already uses mono for an identifier, at `.model`. `--el-text` rather than
+  `--el-text-muted` because it is the card's PRIMARY content, not a secondary
+  annotation beneath one.
+- **No per-member tint, deliberately.** The two existing groups tint their source
+  chip from a CLOSED enum. Subject members are corpus-owned and open-ended — a
+  member exists iff a pack file exists — so a colour per member would be a
+  vocabulary this repository cannot enumerate, and a lookup with a runtime
+  fallback would reintroduce the blank-chip failure the component's own header
+  memorialises. Plain text is the honest treatment.
+
+**The EMPTY state is the common case, and stays common.** The corpus ships four
+members and most cards will carry no subject for a long time, so `—`
+(`.prov-unknown`, `--el-text-muted`) renders exactly as the other two groups'
+unknown state. Panel 3 draws a card with NO subject beside a `—` implementation
+precisely so a subject-less card reads as **ordinary rather than incomplete**.
+
+**Read-only, like the rest of the disclosure** — no chevron on the card, no input,
+no entry affordance, and no filter, board column or bulk edit anywhere.
+
+### Panels the third group adds
+
+5. **Expanded, all three groups populated** — panel 2, extended: MCP planning,
+   BYOK implementation, and `jobs` as the subject.
+6. **Expanded, native + unknown + NO subject** — panel 3, extended: the common
+   case for both trailing groups.
+7. **The shape question** — a triple, a populated Subject and an empty Subject set
+   side by side, with the rationale above stated on the panel.
+
+### ADR amendment
+
+`docs/decisions/work-item-provenance.md` **Decision 7 needed one, and it lands
+with this card**: its text read _"The user expands to see the two triples"_, which
+a third group makes false. The amendment records the third group and states what is
+UNCHANGED — the placement (bottom of the rail), the collapsed default, and the
+read-only contract. Nothing else in the ADR moves.
+
 ### Deliverable
 
-The three-file set under `design/work-items/`: this `design-notes.md` section ·
-`provenance.mock.html` (source of truth) · `provenance.png` (full-page export).
-Rendered with Playwright chromium (full-page, light, `deviceScaleFactor: 2`,
-~1200px wide); `prettier --check` clean.
+The FOUR-file set under `design/work-items/`: this `design-notes.md` section ·
+`provenance.mock.html` (source of truth) · `provenance.png` (full-page export) ·
+`provenance.dark.png` (the dark board, added by MOTIR-5073 — same dimensions, which
+`tests/design-dark-board-parity.test.ts` asserts, because a theme flip changes ink
+and never layout). Rendered with Playwright chromium (full-page, `deviceScaleFactor: 2`,
+~1200px wide) via `scripts/render-design-mock.mjs`; `prettier --check` clean.
 
 ---
 
