@@ -133,7 +133,18 @@ async function kindsFromTurn(before: number): Promise<string[]> {
     .map((e) => e.kind);
 }
 
-const planEntrance = (page: Page) => page.getByTestId('work-item-plan-entrance');
+/**
+ * The item surface's planning door, BY ROLE (MOTIR-5114).
+ *
+ * `WorkItemPlanEntrance` is a `<Link>` whose `aria-label` NAMES THE ITEM —
+ * `Plan {key}` / `Re-plan {key}` — and the component says in writing that this
+ * is so the door stays unambiguous while the global "Plan with AI" pill is in
+ * the nav. The single-token tail is what tells the two apart: the pill's name is
+ * three words, the door's is two. Both faces are matched, because which one is
+ * drawn depends on whether the item has children, and the step below asserts
+ * exactly that either is acceptable.
+ */
+const planEntrance = (page: Page) => page.getByRole('link', { name: /^(Plan|Re-plan) \S+$/ });
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 
 /**

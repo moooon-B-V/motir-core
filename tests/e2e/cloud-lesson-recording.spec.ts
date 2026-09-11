@@ -6,6 +6,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedLessonLibrary, type LessonLibrarySeed } from './_helpers/lesson-library-seed';
 import {
+  aiPlanningPanel,
   aiPlanningSavedToast,
   clickAiPlanningSave,
   openAiPlanningSettings,
@@ -119,6 +120,9 @@ async function pinWorkspace(page: Page, seed: LessonLibrarySeed): Promise<void> 
 // — one copy for every spec that walks this door (MOTIR-3692).
 
 const recordSwitch = (page: Page) => page.getByRole('switch', { name: 'Record planning mistakes' });
+/** Point five's "where to look" link, BY ROLE (MOTIR-5114) — it is a `<Link>`
+ *  whose text is its accessible name, so the role locator is exact. */
+const lessonsLink = (page: Page) => page.getByRole('link', { name: 'See what Motir has learned' });
 
 /**
  * Run a planning pass — a RE-PLAN of the seeded story, through the app's own
@@ -167,7 +171,11 @@ test('the setting reads ON by default, explains itself, and switching it off sto
   // SETTLED, not merely visible: this is the assertion that lost the race in
   // MOTIR-3692 — a strict `toBeVisible()` here THROWS on the transient second
   // segment subtree instead of retrying it, so the retry fails identically.
-  const explanation = page.getByTestId('ai-planning-record-mistakes-explanation');
+  // SCOPED to the panel (MOTIR-5114): the explanation is a `Callout`, which
+  // renders a bare `<div>` unless it is passed `role="status"` — this one is
+  // not, so there is no role to convert to. The settle below is kept: the
+  // scope and the settle answer different duplicate shapes.
+  const explanation = aiPlanningPanel(page).getByTestId('ai-planning-record-mistakes-explanation');
   await expectSettledVisible(explanation);
   await expect(explanation).toContainText('the correction itself');
   await expect(explanation).toContainText('never shared with any other');
@@ -175,7 +183,7 @@ test('the setting reads ON by default, explains itself, and switching it off sto
   await expect(explanation).toContainText('Turn this off');
   await expect(explanation).toContainText('keeps applying until you stop it');
   // Point five — the list is one step away.
-  await expect(page.getByTestId('ai-planning-record-mistakes-lessons-link')).toBeVisible();
+  await expect(lessonsLink(page)).toBeVisible();
 
   // ── 3 · Switch it off; reload and confirm it STAYED off ───────────────────
   await recordSwitch(page).click();
@@ -205,9 +213,9 @@ test('the setting reads ON by default, explains itself, and switching it off sto
   // The lesson this project already had is still there and still applied. A
   // person switching capture off has not asked to lose what it already learned.
   expect(after.some((l) => l.title === EXISTING_TAKEAWAY)).toBe(true);
-  await page.getByTestId('ai-planning-record-mistakes-lessons-link').click();
+  await lessonsLink(page).click();
   await expect(page.getByRole('heading', { name: 'What Motir has learned' })).toBeVisible();
-  await expect(page.getByText(EXISTING_TAKEAWAY)).toBeVisible();
+  await expect(page.getByRole('main').getByText(EXISTING_TAKEAWAY)).toBeVisible();
 
   // ── 5 · Switch it back on; the SAME pass records one ───────────────────────
   await openAiPlanningSettings(page);
