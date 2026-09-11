@@ -26,6 +26,7 @@ import {
   rowIsReachable,
   setHasOrganizationRow,
 } from '@/lib/projectRepos/establishStep';
+import { needsCollaboratorInvite } from '@/lib/projectRepos/access';
 
 // THE ESTABLISH STEP at plan approval (Story MOTIR-1775 · MOTIR-1782) — the step
 // that gives an approved plan somewhere for its code to live. It takes the CANVAS
@@ -417,19 +418,44 @@ function DefaultPath({
  * — a navigation button wearing the connect button's name, shown to people whose
  * account was already in the very view that rendered it.
  *
- * TWO ARMS, and which one shows is what Motir KNOWS rather than a branch the user
- * picks:
+ * THREE ARMS, and which one shows is what Motir KNOWS rather than a branch the
+ * user picks. They are PREDICATES over the DTO, checked in this order, and they
+ * are written as predicates deliberately (design v7 · MOTIR-5038):
  *
- *   • the account is known ⇒ the shipped `IdentityHeader` names it, with the
- *     pending invitation's door beside it when there is exactly one;
- *   • there is none to invite ⇒ one quiet line and the door to the surface that
- *     owns it. Arm B exists because "connected" is a property of the ACTOR, not
- *     of the project: a teammate who did not run onboarding can approve a plan.
+ *   • **B** — `login === null` ⇒ there is no account to invite;
+ *   • **C** — `login !== null` ∧ every INVITABLE row `not_invited` ⇒ Motir had
+ *     an account, tried, and nothing stuck;
+ *   • **A** — otherwise ⇒ some invitable row is `invited` or `accepted`, so the
+ *     shipped `IdentityHeader` names the account, with the pending invitation's
+ *     door beside it when there is exactly one.
  *
- * ⚠️ ARM B SAYS THE RAIL'S WORDS BY REUSING ITS KEY. `PlanDetail.codeOutcomeOf`
- * already resolves a `created` row nobody has been invited to as `needs_access`
- * and `PlanReviewRail` renders that as `outcomeNeedsAccess`; this door is that
- * same key, not a second string that happens to match today.
+ * ⚠️ WHY ARM C EXISTS, AND WHY THE CONDITION IS THE FIX RATHER THAN THE SENTENCE
+ * (bug MOTIR-5036). Arm B used to be guarded on `!login || !anyInvited` while
+ * its copy said only the FIRST disjunct — "Motir doesn't know your GitHub
+ * account yet". A GitHub refusal leaves every row `not_invited` (MOTIR-1900's
+ * graceful degradation, working as designed), so the second disjunct fired with
+ * `login` a real string and the panel told the reader a fact about THEMSELVES
+ * that was untrue — four inches under "Your code is ready", and disagreeing
+ * with the bell MOTIR-5016 had just rung about the same event. The drift was
+ * between a condition written in prose and a guard written as a shape test;
+ * stating all three as predicates is what stops the next reader re-introducing
+ * it.
+ *
+ * ⚠️ ARM C IS DRAWN INSIDE THE SEVERITY RULING, NOT BESIDE IT. An invitation
+ * failure never fails a row: the repositories are real, the plan is safe, and
+ * the main line still says "Your code is ready". So arm C changes ONE SENTENCE
+ * and nothing else — no red tint, no `failed` panel, no GitHub status code, no
+ * repository name, and the same door. The settings surface tints ITS refusal
+ * `--el-danger`, which is right there (a work list you went to in order to fix
+ * something) and wrong here. {@link AccessNote} is what makes "the same
+ * treatment" structural rather than two call sites that happen to agree.
+ *
+ * ⚠️ ARMS B AND C SAY THE RAIL'S WORDS BY REUSING ITS KEY. `PlanDetail.
+ * codeOutcomeOf` resolves a `created` row nobody has been invited to as
+ * `needs_access` and `PlanReviewRail` renders that as `outcomeNeedsAccess`;
+ * this door is that same key, not a second string that happens to match today.
+ * ⚠️ AND `codeOutcomeOf` IS DELIBERATELY UNCHANGED BY ARM C — see its own
+ * header in `PlanDetail.tsx` for the reading and the reason.
  *
  * ⚠️ A REPORT IS NOT A SILENT SURFACE. Arm A keeps **Use a different account**,
  * which re-runs the connect rather than opening a field. That is not a residue of
@@ -456,31 +482,53 @@ function AccessReport({
   // `/settings/project/code-access` is where each is reached.
   const pending = rows.filter((r) => r.access.state === 'invited' && r.access.invitationUrl);
   const invitationUrl = pending.length === 1 ? pending[0]!.access.invitationUrl : null;
-  const anyInvited = rows.some((r) => r.access.state !== 'not_invited');
 
-  // ARM B — nothing was sent, and nothing is asked for HERE.
-  if (!login || !anyInvited) {
+  // ⚠️ THE ROWS THE PRODUCT CAN ACTUALLY INVITE TO — never `rows` (design v7
+  // amendment 2). A `connected` row is the ORGANISATION's and is `not_invited`
+  // for ever by construction; a `skipped` / `failed` row has no repository
+  // behind it. Quantifying arm C over every row would turn its condition on
+  // rows nothing will ever invite to, which is how the MIXED set (§7b) would
+  // have read as a refusal.
+  const invitable = rows.filter((r) => needsCollaboratorInvite(r.state));
+
+  // ARM B — there is no account to invite. "Connected" is a property of the
+  // ACTOR, not of the project: a teammate who did not run onboarding can
+  // approve a plan, and inventing an invitation for an account Motir does not
+  // have would be worse than saying so.
+  if (!login) {
+    return <AccessNote detail={t('notInvitedDetail')} doorLabel={t('outcomeNeedsAccess')} />;
+  }
+
+  // ARM C — Motir HAD an account, sent the invitation at establish, and GitHub
+  // refused it (design v7 · MOTIR-5038 · bug MOTIR-5036).
+  //
+  // ⚠️ WHY `every(not_invited)` IS SUFFICIENT HERE AND WOULD NOT BE ON ITS OWN.
+  // `not_invited` is not a record of a refusal — `projectRepoAccessService`
+  // stamps NOTHING on one, which is MOTIR-1900's graceful degradation working
+  // as specified — so by itself it cannot tell REFUSED from NEVER ATTEMPTED.
+  // The connected login is what closes that: since MOTIR-5015 the invitation is
+  // sent at establish, in the same pass that creates the rows, so a set that
+  // reached `created` while Motir held an identity has ALREADY had its
+  // invitation attempted. A known account with nothing sent has one
+  // explanation — which is why the sentence says what MOTIR could not do rather
+  // than what GitHub's response was.
+  //
+  // ⚠️ AND `invitable` IS NEVER EMPTY WHERE THIS RENDERS, so the vacuous truth
+  // of `[].every(…)` is not reachable: this report is drawn only at
+  // `state === 'ready'` (every row SETTLED) inside a band drawn only when some
+  // row is establish-work (`proposed` / `creating` / `created` / `failed`), and
+  // `created` is the sole state in both sets. `arm C is never drawn for a set
+  // with nothing to invite` pins it.
+  if (invitable.every((r) => r.access.state === 'not_invited')) {
     return (
-      <p
-        role="status"
-        data-testid="repo-access-report"
-        className="flex items-start gap-2 text-sm text-(--el-text-secondary)"
-      >
-        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-(--el-warning)" aria-hidden="true" />
-        <span>
-          {t('notInvitedDetail')}{' '}
-          <Link
-            href={CODE_ACCESS_HREF}
-            className="font-medium text-(--el-link) hover:text-(--el-link-pressed)"
-          >
-            {t('outcomeNeedsAccess')}
-          </Link>
-        </span>
-      </p>
+      <AccessNote
+        detail={t('notInvitedRefusedDetail', { login })}
+        doorLabel={t('outcomeNeedsAccess')}
+      />
     );
   }
 
-  // ARM A — the account is known, and the invitation is already out.
+  // ARM A — some invitable row is `invited` or `accepted`.
   return (
     <div className="flex flex-col gap-3" data-testid="repo-access-report">
       {/* The shipped `IdentityHeader`, not a redrawn stand-in — the same component
@@ -515,6 +563,44 @@ function AccessReport({
         ) : null}
       </p>
     </div>
+  );
+}
+
+/**
+ * THE ONE QUIET LINE ARMS B AND C SHARE — `AccessReport`'s non-invited note.
+ *
+ * ⚠️ ONE ELEMENT, TWO SENTENCES, AND THAT IS THE DESIGN RULING RATHER THAN a
+ * convenience (design v7): the arms are mutually exclusive and only one is ever
+ * on screen, so the DISTINCTION the reader needs is carried ENTIRELY by the
+ * sentence. A second hue would be a severity claim, and the severity is settled
+ * — an invitation failure never fails a row, so neither arm may read as a failed
+ * setup four inches under "Your code is ready".
+ *
+ * Keeping the treatment in ONE place is what stops the two drifting: written as
+ * two call sites, the next person to tint one of them has no reason to notice
+ * the other. Same `role="status"` (nothing FAILED — this is a report), same
+ * `--el-warning` `TriangleAlert`, same `--el-text-secondary` ink, and the same
+ * door, which is `/settings/project/code-access` for both because that surface
+ * OWNS the repair and already distinguishes the two states correctly.
+ */
+function AccessNote({ detail, doorLabel }: { detail: string; doorLabel: string }) {
+  return (
+    <p
+      role="status"
+      data-testid="repo-access-report"
+      className="flex items-start gap-2 text-sm text-(--el-text-secondary)"
+    >
+      <TriangleAlert className="mt-0.5 size-4 shrink-0 text-(--el-warning)" aria-hidden="true" />
+      <span>
+        {detail}{' '}
+        <Link
+          href={CODE_ACCESS_HREF}
+          className="font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          {doorLabel}
+        </Link>
+      </span>
+    </p>
   );
 }
 

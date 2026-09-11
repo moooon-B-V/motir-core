@@ -51,7 +51,11 @@ import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
-import { clickAiPlanningSave, openAiPlanningSettings } from './_helpers/ai-planning-settings';
+import {
+  aiPlanningPanel,
+  clickAiPlanningSave,
+  openAiPlanningSettings,
+} from './_helpers/ai-planning-settings';
 import {
   AUTO_PLAN_THRESHOLD,
   SPRINT_JOB_ID,
@@ -134,6 +138,40 @@ const autoPlanSwitch = (page: Page) =>
 const sprintPlanningSwitch = (page: Page) =>
   page.getByRole('switch', { name: 'Plan sprints with Motir' });
 
+// ── The page-rooted ids this spec used to carry (MOTIR-5114) ────────────────
+//
+// This is the surface MOTIR-3692 and MOTIR-3929 both took `main` down on, and
+// both threw on a `page.getByTestId`. Each binding below states which of the two
+// remedies it took and why, because the choice is not uniform: a node with a
+// role AND an accessible name CONVERTS, and a node with neither is SCOPED to a
+// live subtree rather than given a role it does not have.
+
+/** CONVERTED. `Stepper` renders `<input type="number" aria-label={…}>`, which is
+ *  a `spinbutton` whose accessible name is the label the panel already sets. */
+const thresholdField = (page: Page) =>
+  page.getByRole('spinbutton', { name: 'Ready-work threshold' });
+const sprintLengthField = (page: Page) => page.getByRole('spinbutton', { name: 'Sprint length' });
+
+/** SCOPED to the panel. The paused banner is a `Callout` passed `role="status"`,
+ *  but a `status` region takes its name from `aria-label` and this one has none
+ *  — so `getByRole('status')` would be BROADER than the id it replaces (every
+ *  open toast is one too). The panel is the honest container. */
+const pausedBanner = (page: Page) => aiPlanningPanel(page).getByTestId('ai-planning-paused-banner');
+/** CONVERTED. A `<Link>` whose visible text is its accessible name. */
+const pausedLink = (page: Page) => page.getByRole('link', { name: 'Review the plan' });
+
+/** SCOPED to `main`. `DockShell` is a `<section aria-labelledby>` — so it IS a
+ *  named region — but the name is its own `<h2>`, which is one of THREE titles
+ *  chosen by dock state (running / review / done). One assertion below is
+ *  `toBeHidden`, where a state-narrowed name would pass for the wrong reason, so
+ *  the container keeps the element set exactly as it was. */
+const planDock = (page: Page) => page.getByRole('main').getByTestId('sprint-plan-dock');
+/** SCOPED to the dock. `ProposedSprintPanel` is a named `region`, but its name
+ *  carries the AI-generated sprint NAME, which this spec cannot know — the id is
+ *  the `tempId`, which it can. */
+const proposedSprint = (page: Page, n: number) =>
+  planDock(page).getByTestId(`proposed-sprint-sprint:${n}`);
+
 /** Save the settings panel and wait on the PATCH's 200 — the authoritative
  *  signal. The panel is optimistic, so asserting the reload without this would
  *  race the in-flight write (CLAUDE.md § E2E authoritative signal). */
@@ -192,11 +230,11 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
 
     await autoPlanSwitch(page).click();
     await beat();
-    await page.getByTestId('ai-planning-threshold').fill(String(AUTO_PLAN_THRESHOLD));
+    await thresholdField(page).fill(String(AUTO_PLAN_THRESHOLD));
     await beat();
     await sprintPlanningSwitch(page).click();
     await beat();
-    await page.getByTestId('ai-planning-sprint-length').fill(String(SPRINT_LENGTH_DAYS));
+    await sprintLengthField(page).fill(String(SPRINT_LENGTH_DAYS));
     await beat();
     await saveAiSettings(page, seed.projectKey);
     await beat();
@@ -205,13 +243,9 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     // optimistic panel.
     await page.reload();
     await expect(autoPlanSwitch(page)).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByTestId('ai-planning-threshold')).toHaveValue(
-      String(AUTO_PLAN_THRESHOLD),
-    );
+    await expect(thresholdField(page)).toHaveValue(String(AUTO_PLAN_THRESHOLD));
     await expect(sprintPlanningSwitch(page)).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByTestId('ai-planning-sprint-length')).toHaveValue(
-      String(SPRINT_LENGTH_DAYS),
-    );
+    await expect(sprintLengthField(page)).toHaveValue(String(SPRINT_LENGTH_DAYS));
     await beat();
   });
 
@@ -227,7 +261,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     // renders in ~1-2s like every other lane. The extra margin is kept only for
     // the FIRST render under CI contention; it is headroom on the same signal,
     // not a sleep, and every later assertion keeps the lane's strict default.
-    const planDoor = page.getByTestId('plan-sprints-with-motir');
+    const planDoor = page.getByRole('button', { name: 'Plan sprints with Motir' });
     await expect(planDoor).toBeEnabled({ timeout: 30_000 });
     await beat();
 
@@ -242,10 +276,10 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     // both cheaper and a truer narration: the reviewer sees that nothing is
     // created until they approve.
     await planDoor.click();
-    await expect(page.getByTestId('proposed-sprint-sprint:1')).toBeVisible();
+    await expect(proposedSprint(page, 1)).toBeVisible();
     await beat();
-    await page.getByTestId('sprint-plan-discard').click();
-    await expect(page.getByTestId('sprint-plan-dock')).toBeHidden();
+    await page.getByRole('button', { name: 'Discard' }).click();
+    await expect(planDock(page)).toBeHidden();
     await beat();
     expect(await db.sprint.count({ where: { projectId: seed.projectId } })).toBe(0);
     expect(
@@ -257,21 +291,19 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
 
     // The proposed packing renders: two short sprints, sized to the cadence the
     // settings set, with the blocked item scheduled after its blocker.
-    await expect(page.getByTestId('sprint-plan-dock')).toBeVisible();
-    await expect(page.getByTestId('proposed-sprint-sprint:1')).toBeVisible();
-    await expect(page.getByTestId('proposed-sprint-sprint:2')).toBeVisible();
-    await expect(page.getByTestId('sprint-plan-dock')).toContainText(
-      `${SPRINT_LENGTH_DAYS} days each`,
-    );
-    await expect(page.getByTestId('proposed-sprint-sprint:1')).toContainText(seed.formKey);
-    await expect(page.getByTestId('proposed-sprint-sprint:2')).toContainText(seed.apiKey);
+    await expect(planDock(page)).toBeVisible();
+    await expect(proposedSprint(page, 1)).toBeVisible();
+    await expect(proposedSprint(page, 2)).toBeVisible();
+    await expect(planDock(page)).toContainText(`${SPRINT_LENGTH_DAYS} days each`);
+    await expect(proposedSprint(page, 1)).toContainText(seed.formKey);
+    await expect(proposedSprint(page, 2)).toContainText(seed.apiKey);
     await beat();
 
     // Approve — the REAL persist (Epic-4 createSprint + bulkAssignToSprint).
     const approved = page.waitForResponse(
       (r) => r.url().includes('/api/ai/plan/sprint/approve') && r.request().method() === 'POST',
     );
-    await page.getByTestId('sprint-plan-approve').click();
+    await page.getByRole('button', { name: /^Create \d+ sprints?$/ }).click();
     const approveRes = await approved;
     expect(approveRes.status()).toBe(200);
     const created = (await approveRes.json()) as {
@@ -348,15 +380,12 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
   await chapter('Auto-plan pauses for review', async () => {
     await openAiPlanningSettings(page);
 
-    const banner = page.getByTestId('ai-planning-paused-banner');
+    const banner = pausedBanner(page);
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Auto-plan is paused');
     // The link is the point — it makes the silence actionable.
     const planId = (await plansOf(seed.projectId))[0]!.id;
-    await expect(page.getByTestId('ai-planning-paused-link')).toHaveAttribute(
-      'href',
-      `/plans/${planId}`,
-    );
+    await expect(pausedLink(page)).toHaveAttribute('href', `/plans/${planId}`);
     await beat();
 
     // The gate holds: a further tick creates nothing.
@@ -392,10 +421,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     // …and while THAT one waits, the panel reads paused again — but for the new
     // plan, so the indicator tracks the live gate rather than a stale verdict.
     await openAiPlanningSettings(page);
-    await expect(page.getByTestId('ai-planning-paused-link')).toHaveAttribute(
-      'href',
-      `/plans/${plans[1]!.id}`,
-    );
+    await expect(pausedLink(page)).toHaveAttribute('href', `/plans/${plans[1]!.id}`);
     await beat();
   });
 });
@@ -408,7 +434,7 @@ test('cadence off — the tick creates nothing', async ({ page }) => {
   // On, drained, and firing…
   await openAiPlanningSettings(page);
   await autoPlanSwitch(page).click();
-  await page.getByTestId('ai-planning-threshold').fill(String(AUTO_PLAN_THRESHOLD));
+  await thresholdField(page).fill(String(AUTO_PLAN_THRESHOLD));
   await saveAiSettings(page, seed.projectKey);
   await drainReadySetBelow(AUTO_PLAN_THRESHOLD, seed);
   expect((await runCadenceTick(1)).summary.fired).toBe(1);
@@ -436,7 +462,7 @@ test('the pending-proposal gate is origin-independent — a user-clicked plan pa
 
   await openAiPlanningSettings(page);
   await autoPlanSwitch(page).click();
-  await page.getByTestId('ai-planning-threshold').fill(String(AUTO_PLAN_THRESHOLD));
+  await thresholdField(page).fill(String(AUTO_PLAN_THRESHOLD));
   await saveAiSettings(page, seed.projectKey);
   await drainReadySetBelow(AUTO_PLAN_THRESHOLD, seed);
 
@@ -455,9 +481,6 @@ test('the pending-proposal gate is origin-independent — a user-clicked plan pa
 
   // …and the panel reads paused, pointing at the user's own plan.
   await openAiPlanningSettings(page);
-  await expect(page.getByTestId('ai-planning-paused-banner')).toBeVisible();
-  await expect(page.getByTestId('ai-planning-paused-link')).toHaveAttribute(
-    'href',
-    `/plans/${userPlanId}`,
-  );
+  await expect(pausedBanner(page)).toBeVisible();
+  await expect(pausedLink(page)).toHaveAttribute('href', `/plans/${userPlanId}`);
 });

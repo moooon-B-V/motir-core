@@ -7026,6 +7026,7 @@
     "invitedDetail": "在 GitHub 上接受邀请，代码就归你克隆了。",
     "openInvitation": "打开邀请",
     "notInvitedDetail": "Motir 还不知道你的 GitHub 账号",
+    "notInvitedRefusedDetail": "Motir 还没能让 @{login} 访问你的代码 —— GitHub 拒绝了这次邀请。",
     "outcomeNeedsAccess": "完成访问设置",
     "connectGithub": "连接GitHub",
     "stateCreated": "已创建",

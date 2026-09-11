@@ -361,6 +361,24 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
     case 'UNEXPECTED':
       headline = t('unexpected.title');
       break;
+    // UNREACHABLE, and the compiler is what makes it so: `GateRefusal` is a
+    // closed union, `REFUSAL_TAGS_ARE_TOTAL` proves it covers every server tag,
+    // and `toGateRefusal` narrows anything it does not recognise to
+    // `UNEXPECTED` rather than passing a tag through. The `never` binding below
+    // is the third proof — it stops compiling the moment a member is added to
+    // the union and not handled here.
+    //
+    // It is kept as a RUNTIME arm anyway, because the three proofs are all
+    // compile-time and this file ships to a browser that may be running an
+    // older bundle than the server it is talking to. What it must not do is
+    // depress the coverage number and invite somebody to "cover" it with a
+    // fixture that lies about the union being open.
+    //
+    // The invariant is pinned by `tests/approval-gate-coverage-floor.test.ts`
+    // § 'toGateRefusal — the client reads the SERVER’s vocabulary', whose last
+    // case drives seven unrecognised codes and asserts every one arrives as
+    // `UNEXPECTED` — i.e. that this arm has no producer.
+    /* v8 ignore next 4 */
     default: {
       const exhaustive: never = refusal;
       throw new Error(`Unhandled gate refusal: ${JSON.stringify(exhaustive)}`);

@@ -408,6 +408,9 @@ describe('a READY set REPORTS the invitation rather than asking for one', () => 
     expect(await screen.findByText('Your code is ready')).toBeTruthy();
     const report = screen.getByTestId('repo-access-report');
     expect(report.textContent).toContain("Motir doesn't know your GitHub account yet");
+    // ⚠️ AND IT MUST NOT SAY ARM C's SENTENCE. There is no account here, so
+    // nothing was attempted and nothing was refused.
+    expect(report.textContent).not.toContain('GitHub turned the invitation down');
     // ⚠️ WORD FOR WORD WITH THE RAIL, and by construction rather than by
     // coincidence: the door reuses `repositorySet.outcomeNeedsAccess`, which is
     // what `PlanReviewRail` renders for the `needs_access` outcome
@@ -417,6 +420,92 @@ describe('a READY set REPORTS the invitation rather than asking for one', () => 
     // It is a STATUS, not an alert — nothing failed; nobody has been invited yet.
     expect(report.getAttribute('role')).toBe('status');
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  // ── ARM C (design v7 · MOTIR-5038 · bug MOTIR-5036) ─────────────────────────
+  //
+  // ⚠️ THE THREE ARMS ARE TOLD APART BY THE DTO AND BY NOTHING ELSE. Every case
+  // below differs only in `view.githubLogin` and in the rows' `state` /
+  // `access.state` — never in a prop, a flag or a fixture switch — because that
+  // is the claim the fix makes. The shipped guard was `!login || !anyInvited`,
+  // a DISJUNCTION whose copy stated only its first disjunct: a GitHub refusal
+  // leaves every row `not_invited` (MOTIR-1900's graceful degradation, working
+  // as designed), so the second disjunct fired with `login` a real string and
+  // the panel told the reader something untrue ABOUT THEMSELVES.
+
+  it('arm C — the account IS known and nothing was sent: names it, and blames GitHub', async () => {
+    const v = view([createdRow(ACCESS.notInvited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    stubAccessFetch(v);
+    renderStep(v);
+
+    expect(await screen.findByText('Your code is ready')).toBeTruthy();
+    const report = screen.getByTestId('repo-access-report');
+    // ⚠️ THE WHOLE DEFECT, IN ONE ASSERTION: it must NOT claim Motir lacks the
+    // account it just tried to use.
+    expect(report.textContent).not.toContain("Motir doesn't know your GitHub account yet");
+    expect(report.textContent).toContain('GitHub turned the invitation down');
+    // The one identifier arm C carries is the ACCOUNT — the thing the reader can
+    // act on. Never a repository name and never a GitHub status code.
+    expect(report.textContent).toContain('@yuezhu');
+    expect(report.textContent).not.toContain('403');
+    expect(report.textContent).not.toContain('acme-web');
+  });
+
+  it('arm C — DRAWN INSIDE the severity ruling: a status, the same door, no failure', async () => {
+    // An invitation failure never fails a row. The repositories are real, the
+    // plan is safe, and the main line still says "Your code is ready" — so arm C
+    // changes ONE SENTENCE and nothing else. A second hue here would be a
+    // severity claim four inches under a success line.
+    const v = view([createdRow(ACCESS.notInvited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    stubAccessFetch(v);
+    renderStep(v);
+
+    const report = await screen.findByTestId('repo-access-report');
+    expect(report.getAttribute('role')).toBe('status');
+    expect(screen.queryByRole('alert')).toBeNull();
+    // Arm B's door, by construction rather than by coincidence — both reuse
+    // `repositorySet.outcomeNeedsAccess`, the key `PlanReviewRail` renders for
+    // the `needs_access` outcome that covers BOTH arms.
+    const door = screen.getByRole('link', { name: 'Finish setting up access' });
+    expect(door.getAttribute('href')).toBe('/settings/project/code-access');
+    // No new destination, and no failure panel.
+    expect(screen.queryByText("Motir couldn't finish setting up your code")).toBeNull();
+    expect(screen.getByText('Your code is ready')).toBeTruthy();
+  });
+
+  it('arm C is never drawn for a set with nothing to invite — the MIXED set stays arm A', async () => {
+    // ⚠️ THE CASE THAT RULES OUT `rows.every(...)`. `[].every(…)` is VACUOUSLY
+    // TRUE, so quantifying arm C over every row instead of every INVITABLE one
+    // would turn its condition on rows nothing will ever invite to: a
+    // `connected` row is the ORGANISATION's and is `not_invited` for ever by
+    // construction (design v7 amendment 2). Here the organisation's row is
+    // permanently un-invited while the Motir row's invitation went out — the set
+    // has been reached, and claiming GitHub refused it would be false.
+    const orgRow = row({
+      id: 'r-org',
+      role: 'shared',
+      name: 'atlas-shared',
+      state: 'connected',
+      seedSource: 'organization',
+      established: true,
+    });
+    const v = view([orgRow, createdRow(ACCESS.invited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    stubAccessFetch(v);
+    renderStep(v);
+
+    expect(await screen.findByText('@yuezhu')).toBeTruthy();
+    const report = screen.getByTestId('repo-access-report');
+    expect(report.textContent).not.toContain('GitHub turned the invitation down');
+    expect(report.textContent).not.toContain("Motir doesn't know your GitHub account yet");
   });
 
   it('never renders the report before the set is ready', () => {
