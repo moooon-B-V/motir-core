@@ -3570,6 +3570,7 @@
         "roles": "What each role in this project can do is managed by project admins. Ask an admin if a role needs changing.",
         "code-access": "Who on this team can clone and push this project's code is managed by project admins. You can still connect your own GitHub account from Git settings.",
         "workflow": "Statuses and the transitions between them are managed by project admins. Ask an admin if the workflow needs changing.",
+        "approvals": "Which approvals this project asks for — and the gates that hold work until somebody presses them — is managed by project admins. Ask an admin if a gate needs turning on or off.",
         "board": "Board configuration — columns, limits and swimlanes — is managed by project admins. Ask an admin if a column or a limit needs changing.",
         "estimation": "How this project estimates work is managed by project admins. Ask an admin if the scale needs changing.",
         "fields": "Custom fields are managed by project admins. Ask an admin if a field needs adding or changing.",

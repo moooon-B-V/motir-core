@@ -470,6 +470,16 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/workflowsService.ts',
     gate: 'assertProjectAdmin',
   },
+  // MOTIR-4925 · MOTIR-5170. The SAME key as `workflow`, and deliberately: a
+  // status graph and an approval gate are the two things that decide when work
+  // may move. Unlike its neighbour this service names the gate plainly —
+  // `projectAccessService.assertPermission(projectId, ctx, 'workflow:manage')`
+  // on both `getSettings` and `updateSettings` — so the evidence is the literal.
+  approvals: {
+    permission: 'workflow:manage',
+    source: 'lib/services/approvalGateSettingsService.ts',
+    gate: 'assertPermission',
+  },
   board: {
     permission: 'board:configure',
     source: 'lib/services/boardsService.ts',
