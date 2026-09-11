@@ -469,11 +469,29 @@ export function PlanReviewCanvas({
         const arrivingBlockers = new Map(
           proposalsAtLevel(items, parentId).map((i) => [i.nodeId, i.status === 'done']),
         );
+        // THE ROWS THIS PLAN MOVES OFF THE LEVEL (bug MOTIR-5006) — the mirror of
+        // the map above, answered by the same reader for the same reason. A
+        // proposal whose TARGET is one of this level's committed rows but whose
+        // `parentNodeId` is some other level is re-parenting that card AWAY, and
+        // the level's membership is the fourth thing the committed read cannot
+        // answer about a card the plan is moving.
+        //
+        // ⚠️ IT KEYS ON THE PARENT DIFFERING, never on the card being NAMED by
+        // the plan: a `modify` that re-skins in place sits at this level, so it
+        // is excluded by the comparison rather than by a special case — which is
+        // what keeps every ordinary `modify` drawing exactly where it does now.
+        const levelRowIds = new Set(wi.items.map((i) => i.id));
+        const departingIds = new Set(
+          items
+            .filter((i) => (i.parentNodeId ?? null) !== parentId && levelRowIds.has(i.nodeId))
+            .map((i) => i.nodeId),
+        );
         committed = buildWorkItemLevel(wi, {
           // Grouping is a statement about the PROJECT's roots, so it is the root
           // level's alone — a drilled level's rows are somebody's children.
           groupNonEpicRoots: atRoot,
           arrivingBlockers,
+          departingIds,
           ...(excluded ? { groupExcludeIds: excluded } : {}),
           groupCrumbLabel: t('group.title'),
           levelTotal: wi.levelTotal,

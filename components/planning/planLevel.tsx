@@ -80,6 +80,62 @@ export function mergePlanLevel(
   // this node (MOTIR-3859).
   const gainsChildren = proposedParentNodeIds(items);
 
+  // ⚠️ A CARD THE PLAN RE-PARENTS AWAY FROM THIS LEVEL IS NOT ON IT (bug
+  // MOTIR-5006) — the FOURTH field taken off the level's committed read and never
+  // re-asked about a card the plan is moving, and the only one that is not a
+  // decoration: it is whether the card is there at all. `planReviewService`'s
+  // `parentNodeIdOf` already reports a re-parented card at its DESTINATION, for
+  // the stated reason that *"a re-parent that drew the card in its OLD level
+  // would be the plan review showing the approver the opposite of what approving
+  // does"*. That sentence is about the ORIGIN as much as the destination, and only
+  // half of it was ever applied: at the origin the card fell out of `atLevel`, so
+  // `pending` had no entry for it, the map below passed it through untouched, and
+  // it sat among its siblings with its committed arrows intact.
+  //
+  // ── THE DISPOSITION, and why this one ──────────────────────────────────────
+  // The card is taken OFF the level, and every committed edge between it and a
+  // card that STAYS is drawn by the OFF-LEVEL rule — a `cross` arrow to a naming
+  // anchor — rather than kept as a within-level arrow or dropped. Three claims,
+  // and the third is the one that settles it:
+  //
+  //  - It is what this function is ALREADY decided by. MOTIR-4098 reversed the
+  //    first fix for a REMOVED EDGE and the comment sixty lines down states the
+  //    rule it left behind: *"the graph draws what approving would LEAVE
+  //    BEHIND."* A node is a stronger claim than an arrow, not a weaker one — a
+  //    card drawn on a level says *this container holds this card* — so a
+  //    treatment saying *it is leaving* is the same marked-going-away shape that
+  //    was tried and reverted, one field up.
+  //  - It is what the level ACTUALLY looks like after approve. Re-read level `L`
+  //    once the plan lands: the card is not among its children, and the
+  //    dependency it left behind is a cross-container blocker with a ghost
+  //    anchor. Dropping the card and its edges would under-draw that by one
+  //    arrow; keeping the card would over-draw it by one node. Neither is the
+  //    level the reviewer gets.
+  //  - It answers the under-report the ALTERNATIVE was raised against. The cost
+  //    of a bare DROP is MOTIR-4951's — the reviewer loses a card without being
+  //    told. They are told: the card is named on its anchor, and the arrow flies
+  //    the bad-plan flag, which is the honest verdict about a plan that moves a
+  //    blocker out of its dependent's container. Under a *departing* skin that
+  //    warning cannot be drawn at all, because the card is still on the level and
+  //    the edge is still within it.
+  //
+  // ── WHERE THE MECHANISM LIVES ──────────────────────────────────────────────
+  // NOT HERE, and for exactly MOTIR-4952's reason rather than a new one: two of
+  // the three effects are unreachable downstream — the `crossBlocked` ring is
+  // baked into the dependent's rendered `content`, and the anchor must be minted
+  // before the merge runs. So the consumer answers *which rows is this plan
+  // moving off?* (`PlanReviewCanvas`, one pass over the whole `items` array,
+  // beside the `arrivingBlockers` map it is the mirror of) and
+  // `buildWorkItemLevel`'s `departingIds` takes them off the level with a naming
+  // stub. By the time this function runs, `committed` no longer contains the
+  // card — which is why the map below needs no departure case, and why a
+  // `modify` that does NOT re-parent still re-skins in place exactly as before.
+  //
+  // That is the shape MOTIR-4952 introduced and this card completes: everything
+  // the merge inherits from the committed read is provisional with respect to the
+  // cards the plan moves, in BOTH directions, and each direction is now answered
+  // at the source rather than patched a field at a time.
+
   // The committed children, in the order the read gave them, with a `modify` /
   // `remove` re-skinned in place.
   const nodes: ProjectCanvasNode[] = committed.nodes.map((node) => {
