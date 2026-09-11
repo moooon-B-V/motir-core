@@ -580,6 +580,101 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         expect(covers(imagePatterns, path), path).toBe(false);
       }
     });
+
+    // ── The SAME set, written a second time in a second language (MOTIR-5126)
+    //
+    // `image-cache-main.yml` runs these lanes on a push to `main` for one
+    // reason: a GitHub Actions cache is readable from the ref that WROTE it or
+    // from the DEFAULT branch, so until something ran on `refs/heads/main` no
+    // ref could read another's buildx scope and every new ref built cold.
+    //
+    // It gates itself with an `on.push.paths:` filter rather than by reading
+    // this job, because a workflow cannot read another workflow's outputs. That
+    // is a second copy of the list, and a second copy is only safe if divergence
+    // is LOUD — which it is not on its own: the symptom of drift here is not a
+    // red check, it is a scope that silently stops being refreshed, and the cost
+    // lands weeks later on whoever waits out a cold build. So the two are pinned
+    // to each other here, in the file that already owns the list.
+    describe("and the main-branch cache writer's filter is the same list", () => {
+      const CACHE_WORKFLOW = '.github/workflows/image-cache-main.yml';
+      // ⚠️ COMMENTS STRIPPED, for the same reason this file strips them
+      // everywhere else — and here it is load-bearing twice over. That
+      // workflow's header EXPLAINS its own permissions in prose ("the absence
+      // of `packages: write`"), so a raw-text search for that string finds the
+      // sentence denying it; and its `paths:` list carries a comment BETWEEN
+      // two entries, which stops a run-of-entries match at the comment and
+      // silently yields a short list. Both were live failures of an earlier
+      // draft of this block.
+      const cacheWorkflow = codeOf(read(CACHE_WORKFLOW));
+
+      /** The `paths:` entries, in glob form, from the `on.push` block. */
+      const pushPaths = (() => {
+        const block = /^\s*paths:\n((?:\s*- '[^']*'\n)+)/m.exec(cacheWorkflow);
+        return [...(block?.[1] ?? '').matchAll(/- '([^']*)'/g)].map((m) => m[1]!);
+      })();
+
+      /**
+       * A shell `case` pattern as the equivalent `paths:` glob. `case` uses one
+       * `*` that spans `/`; `paths:` needs `**` for that, and an exact filename
+       * is the same in both. This is the ONLY translation in play, and keeping
+       * it explicit is what lets the comparison below be an equality rather than
+       * a coverage check that a too-wide list would pass.
+       */
+      const asGlob = (pattern: string): string =>
+        pattern.endsWith('/*') ? `${pattern.slice(0, -2)}/**` : pattern;
+
+      it('lifted both lists', () => {
+        // Neither side may be empty, or the equality below holds vacuously —
+        // which is how a drift guard goes green while guarding nothing.
+        expect(imagePatterns.length).toBeGreaterThan(5);
+        expect(pushPaths.length).toBeGreaterThan(5);
+      });
+
+      it('names every path the `images` classifier names, and no others', () => {
+        // The workflow additionally lists ITSELF, which the classifier has no
+        // reason to carry: `ci.yml` does not gate on this file, and this file
+        // must rebuild when what it builds changes. That one asymmetry is
+        // subtracted by name rather than by a loose comparison, so any OTHER
+        // divergence still fails.
+        const declared = new Set(pushPaths);
+        expect(declared.has(CACHE_WORKFLOW), 'the writer re-runs on its own edit').toBe(true);
+        declared.delete(CACHE_WORKFLOW);
+        expect([...declared].sort()).toEqual([...new Set(imagePatterns.map(asGlob))].sort());
+      });
+
+      it('writes the cache and publishes nothing', () => {
+        // It calls the same reusable workflows `ci.yml` calls — a bespoke build
+        // would warm layers no pull request asks for — and it calls them with
+        // `publish: false`, because the release lanes are the tag-triggered
+        // workflows and this one holds no `packages: write`.
+        for (const w of IMAGE_WORKFLOWS) expect(cacheWorkflow).toContain(`uses: ./${w}`);
+        expect(cacheWorkflow).not.toContain('publish: true');
+        expect(cacheWorkflow).not.toContain('packages: write');
+      });
+
+      it('runs only on the DEFAULT branch — the whole point is the scope it writes', () => {
+        // A cache written anywhere else is one no other ref may read, which is
+        // the defect. `main` is not a preference here, it is the mechanism.
+        expect(cacheWorkflow).toMatch(/^\s*branches: \[main\]$/m);
+      });
+
+      it('has its OWN concurrency group, so it cannot queue behind a release', () => {
+        // ⚠️ THE REASON THIS IS A SEPARATE WORKFLOW AT ALL. `ci.yml` groups on
+        // `${{ github.workflow }}-${{ github.ref }}` and does NOT cancel on a
+        // push (MOTIR-3106 — cancelling there starved the deploy), so runs
+        // QUEUE: anything added to its push lane joins the critical path of the
+        // NEXT merge's release. Putting the sandbox matrix there would have
+        // recreated that defect in its slow form, which no check reports.
+        expect(cacheWorkflow).toMatch(/^concurrency:\n\s*group: image-cache-main$/m);
+        expect(cacheWorkflow).toMatch(/^\s*cancel-in-progress: true$/m);
+      });
+
+      it('is not in `deploy`’s needs — a cold cache must never stop a release', () => {
+        // It verifies nothing (the queue entry already gated the merge), so
+        // depending on it would convert a slow build into a blocked release.
+        expect(codeOf(ciJobs.get('deploy') ?? '')).not.toMatch(/image-cache/);
+      });
+    });
   });
 
   describe('every lane it gates actually reads it', () => {
