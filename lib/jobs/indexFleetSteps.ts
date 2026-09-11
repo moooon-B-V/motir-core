@@ -504,14 +504,20 @@ function compactTimings(
   timings: CodeGraphRunVerdict['timings'] | undefined,
 ): NonNullable<IndexModeRecord['containerTimings']> | undefined {
   if (!timings) return undefined;
-  const compact = {
+  // ⚠️ NO "did anything survive" GUARD HERE, deliberately. `parseRunTimings`
+  // (`lib/ai/motirAiClient.ts`) already returns `null` unless at least one field
+  // is non-null, so an all-null object cannot reach this function — a trailing
+  // `Object.keys(compact).length > 0 ? compact : undefined` was an unreachable
+  // branch rather than a safety net, and the honest fix is to delete it rather
+  // than to write a test that constructs a state the only caller cannot produce.
+  // The client-side suite is where that invariant is asserted.
+  return {
     ...(timings.totalMs !== null ? { totalMs: timings.totalMs } : {}),
     ...(timings.unaccountedMs !== null ? { unaccountedMs: timings.unaccountedMs } : {}),
     ...(timings.peakRssMb !== null ? { peakRssMb: timings.peakRssMb } : {}),
     ...(timings.phasesMs !== null ? { phasesMs: timings.phasesMs } : {}),
     ...(timings.syncCounts !== null ? { syncCounts: timings.syncCounts } : {}),
   };
-  return Object.keys(compact).length > 0 ? compact : undefined;
 }
 
 /**

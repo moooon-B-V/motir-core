@@ -571,6 +571,32 @@ describe('the ledger row ALSO carries what the CONTAINER did (MOTIR-5058)', () =
     expect(Object.keys(rows[0]!).sort()).toEqual(['containerMode', 'mode', 'projectId']);
   }, 30_000);
 
+  it('carries a PARTIAL reading — the fields a run did not report are absent, not zero', async () => {
+    // The fields arrive INDEPENDENTLY: the sync counts exist only on a run that
+    // synced, and `peakRssMb` only from a container new enough to send it, which
+    // is none of them before MOTIR-5101 extended the wire. So a run reporting
+    // `totalMs` alone is an ordinary state, not a degenerate one.
+    //
+    // Every absent field must be OMITTED rather than written as `0`: this row is
+    // JSON on a durable ledger, and a zero is indistinguishable from a
+    // measurement — the confusion the whole MOTIR-5055 → MOTIR-5122 → MOTIR-5058
+    // chain exists to remove, in its cheapest possible form.
+    world('sync', {
+      verdict: {
+        indexMode: 'sync',
+        fallbackReason: null,
+        timings: { totalMs: 50_203 },
+      },
+    });
+
+    const rows = await runIndex('cgv-partial');
+    expect(rows[0]!.containerTimings).toEqual({ totalMs: 50_203 });
+    // The key set explicitly: `toEqual` treats an explicitly-undefined property
+    // as absent, so it alone would pass while `peakRssMb: undefined` sat on the
+    // object and serialised onto the row.
+    expect(Object.keys(rows[0]!.containerTimings!)).toEqual(['totalMs']);
+  }, 30_000);
+
   it('ignores a MALFORMED timings object rather than writing it to the ledger', async () => {
     // The body crosses the open/closed boundary and lands on a durable row, so a
     // field of the wrong type must become absent — never a coerced number. A
