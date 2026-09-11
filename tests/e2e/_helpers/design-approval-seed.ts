@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -30,6 +30,21 @@ import { createTestPerson } from './testPerson';
 // and the spec would fail on the status assertion for a reason that has nothing
 // to do with the gate. It is also the honest shape: an agent claims the card,
 // publishes from it, and the reviewer arrives afterwards.
+
+// ⚠️ THE TWO DIRECT WRITES GO THROUGH `adminDb`, NOT `@/lib/db`, AND THE GUARD
+// THAT SAYS SO IS RATCHETED. `tests/rls/test-singleton-statement-guard.test.ts`
+// counts direct singleton statements under `tests/e2e/**` against a ceiling that
+// only ever falls — this file went red at 454 against 452 on its first push, for
+// exactly these two lines. The reason behind the ratchet is not bookkeeping:
+// under `TEST_DB_APP_ROLE=1` the singleton is the NON-BYPASS runtime role, so a
+// seed write through it is REFUSED and a seed read returns `[]` — and neither
+// raises. A spec seeded that way drives a browser against a database it believes
+// it populated. `adminDb` is the owner half of the two-client model
+// (`tests/helpers/adminDb.ts`), which is what fixtures are supposed to hold.
+//
+// Everything else here seeds through the SERVICES on purpose — they are the
+// shipped write paths, and using them is what makes the fixture's tree a tree
+// the product could actually have produced. These two rows have no service door.
 
 export const DESIGN_APPROVAL_PASSWORD = 'design-approval-e2e-pass-7';
 
@@ -108,7 +123,7 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
   });
 
   async function pin(userId: string): Promise<void> {
-    await db.workspaceMembership.update({
+    await adminDb.workspaceMembership.update({
       where: { userId_workspaceId: { userId, workspaceId: workspace.id } },
       data: { activeProjectId: project.id },
     });
@@ -128,7 +143,7 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
       name: label === 'reviewer' ? 'Robin Vale' : 'Sam Reader',
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: { userId: user.id, projectId: project.id, workspaceId: workspace.id, role },
     });
     await pin(user.id);
