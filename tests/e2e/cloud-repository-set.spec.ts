@@ -507,6 +507,24 @@ test('a GitHub refusal does not cost the user their code — the repositories st
   await expect(setupStatus(page)).toHaveText('Your code is ready');
   await expect(page.getByText(/It's yours\./).first()).toBeVisible();
 
+  // ⚠️ AND THE PANEL SAYS WHAT ACTUALLY HAPPENED — ASSERTED POSITIVELY, which is
+  // the assertion whose ABSENCE let bug MOTIR-5036 ship. Everything else in this
+  // test denies a failure presentation, and all of it passed while the panel
+  // read "Motir doesn't know your GitHub account yet" — a fact about the user
+  // that is untrue, four inches under "Your code is ready", for an account the
+  // seed connected and the product had just used in the call GitHub refused.
+  // A negative-only test cannot tell a correct sentence from a wrong one.
+  const report = accessReport(page);
+  await expect(report).toContainText('GitHub turned the invitation down');
+  await expect(report).toContainText(`@${REPO_SET_LOGIN}`);
+  // The arm that used to answer for this state must NOT be the one on screen.
+  await expect(report).not.toContainText("Motir doesn't know your GitHub account yet");
+  // No new destination: the refusal is retried where it is owned.
+  await expect(page.getByRole('link', { name: 'Finish setting up access' })).toHaveAttribute(
+    'href',
+    '/settings/project/code-access',
+  );
+
   // ⚠️ THE NOTIFICATION IS NOT ASSERTED HERE, and this is the explicit statement
   // MOTIR-5018 requires rather than a silent omission.
   //

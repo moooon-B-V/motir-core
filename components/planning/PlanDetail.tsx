@@ -555,6 +555,28 @@ export function PlanDetail({
  * settled answer through the ADR §4.1 edge table rather than restating it. They
  * are NOT the band's predicate — see that module's header for why `state`
  * decides the band and settledness cannot.
+ *
+ * ⚠️ RE-READ AGAINST THE STEP'S THIRD ARM AND DELIBERATELY LEFT ALONE
+ * (bug MOTIR-5036 · design v7 · 2026-09-11). `AccessReport` now splits its
+ * non-invited report into TWO arms — no account (B) and GitHub refused (C) —
+ * and the question this header owes an answer to is whether the rail must split
+ * with it. **It must not, and the reason is that the rail answers a different
+ * question.**
+ *
+ * `codeOutcomeOf` resolves BOTH arms to `needs_access`, because `needs_access`
+ * is TRUE of both: a `created` row nobody has been invited to is code the user
+ * cannot clone, and WHY the invitation never landed does not change that. The
+ * rail's line is the standing outcome of the plan; the step's line is the
+ * report of what just happened. Splitting the rail would put the cause of a
+ * one-off event into a sentence that outlives it, and it would duplicate a
+ * distinction the step and `/settings/project/code-access` already draw — the
+ * latter branching on the DTO's own `reason === 'no_github_identity'`.
+ *
+ * So this function is UNCHANGED by MOTIR-5036, and that is a decision rather
+ * than an omission: `the rail says needs_access for BOTH of the step's
+ * non-invited arms` in `tests/components/plan-detail-settled-set.test.tsx` is
+ * what pins it, so a later reader who thinks the rail should split has to
+ * delete an assertion that says why it should not.
  */
 function codeOutcomeOf(view: ProjectRepoEstablishViewDto | null): PlanCodeOutcome | null {
   if (!view || view.set.rows.length === 0) return null;

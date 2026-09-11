@@ -7030,6 +7030,7 @@
     "invitedDetail": "Accept the invitation on GitHub and your code is yours to clone.",
     "openInvitation": "Open the invitation",
     "notInvitedDetail": "Motir doesn't know your GitHub account yet",
+    "notInvitedRefusedDetail": "Motir couldn't give @{login} access to your code yet — GitHub turned the invitation down.",
     "outcomeNeedsAccess": "Finish setting up access",
     "connectGithub": "Connect GitHub",
     "stateCreated": "Created",

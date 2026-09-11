@@ -207,3 +207,61 @@ describe('PlanDetail — an UNSETTLED set still draws the band, unchanged (MOTIR
     expect(screen.getByTestId('plan-detail-establish-band')).toBeTruthy();
   });
 });
+
+/** The same helper, plus the one field that tells the step's arm B from its arm
+ *  C. `codeOutcomeOf` never reads it — which is exactly what is being pinned. */
+function repositorySetWithIdentity(rows: ReturnType<typeof row>[], githubLogin: string | null) {
+  return { projectKey: 'PRJ', view: { set: { rows }, githubLogin } as never };
+}
+
+describe('PlanDetail — the rail is deliberately BLIND to WHY a row is unreachable (MOTIR-5036)', () => {
+  // ⚠️ THIS BLOCK EXISTS TO BE DELETED DELIBERATELY, NOT TO PASS QUIETLY.
+  //
+  // `AccessReport` now splits its non-invited report into two arms — no account
+  // (B) and GitHub REFUSED (C) — and the obvious next edit is to split the rail
+  // with it. `codeOutcomeOf` must NOT split, and the reason is that the two
+  // surfaces answer different questions: the step REPORTS what just happened,
+  // the rail states the plan's standing outcome. `needs_access` is true of BOTH
+  // arms — a `created` row nobody was invited to is code the user cannot clone,
+  // and WHY the invitation never landed does not change that — so putting the
+  // cause of a one-off event into a sentence that outlives it would be wrong,
+  // and would duplicate a distinction the step and
+  // `/settings/project/code-access` already draw.
+  //
+  // ⚠️ AND THE TWO CASES DIFFER IN EXACTLY ONE FIELD, which is what makes this a
+  // test rather than a restatement. A refusal stamps NOTHING on the row
+  // (MOTIR-1900's graceful degradation), so the ROWS are byte-identical across
+  // both arms and `view.githubLogin` is the ONLY thing that separates them. Feed
+  // the rail both and it must answer the same, because it never reads that
+  // field. See `codeOutcomeOf`'s header in `PlanDetail.tsx`.
+  const createdNotInvited = [row('created', 'nextjs-prisma-vercel-starter')];
+
+  it('says needs_access with NO identity — the step would draw arm B', () => {
+    renderWithIntl(
+      <PlanDetail
+        projectKey="PRJ"
+        repositorySet={repositorySetWithIdentity(createdNotInvited, null)}
+        initialReview={review()}
+      />,
+    );
+
+    expect(screen.getByText('Finish setting up access')).toBeTruthy();
+    // The rail must not claim the code is ready: nobody can clone it yet.
+    expect(screen.queryByText('Your code is ready')).toBeNull();
+  });
+
+  it('says needs_access with an identity present too — the step would draw arm C', () => {
+    renderWithIntl(
+      <PlanDetail
+        projectKey="PRJ"
+        repositorySet={repositorySetWithIdentity(createdNotInvited, 'yuezhu')}
+        initialReview={review()}
+      />,
+    );
+
+    // Identical to the case above, on input that differs. If a later edit makes
+    // the rail read `githubLogin`, this is the assertion that goes red.
+    expect(screen.getByText('Finish setting up access')).toBeTruthy();
+    expect(screen.queryByText('Your code is ready')).toBeNull();
+  });
+});
