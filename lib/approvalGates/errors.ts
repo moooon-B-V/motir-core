@@ -225,22 +225,23 @@ export class ApprovalGateSupersededError extends ApprovalGateError {
 }
 
 /**
- * The actor may edit the project but holds no RELATIONSHIP to the work item —
- * they are neither its assignee nor its reporter, and they are not a workspace
- * owner/admin.
+ * The actor may edit the project but holds no RELATIONSHIP to the work item that
+ * authorises a press — they are not its assignee; they are not its reporter on
+ * an UNASSIGNED item; and they are not a workspace owner/admin.
  *
- * ADR §2's amendment: **AUTHORITY is assignee OR reporter OR admin**, for both
- * verbs, applied ON TOP of the kind's permission floor rather than instead of
- * it. It is deliberately NOT the routing rule — a gate is SHOWN to one person
- * (`assigneeId ?? reporterId`) and may be PRESSED by three — so this error is
- * reachable by someone who can see the gate perfectly well.
+ * ADR §2's 2026-09-11 amendment: **AUTHORITY is the assignee, or the reporter
+ * WHEN THERE IS NO ASSIGNEE, or an admin**, for both verbs, applied ON TOP of
+ * the kind's permission floor rather than instead of it. The relationship arms
+ * are now exactly §2's routing rule (`assigneeId ?? reporterId`), so this error
+ * is reachable by the REPORTER of an item that has an assignee — someone who can
+ * see the gate perfectly well, and who could press it until 2026-09-11.
  */
 export class ApprovalGateNotAuthorisedError extends ApprovalGateError {
   readonly tag = 'APPROVAL_GATE_NOT_AUTHORISED' as const;
   readonly code = 'APPROVAL_GATE_NOT_AUTHORISED' as const;
   constructor(readonly gateId: string) {
     super(
-      `Only the work item's assignee, its reporter, or a workspace admin may decide approval gate ${gateId}.`,
+      `Only the work item's assignee — or its reporter when it has no assignee — or a workspace admin may decide approval gate ${gateId}.`,
     );
     this.name = 'ApprovalGateNotAuthorisedError';
   }

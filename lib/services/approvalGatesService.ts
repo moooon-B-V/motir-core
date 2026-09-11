@@ -92,11 +92,15 @@ export interface DecideGateResult {
  * What a SURFACE needs to render one gate: the gate itself, and whether THIS
  * actor may press its verbs (Story MOTIR-4778 · Subtask MOTIR-4792).
  *
- * ⚠️ `canDecide` is the AUTHORITY answer, not the ROUTING one, and the frame
- * renders the difference: a gate is SHOWN to one person (`assigneeId ??
- * reporterId`) and may be PRESSED by three (assignee OR reporter OR admin, ADR
- * §2's amendment). State `B` — the port live, the verbs absent — is exactly a
- * reader for whom this is `false`.
+ * ⚠️ `canDecide` is the AUTHORITY answer, not the ROUTING one — and after §2's
+ * 2026-09-11 amendment the two axes COINCIDE for the relationship arms and part
+ * company only at the admin override. ROUTING is `assigneeId ?? reporterId`;
+ * AUTHORITY is **the assignee, or the reporter WHEN THERE IS NO ASSIGNEE, or an
+ * admin**. So the person a gate is shown to is exactly the person who may press
+ * it, plus admins — who are the only remaining escape hatch when that person is
+ * unavailable. State `B` — the port live, the verbs absent — is exactly a reader
+ * for whom this is `false`: an admin-less bystander, or an actor below the
+ * kind's permission floor.
  */
 export interface WorkItemGateRead {
   gate: ApprovalGateDTO | null;
@@ -198,6 +202,72 @@ async function routingScope(
   return { projectIds: [ctx.projectId], userId: ctx.userId };
 }
 
+/**
+ * WHICH ARM authorises this actor on this work item — the ONE statement of ADR
+ * §2's authority rule, so the render read and the decide door cannot drift
+ * (MOTIR-5192).
+ *
+ * **THE RULE — §2's 2026-09-11 amendment (Yue), which REVERSED the MOTIR-4911
+ * one of 2026-09-08: the assignee, or the reporter WHEN THE ITEM HAS NO
+ * ASSIGNEE, or an admin on ANY item.** The reporter arm is CONDITIONAL now; it
+ * used to be unconditional, and the paragraph that argued for that is
+ * superseded on the record in the ADR rather than deleted.
+ *
+ * ⚠️ AUTHORITY NOW COINCIDES WITH ROUTING FOR THE RELATIONSHIP ARMS, and that
+ * is the point of the amendment rather than a side effect. §2 routes a gate to
+ * `assigneeId ?? reporterId` — exactly one person — and the two relationship
+ * arms here are precisely that person. An approval says *somebody looked*, and
+ * it says less when two people could have been the one who looked: a gate shown
+ * to one person and pressable by two belongs to neither in particular, and
+ * either can sign off work the other was accountable for.
+ *
+ * ⚠️ THE ADMIN ARM IS THE ONLY REMAINING ESCAPE HATCH, and it is the whole of
+ * the risk this rule accepts. The 2026-09-08 amendment widened authority to the
+ * reporter to prevent the opposite failure — a gate whose single recipient is on
+ * leave or has left, with nobody able to unblock the work. That worry is not
+ * wrong and is not being dismissed: it is now answered by an admin rather than
+ * by the reporter, which is a better shape for an override because a role is
+ * visible in the permission grid, grantable to a custom role and auditable,
+ * which a relationship somebody happens to have to a row is not.
+ *
+ * ⚠️ THE ADMIN ARM IS **ASKED**, NEVER DERIVED HERE. Reading this actor's own
+ * membership row and testing `isWorkspaceManager(...)` in this file is exactly
+ * the SECOND POLICY PATH the model forbids — `tests/permissions/storyGate.test.ts`
+ * guard 1 and `memberFacingGate.integration.test.ts` both refuse it by name,
+ * because such a rule is *"invisible in the grid, un-grantable to a custom role,
+ * and un-auditable by the guard."* So the question goes to
+ * `projectAccessService`, which owns the always-pass rail; this function
+ * composes the answer and derives nothing.
+ *
+ * ⚠️ IT RESOLVES TO **WHICH ARM**, NOT TO A BOOLEAN (MOTIR-5046; ADR §6a —
+ * *under which PERMISSION*). A boolean answers *may this press be honoured?* and
+ * throws away the answer to *on what grounds?*, and the second is what
+ * `decided_under_authority` exists to FREEZE, precisely because a role that has
+ * since changed cannot be re-derived later. **Existing `reporter` rows are not
+ * migrated or re-derived** — they record what was true when the press happened.
+ *
+ * ⚠️ AND THE ORDER OF THE ARMS IS THE ROUTING ORDER, NOT AN OPTIMISATION. §2
+ * routes `assigneeId ?? reporterId`, so an actor who is BOTH assignee and
+ * reporter was asked as the assignee, and that is what the row must say. Testing
+ * `admin` last also keeps the short-circuit that avoids the membership read for
+ * the common case — a happy consequence of the correct order, never its reason.
+ *
+ * ⚠️ IT IS THE RELATIONSHIP HALF ONLY. The kind's permission FLOOR is asserted
+ * separately and FIRST by the decide door, and is what a project `viewer` who
+ * happens to be the assignee fails; this function never sees it.
+ */
+async function resolveGateAuthority(
+  item: { assigneeId: string | null; reporterId: string | null; projectId: string },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<ApprovalGateAuthorityDTO | null> {
+  if (item.assigneeId === ctx.userId) return 'assignee';
+  if (item.assigneeId === null && item.reporterId === ctx.userId) return 'reporter';
+  return (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx))
+    ? 'admin'
+    : null;
+}
+
 export const approvalGatesService = {
   /**
    * The gate of one KIND the approval FRAME renders, WHATEVER STATE IT IS IN,
@@ -245,14 +315,16 @@ export const approvalGatesService = {
       );
       if (!row) return { gate: null, canDecide: false };
 
-      // The SAME composition the decide door applies, and composed the same way
-      // — the admin arm is ASKED of `projectAccessService`, never derived here
-      // (the second-policy-path rule this service already records). A surface
-      // that derived its own answer would draw verbs the door then refuses.
-      const canDecide =
-        item.assigneeId === ctx.userId ||
-        item.reporterId === ctx.userId ||
-        (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
+      // ⚠️ THE SAME FUNCTION the decide door calls, not merely the same rule
+      // written twice. `resolveGateAuthority` is the ONE statement of ADR §2's
+      // authority test, so the surface cannot draw a verb the door then refuses
+      // — which is what two conditionals side by side eventually do, and what
+      // the 2026-09-11 narrowing made easy to half-apply (MOTIR-5192).
+      //
+      // It resolves an ARM; this read needs only whether there IS one. The
+      // admin arm inside it is ASKED of `projectAccessService`, never derived
+      // here (the second-policy-path rule this service already records).
+      const canDecide = (await resolveGateAuthority(item, ctx, tx)) !== null;
 
       return { gate: toApprovalGateDto(row), canDecide };
     });
@@ -272,11 +344,16 @@ export const approvalGatesService = {
    * `workItemRepository.findByAssigneeOrReporterInWorkspace`. `assigneeId ??
    * reporterId`, exactly one recipient, applied IN the query.
    *
-   * ⚠️ ROUTING IS NOT AUTHORITY, and this read answers only the first. A reader
-   * may be SHOWN a gate they cannot press, and a permission-holder may decide
-   * one from the item page that never appears here (§2's amendment: assignee OR
-   * reporter OR admin). `canDecide` is the frame's answer, computed per gate by
-   * {@link getForWorkItem} — do not collapse the two axes back into one query.
+   * ⚠️ ROUTING IS NOT AUTHORITY, and this read answers only the first. They
+   * COINCIDE for the relationship arms after §2's 2026-09-11 amendment — the
+   * reporter arm is conditional on there being no assignee, which is exactly
+   * when routing reaches the reporter — so every row here is routed to somebody
+   * the relationship rule also authorises. The two are still not the same
+   * question: a reader may be shown a gate they cannot press because they are
+   * below the kind's permission FLOOR, and an ADMIN may decide from the item
+   * page a gate that never appears here. `canDecide` is the frame's answer,
+   * computed per gate by {@link getForWorkItem} — do not collapse the two axes
+   * back into one query.
    *
    * ⚠️ COUNT FIRST, THEN THE WINDOW — the same order `/items` and `homeService`
    * use, for the same two reasons: the total is the pager's denominator, and
@@ -323,6 +400,15 @@ export const approvalGatesService = {
       // routing predicate that selected these rows, so what remains to check is
       // `work_item:edit` — which a project `viewer` who happens to be an
       // assignee does not have.
+      //
+      // ⚠️ THAT SHORTCUT IS EXACT AFTER §2's 2026-09-11 amendment, where it was
+      // merely SUFFICIENT before it (MOTIR-5192). Routing selects the rows where
+      // this actor is `assigneeId ?? reporterId`; the relationship rule
+      // authorises the assignee, and the reporter when there is no assignee.
+      // Those are the same set, term for term — so the shortcut no longer rests
+      // on the relationship arms being WIDER than routing, which is what the
+      // narrowing removed. A future widening of EITHER axis breaks the identity
+      // and this read would owe a per-row `resolveGateAuthority` again.
       const canDecide =
         scope.projectIds.length > 0 &&
         (await projectAccessService.getCapabilities(ctx.projectId, ctx, tx)).canEdit;
@@ -528,50 +614,37 @@ export const approvalGatesService = {
       //     transaction's snapshot AND its bound workspace GUC.
       await projectAccessService.assertPermission(item.projectId, ctx, handler.permission, tx);
 
-      // (b) THE RELATIONSHIP — ADR §2's amendment (Yue, 2026-09-08):
-      //     **assignee OR reporter OR admin**, for both verbs, an admin on ANY
-      //     work item. Authority follows a relationship to the item, not a
-      //     permission a role happens to carry.
+      // (b) THE RELATIONSHIP — ADR §2's 2026-09-11 amendment (Yue): **the
+      //     assignee, or the reporter WHEN THE ITEM HAS NO ASSIGNEE, or an
+      //     admin on ANY work item**, for both verbs. Authority follows a
+      //     relationship to the item, not a permission a role happens to carry.
       //
-      //     ⚠️ It is APPLIED ON TOP OF the floor, never instead of it. And it is
-      //     NOT the routing rule: a gate is SHOWN to one person
-      //     (`assigneeId ?? reporterId`) and may be PRESSED by three. The two
-      //     axes answer different questions — routing answers *whose job is it
-      //     to look?*, where a gate shown to two people is a decision neither
-      //     owns; authority answers *may this press be honoured?*, where the
-      //     failure to prevent is the opposite one, a single recipient on leave
-      //     and nobody able to unblock the work.
-      //     ⚠️ THE ADMIN ARM IS **ASKED**, NEVER DERIVED HERE. Reading this
-      //     actor's own membership row and testing `isWorkspaceManager(...)` in
-      //     this file is exactly the SECOND POLICY PATH the model forbids —
-      //     `tests/permissions/storyGate.test.ts` guard 1 and
-      //     `memberFacingGate.integration.test.ts` both refuse it by name,
-      //     because such a rule is *"invisible in the grid, un-grantable to a
-      //     custom role, and un-auditable by the guard."* So the question goes to
-      //     `projectAccessService`, which owns the always-pass rail; this service
-      //     composes the answer and derives nothing.
-      //     ⚠️ IT RESOLVES TO **WHICH ARM**, NOT TO A BOOLEAN (MOTIR-5046; ADR
-      //     §6a — *under which PERMISSION*). The composition below used to be a
-      //     three-term `||`, which computes the answer to *may this press be
-      //     honoured?* and then throws away the answer to *on what grounds?* —
-      //     and the second is the question `decided_under_authority` exists to
-      //     freeze, precisely because a role that has since changed cannot be
-      //     re-derived later.
+      //     ⚠️ It is APPLIED ON TOP OF the floor, never instead of it — that
+      //     half is unchanged, and it is what a project `viewer` who happens to
+      //     be the assignee fails.
       //
-      //     ⚠️ AND THE ORDER OF THE ARMS IS THE ROUTING ORDER, NOT AN
-      //     OPTIMISATION. §2 routes `assigneeId ?? reporterId`, so an actor who
-      //     is BOTH assignee and reporter was asked as the assignee, and that is
-      //     what the row must say. Testing `admin` last also keeps the
-      //     short-circuit that avoids the membership read for the common case —
-      //     a happy consequence of the correct order, never its reason.
-      const authority: ApprovalGateAuthorityDTO | null =
-        item.assigneeId === ctx.userId
-          ? 'assignee'
-          : item.reporterId === ctx.userId
-            ? 'reporter'
-            : (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx))
-              ? 'admin'
-              : null;
+      //     ⚠️ AUTHORITY AND ROUTING NOW COINCIDE for the relationship arms.
+      //     §2 routes a gate to `assigneeId ?? reporterId`, exactly one person,
+      //     and that person is exactly who these two arms authorise. The gate is
+      //     pressed by the person it is shown to, or by an admin. (Until
+      //     2026-09-11 the reporter arm was UNCONDITIONAL and the two axes were
+      //     deliberately apart; the ADR keeps that argument visible as
+      //     superseded rather than deleting it, and this comment no longer
+      //     makes it.)
+      //
+      //     ⚠️ THE ADMIN ARM IS THE ONLY REMAINING ESCAPE HATCH. The rule it
+      //     replaced existed to prevent a gate whose single recipient is on
+      //     leave or has left from holding the work for ever — a real failure,
+      //     not a dismissed one. An admin still unblocks it, and does so under
+      //     an authority that is visible in the permission grid, grantable to a
+      //     custom role and auditable, which the reporter's never was.
+      //
+      //     The rule itself lives in `resolveGateAuthority` above — ONE
+      //     statement, called by the render read and by this door, so the two
+      //     cannot drift. Its header carries the asked-never-derived rule, the
+      //     which-arm-not-a-boolean rule and why the arm order is the routing
+      //     order.
+      const authority: ApprovalGateAuthorityDTO | null = await resolveGateAuthority(item, ctx, tx);
       if (!authority) throw new ApprovalGateNotAuthorisedError(input.gateId);
 
       // 3 · REFUSE A GATE THAT IS NOT `awaiting`.

@@ -254,7 +254,10 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
 
   it('the REPORTER’s press records `reporter`', async () => {
     // `fx.ownerId` reports everything the fixture creates, and the card has no
-    // assignee — which is the routing fallback §2 names.
+    // assignee — which is the routing fallback §2 names, and (since §2's
+    // 2026-09-11 amendment, MOTIR-5192) the ONLY state in which the reporter arm
+    // is reachable at all. The `reporter` member of the vocabulary survives that
+    // narrowing unchanged; it simply stops being reachable on an assigned item.
     await assignTo(null);
     const gate = await gateFor((await publish('frame')).id);
 
@@ -292,6 +295,35 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
     );
 
     expect((await rowOf(gate.id)).decidedUnderAuthority).toBe('assignee');
+  });
+
+  it('⚠️ a HISTORICAL `reporter` row on an ASSIGNED item is left exactly as it was — no migration, no backfill (MOTIR-5192)', async () => {
+    // §2's 2026-09-11 amendment made the reporter arm unreachable on an assigned
+    // item. Rows written BEFORE it record a press that really happened under the
+    // rule in force at the time, and §6a freezes the arm precisely so a later
+    // rule change cannot rewrite history — a backfill or a re-derivation would
+    // destroy the one thing the column exists to preserve.
+    //
+    // The row is written directly rather than through the door, because the door
+    // can no longer produce it. That is the point: this asserts the absence of a
+    // data migration, which no test driving the current door could reach.
+    const assignee = await member('member');
+    await assignTo(assignee.id);
+    const gate = await gateFor((await publish('frame')).id);
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: {
+        state: 'approved',
+        decidedById: fx.ownerId,
+        decidedAt: new Date('2026-09-09T10:00:00.000Z'),
+        decidedUnderAuthority: 'reporter',
+      },
+    });
+
+    const row = await rowOf(gate.id);
+    expect(row.decidedUnderAuthority).toBe('reporter');
+    expect(row.decidedById).toBe(fx.ownerId);
+    expect(row.state).toBe('approved');
   });
 });
 
