@@ -47,6 +47,13 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     planningSource: null,
     planningHarness: null,
     planningModel: null,
+    // The SUBJECT coordinate (Story MOTIR-5062 · MOTIR-5065), beside the three
+    // planning columns because the schema places it there for the same reason:
+    // it records how the card was PLANNED, not a property of the work. Present
+    // rather than merely optional in the override, because `...overrides` spreads
+    // a `Partial` and TypeScript only drops `undefined` from a key the target
+    // already declares.
+    subject: null,
     implementationSource: null,
     implementationHarness: null,
     implementationModel: null,

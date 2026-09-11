@@ -50,6 +50,7 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     targetRepoRole: null,
     executor: null,
     planningProvenance: null,
+    subject: null,
     status: null,
     statusLabel: null,
     statusCategory: null,
