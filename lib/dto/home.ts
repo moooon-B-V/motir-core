@@ -139,14 +139,20 @@ export interface HomeTabCountsDto {
   /** Finished inside the rolling window (`HOME_FINISHED_WINDOW_DAYS`). */
   recentlyFinished: number;
   /**
-   * What is waiting on YOU to approve.
+   * What is waiting on YOU to approve — the count of `awaiting` approval gates
+   * ROUTED to this reader in the active project (MOTIR-4794).
    *
-   * ⚠️ ALWAYS `0` FROM THIS CARD, and that is a scope boundary rather than a
-   * placeholder to forget. MOTIR-4777 draws the Approvals tab's SLOT and ships
-   * nothing behind it; the rows, the gate records and the approve/confirm
-   * control are the sibling story's (MOTIR-4778). The number rides here now so
-   * the tab strip can render a five-slot composition without a second DTO
-   * change when that story lands.
+   * ⚠️ IT WAS HARDWIRED TO `0` UNTIL THIS CARD, as a declared scope boundary:
+   * MOTIR-4777 drew the tab's SLOT and shipped nothing behind it. It is now
+   * `approvalGateRepository.countAwaitingRoutedTo`, the SAME predicate and the
+   * same builder `approvalGatesService.listAwaitingMe` pages — one question, so
+   * the badge and the list cannot disagree.
+   *
+   * ⚠️ AND IT IS NOT COUNTED LIKE THE FOUR AROUND IT. They are
+   * assignee-OR-reporter over work items; this is `assigneeId ?? reporterId`
+   * over GATES (ADR §2). The divergence is deliberate and recorded there: a work
+   * list may show you your own item twice, and a decision queue may not show one
+   * gate to two people.
    */
   approvals: number;
   watching: number;

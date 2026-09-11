@@ -69,6 +69,40 @@ export const designEvidenceRepository = {
   },
 
   /**
+   * SEVERAL results by id, with a COUNT of their assets — the Approvals tab's
+   * subject summaries, loaded for a whole page in one round trip (Story
+   * MOTIR-4879 · Subtask MOTIR-4791).
+   *
+   * ⚠️ A BATCH RATHER THAN N CALLS TO {@link findById}, and the shape of the
+   * caller is why. A queue page holds up to `HOME_PAGE_SIZE` gates and every one
+   * of them needs its subject named, so the per-id read would be 25 queries to
+   * render one list — the N+1 that a paged surface turns from a smell into a
+   * cost the reader pays on every page.
+   *
+   * ⚠️ IT COUNTS ASSETS RATHER THAN INCLUDING THEM. {@link findById}'s
+   * `WITH_ASSETS` joins every asset AND its Attachment because the panel renders
+   * them; a ROW says *three files* and links away. Including them here would
+   * fetch a page's worth of attachment rows to render a number.
+   *
+   * Returned as a MAP keyed by id, because the caller has gate rows in the
+   * query's order and needs to look each subject up rather than re-sort — and
+   * because a subject that no longer resolves must be ABSENT rather than
+   * silently shifting the list (ADR §6a: a gate's subject can stop resolving,
+   * and the honest answer is to say so on the row).
+   */
+  async findManyByIds(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, DesignEvidenceSummaryRow>> {
+    if (ids.length === 0) return new Map();
+    const rows = await tx.designEvidence.findMany({
+      where: { id: { in: ids } },
+      select: DESIGN_EVIDENCE_SUMMARY_SELECT,
+    });
+    return new Map(rows.map((row) => [row.id, row]));
+  },
+
+  /**
    * LOCK the current row for a work item before the supersede decides on it.
    * The supersede is read-derived — it reads which row is current, then writes
    * based on that — so a plain read-then-write races: two publishes both read
@@ -165,3 +199,26 @@ export const designEvidenceRepository = {
     });
   },
 };
+
+/**
+ * What ONE queue row needs to say WHICH design is waiting — the narrow
+ * projection {@link designEvidenceRepository.findManyByIds} returns.
+ *
+ * `producedByKey` and `commitSha` are the two that let a reader recognise the
+ * work without opening it (*the card whose pull request made this, at this
+ * commit*); `noteMd` is excerpted by the caller, never rendered whole at row
+ * scale; `_count.assets` is the *three files* a row shows in place of the files.
+ */
+const DESIGN_EVIDENCE_SUMMARY_SELECT = {
+  id: true,
+  workItemId: true,
+  producedByKey: true,
+  commitSha: true,
+  noteMd: true,
+  _count: { select: { assets: true } },
+} as const satisfies Prisma.DesignEvidenceSelect;
+
+/** One design result, at the size a queue row reads it. */
+export type DesignEvidenceSummaryRow = Prisma.DesignEvidenceGetPayload<{
+  select: typeof DESIGN_EVIDENCE_SUMMARY_SELECT;
+}>;

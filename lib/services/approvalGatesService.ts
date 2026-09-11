@@ -4,6 +4,7 @@ import type {
   ApprovalGateDTO,
   ApprovalGateDecisionSourceDTO,
   ApprovalGateKindDTO,
+  ApprovalQueuePageDto,
   GateDecision,
 } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
@@ -15,13 +16,19 @@ import {
   ApprovalGateNotFoundError,
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
-import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import {
+  approvalGateRepository,
+  type AwaitingRoutingScope,
+} from '@/lib/repositories/approvalGateRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
+import { HOME_PAGE_SIZE, type HomeActorContext } from '@/lib/services/homeService';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { toApprovalGateDto } from '@/lib/mappers/approvalGateMappers';
+import { toApprovalGateDto, toApprovalQueueRowDto } from '@/lib/mappers/approvalGateMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -121,6 +128,76 @@ async function actorLabel(userId: string, tx: Prisma.TransactionClient): Promise
   return user.name ? `${user.name} <${user.email}>` : user.email;
 }
 
+/**
+ * How a caller narrows the Approvals tab's window — the same two options, with
+ * the same names and the same meanings, as every other Workbench tab
+ * (`HomeListOptions`).
+ */
+export interface ApprovalQueueListOptions {
+  /** The 1-based page to serve; omit for page one. CLAMPED to the last page. */
+  page?: number;
+  /**
+   * The window SIZE, defaulting to `HOME_PAGE_SIZE`. Named `limit` rather than
+   * `pageSize` for the same reason `homeService` names it that — it is what
+   * every caller of these reads already passes — and the DTO reports it back as
+   * `pageSize`, which is `/items`' word for the same number.
+   */
+  limit?: number;
+}
+
+/** The ceiling a caller-supplied page size is clamped to — `homeService`'s. */
+const APPROVAL_QUEUE_MAX_PAGE_SIZE = 100;
+
+/** `homeService.clampLimit`'s rule, applied to this tab so the strip's five tabs
+ *  cannot disagree about what a page is. */
+function clampApprovalQueueLimit(limit: number | undefined): number {
+  if (limit === undefined) return HOME_PAGE_SIZE;
+  if (!Number.isFinite(limit) || limit < 1) return HOME_PAGE_SIZE;
+  return Math.min(Math.floor(limit), APPROVAL_QUEUE_MAX_PAGE_SIZE);
+}
+
+/**
+ * Where a 1-based page starts, and which page is actually being served.
+ *
+ * ⚠️ AN OUT-OF-RANGE PAGE CLAMPS TO THE LAST ONE — it does not serve an empty
+ * window, and it is never an error. That is `/items`' shipped contract and
+ * `homeService.windowFor`'s, and this tab is deliberately shaped to match:
+ * `IssueListPager` fed a `page` it did not ask for would draw a current-page
+ * chip outside its own run. `total === 0` gives `page: 1` with an empty `items`,
+ * which is the honest answer for a tab with nothing in it.
+ */
+function approvalQueueWindow(total: number, page: number | undefined, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const clamped = Math.min(Math.max(1, Math.trunc(page ?? 1) || 1), totalPages);
+  return { page: clamped, skip: (clamped - 1) * pageSize };
+}
+
+/**
+ * WHICH projects this reader's queue may draw from — at most the ACTIVE one,
+ * and NONE when they may not browse it.
+ *
+ * This is `homeService.activeProjectScope`'s access half, and only that half:
+ * the LIFECYCLE axis it also resolves is a fact about work-item statuses, and a
+ * gate has none — a decision is not filtered by the status of the card it hangs
+ * off. Resolving it here would be carrying a join this read never uses.
+ *
+ * The workspace check beside the browse check is belt AND braces, for the reason
+ * `homeService` records: RLS already bounds the read to `ctx.workspaceId`, but a
+ * stale active-project pointer is exactly the input that would otherwise cross a
+ * tenant on the day RLS is relaxed.
+ */
+async function routingScope(
+  ctx: HomeActorContext,
+  tx: Prisma.TransactionClient,
+): Promise<AwaitingRoutingScope> {
+  const empty: AwaitingRoutingScope = { projectIds: [], userId: ctx.userId };
+  const project = await projectRepository.findById(ctx.projectId, tx);
+  if (!project || project.workspaceId !== ctx.workspaceId) return empty;
+  const browsable = await projectAccessService.filterBrowsable([project], ctx, tx);
+  if (browsable.length === 0) return empty;
+  return { projectIds: [ctx.projectId], userId: ctx.userId };
+}
+
 export const approvalGatesService = {
   /**
    * The gate of one KIND the approval FRAME renders, WHATEVER STATE IT IS IN,
@@ -179,6 +256,107 @@ export const approvalGatesService = {
 
       return { gate: toApprovalGateDto(row), canDecide };
     });
+  },
+
+  /**
+   * THE APPROVALS TAB's read — every `awaiting` gate routed to THIS person in
+   * the ACTIVE project, oldest-waiting first, as a page (Story MOTIR-4879 ·
+   * Subtask MOTIR-4791; ADR docs/decisions/approval-gates.md §2).
+   *
+   * ⚠️ IT IS A DIFFERENT QUESTION FROM THE THREE TABS BESIDE IT, and the
+   * predicate says so. They partition the member's own WORK by lifecycle with
+   * `homeService`'s assignee-OR-reporter union; this one lists DECISIONS, which
+   * are not work items and are not filtered by status. §2 records the divergence
+   * and the reason in as many words — *"a gate shown to two people is a decision
+   * neither owns"* — so this read does NOT reuse
+   * `workItemRepository.findByAssigneeOrReporterInWorkspace`. `assigneeId ??
+   * reporterId`, exactly one recipient, applied IN the query.
+   *
+   * ⚠️ ROUTING IS NOT AUTHORITY, and this read answers only the first. A reader
+   * may be SHOWN a gate they cannot press, and a permission-holder may decide
+   * one from the item page that never appears here (§2's amendment: assignee OR
+   * reporter OR admin). `canDecide` is the frame's answer, computed per gate by
+   * {@link getForWorkItem} — do not collapse the two axes back into one query.
+   *
+   * ⚠️ COUNT FIRST, THEN THE WINDOW — the same order `/items` and `homeService`
+   * use, for the same two reasons: the total is the pager's denominator, and
+   * knowing it is what lets an out-of-range page CLAMP to the last one instead
+   * of fetching an empty offset. Both halves call one `where` builder in the
+   * repository, so the badge and the list cannot disagree.
+   *
+   * ⚠️ THE ACCESS DECISION IS THE SERVICE'S AND TRAVELS INTO THE QUERY. RLS is
+   * WORKSPACE-rooted, so what this could leak is a PRIVATE PROJECT inside the
+   * reader's own workspace — which RLS admits and `canBrowse` does not — and an
+   * actor's ACTIVE project can be one they may not browse, because the pointer
+   * is a stored preference and membership can be revoked under it. Such a reader
+   * resolves to an EMPTY project list and the query returns nothing: empty
+   * rather than an error, the no-existence-leak convention every other project
+   * gate follows. It is passed IN, never applied to the output — a post-read
+   * filter shortens pages instead of failing.
+   */
+  async listAwaitingMe(
+    ctx: HomeActorContext,
+    options: ApprovalQueueListOptions = {},
+  ): Promise<ApprovalQueuePageDto> {
+    const pageSize = clampApprovalQueueLimit(options.limit);
+    return withWorkspaceContext(ctx, async (tx) => {
+      const scope = await routingScope(ctx, tx);
+
+      const total = await approvalGateRepository.countAwaitingRoutedTo(scope, tx);
+      const { page, skip } = approvalQueueWindow(total, options.page, pageSize);
+      const rows = await approvalGateRepository.findAwaitingRoutedTo(
+        scope,
+        { skip, take: pageSize },
+        tx,
+      );
+
+      // ONE query per KIND on the page, never one per gate: a 25-row queue that
+      // read its subjects individually would be 25 round trips to render one
+      // list. `summarizeGateSubjects` is also where the DTO's totality over the
+      // kind enum is asserted.
+      const subjects = await summarizeGateSubjects(rows, tx);
+
+      // ⚠️ THE AUTHORITY ANSWER, resolved ONCE for the page rather than per row.
+      // Every row here is in the ACTIVE project, so the permission floor is one
+      // question, and asking it per gate would be N identical reads. It is the
+      // FLOOR only: ADR §2's relationship arm is already satisfied by the
+      // routing predicate that selected these rows, so what remains to check is
+      // `work_item:edit` — which a project `viewer` who happens to be an
+      // assignee does not have.
+      const canDecide =
+        scope.projectIds.length > 0 &&
+        (await projectAccessService.getCapabilities(ctx.projectId, ctx, tx)).canEdit;
+
+      return {
+        items: rows.map((row) =>
+          toApprovalQueueRowDto(row, subjects.get(row.id) ?? null, canDecide),
+        ),
+        total,
+        page,
+        pageSize,
+      };
+    });
+  },
+
+  /**
+   * HOW MANY decisions are waiting on this person in the active project — the
+   * tab strip's badge (`HomeTabCountsDto.approvals`).
+   *
+   * ⚠️ THE SAME PREDICATE AND THE SAME ACCESS GATE AS {@link listAwaitingMe},
+   * reached through the same repository builder — *one read, not two, so they
+   * cannot disagree*. A strip saying `3` above a list of two is what a second
+   * copy of this predicate looks like from the reader's side.
+   *
+   * ⚠️ THIS CARD SUPPLIES THE NUMBER AND WIRES IT NOWHERE. `HomeTabCountsDto.approvals`
+   * is still hardwired to `0` with a comment naming this story as its owner;
+   * MOTIR-4794 is the card that renders the tab and feeds this into
+   * `tabCounts`. Wiring it here would put a number on a strip above a tab that
+   * does not exist yet.
+   */
+  async countAwaitingMe(ctx: HomeActorContext): Promise<number> {
+    return withWorkspaceContext(ctx, async (tx) =>
+      approvalGateRepository.countAwaitingRoutedTo(await routingScope(ctx, tx), tx),
+    );
   },
 
   /**

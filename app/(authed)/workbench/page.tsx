@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Circle, CircleCheck, CircleDot, Inbox, Star } from 'lucide-react';
@@ -18,6 +19,7 @@ import { parsePage } from '@/lib/issues/issueListView';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { WorkbenchTabs } from './_components/WorkbenchTabs';
 import { WorkbenchList } from './_components/WorkbenchList';
+import { ApprovalsTab } from './_components/ApprovalsTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
 
 // `/workbench` — the signed-in landing surface (Story MOTIR-2649 · MOTIR-2653,
@@ -69,11 +71,17 @@ const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
  * The ONE read this render needs, chosen by tab.
  *
  * Four tabs each have their own service method — the partition is the READ's
- * (MOTIR-4781), not a filter applied to a shared list here — and the fifth has
- * none yet: **To approve renders its SLOT**. MOTIR-4777 draws the tab and ships
- * nothing behind it; the rows, the gate records and the approve control are the
- * sibling story's (MOTIR-4778). An empty page rather than a fifth query is what
- * makes that boundary visible: there is nothing to read, so nothing is read.
+ * (MOTIR-4781), not a filter applied to a shared list here.
+ *
+ * ⚠️ THE FIFTH IS NOT HERE, and its absence is the point (MOTIR-4794). To
+ * approve reads `approvalGatesService.listAwaitingMe`, whose rows are GATES
+ * rather than work items — a different DTO, a different list — and it does that
+ * read inside `<ApprovalsTab>` rather than in this function, so the page can
+ * mount a `<Suspense>` between its gate and that content. Window 2 of
+ * `design/shell/design-notes.md`'s navigation-pending grammar: *"an in-page
+ * `<Suspense>` placed AFTER the page's gate"*. Calling it here would put the
+ * await back in the page's own `Promise.all`, where nothing can suspend around
+ * it.
  */
 function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promise<HomePageDto> {
   switch (tab) {
@@ -86,6 +94,8 @@ function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promis
     case 'watching':
       return homeService.listWatching(ctx, { page });
     case 'approvals':
+      // Read by `<ApprovalsTab>` instead — see the note above. This arm is
+      // unreachable: the render branches on the tab before calling this.
       return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
   }
 }
@@ -165,6 +175,30 @@ async function EmptyTab({ tab }: { tab: WorkbenchTab }): Promise<ReactNode> {
   }
 }
 
+/**
+ * The Approvals tab's pending FRAME — window 2's drawing, at the list's own
+ * shape so nothing shifts when the rows arrive.
+ *
+ * It reuses the list's container and its 40px header band rather than a bespoke
+ * skeleton: `design/shell/design-notes.md` is explicit that the shell must not
+ * guess a destination's shape, and the corollary for a page drawing its own
+ * frame is that the frame should be the shape it is about to become.
+ */
+function ApprovalsPending() {
+  return (
+    <div
+      data-surface="card"
+      aria-busy="true"
+      className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
+    >
+      <div className="h-10 border-b border-(--el-border) bg-(--el-surface-soft)" />
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-11 border-b border-(--el-border) last:border-b-0" />
+      ))}
+    </div>
+  );
+}
+
 export default async function WorkbenchPage({
   searchParams,
 }: {
@@ -201,8 +235,14 @@ export default async function WorkbenchPage({
 
   const t = await getTranslations('workbench');
 
+  const isApprovals = tab === 'approvals';
+
   const [window, counts, members, workflow] = await Promise.all([
-    readTab(tab, ctx, page),
+    // The Approvals tab's rows are read inside `<ApprovalsTab>` so a boundary
+    // can sit around them; this window stays empty for it and is not rendered.
+    isApprovals
+      ? Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE })
+      : readTab(tab, ctx, page),
     homeService.tabCounts(ctx),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
     // ONE workflow, for the one project the page reads. This surface used to
@@ -246,7 +286,18 @@ export default async function WorkbenchPage({
             state: a second, quieter way of saying what the empty state has just
             said in a sentence. The pager lives INSIDE `WorkbenchList`, so this
             branch gets that for free rather than by remembering to suppress it. */}
-        {isEmpty ? (
+        {isApprovals ? (
+          /* ⚠️ WINDOW 2, and it is INSIDE the page rather than a `loading.tsx`.
+             `design/shell/design-notes.md`'s navigation-pending grammar is
+             explicit that a route boundary can flush the response head before
+             the page's gate has run — which is why this repo has none, and why
+             the boundary sits here, below the session and active-project reads
+             that decide who may see this page. The fallback is the list's own
+             shape so the frame does not shift when the rows arrive. */
+          <Suspense fallback={<ApprovalsPending />}>
+            <ApprovalsTab ctx={ctx} page={page} />
+          </Suspense>
+        ) : isEmpty ? (
           <EmptyTab tab={tab} />
         ) : (
           <WorkbenchList

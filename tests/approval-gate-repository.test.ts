@@ -112,3 +112,66 @@ describe('approvalGateRepository.create — partial-unique race', () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+describe('approvalGateRepository — THE ROUTING READ', () => {
+  async function seedRouted(assigneeId: string | null): Promise<string> {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: `Routed ${Math.random()}` },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId } });
+    const row = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.create(
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: item.id,
+          kind: 'design_result',
+          subjectId: `subj-${item.id}`,
+        },
+        tx,
+      ),
+    );
+    return row.id;
+  }
+
+  it('returns the gates routed to the reader, and counts the same set', async () => {
+    const mine = await seedRouted(fx.ownerId);
+    await seedRouted(null); // reported by the owner too — the fallback arm
+    const scope = { projectIds: [fx.projectId], userId: fx.ownerId };
+
+    const rows = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.findAwaitingRoutedTo(scope, { skip: 0, take: 50 }, tx),
+    );
+    const count = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.countAwaitingRoutedTo(scope, tx),
+    );
+
+    expect(rows.map((r) => r.id)).toContain(mine);
+    expect(count).toBe(rows.length);
+    expect(count).toBe(2);
+  });
+
+  it('returns NOTHING for an EMPTY project scope — the shape an unbrowsable reader resolves to', async () => {
+    await seedRouted(fx.ownerId);
+
+    // `projectIds: []` is what `routingScope` hands the query when the actor may
+    // not browse their own active project. It must be EMPTY rather than
+    // unscoped — an `IN ()` that degraded to "no filter" would return the row,
+    // which is the access leak the service's own note is about.
+    const rows = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.findAwaitingRoutedTo(
+        { projectIds: [], userId: fx.ownerId },
+        { skip: 0, take: 50 },
+        tx,
+      ),
+    );
+
+    expect(rows).toEqual([]);
+    expect(
+      await withWorkspaceContext(fx.ctx, (tx) =>
+        approvalGateRepository.countAwaitingRoutedTo({ projectIds: [], userId: fx.ownerId }, tx),
+      ),
+    ).toBe(0);
+  });
+});

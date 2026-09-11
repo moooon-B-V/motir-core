@@ -7304,6 +7304,26 @@
         "title": "没有等待你审批的工作",
         "body": "需要你签字确认才能继续的工作会显示在这里。"
       }
+    },
+    "approvals": {
+      "columns": {
+        "subject": "等待你处理",
+        "workItem": "工作项",
+        "waited": "已等待"
+      },
+      "review": "查看",
+      "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
+      "noVersion": "无版本号",
+      "subjectGone": "此项针对的设计已不存在",
+      "notRenderable": "Motir 暂不支持展示此类型",
+      "notBuiltYet": "尚未实现",
+      "kind": {
+        "design_result": "设计成果",
+        "decision_approval": "决策审批",
+        "pull_request_approval": "合并请求审批",
+        "pull_request_merge": "合并请求合并"
+      },
+      "reviewRow": "查看 {key} {title}"
     }
   },
   "platformAdmin": {

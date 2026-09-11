@@ -4348,8 +4348,18 @@ model ApprovalGate {
   decidedBy User?     @relation("ApprovalGateDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
   routedTo  User?     @relation("ApprovalGateRoutedTo", fields: [routedToId], references: [id], onDelete: SetNull)
 
-  /// The routing read: a workspace's gates by state (whose Approvals tab).
+  /// The WORKSPACE-tier read: a workspace's gates by state. Kept for
+  /// MOTIR-2920's "what is on me across everything" surface, which is the
+  /// caller it was added for.
   @@index([workspaceId, state])
+  /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
+  /// PROJECT's `awaiting` gates, because the Workbench is active-project scoped
+  /// (MOTIR-2761), and the workspace index above cannot serve that: a workspace
+  /// with many projects would scan every project's gates to render one
+  /// project's tab. The routing half of the predicate (`assignee_id ??
+  /// reporter_id`) lives on `work_item` and is reached from these rows by
+  /// primary key, so narrowing the GATE side is what the plan needs.
+  @@index([projectId, state])
   /// The per-card read: every gate on one work item.
   @@index([workItemId])
   @@map("approval_gate")
