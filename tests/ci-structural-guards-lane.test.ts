@@ -193,6 +193,15 @@ const SELF_WALKING_MEMBERS = [
   // text handed to it and reaches no filesystem of its own — so, like the
   // entries above, nothing derives it.
   'tests/e2e-acceptance-lane-imports.test.ts',
+  // MOTIR-5037. It reaches the tree through a SUBPROCESS — the shared predicate
+  // in `scripts/enumerate-page-locators.mjs` — rather than through an entry
+  // point in its own source, so it is invisible to `entryPointsIn` for a reason
+  // none of the entries above has: not "it walks by hand", but "it walks
+  // somewhere this file cannot read". Worth keeping distinct, because the
+  // obvious repair (teach `entryPointsIn` about `execFileSync`) would match
+  // every test that shells out to anything, which is a much larger set than the
+  // one the lane is for.
+  'tests/e2e-page-rooted-locators.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {
