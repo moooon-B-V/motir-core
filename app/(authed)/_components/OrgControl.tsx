@@ -241,8 +241,20 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
         title={t('menu.newWorkspace')}
         label={ts('workspaceSwitcher.nameLabel')}
         submitLabel={t('menu.newWorkspace')}
-        run={(name) => createWorkspaceAction(name)}
+        // MOTIR-5130 — a §4.4 cap refusal comes back as a VALUE, not a throw, so
+        // it is translated into the modal's failure shape and the server's
+        // message (which NAMES the plan limit) is what the reader is told. This
+        // modal used to carry no `onError` at all while its organisation twin
+        // nine lines below did, so the refusal reached the user as a 500 and
+        // then as nothing.
+        run={async (name) => {
+          const result = await createWorkspaceAction(name);
+          if (!result.ok) return { error: result.error };
+        }}
         onDone={() => router.refresh()}
+        onError={(message) =>
+          toast({ variant: 'error', title: message ?? t('settings.saveError') })
+        }
       />
       <NameModal
         open={createOrgOpen}
@@ -278,6 +290,13 @@ function MenuLink({
   );
 }
 
+/**
+ * A refusal the action RETURNED rather than threw — a business rule saying no,
+ * carrying the message the reader should see (MOTIR-5130). Resolving to
+ * anything else, `undefined` included, is a success.
+ */
+type NameModalFailure = { error: string };
+
 // A minimal name-only create modal shared by "New workspace" and "Create
 // organization". (The richer create-workspace dialog — copy-source picker,
 // tier-2 reveal — is gated on the 6.10.9 copy-on-create backend; design
@@ -297,9 +316,11 @@ function NameModal({
   title: string;
   label: string;
   submitLabel: string;
-  run: (name: string) => Promise<unknown>;
+  run: (name: string) => Promise<NameModalFailure | void>;
   onDone: () => void;
-  onError?: () => void;
+  /** Called with the refusal's own message when `run` RETURNS one, and with
+   *  nothing when it THROWS (a genuine fault has no message worth showing). */
+  onError?: (message?: string) => void;
 }) {
   const tc = useTranslations('common');
   const [name, setName] = useState('');
@@ -310,7 +331,15 @@ function NameModal({
     if (!value) return;
     startTransition(async () => {
       try {
-        await run(value);
+        const failure = await run(value);
+        if (failure) {
+          // A REFUSAL is not a fault and not a success: nothing was created, so
+          // the modal stays open with the name intact while the message
+          // explains why — the reader can rename or cancel rather than watch
+          // the dialog vanish with no account of itself.
+          onError?.(failure.error);
+          return;
+        }
         setName('');
         onOpenChange(false);
         onDone();

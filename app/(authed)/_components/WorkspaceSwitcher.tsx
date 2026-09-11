@@ -57,7 +57,18 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
     if (!name) return;
     startTransition(async () => {
       try {
-        await createWorkspaceAction(name);
+        const result = await createWorkspaceAction(name);
+        if (!result.ok) {
+          // MOTIR-5130 — the §4.4 cap refusal. This is the SECOND door onto the
+          // same action (the org menu's "New workspace" is the other), and it
+          // used to answer the refusal with `createError` — "Could not create
+          // workspace" — which is exactly the generic text that leaves a reader
+          // unable to tell a plan ceiling from an outage. The server's message
+          // names the limit, so it is what gets shown; the modal stays open,
+          // because nothing was created.
+          toast({ variant: 'error', title: result.error });
+          return;
+        }
         setCreateOpen(false);
         setNewName('');
         toast({ variant: 'success', title: t('workspaceSwitcher.created') });
