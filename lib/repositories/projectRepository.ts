@@ -199,6 +199,43 @@ export const projectRepository = {
     return tx.project.findMany({ where: { id: { in: [...ids] } }, orderBy: { name: 'asc' } });
   },
 
+  /**
+   * The LIVE members of `ids` — the archive-filtered counterpart of
+   * {@link findManyByIds} (MOTIR-5131), standing to it exactly as
+   * `findByWorkspace` stands to `findAllIdsByWorkspace`.
+   *
+   * Its caller is `organizationRepoService.listRepositoryUsage`, which answers
+   * `Used by N projects` for the org inventory AND for the DISCONNECT dialog's
+   * affected-project list. An archived project is not a user of a repository: it
+   * inflates a count a person reads at rest, and it names a dead project in the
+   * one disclosure a destructive act rests on.
+   *
+   * ⚠️ THE PREDICATE IS HERE RATHER THAN ON `findManyByIds` BECAUSE THE OTHER
+   * CALLER NEEDS THE ARCHIVED ROWS. `disconnectFromOrganisation` enumerates the
+   * same way to clear links and enqueue code-graph offboarding, and an archived
+   * project's graph still exists — filtering it there would leave that graph an
+   * unreachable orphan, which is the failure `docs/decisions/code-graph-index-fleet.md`
+   * §14.3 and MOTIR-2166 are about. So the two callers read DIFFERENT methods,
+   * deliberately, and neither should be "simplified" onto the other.
+   *
+   * Lifecycle only. The ACCESS filter is still the caller's
+   * (`projectAccessService.filterBrowsable`, per workspace) — the two narrow for
+   * different reasons and neither substitutes for the other. That conflation is
+   * what let this survive two prior corrections to the same sentence
+   * (MOTIR-4955, MOTIR-4997): the chain had a filter in it, and it was the
+   * wrong axis.
+   */
+  async findManyLiveByIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Project[]> {
+    if (ids.length === 0) return [];
+    return tx.project.findMany({
+      where: { id: { in: [...ids] }, archivedAt: null },
+      orderBy: { name: 'asc' },
+    });
+  },
+
   async findAllIdsByWorkspace(
     workspaceId: string,
     tx?: Prisma.TransactionClient,
