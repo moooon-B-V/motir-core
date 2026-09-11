@@ -194,6 +194,39 @@ export interface BuildWorkItemLevelOptions {
    * WHICH blockers are arriving is the consumer's own question.
    */
   arrivingBlockers?: ReadonlyMap<string, boolean>;
+  /**
+   * Committed rows of this level that a pending proposal is moving OFF it (bug
+   * MOTIR-5006), by work-item id — the exact mirror of `arrivingBlockers`, and
+   * supplied by the same consumer for the same reason. Absent / empty everywhere
+   * else, which is the pre-MOTIR-5006 behaviour.
+   *
+   * ⚠️ WITHOUT IT THE LEVEL'S *MEMBERSHIP* IS ASKED OF THE WRONG SET. The read
+   * answers `who are this level's children?` from the tree as it stands, which is
+   * the right question for the roadmap and the wrong one for a canvas whose whole
+   * subject is a plan moving a card OUT: the row is a child at read time and is
+   * not one the moment the reviewer approves. Answering from the committed rows
+   * alone draws the departing card among its siblings with its ordinary committed
+   * arrows, indistinguishable from one nobody proposed to touch — and approving is
+   * then the first time the reviewer learns it left.
+   *
+   * A departing row is treated exactly as a GROUPED one: off `onLevel`, with a
+   * naming stub minted from its own row so an edge into it takes the off-level
+   * path and names it rather than vanishing. That is what the level LOOKS LIKE
+   * after approve — the card gone, and the dependency it leaves behind flying the
+   * cross-container flag — which is the rule this whole family is decided by
+   * (`mergePlanLevel`'s MOTIR-5006 comment carries the argument).
+   *
+   * A SET rather than a map, unlike `arrivingBlockers`: the arriving case needs a
+   * status because it draws a WITHIN-level arrow whose variant is status-derived,
+   * and every edge this one produces is `cross`, which has no variant to choose.
+   * The stub's own `isDone` comes off the row, by the same `status === 'done'`
+   * predicate the within-level rule uses.
+   *
+   * It is a SET rather than a predicate for the same reason `groupExcludeIds` is:
+   * this builder is a pure function that knows nothing about plans, and WHICH rows
+   * are departing is the consumer's own question.
+   */
+  departingIds?: ReadonlySet<string>;
 }
 
 export function buildWorkItemLevel(
@@ -242,7 +275,20 @@ export function buildWorkItemLevel(
       : [];
   const grouped = candidates.length < wi.items.length ? candidates : [];
   const groupedIds = new Set(grouped.map((i) => i.id));
-  const onLevel = grouped.length > 0 ? wi.items.filter((i) => !groupedIds.has(i.id)) : wi.items;
+  const afterGrouping =
+    grouped.length > 0 ? wi.items.filter((i) => !groupedIds.has(i.id)) : wi.items;
+  // THE ROWS THE PENDING PLAN MOVES OFF THIS LEVEL (bug MOTIR-5006) — the second
+  // thing that takes a row off a level after the read, and it lands in the same
+  // partition as the first for the same reason: everything downstream depends on
+  // which rows are actually ON the level. Applied AFTER grouping so the two
+  // compose rather than race; they never overlap in fact, because the only
+  // consumer that supplies this one excludes every row the plan touches from
+  // grouping (`groupExcludeIds`).
+  const departing = opts.departingIds;
+  const departed = departing?.size ? afterGrouping.filter((i) => departing.has(i.id)) : [];
+  const departedIds = new Set(departed.map((i) => i.id));
+  const onLevel =
+    departed.length > 0 ? afterGrouping.filter((i) => !departedIds.has(i.id)) : afterGrouping;
 
   const itemIds = new Set(onLevel.map((i) => i.id));
   const statusById = new Map(onLevel.map((i) => [i.id, i.status]));
@@ -251,8 +297,14 @@ export function buildWorkItemLevel(
   // an anonymous anchor. Dropping such an edge instead would have been the quiet
   // option and the wrong one: an epic blocked by a grouped defect is still blocked,
   // and the flag is how the reader finds out.
+  // A DEPARTING row is off this level for the same reason and gets the same
+  // treatment (bug MOTIR-5006) — its whole row is in hand, so an edge into it
+  // names it instead of drawing an anonymous anchor. Dropping such an edge
+  // would be the quiet option here too, and worse: the dependency the plan is
+  // about to stretch across containers is exactly what the reviewer is being
+  // asked to approve.
   const offById = new Map(wi.offLevelBlockers.map((b) => [b.id, b]));
-  for (const g of grouped) {
+  for (const g of [...grouped, ...departed]) {
     if (offById.has(g.id)) continue;
     offById.set(g.id, {
       id: g.id,

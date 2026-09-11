@@ -741,7 +741,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   search_lessons: {
     summary:
       "Search recorded lessons by meaning — the shared corpus and this project's own — before you plan or build.",
-    descriptionFingerprint: '0266605e57b9',
+    // Re-pinned by MOTIR-4775: the description's phase axis now reads `lay` /
+    // `author`. Taken from the live handshake the gate prints, never computed by
+    // hand.
+    descriptionFingerprint: 'f6bd495dc414',
   },
   reinforce_lesson: {
     summary:

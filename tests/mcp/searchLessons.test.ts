@@ -50,7 +50,7 @@ function lesson(over: Record<string, unknown> = {}) {
     scope: 'global',
     kinds: [],
     types: ['code'],
-    phases: ['deepen'],
+    phases: ['author'],
     distance: 0.12,
     ...over,
   };
@@ -213,15 +213,25 @@ describe('the three outcomes reach the caller', () => {
 describe('the axes reach the seam, and an omitted one stays absent', () => {
   it('passes supplied axes and the limit through', async () => {
     await runSearchLessons(
-      { ...ARGS, kinds: ['bug'], types: ['code'], phases: ['skeleton'], limit: 3 } as never,
+      { ...ARGS, kinds: ['bug'], types: ['code'], phases: ['lay'], limit: 3 } as never,
       ctx,
     );
     expect(searchLessons.mock.calls[0]![2]).toMatchObject({
       kinds: ['bug'],
       types: ['code'],
-      phases: ['skeleton'],
+      phases: ['lay'],
       limit: 3,
     });
+  });
+
+  // MOTIR-4775 — the one-release grace, asserted where it is observable: the
+  // value motir-ai RECEIVES. A caller still on the old runbook sends
+  // `skeleton` / `deepen` and the seam sees `lay` / `author`, so no retired
+  // word ever reaches the upstream and its own compatibility warning stays
+  // quiet for callers that are already current.
+  it('canonicalises a RETIRED spelling before the seam sees it', async () => {
+    await runSearchLessons({ ...ARGS, phases: ['skeleton', 'deepen'] } as never, ctx);
+    expect(searchLessons.mock.calls[0]![2]).toMatchObject({ phases: ['lay', 'author'] });
   });
 
   it('omits an axis the caller did not name — never `[]`', async () => {
@@ -241,7 +251,7 @@ describe('the axes reach the seam, and an omitted one stays absent', () => {
 describe('an illegal axis value is refused with the legal set named', () => {
   it.each([
     ['kinds', ['epic', 'story', 'task', 'bug', 'subtask']],
-    ['phases', ['skeleton', 'deepen']],
+    ['phases', ['lay', 'author']],
   ])('%s — the schema enumerates the legal members', (axis, legal) => {
     // The refusal is the SCHEMA's: `strictInput.ts` makes every tool's input
     // strict at the registration seam, and a zod enum rejects a non-member by
@@ -253,6 +263,30 @@ describe('an illegal axis value is refused with the legal set named', () => {
     >;
     expect(() => schema[axis]!.parse(['not-a-member'])).toThrow();
     expect(schema[axis]!.parse(legal)).toEqual(legal);
+  });
+
+  // MOTIR-4775 — the phase axis takes FOUR spellings and PUBLISHES two, so the
+  // row above (which asserts parse is the identity on the legal set) cannot
+  // cover the retired half: those two parse to something OTHER than themselves.
+  it('phases — a retired spelling parses to its current one, and the refusal names all four', () => {
+    const schema = registeredTool().config.inputSchema as Record<
+      string,
+      { parse(v: unknown): unknown }
+    >;
+    expect(schema['phases']!.parse(['skeleton'])).toEqual(['lay']);
+    expect(schema['phases']!.parse(['deepen'])).toEqual(['author']);
+    expect(schema['phases']!.parse(['skeleton', 'author'])).toEqual(['lay', 'author']);
+    // A fifth spelling is still refused, and the message lists every spelling
+    // that would have worked — including the two the published enum omits.
+    let message = '';
+    try {
+      schema['phases']!.parse(['sketch']);
+    } catch (err) {
+      message = JSON.stringify(err);
+    }
+    for (const spelling of ['lay', 'author', 'skeleton', 'deepen']) {
+      expect(message, `the refusal omits "${spelling}"`).toContain(spelling);
+    }
   });
 
   it('requires a non-empty query', () => {

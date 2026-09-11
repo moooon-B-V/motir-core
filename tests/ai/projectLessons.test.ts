@@ -50,7 +50,7 @@ function rawLesson(over: Partial<RawLesson> = {}): RawLesson {
     categories: [],
     kinds: ['story'],
     types: ['code'],
-    phases: ['deepen'],
+    phases: ['author'],
     sourceRef: 'MOTIR-1',
     enabled: true,
     createdAt: '2026-08-01T00:00:00.000Z',

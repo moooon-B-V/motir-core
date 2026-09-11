@@ -491,3 +491,93 @@ describe("the index container's motir-ai ADDRESS rides the same health check", (
     });
   });
 });
+
+describe('the REBUILD-STREAK probe rides the same health check', () => {
+  /** A cloud deployment wired for CI only — the ordinary state, and the one in
+   *  which every other probe is green while the index rebuilds every run. */
+  function stubCiFleet() {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
+  }
+
+  // ── The FIFTH probe: the rebuild streak (MOTIR-5027) ───────────────────────
+  //
+  // The only probe here that reads the LEDGER, so its fixture is `job_run` rows
+  // rather than an env var and a stubbed registry. Rows are untenanted
+  // (`workspace_id IS NULL`) because that is what a `system.*` job writes and
+  // what the read's `withSystemContext` admits.
+
+  async function seedCodeGraphRuns(count: number, mode: 'sync' | 'rebuild') {
+    for (let i = 0; i < count; i += 1) {
+      await adminDb.jobRun.create({
+        data: {
+          workspaceId: null,
+          functionId: 'system.code-graph-refresh',
+          eventName: 'scheduled.system.code-graph-refresh',
+          eventId: `evt-cg-${mode}-${i}-${Date.now()}`,
+          lane: 'engine',
+          attempt: 1,
+          status: 'succeeded',
+          startedAt: new Date(Date.UTC(2026, 8, 1, 0, 0, i)),
+          output: {
+            indexed: true,
+            repoRef: 'moooon-B-V/motir-core',
+            projectsIndexed: 1,
+            indexModes: [{ projectId: 'p0', mode }],
+          },
+        },
+      });
+    }
+  }
+
+  it('records the streak verdict on a HEALTHY tick too — so the ledger answers "was it still incremental yesterday?"', async () => {
+    // The same reason every other verdict here is recorded on success: a green
+    // run that says `not_applicable` and one that says the index is syncing are
+    // very different states, and a field that only appeared on failure could not
+    // tell them apart.
+    await seedHealthyJobSchedules();
+    stubCiFleet();
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
+    await seedCodeGraphRuns(3, 'sync');
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({
+      ok: true,
+      indexRebuildStreak: { verdict: 'ok' },
+    });
+    // The boundary is on the recorded row, not only in the failure path.
+    expect(
+      (result as { indexRebuildStreak: { blindSpot: string } }).indexRebuildStreak.blindSpot,
+    ).toContain('OFFERED');
+  });
+
+  it('FAILS the run when a repository has rebuilt N consecutive times — with every OTHER probe green', async () => {
+    // ⚠️ THE CARD'S CENTRAL ASSERTION. The schedules are healthy, both images
+    // pull, the container address is fine — the exact state production was in
+    // for twenty days while the graph was rebuilt from scratch on every run and
+    // nothing said so. The message is the whole of what the DLQ panel renders,
+    // so it must name the repository, the fork, AND what it did not measure.
+    await seedHealthyJobSchedules();
+    stubCiFleet();
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
+    await seedCodeGraphRuns(6, 'rebuild');
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, error } = (await engine.execute()) as {
+      result?: unknown;
+      error?: { message?: string };
+    };
+
+    expect(result).toBeUndefined();
+    expect(error?.message).toContain('moooon-B-V/motir-core');
+    expect(error?.message).toContain('MOTIR_INDEXER_IMAGE');
+    expect(error?.message).toContain('codegraphVersion');
+    // The blind spot travels into the DLQ row with the diagnosis.
+    expect(error?.message).toContain('OFFERED');
+  });
+});

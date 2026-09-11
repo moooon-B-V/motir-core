@@ -29,6 +29,11 @@ import {
 } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
+import {
+  isSettledRow,
+  rowIsReachable,
+  setHasEstablishWork,
+} from '@/lib/projectRepos/establishStep';
 
 // The plan-detail island (Subtask 7.4.5 / MOTIR-847) — the generation-review MODE
 // of the canvas+chat workspace shell (MOTIR-1193). It composes the proposed-plan
@@ -54,9 +59,20 @@ export interface PlanDetailProps {
   ariaLabel?: string;
   /**
    * The project's repository SET, when the plan is approved and the project has
-   * one (Story MOTIR-1775 · MOTIR-1782). Present → the establish step takes a
-   * BAND across the TOP of the canvas pane, at its own natural height, and the
-   * canvas takes the remainder.
+   * one (Story MOTIR-1775 · MOTIR-1782). The establish step then takes a BAND
+   * across the TOP of the canvas pane, at its own natural height, and the canvas
+   * takes the remainder.
+   *
+   * ⚠️ PRESENT IS NO LONGER THE SAME AS DRAWN (bug MOTIR-5049). This prop is
+   * handed down whenever the set EXISTS, because it feeds two consumers asking
+   * different questions: the band, gated on `setHasEstablishWork`, and the review
+   * rail's approved-outcome line, via `codeOutcomeOf`. A set whose every row is
+   * `connected` or `skipped` — every BYOK project, since MOTIR-4753 made a
+   * repository a precondition of planning — arrives here in full and draws NO
+   * band; the canvas has the whole pane and the rail says the one true thing
+   * (`design/repository-set/design-notes.md` §7b). Do not re-gate this prop on
+   * the band's predicate: that is the shape that would silently take the rail's
+   * line away for exactly that population.
    *
    * ⚠️ THIS REPLACES, AND DOES NOT DELETE, THE RULE THAT STOOD HERE
    * (`design/ai-planning/design-notes.md` Part VI §4; bug MOTIR-3154). It read:
@@ -378,9 +394,23 @@ export function PlanDetail({
           // BOTH, STACKED (Part VI §4). The step takes a band at the top at its
           // own natural height; the canvas takes the remainder with `min-h-0` so
           // it SHRINKS rather than pushing the band out, and is never replaced.
-          // Once the step settles it collapses to its own one-line form and the
-          // canvas has effectively the whole pane — no extra rule needed, because
-          // the step's own design already shrinks.
+          //
+          // ⚠️ THE CLAUSE THAT USED TO CLOSE THIS COMMENT WAS FALSE, AND IT IS
+          // WHAT LET MOTIR-5049 SHIP. It read: *"Once the step settles it
+          // collapses to its own one-line form and the canvas has effectively
+          // the whole pane — no extra rule needed, because the step's own design
+          // already shrinks."* No collapsed form exists in `RepositorySetStep`.
+          // Settling GROWS it: `state === 'ready'` renders the overline, the
+          // `<h2>`, the status line, `OwnershipPromise` AND `AccessReport`,
+          // inside `StepShell`'s `p-8` — two blocks and a button MORE than
+          // `working`. `design/ai-planning/design-notes.md` Part VI §4 carries
+          // the same amendment against the same sentence.
+          //
+          // So the extra rule the comment said was unnecessary is the one below,
+          // and Part VI §4's stacking decision is UNCHANGED by it: the band still
+          // takes a band and never the pane, for every project with code to
+          // establish. What is added is the population where the band is not
+          // drawn AT ALL (`design/repository-set/design-notes.md` §7b).
           <div className="flex h-full min-h-0 w-full flex-col">
             {/* The PANE HEADER (Part VIII §2). The pane had none —
                 `PlanningWorkspace`'s `canvas` slot is filled edge to edge — so
@@ -407,7 +437,7 @@ export function PlanDetail({
                 ]}
               />
             </div>
-            {repositorySet ? (
+            {repositorySet && setHasEstablishWork(repositorySet.view.set.rows) ? (
               <div
                 data-testid="plan-detail-establish-band"
                 className="shrink-0 border-b border-(--el-border) bg-(--el-surface)"
@@ -511,20 +541,28 @@ export function PlanDetail({
  * because a deliberately skipped row is a finished decision, not an unfinished
  * one — telling the user to "finish setting up repositories" they chose to go
  * without would be a nag about a choice they already made.
+ *
+ * ⚠️ THIS IS THE LINE THE USER IS LEFT WITH ONCE THE BAND IS GONE, so it is
+ * computed from the set whether or not the band is drawn (bug MOTIR-5049). For a
+ * settled organisation-owned set it resolves `ready` and the rail renders "Your
+ * code is ready" — true of an organisation's own repository, claiming nothing
+ * about who hosts it, and per `design/repository-set/design-notes.md` §7b it is
+ * the WHOLE answer: nothing is added to the rail, deliberately.
+ *
+ * ⚠️ AND ITS TWO PREDICATES ARE NO LONGER LOCAL COPIES. `isSettledRow` and
+ * `rowIsReachable` were duplicated verbatim here and in `RepositorySetStep`;
+ * both now come from `lib/projectRepos/establishStep.ts`, which reaches the
+ * settled answer through the ADR §4.1 edge table rather than restating it. They
+ * are NOT the band's predicate — see that module's header for why `state`
+ * decides the band and settledness cannot.
  */
-function codeOutcomeOf(
-  view: { set: { rows: { state: string; access: { state: string } }[] } } | null,
-): PlanCodeOutcome | null {
+function codeOutcomeOf(view: ProjectRepoEstablishViewDto | null): PlanCodeOutcome | null {
   if (!view || view.set.rows.length === 0) return null;
-  const settled = (state: string) =>
-    state === 'created' || state === 'connected' || state === 'skipped';
-  if (!view.set.rows.every((r) => settled(r.state))) return 'unfinished';
+  if (!view.set.rows.every(isSettledRow)) return 'unfinished';
   // Settled is not the same as REACHABLE (MOTIR-1900). A repository Motir created
   // lives in Motir's org and is private, so a `created` row nobody has been
   // invited to is code the user cannot clone — the rail says so rather than
   // claiming it is ready. A `connected` row is the user's own repository and a
   // `skipped` row has none, so neither raises the question.
-  const reachable = (row: { state: string; access: { state: string } }) =>
-    row.state !== 'created' || row.access.state !== 'not_invited';
-  return view.set.rows.every(reachable) ? 'ready' : 'needs_access';
+  return view.set.rows.every(rowIsReachable) ? 'ready' : 'needs_access';
 }

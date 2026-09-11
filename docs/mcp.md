@@ -1077,7 +1077,7 @@ planner calls during a run.
 | `mistakeType` | enum     | no       | `regular_planning` (default) · `onboarding_planning` · `planning_craft`.           |
 | `kinds`       | string[] | no       | `epic` · `story` · `task` · `bug` · `subtask`. Omitted = every kind.               |
 | `types`       | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = every type.              |
-| `phases`      | string[] | no       | `skeleton` · `deepen`. Omitted = both.                                             |
+| `phases`      | string[] | no       | `lay` · `author`. Omitted = both. (`skeleton` · `deepen` still accepted.)          |
 | `sourceRef`   | string   | no       | Provenance, and the idempotency key — a repeat returns the existing lesson.        |
 
 Requires the lesson-library-change permission (`lesson:manage`) — the same key
@@ -1137,7 +1137,7 @@ wrongly.
 | `query`      | string   | yes      | The question, in takeaway register — the action and the risk shape.      |
 | `kinds`      | string[] | no       | `epic` · `story` · `task` · `bug` · `subtask`. Omitted = unconstrained.  |
 | `types`      | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = unconstrained. |
-| `phases`     | string[] | no       | `skeleton` · `deepen`. Omitted = unconstrained.                          |
+| `phases`     | string[] | no       | `lay` · `author`. Omitted = unconstrained. (Old spellings still taken.)  |
 | `limit`      | number   | no       | How many to return, nearest first. Default 8, max 50.                    |
 
 **Output** — each lesson's `title`, `body`, `howToApply`, its `scope`

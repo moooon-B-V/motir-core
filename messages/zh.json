@@ -3353,6 +3353,10 @@
         "everyCard": "适用于所有工作项",
         "notApplied": "未生效",
         "notRecurred": "{days} 天内未再出现",
+        "phase": {
+          "lay": "铺开层级",
+          "author": "撰写正文"
+        },
         "applyingTitle": "Motir 正在应用这条经验。",
         "applyingBody": "它会进入为本项目起草的每一份计划。",
         "sectionHappened": "发生了什么",
@@ -7001,8 +7005,10 @@
   "repositorySet": {
     "overline": "项目代码",
     "title": "Motir将为你托管代码",
+    "titleMixed": "Motir将为你托管新代码",
     "lead": "项目代码存放在Motir，随时可供智能体开始工作。",
     "promise": "<b>代码归你所有。</b>Motir会妥善保管并保持私有——你可以随时把它迁移到自己的GitHub。",
+    "promiseMixed": "<b>代码归你所有。</b>Motir会妥善保管它所托管的代码并保持私有——你可以随时把它迁移到自己的GitHub。",
     "continueCta": "继续",
     "working": "正在准备你的代码…",
     "workingDetail": "这需要几秒钟。计划已经在你的待办中——你可以离开此页面。",

@@ -1,6 +1,7 @@
 import type { LessonRowCopy } from './LessonRow';
 import type { LessonApplyCopy } from './LessonApplyControl';
 import type { ProjectLessonDTO } from '@/lib/dto/projectLessons';
+import { lessonPhaseLabelKey } from '@/lib/lessons/phaseAxis';
 
 // The row's copy, resolved ONCE and handed to every consumer (Subtask
 // MOTIR-3338). The list and the door card render the same lesson, so the
@@ -25,6 +26,14 @@ export function lessonRowCopy(
     everyCard: t('aiPlanning.lessons.everyCard'),
     notApplied: t('aiPlanning.lessons.notApplied'),
     notRecurred: (days) => t('aiPlanning.lessons.notRecurred', { days }),
+    // The PHASE axis's label (Bug MOTIR-4775). `lessonPhaseLabelKey` returns
+    // null for a value the catalogue does not label, and then the RAW value is
+    // rendered — so a phase the store grows past this build shows up as itself
+    // instead of being hidden behind a missing-key error or a wrong word.
+    phaseLabel: (value) => {
+      const key = lessonPhaseLabelKey(value);
+      return key === null ? value : t(key);
+    },
   };
 }
 

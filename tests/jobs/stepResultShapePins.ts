@@ -179,6 +179,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ address: string; detail: string; verdict: "indeterminate" } | { address: string; detail: string; verdict: "private_address" } | { address: string; status: number; verdict: "reachable" } | { detail: string; verdict: "not_applicable" } | { detail: string; verdict: "unconfigured" }',
   },
+  'index-rebuild-streak': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ blindSpot: string; candidates: Array<string>; checkedAt: string; entries: Array<{ consecutiveRebuilds: number; modeRuns: number; repoRef: string; state: "rebuilding" | "syncing" | "unknown"; succeededRuns: number }>; offenders: Array<{ consecutiveRebuilds: number; modeRuns: number; repoRef: string; state: "rebuilding" | "syncing" | "unknown"; succeededRuns: number }>; threshold: number; unknownRepoRefs: Array<string>; verdict: "rebuilding" } | { blindSpot: string; checkedAt: string; detail: string; verdict: "not_applicable" } | { blindSpot: string; checkedAt: string; entries: Array<{ consecutiveRebuilds: number; modeRuns: number; repoRef: string; state: "rebuilding" | "syncing" | "unknown"; succeededRuns: number }>; threshold: number; unknownRepoRefs: Array<string>; verdict: "ok" }',
+  },
   'index-fleet-boot-preflight': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
     shape:

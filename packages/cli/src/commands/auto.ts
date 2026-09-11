@@ -43,6 +43,7 @@ import {
   planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
+  sessionPrScope,
   sessionPrTitle,
   type ApprovalRecord,
   type AutoSummary,
@@ -362,6 +363,10 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
       ...(deps.sleep ? { sleep: deps.sleep } : {}),
     });
     closeOutRepos(summary, run);
+    // ⚠️ AFTER, and the order is the rule (MOTIR-4969): every repository's pull
+    // request has its final title and body and has been marked ready by the line
+    // above before the container is told it is built.
+    await closeOutContainer(session.client, summary);
     for (const pr of summary.prs) {
       reporter.event({
         kind: 'session_pr',
@@ -722,8 +727,11 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // the container is built while a child of its own is not, which is the
       // invariant Bug MOTIR-3268's hold used to carry by opening nothing.
       if (openPrEagerly && landedWork(record)) {
-        for (const session of repo ?? []) {
-          ensureRepoPullRequest(session, runId, run);
+        for (const repoSession of repo ?? []) {
+          // `records` and not `[record]`: the LINK reads the WHOLE run's parent
+          // partition, which is what turns a set of one into a container run at
+          // the second card (MOTIR-4969).
+          await ensureRepoPullRequest(repoSession, runId, run, { client, carried: records });
         }
       }
 
@@ -1469,11 +1477,24 @@ export async function transitionToImplemented(
  * would abandon the cards still queued behind a tooling gap. The close-out at
  * the end tries again and reports properly.
  */
-export function ensureRepoPullRequest(
+export async function ensureRepoPullRequest(
   session: RepoSession,
   runId: string,
   run: CommandRunner,
-): void {
+  /**
+   * The LINK half (MOTIR-4969) — the client to declare through, and the whole
+   * run's landed records, whose parent partition decides WHAT this pull request
+   * delivers.
+   *
+   * ⚠️ THE RUN'S SET, NOT THIS REPOSITORY'S. The title is per-repository because
+   * a reviewer of repo A must not read repo B's cards; the LINK is not, because
+   * a container spanning two repositories is delivered by both of its pull
+   * requests and the completion gate holds it until every one of them has
+   * merged. Passing one repository's slice here would leave the container linked
+   * in whichever repository happened to carry two cards.
+   */
+  link: { client: MotirClient; carried: readonly DispatchRecord[] },
+): Promise<void> {
   try {
     if (!sessionBranchHasCommits(session.cwd, session.branch, run)) return;
     const result = openSessionPr(
@@ -1500,9 +1521,165 @@ export function ensureRepoPullRequest(
     } else if (result.outcome === 'failed' && result.message) {
       info(result.message);
     }
+    // ⚠️ AT CREATION, which in practice means AS SOON AS THE ARM IS KNOWN
+    // (MOTIR-4969, point 5 of the decided lifecycle). A run's first landed card
+    // is a set of one — `one-card`, indistinguishable from a leaf run — and only
+    // the second card of the same parent makes it `shared-parent`. So this is
+    // asked on EVERY landed card rather than only on the call that created the
+    // pull request, and the arm is what gates it.
+    //
+    // Re-declaring the same delivery is a genuine no-op: the row is upserted on
+    // `(work_item, pull_request)`, so this holds no "have I linked it?" state,
+    // exactly as the open above holds no "have I opened it?" state — which is
+    // what keeps a resumed or re-invoked run safe.
+    if (result.url) await linkSessionPrToContainer(link, session.branch, result.url);
   } catch (err) {
     info(
       `Could not open ${session.branch}'s pull request yet: ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * The base branch every session pull request targets — `openSessionPr` opens
+ * with `--base main`, and a link that named anything else would seed the row
+ * with a base the pull request does not have.
+ */
+const SESSION_PR_BASE = 'main';
+
+/**
+ * DECLARE that this repository's session pull request delivers the container the
+ * run's carried set shares — when it shares one (MOTIR-4969).
+ *
+ * ⚠️ IT ADDS TO WHAT THE AGENTS ALREADY WROTE, and does not replace it. Every
+ * dispatched agent links this same pull request to its OWN card (MOTIR-3678), so
+ * a merge already closes the children; what nothing linked is the CONTAINER, so
+ * the story stayed open on work that had entirely shipped. A delivery is a row
+ * and rows accumulate, so both are true at once — and linking the parent is what
+ * stays correct as children are added, since the merge cascades DOWN from it.
+ *
+ * ⚠️ REPORTED AND SWALLOWED, like every other close-out side effect here. The
+ * agents' work is committed, pushed and open for review by the time this runs;
+ * abandoning a run over a link call would strand real work behind a network
+ * hiccup, and the missing link is visible on the pull request itself as a red
+ * `Motir / work item link` check.
+ */
+async function linkSessionPrToContainer(
+  link: { client: MotirClient; carried: readonly DispatchRecord[] },
+  branch: string,
+  url: string,
+): Promise<void> {
+  const scope = sessionPrScope(link.carried.filter(landedWork));
+  // ⚠️ ONLY `shared-parent`. A `one-card` run's pull request is the card's own
+  // and the agent has already linked it; a `many-parents` run has no container,
+  // and a run carrying two parents must not invent a story to name.
+  if (scope.arm !== 'shared-parent') return;
+  try {
+    await link.client.linkPullRequest({
+      key: scope.key,
+      url,
+      headRef: branch,
+      baseRef: SESSION_PR_BASE,
+    });
+  } catch (err) {
+    info(
+      `Could not link ${url} to ${scope.key}: ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * The CONTAINER half of the close-out (MOTIR-4969): make sure every repository's
+ * session pull request declares the container it delivers, then move that
+ * container to Implemented — ONCE.
+ *
+ * ── Why it is its own call, AFTER `closeOutRepos` ──────────────────────────
+ * The order is the rule, and it is invisible on the happy path: ready
+ * everywhere, then the flip. `closeOutRepos` is what rewrites each pull
+ * request's title and body and then marks it ready, so a container moved to
+ * Implemented before it returns would claim the run finished while a reviewer is
+ * still looking at a draft saying "0 work items".
+ *
+ * It reads {@link AutoSummary.prs}, which `closeOutRepos` is what WRITES — so a
+ * caller that ran this first finds an empty list and does nothing. The ordering
+ * is therefore structural rather than a convention two lanes have to remember,
+ * which is the property MOTIR-4999 was paid for by not having.
+ *
+ * ⚠️ A RUN THAT DIES BEFORE THIS LEAVES DRAFTS AND A CONTAINER THAT IS NOT
+ * IMPLEMENTED, and that pair is TRUE. Any other arrangement claims more than
+ * happened.
+ */
+export async function closeOutContainer(client: MotirClient, summary: AutoSummary): Promise<void> {
+  const carried = summary.records.filter(landedWork);
+  const scope = sessionPrScope(carried);
+  if (scope.arm !== 'shared-parent') return;
+
+  // Every repository's pull request delivers the container. `ensureRepoPullRequest`
+  // has normally said so already; this covers the pull request that did not exist
+  // until the close-out opened it, and costs one idempotent call otherwise.
+  for (const pr of summary.prs) {
+    if (!pr.url) continue;
+    await linkSessionPrToContainer({ client, carried }, pr.branch, pr.url);
+  }
+
+  // ⚠️ NOT WHILE A CHILD IS OUTSTANDING — the same gate, and the same re-read,
+  // that holds every repository's pull request a draft. Claiming a container is
+  // built while a child of its own is not is Bug MOTIR-3229's shape, and the
+  // server refuses it (`CONTAINER_HAS_OPEN_CHILDREN`); this is the run declining
+  // to ask rather than relying on the refusal.
+  if (summary.outstanding && summary.outstanding.keys.length > 0) {
+    info(
+      `${scope.key} stays as it is: ${summary.outstanding.keys.length} of its children ` +
+        `have not landed (${summary.outstanding.keys.join(', ')}).`,
+    );
+    return;
+  }
+
+  // ⚠️ AND NOT WHILE ANY REPOSITORY'S PULL REQUEST IS STILL A DRAFT. A
+  // two-repository container finishes its repositories at different points and
+  // is marked ready in ONE pass at the close-out, so the honest question is
+  // whether that pass succeeded everywhere — a `failed` open, or a `gh pr ready`
+  // that refused, leaves work nobody can review, and Implemented would say
+  // otherwise.
+  const live = summary.prs.filter((pr) => pr.url !== null);
+  if (live.length === 0) return;
+  const stillDraft = live.filter((pr) => pr.draft);
+  if (stillDraft.length > 0) {
+    info(
+      `${scope.key} stays as it is: ${stillDraft
+        .map((pr) => pr.branch)
+        .join(', ')} ${stillDraft.length === 1 ? 'is' : 'are'} still a draft.`,
+    );
+    return;
+  }
+
+  // ⚠️ IMPLEMENTED, NEVER IN REVIEW. A pull request being open is what
+  // Implemented means (MOTIR-3005); CI is what promotes it from there, and a run
+  // that wrote In Review itself would be asserting a verdict nothing has reached.
+  //
+  // ⚠️ ONCE, not once per repository. A container has one status, and two
+  // attempts would spend a second call on a no-op at best.
+  //
+  // ⚠️ IDEMPOTENT BY THE SERVER'S OWN CONTRACT: a status move to the status the
+  // item already holds returns without a revision, so MOTIR-4968's webhook
+  // having got here first makes this a no-op rather than an error. The two are
+  // deliberately BOTH written — the run writes it eagerly, the webhook writes it
+  // authoritatively — and neither is a fallback for the other.
+  try {
+    const refusal = await transitionToImplemented(client, scope.key);
+    if (refusal) info(`${scope.key}: ${refusal}`);
+    else info(`${scope.key}: Implemented — every card this run carried has landed.`);
+  } catch (err) {
+    // Reported and swallowed, exactly as `openSessionPr` / `updateSessionPr` /
+    // `markSessionPrReady` are. The commonest arrival here is not a fault at all:
+    // CI beat the close-out, the webhook already moved the container on to In
+    // Review, and `in_review → implemented` is not a legal edge. The work is
+    // reviewable either way, and a run that aborted its summary over this would
+    // hide it.
+    info(
+      `Could not move ${scope.key} to Implemented: ` +
         `${err instanceof Error ? err.message : String(err)}`,
     );
   }

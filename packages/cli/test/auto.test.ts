@@ -112,6 +112,10 @@ class FakeServer {
    *  (MOTIR-3229's 422). The refusal is the one a run reports and continues from
    *  rather than dies on — Bug MOTIR-3268. */
   refuseTransitionFor: ((args: { key: string; status: string }) => Error | null) | null = null;
+  /** Every `link_pull_request` the run declared (MOTIR-4969) — the CONTAINER
+   *  links, since the per-card ones are the dispatched agent's and never reach
+   *  this client. */
+  readonly links: { key: string; url?: string; headRef: string; baseRef: string }[] = [];
 
   constructor(private readonly items: FakeItem[]) {}
 
@@ -273,6 +277,15 @@ class FakeServer {
         item.status = 'in_review';
         item.sessionBranch = args.sessionBranch;
         return {};
+      },
+      linkPullRequest: async (args: {
+        key: string;
+        url?: string;
+        headRef: string;
+        baseRef: string;
+      }) => {
+        this.links.push(args);
+        return undefined;
       },
     };
     return fake as unknown as MotirClient;
@@ -1354,6 +1367,44 @@ describe('the session pull request is a DRAFT until the close-out marks it ready
     expect(renderAutoSummary(summary)).toContain('still a DRAFT');
     // The card is still recorded as integrated — the draft is downstream of it.
     expect(server.integrated.map((r) => r.key)).toEqual(['PROD-1']);
+  });
+
+  it('an `auto` run carrying ONE STORY’S CHILDREN takes arm 2 and links the STORY (MOTIR-4969)', async () => {
+    // ⚠️ THE MODE THE FIRST WORDING EXCLUDED BY NAME. `motir auto` is the
+    // UNSCOPED lane and was going to keep per-card linking for ever — but it
+    // routinely drains a story's children one after another, and then its
+    // session pull request delivers that story exactly as a scoped run's does.
+    // The arm is read off the set, so this needs no lane branch to reach.
+    const server = new FakeServer([leaf('row-1', 'PROD-2'), leaf('row-2', 'PROD-3')]);
+    const git = new FakeGit();
+    const summary = await runAutoLoop({
+      openPrEagerly: true,
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260910-010203',
+      branch: BRANCH,
+      run: git.runner,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
+    });
+
+    // Both cards landed under the fake's shared parent, so the run declared the
+    // PARENT — once, at the moment the second card made the arm knowable.
+    expect(summary.records.map((r) => r.parentKey)).toEqual(['PROD-1', 'PROD-1']);
+    expect(server.links.map((l) => l.key)).toEqual(['PROD-1']);
+    expect(server.links[0]).toMatchObject({ headRef: BRANCH, baseRef: 'main' });
+  });
+
+  it('an `auto` run carrying ONE card links nothing — the agent already did (MOTIR-4969)', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    await runOneCard(git, server);
+
+    expect(server.links).toEqual([]);
   });
 });
 
