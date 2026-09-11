@@ -94,7 +94,7 @@ async function enrol(page: Page): Promise<{ setupKey: string; codes: string[] }>
   const enabled = page.waitForResponse(
     (r) => r.url().includes('/api/auth/two-factor/enable') && r.request().method() === 'POST',
   );
-  await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await page.getByRole('dialog').getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   expect((await enabled).status()).toBe(200);
 
@@ -109,7 +109,7 @@ async function enrol(page: Page): Promise<{ setupKey: string; codes: string[] }>
   const verified = page.waitForResponse(
     (r) => r.url().includes('/api/auth/two-factor/verify-totp') && r.request().method() === 'POST',
   );
-  await page.getByLabel('Six-digit code').fill(totpFromSetupKey(setupKey));
+  await page.getByRole('textbox', { name: 'Six-digit code' }).fill(totpFromSetupKey(setupKey));
   await page.getByRole('button', { name: 'Turn on' }).click();
   expect((await verified).status()).toBe(200);
 
@@ -145,7 +145,7 @@ test('@smoke enrol, then a TOTP code completes the next sign-in', async ({ page 
   const verified = page.waitForResponse(
     (r) => r.url().includes('/api/auth/two-factor/verify-totp') && r.request().method() === 'POST',
   );
-  await page.getByLabel('Six-digit code').fill(totpFromSetupKey(setupKey));
+  await page.getByRole('textbox', { name: 'Six-digit code' }).fill(totpFromSetupKey(setupKey));
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await verified).status()).toBe(200);
 
@@ -159,7 +159,7 @@ test('a wrong code is refused and keeps the reader on the challenge', async ({ p
   await signInWithPassword(page);
 
   const refused = page.waitForResponse((r) => r.url().includes('/api/auth/two-factor/verify-totp'));
-  await page.getByLabel('Six-digit code').fill('000000');
+  await page.getByRole('textbox', { name: 'Six-digit code' }).fill('000000');
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await refused).status()).toBeGreaterThanOrEqual(400);
 
@@ -194,7 +194,7 @@ test('an emailed code completes the sign-in', async ({ page }) => {
   const verified = page.waitForResponse(
     (r) => r.url().includes('/api/auth/two-factor/verify-otp') && r.request().method() === 'POST',
   );
-  await page.getByLabel('Six-digit code').fill(code!);
+  await page.getByRole('textbox', { name: 'Six-digit code' }).fill(code!);
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await verified).status()).toBe(200);
 
@@ -215,7 +215,7 @@ test('a recovery code works ONCE and the remaining count drops', async ({ page }
       r.url().includes('/api/auth/two-factor/verify-backup-code') &&
       r.request().method() === 'POST',
   );
-  await page.getByLabel('Recovery code').fill(codes[0]!);
+  await page.getByRole('textbox', { name: 'Recovery code' }).fill(codes[0]!);
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await verified).status()).toBe(200);
   await page.waitForURL(POST_AUTH_URL);
@@ -237,7 +237,7 @@ test('"don’t ask again" skips the next challenge, and revoking brings it back'
   await signInWithPassword(page);
   if (secondsLeftInWindow() < 3) await page.waitForTimeout(3000);
   const trusted = page.waitForResponse((r) => r.url().includes('/api/auth/two-factor/verify-totp'));
-  await page.getByLabel('Six-digit code').fill(totpFromSetupKey(setupKey));
+  await page.getByRole('textbox', { name: 'Six-digit code' }).fill(totpFromSetupKey(setupKey));
   await page.getByRole('checkbox', { name: /Don’t ask again/ }).click();
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await trusted).status()).toBe(200);
@@ -277,7 +277,7 @@ test('turning 2FA off removes the challenge entirely', async ({ page }) => {
     (r) => r.url().includes('/api/auth/two-factor/disable') && r.request().method() === 'POST',
   );
   await page.getByRole('button', { name: 'Turn off' }).first().click();
-  await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await page.getByRole('dialog').getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Turn off' }).last().click();
   expect((await disabled).status()).toBe(200);
 

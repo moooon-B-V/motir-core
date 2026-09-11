@@ -133,7 +133,7 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   // the spec now exercises both sides of the reveal threshold.
   await gotoAuthed(page, '/settings/workspace');
   await expect(page.getByRole('heading', { name: 'Workspace settings' })).toBeVisible();
-  const nameInput = page.getByLabel('Workspace name');
+  const nameInput = page.getByRole('textbox', { name: 'Workspace name' });
   await nameInput.fill('Acme Renamed');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Workspace renamed', { exact: true }).first()).toBeVisible();

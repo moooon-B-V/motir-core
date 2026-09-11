@@ -82,7 +82,7 @@ test('the Children panel reads as a graph, rooted at the item', async ({
     await page.getByTestId('drill-button').click();
     await expect(node(page, seed.grandchildKey)).toBeVisible();
     // The breadcrumb's root crumb is the ITEM, so Back is self-describing.
-    await expect(page.getByLabel('Breadcrumb')).toContainText(seed.storyKey);
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText(seed.storyKey);
     // Still on the item's own page — the panel never navigated.
     expect(new URL(page.url()).pathname).toBe(`/items/${seed.storyKey}`);
     await beat();

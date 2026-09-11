@@ -114,9 +114,9 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
-  await page.getByLabel('Project name').fill('Mobile App');
+  await page.getByRole('textbox', { name: 'Project name' }).fill('Mobile App');
   // Identifier should auto-derive to MOBIL (5 chars, uppercased name)
-  await expect(page.getByLabel('Identifier')).toHaveValue('MOBIL');
+  await expect(page.getByRole('textbox', { name: 'Identifier' })).toHaveValue('MOBIL');
   await expect(page.getByText(/Work items will be keyed MOBIL-1, MOBIL-2/)).toBeVisible();
   await page.screenshot({ path: `${SCREENSHOT_DIR}/02-create-modal-light.png`, fullPage: false });
 
@@ -153,8 +153,8 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
     .getByRole('button', { name: /Create project/ })
     .last()
     .click();
-  await page.getByLabel('Project name').fill('Marketing Site');
-  await expect(page.getByLabel('Identifier')).toHaveValue('MARKE');
+  await page.getByRole('textbox', { name: 'Project name' }).fill('Marketing Site');
+  await expect(page.getByRole('textbox', { name: 'Identifier' })).toHaveValue('MARKE');
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
   await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible({
     timeout: 5_000,
@@ -190,10 +190,10 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   });
 
   // Type a partial identifier — still disabled
-  await page.getByLabel(/Type MOBIL to confirm/).fill('MOBI');
+  await page.getByRole('textbox', { name: /Type MOBIL to confirm/ }).fill('MOBI');
   await expect(archiveBtn).toBeDisabled();
   // Type full identifier — armed
-  await page.getByLabel(/Type MOBIL to confirm/).fill('MOBIL');
+  await page.getByRole('textbox', { name: /Type MOBIL to confirm/ }).fill('MOBIL');
   await expect(archiveBtn).toBeEnabled();
   await page.screenshot({ path: `${SCREENSHOT_DIR}/04-archive-armed-light.png`, fullPage: false });
 
@@ -240,7 +240,7 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
 
   await page.goto('/settings/project');
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
-  await page.getByLabel(/Type MARKE to confirm/).fill('MARKE');
+  await page.getByRole('textbox', { name: /Type MARKE to confirm/ }).fill('MARKE');
   await page.getByRole('button', { name: 'Archive project' }).click();
   await expect(page.getByText('Project archived', { exact: true }).first()).toBeVisible({
     timeout: 5_000,

@@ -219,7 +219,7 @@ test('@smoke the create-modal link control searches server-side and persists the
 
   await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
-  await page.getByLabel('Title').fill('item created with a link');
+  await page.getByRole('textbox', { name: 'Title' }).fill('item created with a link');
 
   // The "Linked work items" section rides the same query-driven LinkAddForm —
   // search server-side, pick, Add a pending row (default relationship: Blocked

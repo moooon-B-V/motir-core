@@ -63,8 +63,8 @@ async function addCustomStatusViaWorkflow(
   await page.goto('/settings/project/workflow');
   await expect(page.getByRole('heading', { name: 'Workflow' })).toBeVisible();
   await page.getByRole('button', { name: 'Add status' }).click();
-  await page.getByLabel('Key (machine id, lowercase)').fill(status.key);
-  await page.getByLabel('Label').fill(status.label);
+  await page.getByRole('textbox', { name: 'Key (machine id, lowercase)' }).fill(status.key);
+  await page.getByRole('textbox', { name: 'Label' }).fill(status.label);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText(status.label, { exact: true }).first()).toBeVisible();
 }
@@ -215,7 +215,7 @@ test.describe('board-config @smoke', () => {
     // the real id on the POST response — await BOTH the POST and the temp→real
     // reconcile before mapping, or the map PUT fires against the temp id (404).
     await page.getByTestId('board-config-add-column').click();
-    await page.getByLabel('New column name').fill('Review Lane');
+    await page.getByRole('textbox', { name: 'New column name' }).fill('Review Lane');
     const addPost = page.waitForResponse(
       (r) => r.url().endsWith('/api/board/columns') && r.request().method() === 'POST',
     );

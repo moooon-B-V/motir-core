@@ -224,7 +224,7 @@ test('@smoke a failing pilot run retries on the engine’s own backoff, then dea
   await page.getByRole('link', { name: 'Failed' }).click();
   await expect(page.getByText(PILOT_JOB).first()).toBeVisible();
 
-  await expect(page.getByLabel('1 in dead-letter queue')).toBeVisible();
+  await expect(page.getByRole('main').getByLabel('1 in dead-letter queue')).toBeVisible();
   await page.getByRole('link', { name: /Dead letter/ }).click();
   await expect(page.getByRole('cell', { name: '3', exact: true })).toBeVisible();
 });
@@ -300,7 +300,7 @@ test('the runs table renders its EMPTY state before any job has run', async ({ p
   await gotoJobs(page);
   await expect(page.getByText('No job runs yet')).toBeVisible();
   // The dead-letter tab carries no badge when the queue is empty.
-  await expect(page.getByLabel(/in dead-letter queue/)).toBeHidden();
+  await expect(page.getByRole('main').getByLabel(/in dead-letter queue/)).toBeHidden();
 });
 
 test('the runs table renders its EMPTY-FOR-THIS-FILTER state', async ({ page }) => {

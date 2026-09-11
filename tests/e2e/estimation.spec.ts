@@ -126,7 +126,7 @@ test.describe('estimation — estimate & roll-up session (4.3.7)', () => {
 
     // The sprint container header roll-up starts at the muted "—" (no estimated
     // points yet) — the bounded `rollupForSprint` returns {0,0,0}, never NaN.
-    await expect(page.getByLabel('Sprint has no estimated points')).toBeVisible();
+    await expect(page.getByRole('main').getByLabel('Sprint has no estimated points')).toBeVisible();
 
     // Estimate the issue that lives INSIDE the sprint.
     await estimateVia(page, row(page, seed.sprintIssue.identifier), 5);
@@ -140,7 +140,9 @@ test.describe('estimation — estimate & roll-up session (4.3.7)', () => {
     // a planned sprint shows the committed segment only.
     await page.reload();
     await waitBacklogReady(page);
-    await expect(page.getByLabel('Points: 5 committed')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('main').getByLabel('Points: 5 committed')).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test('estimating a child rolls up to the epic header total + shows on the detail story-points field', async ({
@@ -163,7 +165,9 @@ test.describe('estimation — estimate & roll-up session (4.3.7)', () => {
     // aggregate, server-computed) — labelled so it never reads as the epic's own
     // estimate.
     await page.goto(`/items/${seed.epic.identifier}`);
-    await expect(page.getByLabel('Rolled-up Story points: 8')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('main').getByLabel('Rolled-up Story points: 8')).toBeVisible({
+      timeout: 10_000,
+    });
 
     // …and the same roll-up decorates the epic's row in the issues tree (the
     // compact variant lazily fetches GET /api/work-items/[id]/rollup per parent).
@@ -259,7 +263,9 @@ test.describe('estimation — at scale (finding #57)', () => {
 
     // And it renders on the epic header (server-computed, no flash).
     await page.goto(`/items/${seed.epic.identifier}`);
-    await expect(page.getByLabel(`Rolled-up Story points: ${seed.epicTotal}`)).toBeVisible({
+    await expect(
+      page.getByRole('main').getByLabel(`Rolled-up Story points: ${seed.epicTotal}`),
+    ).toBeVisible({
       timeout: 10_000,
     });
   });

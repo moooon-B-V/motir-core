@@ -71,20 +71,23 @@ test('owner manages the workflow: defaults protected, custom status add + rename
   // Its "Color" action opens a recolor-only form — no Label field to rename.
   await reviewRow.getByRole('button', { name: 'Change color of In Review' }).click();
   await expect(page.getByText('only its color can be changed')).toBeVisible();
+  // MOTIR-5056: NOT converted. A `toHaveCount` assertion resolves the whole match
+  // set, so it cannot throw strict mode — this site is not in the defect class — and
+  // narrowing it to a role would weaken what the absence assertion proves.
   await expect(page.getByLabel('Label')).toHaveCount(0);
   await page.getByRole('button', { name: 'Cancel' }).click();
 
   // Add a custom status — custom statuses stay fully editable.
   await page.getByRole('button', { name: 'Add status' }).click();
-  await page.getByLabel('Key (machine id, lowercase)').fill('on_hold');
-  await page.getByLabel('Label').fill('On Hold');
+  await page.getByRole('textbox', { name: 'Key (machine id, lowercase)' }).fill('on_hold');
+  await page.getByRole('textbox', { name: 'Label' }).fill('On Hold');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('On Hold', { exact: true }).first()).toBeVisible();
 
   // Rename the custom status: On Hold → On Standby.
   const customRow = page.getByRole('listitem').filter({ hasText: 'On Hold' });
   await customRow.getByRole('button', { name: 'Edit' }).click();
-  await page.getByLabel('Label').fill('On Standby');
+  await page.getByRole('textbox', { name: 'Label' }).fill('On Standby');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('On Standby', { exact: true }).first()).toBeVisible();
 

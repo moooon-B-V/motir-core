@@ -247,7 +247,7 @@ test('@smoke a toolbar create appears in the Tree + List without a manual reload
 
   // Create through the SAME entry point the bug was reported on.
   await page.getByRole('button', { name: 'New work item' }).click();
-  await page.getByLabel('Title').fill('Created in tree');
+  await page.getByRole('textbox', { name: 'Title' }).fill('Created in tree');
   await page.getByRole('button', { name: 'Create' }).click();
 
   // The new ROOT row appears in the tree WITHOUT a reload (the regression assert).
@@ -263,7 +263,7 @@ test('@smoke a toolbar create appears in the Tree + List without a manual reload
 
   // A second create from the List toolbar also shows up with no reload.
   await page.getByRole('button', { name: 'New work item' }).click();
-  await page.getByLabel('Title').fill('Created in list');
+  await page.getByRole('textbox', { name: 'Title' }).fill('Created in list');
   await page.getByRole('button', { name: 'Create' }).click();
   await expect(page.getByRole('link', { name: /Created in list/ })).toBeVisible();
 });

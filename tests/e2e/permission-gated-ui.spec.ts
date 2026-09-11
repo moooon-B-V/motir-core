@@ -119,7 +119,7 @@ test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page 
   // So the admin walk ends on a real round trip: rename the project on Details
   // and read the persisted value back after a reload.
   await page.goto('/settings/project');
-  const nameField = page.getByLabel('Name', { exact: true });
+  const nameField = page.getByRole('textbox', { name: 'Name', exact: true });
   await expect(nameField).toBeEnabled();
   await nameField.fill('Permission-gated Project (renamed)');
   await page.getByRole('button', { name: 'Save changes' }).click();
@@ -127,7 +127,7 @@ test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page 
   await expect(page.getByText('Saved')).toBeVisible();
 
   await page.reload();
-  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(
     'Permission-gated Project (renamed)',
   );
 });

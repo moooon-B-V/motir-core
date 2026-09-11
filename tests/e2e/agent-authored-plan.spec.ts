@@ -153,7 +153,7 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     // the level it opens on is the one THE PLAN FILLS (MOTIR-3260, Story
     // MOTIR-3232): for this plan that is INSIDE the proposed story, so the
     // reviewer is greeted by the story's own crumb rather than by its card.
-    await expect(page.getByLabel('Proposed plan canvas')).toBeVisible();
+    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
     await expect(
       page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', {
         name: `New · ${authored.storyTitle}`,

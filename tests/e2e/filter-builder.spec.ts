@@ -155,7 +155,7 @@ test('build a beyond-facet filter → live results + count + URL round-trip + Tr
   await expect(page.getByText('OAuth docs page')).toHaveCount(0);
 
   // The facet [Filter] button is SUPERSEDED (negation can't down-convert).
-  await expect(page.getByLabel('Managed in Advanced')).toBeVisible();
+  await expect(page.getByRole('main').getByLabel('Managed in Advanced')).toBeVisible();
 
   // The applied summary chips render the conditions read-only.
   await expect(page.getByText('is none of Lowest')).toBeVisible();
@@ -339,7 +339,7 @@ test('the recipe: a custom-field + label + negation + relative-date filter → o
 
   // The facet button is SUPERSEDED — the AST (CF rows, negation) can't
   // down-convert into the quick facet bar.
-  await expect(page.getByLabel('Managed in Advanced')).toBeVisible();
+  await expect(page.getByRole('main').getByLabel('Managed in Advanced')).toBeVisible();
 
   // Fresh-context URL round-trip: a NEW signed-in browser opening the shared
   // `?filter=v1:` URL restores the exact result + builder state.
@@ -467,5 +467,5 @@ test('the facet state upgrades losslessly into builder rows (one-way "Edit in Ad
   await page.getByRole('option', { name: 'Lowest', exact: true }).click();
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
-  await expect(page.getByLabel('Managed in Advanced')).toBeVisible();
+  await expect(page.getByRole('main').getByLabel('Managed in Advanced')).toBeVisible();
 });

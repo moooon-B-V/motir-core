@@ -84,8 +84,10 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
   // Default type (Task) keeps it top-level-legal; fill title + a PLAIN-PROSE
   // description (the WYSIWYG editor stores typed text literally — no Markdown
   // syntax, so it round-trips byte-for-byte; fidelity is unit-tested elsewhere).
-  await page.getByLabel('Title').fill('Wire the dashboard');
-  await page.getByLabel('Description').fill('A short requirement for the dashboard view.');
+  await page.getByRole('textbox', { name: 'Title' }).fill('Wire the dashboard');
+  await page
+    .getByRole('textbox', { name: 'Description' })
+    .fill('A short requirement for the dashboard view.');
   await page.getByRole('button', { name: 'Create' }).click();
   await expect(page.getByText(/^\S+ created$/).first()).toBeVisible();
 
@@ -102,8 +104,8 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
   // The edit route opens for that identifier and rehydrates BOTH fields — the
   // stored Markdown parses back into the WYSIWYG editor's rendered document.
   await page.goto(`/items/${created!.identifier}/edit`);
-  await expect(page.getByLabel('Title')).toHaveValue('Wire the dashboard');
-  await expect(page.getByLabel('Description')).toContainText(
+  await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('Wire the dashboard');
+  await expect(page.getByRole('textbox', { name: 'Description' })).toContainText(
     'A short requirement for the dashboard view.',
   );
 });
@@ -159,7 +161,7 @@ test('@smoke edit non-status fields persists + writes a revision', async ({ page
   const identifier = ((await getItem(page, id)).identifier as string) ?? '';
 
   await page.goto(`/items/${identifier}/edit`);
-  await page.getByLabel('Title').fill('Edited title');
+  await page.getByRole('textbox', { name: 'Title' }).fill('Edited title');
   // Priority is the shared Combobox picker now (not a native <select>) — open it
   // and pick High (exact: 'High' would otherwise also match 'Highest').
   await page.getByRole('combobox', { name: 'Priority' }).click();
@@ -213,7 +215,7 @@ test('@smoke a stale edit (the row changed since load) surfaces the refresh bann
   const identifier = (await getItem(page, id)).identifier as string;
 
   await page.goto(`/items/${identifier}/edit`);
-  await expect(page.getByLabel('Title')).toHaveValue('Concurrent');
+  await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('Concurrent');
 
   // Externally mutate the row (bumps updatedAt) AFTER the form captured the old one.
   const patch = await page.request.patch(`/api/_test/work-items?id=${id}`, {
@@ -222,7 +224,7 @@ test('@smoke a stale edit (the row changed since load) surfaces the refresh bann
   expect(patch.status(), 'external edit').toBe(200);
 
   // Our form still holds the stale updatedAt → save must be refused with the banner.
-  await page.getByLabel('Title').fill('My conflicting edit');
+  await page.getByRole('textbox', { name: 'Title' }).fill('My conflicting edit');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(
     page.getByText('This work item was edited by someone else. Refresh to see the latest.'),

@@ -149,12 +149,12 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
   });
 
   await chapter(`Start from Member, name it ${ROLE_NAME}, untick two permissions`, async () => {
-    await page.getByLabel('Name').fill(ROLE_NAME);
+    await page.getByRole('textbox', { name: 'Name' }).fill(ROLE_NAME);
     await beat();
 
     // `Start from` SEEDS the grid and is stored nowhere — an authoring
     // convenience so the author does not face 28 blank boxes.
-    await page.getByLabel('Start from').selectOption('member');
+    await page.getByRole('combobox', { name: 'Start from' }).selectOption('member');
     const count = page.getByTestId('role-editor-count');
     const [seeded] = parseCount(await count.innerText());
     expect(seeded, 'Start from Member pre-ticked nothing').toBeGreaterThan(0);
@@ -385,11 +385,11 @@ test('the editor refuses an empty name and a duplicate one', async ({ page }) =>
   // trip — the refusal is visible before it is earned.
   const submit = page.getByRole('button', { name: 'Create role' });
   await expect(submit).toBeDisabled();
-  await page.getByLabel('Name').fill('   ');
+  await page.getByRole('textbox', { name: 'Name' }).fill('   ');
   await expect(submit, 'whitespace is not a name').toBeDisabled();
 
   // Author one for real…
-  await page.getByLabel('Name').fill(ROLE_NAME);
+  await page.getByRole('textbox', { name: 'Name' }).fill(ROLE_NAME);
   const created = page.waitForResponse(
     (res) => /\/roles$/.test(new URL(res.url()).pathname) && res.request().method() === 'POST',
   );
@@ -401,12 +401,12 @@ test('the editor refuses an empty name and a duplicate one', async ({ page }) =>
   await openRolesList(page);
   await page.getByTestId('create-role').click();
   await page.waitForURL('**/settings/project/roles/new');
-  await page.getByLabel('Name').fill(ROLE_NAME);
+  await page.getByRole('textbox', { name: 'Name' }).fill(ROLE_NAME);
   const refused = page.waitForResponse(
     (res) => /\/roles$/.test(new URL(res.url()).pathname) && res.request().method() === 'POST',
   );
   await page.getByRole('button', { name: 'Create role' }).click();
   expect((await refused).status()).toBe(409);
   await expect(page.getByTestId('role-editor-error')).toContainText(ROLE_NAME);
-  await expect(page.getByLabel('Name')).toHaveValue(ROLE_NAME);
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue(ROLE_NAME);
 });

@@ -111,10 +111,10 @@ async function createProject(page: Page, name: string, identifier: string): Prom
     .last()
     .click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
-  await page.getByLabel('Project name').fill(name);
+  await page.getByRole('textbox', { name: 'Project name' }).fill(name);
   // Identifier auto-derives from the name; replace it with our explicit
   // value so the cross-tenant assertions can pin on stable handles.
-  const identifierInput = page.getByLabel('Identifier');
+  const identifierInput = page.getByRole('textbox', { name: 'Identifier' });
   await identifierInput.fill(identifier);
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
   await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible({
