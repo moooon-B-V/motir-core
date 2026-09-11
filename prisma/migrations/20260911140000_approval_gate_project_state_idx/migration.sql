@@ -1,0 +1,12 @@
+-- The ROUTING READ's index (Story MOTIR-4879 · Subtask MOTIR-4791).
+--
+-- The Approvals tab reads one PROJECT's `awaiting` gates — the Workbench is
+-- active-project scoped (MOTIR-2761) — and `approval_gate_workspace_id_state_idx`
+-- cannot serve that: a workspace with many projects scans every project's gates
+-- to render one project's tab. The routing half of the predicate
+-- (`assignee_id ?? reporter_id`) lives on `work_item` and is reached from these
+-- rows by primary key, so narrowing the gate side is what the plan needs.
+--
+-- The workspace index is NOT dropped: MOTIR-2920's workspace-tier read is what
+-- it was added for.
+CREATE INDEX "approval_gate_project_id_state_idx" ON "approval_gate"("project_id", "state");

@@ -137,6 +137,8 @@ describe('board API routes', () => {
       'implemented',
       'planning',
       'in_review',
+      // MOTIR-5139 — a person's YES, between review and the merge.
+      'approved',
       'done',
       'cancelled',
     ]);

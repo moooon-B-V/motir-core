@@ -228,6 +228,68 @@ describe('the ladder — each rung moves the parent to the right status', () => 
   });
 });
 
+describe('the APPROVED rung (MOTIR-5140) — a person\u2019s yes moves the parent FORWARD', () => {
+  it('every live child approved ⇒ the parent derives to approved, NOT to in_progress', async () => {
+    // THE REGRESSION THIS CARD EXISTS FOR. `approved` is an in_progress-CATEGORY
+    // status, so before the sixth rung it ranked as plain in-progress and this
+    // parent derived BACKWARDS — the same children at `in_review` derived to In
+    // Review, and moving them forward to Approved moved the parent back.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['approved', 'approved']);
+    await setStatus(story.id, 'in_review'); // where the previous rung left it
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'approved' });
+    expect(await statusOf(story.id)).toBe('approved');
+  });
+
+  it('and the parent is NOT completed — the story\u2019s own acceptance criterion', async () => {
+    // Proven rather than inherited from the category: `approved` sits in
+    // `in_progress`, so nothing here should reach a done-category status.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['approved', 'approved']);
+
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    const parent = await statusOf(story.id);
+    expect(parent).toBe('approved');
+    const statuses = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
+    expect(statuses.statuses.find((st) => st.key === parent)?.category).toBe('in_progress');
+    expect(parent).not.toBe('done');
+  });
+
+  it('approved + done ⇒ approved; one child still in review holds it at in_review', async () => {
+    // The cumulative-sum shape: each rung counts every bucket at-or-ABOVE it, so
+    // a done sibling does not block the approved rung and an in-review one does.
+    const fx = await makeWorkItemFixture();
+    const a = await storyWithChildren(fx, ['approved', 'done']);
+    await parentStatusRollupService.rollUpForChild(a.children[0]!.id, fx.workspaceId);
+    expect(await statusOf(a.story.id)).toBe('approved');
+
+    const b = await storyWithChildren(fx, ['approved', 'in_review']);
+    await parentStatusRollupService.rollUpForChild(b.children[0]!.id, fx.workspaceId);
+    expect(await statusOf(b.story.id)).toBe('in_review');
+  });
+
+  it('a project WITHOUT an approved status derives exactly as it did before', async () => {
+    // The inertness guarantee, at the service level: strip the status the way a
+    // project the backfill never reached would have it, and the ladder falls back
+    // to the category for everything — which is the five-rung reading.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['in_review', 'in_review']);
+    await setStatus(story.id, 'in_progress'); // the rung the recompute walks from
+    await adminDb.$executeRawUnsafe(
+      `DELETE FROM workflow_status WHERE project_id = $1 AND key = 'approved'`,
+      fx.projectId,
+    );
+
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(await statusOf(story.id)).toBe('in_review');
+  });
+});
+
 describe('the fourth (todo) rung — the ladder can say "open work, none started"', () => {
   it('a DONE parent given a fresh todo child comes back to todo', async () => {
     // The story's own case (MOTIR-2888), and the one the ratchet could not

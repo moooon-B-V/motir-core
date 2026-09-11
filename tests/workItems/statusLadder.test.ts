@@ -25,13 +25,14 @@ const DEFAULT_STATUSES = [
   { key: 'implemented', category: 'in_progress' as const },
   { key: 'planning', category: 'in_progress' as const },
   { key: 'in_review', category: 'in_progress' as const },
+  { key: 'approved', category: 'in_progress' as const },
   { key: 'done', category: 'done' as const },
   { key: 'cancelled', category: 'done' as const },
 ];
 
-const KEYS = { reviewKey: 'in_review', implementedKey: 'implemented' };
+const KEYS = { reviewKey: 'in_review', implementedKey: 'implemented', approvedKey: 'approved' };
 
-describe('rankOfStatus — five rungs, by category with two keys pulled out', () => {
+describe('rankOfStatus — six rungs, by category with three keys pulled out', () => {
   it.each([
     ['todo', RUNG_RANK.todo],
     ['blocked', RUNG_RANK.todo],
@@ -42,6 +43,10 @@ describe('rankOfStatus — five rungs, by category with two keys pulled out', ()
     ['planning', RUNG_RANK.in_progress],
     ['implemented', RUNG_RANK.implemented],
     ['in_review', RUNG_RANK.in_review],
+    // ⚠️ MOTIR-5140 — `approved` is an in_progress-CATEGORY status like
+    // `planning` two lines up, and ranks nowhere near it: a person has said yes.
+    // The category says it is not FINISHED; the rung says how far along it is.
+    ['approved', RUNG_RANK.approved],
     ['done', RUNG_RANK.done],
     ['cancelled', RUNG_RANK.done],
   ])('ranks %s at %i', (key, rank) => {
@@ -49,11 +54,34 @@ describe('rankOfStatus — five rungs, by category with two keys pulled out', ()
   });
 
   it('ranks the strictly increasing lifecycle in order', () => {
-    const ranks = ['todo', 'in_progress', 'implemented', 'in_review', 'done'].map((k) =>
+    const ranks = ['todo', 'in_progress', 'implemented', 'in_review', 'approved', 'done'].map((k) =>
       rankOfStatus(k, DEFAULT_STATUSES, KEYS),
     );
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
-    expect(new Set(ranks).size).toBe(5);
+    expect(new Set(ranks).size).toBe(6);
+  });
+
+  it('ranks `approved` ABOVE in_review and BELOW done — the whole of MOTIR-5140', () => {
+    // Stated as an ordering rather than as a number, because the numbers are an
+    // implementation detail and this relation is the card's actual claim.
+    const rank = (k: string) => rankOfStatus(k, DEFAULT_STATUSES, KEYS);
+    expect(rank('approved')).toBeGreaterThan(rank('in_review'));
+    expect(rank('approved')).toBeLessThan(rank('done'));
+    // And the regression it fixes, named: before the rung it returned this.
+    expect(rank('approved')).not.toBe(rank('in_progress'));
+  });
+
+  it('a project WITHOUT an approved status is completely unaffected', () => {
+    // The inertness guarantee — a project the backfill never reached passes a
+    // null key and every other rank is byte-identical to what it was.
+    const noApproved = { ...KEYS, approvedKey: null };
+    for (const key of ['todo', 'in_progress', 'implemented', 'in_review', 'done', 'cancelled']) {
+      expect(rankOfStatus(key, DEFAULT_STATUSES, noApproved)).toBe(
+        rankOfStatus(key, DEFAULT_STATUSES, KEYS),
+      );
+    }
+    // …and the status itself falls back to its CATEGORY, which is in_progress.
+    expect(rankOfStatus('approved', DEFAULT_STATUSES, noApproved)).toBe(RUNG_RANK.in_progress);
   });
 
   it('ranks an UNKNOWN key lowest — a status nobody can classify is not evidence of progress', () => {
@@ -70,7 +98,7 @@ describe('rankOfStatus — five rungs, by category with two keys pulled out', ()
       { key: 'qa', category: 'in_progress' as const },
       { key: 'shipped', category: 'done' as const },
     ];
-    const noKeys = { reviewKey: null, implementedKey: null };
+    const noKeys = { reviewKey: null, implementedKey: null, approvedKey: null };
     expect(rankOfStatus('doing', renamed, noKeys)).toBe(RUNG_RANK.in_progress);
     expect(rankOfStatus('qa', renamed, noKeys)).toBe(RUNG_RANK.in_progress);
     expect(rankOfStatus('shipped', renamed, noKeys)).toBe(RUNG_RANK.done);
@@ -82,19 +110,26 @@ describe('rankOfStatus — five rungs, by category with two keys pulled out', ()
       { key: 'built', category: 'in_progress' as const },
       { key: 'qa', category: 'in_progress' as const },
     ];
-    const keys = { reviewKey: 'qa', implementedKey: 'built' };
+    const keys = { reviewKey: 'qa', implementedKey: 'built', approvedKey: 'signed-off' };
     expect(rankOfStatus('built', renamed, keys)).toBe(RUNG_RANK.implemented);
     expect(rankOfStatus('qa', renamed, keys)).toBe(RUNG_RANK.in_review);
     expect(rankOfStatus('doing', renamed, keys)).toBe(RUNG_RANK.in_progress);
+    expect(rankOfStatus('signed-off', renamed, keys)).toBe(RUNG_RANK.approved);
   });
 
-  it('gives REVIEW precedence when a project aliases both rungs onto one key', () => {
+  it('gives the HIGHER rung precedence when a project aliases rungs onto one key', () => {
     // Pathological but expressible. The higher rung is the conservative answer for
-    // the derivation and the stricter one for the gate, so review wins.
-    const keys = { reviewKey: 'qa', implementedKey: 'qa' };
-    expect(rankOfStatus('qa', [{ key: 'qa', category: 'in_progress' }], keys)).toBe(
-      RUNG_RANK.in_review,
-    );
+    // the derivation and the stricter one for the gate.
+    const one = [{ key: 'qa', category: 'in_progress' as const }];
+    expect(
+      rankOfStatus('qa', one, { reviewKey: 'qa', implementedKey: 'qa', approvedKey: null }),
+    ).toBe(RUNG_RANK.in_review);
+    // MOTIR-5140 — and APPROVED outranks review, so it wins over both. This is
+    // the same precedence `aggregateChildrenStatus` applies when it buckets, and
+    // the two must not drift: the rank and the bucket are one decision.
+    expect(
+      rankOfStatus('qa', one, { reviewKey: 'qa', implementedKey: 'qa', approvedKey: 'qa' }),
+    ).toBe(RUNG_RANK.approved);
   });
 });
 
@@ -107,6 +142,7 @@ describe('the ladder itself', () => {
   it('names every rung exactly once', () => {
     expect(LADDER.map((e) => e.rung)).toEqual([
       'done',
+      'approved',
       'in_review',
       'implemented',
       'in_progress',
@@ -116,9 +152,15 @@ describe('the ladder itself', () => {
 });
 
 describe('the container-completeness bar', () => {
-  it('is `implemented`, and gates exactly the two statuses that CLAIM the work is built', () => {
+  it('is `implemented`, and gates exactly the statuses that CLAIM the work is built', () => {
+    // The BAR is unchanged by MOTIR-5140 and is now correct rather than merely
+    // unchanged: an approved child ranks ABOVE it, so it clears.
     expect(CONTAINER_CLAIM_BAR_RANK).toBe(RUNG_RANK.implemented);
-    expect([...CONTAINER_CLAIM_STATUS_KEYS].sort()).toEqual(['implemented', 'in_review']);
+    expect([...CONTAINER_CLAIM_STATUS_KEYS].sort()).toEqual([
+      'approved',
+      'implemented',
+      'in_review',
+    ]);
     // ⚠️ `done` is NOT here, and its absence is the decision: completing a parent
     // is a decision that completes its children (ADR §4), so gating it would break
     // the feature rather than the defect.
@@ -133,6 +175,7 @@ describe('the container-completeness bar', () => {
       { id: 'd', status: 'planning' },
       { id: 'e', status: 'implemented' },
       { id: 'f', status: 'in_review' },
+      { id: 'i', status: 'approved' },
       { id: 'g', status: 'done' },
       { id: 'h', status: 'cancelled' },
     ];
@@ -151,6 +194,21 @@ describe('the container-completeness bar', () => {
         [
           { id: 'a', status: 'implemented' },
           { id: 'b', status: 'done' },
+        ],
+        DEFAULT_STATUSES,
+        KEYS,
+      ),
+    ).toEqual([]);
+    // ⚠️ MOTIR-5140's second regression, asserted directly: an APPROVED child
+    // clears the bar. Before the rung it ranked as plain in-progress, so it was
+    // counted as un-built and `applyStatusTransition` refused the parent's move
+    // with CONTAINER_HAS_OPEN_CHILDREN — on a container every one of whose
+    // children had been approved.
+    expect(
+      childrenBelowClaimBar(
+        [
+          { id: 'a', status: 'approved' },
+          { id: 'b', status: 'approved' },
         ],
         DEFAULT_STATUSES,
         KEYS,

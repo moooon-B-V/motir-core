@@ -1,5 +1,10 @@
 import type { ApprovalGate } from '@/generated/prisma/client';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type {
+  ApprovalGateDTO,
+  ApprovalGateSubjectSummaryDTO,
+  ApprovalQueueRowDto,
+} from '@/lib/dto/approvalGate';
+import type { AwaitingGateRow } from '@/lib/repositories/approvalGateRepository';
 
 // Prisma row → the wire DTO the decide control / Approvals tab reads (Story
 // MOTIR-4778 · Subtask MOTIR-4788, widened by MOTIR-4912 with the ADR §6a AUDIT
@@ -38,5 +43,43 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
     outcomeRef: row.outcomeRef,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * One routing-read row → the Approvals tab's wire row (Story MOTIR-4879 ·
+ * Subtask MOTIR-4791).
+ *
+ * The subject summary is resolved per kind by
+ * `lib/approvalGates/subjectSummary.ts` and threaded in, rather than read here:
+ * a mapper is a pure row→DTO conversion (the same discipline
+ * {@link toApprovalGateDto} keeps by being an explicit field list rather than a
+ * spread), and resolving a subject is a database read.
+ *
+ * ⚠️ `state` IS ASSERTED, NOT MAPPED THROUGH, and the narrowing is deliberate:
+ * the read's `where` clause pins it to `awaiting`, so the DTO says so in its
+ * type. If that predicate is ever widened this line is where the type-check
+ * fails, which is the point of narrowing it.
+ */
+export function toApprovalQueueRowDto(
+  row: AwaitingGateRow,
+  subject: ApprovalGateSubjectSummaryDTO | null,
+  canDecide: boolean,
+): ApprovalQueueRowDto {
+  return {
+    gateId: row.id,
+    kind: row.kind,
+    state: 'awaiting',
+    canDecide,
+    waitingSince: row.createdAt.toISOString(),
+    workItem: {
+      id: row.workItem.id,
+      key: row.workItem.key,
+      identifier: row.workItem.identifier,
+      title: row.workItem.title,
+      kind: row.workItem.kind,
+      type: row.workItem.type,
+    },
+    subject,
   };
 }

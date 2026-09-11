@@ -2208,6 +2208,60 @@ jobs:
       - run: pnpm prisma migrate deploy
       - run: pnpm coverage:onboarding-routing
 
+  # STORY MOTIR-4905's COVERAGE FLOOR (MOTIR-5142) — the `approved` status's
+  # decision code: the ladder that ranks it, the workflow that declares it, the
+  # derivation that reads the rank, and the canvas map that paints it. Same shape
+  # and same reasoning as `story-4753-coverage` above, including the scoped
+  # `include`: measuring four files by running the whole tree is a gate nobody
+  # would run locally and a second copy of the sharded suite's bill in CI.
+  #
+  # It needs Postgres: the rollup, the children aggregate and the story gate all
+  # run against a real database, per the repository's own convention.
+  story-4905-coverage:
+    name: Coverage (approved status)
+    runs-on: ubuntu-latest
+    # Observed 0.8 min of test time locally; the ceiling bounds a hang rather
+    # than setting a target, and the fixed cost (checkout + Postgres + install +
+    # `migrate deploy`) is ~75 s on this runner class.
+    timeout-minutes: 15
+    needs: changes
+    # Same predicate as the sharded suite: a diff that reaches no app code has
+    # nothing here to cover.
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-4905
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-4905
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-4905.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-4905.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm coverage:approved-status
+
   ci-complete:
     name: CI complete
     # WHY `always()` AND an explicit result assertion — neither alone works:
@@ -2236,6 +2290,7 @@ jobs:
         test,
         coverage,
         story-4753-coverage,
+        story-4905-coverage,
         e2e,
         e2e-at-scale,
         sandbox,

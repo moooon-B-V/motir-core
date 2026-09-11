@@ -351,6 +351,16 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // is ever seen to trip on it the remedy is a design-owned relabel of the
     // provenance chip (design/work-items/provenance.mock.html draws it), not a
     // change to the closed type-label set.
+    // The disclosure VERB on the Approvals tab's row — a different part of
+    // speech from the `review` TYPE (review WORK), exactly as the clipboard
+    // `copy` entries above are from the `copy` type. The row it sits in renders
+    // no work-item type chip at all: its cells are the GATE kind, the card's
+    // identifier and title, and how long it has waited. The sibling
+    // `kind.decision_approval` was NOT allowlisted — it is RENAMED to "Decision
+    // approval", which matches its own siblings (`Pull-request approval`,
+    // `Pull-request merge`) and needs no note to be unambiguous.
+    'workbench.approvals.review':
+      'disclosure verb on the Approvals row — opens the approval frame; the row renders no type chip',
     'issueViews.provenanceSourceManual':
       'provenance ORIGIN chip on the item detail rail — framed by FieldCard label "Planning"/"Implementation"',
   },

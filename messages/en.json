@@ -576,6 +576,7 @@
       "implemented": "Implemented",
       "planning": "Planning",
       "in_review": "In Review",
+      "approved": "Approved",
       "done": "Done",
       "cancelled": "Cancelled"
     },
@@ -7307,6 +7308,26 @@
         "title": "Nothing is waiting on your approval",
         "body": "Work that needs your sign-off before it can go on will show up here."
       }
+    },
+    "approvals": {
+      "columns": {
+        "subject": "Waiting on",
+        "workItem": "Work item",
+        "waited": "Waited"
+      },
+      "review": "Review",
+      "subjectMeta": "{files, plural, =1 {# file} other {# files}} · {version}",
+      "noVersion": "no version",
+      "subjectGone": "The design this asked about is gone",
+      "notRenderable": "Motir cannot show this kind yet",
+      "notBuiltYet": "Not built yet",
+      "kind": {
+        "design_result": "Design result",
+        "decision_approval": "Decision approval",
+        "pull_request_approval": "Pull-request approval",
+        "pull_request_merge": "Pull-request merge"
+      },
+      "reviewRow": "Review {key} {title}"
     }
   },
   "platformAdmin": {

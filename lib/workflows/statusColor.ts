@@ -35,6 +35,13 @@ const STATUS_KEY_EL: Record<string, string> = {
   // `in_progress` — the exact collapse MOTIR-1273 un-did for `in_review`.
   implemented: '--el-status-implemented',
   in_review: '--el-status-in-review',
+  // A person's YES (MOTIR-5139). Same reasoning as `planning` and `implemented`
+  // above, a third time: it sits in the in-progress category, so without its own
+  // key entry the option dot would be `--el-status-in-progress` and Approved
+  // would be indistinguishable from In Progress and In Review **in the one
+  // control a person uses to SET the status**. Drawn, and visible, in
+  // design/boards/approved-column.mock.html panel 4.
+  approved: '--el-status-approved',
   done: '--el-status-done',
   cancelled: '--el-status-cancelled',
 };

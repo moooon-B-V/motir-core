@@ -400,13 +400,22 @@ describe('a SUPERSEDED subject retires its AWAITING gate (ADR §6b)', () => {
     const byItem = await withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.findAwaitingByWorkItem(card.id, tx),
     );
-    const byWorkspace = await withWorkspaceContext(fx.ctx, (tx) =>
-      approvalGateRepository.findAwaitingByWorkspace(fx.workspaceId, tx),
+    // MOTIR-4791 narrowed `findAwaitingByWorkspace` into the ROUTING read the
+    // Approvals tab actually makes — one project, routed to one person, paged.
+    // The assertion is unchanged in substance: the superseded gate leaves the
+    // routing read. The card is created through `fx.ctx` with no assignee, so
+    // §2's `assigneeId ?? reporterId` routes it to that same actor.
+    const byRouting = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.findAwaitingRoutedTo(
+        { projectIds: [fx.projectId], userId: fx.ctx.userId },
+        { skip: 0, take: 50 },
+        tx,
+      ),
     );
 
     expect(byItem.map((g) => g.id)).not.toContain(v1Gate.id);
     expect(byItem.map((g) => g.subjectId)).toEqual([v2.id]);
-    expect(byWorkspace.map((g) => g.subjectId)).toEqual([v2.id]);
+    expect(byRouting.map((g) => g.subjectId)).toEqual([v2.id]);
   });
 
   it('is refused by the decide door with a typed error — a withdrawn question, not somebody’s answer', async () => {
