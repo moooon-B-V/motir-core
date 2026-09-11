@@ -1,3 +1,5 @@
+import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+
 // Wire DTOs for the approval-gate record (Story MOTIR-4778 · Subtask
 // MOTIR-4788; ADR docs/decisions/approval-gates.md). The service layer (the
 // decide-door card MOTIR-4790, the Approvals tab MOTIR-4779) maps Prisma rows
@@ -114,4 +116,128 @@ export interface ApprovalGateDTO {
 
   createdAt: string;
   updatedAt: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE APPROVALS QUEUE (Story MOTIR-4879 · Subtask MOTIR-4791) — what the
+// Workbench's *To approve* tab reads. A DIFFERENT shape from `ApprovalGateDTO`
+// above, and the difference is the surface: the gate DTO answers *what is the
+// record of this decision?* on a card a reader is already looking at, and these
+// answer *what is waiting on me, and which one is it?* in a list of things the
+// reader has not opened.
+//
+// ⚠️ THE AUDIT SET IS ABSENT HERE, and that is not an omission to fix later.
+// Every row this read returns is `awaiting`, so all six audit fields are null on
+// every one of them by construction — carrying them would be six columns of
+// guaranteed nulls travelling to a surface with nothing to render them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * WHICH DESIGN is waiting, at row scale — enough to recognise the work without
+ * opening it.
+ *
+ * `noteExcerpt` is a LEAD rather than the note: a design note runs to tens of
+ * kilobytes and a row has one line. The whole text is on the card, which is
+ * where a reader who wants it is going anyway.
+ */
+export interface DesignResultSubjectSummaryDTO {
+  kind: 'design_result';
+  /** The `DesignEvidence` row the gate asks about — these bytes, not "the design". */
+  designEvidenceId: string;
+  /** The card whose pull request produced this result (e.g. `MOTIR-2669`). */
+  producedByKey: string | null;
+  /** The commit those bytes are, when the publish had one. */
+  commitSha: string | null;
+  /** How many files the result carries — the row says the number and links away. */
+  assetCount: number;
+  /** The first line or so of the design note, plain, or null when it has none. */
+  noteExcerpt: string | null;
+}
+
+/**
+ * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
+ * day this ships, not a defensive branch.
+ *
+ * `lib/approvalGates/registry.ts` registers exactly one kind and names the other
+ * three as declared compile-time holes owned by MOTIR-4907 / 4909 / 4910 / 4882.
+ * A gate carrying one of them can exist — a fixture, a half-landed sibling, the
+ * day the next story lands its creation path before its renderer — and the
+ * honest answer is a row that SAYS the kind is not built yet, which is exactly
+ * what `UNREGISTERED_GATE_KINDS` exists at runtime to let a surface do.
+ */
+export interface UnregisteredSubjectSummaryDTO {
+  kind: Exclude<ApprovalGateKindDTO, 'design_result'>;
+}
+
+/**
+ * What a row says about the thing being decided, per kind.
+ *
+ * ⚠️ TOTAL OVER `ApprovalGateKind`, not over the kinds somebody had in mind —
+ * and the assertion that keeps it total lives in
+ * `lib/approvalGates/subjectSummary.ts`, because THIS file is imported by client
+ * modules and the registry is not (see `GateDecision`'s note above on why the
+ * boundary is enforced by import SITE). Adding a fifth enum member fails the
+ * build there, which is the registry's own guarantee extended to the read.
+ */
+export type ApprovalGateSubjectSummaryDTO =
+  | DesignResultSubjectSummaryDTO
+  | UnregisteredSubjectSummaryDTO;
+
+/** The card a gate hangs off, as a queue row identifies it. */
+export interface ApprovalQueueWorkItemRefDto {
+  id: string;
+  key: number;
+  identifier: string;
+  title: string;
+  kind: WorkItemKindDto;
+  /** The leaf's work TYPE (`design` / `code` / …); null on a container. */
+  type: WorkItemTypeDto | null;
+}
+
+/**
+ * ONE row of the Approvals tab: a live question, the card it is about, and
+ * enough of its subject to answer it from the list.
+ *
+ * `state` is narrowed to `'awaiting'` rather than carried as the full union,
+ * because this read returns nothing else — a decided gate is not something
+ * anybody is waiting on. A row that could be `approved` would invite a renderer
+ * to draw a state this read cannot produce.
+ */
+export interface ApprovalQueueRowDto {
+  gateId: string;
+  kind: ApprovalGateKindDTO;
+  state: Extract<ApprovalGateStateDTO, 'awaiting'>;
+  /** ISO-8601 — when the question was asked. The row renders how long ago. */
+  waitingSince: string;
+  workItem: ApprovalQueueWorkItemRefDto;
+  /**
+   * What is being decided — or NULL when the gate's subject no longer resolves.
+   *
+   * ⚠️ NULL IS A THIRD ANSWER, not a missing one, and it is distinct from the
+   * not-built-yet arm above. *This build cannot render this kind* and *the row
+   * this gate points at is gone* are different facts about a row, and a reader
+   * needs to be told which: the first is a feature that has not shipped, the
+   * second is a gate worth withdrawing. ADR §6a already admits the second — a
+   * handler's `resolveSubject` is documented to return null — so a queue that
+   * collapsed it into the unregistered arm would report a shipped kind as
+   * unbuilt.
+   */
+  subject: ApprovalGateSubjectSummaryDTO | null;
+}
+
+/**
+ * One OFFSET-paged window of the Approvals tab.
+ *
+ * ⚠️ THE SHAPE IS `HomePageDto`'s, AND THAT IS THE DECISION. `lib/dto/home.ts`
+ * records why the Workbench retired its keyset (MOTIR-4852): *"a keyset has no
+ * notion of 'page 7', so a reader could not see how far a tab went, jump, or
+ * step back. The Workbench is not a feed."* This tab sits in the same strip,
+ * under the same `IssueListPager`, so it inherits the same vocabulary — `page`
+ * 1-based and CLAMPED to the last page, `total` the size of the whole set.
+ */
+export interface ApprovalQueuePageDto {
+  items: ApprovalQueueRowDto[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

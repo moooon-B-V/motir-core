@@ -364,19 +364,148 @@ export const approvalGateRepository = {
     return result.count;
   },
 
-  /** The routing read: a workspace's `awaiting` gates (whose Approvals tab).
-   *  Served by the `approval_gate_workspace_id_state_idx` index. */
-  async findAwaitingByWorkspace(
-    workspaceId: string,
+  /**
+   * THE ROUTING READ — one project's `awaiting` gates that are routed to ONE
+   * person, oldest-waiting first, as a WINDOW (Story MOTIR-4879 · Subtask
+   * MOTIR-4791; ADR docs/decisions/approval-gates.md §2).
+   *
+   * ⚠️ THIS IS `findAwaitingByWorkspace` NARROWED, NOT A SECOND METHOD BESIDE
+   * IT. That read was workspace-scoped, unpaged and routed to nobody — the right
+   * LEAF with the wrong scope, as its own comment said (*"the routing read: a
+   * workspace's `awaiting` gates (whose Approvals tab)"*). Three things were
+   * missing and all three are properties of the surface it was named for: the
+   * Workbench is ACTIVE-PROJECT scoped (`homeService`'s own note, MOTIR-2761),
+   * the tab asks whose gate it is, and a personal list is paged. Adding a fourth
+   * near-identical `findMany` beside it would have left two answers to *whose
+   * Approvals tab* differing only in a `where` clause nobody diffs.
+   *
+   * ⚠️ THE PREDICATE IS APPLIED IN THE QUERY, NEVER TO ITS OUTPUT — and the
+   * `projectIds` ARRAY is what carries the ACCESS decision in. An actor who may
+   * not browse their own active project is passed an EMPTY array and the query
+   * returns nothing, which is the no-existence-leak convention every other
+   * project gate follows. A post-read filter would shorten pages instead of
+   * failing, and *"the list sometimes ends early"* is a bug nobody traces back to
+   * an access rule (`homeService`'s `activeProjectScope`, verbatim reasoning).
+   *
+   * ⚠️ ROUTING IS RE-DERIVED FROM THE WORK ITEM, NOT READ FROM `routed_to_id` —
+   * and the two genuinely differ, so this is a decision rather than an
+   * oversight. `routed_to_id` is §2's answer FROZEN AT CREATION, and ADR §6a
+   * keeps it for exactly that: it is the audit record of *who was actually
+   * asked*, which must not move when a card is reassigned. A live QUEUE asks a
+   * different question — *whose job is it to look, now* — and answering it from
+   * the frozen column would strand every gate on a reassigned card in the
+   * previous assignee's tab, including one belonging to somebody who has left.
+   * That is the failure §2's amendment widened AUTHORITY to escape, and it
+   * should not be reintroduced through the routing half. The audit column and
+   * this predicate are both right, about different questions.
+   *
+   * `assigneeId = :me OR (assigneeId IS NULL AND reporterId = :me)` — §2's
+   * `assigneeId ?? reporterId`, expressed as a predicate. Exactly one recipient,
+   * which is why it is NOT `workItemRepository.findByAssigneeOrReporterInWorkspace`'s
+   * union: that one is right for a WORK LIST and wrong for a DECISION QUEUE.
+   *
+   * Ordered `createdAt asc` — oldest-waiting first, matching
+   * {@link findAwaitingByWorkItem}'s own determinism. A queue optimises for what
+   * has been waiting, because the cost of a gate is the work stalled behind it.
+   *
+   * Served by `approval_gate_project_id_state_idx` (this card's migration): the
+   * gate side narrows to one project's awaiting rows and the join to
+   * `work_item` is by primary key. The old `(workspace_id, state)` index stays
+   * for the workspace-tier read MOTIR-2920 will add.
+   */
+  async findAwaitingRoutedTo(
+    scope: AwaitingRoutingScope,
+    window: { skip: number; take: number },
     tx?: Prisma.TransactionClient,
-  ): Promise<ApprovalGate[]> {
+  ): Promise<AwaitingGateRow[]> {
     const client = tx ?? dbRead;
     return client.approvalGate.findMany({
-      where: { workspaceId, state: 'awaiting' },
+      where: awaitingRoutedToWhere(scope),
+      select: AWAITING_GATE_SELECT,
       orderBy: { createdAt: 'asc' },
+      skip: window.skip,
+      take: window.take,
     });
   },
+
+  /**
+   * HOW MANY gates {@link findAwaitingRoutedTo} would return over the whole set
+   * — the tab strip's badge, and the pager's denominator.
+   *
+   * ⚠️ IT IS THE SAME PREDICATE, from the same function, and that is the point
+   * rather than a tidiness. The strip's number and the list's rows are two reads
+   * of one question, so a copy of the `where` clause here is a copy that can
+   * drift — and a badge saying `3` above a list of two is the exact bug the
+   * story's own criterion (*"one read, not two, so they cannot disagree"*)
+   * names. `awaitingRoutedToWhere` is the one place the predicate is written.
+   */
+  async countAwaitingRoutedTo(
+    scope: AwaitingRoutingScope,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? dbRead;
+    return client.approvalGate.count({ where: awaitingRoutedToWhere(scope) });
+  },
 };
+
+/**
+ * WHICH projects the read may see, and WHO it is routed to.
+ *
+ * `projectIds` is an ARRAY of at most one rather than a bare id, deliberately —
+ * the same shape and the same reason as `homeService`'s `HomeProjectScope[]`: an
+ * actor who may not browse their active project resolves to `[]`, and a call
+ * shape that took a bare id could not express that without an early return, at
+ * which point the access decision has left the query.
+ */
+export interface AwaitingRoutingScope {
+  projectIds: string[];
+  /** The reader — §2's single recipient. */
+  userId: string;
+}
+
+/**
+ * §2's routing predicate, written ONCE — the list and the count both call it.
+ *
+ * The `OR` is the SQL spelling of `assigneeId ?? reporterId`: the second arm is
+ * guarded by `assigneeId: null`, which is what makes it a FALLBACK rather than
+ * the union the work tabs use. Drop that guard and this becomes
+ * `homeService`'s membership predicate, which is the exact "fix" ADR §2 records
+ * itself to stop.
+ */
+function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGateWhereInput {
+  return {
+    projectId: { in: scope.projectIds },
+    state: 'awaiting',
+    workItem: {
+      OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
+    },
+  };
+}
+
+/**
+ * What ONE queue row reads off the gate and its card — the projection the
+ * Approvals tab is built on.
+ *
+ * Narrow on purpose: a queue row is not the gate DTO. The audit set (§6a) is
+ * null on every row this read returns, because every row is `awaiting`, so
+ * selecting it would be six columns of guaranteed nulls travelling to a surface
+ * that cannot render them.
+ */
+const AWAITING_GATE_SELECT = {
+  id: true,
+  kind: true,
+  state: true,
+  subjectId: true,
+  createdAt: true,
+  workItem: {
+    select: { id: true, key: true, identifier: true, title: true, kind: true, type: true },
+  },
+} as const satisfies Prisma.ApprovalGateSelect;
+
+/** One row of the routing read, as Prisma returns it. */
+export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
+  select: typeof AWAITING_GATE_SELECT;
+}>;
 
 /**
  * Translate an `approval_gate` WRITE-path error into one of this domain's typed
