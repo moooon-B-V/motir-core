@@ -858,6 +858,113 @@ export async function mintCodeGraphRunCredential(input: {
   };
 }
 
+/**
+ * WHAT THE CONTAINER ITSELF DID on one index run (MOTIR-5058).
+ *
+ * ⚠️ THIS IS NOT `IndexMode`, AND THE WHOLE CARD IS THAT THEY ARE DIFFERENT
+ * FACTS WEARING ONE NAME. `codeGraphIndexService`'s `IndexMode` is derived on
+ * THIS side from whether a snapshot was OFFERED — it answers *did we give this
+ * run a chance to sync*. This one is the container's own report of what it then
+ * DID with that chance. A run handed a pointer that rebuilt anyway is `sync` over
+ * there and `build` here, and until this read existed nothing on this side could
+ * tell that apart from a run that genuinely synced (MOTIR-5055).
+ *
+ * The vocabulary is the CONTAINER's (`sync` / `build`), deliberately not
+ * re-spelled into `IndexMode`'s (`sync` / `rebuild`). Two words that differ are
+ * what stops a later reader assuming the two fields are interchangeable.
+ */
+export interface CodeGraphRunVerdict {
+  repoRef: string;
+  runId: string;
+  commitSha: string | null;
+  /** `null` when the container reported no mode — never to be read as `build`. */
+  indexMode: 'sync' | 'build' | null;
+  /** Why a run that WAS offered a snapshot rebuilt anyway. Bounded to 300 chars. */
+  fallbackReason: string | null;
+}
+
+/**
+ * GET /v1/code-graph/run/verdict — read back what the container reported for one
+ * run (MOTIR-5058; motir-ai's half ships on the same card).
+ *
+ * ⚠️ **IT NEVER THROWS, AND IT IS THE ONLY METHOD IN THIS FILE THAT DOES NOT.**
+ * Everywhere else here a failure is fatal because the caller cannot proceed
+ * without the answer. This one is TELEMETRY read at the very end of a settled
+ * run: the container has finished, the graph is published, the ledger row is
+ * about to be written, and the only thing a throw could achieve is to fail a run
+ * that fully succeeded over a diagnostic. So every failure — a non-2xx, a
+ * malformed body, a motir-ai that never answers, a deployment that has no such
+ * route — returns `null`, and the caller records no container mode.
+ *
+ * ⚠️ **THAT TOTALITY IS WHAT MAKES MERGE ORDER FREE**, which is the property this
+ * card is built around rather than a nicety. An older motir-ai answers this route
+ * with a 404 and this function returns `null`, exactly as it does for a run that
+ * reported nothing — so motir-core's half may merge and deploy FIRST, alone, and
+ * the ledger it writes is byte-identical to today's until the other half lands.
+ * It is the same property `previousSnapshotUrl` relies on one function up, and it
+ * is why this is a boundary contract rather than a lockstep deploy.
+ *
+ * ⚠️ **`null` IS NOT `build`.** Four distinct situations produce it — no route,
+ * no verdict recorded, a lost write, a call that failed — and none of them is
+ * evidence about what the run did. A caller that defaults it manufactures exactly
+ * the false confidence this card exists to remove.
+ */
+export async function fetchCodeGraphRunVerdict(input: {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  repoRef: string;
+  /** The SAME `runId` that was sent to `mintCodeGraphRunCredential`. */
+  runId: string;
+}): Promise<CodeGraphRunVerdict | null> {
+  try {
+    const { url, serviceToken } = config();
+    const query = new URLSearchParams({
+      coreWorkspaceId: input.coreWorkspaceId,
+      coreProjectId: input.coreProjectId,
+      repoRef: input.repoRef,
+      runId: input.runId,
+    });
+    const res = await aiFetch(`${url}/v1/code-graph/run/verdict?${query.toString()}`, {
+      method: 'GET',
+      headers: authHeaders(serviceToken),
+    });
+    // A 404 is the OLDER-motir-ai arm and is not an error here; so is any other
+    // non-2xx, for the reason in the doc block.
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as { verdict?: Partial<CodeGraphRunVerdict> | null } | null;
+    const verdict = body?.verdict;
+    // `{ verdict: null }` is the route's own ABSENT answer and arrives here as the
+    // same `null` every other miss does — which is correct: the caller's question
+    // is "do I know what the container did", and all of these answer no.
+    if (!verdict || typeof verdict !== 'object') return null;
+
+    const indexMode =
+      verdict.indexMode === 'sync' || verdict.indexMode === 'build' ? verdict.indexMode : null;
+    const fallbackReason =
+      typeof verdict.fallbackReason === 'string' && verdict.fallbackReason.length > 0
+        ? verdict.fallbackReason
+        : null;
+    // A body that carries neither half tells us nothing — report it as absent
+    // rather than as a verdict whose every field is null, so the caller has one
+    // shape to reason about instead of two.
+    if (indexMode === null && fallbackReason === null) return null;
+
+    return {
+      repoRef: typeof verdict.repoRef === 'string' ? verdict.repoRef : input.repoRef,
+      runId: typeof verdict.runId === 'string' ? verdict.runId : input.runId,
+      commitSha: typeof verdict.commitSha === 'string' ? verdict.commitSha : null,
+      indexMode,
+      fallbackReason,
+    };
+  } catch {
+    // Deliberately total. See the doc block: a settled run must not fail on a
+    // telemetry read, and an unreachable motir-ai is indistinguishable from one
+    // that has nothing to report — both mean "no container mode recorded".
+    return null;
+  }
+}
+
 /** What motir-ai removed for ONE repo (`POST /v1/code-graph/offboard`). */
 export interface CodeGraphOffboardRepoResult {
   repoRef: string;

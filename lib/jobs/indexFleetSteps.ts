@@ -1,3 +1,4 @@
+import { fetchCodeGraphRunVerdict } from '@/lib/ai/motirAiClient';
 import { indexFleetConfig } from '@/lib/orchestrator';
 import type {
   IndexDispatchOutcome,
@@ -424,7 +425,49 @@ async function indexEveryProject(
     // timings. Sharing their guard would lose the mode whenever a clock went
     // backwards — which has nothing to do with whether the run synced.
     if (outcome.indexMode) {
-      indexModes.push({ projectId, mode: outcome.indexMode });
+      // ⚠️ AND THE CONTAINER'S OWN VERDICT BESIDE IT (MOTIR-5058). `outcome.indexMode`
+      // above says whether a snapshot was OFFERED — it is derived on this side, from
+      // the boot memo, and it cannot see what the container then DID with the offer.
+      // A run handed a pointer whose sync threw rebuilds from scratch and is recorded
+      // as `sync` by the line above, which is the blind arm MOTIR-5027's detector
+      // reads straight through.
+      //
+      // ⚠️ READ HERE, AT SETTLE, BECAUSE THIS IS THE ONE PLACE THAT HOLDS BOTH HALVES
+      // OF THE ADDRESS. `ctx.runId` is the same run the credential was minted with
+      // (see `dispatchInput.runId` above) and `input.workspaceId` / `projectId` are
+      // the same pair `mintCodeGraphRunCredential` resolved the `AiProject` from, so
+      // the row this finds is this run's by construction.
+      //
+      // ⚠️ IT CANNOT FAIL THE RUN, AND THAT IS A PROPERTY OF THE CLIENT RATHER THAN
+      // OF THIS CALL SITE. `fetchCodeGraphRunVerdict` is total: a 404 from an older
+      // motir-ai, a malformed body, an unreachable service and a run that reported
+      // nothing all come back as `null`, and there is then no container half on the
+      // record. That is what makes the two repositories' pull requests free to merge
+      // in either order — with motir-core alone, this ledger row is byte-identical to
+      // the one it wrote before the card.
+      //
+      // ⚠️ AND A REPLAY PASS RE-READS IT RATHER THAN MEMOIZING IT. The row it reads
+      // is written once by the container and never changes, so every pass computes
+      // the same answer — the same discipline the arrays themselves follow (see the
+      // note where they are declared). A memo would buy nothing and would have to be
+      // kept in step with them.
+      const verdict = await fetchCodeGraphRunVerdict({
+        coreWorkspaceId: input.workspaceId,
+        coreProjectId: projectId,
+        repoRef: target.repoRef,
+        runId: ctx.runId,
+      });
+
+      indexModes.push({
+        projectId,
+        mode: outcome.indexMode,
+        // Spread-or-omit, never `undefined` written explicitly: this record is
+        // JSON-serialized onto the ledger row, and an explicit `undefined` and an
+        // absent key are the same thing there — but only the omission says so to a
+        // reader of the type.
+        ...(verdict?.indexMode ? { containerMode: verdict.indexMode } : {}),
+        ...(verdict?.fallbackReason ? { containerFallbackReason: verdict.fallbackReason } : {}),
+      });
     }
   }
 
