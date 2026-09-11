@@ -130,6 +130,14 @@ test('a FREE-TIER org renders its board cloud-on — not the server-error page',
   // instead of the page's seven server reads. Assert the error page ABSENT by
   // name, so a regression says what actually happened. (The stack itself lands
   // in the webServer log, never in the Playwright trace — `acceptance-lane-cloud-on`.)
+  // NEITHER CONVERTED NOR SCOPED, deliberately (MOTIR-5116). The string belongs
+  // to Next's BUILT-IN error page, which is not our markup and offers no role to
+  // ask for — and scoping is worse than useless here: the error page REPLACES
+  // the app shell, so on exactly the run this assertion exists to catch there is
+  // no `<main>` to scope to, and a scoped `toHaveCount(0)` would pass VACUOUSLY
+  // on the regression. It is also structurally immune to the defect this sweep
+  // is about: `toHaveCount` retries on the count and never trips strict mode
+  // (`_helpers/settle.ts`). Its inventory row is KEPT.
   await expect(
     page.getByText("This page couldn't load"),
     "the boards page rendered Next's built-in error page — a server read threw; " +
@@ -141,12 +149,21 @@ test('a FREE-TIER org renders its board cloud-on — not the server-error page',
   await expect(page.getByRole('heading', { level: 1, name: 'Boards' })).toBeVisible();
 
   // …and the board itself loaded its projection and drew real columns/cards.
-  await expect(page.getByTestId('board')).toBeVisible({ timeout: 30_000 });
+  // BY ROLE: the scroll row is `role="group"` + `aria-label` (`BoardContainer`),
+  // so the accessibility tree excludes the streamed and outgoing copies a
+  // page-rooted `getByTestId` would resolve (MOTIR-3929 / MOTIR-4822).
+  const boardRegion = page.getByRole('group', { name: 'Board columns' });
+  await expect(boardRegion).toBeVisible({ timeout: 30_000 });
   const board = await getBoard(page.request);
   const todo = columnByStatus(board, 'todo');
   expect(todo.totalCount).toBe(3);
-  await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText('3');
-  await expect(
-    page.getByTestId(`board-column-${todo.id}`).locator('[data-testid^="board-card-"]').first(),
-  ).toBeVisible();
+  // The column is a `<section>` with an `aria-label`, so it is a region — but its
+  // name carries the COUNT (`'{name}, {count} work items'`), and the next line
+  // asserts that count. Addressing it by name would turn a wrong count into a
+  // locator timeout instead of a count mismatch, so the id stays and is SCOPED
+  // to the live board instead. That also disambiguates `board-count-…`, which
+  // `SwimlaneBoard` renders a second copy of outside the column.
+  const todoColumn = boardRegion.getByTestId(`board-column-${todo.id}`);
+  await expect(todoColumn.getByTestId(`board-count-${todo.id}`)).toHaveText('3');
+  await expect(todoColumn.locator('[data-testid^="board-card-"]').first()).toBeVisible();
 });

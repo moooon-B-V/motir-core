@@ -129,9 +129,15 @@ async function mkCard(page: Page, t: Tenant, parentId: string, title: string) {
  *  assertion has already been made against committed state. */
 async function showBoard(page: Page, columnId: string, identifier: string): Promise<void> {
   await page.goto('/boards');
-  await expect(page.getByTestId('board')).toBeVisible({ timeout: 30_000 });
+  // BY ROLE: the scroll row is `role="group"` + `aria-label` (`BoardContainer`),
+  // so the accessibility tree excludes the streamed and outgoing copies a
+  // page-rooted `getByTestId` would resolve (MOTIR-3929 / MOTIR-4822). The
+  // column keeps its id — its own accessible name carries a COUNT this helper
+  // does not know — and is SCOPED to the live board instead.
+  const board = page.getByRole('group', { name: 'Board columns' });
+  await expect(board).toBeVisible({ timeout: 30_000 });
   await expect(
-    page.getByTestId(`board-column-${columnId}`).getByTestId(`board-card-${identifier}`),
+    board.getByTestId(`board-column-${columnId}`).getByTestId(`board-card-${identifier}`),
   ).toBeVisible();
 }
 
@@ -203,7 +209,14 @@ test('a run refuses a card, files a bug, and — only when told it may — appro
     // so the backticked paths become <code> elements and the literal string with
     // its backticks appears nowhere in the text — the assertion has to name what
     // a reader SEES.
-    await expect(page.getByText('The filter bar this card extends')).toBeVisible();
+    // SCOPED TO `main`: a Markdown-rendered comment body has no role to ask for,
+    // and the item page streams its late stack behind an in-page `<Suspense>`
+    // (`CLAUDE.md` § *a `loading.tsx` may NOT sit above…*), so React leaves a
+    // resolved copy in `<div hidden id="S:0">` at the end of `<body>` — outside
+    // `main`, which is exactly what this scope drops.
+    await expect(
+      page.getByRole('main').getByText('The filter bar this card extends'),
+    ).toBeVisible();
     await beat();
   });
 
@@ -244,7 +257,8 @@ test('a run refuses a card, files a bug, and — only when told it may — appro
     expect(worked.item.status).toBe('implemented');
 
     await showItem(page, bug.identifier);
-    await expect(page.getByText('Reproduction')).toBeVisible();
+    // SCOPED TO `main`, as above — a streamed bug body, no role of its own.
+    await expect(page.getByRole('main').getByText('Reproduction')).toBeVisible();
     await beat();
   });
 
@@ -273,7 +287,8 @@ test('a run refuses a card, files a bug, and — only when told it may — appro
     expect(plansAfter.plans).toHaveLength(plansBefore.plans.length);
 
     await showItem(page, good.identifier);
-    await expect(page.getByText('may not file it')).toBeVisible();
+    // SCOPED TO `main`, as above — a streamed comment body, no role of its own.
+    await expect(page.getByRole('main').getByText('may not file it')).toBeVisible();
     await beat();
   });
 
@@ -326,7 +341,9 @@ test('a run refuses a card, files a bug, and — only when told it may — appro
     expect(created?.parentId).toBe(story.id);
 
     await page.goto('/boards');
-    await expect(page.getByTestId('board')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('group', { name: 'Board columns' })).toBeVisible({
+      timeout: 30_000,
+    });
     await beat();
     await beat();
   });
