@@ -872,3 +872,216 @@ only over the keys the asset happens to name.
   has a no-project panel.
 - `design/ready/` · `design/reports/` — the three-file convention and PNG render
   settings this asset follows.
+
+---
+
+## 20 · The To-approve tab's ROW — MOTIR-5147
+
+**AMENDED by MOTIR-5147** (Story [MOTIR-4879](motir:cmtrwx30n0052hxphd0yqbnwb))
+with the one element this area drew a SLOT for and deliberately left empty. It is
+the layout source of truth for **MOTIR-4794** (the tab), which carries it in
+`blocked_by`.
+
+| Surface                        | Asset                                       | Notes                                                                                                                                                                                                             |
+| ------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The `To approve` tab's ROW** | **`approvals-row.mock.html`** (HTML mockup) | The row and every state it can be in: in situ · its anatomy · the disclosure · a treatment per `ApprovalGateState` · see-but-not-decide · refused in place · no-subject · narrow. Exports to `approvals-row.png`. |
+
+**Panels:** 1 the tab in situ · 2 the row's anatomy · **3 the disclosure** ·
+4 a row per `ApprovalGateState` · 5 see but not decide · 6 refused in place ·
+7 the two rows with no subject · 8 narrow (`< md`).
+
+### What this COMPOSES, and who owns each piece
+
+**This asset draws the ROW and nothing else on the screen.** Two shipped assets
+own the rest, and neither is re-decided here:
+
+| piece                                                                                                                         | owner                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| the five-tab strip, the `To approve` label, its `Inbox` glyph, its count treatment, the tab's EMPTY state, the numbered pager | **`workbench.mock.html`** (this file, §§ _The tab strip_ · _The pager_ · _Empty states_) |
+| the universal approval FRAME, in all nine of its states                                                                       | **`design/work-items/approval-control.mock.html`** (MOTIR-4789)                          |
+
+The mock reproduces both from their own markup rather than redrawing them — the
+strip and pager from `workbench.mock.html`, the frame from
+`ApprovalGateControl`'s own emitted HTML, one dump per state. Its glyphs are
+generated from the installed `lucide-react@1.16.0`'s icon nodes. The header
+comment in the mock carries the full provenance.
+
+**The tab's EMPTY state is NOT re-drawn here.** _Nothing is waiting on your
+approval_ is already specified in § _Empty states_ above, with no action,
+because nothing a reader can press conjures an approval. A second drawing of it
+would be a second answer.
+
+### The component contract this designed TO
+
+**`components/approvals/ApprovalGateControl.tsx`**, and it is **PRESENTATIONAL**:
+it fetches nothing, renders what it is fed, and `onDecide` resolves to a refusal
+it draws IN PLACE rather than throwing. The props the row supplies:
+
+| prop                                            | what the row supplies                                                                                                                    |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `gate`                                          | the `ApprovalGateDTO` behind the row                                                                                                     |
+| `canDecide`                                     | the AUTHORITY answer — assignee OR reporter OR admin (ADR §2's amendment), never the routing one                                         |
+| `kindLabel` / `subjectMeta`                     | band 1: _Design result_, and _Published 4 days ago · 3 files · `9840d00ea1b2`_ — where `subject.noteExcerpt` lands                       |
+| `port`                                          | band 2, the subject RENDERED. **Its contents are the KIND's, not this asset's** — the mock draws a token stand-in, never a specification |
+| `verbs` / `consequence` / `confirmConsequences` | band 3                                                                                                                                   |
+| `routedToLabel`                                 | state `B`'s _waiting on_ line (Panel 5)                                                                                                  |
+| `onDecide`                                      | records the decision; a `GateRefusal` comes back and the frame draws it (Panel 6)                                                        |
+
+### WHICH FIELD each element of the row reads
+
+Every cell names a field of `ApprovalQueueRowDto` (MOTIR-4791), so the row cannot
+promise data the read has no producer for:
+
+| element                         | field                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| kind glyph + _Design result_    | `row.kind`                                                                                              |
+| _3 files · `9840d00ea1b2`_      | `row.subject.assetCount` · `row.subject.commitSha`                                                      |
+| `MOTIR-5147` + title            | `row.workItem.identifier` · `row.workItem.title`                                                        |
+| _4 days_                        | `row.waitingSince` (the gate's `createdAt`), relative in the cell and ABSOLUTE in its `title` attribute |
+| the disclosure / the state pill | `row.state`, plus the frame's `canDecide`                                                               |
+
+**`row.subject.noteExcerpt` is deliberately NOT on the row.** A 44px row carries
+one line, better spent on which design and how long it has waited than on the
+first sentence of its notes. It is the frame's `subjectMeta` when the row opens —
+the same DTO, read one interaction later.
+
+### The ROW is a DISCLOSURE — the question this card existed to answer
+
+**The row opens, and the shipped frame renders inside the list.** One row open at
+a time; opening a second closes the first.
+
+Three candidates were live, and two are wrong for reasons already on the record:
+
+- **Verbs on every row** — the frame's own first cut drew the BUTTON as the
+  shared element and was rejected on review: _"Approve button without review
+  doesn't stand — the user needs to see what he is approving."_ A 44px row cannot
+  carry a rendered design, so verbs on it would be approving something you have
+  not looked at.
+- **Link to the item page** — defeats the tab, whose promise is that you stop
+  needing to know which card to open.
+- **Open in place** — keeps the port's floor, ceiling and Expand affordance
+  unchanged, and keeps the list scannable between decisions.
+  `approval-control.mock.html`'s Panel 0b already drew this door with a ghost row
+  labelled _"the frame renders here"_; Panel 3 is that sentence, drawn.
+
+### ⚠️ THE POST-DECISION BEHAVIOUR — SETTLED: a decided row SETTLES IN PLACE
+
+[MOTIR-4879](motir:cmtrwx30n0052hxphd0yqbnwb) deferred this here by name. **The
+rule, in one sentence: a decided row keeps its position, swaps its Decide cell
+for a state pill, and leaves on the NEXT LOAD — it never vanishes under the
+cursor.**
+
+**Why.** This is a SHARED queue: routing shows a gate to one person, but ADR §2's
+amendment lets assignee OR reporter OR admin press it, so a row can be decided by
+somebody else while you are reading it. A surface that sometimes removes a row
+silently and sometimes explains one teaches the reader that **disappearance is
+ambiguous**, which is the most expensive thing a queue can teach. And the frame
+already refuses to vanish one interaction over — when somebody else decides
+between render and press it draws the refusal IN PLACE (Panel 6) — so a list that
+removed rows would contradict the panel inside it.
+
+**What settling looks like:** the subject and work-item cells go
+`--el-text-muted`, the Decide cell carries the state pill, and no verb remains —
+a decided gate is immutable (ADR §6a), so there is nothing left to press. **The
+strip count decrements immediately**, because the count and the list are one read
+(MOTIR-4791) and the count is about what is AWAITING; the settled row is a
+receipt, not a member. A reload removes it, because the read returns only
+`awaiting` gates.
+
+### Every state a row can be in
+
+**Four are `ApprovalGateState`'s** (`prisma/schema.prisma`), so they are a
+checklist rather than a judgement — Panel 4 draws one row per value:
+
+| state               | treatment                                                           |
+| ------------------- | ------------------------------------------------------------------- |
+| `awaiting`          | the live row: full ink, the disclosure                              |
+| `approved`          | muted ink, `--el-tint-mint` pill reading **Approved**               |
+| `changes_requested` | muted ink, `--el-tint-peach` pill reading **Changes requested**     |
+| `superseded`        | muted ink, **colourless** `--el-chip-bg` pill reading **Withdrawn** |
+
+`superseded` is colourless deliberately: it is written by the PRODUCT, never by a
+person, and a tinted pill would let a reader take a withdrawn question for
+somebody's answer. Every pill carries its own WORD, so no state is signalled by
+colour alone (finding #35).
+
+**Three more are states of the ROW rather than of the gate**, and the mock draws
+each:
+
+- **See but not decide** (Panel 5) — the Decide cell names who it is waiting on
+  and carries no verb; the frame renders its state `B`, port live and verbs
+  absent. **The row still OPENS**: what is withheld is the DECISION, never the
+  look.
+- **Refused in place** (Panel 6) — somebody else decided between render and
+  press. The frame's own refusal, naming who, with an unattributed arm for a
+  decider whose account has gone.
+- **Unregistered kind** (Panel 7) — `lib/approvalGates/registry.ts` registers
+  `design_result` alone and names three declared holes. The row takes the
+  colourless `circle-dashed` glyph, says **Not built yet** in words, NAMES the
+  kind, and offers no disclosure because there is nothing behind it to open.
+
+**And a FOURTH row state this asset adds, because the read can produce it:** a
+gate whose **subject no longer resolves** (Panel 7, row two). A handler's
+`resolveSubject` is documented to return null, so `ApprovalQueueRowDto.subject`
+is nullable. _This build cannot render this kind_ and _the row this gate points
+at is gone_ look alike and are opposite — the first is a feature that has not
+shipped, the second is a gate worth withdrawing — so collapsing them would report
+a shipped kind as unbuilt. Its affordance is **Open card**, not _Review_.
+
+### Narrow (`< md`)
+
+The four-column grid does not survive 388px. The row becomes two stacked lines in
+the same list container — _subject + waited_, then _work item_ — with the Decide
+affordance full-width beneath them where a thumb reaches it; 44px → 76px. **The
+column-header band is dropped rather than re-flowed**: it labels a grid that no
+longer exists, and a header reading _Work item_ above something that is not a
+column is worse than no header. The strip above already scrolls at this width
+(§ _Narrow: the strip SCROLLS_), which is why a fifth tab costs this surface
+nothing.
+
+### Token map — the row's own elements
+
+| Element                      | Colour                                                                     | Shape                                   |
+| ---------------------------- | -------------------------------------------------------------------------- | --------------------------------------- |
+| kind glyph (`design_result`) | `--el-type-design` (the shipped design-type hue, `workItemTypeMeta.ts`)    | `h-4 w-4`                               |
+| kind glyph (unregistered)    | `--el-text-faint`                                                          | `h-4 w-4`                               |
+| kind label / subject meta    | `--el-text` / `--el-text-secondary`                                        | `text-sm` / `text-xs`                   |
+| a SETTLED row's ink          | `--el-text-muted`                                                          | —                                       |
+| work-item key / title        | `--el-text-secondary` (mono) / `--el-text`                                 | `font-mono text-xs` / `text-sm`         |
+| waited                       | `--el-text-secondary`                                                      | `text-xs`                               |
+| state pills                  | `--el-tint-mint` · `--el-tint-peach` · `--el-chip-bg` + `--el-chip-border` | `--radius-badge` · `--spacing-chip-x/y` |
+| the disclosure               | `--el-text` on `--el-button-secondary-border`                              | `--radius-btn`                          |
+| row / list container         | `--el-border`, hover `--el-surface`                                        | `--radius-card`, 44px rows              |
+
+No raw hex and no raw shape utilities anywhere in the asset.
+
+### What this asset does NOT decide
+
+- **The tab's empty state** — § _Empty states_ above owns it.
+- **The port's CONTENTS.** Band 2 renders the subject, and what a design result
+  looks like inside it is MOTIR-4789's. The mock draws a token stand-in so the
+  frame has something in band 2; it is not a specification.
+- **A port for `decision_approval`, `pull_request_approval` or
+  `pull_request_merge`** — each belongs to the story that registers that kind.
+  This asset draws only the unregistered-kind row those will replace.
+- **The item-page / board / list indicator** — [MOTIR-4908](motir:cmtt4ogn7000fhutx7zrhizuo).
+- **The `zh` catalogue.** Every string here is a DRAFT for MOTIR-4794's catalog
+  entry, not the catalog.
+
+### GIVES / TAKES — every card this asset names
+
+Scope, as § _The MOTIR-4851 revision's own sweep_ sets it: every `MOTIR-<n>` in
+these notes plus the mock's annotation prose. The mock's SAMPLE ROW DATA is
+excluded — those keys stand in for a reader's list.
+
+| card                                        | GIVES                                                                                                                                                        | TAKES                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4794** (the tab)                    | The row, its cells, the disclosure, a treatment per state, the settled post-decision rule, and the narrow reflow — so none of it is decided at the keyboard. | Nothing. It builds what is drawn here and owns the `en` + `zh` catalog, which this asset only drafts.      |
+| **MOTIR-4791** (the read)                   | A drawn consumer for every field of `ApprovalQueueRowDto`, and the confirmation that `noteExcerpt` has a home (the frame) rather than a row cell.            | Nothing. Its predicate, its paging and its DTO are unchanged by anything drawn here.                       |
+| **MOTIR-4879** (the story)                  | **The deferred post-decision decision, SETTLED** — the one thing it named as owed to this card.                                                              | Nothing.                                                                                                   |
+| **MOTIR-4777 / MOTIR-4851** (the Workbench) | Nothing. Their slot, strip, empty state and pager are composed exactly as drawn.                                                                             | Nothing — and the boundary they stated four times is honoured: this asset draws the rows and not the slot. |
+| **MOTIR-4789** (the frame)                  | Nothing it does not already own. Its Panel 0b's ghost row _"the frame renders here"_ is now a drawing.                                                       | Nothing. Band 2's contents stay its own.                                                                   |
+| **MOTIR-4786 / MOTIR-4911** (the ADR)       | Nothing. Routing and authority are read from the record, not re-decided.                                                                                     | Nothing.                                                                                                   |
+| **MOTIR-4907 / 4909 / 4910 / 4882**         | The not-built-yet ROW each of them replaces when it registers its kind — so a fourth kind is a renderer rather than a layout question.                       | Nothing.                                                                                                   |
+| **MOTIR-4908 / MOTIR-4949 / MOTIR-2920**    | Nothing — named only as boundaries this asset does not cross.                                                                                                | Nothing.                                                                                                   |
+| **MOTIR-5008**                              | Nothing — cited for its LESSON (a hand-typed sprite is a wrong glyph waiting for a reader who trusts its name), which is why every glyph here is generated.  | Nothing.                                                                                                   |
