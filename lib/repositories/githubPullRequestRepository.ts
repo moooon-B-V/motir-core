@@ -374,13 +374,25 @@ export const githubPullRequestRepository = {
     });
   },
 
-  /** Candidate PRs for the explicit-link picker (MOTIR-1596): the workspace's
+  /** Candidate PRs for the explicit-link picker (MOTIR-1596): the ORGANISATION's
    *  ingested PRs (installation → repo → PR), matched by title / repo owner+name
    *  / number **or by a PR REFERENCE the query names** (MOTIR-5150 — a pasted
    *  URL, `owner/name#n`, `name#n`, `#n`; see `lib/github/prReferenceQuery.ts`),
    *  newest-updated first, bounded to `take`. Includes each PR's repo
-   *  Read-only path → `db`; `workspaceId` is the explicit tenant gate
+   *  Read-only path → `db`; `organizationId` is the explicit tenant gate
    *  (finding #26 — RLS is inert under the dev/CI superuser).
+   *
+   *  ⚠️ THE GATE IS THE ORGANISATION SINCE MOTIR-5152, and the widening is a
+   *  READ only. It was `workspaceId`, which is the tier a repository is
+   *  connected FROM rather than the tier that OWNS it (MOTIR-4649): in any
+   *  workspace but that one the gate matched nothing, so the picker's caller
+   *  raised `GithubNotConnectedError` and, past it, this read would have found
+   *  no candidate anyway. Both halves had to move together, which is why they
+   *  moved on one card. `github_pull_request_org_read` is the RLS arm that
+   *  admits the same set under the `motir_app` role; this `where` is what
+   *  enforces it under the dev/CI superuser, where RLS is inert. No write path
+   *  is widened — the `FOR ALL` policies are untouched, per MOTIR-4677's
+   *  DELETE-is-authorised-by-USING-alone reasoning.
    *
    *  ⚠️ NO WORK-ITEM INCLUDE (MOTIR-3756). It used to carry
    *  `workItem: { select: { identifier: true } }` — the single item the FK named,
@@ -390,7 +402,7 @@ export const githubPullRequestRepository = {
    *  this one; an `include` cannot express it, because the relation the FK
    *  declares is the singular one being retired. */
   async searchCandidates(
-    workspaceId: string,
+    organizationId: string,
     query: string,
     take: number,
     tx?: Prisma.TransactionClient,
@@ -433,11 +445,13 @@ export const githubPullRequestRepository = {
       });
     }
     return client.githubPullRequest.findMany({
-      // Gate on the REPO row's own `workspace_id` (MOTIR-1931), not a join through
-      // the installation: a PR on a repo Motir created sits behind the shared
-      // provisioning installation, which is bound to no workspace, so the old
-      // join would never have matched it.
-      where: { repo: { is: { workspaceId } }, OR: match },
+      // Gate on the REPO row's own `organization_id` (MOTIR-1931's reasoning at
+      // the tier MOTIR-4649 moved tenancy to), not a join through the
+      // installation: a PR on a repo Motir created sits behind the shared
+      // provisioning installation, which is bound to neither a workspace nor an
+      // organisation, so the old join would never have matched it. The column is
+      // NOT NULL (MOTIR-4700), so no row escapes this gate by carrying a null.
+      where: { repo: { is: { organizationId } }, OR: match },
       include: { repo: true },
       orderBy: { updatedAt: 'desc' },
       take,
