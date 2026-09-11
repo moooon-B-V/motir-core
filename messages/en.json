@@ -7005,8 +7005,10 @@
   "repositorySet": {
     "overline": "Your project's code",
     "title": "Motir will host your code",
+    "titleMixed": "Motir will host the new code",
     "lead": "Your project's code lives with Motir, ready for your agents to start work.",
     "promise": "<b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub whenever you want.",
+    "promiseMixed": "<b>It's yours.</b> Motir keeps the code it hosts safe and private — move it to your own GitHub whenever you want.",
     "continueCta": "Continue",
     "working": "Setting up your code…",
     "workingDetail": "This takes a few seconds. Your plan is already in your backlog — you can leave this page.",
