@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 // Guard for MOTIR-3148. The expensive lanes in `ci.yml` used to decide whether
 // to run from the BRANCH NAME — a `startsWith` test against the `seed/` /
@@ -147,8 +149,18 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
   });
 
   describe('fails OPEN — the direction is the whole safety argument', () => {
-    it('runs everything when the event is not a pull request', () => {
-      expect(changesCode).toMatch(/if \[ "\$EVENT" != 'pull_request' \]/);
+    it('runs everything for an event that carries no base/head pair', () => {
+      // ⚠️ THE PREDICATE IS NARROWER THAN IT WAS, AND DELIBERATELY (MOTIR-5124).
+      // This used to read `if [ "$EVENT" != 'pull_request' ]`, which swept up
+      // `merge_group` — an event that carries its own base and head — along with
+      // the events that genuinely have none. The fail-open DIRECTION is
+      // unchanged and is asserted twice over: the `case` ends in a catch-all
+      // that empties the pair, and the emptiness test below is what runs every
+      // lane. Both halves are needed; either alone would let a recognised event
+      // with an absent payload field fall through to a `git diff ...` that
+      // compares the tree with itself and answers "nothing changed".
+      expect(changesCode).toMatch(/^\s*\*\)$/m);
+      expect(changesCode).toMatch(/if \[ -z "\$base" \] \|\| \[ -z "\$head" \]/);
     });
 
     it('runs everything when the diff cannot be computed', () => {
@@ -162,9 +174,15 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
     });
 
     it('emits `true true` on every one of those paths, and nowhere assumes false', () => {
-      // Three fail-open branches, each emitting both flags true. If a fourth
-      // early exit is added that emits anything else, this count moves and the
-      // author lands here.
+      // Still THREE early exits, each emitting both flags true — MOTIR-5124
+      // MERGED two cases into one arm rather than adding a fourth: the empty
+      // base/head test now covers both the unclassifiable event the old
+      // non-pull_request early return handled AND a recognised event whose
+      // payload carried no shas, which nothing covered before. If a fourth early
+      // exit is added that emits anything else, this count moves and the author
+      // lands here. Every one of the three is EXECUTED in `the merge-queue arm`
+      // below; this count is what catches an arm added with no case written for
+      // it.
       expect([...changesCode.matchAll(/^\s*emit true true$/gm)]).toHaveLength(3);
     });
 
@@ -187,11 +205,265 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       expect(changesCode).toMatch(
         /^\s*BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \}\}$/m,
       );
+      expect(changesCode).toMatch(
+        /^\s*MERGE_BASE_SHA: \$\{\{ github\.event\.merge_group\.base_sha \}\}$/m,
+      );
+      expect(changesCode).toMatch(
+        /^\s*MERGE_HEAD_SHA: \$\{\{ github\.event\.merge_group\.head_sha \}\}$/m,
+      );
       const runBodies = changesCode
         .split(/^\s*run: \|$/m)
         .slice(1)
         .join('\n');
       expect(runBodies).not.toMatch(/\$\{\{/);
+    });
+  });
+
+  // ── The classifier EXECUTED, not read (MOTIR-5124) ────────────────────────
+  //
+  // Every other assertion in this file is a reading of the workflow's TEXT, and
+  // for the `case` arms that is the right instrument — `classifiesAsApp` models
+  // first-match-wins precisely and costs nothing. It cannot answer this card's
+  // question, which is about the step's CONTROL FLOW: which arm a given event
+  // reaches, and what `git diff` it runs once it gets there. A text assertion
+  // that `merge_group` appears somewhere in the script is satisfied by a comment
+  // ABOUT merge_group, which is the failure mode this block exists to remove.
+  //
+  // So it runs the shipped bytes. The script is lifted out of `ci.yml` — the
+  // same extraction `tests/ci-acceptance-lane.test.ts` does for the acceptance
+  // lane's gate — and executed under `bash` in a throwaway git repository, with
+  // the five `env:` values the job declares and a `GITHUB_OUTPUT` file to read
+  // the answer back from. There is no second copy of the classifier: what is
+  // tested here is the text that ships.
+  //
+  // ⚠️ THE FIXTURE IS SYNTHETIC AND ITS SHAPE IS NOT. `design-and-docs-only`
+  // below is the file set of `moooon-B-V/motir-core#2789`, the pull request the
+  // queue ejected twice: four files under `design/work-items/` and one under
+  // `docs/decisions/`. Measured on the real refs at the time
+  // (`git diff b2e93721...fdf871ce`, the base and head the queue branch
+  // `gh-readonly-queue/main/pr-2789-b2e937215…` names), which is where the list
+  // comes from. A test cannot fetch those commits, so the SHAPE is reproduced
+  // locally and the provenance recorded here.
+  describe('the merge-queue arm, executed (MOTIR-5124)', () => {
+    /** The `classify` step's shell body, de-dented, exactly as it ships. */
+    const classifyScript = ((): string => {
+      const lines = ci.split('\n');
+      const jobAt = lines.findIndex((l) => /^ {2}changes:\s*$/.test(l));
+      expect(jobAt, 'no `changes` job in ci.yml').toBeGreaterThan(-1);
+      const stepAt = lines.findIndex((l, i) => i > jobAt && /^\s*- id: classify\s*$/.test(l));
+      expect(stepAt, 'no `classify` step in the `changes` job').toBeGreaterThan(jobAt);
+      const runAt = lines.findIndex((l, i) => i > stepAt && /^\s*run: \|\s*$/.test(l));
+      expect(runAt, 'the `classify` step has no block `run:`').toBeGreaterThan(stepAt);
+      const indent = /^ */.exec(lines[runAt + 1]!)![0].length;
+      const body: string[] = [];
+      for (const line of lines.slice(runAt + 1)) {
+        if (line.trim() !== '' && /^ */.exec(line)![0].length < indent) break;
+        body.push(line.slice(indent));
+      }
+      return body.join('\n');
+    })();
+
+    /**
+     * The file sets each fixture head adds on top of the base commit.
+     *
+     * `design-and-docs-only` is the ejected pull request's own shape (above).
+     * The other three are the criterion's two image inputs and one app-only
+     * control — the control is what stops `images` widening to "always true",
+     * which would make every assertion here pass for the wrong reason.
+     */
+    const HEADS: Record<string, readonly string[]> = {
+      'design-and-docs-only': [
+        'design/work-items/design-notes.md',
+        'design/work-items/provenance.mock.html',
+        'design/work-items/provenance.png',
+        'design/work-items/provenance.dark.png',
+        'docs/decisions/work-item-provenance.md',
+      ],
+      'ci-runner-image-input': ['infra/ci-runner/Dockerfile'],
+      'runner-image-workflow': ['.github/workflows/runner-image.yml'],
+      'app-only': ['app/page.tsx'],
+    };
+
+    let repo: string;
+    let base: string;
+    const head: Record<string, string> = {};
+
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, {
+        cwd: repo,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim();
+
+    beforeAll(() => {
+      repo = mkdtempSync(join(tmpdir(), 'changed-paths-gate-'));
+      // `-b main` and the explicit identity: a runner with no global git config
+      // cannot commit at all, and the default branch name is a user setting.
+      git('init', '-q', '-b', 'main');
+      git('config', 'user.email', 'ci@example.invalid');
+      git('config', 'user.name', 'CI fixture');
+      git('config', 'commit.gpgsign', 'false');
+      const write = (path: string): void => {
+        const full = join(repo, path);
+        mkdirSync(dirname(full), { recursive: true });
+        writeFileSync(full, `${path}\n`);
+      };
+      write('README.md');
+      git('add', '-A');
+      git('commit', '-qm', 'base');
+      base = git('rev-parse', 'HEAD');
+      for (const [name, paths] of Object.entries(HEADS)) {
+        // Detached at `base` so every head is a SIBLING of the others: the
+        // queue's own shape, where each entry is built on the same tip.
+        git('checkout', '-q', base);
+        for (const path of paths) write(path);
+        git('add', '-A');
+        git('commit', '-qm', name);
+        head[name] = git('rev-parse', 'HEAD');
+      }
+      git('checkout', '-q', base);
+    });
+
+    afterAll(() => {
+      if (repo) rmSync(repo, { recursive: true, force: true });
+    });
+
+    /** Run the shipped classifier with these `env:` values, and read its outputs. */
+    function classify(env: {
+      EVENT: string;
+      BASE_SHA?: string;
+      HEAD_SHA?: string;
+      MERGE_BASE_SHA?: string;
+      MERGE_HEAD_SHA?: string;
+    }): { app: string; images: string; stdout: string } {
+      const outPath = join(repo, 'github-output');
+      writeFileSync(outPath, '');
+      let stdout: string;
+      try {
+        stdout = execFileSync('bash', ['-c', classifyScript], {
+          cwd: repo,
+          env: {
+            ...process.env,
+            // All five are DECLARED in the job's `env:`, so under `set -u` the
+            // script may read any of them whatever the event is. GitHub renders
+            // an absent context field as the empty string; this mirrors that.
+            BASE_SHA: '',
+            HEAD_SHA: '',
+            MERGE_BASE_SHA: '',
+            MERGE_HEAD_SHA: '',
+            ...env,
+            GITHUB_OUTPUT: outPath,
+          },
+          stdio: 'pipe',
+          encoding: 'utf8',
+        });
+      } catch (error) {
+        const { stderr, stdout: out } = error as { stderr?: string; stdout?: string };
+        throw new Error(
+          `the classifier exited non-zero\n--- stderr ---\n${stderr ?? ''}\n--- stdout ---\n${out ?? ''}`,
+        );
+      }
+      const outputs = Object.fromEntries(
+        readFileSync(outPath, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => {
+            const at = line.indexOf('=');
+            return [line.slice(0, at), line.slice(at + 1)] as const;
+          }),
+      ) as Record<string, string>;
+      return { app: outputs.app!, images: outputs.images!, stdout };
+    }
+
+    const asMergeGroup = (name: string) =>
+      classify({ EVENT: 'merge_group', MERGE_BASE_SHA: base, MERGE_HEAD_SHA: head[name]! });
+    const asPullRequest = (name: string) =>
+      classify({ EVENT: 'pull_request', BASE_SHA: base, HEAD_SHA: head[name]! });
+
+    it('lifted a script that actually runs', () => {
+      // Without this the whole block can pass vacuously: an extraction that
+      // returned '' would run bash on nothing, write no outputs, and every
+      // assertion below would compare `undefined` against `undefined`.
+      expect(classifyScript).toMatch(/^set -euo pipefail$/m);
+      expect(classifyScript).not.toMatch(/\$\{\{/);
+      expect(asMergeGroup('app-only').app).toBe('true');
+    });
+
+    it('emits `images=false` for a queue batch that touches no image input', () => {
+      // THE DEFECT. Before this card the same call answered `images=true` — the
+      // early return ran before any diff — and PR #2789 was ejected twice by a
+      // twenty-minute image build its five files provably cannot affect.
+      const { app, images } = asMergeGroup('design-and-docs-only');
+      expect(images).toBe('false');
+      // And the app lanes skip too: this is the design/docs exclusion reaching
+      // the queue for the first time, which the `app` half of the job always
+      // claimed to do and only ever did on a pull request.
+      expect(app).toBe('false');
+    });
+
+    it.each([['ci-runner-image-input'], ['runner-image-workflow']])(
+      'emits `images=true` for a queue batch touching %s',
+      (name) => {
+        // The direction that must NOT be lost. A batch that can change the image
+        // still pays for the build — which is the one case where waiting for a
+        // cold build is the point.
+        expect(asMergeGroup(name).images).toBe('true');
+      },
+    );
+
+    it('answers the same for a queue entry as for the pull request it holds', () => {
+      // The whole claim of the fix, stated as one property: `merge_group` is now
+      // classified by the SAME predicate over the SAME pair, so the queue can no
+      // longer disagree with the pull request that was just reviewed. A future
+      // edit that gives the queue its own arm — a different exclusion set, a
+      // different default — fails here rather than in the queue.
+      for (const name of Object.keys(HEADS)) {
+        const queue = asMergeGroup(name);
+        const pr = asPullRequest(name);
+        expect({ name, ...queue }).toEqual({ name, ...pr });
+      }
+    });
+
+    describe('and every fail-open arm still fires — executed, not asserted in prose', () => {
+      it.each([['push'], ['workflow_dispatch'], ['schedule']])(
+        'runs everything on a `%s` event, which carries no base/head',
+        (event) => {
+          expect(classify({ EVENT: event })).toMatchObject({ app: 'true', images: 'true' });
+        },
+      );
+
+      it('runs everything when a RECOGNISED event arrives with no shas', () => {
+        // The arm the old shape could not have: a `merge_group` payload whose
+        // fields are absent renders as two empty strings, and `git diff ...`
+        // on those compares the tree with itself and reports NOTHING CHANGED —
+        // fail-closed, on the merge gate. Both recognised events are checked,
+        // because the emptiness test is shared and a future edit could route
+        // one of them around it.
+        expect(classify({ EVENT: 'merge_group' })).toMatchObject({
+          app: 'true',
+          images: 'true',
+        });
+        expect(classify({ EVENT: 'pull_request' })).toMatchObject({
+          app: 'true',
+          images: 'true',
+        });
+      });
+
+      it('runs everything when the diff FAILS', () => {
+        // An unavailable base commit — the shallow-clone case `fetch-depth: 0`
+        // exists to prevent, and a real possibility in the queue, where the base
+        // is a commit on another branch.
+        const absent = '0'.repeat(40);
+        expect(
+          classify({ EVENT: 'merge_group', MERGE_BASE_SHA: absent, MERGE_HEAD_SHA: base }),
+        ).toMatchObject({ app: 'true', images: 'true' });
+      });
+
+      it('runs everything when the changed-file set is empty', () => {
+        expect(
+          classify({ EVENT: 'merge_group', MERGE_BASE_SHA: base, MERGE_HEAD_SHA: base }),
+        ).toMatchObject({ app: 'true', images: 'true' });
+      });
     });
   });
 

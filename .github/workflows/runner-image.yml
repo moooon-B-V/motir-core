@@ -56,9 +56,69 @@ jobs:
     name: Build, assert, prove
     runs-on: ubuntu-latest
     # Observed 1.7–5.4 min across ten runs of both callers → 20 (~3.7x on the
-    # worst, 5.38 min on ci.yml run 33218152057). The spread is BuildKit cache
-    # warmth, not load: the same job is 1.7 min with a warm layer cache and 5.4
-    # with a cold one, and both are healthy.
+    # worst, 5.38 min on ci.yml run 33218152057).
+    #
+    # ⚠️ THIS BLOCK USED TO ATTRIBUTE THAT SPREAD TO "BuildKit cache warmth, not
+    # load — the same job is 1.7 min with a warm layer cache and 5.4 with a cold
+    # one". THAT SENTENCE WAS FALSE, and it is corrected rather than deleted
+    # because a ceiling nobody can re-derive is a ceiling the next reader invents
+    # (MOTIR-5124). **No run of this job restores a layer cache from an earlier
+    # run — every build here is cold**, on a pull request exactly as in the merge
+    # queue. `cache-from: type=gha,scope=ci-runner` is real and the import line
+    # appears in every log, but it imports NOTHING: a GitHub Actions cache is
+    # readable only from the ref that wrote it or from the DEFAULT branch, and
+    # `ci.yml`'s `runner-image` job carries `github.event_name != 'push'`, so no
+    # run on `refs/heads/main` has ever written this scope. Read back off the
+    # repository's live cache list on 2026-09-11: `refs/heads/main` holds only
+    # `actions/cache@v4` entries (node-modules, pnpm-store, corepack, prisma,
+    # playwright, codeql) and NO buildx index at all, while every `index-*`
+    # buildx entry sits under an ephemeral `gh-readonly-queue/main/pr-<n>-<sha>`
+    # ref that is reclaimed with its branch. The `#N CACHED` layers a reader
+    # finds in a green log are from the job's SECOND build — `Export an OCI
+    # layout to measure`, which hits the cache the FIRST build wrote seconds
+    # earlier in the same run, and says nothing about the run before it.
+    #
+    # ⚠️ SO THE SPREAD IS RUNNER NETWORK THROUGHPUT, and that is why 20 STAYS
+    # rather than being re-derived. Three cold builds of the same Dockerfile,
+    # measured at the `Build the image` step:
+    #
+    #   34544907175 (pull_request, PR #2782)  165 s  — apt: 32.6 MB in 2 s      (19.9 MB/s)
+    #   34575315881 (merge_group, pr-2787)    918 s  — apt: 32.6 MB in 53 s     (613 kB/s)
+    #   34583414138 (merge_group, pr-2797)  CANCELLED — apt: 38.3 MB in 13m46s  (46.4 kB/s)
+    #
+    # Per layer: `#9` 12.4 s → 106.0 s → 961.4 s; `#12` 21.4 s → 377.3 s → still
+    # resolving at the cut. A 430x throughput swing on one external mirror.
+    #
+    # ⚠️ AND THE THIRD ROW IS WHY NO NUMBER IS THE ANSWER. At the 20-minute cut
+    # that build had finished ONE layer and was 85 s into `#12`, which had just
+    # announced `Need to get 96.8 MB of archives` — at the rate it was being
+    # served, ~35 further minutes for that layer alone. **Raising the ceiling to
+    # 30 or 40 would not have saved it either**, and this is not a rare tail:
+    # sampled over the 21 most recent completed runs of this job, **11 were
+    # CANCELLED at this ceiling** (1159–1180 s) against 9 successes (35 · 361 ·
+    # 703 · 774 · 918 · 938 · 1036 · 1080 s) and 1 failure. The successes cluster
+    # against the cap, the cancellations are right-CENSORED at it, and one of the
+    # cancellations is a `pull_request` run (34575851960) — so this is not a
+    # merge-queue property either.
+    #
+    # ⚠️ AND THIS REPOSITORY HAS ALREADY REFUSED THIS KNOB, THREE TIMES, FOR THIS
+    # MIRROR. MOTIR-1679 removed an apt source, MOTIR-2970 added a 300 s cap plus
+    # retry, MOTIR-3128 re-shaped the class, and MOTIR-3143 states the standing
+    # rule outright: *"Do NOT raise the retry count or the timeout. That is the
+    # move already made twice; it lowers probability and leaves the class."* A
+    # ceiling is a bound on a wedged build, not a budget for a degraded network.
+    #
+    # ⚠️ SO WHAT ACTUALLY FIXES IT IS THE CACHE, AND THAT IS MOTIR-5126. A
+    # restored layer cache makes `#9` and `#12` `CACHED` and takes apt off the
+    # critical path entirely — the mirror stops being able to decide whether this
+    # lane passes. Until then every build here is cold by construction (above),
+    # and cold means apt-bound.
+    #
+    # MOTIR-5124 narrowed WHICH batches reach this build — `ci.yml`'s `changes`
+    # job now classifies a `merge_group` batch instead of waving it through, so a
+    # queue entry builds only when it touches an image input. **That removes the
+    # unnecessary runs and does nothing for the necessary ones**, which are still
+    # a coin flip on the mirror; do not read it as having closed this.
     #
     # ⚠️ MOTIR-3768's own card cited `1.3 min` here from ci.yml run
     # 33167406878, where this job was SKIPPED by its path filter — so that
