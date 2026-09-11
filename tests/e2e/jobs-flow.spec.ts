@@ -204,7 +204,7 @@ test('@smoke forced failure: a failing send retries to exhaustion, then dead-let
   await expect(page.getByText('email.send').first()).toBeVisible();
 
   // …and the Dead-letter tab badge counts the one un-replayed entry, attempts = 3.
-  await expect(page.getByLabel('1 in dead-letter queue')).toBeVisible();
+  await expect(page.getByRole('main').getByLabel('1 in dead-letter queue')).toBeVisible();
   await page.getByRole('link', { name: /Dead letter/ }).click();
   await expect(page.getByRole('cell', { name: '3', exact: true })).toBeVisible();
 });

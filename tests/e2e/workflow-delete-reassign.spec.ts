@@ -65,8 +65,8 @@ test('@smoke delete-with-reassign: an in-use custom status migrates its items, t
 
   // Add a custom "Triage" status (Statuses tab).
   await page.getByRole('button', { name: 'Add status' }).click();
-  await page.getByLabel('Key (machine id, lowercase)').fill('triage');
-  await page.getByLabel('Label').fill('Triage');
+  await page.getByRole('textbox', { name: 'Key (machine id, lowercase)' }).fill('triage');
+  await page.getByRole('textbox', { name: 'Label' }).fill('Triage');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Triage', { exact: true }).first()).toBeVisible();
 
@@ -98,7 +98,7 @@ test('@smoke delete-with-reassign: an in-use custom status migrates its items, t
   );
 
   // Pick "To Do" as the target and confirm.
-  await page.getByLabel('Move items to').selectOption({ label: 'To Do' });
+  await page.getByRole('combobox', { name: 'Move items to' }).selectOption({ label: 'To Do' });
   await page.getByRole('button', { name: 'Reassign & delete' }).click();
 
   // Success toast + the Triage row is gone from the editor. `exact` so the

@@ -351,7 +351,7 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     await page.getByRole('option', { name: 'Sub-task' }).click();
     await page.getByRole('combobox', { name: 'Parent' }).click();
     await page.getByRole('option', { name: /Finished Story/ }).click();
-    await page.getByLabel('Title').fill('Newly discovered work');
+    await page.getByRole('textbox', { name: 'Title' }).fill('Newly discovered work');
     await page.getByRole('button', { name: 'Create' }).click();
     await expect(page.getByText(/^\S+ created$/).first()).toBeVisible();
 

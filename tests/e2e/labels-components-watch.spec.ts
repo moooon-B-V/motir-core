@@ -583,7 +583,7 @@ test('the detail route is axe-clean with the chip picker and the watchers popove
   await page.keyboard.press('Escape');
   await watchButton(page).click();
   await expect(watchersPopover(page)).toBeVisible();
-  await expect(page.getByLabel('Add a watcher…')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Add a watcher…' })).toBeVisible();
 
   const popoverResults = await new AxeBuilder({ page })
     .withTags(WCAG_TAGS)

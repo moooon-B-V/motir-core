@@ -178,7 +178,7 @@ test('@smoke jobs dashboard: DLQ badge counts entries, and an owner replays', as
   await gotoJobs(page);
 
   // The Dead-letter tab badge reflects the one un-replayed entry.
-  await expect(page.getByLabel('1 in dead-letter queue')).toBeVisible();
+  await expect(page.getByRole('main').getByLabel('1 in dead-letter queue')).toBeVisible();
 
   // Open the DLQ tab and replay (the signed-up user is the workspace owner).
   await page.getByRole('link', { name: /Dead letter/ }).click();

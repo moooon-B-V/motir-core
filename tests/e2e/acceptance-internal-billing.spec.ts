@@ -181,9 +181,9 @@ test('an internal org is classified by staff, and then bills like a customer', a
     // an `org.internal_billing_set` row with no reason cannot answer *why is
     // this organization not being billed?* a year from now. Whitespace is blank.
     await expect(confirm).toBeDisabled();
-    await page.getByLabel(admin.confirm.reasonLabel).fill('   ');
+    await page.getByRole('textbox', { name: admin.confirm.reasonLabel }).fill('   ');
     await expect(confirm).toBeDisabled();
-    await page.getByLabel(admin.confirm.reasonLabel).fill(REASON);
+    await page.getByRole('textbox', { name: admin.confirm.reasonLabel }).fill(REASON);
     await expect(confirm).toBeEnabled();
     await beat();
 
@@ -267,7 +267,7 @@ test('an internal org is classified by staff, and then bills like a customer', a
     // organization the panel says is out of credits.
     await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
-    await page.getByLabel('Title').fill('Written while the balance reads zero');
+    await page.getByRole('textbox', { name: 'Title' }).fill('Written while the balance reads zero');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
     await expect(page.getByText(/^\S+ created$/).first()).toBeVisible();
     await beat();
@@ -300,7 +300,9 @@ test('an internal org is classified by staff, and then bills like a customer', a
     await db.user.update({ where: { email: OWNER }, data: { platformRole: 'superadmin' } });
     await page.goto(`/admin/tenants/${seed.organizationId}`);
     await page.getByRole('button', { name: admin.action.unclassify }).click();
-    await page.getByLabel(admin.confirm.reasonLabel).fill('Moved to a paying plan');
+    await page
+      .getByRole('textbox', { name: admin.confirm.reasonLabel })
+      .fill('Moved to a paying plan');
     await page.getByRole('button', { name: admin.confirm.unclassify.confirm }).click();
     await expect(page.getByText(admin.chip.internalBilling, { exact: true })).toHaveCount(0);
 

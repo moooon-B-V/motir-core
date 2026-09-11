@@ -125,7 +125,7 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
   // ── 1. CREATE via the modal — the type-parent rule, surfaced in the UI ──────
   await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
-  await page.getByLabel('Title').fill('Acceptance subtask');
+  await page.getByRole('textbox', { name: 'Title' }).fill('Acceptance subtask');
 
   // Pick kind = Sub-task → the parent picker must offer the Task but NOT the
   // Epic (a Sub-task requires a story/task/bug parent; an epic is never legal).

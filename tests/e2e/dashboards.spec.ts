@@ -416,6 +416,9 @@ test.describe('dashboards @smoke', () => {
     await page.getByRole('button', { name: 'Edit' }).click();
     await expect(page.getByTestId('dashboard-add-widget')).toBeVisible();
     // Let the widget bodies settle (loading skeleton → data/empty) before the sweep.
+    // MOTIR-5056: NOT converted. A `toHaveCount` assertion resolves the whole match
+    // set, so it cannot throw strict mode — this site is not in the defect class — and
+    // narrowing it to a role would weaken what the absence assertion proves.
     await expect(page.getByLabel('Loading widget…')).toHaveCount(0, { timeout: 15_000 });
     const grid = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(grid.violations).toEqual([]);

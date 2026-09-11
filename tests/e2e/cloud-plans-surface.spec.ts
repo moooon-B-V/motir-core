@@ -317,7 +317,7 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
     // a level that can show it. (WHICH plans open on the list instead is the
     // sibling spec's; this one is seeded single-parent so the switcher is what
     // is under test.)
-    await expect(page.getByLabel('Proposed plan canvas')).toBeVisible();
+    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
     expect(new URL(page.url()).search).toBe('');
     await beat();
 
@@ -342,7 +342,7 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
     // than replacing it.
     await page.goBack();
     await page.waitForURL(`**/plans/${seed.detailPlanId}`);
-    await expect(page.getByLabel('Proposed plan canvas')).toBeVisible();
+    await expect(page.getByRole('application', { name: 'Proposed plan canvas' })).toBeVisible();
     await beat();
   });
 
