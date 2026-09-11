@@ -255,6 +255,38 @@ export interface IndexModeRecord {
    * offered: a cold build was never offered one and has nothing to explain.
    */
   readonly containerFallbackReason?: string;
+  /**
+   * WHAT THE RUN COST, as the CONTAINER measured itself (MOTIR-5101). Absent
+   * when motir-ai had no timings to report — an older deployment, a run that
+   * predates the store, a failed read.
+   *
+   * ⚠️ THIS IS NOT {@link IndexCoreTimings}, AND THE TWO MUST NEVER BE MERGED —
+   * the naming collision MOTIR-5055 records is the failure being avoided here,
+   * one field over, and the instinct to "unify the timings" is exactly how it
+   * recurs. They are produced by different processes and measure different
+   * spans:
+   *
+   *   • **`coreTimings`** (`IndexCoreTimings`, MOTIR-4413) — THIS side's own
+   *     detection overhead, derived on the dispatch host from the boot memo:
+   *     how long motir-core spent provisioning, polling and tearing down. It
+   *     rides its OWN array on the ledger row and is untouched by this card.
+   *   • **`containerTimings`** (here) — the span INSIDE the container, measured
+   *     by the container, excluding every one of those costs.
+   *
+   * **The whole reason the second exists is that the first cannot answer the
+   * question.** Provisioning overhead measured 31 513 ms and 58 738 ms on two
+   * runs eighteen minutes apart — a swing 62% the size of the saving being
+   * measured — so a reader who adds these two numbers together, or who reaches
+   * for whichever is at hand, gets a figure that says incremental indexing does
+   * nothing. Keep them separately readable and separately labelled.
+   */
+  readonly containerTimings?: {
+    readonly totalMs?: number;
+    readonly unaccountedMs?: number;
+    readonly peakRssMb?: number;
+    readonly phasesMs?: Record<string, number>;
+    readonly syncCounts?: Record<string, number>;
+  };
 }
 
 /**

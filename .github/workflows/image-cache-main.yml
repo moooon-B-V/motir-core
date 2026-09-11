@@ -93,17 +93,89 @@ on:
       # scope it is responsible for.
       - '.github/workflows/image-cache-main.yml'
 
-# ⚠️ `cancel-in-progress: true` HERE IS SAFE, AND IT IS THE OPPOSITE OF THE CALL
-# `ci.yml` MAKES ON A PUSH — read both before changing either. What MOTIR-3106
-# lost to cancellation was a DEPLOY: every cancelled run dropped a migration
-# obligation onto the next one, which was then cancelled in turn. This workflow
-# produces no release and gates nothing, so cancelling it loses only a cache
-# write that the newer `main` is about to redo better — and without it a burst
-# of merges queues a chain of builds, each writing a scope the next immediately
-# supersedes.
+  # ⚠️ A SECOND TRIGGER, BECAUSE MERGE TRAFFIC IS NOT A RELIABLE CLOCK FOR
+  # EITHER JOB THIS WORKFLOW HAS — and MOTIR-5126 asked for this decision
+  # explicitly rather than leaving it inherited: *"GHA caches evict after 7 days
+  # without a hit and compete for a 10 GB per-repo budget … gating the write
+  # narrows the cost and risks the scope going cold in quiet stretches. Say which
+  # was chosen and why."* The `paths:` gate above is that narrowing; this is the
+  # answer to what it costs.
+  #
+  # TWO things need a clock the merge stream cannot give:
+  #
+  # 1. BOOTSTRAP. The `ci-runner` scope is written only by a build that SURVIVES
+  #    to its cache export, and a cold one is killed at the 20-minute ceiling
+  #    roughly half the time. It only has to succeed ONCE — after that every
+  #    build restores and finishes in ~35 s, including this workflow's own. Until
+  #    then each attempt is a coin flip, and `push` supplies attempts only when
+  #    somebody merges something image-touching. Both of the first two attempts
+  #    lost (see the concurrency block); a scope that has never been written
+  #    cannot bootstrap itself out of that on merge traffic alone.
+  #
+  # 2. EVICTION. An Actions cache is reclaimed after 7 days WITHOUT A HIT, and
+  #    the sandbox blobs (461 MB · 345 MB · 125 MB each) push this repository
+  #    against the 10 GB budget, so eviction is a live pressure rather than a
+  #    theoretical one. A quiet week in `packages/` / `prisma/` — which is an
+  #    ordinary week — takes the scope cold with nothing to notice it, and the
+  #    cost lands on whoever opens the next pull request.
+  #
+  # SIX-HOURLY rather than daily: four attempts a day makes the bootstrap
+  # near-certain within one, against a coin flip per attempt, and it keeps every
+  # scope comfortably inside the 7-day window even across a holiday. It is not
+  # free — each run is a build — but it is the cheapest thing on this lane and it
+  # is strictly cheaper than the cold build it removes from a person's pull
+  # request. Revisit the cadence if the budget tightens; do NOT revisit it by
+  # raising the ceiling (`runner-image.yml`'s block says why).
+  schedule:
+    - cron: '20 */6 * * *'
+
+  # So the scope can be re-warmed on demand — after an eviction, or to re-try a
+  # bootstrap without waiting for the cron or inventing a commit.
+  workflow_dispatch:
+
+# ⚠️ THIS WAS `cancel-in-progress: true`, AND ITS PREMISE WAS FALSIFIED WITHIN
+# THE HOUR — corrected rather than deleted, because the argument was a good one
+# and the reason it fails is the whole finding.
+#
+# It read: this workflow "produces no release and gates nothing, so cancelling it
+# loses only a cache write that the newer `main` is about to redo better — and
+# without it a burst of merges queues a chain of builds, each writing a scope the
+# next immediately supersedes."
+#
+# Every clause is true EXCEPT "is about to redo it better", and that one carries
+# the decision. It assumes the newer run COMPLETES. For the `ci-runner` half it
+# does not: a cold build of that image is apt-bound on a mirror whose throughput
+# has been measured across a 430x range, and it is killed at `runner-image.yml`'s
+# 20-minute ceiling roughly half the time (11 of 21 in the sample recorded in
+# that file). **A cancelled build never reaches `#20 exporting to GitHub Actions
+# Cache`, so it writes NOTHING.** Trading a run that is eighteen minutes in for
+# one with a coin-flip chance of writing anything is not a better redo; it is a
+# guaranteed loss against a possible gain.
+#
+# MEASURED, on this workflow's first two runs — both the whole reason it exists:
+#
+#   34597976860  12:16:29 → 12:36:45  20m16s  CANCELLED at the ceiling
+#   34602517798  13:07:14 → 13:27:28  20m16s  CANCELLED at the ceiling
+#
+# After both, `refs/heads/main` held nine `sandbox-*` scopes and NO `ci-runner`
+# scope — the sandbox profiles finish in 4–5 minutes and export, the runner image
+# does not. So the mechanism this file was written for works, and the one scope
+# that motivated it had still never been written.
+#
+# The queued-chain cost the old text feared is real and is the cheaper side: a
+# chain of builds each superseding the next still WRITES, and one stale-by-a-
+# commit layer cache is a valid cache — buildx layers are content-addressed, so a
+# superseded scope costs a partial miss, never a wrong build. GitHub also holds
+# at most one pending run per group, so the "chain" is one run deep.
+#
+# ⚠️ AND THE CEILING IS NOT THE KNOB — see `runner-image.yml`'s own block. This
+# repository has refused to raise it three times for this mirror (MOTIR-1679,
+# MOTIR-2970, MOTIR-3128), and MOTIR-3143 states the rule: *"Do NOT raise the
+# retry count or the timeout. That is the move already made twice; it lowers
+# probability and leaves the class."* Nothing here touches it.
 concurrency:
   group: image-cache-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # Both jobs call the SAME reusable workflows `ci.yml` calls, so the layers

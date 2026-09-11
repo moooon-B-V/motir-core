@@ -1112,3 +1112,97 @@ read/display contract and the placement of inventory choices.
 The workspace-rung leak is a separate runtime defect owned by MOTIR-4955. Nothing in this asset asks
 MOTIR-4954 to repair or preserve that ladder behavior as a side effect; the implementation must use
 the explicit project-link set for this surface while leaving the broader runtime domain untouched.
+
+---
+
+## 19 · The Development rows are DERIVED, not drawn (MOTIR-5008, 2026-09-11)
+
+**Where the `.pr-row` measurements come from.** `PullRequestRow` in
+`components/github/DevelopmentSection.tsx` (lines 77–160), read at `origin/main` **`7c3ae250b`**.
+Every declaration in the mock's `.pr-row` / `.pr-text` / `.pr-title` / `.pr-meta` / `.pr-states` /
+`.ext` block carries the component's own Tailwind class string in a comment directly above it, so the
+correspondence is a **string diff** rather than a re-measurement.
+
+**The one command that re-checks the whole block:**
+
+```
+sed -n '77,160p' components/github/DevelopmentSection.tsx
+```
+
+Read it beside the CSS block in `github.mock.html`. Each quoted class string should match the `class`
+attribute on the element it sits above; anything that does not is drift, and drift in this asset is a
+bug worth filing (this is the third).
+
+### What was wrong, and what changed
+
+The row was a hand drawing, authored by MOTIR-1595 in 2026-07 and never measured against the
+component. Four things disagreed:
+
+| element                                    | the asset drew                                                | the component renders                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| row padding                                | `11px 12px`                                                   | `var(--spacing-control-y) var(--spacing-control-x)` — `6px 10px` under the default style |
+| meta-line ink                              | `--el-text-secondary`                                         | `--el-text-identifier`                                                                   |
+| link-out glyph                             | `15 × 15`, no box                                             | `16 × 16` in `p-1` — a 24px target                                                       |
+| the flex structure that decides TRUNCATION | a zero-basis text block plus a separate `.spacer { flex: 1 }` | the TEXT BLOCK carries `min-w-0 flex-1 py-1`                                             |
+
+The last one is the one that changes a picture rather than a number: a zero-basis block that cannot
+grow never reaches its ellipsis, so the two structures agree at short titles and disagree at long
+ones — which is precisely the case the crowding panel exists to show. `.spacer` had no other caller
+in this asset and is deleted with it; the text block is now `.pr-text`.
+
+**The ink one changes no pixel today and is the most important of the four.** `--el-text-identifier`
+and `--el-text-secondary` both resolve to `--color-slate` in the base palette. What differs is which
+token a builder copies out of this asset — and the identifier ink exists because the caption inks
+were wrong for a monospace-ish identifier at 12px (the same lesson Panel 5b already cites for the
+picker's option rows). `owner/repo · #n` is exactly that kind of string.
+
+### The measurements are TOKEN REFERENCES, and that is the fix
+
+`padding: 11px 12px` was not merely the wrong number — it was the wrong KIND of statement. The
+component writes `px-(--spacing-control-x) py-(--spacing-control-y)`, and that token pair is
+`10px / 6px` under the default style and `14px / 8px` under `soft-playful`. Any resolved pixel value
+is right for one style pack and silently wrong for the other four. The `var()` is right for all five
+and re-skins with a `data-style` swap the way the rest of this mock's token block already does.
+
+**This is what makes the third drift bug different from the first two.** MOTIR-4831 and MOTIR-4900
+were _the product moved and the asset did not_, each closed by drawing the new state. This one was
+_the asset never matched_ — so correcting four numbers would have fixed the instance and left the
+mechanism that produced it. `design/work-items/`'s assets state the alternative outright: the markup
+comes from a real render and _"the mock's tokens are EXTRACTED … and its icons from the installed
+`lucide-react`, so no hex and no path is hand-typed and **the asset cannot drift**."_
+
+That asset reaches it by carrying the component's Tailwind class strings verbatim. **This asset
+cannot do that**, and the reason is structural rather than a preference: `github.mock.html` contains
+zero utility rules — it is semantic CSS end to end — so importing a utility island for eleven rows
+would leave two CSS idioms in one board. It reaches the same guarantee the other way: token
+references instead of resolved pixels, the class string quoted beside every rule, and the command
+above.
+
+### The sprite sheet — EXTRACTED vs APPROXIMATE
+
+A symbol's NAME is exactly the kind of thing a careful reader trusts, and in this sheet it has been
+wrong twice: `#i-x` is lucide `circle-x` under a short name (MOTIR-5007 reached for it and drew a
+circled ⊗ where `RemoveLinkButton` renders a plain `X`), and it was also hand-typed at `r="9"` where
+the package draws `r="10"`.
+
+Diffing every `<symbol>` against `lucide-react@1.16.0` found **19 of 30 drifted**. The six the
+Development row draws — `#i-git-pr`, `#i-git-merge`, `#i-git-closed`, `#i-check`, `#i-x`, `#i-dots` —
+are now emitted from the package, each with a comment naming the file it came from and the
+`PR_STATE_META` / `CI_STATE_META` entry it stands for. **Three of them were not approximations of
+their own icon at all**: `#i-git-pr` was a sketch of lucide `git-pull-request`, a different icon from
+the `GitPullRequestArrow` the component imports.
+
+The remaining thirteen are listed as APPROXIMATE in the sprite sheet's own header, and extracting
+them — plus turning this diff into a reusable predicate — is **MOTIR-5136**. `#i-github` and
+`#i-gitlab` are brand marks and are outside the audit. Re-check any one sprite in one command:
+
+```
+grep -oE '\["(circle|path|line|polyline|rect)".*' \
+  node_modules/lucide-react/dist/esm/icons/circle-x.mjs
+```
+
+### What did NOT change
+
+No panel gains or loses an element. This is a measurement correction, not a redesign: the eleven
+`.pr-row` instances across Panels 3, 4, 5a–5f keep their glyph, title, meta line, pill set, link-out
+and — where MOTIR-5007 put one — their remove control, in that order.

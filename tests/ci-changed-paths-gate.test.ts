@@ -666,7 +666,50 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         // NEXT merge's release. Putting the sandbox matrix there would have
         // recreated that defect in its slow form, which no check reports.
         expect(cacheWorkflow).toMatch(/^concurrency:\n\s*group: image-cache-main$/m);
-        expect(cacheWorkflow).toMatch(/^\s*cancel-in-progress: true$/m);
+      });
+
+      it('does NOT cancel in progress — a killed build writes no cache at all', () => {
+        // ⚠️ THIS ASSERTION WAS `true` AND IS NOW `false`. The reasoning that
+        // set it is in the workflow beside the directive; the short form is that
+        // its premise — a cancelled write is one "the newer `main` is about to
+        // redo better" — assumes the newer run COMPLETES, and for the
+        // `ci-runner` image it does not: a cold build is killed at the 20-minute
+        // ceiling roughly half the time, and a killed build never reaches its
+        // cache export. Both of this workflow's first two runs died that way
+        // (20m16s each) and wrote no `ci-runner` scope.
+        //
+        // Pinned in the NEGATIVE direction on purpose: flipping it back is a
+        // decision with an argument on the other side, so it should cost a
+        // deliberate edit to this line rather than pass unnoticed.
+        expect(cacheWorkflow).toMatch(/^\s*cancel-in-progress: false$/m);
+      });
+
+      it('has a clock that does not depend on merge traffic', () => {
+        // Two jobs need one, and the workflow states both: BOOTSTRAP (the
+        // `ci-runner` scope has to survive one build to exist at all, and each
+        // attempt is a coin flip) and EVICTION (an Actions cache is reclaimed
+        // after 7 days without a hit, and the sandbox blobs keep this repo near
+        // the 10 GB budget). A `push` + `paths:` gate supplies attempts only
+        // when somebody merges something image-touching, which is not a clock.
+        expect(cacheWorkflow).toMatch(/^\s*schedule:\n\s*- cron: '[^']+'$/m);
+
+        // Inside the 7-day eviction window with a wide margin — the assertion is
+        // on the PROPERTY, not on the literal cadence, so tuning the cron for
+        // cost does not fail this while dropping it to weekly does.
+        const cron = /^\s*- cron: '([^']+)'$/m.exec(cacheWorkflow)?.[1] ?? '';
+        const [, hour = '', dayOfMonth = '', , dayOfWeek = ''] = cron.split(' ');
+        expect(cron, 'a cron was declared').not.toBe('');
+        expect(
+          hour.includes('/') || dayOfMonth === '*',
+          `cron '${cron}' must fire at least daily — the scope evicts after 7 days`,
+        ).toBe(true);
+        expect(dayOfWeek, `cron '${cron}' must not be weekly`).toBe('*');
+      });
+
+      it('can be re-warmed on demand', () => {
+        // After an eviction, or to retry a lost bootstrap without waiting for
+        // the cron or inventing a commit.
+        expect(cacheWorkflow).toMatch(/^\s*workflow_dispatch:$/m);
       });
 
       it('is not in `deploy`’s needs — a cold cache must never stop a release', () => {

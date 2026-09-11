@@ -2338,9 +2338,12 @@
     </div>
 
     <div class="panel-label">
-      7b &middot; <b><span class="mono">Organisation</span> active</b> — the index page, unchanged,
-      now inside the area chrome. Drawn to make the &ldquo;nothing moves&rdquo; claim above
-      checkable rather than asserted.
+      7b &middot; <b><span class="mono">Organisation</span> active</b> — the index page inside the
+      area chrome. <b>AMENDED 2026-09-11 (MOTIR-4942):</b> the page is drawn as it will stand once
+      MOTIR-4925 moves the acceptance-video switch to the project tier — <b>without</b>
+      <span class="mono">AcceptanceVideoCard</span>, and in the order the page actually renders,
+      which the previous prose stub got wrong in two ways. Drawn to make the &ldquo;nothing
+      moves&rdquo; claim above checkable rather than asserted.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2414,18 +2417,81 @@
                 Your organisation&rsquo;s name, its plan, and the sections that belong to it.
               </p>
             </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <b><span class="mono">OrgGeneralCard</span></b>
+                  <span class="pill pill-neutral">admin</span>
+                </div>
+                <div class="card-body">
+                  <span class="quiet">Name, plan, workspace and member counts.</span>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <b><span class="mono">BillingCard</span></b>
+                  <span class="pill pill-neutral">admin &middot; cloud only</span>
+                </div>
+                <div class="card-body">
+                  <span class="quiet">The live billing door. Absent off-cloud.</span>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <b><span class="mono">WorkspaceFoldInSection</span></b>
+                  <span class="pill pill-neutral">workspace membership</span>
+                </div>
+                <div class="card-body">
+                  <span class="quiet"
+                    >Gated on membership, never on <span class="mono">isAdmin</span>.</span
+                  >
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <b><span class="mono">JobRunsFoldInSection</span></b>
+                  <span class="pill pill-neutral">workspace membership</span>
+                </div>
+                <div class="card-body">
+                  <span class="quiet"
+                    >The operator surface; same condition as the fold-in above.</span
+                  >
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <b><span class="mono">DangerZoneCard</span></b>
+                  <span class="pill pill-neutral">admin</span>
+                </div>
+                <div class="card-body">
+                  <span class="quiet">Last, as it always was.</span>
+                </div>
+              </div>
+            </div>
             <div class="stub">
-              <b
-                >Today&rsquo;s <span class="mono">/settings/organization</span> page, card for
-                card</b
-              >
-              — <span class="mono">OrgGeneralCard</span> &middot;
-              <span class="mono">AcceptanceVideoCard</span> &middot;
-              <span class="mono">BillingCard</span> &middot;
-              <span class="mono">WorkspaceFoldInSection</span> &middot;
-              <span class="mono">DangerZoneCard</span>, in that order, each keeping its own §6d
-              per-SECTION gate. The row filter below decides which ROWS exist; it does not touch
+              <b>Five sections, and the acceptance-video card is not one of them.</b> It moves to
+              <span class="mono">/settings/project/approvals</span> (MOTIR-4942 &middot;
+              MOTIR-4925), because what it decides is a PROJECT&rsquo;s approval gate. The
+              ENTITLEMENT does not move: <span class="mono">hasPaidAiPlan</span> is bought once for
+              the organisation and is still read from here. Each remaining section keeps its own §6d
+              per-SECTION gate; the row filter below decides which ROWS exist, and does not touch
               what is inside one.
+              <div class="note">
+                <span aria-hidden="true">⚠️</span>
+                <span>
+                  <b
+                    >The list this panel used to carry was stale in two ways, and both are corrected
+                    above</b
+                  >
+                  — read off
+                  <span class="mono">app/(authed)/settings/organization/page.tsx</span> on
+                  <span class="mono">origin/main</span>, 2026-09-11. It put
+                  <span class="mono">AcceptanceVideoCard</span> BEFORE
+                  <span class="mono">BillingCard</span> (the page renders Billing first), and it
+                  omitted <span class="mono">JobRunsFoldInSection</span> entirely. A card order is
+                  exactly the kind of claim a prose stub records once and nobody re-reads.
+                </span>
+              </div>
             </div>
           </div>
         </div>

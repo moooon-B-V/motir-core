@@ -881,6 +881,46 @@ export interface CodeGraphRunVerdict {
   indexMode: 'sync' | 'build' | null;
   /** Why a run that WAS offered a snapshot rebuilt anyway. Bounded to 300 chars. */
   fallbackReason: string | null;
+  /**
+   * WHAT THE RUN COST, as the CONTAINER measured it (MOTIR-5101) — `null` when
+   * motir-ai recorded none.
+   *
+   * ⚠️ THIS IS THE ONLY INSTRUMENT THAT CAN MEASURE WHAT A SYNC SAVES, and the
+   * reason it had to cross the boundary at all is that the obvious local
+   * substitute is wrong. `job_run.duration_ms` is right here, queryable and
+   * plausible — and it spans machine create, image pull, a fixed 15 000 ms
+   * detect cap and teardown. That overhead measured 31 513 ms and 58 738 ms on
+   * two runs eighteen minutes apart, a swing 62% the size of the effect; on
+   * MOTIR-5031's three runs it placed a `sync` and a `rebuild` 0.5% apart while
+   * the container's own `totalMs` resolved the same pair at 93 778 → 50 203 ms.
+   * So the local number does not fail loudly — it reports, stably, that
+   * incremental indexing does nothing.
+   *
+   * ⚠️ AND `null` IS NOT ZERO. Every run recorded before MOTIR-5101 shipped has
+   * a verdict and no timings, which is the whole of the store's history — so
+   * absent must read as *nobody measured this*, never as an instantaneous run.
+   */
+  timings: CodeGraphRunTimings | null;
+}
+
+/**
+ * One run's self-measured cost, as motir-ai stored it (MOTIR-5101).
+ *
+ * Every field is independently nullable because they arrive independently: the
+ * sync counts only exist on a run that synced, and `peakRssMb` only from a
+ * container new enough to send it.
+ */
+export interface CodeGraphRunTimings {
+  /** The container's own wall clock for the run, excluding the report call. */
+  totalMs: number | null;
+  /** `totalMs` − Σ`phasesMs`: interstitial work, or a phase nobody wrapped. */
+  unaccountedMs: number | null;
+  /** Peak RESIDENT SET in whole MB — not heap; a whole-tree index is mostly off-heap. */
+  peakRssMb: number | null;
+  /** Phase name → wall-clock ms. Bounded by motir-ai at 32 entries, 32-char keys. */
+  phasesMs: Record<string, number> | null;
+  /** The whitelisted `SyncResult` counts — what a sync actually touched. */
+  syncCounts: Record<string, number> | null;
 }
 
 /**
@@ -945,10 +985,19 @@ export async function fetchCodeGraphRunVerdict(input: {
       typeof verdict.fallbackReason === 'string' && verdict.fallbackReason.length > 0
         ? verdict.fallbackReason
         : null;
-    // A body that carries neither half tells us nothing — report it as absent
-    // rather than as a verdict whose every field is null, so the caller has one
-    // shape to reason about instead of two.
-    if (indexMode === null && fallbackReason === null) return null;
+    const timings = parseRunTimings(verdict.timings);
+
+    // A body that carries NOTHING tells us nothing — report it as absent rather
+    // than as a verdict whose every field is null, so the caller has one shape to
+    // reason about instead of two.
+    //
+    // ⚠️ THE TIMINGS ARE PART OF THAT TEST SINCE MOTIR-5101, AND OMITTING THEM
+    // HERE WOULD HAVE SILENTLY DISCARDED THE CARD'S OWN DELIVERABLE. A run that
+    // reported its cost but no mode — a container whose `indexMode` was
+    // unrecognised, which motir-ai stores as `null` by design — carries a
+    // perfectly good measurement, and the old two-term test threw the whole
+    // verdict away before anyone could read it.
+    if (indexMode === null && fallbackReason === null && timings === null) return null;
 
     return {
       repoRef: typeof verdict.repoRef === 'string' ? verdict.repoRef : input.repoRef,
@@ -956,6 +1005,7 @@ export async function fetchCodeGraphRunVerdict(input: {
       commitSha: typeof verdict.commitSha === 'string' ? verdict.commitSha : null,
       indexMode,
       fallbackReason,
+      timings,
     };
   } catch {
     // Deliberately total. See the doc block: a settled run must not fail on a
@@ -963,6 +1013,43 @@ export async function fetchCodeGraphRunVerdict(input: {
     // that has nothing to report — both mean "no container mode recorded".
     return null;
   }
+}
+
+/**
+ * The `timings` half of a verdict body, validated field by field (MOTIR-5101).
+ *
+ * ⚠️ NOTHING IS TRUSTED AND NOTHING IS DEFAULTED. This is a body from another
+ * service across the open/closed boundary, read at the end of a settled run: a
+ * field of the wrong type must become `null`, never a coerced number, because a
+ * plausible value here is indistinguishable from a measured one and lands on a
+ * durable ledger row. Returns `null` when no field survived, so the caller never
+ * has to tell an absent object from an all-null one.
+ */
+function parseRunTimings(value: unknown): CodeGraphRunTimings | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+
+  const num = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+  const numberMap = (v: unknown): Record<string, number> | null => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    const out: Record<string, number> = {};
+    for (const [key, entry] of Object.entries(v as Record<string, unknown>)) {
+      const n = num(entry);
+      if (n !== null) out[key] = n;
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  };
+
+  const timings: CodeGraphRunTimings = {
+    totalMs: num(raw['totalMs']),
+    unaccountedMs: num(raw['unaccountedMs']),
+    peakRssMb: num(raw['peakRssMb']),
+    phasesMs: numberMap(raw['phasesMs']),
+    syncCounts: numberMap(raw['syncCounts']),
+  };
+
+  return Object.values(timings).some((field) => field !== null) ? timings : null;
 }
 
 /** What motir-ai removed for ONE repo (`POST /v1/code-graph/offboard`). */
