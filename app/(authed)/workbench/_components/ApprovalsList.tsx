@@ -177,12 +177,25 @@ function ApprovalRow({
   }
 
   async function onDecide(decision: GateDecision): Promise<GateRefusal | null> {
-    const result = await decideApprovalGateAction(row.gateId, decision);
+    const result = await decideApprovalGateAction({
+      gateId: row.gateId,
+      decision,
+      // The CARD's path, which the action revalidates alongside the Workbench's
+      // — a decision moves that card's status rail as well as this row.
+      identifier: row.workItem.identifier,
+    });
     if (!result.ok) return result.refusal;
     // SETTLE IN PLACE: the row keeps its position and swaps its Decide cell for
     // the state pill. The read returns only `awaiting` gates, so the refresh
     // below is also what eventually removes it — on the NEXT load, never under
     // the cursor.
+    //
+    // ⚠️ BOTH HALVES, AND THE SERVER HALF RIDES THE ACTION'S OWN RESPONSE.
+    // MOTIR-5118 measured `router.refresh()` ALONE as insufficient on a loaded
+    // lane — it fires, it returns 200, and the fresh tree arrives on a second
+    // apply that can go missing. So the action revalidates; this refresh is what
+    // reaches surfaces a server revalidation does not cover, and removing it is
+    // a separate claim nobody has measured.
     setGate(result.gate);
     router.refresh();
     return null;
@@ -245,7 +258,14 @@ function ApprovalRow({
           <span
             className={cn(
               'shrink-0 text-sm font-medium',
-              settled || !openable ? 'text-(--el-text-muted)' : 'text-(--el-text)',
+              // ⚠️ `--el-text-secondary`, NOT the `--el-text-muted` the design's
+              // token map names for a settled row. Muted is 4.12–4.34:1 on
+              // `--el-surface` — which is THIS row's hover fill — so the ink
+              // would drop below AA exactly while the pointer is on it. The
+              // sibling `WorkbenchList` records the identical pair for its own
+              // identifier cell. The ASSET is amended to match (§ 20's token
+              // map); the guard found this before a reader did.
+              settled || !openable ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
             )}
           >
             {t(`kind.${row.kind}`)}
@@ -268,7 +288,7 @@ function ApprovalRow({
               <span
                 className={cn(
                   'truncate text-sm',
-                  settled || !openable ? 'text-(--el-text-muted)' : 'text-(--el-text)',
+                  settled || !openable ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
                 )}
               >
                 {row.workItem.title}

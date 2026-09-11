@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 import { approvalGatesService, type GateDecision } from '@/lib/services/approvalGatesService';
 import { ApprovalGateError } from '@/lib/approvalGates/errors';
 import { ApprovalGateAlreadyDecidedError } from '@/lib/approvalGates/errors';
@@ -95,6 +96,14 @@ export async function decideApprovalGateAction(input: {
     // nothing — no surface moved, and re-rendering the page under a reader who
     // is about to be shown why their press did not land helps nobody.
     revalidatePath(`/items/${identifier}`);
+    // ⚠️ AND THE WORKBENCH, ALWAYS — because EVERY decision moves its
+    // **To approve** count, whichever surface the press came from (MOTIR-4794).
+    // The tab is the other home of this frame: a decision made there must leave
+    // the row AND drop the badge in ONE render, and the paragraph above is the
+    // measurement that says the client refresh alone cannot be trusted to do
+    // it. A decision made on the ITEM page moves that same badge, so this is
+    // correct for both callers rather than a branch for one of them.
+    revalidatePath(AUTHED_LANDING_PATH);
     return { ok: true, gate };
   } catch (err) {
     // The shared project gate's two refusals. A non-browser reads NOT_FOUND and

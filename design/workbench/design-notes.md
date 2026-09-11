@@ -1046,12 +1046,22 @@ nothing.
 | kind glyph (`design_result`) | `--el-type-design` (the shipped design-type hue, `workItemTypeMeta.ts`)    | `h-4 w-4`                               |
 | kind glyph (unregistered)    | `--el-text-faint`                                                          | `h-4 w-4`                               |
 | kind label / subject meta    | `--el-text` / `--el-text-secondary`                                        | `text-sm` / `text-xs`                   |
-| a SETTLED row's ink          | `--el-text-muted`                                                          | —                                       |
+| a SETTLED row's ink          | `--el-text-secondary` — see the AA note below                              | —                                       |
 | work-item key / title        | `--el-text-secondary` (mono) / `--el-text`                                 | `font-mono text-xs` / `text-sm`         |
 | waited                       | `--el-text-secondary`                                                      | `text-xs`                               |
 | state pills                  | `--el-tint-mint` · `--el-tint-peach` · `--el-chip-bg` + `--el-chip-border` | `--radius-badge` · `--spacing-chip-x/y` |
 | the disclosure               | `--el-text` on `--el-button-secondary-border`                              | `--radius-btn`                          |
 | row / list container         | `--el-border`, hover `--el-surface`                                        | `--radius-card`, 44px rows              |
+
+⚠️ **A SETTLED ROW'S INK IS `--el-text-secondary`, NOT `--el-text-muted` — AMENDED
+2026-09-11 by MOTIR-4794, on the record.** The first cut of this table named
+muted, and `tests/theme/inkContrastLint.test.ts` refused it on the build: muted
+is **4.12–4.34:1 on `--el-surface`**, which is exactly this row's HOVER FILL, so
+the ink would drop below AA in the one moment a pointer is on it. It clears AA
+only on the white page/card. `WorkbenchList` records the identical pair for its
+own identifier cell, which is the tell that this is a property of the SURFACE
+rather than a mistake in this row. The guard caught it before a reader did, and
+the asset is corrected rather than the guard exempted.
 
 No raw hex and no raw shape utilities anywhere in the asset.
 
