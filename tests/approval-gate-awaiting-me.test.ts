@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { homeService } from '@/lib/services/homeService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -437,5 +438,61 @@ describe('approvalGatesService.listAwaitingMe — the subject summary', () => {
       expect(row.workItem.title).toBe(`Design ${i}`);
       expect(row.workItem.kind).toBe('subtask');
     }
+  });
+});
+
+describe('homeService.tabCounts — the strip badge (MOTIR-4794)', () => {
+  it('reports the SAME number the tab lists, over the same fixture — one question, not two', async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await gateOn({ title: `Mine ${i}`, assigneeId: meCtx.userId });
+    }
+    // Rows the badge must NOT count, each for a different reason.
+    await gateOn({ title: 'Theirs', assigneeId: otherId, reporterId: meCtx.userId });
+    const decided = await gateOn({ title: 'Decided', assigneeId: meCtx.userId });
+    await adminDb.approvalGate.update({
+      where: { id: decided.gate.id },
+      data: { state: 'approved' },
+    });
+
+    const counts = await homeService.tabCounts(meCtx);
+    const listed = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+
+    expect(counts.approvals).toBe(3);
+    // ⚠️ THE ASSERTION THAT MATTERS IS THE AGREEMENT, not the literal. A badge
+    // reading `3` above a list of two is what a second copy of the predicate
+    // looks like from the reader's side, and the two are only safe from that
+    // because they call ONE `where` builder in the repository.
+    expect(counts.approvals).toBe(listed.total);
+    expect(counts.approvals).toBe(listed.items.length);
+  });
+
+  it("is NOT the sibling tabs' membership union — the badge diverges exactly where the predicate does", async () => {
+    // Assigned to somebody else, reported by me: a WORK tab would count it.
+    await gateOn({ title: 'Theirs now', assigneeId: otherId, reporterId: meCtx.userId });
+
+    expect((await homeService.tabCounts(meCtx)).approvals).toBe(0);
+  });
+
+  it('counts nothing for a reader who may not browse the active project', async () => {
+    const stranger = await createTestUser({ email: 'badge-stranger@ex.com', name: 'Badge' });
+    await workspacesService.addMember({ userId: stranger.id, workspaceId: fx.workspaceId });
+    await gateOn({ title: 'Routed to the stranger', assigneeId: stranger.id });
+    await projectMembersService.setAccessLevel({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      level: 'private',
+    });
+    await adminDb.projectMembership.deleteMany({
+      where: { userId: stranger.id, projectId: fx.projectId },
+    });
+
+    const counts = await homeService.tabCounts({
+      userId: stranger.id,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+
+    expect(counts.approvals).toBe(0);
   });
 });

@@ -64,11 +64,13 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
 export function toApprovalQueueRowDto(
   row: AwaitingGateRow,
   subject: ApprovalGateSubjectSummaryDTO | null,
+  canDecide: boolean,
 ): ApprovalQueueRowDto {
   return {
     gateId: row.id,
     kind: row.kind,
     state: 'awaiting',
+    canDecide,
     waitingSince: row.createdAt.toISOString(),
     workItem: {
       id: row.workItem.id,

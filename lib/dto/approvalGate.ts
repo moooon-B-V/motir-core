@@ -207,6 +207,21 @@ export interface ApprovalQueueRowDto {
   gateId: string;
   kind: ApprovalGateKindDTO;
   state: Extract<ApprovalGateStateDTO, 'awaiting'>;
+  /**
+   * Whether THIS reader may press this gate's verbs — the AUTHORITY answer, and
+   * NEVER the routing one.
+   *
+   * ⚠️ IT IS NOT IMPLIED BY THE ROW'S PRESENCE, which is the trap. Routing is
+   * `assigneeId ?? reporterId`, so every row in your own queue satisfies ADR
+   * §2's RELATIONSHIP arm by construction — and it is tempting to conclude the
+   * flag is always `true` and hardcode it. The PERMISSION FLOOR is the other
+   * half the decide door applies (`work_item:edit` for `design_result`, *"on
+   * top of it, not instead of it"*), and a project `viewer` can be an assignee.
+   * Such a reader is routed a gate they may not decide, and a surface that
+   * derived its own answer would draw verbs the door then refuses — the exact
+   * disagreement `approvalGatesService.getForWorkItem` records.
+   */
+  canDecide: boolean;
   /** ISO-8601 — when the question was asked. The row renders how long ago. */
   waitingSince: string;
   workItem: ApprovalQueueWorkItemRefDto;

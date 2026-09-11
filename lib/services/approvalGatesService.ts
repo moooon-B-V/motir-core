@@ -316,8 +316,21 @@ export const approvalGatesService = {
       // kind enum is asserted.
       const subjects = await summarizeGateSubjects(rows, tx);
 
+      // ⚠️ THE AUTHORITY ANSWER, resolved ONCE for the page rather than per row.
+      // Every row here is in the ACTIVE project, so the permission floor is one
+      // question, and asking it per gate would be N identical reads. It is the
+      // FLOOR only: ADR §2's relationship arm is already satisfied by the
+      // routing predicate that selected these rows, so what remains to check is
+      // `work_item:edit` — which a project `viewer` who happens to be an
+      // assignee does not have.
+      const canDecide =
+        scope.projectIds.length > 0 &&
+        (await projectAccessService.getCapabilities(ctx.projectId, ctx, tx)).canEdit;
+
       return {
-        items: rows.map((row) => toApprovalQueueRowDto(row, subjects.get(row.id) ?? null)),
+        items: rows.map((row) =>
+          toApprovalQueueRowDto(row, subjects.get(row.id) ?? null, canDecide),
+        ),
         total,
         page,
         pageSize,
