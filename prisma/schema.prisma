@@ -1154,6 +1154,13 @@ model Workspace {
   // installation holds every tenant's created repos, so the repo row is what says
   // whose they are. Cascade with the workspace.
   githubRepos                 GithubRepo[]
+  // Error-monitor GRANTS installed by this workspace, and the project↔monitored-
+  // project BINDINGS made on them (Story MOTIR-4926 · MOTIR-5258). The grant is
+  // the workspace's own, so unlike `githubInstallations` there is no shared-
+  // provisioning case; both cascade with the workspace, and both are modelled on
+  // BOTH sides per the FK-`@relation` rule.
+  monitorInstallations        MonitorInstallation[]
+  monitorConnections          MonitorConnection[]
   // Issue-import runs + their external-id → work-item map (Story 7.16 · MOTIR-939).
   // Workspace-scoped tenant data — cascade with the workspace.
   imports                     Import[]
@@ -1588,6 +1595,10 @@ model Project {
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
   repos                       ProjectRepo[]
+  // The external monitored projects bound to THIS project (Story MOTIR-4926 ·
+  // MOTIR-5258) — a SET whose degenerate case is one, never a column on this
+  // model. Cascade: the bindings existed only to route this project's errors.
+  monitorConnections          MonitorConnection[]
   // Metered CI runs attributed to this project (Story MOTIR-1775 · MOTIR-1896).
   // SetNull, NOT Cascade: the run rows are a spend AUDIT, and Motir was really
   // billed for those minutes whether or not the project still exists — deleting
@@ -9454,4 +9465,153 @@ model PublicHostnameReservation {
   retiredAt DateTime @default(now()) @map("retired_at")
 
   @@map("public_hostname_reservation")
+}
+
+/// An error-monitor GRANT — one provider installation, held by one workspace
+/// (Story MOTIR-4926 · MOTIR-5258).
+///
+/// Modelled on `GithubInstallation` ↔ `GithubRepo`, and for the same reason that
+/// pair is split: a provider authorises at the ORGANISATION tier (Sentry's
+/// permissions are scoped to the org), so ONE grant covers every project in that
+/// org. This row is therefore the only one that holds a secret, and the binding
+/// below holds none.
+///
+/// ⚠️ THE CREDENTIAL LIVES HERE AND NOWHERE ELSE. Storing a copy per bound
+/// project would mean N copies of one secret, N things to rotate, and N chances
+/// for one of them to be the stale one.
+model MonitorInstallation {
+  id String @id @default(cuid())
+
+  /// Provider discriminator — "sentry" today, and the only implementation
+  /// (`lib/monitors/registry.ts` resolves it). An unknown value is a typed error
+  /// there, never a default member.
+  provider String @default("sentry")
+
+  /// The provider's OWN installation id, as a string — never do math on it.
+  /// Sentry's `installationId` from the external-install redirect. UNIQUE: one
+  /// row per provider installation, and the grant-exchange and refresh paths key
+  /// on it. DISTINCT from `id`, the internal cuid PK.
+  installationId String @map("installation_id")
+
+  /// The workspace whose OWN grant this is. NOT NULL — unlike
+  /// `GithubInstallation.workspaceId`, which is nullable only because Motir's
+  /// shared PROVISIONING installation (MOTIR-1931) is owned by no tenant. There
+  /// is no shared-installation case for a monitor: every grant is a customer
+  /// authorising their own Sentry organisation, so the column that says whose it
+  /// is can be required, and the RLS policy reads it directly.
+  workspaceId String @map("workspace_id")
+
+  /// The grant's access token, encrypted at rest by `lib/monitors/tokenCrypto.ts`
+  /// (the shared AES-256-GCM `v1.<iv>.<tag>.<ct>` form). Only
+  /// `monitorConnectionService` and the credential-lifecycle path read or write
+  /// it, and no read path outside them returns the plaintext.
+  accessTokenEncrypted String @map("access_token_encrypted")
+
+  /// The grant's refresh token, encrypted the same way. Sentry's public
+  /// integration issues BOTH — an access token that expires in eight hours and a
+  /// refresh token to mint the next one — so both are persisted, exactly as the
+  /// GitLab connection does for the same reason.
+  refreshTokenEncrypted String @map("refresh_token_encrypted")
+
+  /// When the stored access token expires. The refresh path reads it to decide
+  /// when to refresh; eight hours after the exchange, for Sentry.
+  tokenExpiresAt DateTime @map("token_expires_at")
+
+  /// The grant's HEALTH — "connected" or "degraded". RECORDED, never derived: a
+  /// revoked credential is a fact only a probe can learn, and the whole reason
+  /// this epic exists (MOTIR-4918) is that a signal which stopped arriving looked
+  /// exactly like a quiet week. The credential-lifecycle card (MOTIR-5261) is the
+  /// only writer.
+  health String @default("connected")
+
+  /// The PROVIDER'S OWN reason for a `degraded` verdict, surfaced verbatim to a
+  /// person on the settings surface. NULL while healthy. It is the provider's
+  /// string and not ours: a re-worded reason is a reason nobody can act on.
+  healthReason String? @map("health_reason")
+
+  /// When the health above was last established. NULL until the first probe.
+  healthCheckedAt DateTime? @map("health_checked_at")
+
+  /// Per-provider context that carries NO secret — Sentry's organisation slug,
+  /// so the room can say which org is connected without a provider call. Json?
+  /// because the shape is the provider's; the discriminator above says how to
+  /// read it.
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Modelled on BOTH sides with the same action the migration SQL uses (the
+  /// FK-`@relation` rule). Cascade: a deleted workspace takes its grants — and
+  /// therefore its stored credentials — with it.
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connections MonitorConnection[]
+
+  /// The provider's installation id is unique WITHIN a provider, not across the
+  /// table: two providers may legitimately mint the same id. Scoping the
+  /// constraint is what keeps a second provider purely additive.
+  @@unique([provider, installationId])
+  @@index([workspaceId])
+  @@map("monitor_installation")
+}
+
+/// A BINDING between one Motir project and one monitored external project
+/// (Story MOTIR-4926 · MOTIR-5258).
+///
+/// ⚠️ THIS TABLE IS THE SET. A team with a web app and a worker has two Sentry
+/// projects; a monorepo has one; a service-oriented backend has N. So "how many
+/// monitored projects does a Motir project have?" is a ROW COUNT, and the
+/// degenerate case of one is a row — never a `sentryProjectId` column on
+/// `Project`, which would be a schema migration, a settings-page rewrite and a
+/// failure-model change the first time a customer has two services.
+model MonitorConnection {
+  id String @id @default(cuid())
+
+  /// FK → MonitorInstallation.id (the internal cuid, NOT the provider's own
+  /// installation id). The grant this binding was made on, and where its
+  /// credential lives.
+  installationId String @map("installation_id")
+
+  /// The Motir project whose errors these are.
+  projectId String @map("project_id")
+
+  /// WHOSE this binding is — carried on the CHILD rather than joined through the
+  /// parent grant, which is the shape `GithubRepo` was migrated TO
+  /// (`prisma/migrations/20260731160000_github_repo_workspace_tenancy`). RLS does
+  /// not traverse a foreign key, so a policy written as a correlated EXISTS over
+  /// the parent is a per-row subquery on every read by every caller — measured at
+  /// 3× on one unrelated test file (the org-read-arm lesson). This column is what
+  /// lets the policy be a column comparison.
+  workspaceId String @map("workspace_id")
+
+  /// The provider's own id for the monitored project, as a string. The dedup key
+  /// the unique index below is built on.
+  externalProjectId String @map("external_project_id")
+
+  /// The monitored project's human slug, as the provider reports it — what the
+  /// settings row shows. Recorded rather than resolved: a room that has to call
+  /// the provider to render a list cannot render one while the credential is
+  /// degraded, which is the exact state it most needs to show.
+  externalProjectSlug String @map("external_project_slug")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// All three modelled on BOTH sides with the actions the migration SQL uses
+  /// (the FK-`@relation` rule).
+  installation MonitorInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// ⚠️ THE UNIQUENESS IS THE DATABASE'S, NOT THE READ'S. Binding a project is a
+  /// check-then-write, and two authorisation returns can land at once — so the
+  /// constraint is what makes exactly one win, and the repository surfaces the
+  /// loser's collision as a typed `MONITOR_CONNECTION_ALREADY_EXISTS` refusal
+  /// rather than a raw Prisma error. A count-then-write guard with no constraint
+  /// behind it only fails under a warm pool.
+  @@unique([projectId, installationId, externalProjectId])
+  @@index([workspaceId])
+  @@index([installationId])
+  @@index([projectId])
+  @@map("monitor_connection")
 }
