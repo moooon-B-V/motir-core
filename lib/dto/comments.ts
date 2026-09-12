@@ -27,6 +27,16 @@ export interface CommentDTO {
   mentionedUserIds: string[];
 }
 
+/** What a hard delete removed — the comment, and for a root its whole thread. */
+export interface DeletedCommentDTO {
+  commentId: string;
+  workItemId: string;
+  /** Null when the deleted comment was a root. */
+  parentCommentId: string | null;
+  /** Replies the cascade took with it — always 0 for a reply. */
+  replyCount: number;
+}
+
 /** A root comment with its whole single-level thread riding along. */
 export interface CommentThreadDTO extends CommentDTO {
   replies: CommentDTO[];

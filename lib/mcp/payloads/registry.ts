@@ -82,6 +82,9 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   change_kind: workItemWritePayload as unknown as PayloadDefinition<never>,
   move_to_parent: workItemWritePayload as unknown as PayloadDefinition<never>,
   add_comment: addCommentPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-5295 — an edit returns the comment it changed, the same shape the
+  // add returns, so it derives through the same definition.
+  edit_comment: addCommentPayload as unknown as PayloadDefinition<never>,
   // MOTIR-3100 — the plan-tree breadth projection. Its row is a declared
   // NARROWING of `WorkItemRef`, so it derives (and carries no probe) for the
   // same reason the search row does.

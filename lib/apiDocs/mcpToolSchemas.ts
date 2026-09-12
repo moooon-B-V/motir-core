@@ -812,6 +812,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  delete_comment: {
+    type: 'object',
+    properties: {
+      commentId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The comment id — the `id` `add_comment` returned, or a comment row’s `id` from `get_work_item_activity`.',
+      },
+    },
+    required: ['commentId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   delete_sprint: {
     type: 'object',
     properties: {
@@ -863,6 +877,25 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  edit_comment: {
+    type: 'object',
+    properties: {
+      commentId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The comment id — the `id` `add_comment` returned, or a comment row’s `id` from `get_work_item_activity`.',
+      },
+      body: {
+        type: 'string',
+        minLength: 1,
+        description: 'The new comment body (Markdown). Mention a member with @[name](userId).',
+      },
+    },
+    required: ['commentId', 'body'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

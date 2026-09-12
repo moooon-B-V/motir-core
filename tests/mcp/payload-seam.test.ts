@@ -127,6 +127,8 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   change_kind: true,
   move_to_parent: true,
   add_comment: true,
+  // MOTIR-5295 — derives through the add's own definition.
+  edit_comment: true,
   // MOTIR-3058 — the general attachment door. Derives from v1's own
   // `attachmentSchema` through `presentAttachment`; the payload is that shape
   // verbatim, with no widening at all.
