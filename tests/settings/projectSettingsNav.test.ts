@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { Globe, Megaphone } from 'lucide-react';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,9 +12,12 @@ import {
   hasVisibleSettingsArea,
   isProjectSettingsPath,
   isSettingsEntryActive,
+  settingsEntryViewKey,
   toSettingsNavPermissions,
   visibleSettingsNav,
+  type SettingsNavEntry,
 } from '@/lib/settings/projectSettingsNav';
+import { resolveSettingsRefusal, settingsEntryKeys } from '@/app/(authed)/settings/project/_guard';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { PERMISSIONS, isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
 
@@ -642,5 +645,323 @@ describe('what each actor is offered (MOTIR-2468)', () => {
     // story's headline was unreachable. This is that invariant, pinned.
     expect(PROJECT_SETTINGS_NAV.map((e) => e.permission)).not.toContain('project:browse');
     expect(hasVisibleSettingsArea(toSettingsNavPermissions(['project:browse']))).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task MOTIR-5193 — a VIEW key distinct from the WRITE key.
+//
+// An entry may now declare `viewPermission`: the key that opens its DOOR, apart
+// from `permission`, the key its CONTROLS require. The rail row, the area door
+// and the destination guard read the view key; the write key gates nothing on
+// arrival. No shipped entry declares one yet — the first is MOTIR-5278's — so
+// everything below is proven twice: over the real registry, where the change must
+// be invisible, and over a FIXTURE, where it must be visible.
+//
+// ⚠️ THE DRIFT TEST IS THE POINT OF THE CARD. The one-key model made the row and
+// the page structurally unable to disagree; two keys make it possible again, and
+// a comment asking for care is exactly what stops working once there are two keys
+// to align. So the alignment is a test, and the test is shown to FIRE.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Whether `entry` exists on a build with `available` — the registry's own axis, restated. */
+function existsOn(entry: SettingsNavEntry, available: { publicProjectsAvailable: boolean }) {
+  return !entry.cloudOnly || available.publicProjectsAvailable;
+}
+
+describe('the VIEW key defaults to the WRITE key — the no-regression proof (MOTIR-5193)', () => {
+  it('every shipped entry’s effective view key IS its permission', () => {
+    for (const entry of PROJECT_SETTINGS_NAV) {
+      expect(settingsEntryViewKey(entry), entry.id).toBe(entry.permission);
+      expect(settingsEntryKeys(entry.id), entry.id).toEqual({
+        view: entry.permission,
+        write: entry.permission,
+      });
+    }
+  });
+
+  it('the view-gated rail, door and refusal are IDENTICAL to the write-gated ones for every actor', () => {
+    // Every single-key actor in the catalog, plus every built-in role and nobody
+    // at all, on both builds. "Identical" is asserted against a filter written
+    // here on `permission` alone — the one-key model, restated — so a change in
+    // what any actor is offered anywhere fails this, not merely a change in count.
+    const actors = [
+      ...PERMISSIONS.map((key) => toSettingsNavPermissions([key])),
+      ADMIN,
+      MEMBER,
+      VIEWER,
+      NO_ACCESS,
+    ];
+    for (const held of actors) {
+      for (const available of [ON_CLOUD, SELF_HOSTED]) {
+        const writeGated = PROJECT_SETTINGS_NAV.filter(
+          (e) => existsOn(e, available) && held.has(e.permission),
+        );
+        expect(visibleSettingsNav(held, PROJECT_SETTINGS_NAV, available)).toEqual(writeGated);
+        expect(hasVisibleSettingsArea(held, available)).toBe(writeGated.length > 0);
+      }
+      for (const entry of PROJECT_SETTINGS_NAV) {
+        expect(resolveSettingsRefusal(entry.id, held) === null).toBe(held.has(entry.permission));
+      }
+    }
+  });
+});
+
+/**
+ * Two entries, and the second declares a distinct view key. The first carries a
+ * key a browser does not hold, so its write-gated and view-gated rails DIFFER for
+ * a browser — the shape that can tell the two filters apart.
+ */
+const FIXTURE_ROOM = '/settings/project/fixture-room';
+const FIXTURE: SettingsNavEntry[] = [
+  {
+    id: 'fixture-admin',
+    group: 'general',
+    href: PROJECT_SETTINGS_ROOT,
+    icon: Globe,
+    labelKey: 'nav.details',
+    permission: 'project:administer',
+    exact: true,
+  },
+  {
+    id: 'fixture-room',
+    group: 'work',
+    href: FIXTURE_ROOM,
+    icon: Globe,
+    labelKey: 'nav.approvals',
+    viewPermission: 'project:browse',
+    permission: 'workflow:manage',
+  },
+];
+const BROWSER = toSettingsNavPermissions(['project:browse']);
+const WRITER_ONLY = toSettingsNavPermissions(['workflow:manage']);
+
+describe('a distinct VIEW key opens the door, and only the door (MOTIR-5193, over a fixture)', () => {
+  it('an actor holding only the view key SEES the row, and the area door agrees', () => {
+    expect(visibleSettingsNav(BROWSER, FIXTURE).map((e) => e.id)).toEqual(['fixture-room']);
+    for (const held of [BROWSER, WRITER_ONLY, NO_ACCESS, ADMIN]) {
+      for (const available of [ON_CLOUD, SELF_HOSTED]) {
+        expect(hasVisibleSettingsArea(held, available, FIXTURE)).toBe(
+          visibleSettingsNav(held, FIXTURE, available).length > 0,
+        );
+      }
+    }
+  });
+
+  it('the WRITE key opens nothing on its own — it is what the room renders, not what admits', () => {
+    expect(visibleSettingsNav(WRITER_ONLY, FIXTURE)).toEqual([]);
+    expect(hasVisibleSettingsArea(WRITER_ONLY, SELF_HOSTED, FIXTURE)).toBe(false);
+  });
+
+  it('the refusal is decided by the view key — open to a browser, refused to an actor with neither', () => {
+    expect(resolveSettingsRefusal('fixture-room', BROWSER, FIXTURE)).toBeNull();
+    expect(resolveSettingsRefusal('fixture-room', NO_ACCESS, FIXTURE)).toEqual({
+      descriptionKey: 'noAccess.section.fixture-room',
+      backHref: '/dashboard',
+      backLabelKey: null,
+    });
+    expect(resolveSettingsRefusal('fixture-room', WRITER_ONLY, FIXTURE)).not.toBeNull();
+  });
+
+  it('back is drawn from the VIEW-filtered rail — a room the refused actor CAN open', () => {
+    // The trap the helper was written against, moved by the second key: for a
+    // browser the WRITE-filtered rail over this fixture is EMPTY, so a back-link
+    // drawn from it would throw them out of the area; the view-filtered one lands
+    // on the room they may read.
+    expect(FIXTURE.filter((e) => BROWSER.has(e.permission))).toEqual([]);
+    const refusal = resolveSettingsRefusal('fixture-admin', BROWSER, FIXTURE)!;
+    expect(refusal.backHref).toBe(FIXTURE_ROOM);
+    expect(refusal.backLabelKey).toBe('nav.approvals');
+    expect(resolveSettingsRefusal('fixture-room', BROWSER, FIXTURE)).toBeNull();
+  });
+
+  it('settingsEntryKeys reads both keys off the entry, and refuses an id it does not carry', () => {
+    expect(settingsEntryKeys('fixture-room', FIXTURE)).toEqual({
+      view: 'project:browse',
+      write: 'workflow:manage',
+    });
+    expect(settingsEntryKeys('fixture-admin', FIXTURE)).toEqual({
+      view: 'project:administer',
+      write: 'project:administer',
+    });
+    expect(() => settingsEntryKeys('not-an-entry' as never, FIXTURE)).toThrow(
+      /No settings registry entry/,
+    );
+  });
+});
+
+/**
+ * Where each view-key-declaring entry's key was read from — the destination READ
+ * that asserts it. The same discipline as {@link KEY_EVIDENCE}, one axis over:
+ * a rail row opening on a key the room's own read does not admit is a door onto
+ * an error page.
+ *
+ * EMPTY today, and total over the declaring entries (asserted below), so the
+ * first room to declare a view key cannot land without its row here.
+ */
+const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {};
+
+/** The repo-relative `page.tsx` a settings route renders from. */
+function pageFileFor(route: string): string {
+  return join(
+    'app/(authed)/settings/project',
+    route.slice(PROJECT_SETTINGS_ROOT.length),
+    'page.tsx',
+  );
+}
+
+/**
+ * Every way a view-key-declaring entry has drifted from its destination, as one
+ * message per finding naming the file and BOTH keys. Empty means aligned.
+ *
+ * Three checks per declaring entry, each the half of the one-key guarantee that a
+ * second key can break:
+ *   1. every destination page (`href` + `nestedRoutes`) guards on THIS entry, so
+ *      the key that opens the door is the key the page checks;
+ *   2. no destination page types the WRITE key as a literal — it reads it off
+ *      the registry (`settingsEntryKeys(id).write`) so the controls it renders and
+ *      the key the registry names cannot come apart;
+ *   3. an evidence row names the destination READ, and that source asserts the
+ *      VIEW key — or the door admits an actor the room's own read then refuses.
+ *
+ * Pure over its inputs, so it runs identically over the real tree and over a
+ * fixture built to drift.
+ */
+function viewKeyDrift(
+  entries: SettingsNavEntry[],
+  readFile: (repoPath: string) => string | null,
+  evidence: Record<string, { source: string; gate: string }>,
+): string[] {
+  const findings: string[] = [];
+  for (const entry of entries) {
+    if (!entry.viewPermission) continue;
+    const view = entry.viewPermission;
+    const write = entry.permission;
+    const keys = `(view '${view}', write '${write}')`;
+
+    for (const route of [entry.href, ...(entry.nestedRoutes ?? [])]) {
+      const file = pageFileFor(route);
+      const source = readFile(file);
+      if (source === null) {
+        findings.push(`${file}: no page for "${entry.id}" ${keys}`);
+        continue;
+      }
+      if (!source.includes(`await guardSettingsPage('${entry.id}'`)) {
+        findings.push(
+          `${file} does not guard on "${entry.id}", so the door key is not what this page checks ${keys}`,
+        );
+      }
+      if (source.includes(`'${write}'`)) {
+        findings.push(
+          `${file} re-declares the write key instead of reading settingsEntryKeys('${entry.id}').write ${keys}`,
+        );
+      }
+    }
+
+    const row = evidence[entry.id];
+    if (!row) {
+      findings.push(
+        `"${entry.id}" declares a view key with no evidence row naming the destination read that asserts it ${keys}`,
+      );
+      continue;
+    }
+    const read = readFile(row.source);
+    if (read === null || !read.includes(row.gate) || !read.includes(`'${view}'`)) {
+      findings.push(
+        `${row.source}: ${row.gate} does not assert the view key for "${entry.id}" — the door admits an actor the room's read refuses ${keys}`,
+      );
+    }
+  }
+  return findings;
+}
+
+function readRepoFile(repoPath: string): string | null {
+  const abs = join(process.cwd(), repoPath);
+  return existsSync(abs) ? readFileSync(abs, 'utf8') : null;
+}
+
+describe('the VIEW key cannot drift from its destination (MOTIR-5193)', () => {
+  const declaring = PROJECT_SETTINGS_NAV.filter((e) => e.viewPermission);
+
+  it('pins how many shipped entries declare a view key — a MEASUREMENT, not a target', () => {
+    // Zero today. The drift test below is vacuous over zero entries, and a guard
+    // that silently walks an empty population passes for ever — so the count is
+    // pinned: the day a room declares a key, this line fails and is updated in
+    // the SAME change, which is the moment the drift test starts biting instead
+    // of passing trivially. (The fixture tests below are what prove it bites.)
+    expect(declaring.map((e) => e.id)).toEqual([]);
+  });
+
+  it('every declaring entry has an evidence row, and every evidence row a declaring entry', () => {
+    expect(Object.keys(VIEW_KEY_EVIDENCE).sort()).toEqual(declaring.map((e) => e.id).sort());
+  });
+
+  it('the shipped registry has no drift', () => {
+    expect(viewKeyDrift(PROJECT_SETTINGS_NAV, readRepoFile, VIEW_KEY_EVIDENCE)).toEqual([]);
+  });
+
+  describe('…and the test FIRES on a fixture that drifts on purpose', () => {
+    const PAGE = pageFileFor(FIXTURE_ROOM);
+    const SERVICE = 'lib/services/fixtureRoomService.ts';
+    const EVIDENCE = { 'fixture-room': { source: SERVICE, gate: 'getFixtureRoom' } };
+    const ALIGNED_PAGE = [
+      "const refused = await guardSettingsPage('fixture-room', ctx);",
+      'if (refused) return refused;',
+      "const canManage = held.has(settingsEntryKeys('fixture-room').write);",
+    ].join('\n');
+    const ALIGNED_SERVICE =
+      "async getFixtureRoom(projectId, ctx) { await assertPermission(projectId, ctx, 'project:browse'); }";
+
+    const files =
+      (overrides: Record<string, string | null>) =>
+      (repoPath: string): string | null => {
+        const tree: Record<string, string | null> = {
+          [PAGE]: ALIGNED_PAGE,
+          [SERVICE]: ALIGNED_SERVICE,
+          ...overrides,
+        };
+        return repoPath in tree ? tree[repoPath]! : null;
+      };
+
+    it('an ALIGNED fixture reports nothing — so each finding below is the drift, not the fixture', () => {
+      expect(viewKeyDrift(FIXTURE, files({}), EVIDENCE)).toEqual([]);
+    });
+
+    it('fires when the page guards on a DIFFERENT entry, naming the file and both keys', () => {
+      const drifted = ALIGNED_PAGE.replace("'fixture-room', ctx", "'fixture-admin', ctx");
+      const findings = viewKeyDrift(FIXTURE, files({ [PAGE]: drifted }), EVIDENCE);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain(PAGE);
+      expect(findings[0]).toContain("view 'project:browse'");
+      expect(findings[0]).toContain("write 'workflow:manage'");
+      expect(findings[0]).toContain('does not guard on "fixture-room"');
+    });
+
+    it('fires when the page RE-DECLARES the write key, naming the file and both keys', () => {
+      const drifted = `${ALIGNED_PAGE}\nconst canManage = held.has('workflow:manage');`;
+      const findings = viewKeyDrift(FIXTURE, files({ [PAGE]: drifted }), EVIDENCE);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain(PAGE);
+      expect(findings[0]).toContain("view 'project:browse'");
+      expect(findings[0]).toContain("write 'workflow:manage'");
+      expect(findings[0]).toContain('re-declares the write key');
+    });
+
+    it('fires when the destination READ asserts the WRITE key instead of the view key', () => {
+      const drifted = ALIGNED_SERVICE.replace("'project:browse'", "'workflow:manage'");
+      const findings = viewKeyDrift(FIXTURE, files({ [SERVICE]: drifted }), EVIDENCE);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain(SERVICE);
+      expect(findings[0]).toContain("view 'project:browse'");
+      expect(findings[0]).toContain("write 'workflow:manage'");
+    });
+
+    it('fires when a declaring entry has NO evidence row, and when its page does not exist', () => {
+      expect(viewKeyDrift(FIXTURE, files({}), {})).toEqual([
+        expect.stringContaining('declares a view key with no evidence row'),
+      ]);
+      const missingPage = viewKeyDrift(FIXTURE, files({ [PAGE]: null }), EVIDENCE);
+      expect(missingPage).toEqual([expect.stringContaining(`${PAGE}: no page for "fixture-room"`)]);
+    });
   });
 });
