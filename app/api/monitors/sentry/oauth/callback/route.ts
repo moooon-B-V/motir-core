@@ -5,6 +5,11 @@ import {
   MONITOR_CONNECT_STATE_COOKIE,
   decodeMonitorConnectState,
 } from '@/lib/monitors/connectState';
+import {
+  MONITOR_CONNECT_RESULT_COOKIE,
+  encodeMonitorConnectResult,
+  monitorConnectResultCookieOptions,
+} from '@/lib/monitors/connectResult';
 import { MonitorProviderCallError, UnknownMonitorProviderError } from '@/lib/monitors/errors';
 import { resolveMonitorReturnPath } from '@/lib/monitors/returnSurface';
 import { monitorConnectionService } from '@/lib/services/monitorConnectionService';
@@ -84,8 +89,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (err instanceof MonitorProviderCallError) {
       // The provider's OWN reason reaches the room, which is what makes a failed
       // connect actionable rather than "something went wrong".
+      // Carried in a short-lived httpOnly cookie, never a header (a redirect's
+      // headers never reach the page) and never the URL (a crafted link could
+      // make "Sentry says" say anything) — `lib/monitors/connectResult.ts`.
       const res = done(state.returnSurfaceId, 'error');
-      res.headers.set('x-monitor-provider-reason', encodeURIComponent(err.providerReason));
+      res.cookies.set(
+        MONITOR_CONNECT_RESULT_COOKIE,
+        encodeMonitorConnectResult(err.providerReason),
+        monitorConnectResultCookieOptions(),
+      );
       return res;
     }
     if (err instanceof UnknownMonitorProviderError) return done(state.returnSurfaceId, 'error');

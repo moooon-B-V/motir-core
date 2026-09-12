@@ -8,6 +8,12 @@ import {
   decodeMonitorConnectState,
   encodeMonitorConnectState,
 } from '@/lib/monitors/connectState';
+import {
+  MONITOR_CONNECT_REASON_MAX,
+  MONITOR_CONNECT_RESULT_COOKIE,
+  decodeMonitorConnectResult,
+  encodeMonitorConnectResult,
+} from '@/lib/monitors/connectResult';
 import { fakeMonitorProvider, resetFakeMonitorProvider } from '@/lib/monitors/providers/fake';
 import { sentryMonitorProvider } from '@/lib/monitors/providers/sentry';
 import { registerMonitorProvider } from '@/lib/monitors/registry';
@@ -277,9 +283,16 @@ describe('GET /api/monitors/sentry/oauth/callback', () => {
     );
 
     expect(res.headers.get('location')).toContain('monitor=error');
-    expect(decodeURIComponent(res.headers.get('x-monitor-provider-reason') ?? '')).toContain(
-      'Unknown grant code',
-    );
+    // ⚠️ THE REASON RIDES A COOKIE THE PAGE CAN READ, not a header on the redirect.
+    // This assertion used to read an `x-monitor-provider-reason` header off the
+    // route's own Response — which passed while no browser could ever see it,
+    // because a redirect's headers never reach the page it lands on.
+    const result = res.cookies.get(MONITOR_CONNECT_RESULT_COOKIE);
+    expect(result?.httpOnly).toBe(true);
+    expect(decodeMonitorConnectResult(result?.value)).toContain('Unknown grant code');
+    expect(res.headers.get('x-monitor-provider-reason')).toBeNull();
+    // And never the URL: a reason in the query string is content spoofing.
+    expect(res.headers.get('location')).not.toContain('Unknown');
     expect(await adminDb.monitorInstallation.count()).toBe(0);
   });
 
@@ -310,5 +323,25 @@ describe('GET /api/monitors/sentry/oauth/callback', () => {
       existsSync(join(process.cwd(), 'app/api/monitors/sentry/oauth/callback/route.ts')),
       'the callback must stay at the path MOTIR-5257 registers as the redirect URL',
     ).toBe(true);
+  });
+});
+
+describe('the connect RESULT cookie', () => {
+  it('round-trips a reason, and caps an unbounded one', () => {
+    expect(decodeMonitorConnectResult(encodeMonitorConnectResult('Invalid token'))).toBe(
+      'Invalid token',
+    );
+    const huge = 'x'.repeat(MONITOR_CONNECT_REASON_MAX * 3);
+    expect(decodeMonitorConnectResult(encodeMonitorConnectResult(huge))).toHaveLength(
+      MONITOR_CONNECT_REASON_MAX,
+    );
+  });
+
+  it('is null for anything absent or malformed', () => {
+    expect(decodeMonitorConnectResult(null)).toBeNull();
+    expect(decodeMonitorConnectResult('not-json')).toBeNull();
+    expect(
+      decodeMonitorConnectResult(Buffer.from(JSON.stringify({ reason: 7 })).toString('base64url')),
+    ).toBeNull();
   });
 });
