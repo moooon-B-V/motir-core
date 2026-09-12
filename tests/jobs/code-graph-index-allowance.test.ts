@@ -6,6 +6,8 @@ import { db } from '@/lib/db';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
 import { askIndexAllowanceUnlessBooted } from '@/lib/jobs/indexFleetSteps';
 import { jobServices } from '@/lib/jobs/services';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import {
@@ -16,6 +18,7 @@ import {
 } from '@/lib/ciFleet/indexAllowance';
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import {
@@ -382,4 +385,69 @@ describe('no AI-entitlement check on the index path (AC 11, decision A)', () => 
     expect(result).toEqual({ indexed: false, reason: 'paused_index_no_credit' });
     expect(entitlement).not.toHaveBeenCalled();
   }, 30_000);
+});
+
+describe('the pause bookkeeping NEVER fails a run (MOTIR-4544 top-up)', () => {
+  it('an unreadable boot memo is not evidence of a boot — the run still asks', async () => {
+    vi.spyOn(jobStepRepository, 'findByRunAndStep').mockRejectedValueOnce(
+      new Error('memo table down'),
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const ask = vi.spyOn(codeGraphIndexDispatchService, 'askIndexAllowance');
+    const target = {
+      indexed: true as const,
+      repoRef: INDEX_REPO_REF,
+      providerId: 'github' as const,
+      organizationId: 'org-memo-down',
+      anchorProjectId: 'proj-memo-down',
+    };
+    stubIndexFleet();
+    indexAllowanceWorld.checkOutcome = 'hard_stop_no_credit';
+
+    expect(
+      await askIndexAllowanceUnlessBooted({ runId: 'run-memo-down' }, jobServices, target),
+    ).toMatchObject({
+      proceed: false,
+      reason: 'paused_index_no_credit',
+    });
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0]?.[0])).toContain('could not read the boot memo');
+  });
+
+  it('a pause that cannot be RECORDED still ends the run as the paused no-op', async () => {
+    vi.spyOn(githubRepoRepository, 'markIndexPaused').mockRejectedValue(new Error('write refused'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = await runIndex('alw-pw-fail', { checkOutcome: 'hard_stop_no_credit' });
+
+    expect(result).toEqual({ indexed: false, reason: 'paused_index_no_credit' });
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(
+      error.mock.calls.some((call) => String(call[0]).includes('could not record the index pause')),
+    ).toBe(true);
+  }, 30_000);
+
+  it('a pause that cannot be LIFTED does not stop the index', async () => {
+    vi.spyOn(githubRepoRepository, 'clearIndexPause').mockRejectedValue(new Error('write refused'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = await runIndex('alw-lift-fail');
+
+    expect(result).toMatchObject({ indexed: true });
+    expect(
+      error.mock.calls.some((call) => String(call[0]).includes('could not lift the index pause')),
+    ).toBe(true);
+  }, 30_000);
+
+  it('the repository writes refuse a malformed repoRef rather than matching every row', async () => {
+    await seedIndexWorkspace('alw-malformed', 1);
+    const counts = await withSystemContext(async (tx) => [
+      await githubRepoRepository.markIndexPaused(
+        'no-slash',
+        { reason: 'paused_index_no_credit' },
+        tx,
+      ),
+      await githubRepoRepository.clearIndexPause('no-slash', tx),
+    ]);
+    expect(counts).toEqual([0, 0]);
+    expect((await repoRow()).indexPausedReason).toBeNull();
+  });
 });

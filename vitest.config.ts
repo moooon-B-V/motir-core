@@ -1169,6 +1169,15 @@ export default defineConfig({
         // single image.
         'lib/services/codeGraphIndexDispatchService.ts',
         'lib/services/codeGraphIndexAdmissionService.ts',
+        // Story MOTIR-4335 · MOTIR-4544 — the internal index allowance's vocabulary
+        // (MOTIR-4593) and the catch-up sweep (MOTIR-5290). MEASURED first: 100
+        // statements / 100 branches / 100 functions / 100 lines apiece, over
+        // `tests/jobs/code-graph-index-{allowance,catch-up}.test.ts`,
+        // `tests/ai/indexAllowanceClient.test.ts` and `tests/ciFleet/`. Pinned at the
+        // fleet's 90 floor below.
+        'lib/ciFleet/indexAllowance.ts',
+        'lib/services/codeGraphIndexCatchUpService.ts',
+        'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
         'lib/jobs/indexFleetSteps.ts',
         'lib/jobs/definitions/codeGraphIndex.ts',
         'lib/ciFleet/config.ts',
@@ -3078,6 +3087,10 @@ export default defineConfig({
           lines: 90,
         },
         'lib/jobs/indexFleetSteps.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-4335 · MOTIR-4544 (see the include list).
+        'lib/ciFleet/indexAllowance.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/codeGraphIndexCatchUpService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/codeGraphIndexCatchUp.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/codeGraphIndex.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/config.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/limits.ts': { branches: 90, functions: 90, lines: 90 },
