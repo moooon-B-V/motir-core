@@ -2030,6 +2030,11 @@ export default defineConfig({
         'lib/approvalGates/designResultHandler.ts',
         'lib/approvalGates/errors.ts',
         'lib/approvalGates/refusals.ts',
+        // Bug MOTIR-5191 — ADR §2's routing rule and the *waiting on* display
+        // name, shared by the item page's read and the Approvals queue. Two pure
+        // functions with one job each, so they are measured and pinned here per
+        // this list's own rule: MEASURED at 100 / 100 / 100 / 100 on this branch.
+        'lib/approvalGates/routing.ts',
         'lib/mappers/approvalGateMappers.ts',
         'components/approvals/ApprovalGateControl.tsx',
         'components/approvals/portRenderStatus.tsx',
@@ -2066,6 +2071,7 @@ export default defineConfig({
         },
         'lib/approvalGates/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/approvalGates/refusals.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/approvalGates/routing.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/mappers/approvalGateMappers.ts': {
           lines: 90,
           functions: 90,

@@ -1,0 +1,6 @@
+{
+  "$schema": "MOTIR-5207 CONTRACT-ratchet fixture",
+  "note": "A committed population measurement: a numeric `count` beside an array of exactly that length. That shape is the whole enrolment rule for the CONTRACT ratchet — see tests/rls/ratchetScan.ts.",
+  "count": 3,
+  "ids": ["a.spec.ts:1:getByText", "a.spec.ts:2:getByTestId", "b.spec.ts:9:getByLabel"]
+}

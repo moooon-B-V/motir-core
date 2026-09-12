@@ -96,6 +96,14 @@ async function identifiersOf(projectId: string): Promise<string[]> {
   return rows.map((r) => r.identifier).sort();
 }
 
+// A race assertion is only worth what its FAILURE says. `expected false to be
+// true` discards the one fact that separates a benign interleaving from a broken
+// lock — WHICH error rejected — so every tolerance below names its reason.
+function describeRejection(reason: unknown): string {
+  if (reason instanceof Error) return `${reason.constructor.name}: ${reason.message}`;
+  return String(reason);
+}
+
 describe('Story 6.8 — the project-details lifecycle, composed on one project', () => {
   it('walks the full verification recipe end to end (rename → key change → redirect → reclaim → release)', async () => {
     const { project, ownerCtx } = await makeFixture('lifecycle');
@@ -201,30 +209,108 @@ describe('Story 6.8 — concurrent renames serialise on the project-row lock', (
     expect(await identifiersOf(project.id)).toEqual(['NIF-1', 'NIF-2']);
   });
 
-  it('two renames to DIFFERENT keys both apply, serialised, leaving a clean alias chain', async () => {
+  it('two renames to DIFFERENT keys: both apply, or the loser loses TYPED — the end state is single-valued either way', async () => {
     const { project, ownerCtx } = await makeFixture('race-rr-diff');
     await seedItems(project.id, ownerCtx, 1);
 
-    // PROD→NIF and PROD→ZAP concurrently. Whichever grabs the lock first renames;
-    // the second resolves the (now-aliased) PROD to the SAME project and renames
-    // again — both succeed, serialised, with no lost update. The final key is one
-    // of the two targets, and BOTH non-final keys resolve flat to the project.
+    // PROD→NIF and PROD→ZAP concurrently. Whichever grabs the lock first renames.
+    // The second has TWO legitimate fates, decided by where its resolve landed
+    // relative to the winner's COMMIT:
+    //   • resolve BEFORE the commit → it already holds the project, blocks on the
+    //     FOR-UPDATE lock, re-reads the now-renamed key and renames again — both
+    //     apply, serialised, with no lost update;
+    //   • resolve AFTER the commit → PROD is already an ALIAS, and changeKey's
+    //     resolve is deliberately NOT alias-aware (`resolveProjectByKeyInTx`:
+    //     "alias-aware resolution is Subtask 6.8.2's job, not the admin write
+    //     path's") — so it rejects with a typed ProjectNotFoundError.
+    // This test used to assert `.every(fulfilled)`, i.e. only the first fate — a
+    // guarantee the service has never made. It is the SAME loss mode `6ea8b7ada`
+    // named when it de-flaked the SAME-key sibling above and left standing here,
+    // and it evicted a merge-queue entry on an unrelated diff (MOTIR-5156).
     const results = await Promise.allSettled([
       projectsService.changeKey({ key: 'PROD', newKey: 'NIF', ctx: ownerCtx }),
       projectsService.changeKey({ key: 'PROD', newKey: 'ZAP', ctx: ownerCtx }),
     ]);
-    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
 
+    // At MOST one may lose — two losers would mean the winner's write vanished.
+    const rejectedReasons = results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map((r) => r.reason as unknown);
+    expect(
+      rejectedReasons.length,
+      `at most one rename may lose; got ${rejectedReasons.length}: ${rejectedReasons
+        .map(describeRejection)
+        .join(' | ')}`,
+    ).toBeLessThanOrEqual(1);
+    // A loss is a TYPED domain error, never a raw DB error — and the message names
+    // WHICH, so a future red tells the benign interleaving from a lock regression:
+    //   • ProjectNotFoundError — the resolve landed after the winner's commit;
+    //   • IdentifierTakenError — the changeKey P2002 backstop (never a raw P2002).
+    for (const reason of rejectedReasons) {
+      expect(
+        reason instanceof ProjectNotFoundError || reason instanceof IdentifierTakenError,
+        `the losing rename must fail with a typed rename conflict, got ${describeRejection(reason)}`,
+      ).toBe(true);
+    }
+    const bothApplied = rejectedReasons.length === 0;
+
+    // The end state is single-valued whichever way the race went: ONE live key, a
+    // clean alias chain, every work item on the canonical prefix.
     const fresh = await projectsService.resolveByKey('PROD', ownerCtx);
+    expect(fresh.viaAlias).toBe(true);
     const finalKey = fresh.project.identifier;
     expect(['NIF', 'ZAP']).toContain(finalKey);
-    // Both PROD and the non-final target are retired keys that resolve flat.
-    const retired = finalKey === 'NIF' ? 'ZAP' : 'NIF';
-    for (const oldKey of ['PROD', retired]) {
-      const r = await projectsService.resolveByKey(oldKey, ownerCtx);
-      expect(r.viaAlias).toBe(true);
+
+    const otherTarget = finalKey === 'NIF' ? 'ZAP' : 'NIF';
+    if (bothApplied) {
+      // Both applied: PROD and the intermediate target are both retired keys that
+      // resolve FLAT to the final key — no alias-to-alias chain.
+      const r = await projectsService.resolveByKey(otherTarget, ownerCtx);
+      expect(r.viaAlias, `${otherTarget} should be a retired key resolving to ${finalKey}`).toBe(
+        true,
+      );
       expect(r.project.identifier).toBe(finalKey);
+    } else {
+      // Only the winner applied: the loser rolled back, so its target was never
+      // assigned and is neither a live key nor an alias.
+      await expect(projectsService.resolveByKey(otherTarget, ownerCtx)).rejects.toBeInstanceOf(
+        ProjectNotFoundError,
+      );
     }
+    // Exactly one alias row per rename that actually applied — never a half-applied
+    // state, and never a duplicate PROD alias.
+    const projectKeyAliasCount = await adminDb.projectKeyAlias.count({
+      where: { projectId: project.id },
+    });
+    expect(
+      projectKeyAliasCount,
+      `final key ${finalKey}; ${bothApplied ? 'both renames applied' : 'one rename applied'}`,
+    ).toBe(bothApplied ? 2 : 1);
     expect(await identifiersOf(project.id)).toEqual([`${finalKey}-1`]);
+  });
+
+  it('the tolerated loss mode, driven deterministically: a rename whose resolve lands AFTER the winner commits rejects ProjectNotFoundError', async () => {
+    const { project, ownerCtx } = await makeFixture('race-rr-after');
+    await seedItems(project.id, ownerCtx, 1);
+
+    // The race above TOLERATES this outcome; this proves it is the outcome the
+    // service actually produces, with no interleaving to depend on. Sequencing the
+    // two renames IS the losing interleaving — the second call resolves PROD when
+    // PROD has already become an alias — so the tolerance above is a tested claim
+    // rather than a widened assertion nobody can exercise.
+    await projectsService.changeKey({ key: 'PROD', newKey: 'NIF', ctx: ownerCtx });
+    await expect(
+      projectsService.changeKey({ key: 'PROD', newKey: 'ZAP', ctx: ownerCtx }),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+
+    // And the loser changed NOTHING: NIF is still live, ZAP was never assigned,
+    // and the single PROD alias still resolves flat.
+    const fresh = await projectsService.resolveByKey('PROD', ownerCtx);
+    expect(fresh.viaAlias).toBe(true);
+    expect(fresh.project.identifier).toBe('NIF');
+    await expect(projectsService.resolveByKey('ZAP', ownerCtx)).rejects.toBeInstanceOf(
+      ProjectNotFoundError,
+    );
+    expect(await identifiersOf(project.id)).toEqual(['NIF-1']);
   });
 });

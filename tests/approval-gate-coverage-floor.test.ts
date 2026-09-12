@@ -11,6 +11,7 @@ import {
   ApprovalGateNotFoundError,
 } from '@/lib/approvalGates/errors';
 import { toGateRefusal } from '@/lib/approvalGates/refusals';
+import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
@@ -192,6 +193,50 @@ describe('the design handler’s ROUTING falls all the way through (MOTIR-4796)'
     expect(routing({ assigneeId: 'u-assignee', reporterId: 'u-reporter' })).toBe('u-assignee');
     expect(routing({ assigneeId: null, reporterId: 'u-reporter' })).toBe('u-reporter');
     expect(routing({ assigneeId: null, reporterId: null })).toBeNull();
+  });
+
+  // ⚠️ AND THE HANDLER NOW DELEGATES TO THE SHARED RULE (MOTIR-5191), so the
+  // three arms above exercise `routingTargetId` too. These pin it directly as
+  // well, because its SECOND caller is the Approvals queue — which reaches it
+  // through a repository projection rather than through this handler, and would
+  // otherwise have no arm of its own here.
+  it('is the SAME rule the shared helper states — the handler is a delegation now', () => {
+    expect(routingTargetId({ assigneeId: 'u-assignee', reporterId: 'u-reporter' })).toBe(
+      'u-assignee',
+    );
+    expect(routingTargetId({ assigneeId: null, reporterId: 'u-reporter' })).toBe('u-reporter');
+    expect(routingTargetId({ assigneeId: null, reporterId: null })).toBeNull();
+  });
+});
+
+describe('routedToDisplayName — the *waiting on* name degrades honestly (MOTIR-5191)', () => {
+  // The display rule, pinned as a pure function because its two degradations
+  // are exactly the arms a fixture with well-formed users never reaches — and
+  // they are the arms that decide whether the sentence reads *"Waiting on
+  // Mara S."*, *"Waiting on ."*, or the generic fallback.
+
+  it('uses the name when there is one', () => {
+    expect(routedToDisplayName({ name: 'Mara Sandoval', email: 'mara@example.com' })).toBe(
+      'Mara Sandoval',
+    );
+  });
+
+  it('falls back to the EMAIL on a blank name — `||`, never `??`', () => {
+    // `User.name` is non-nullable but not non-EMPTY. A nullish-coalescing rule
+    // would keep the blank and render *"Waiting on ."*, which is worse than the
+    // generic fallback it replaced: it looks like a bug rather than an absence.
+    expect(routedToDisplayName({ name: '   ', email: 'mara@example.com' })).toBe(
+      'mara@example.com',
+    );
+    expect(routedToDisplayName({ name: '', email: 'mara@example.com' })).toBe('mara@example.com');
+  });
+
+  it('yields NULL for a user row that no longer resolves — the fallback copy’s case', () => {
+    // This is the arm ADR §3 relies on when it declines to denormalise a
+    // surviving label beside `routedToId`: the surface has somewhere honest to
+    // land, so the routing column may be `onDelete: SetNull` without stranding
+    // anybody.
+    expect(routedToDisplayName(null)).toBeNull();
   });
 });
 
