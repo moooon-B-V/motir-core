@@ -13,6 +13,7 @@ import { plansService } from '@/lib/services/plansService';
 import { estimationService } from '@/lib/services/estimationService';
 import { componentsService } from '@/lib/services/componentsService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
+import { OptimisticStatusProvider } from './_components/OptimisticStatusProvider';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
@@ -326,24 +327,32 @@ export default async function IssueDetailPage({
 
   return (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
-      <div className="flex flex-col gap-6">
-        {/* Header — type icon · identifier · parent breadcrumb · title +
+      {/* THE PAGE'S OPTIMISTIC STATUS CHANNEL (Bug MOTIR-5212) — the one way a
+        decision taken in the approval frame can reach the core-fields rail
+        before a server render lands. It wraps BOTH islands because that is the
+        whole point: the writer is in `LateLowerSections`, the reader is in the
+        `aside`, and they are siblings with no other channel between them.
+        Seeded with the status THIS render read, which is also what reconciles
+        the override the moment a fresher one arrives. */}
+      <OptimisticStatusProvider serverStatus={item.status}>
+        <div className="flex flex-col gap-6">
+          {/* Header — type icon · identifier · parent breadcrumb · title +
           Edit link. The breadcrumb (2.4.3) renders the ancestor chain right
           after the identifier, per the detail.png eyebrow. (Status lives in the
           core-fields rail's StatusPicker, not the eyebrow — 2.4.13.) */}
-        <header className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
-            {/* data-testid: the header identifier is asserted by several E2E
+          <header className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
+              {/* data-testid: the header identifier is asserted by several E2E
               journeys; the bare text is no longer unique on the page (the
               Development empty-state copy also names the key — MOTIR-1579). */}
-            <span
-              data-testid="item-identifier"
-              className="text-(--el-text-muted) font-mono text-sm"
-            >
-              {item.identifier}
-            </span>
-            {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb sits in
+              <span
+                data-testid="item-identifier"
+                className="text-(--el-text-muted) font-mono text-sm"
+              >
+                {item.identifier}
+              </span>
+              {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb sits in
               a `min-w-0 flex-1` cell so it has a BOUNDED track to truncate against
               — its inner `<span className="truncate">` (ParentBreadcrumb) only
               fires inside a bounded parent. Without this cell the breadcrumb sits
@@ -352,30 +361,30 @@ export default async function IssueDetailPage({
               the whole page wider than the viewport and clips the right cluster +
               core-fields rail. Short / no-ancestor items render exactly as before
               (the cell collapses to content width at the left). */}
-            <div className="flex min-w-0 flex-1 items-center gap-x-3">
-              <ParentBreadcrumb ancestors={detail.ancestors} />
-              {/* 2.9.6: the always-visible "Archived" chip follows the breadcrumb
+              <div className="flex min-w-0 flex-1 items-center gap-x-3">
+                <ParentBreadcrumb ancestors={detail.ancestors} />
+                {/* 2.9.6: the always-visible "Archived" chip follows the breadcrumb
                 so the archived state stays legible when the page is scrolled past
                 the banner. Neutral register (NOT a colored Pill tone) — the only
                 eyebrow tag (the status Pill was removed in 2.4.13). */}
-              {isArchived ? (
-                <Pill className="shrink-0 border-(--el-border) bg-(--el-surface) text-(--el-text-secondary)">
-                  <Archive className="size-3 text-(--el-text-muted)" aria-hidden />
-                  {t('archivedEntry')}
-                </Pill>
-              ) : null}
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              {/* Epic/parent subtree roll-up (4.3.5) — labelled so it never reads
+                {isArchived ? (
+                  <Pill className="shrink-0 border-(--el-border) bg-(--el-surface) text-(--el-text-secondary)">
+                    <Archive className="size-3 text-(--el-text-muted)" aria-hidden />
+                    {t('archivedEntry')}
+                  </Pill>
+                ) : null}
+              </div>
+              <div className="ml-auto flex items-center gap-3">
+                {/* Epic/parent subtree roll-up (4.3.5) — labelled so it never reads
                 as the parent's OWN estimate; shown only when it has descendants. */}
-              {parentRollup ? (
-                <ParentRollupBadge
-                  itemId={item.id}
-                  initialTotal={parentRollup.total}
-                  variant="header"
-                />
-              ) : null}
-              {/* MOTIR-910: the per-item Plan / Re-plan door — FIRST in the
+                {parentRollup ? (
+                  <ParentRollupBadge
+                    itemId={item.id}
+                    initialTotal={parentRollup.total}
+                    variant="header"
+                  />
+                ) : null}
+                {/* MOTIR-910: the per-item Plan / Re-plan door — FIRST in the
                 right cluster, before Watch / ⋯ (the plan-replan-entrance
                 mockup's panel-1 placement). Plan when the item has no children
                 yet, Re-plan when it does. BOTH whether it renders and which face
@@ -384,143 +393,143 @@ export default async function IssueDetailPage({
                 state: the actor's capability, the archived flag (MOTIR-2050),
                 the terminal status category, and the kind + children/description
                 the face is picked from. */}
-              <WorkItemPlanEntrance
-                itemKey={item.identifier}
-                hasChildren={detail.children.length > 0}
-                kind={item.kind}
-                hasDescription={(item.descriptionMd ?? '').trim().length > 0}
-                canPlan={canEdit}
-                archived={isArchived}
-                statusCategory={statusCategory}
-              />
-              {/* 5.4.9: the watch control + watchers popover — BEFORE Edit,
+                <WorkItemPlanEntrance
+                  itemKey={item.identifier}
+                  hasChildren={detail.children.length > 0}
+                  kind={item.kind}
+                  hasDescription={(item.descriptionMd ?? '').trim().length > 0}
+                  canPlan={canEdit}
+                  archived={isArchived}
+                  statusCategory={statusCategory}
+                />
+                {/* 5.4.9: the watch control + watchers popover — BEFORE Edit,
                 beside the roll-up badge (the labels-components-watch mockup's
                 panel-0 placement). Every viewer gets it: watching is not
                 editing (the verified permission split). */}
-              <WatchControl
-                workItemId={item.id}
-                initialCount={detail.watcherCount}
-                initialWatching={detail.viewerIsWatching}
-                currentUserId={ctx.userId}
-                candidates={members.map((m) => ({
-                  id: m.userId,
-                  name: m.name,
-                  email: m.email,
-                }))}
-              />
-              {/* 2.8.4: the ⋯ actions menu — Edit details · Copy link · Archive
+                <WatchControl
+                  workItemId={item.id}
+                  initialCount={detail.watcherCount}
+                  initialWatching={detail.viewerIsWatching}
+                  currentUserId={ctx.userId}
+                  candidates={members.map((m) => ({
+                    id: m.userId,
+                    name: m.name,
+                    email: m.email,
+                  }))}
+                />
+                {/* 2.8.4: the ⋯ actions menu — Edit details · Copy link · Archive
                 · Delete… (Edit folded in here). Permission-gated: Edit/Archive
                 on canEdit, Archive + Delete on canDelete. 2.9.11: on an archived
                 item the menu swaps Archive→Restore and Delete… opens the
                 archived confirm. */}
-              <WorkItemDetailActions
-                itemId={item.id}
-                identifier={item.identifier}
-                title={item.title}
-                canEdit={canEdit}
-                canArchive={canArchive}
-                canDelete={canDelete}
-                archived={isArchived}
-                activeSprintId={activeSprint?.id ?? null}
-                activeSprintName={activeSprint?.name ?? null}
-                inActiveSprint={activeSprint != null && item.sprintId === activeSprint.id}
-              />
+                <WorkItemDetailActions
+                  itemId={item.id}
+                  identifier={item.identifier}
+                  title={item.title}
+                  canEdit={canEdit}
+                  canArchive={canArchive}
+                  canDelete={canDelete}
+                  archived={isArchived}
+                  activeSprintId={activeSprint?.id ?? null}
+                  activeSprintName={activeSprint?.name ?? null}
+                  inActiveSprint={activeSprint != null && item.sprintId === activeSprint.id}
+                />
+              </div>
             </div>
-          </div>
-          <h1 className="text-(--el-text) font-serif text-2xl font-semibold">
-            <WorkItemTitle
-              title={item.title}
-              projectIdentifier={ctx.project.identifier}
-              workItemRefs={workItemRefs}
-            />
-          </h1>
-        </header>
+            <h1 className="text-(--el-text) font-serif text-2xl font-semibold">
+              <WorkItemTitle
+                title={item.title}
+                projectIdentifier={ctx.project.identifier}
+                workItemRefs={workItemRefs}
+              />
+            </h1>
+          </header>
 
-        {/* Body — two columns; later subtasks fill the regions. The `1fr` track is
+          {/* Body — two columns; later subtasks fill the regions. The `1fr` track is
           `minmax(auto, 1fr)`, so `min-w-0` on the <main> floors its min-content to
           0 — otherwise a wide markdown child (a long unbroken URL, a code block, a
           wide table) blows the track past the viewport. The code block itself
           scrolls inside its own `.motir-prose pre` (overflow-x:auto), but only once
           this track is bounded. Sibling of the eyebrow fix above —
           bug-issue-detail-eyebrow-overflows-viewport. */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
-          <main className="flex min-w-0 flex-col gap-6">
-            {/* 2.9.6: the archived banner is the FIRST element of the main column,
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
+            <main className="flex min-w-0 flex-col gap-6">
+              {/* 2.9.6: the archived banner is the FIRST element of the main column,
               above Description — the page's archived-state signal + Restore. */}
-            {isArchived ? (
-              <ArchivedBanner
-                itemId={item.id}
-                identifier={item.identifier}
-                archivedByName={detail.archivedBy?.name ?? null}
-                archivedAtLabel={archivedAtLabel}
-                canEdit={canEdit}
-              />
-            ) : null}
-            {/* MOTIR-4197: the pending-plan indicator — SECOND in the slot,
+              {isArchived ? (
+                <ArchivedBanner
+                  itemId={item.id}
+                  identifier={item.identifier}
+                  archivedByName={detail.archivedBy?.name ?? null}
+                  archivedAtLabel={archivedAtLabel}
+                  canEdit={canEdit}
+                />
+              ) : null}
+              {/* MOTIR-4197: the pending-plan indicator — SECOND in the slot,
               after the archived banner when both render (present before
               future: what this card IS, then what a plan proposes it BECOME).
               Nothing renders — no reserved box — when no undecided plan names
               this card, which is nearly every card, or when the actor lacks
               `ai:view_plan` (then `pendingPlans` is null: the read was skipped). */}
-            {pendingPlans && pendingPlans.length > 0 ? (
-              <PendingPlanNotice identifier={item.identifier} proposals={pendingPlans} />
-            ) : null}
-            <ContentSectionCard
-              title={t('description')}
-              subtitle={t('descriptionGloss')}
-              editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
-            >
-              {item.descriptionMd ? (
-                <MarkdownView
-                  value={item.descriptionMd}
-                  aria-label={t('issueDescriptionAria')}
-                  workItemRefs={workItemRefs}
-                />
-              ) : (
-                <p className="font-sans text-sm text-(--el-text-secondary) italic">
-                  {t('noDescription')}
-                </p>
-              )}
-            </ContentSectionCard>
-            <IssueExplanation
-              explanationMd={item.explanationMd}
-              explanationSource={item.explanationSource}
-              editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
-              workItemRefs={workItemRefs}
-            />
-            {/* MOTIR-3815: the to-do list — after Explanation and BEFORE
+              {pendingPlans && pendingPlans.length > 0 ? (
+                <PendingPlanNotice identifier={item.identifier} proposals={pendingPlans} />
+              ) : null}
+              <ContentSectionCard
+                title={t('description')}
+                subtitle={t('descriptionGloss')}
+                editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
+              >
+                {item.descriptionMd ? (
+                  <MarkdownView
+                    value={item.descriptionMd}
+                    aria-label={t('issueDescriptionAria')}
+                    workItemRefs={workItemRefs}
+                  />
+                ) : (
+                  <p className="font-sans text-sm text-(--el-text-secondary) italic">
+                    {t('noDescription')}
+                  </p>
+                )}
+              </ContentSectionCard>
+              <IssueExplanation
+                explanationMd={item.explanationMd}
+                explanationSource={item.explanationSource}
+                editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
+                workItemRefs={workItemRefs}
+              />
+              {/* MOTIR-3815: the to-do list — after Explanation and BEFORE
               Relationships, the slot `design/work-items/todo-list.mock.html`
               panel 0 measures. `canEdit` is the same `work_item:edit` the rest
               of this page reads; the section hides its controls without it and
               every action re-checks server-side, because a hidden control is
               not an authorization. */}
-            <TodoListSection
-              workItemId={item.id}
-              initialTodos={todoList.items}
-              initialProgress={todoList.progress}
-              canEdit={canEdit}
-            />
-            {/* 2.4.5: the relationships section + ready/blocked banner — a left-
+              <TodoListSection
+                workItemId={item.id}
+                initialTodos={todoList.items}
+                initialProgress={todoList.progress}
+                canEdit={canEdit}
+              />
+              {/* 2.4.5: the relationships section + ready/blocked banner — a left-
               column section card (per the approved mockup), after Explanation.
               2.4.9: editable here (add control + per-row remove). */}
-            <RelationshipsPanel
-              blockedBy={detail.blockedBy}
-              blocks={detail.blocks}
-              relatesTo={detail.relatesTo}
-              duplicates={detail.duplicates}
-              clones={detail.clones}
-              readiness={detail.readiness}
-              currentStatus={item.status}
-              // MOTIR-2050: the page already knows the archived state (the banner
-              // above renders off it) — pass it down so the readiness badge is
-              // suppressed too, instead of contradicting the banner.
-              archived={isArchived}
-              workflow={detail.workflow}
-              editable={canEdit}
-              currentItemId={item.id}
-              identifier={item.identifier}
-            />
-            {/* 7.10.11 (MOTIR-1579): the Development section — linked PRs with
+              <RelationshipsPanel
+                blockedBy={detail.blockedBy}
+                blocks={detail.blocks}
+                relatesTo={detail.relatesTo}
+                duplicates={detail.duplicates}
+                clones={detail.clones}
+                readiness={detail.readiness}
+                currentStatus={item.status}
+                // MOTIR-2050: the page already knows the archived state (the banner
+                // above renders off it) — pass it down so the readiness badge is
+                // suppressed too, instead of contradicting the banner.
+                archived={isArchived}
+                workflow={detail.workflow}
+                editable={canEdit}
+                currentItemId={item.id}
+                identifier={item.identifier}
+              />
+              {/* 7.10.11 (MOTIR-1579): the Development section — linked PRs with
               PR/CI state, per design/github Panel 5a: a ContentSectionCard after
               Relationships (the linkage cluster), same shared body as the peek.
               7.10.14 (MOTIR-1596): the explicit-link affordance — the "+ Link
@@ -528,95 +537,96 @@ export default async function IssueDetailPage({
               the provider; gated on canEdit (a read-only actor sees no door and
               the caption drops the "or linked by hand" clause). The peek stays
               read-only (no door). */}
-            {/* THE LATE STACK, upper half — Development · Acceptance · Design
+              {/* THE LATE STACK, upper half — Development · Acceptance · Design
               result (Subtask MOTIR-3436). Both halves await the SAME
               `lateReads` promise, so they resolve in one tick and the page
               settles ONCE for the whole stack, as the design decided. They are
               two boundaries only because `ChildPanel` below is TIER TWO and the
               page renders it between them. */}
-            <Suspense fallback={<LateUpperFallback />}>
-              <LateUpperSections
-                reads={lateReads}
+              <Suspense fallback={<LateUpperFallback />}>
+                <LateUpperSections
+                  reads={lateReads}
+                  itemId={item.id}
+                  itemIdentifier={item.identifier}
+                  canEdit={canEdit}
+                  repoDelivery={deliveryView.repos}
+                  deliveries={deliveryView.deliveries}
+                />
+              </Suspense>
+              <ChildPanel
+                count={detail.children.length}
                 itemId={item.id}
                 itemIdentifier={item.identifier}
-                canEdit={canEdit}
-                repoDelivery={deliveryView.repos}
-                deliveries={deliveryView.deliveries}
-              />
-            </Suspense>
-            <ChildPanel
-              count={detail.children.length}
-              itemId={item.id}
-              itemIdentifier={item.identifier}
-              projectKey={ctx.project.identifier}
-            >
-              <ChildList items={detail.children} workflow={detail.workflow} members={members} />
-            </ChildPanel>
-            {/* 5.2.5: the Attachments panel — after Children, before Activity
+                projectKey={ctx.project.identifier}
+              >
+                <ChildList items={detail.children} workflow={detail.workflow} members={members} />
+              </ChildPanel>
+              {/* 5.2.5: the Attachments panel — after Children, before Activity
               (the reserved Epic-5 slot, per the attachments mockup's panel 0;
               content-width and multi-row, so the left column — the rail is
               for scalars). */}
-            {/* THE LATE STACK, lower half — Attachments · Activity. KEYED on the
+              {/* THE LATE STACK, lower half — Attachments · Activity. KEYED on the
               activity tab so switching `?activity=` re-shows the fallback
               instead of freezing on the previous tab's content (the shipped
               `/items` pattern). */}
-            <Suspense key={activityTab} fallback={<LateLowerFallback />}>
-              <LateLowerSections
-                reads={lateReads}
-                itemId={item.id}
-                currentUserId={ctx.userId}
-                currentUserName={session.user.name}
-                workflowStatuses={detail.workflow.statuses}
-                mentionCandidates={members.map((m) => ({
-                  id: m.userId,
-                  name: m.name,
-                  email: m.email,
-                }))}
-                activityTab={activityTab}
-              />
-            </Suspense>
-          </main>
+              <Suspense key={activityTab} fallback={<LateLowerFallback />}>
+                <LateLowerSections
+                  reads={lateReads}
+                  itemId={item.id}
+                  currentUserId={ctx.userId}
+                  currentUserName={session.user.name}
+                  workflowStatuses={detail.workflow.statuses}
+                  mentionCandidates={members.map((m) => ({
+                    id: m.userId,
+                    name: m.name,
+                    email: m.email,
+                  }))}
+                  activityTab={activityTab}
+                />
+              </Suspense>
+            </main>
 
-          <aside className="flex flex-col gap-4">
-            <CoreFieldsPanel
-              item={item}
-              members={members}
-              workflow={detail.workflow}
-              parent={detail.parent}
-              reporterIsSelf={item.reporterId === ctx.userId}
-              customFields={detail.customFields}
-              repoDelivery={deliveryView.repos}
-              deliveries={deliveryView.deliveries}
-              labelsComponents={{
-                projectKey: ctx.project.identifier,
-                labels: detail.labels,
-                components: detail.components,
-                projectComponents,
-                canManageProject,
-              }}
-              sprints={sprints}
-            />
-            {/* Epic-level privacy (Story 6.14 · 6.14.7) — the project-admin
+            <aside className="flex flex-col gap-4">
+              <CoreFieldsPanel
+                item={item}
+                members={members}
+                workflow={detail.workflow}
+                parent={detail.parent}
+                reporterIsSelf={item.reporterId === ctx.userId}
+                customFields={detail.customFields}
+                repoDelivery={deliveryView.repos}
+                deliveries={deliveryView.deliveries}
+                labelsComponents={{
+                  projectKey: ctx.project.identifier,
+                  labels: detail.labels,
+                  components: detail.components,
+                  projectComponents,
+                  canManageProject,
+                }}
+                sprints={sprints}
+              />
+              {/* Epic-level privacy (Story 6.14 · 6.14.7) — the project-admin
               set/unset control, EPIC-kind only. A non-admin member sees it
               read-only (design invariant #4); public-read hiding is enforced
               server-side (6.14.4). */}
-            {item.kind === 'epic' ? (
-              <EpicPrivacyControl
-                workItemId={item.id}
-                initialHidden={item.publicChildrenHidden}
-                canManageProject={canManageProject}
-              />
-            ) : null}
-            {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
+              {item.kind === 'epic' ? (
+                <EpicPrivacyControl
+                  workItemId={item.id}
+                  initialHidden={item.publicChildrenHidden}
+                  canManageProject={canManageProject}
+                />
+              ) : null}
+              {/* The 2.4.3 parent breadcrumb lives in the header (per detail.png),
               not here. Epic 5: custom fields · attachments. */}
-          </aside>
+            </aside>
+          </div>
         </div>
-      </div>
-      {/* The shared quick-view (peek) modal — driven by `?peek=<identifier>`.
+        {/* The shared quick-view (peek) modal — driven by `?peek=<identifier>`.
         Mounted here so the RelationshipsPanel rows can open a linked item in
         the same peek used on the list/board/ready surfaces (8.8.31), without
         navigating away from this detail page. */}
-      <IssueQuickViewController />
+        <IssueQuickViewController />
+      </OptimisticStatusProvider>
     </EstimationConfigProvider>
   );
 }
