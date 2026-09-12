@@ -81,7 +81,9 @@ describe('createIssueAction', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected ok');
-    expect(result.identifier).toBe('WFD-1');
+    // WFD-2, not WFD-1: `createProject` seeds a bug container in the same
+    // transaction (MOTIR-4935) and it holds the project's first key.
+    expect(result.identifier).toBe('WFD-2');
 
     const row = await adminDb.workItem.findUnique({ where: { id: result.id } });
     expect(row).not.toBeNull();
@@ -146,17 +148,22 @@ describe('createIssueAction', () => {
 
   it('trims the title and rejects an empty one without calling the service', async () => {
     await makeFixture();
+    // ⚠️ "nothing was created" is the claim, and the baseline is no longer zero:
+    // every project is born with a seeded bug container (MOTIR-4935). So the
+    // assertion is that the ACTION added nothing — measured as a delta, which
+    // says what the test means and cannot drift as more is seeded at birth.
+    const before = await adminDb.workItem.count();
     const empty = await createIssueAction({ kind: 'task', title: '   ' });
     expect(empty).toEqual({ ok: false, error: 'Give the work item a title.' });
-    const count = await adminDb.workItem.count();
-    expect(count).toBe(0);
+    expect(await adminDb.workItem.count()).toBe(before);
   });
 
   it('rejects a title over 200 characters', async () => {
     await makeFixture();
+    const before = await adminDb.workItem.count();
     const result = await createIssueAction({ kind: 'task', title: 'x'.repeat(201) });
     expect(result.ok).toBe(false);
-    expect(await adminDb.workItem.count()).toBe(0);
+    expect(await adminDb.workItem.count()).toBe(before);
   });
 
   it('returns an error (no throw) when there is no active project', async () => {
@@ -171,9 +178,11 @@ describe('createIssueAction', () => {
     // Point the active context at a non-existent project id — the service
     // throws ProjectNotFoundError, which the action maps (not rethrows).
     activeCtx.current = { ...activeCtx.current!, projectId: 'does-not-exist' };
+    const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     const result = await createIssueAction({ kind: 'task', title: 'Ghost' });
     expect(result).toEqual({ ok: false, error: 'That project no longer exists.' });
-    // Nothing persisted under the real project either.
-    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    // Nothing persisted under the real project either — its seeded container is
+    // all it had before the call, and all it has after.
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
   });
 });

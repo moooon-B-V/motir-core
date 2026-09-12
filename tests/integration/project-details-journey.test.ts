@@ -88,6 +88,15 @@ async function seedItems(projectId: string, ctx: WorkspaceContext, n: number) {
   return items;
 }
 
+/**
+ * Every issue identifier in the project, sorted.
+ *
+ * ⚠️ This INCLUDES the project's seeded bug container (MOTIR-4935), which holds
+ * the first key — so a project with N seeded items reports N+1 identifiers, and
+ * the container is `<KEY>-1`. That is deliberate rather than tolerated: the
+ * container is an ordinary work item, so a key change MUST re-key it too, and
+ * asserting the full list is what proves the rewrite missed nothing.
+ */
 async function identifiersOf(projectId: string): Promise<string[]> {
   const rows = await adminDb.workItem.findMany({
     where: { projectId },
@@ -100,8 +109,10 @@ describe('Story 6.8 — the project-details lifecycle, composed on one project',
   it('walks the full verification recipe end to end (rename → key change → redirect → reclaim → release)', async () => {
     const { project, ownerCtx } = await makeFixture('lifecycle');
     const [one, two] = await seedItems(project.id, ownerCtx, 2);
-    expect(one?.identifier).toBe('PROD-1');
-    expect(two?.identifier).toBe('PROD-2');
+    // PROD-1 is the seeded bug container, so the items this test drives start
+    // at PROD-2 (see `identifiersOf`).
+    expect(one?.identifier).toBe('PROD-2');
+    expect(two?.identifier).toBe('PROD-3');
 
     // ── 1. Rename (the batched updateDetails path) ───────────────────────────
     // This step also set a preset avatar until MOTIR-2680 dropped that pair; the
@@ -122,7 +133,8 @@ describe('Story 6.8 — the project-details lifecycle, composed on one project',
     expect(moved.identifier).toBe('NIF');
     expect(moved.previousKeys).toEqual([{ identifier: 'PROD', retiredAt: expect.any(String) }]);
     // Every issue re-keyed, numbers preserved; the name survives the change.
-    expect(await identifiersOf(project.id)).toEqual(['NIF-1', 'NIF-2']);
+    // The container (NIF-1) is re-keyed with the rest — it is not exempt.
+    expect(await identifiersOf(project.id)).toEqual(['NIF-1', 'NIF-2', 'NIF-3']);
     expect(moved.name).toBe('Lifecycle Renamed');
 
     // ── 3. The old key still SERVES (REST shape) and issue links REDIRECT ────
@@ -136,7 +148,7 @@ describe('Story 6.8 — the project-details lifecycle, composed on one project',
     expect(reverted.identifier).toBe('PROD');
     // PROD's alias was consumed (reclaimed); NIF is now the retired key.
     expect(reverted.previousKeys).toEqual([{ identifier: 'NIF', retiredAt: expect.any(String) }]);
-    expect(await identifiersOf(project.id)).toEqual(['PROD-1', 'PROD-2']);
+    expect(await identifiersOf(project.id)).toEqual(['PROD-1', 'PROD-2', 'PROD-3']);
     // Old NIF links now redirect to the canonical PROD; the reclaimed PROD is live.
     expect(await resolveAliasedIssueKey('NIF-1', ownerCtx)).toBe('PROD-1');
     expect(await resolveAliasedIssueKey('PROD-1', ownerCtx)).toBeNull();
@@ -198,7 +210,7 @@ describe('Story 6.8 — concurrent renames serialise on the project-row lock', (
       where: { projectId: project.id },
     });
     expect(projectKeyAliasCount).toBe(1);
-    expect(await identifiersOf(project.id)).toEqual(['NIF-1', 'NIF-2']);
+    expect(await identifiersOf(project.id)).toEqual(['NIF-1', 'NIF-2', 'NIF-3']);
   });
 
   it('two renames to DIFFERENT keys both apply, serialised, leaving a clean alias chain', async () => {
@@ -225,6 +237,6 @@ describe('Story 6.8 — concurrent renames serialise on the project-row lock', (
       expect(r.viaAlias).toBe(true);
       expect(r.project.identifier).toBe(finalKey);
     }
-    expect(await identifiersOf(project.id)).toEqual([`${finalKey}-1`]);
+    expect(await identifiersOf(project.id)).toEqual([`${finalKey}-1`, `${finalKey}-2`]);
   });
 });

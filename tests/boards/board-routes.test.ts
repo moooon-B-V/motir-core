@@ -184,10 +184,12 @@ describe('board API routes', () => {
       { userId: fx.userId, workspaceId: fx.workspaceId },
     );
 
-    // Unfiltered: both land in todo.
+    // Unfiltered: both land in todo — plus the project's SEEDED bug container,
+    // which is an ordinary `task` in the initial status and so appears on the
+    // board like any other card (MOTIR-4935).
     const before = (await (await boardGetReq()).json()) as BoardProjectionDto;
     const todoBefore = before.columns.find((c) => c.statusKeys[0] === 'todo')!;
-    expect(todoBefore.totalCount).toBe(2);
+    expect(todoBefore.totalCount).toBe(3);
 
     // Filtered to kind=bug → only the bug remains.
     const param = encodeFilterParam(facetFilterToAst({ ...EMPTY_FILTER, kinds: ['bug'] }));
@@ -205,11 +207,13 @@ describe('board API routes', () => {
       { projectId: fx.projectId, kind: 'task', title: 'a task' },
       { userId: fx.userId, workspaceId: fx.workspaceId },
     );
-    // No version prefix → decode fails → treated as NO filter (not a 400).
+    // No version prefix → decode fails → treated as NO filter (not a 400). The
+    // count is the created task PLUS the seeded bug container (MOTIR-4935) —
+    // the point of the assertion is that NOTHING was filtered out.
     const res = await boardGetReq('?filter=not-a-valid-param');
     expect(res.status).toBe(200);
     const board = (await res.json()) as BoardProjectionDto;
-    expect(board.columns.find((c) => c.statusKeys[0] === 'todo')!.totalCount).toBe(1);
+    expect(board.columns.find((c) => c.statusKeys[0] === 'todo')!.totalCount).toBe(2);
   });
 
   it('GET /api/board?filter= → 422 for a structurally-decodable but invalid filter', async () => {

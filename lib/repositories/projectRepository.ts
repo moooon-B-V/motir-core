@@ -721,6 +721,26 @@ export const projectRepository = {
     return tx.project.update({ where: { id }, data: { archivedAt: new Date() } });
   },
 
+  /**
+   * Point the project's BUG DESTINATION at a container, or at the project ROOT
+   * (Story MOTIR-4927 · Subtask MOTIR-4934/MOTIR-4935).
+   *
+   * ⚠️ `null` is the ROOT, a real destination — it is NOT "clear this field". The
+   * parameter is therefore required and non-optional: a caller must say which of
+   * the two it means, and there is no overload that leaves it unsaid.
+   *
+   * The DATABASE enforces that the target is one of this project's own work
+   * items (`trg_project_bug_destination_tenancy`), so a cross-project id
+   * surfaces here as a write error rather than as a silently stored pointer.
+   */
+  async updateBugDestination(
+    id: string,
+    bugDestinationId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data: { bugDestinationId } });
+  },
+
   /** Flip the project's workflow policy mode (Subtask 2.2.5). */
   async updateWorkflowPolicyMode(
     id: string,

@@ -67,6 +67,13 @@ interface WorkItemTenantFixture {
   // One link in each workspace.
   linkW1Id: string;
   linkW2Id: string;
+  // ⚠️ The BUG CONTAINER each project is born with (MOTIR-4935). It is an
+  // ordinary work item and is therefore subject to every policy under test, so
+  // the exact-set assertions below INCLUDE it rather than filtering it out —
+  // which also proves the seeded row is correctly tenanted.
+  containerP1Id: string;
+  containerP1bId: string;
+  containerP2Id: string;
 }
 
 let positionCounter = 0;
@@ -90,13 +97,25 @@ async function makeWorkItem(args: {
   key: number;
   parentId?: string | null;
 }): Promise<string> {
+  // ⚠️ The `key` argument names the item for this fixture's own readability; the
+  // stored key is ALLOCATED, not taken from it. Since MOTIR-4935 every project
+  // is created with a seeded bug container, which already holds key 1 — so a
+  // fixture that writes its own `key: 1` now collides on
+  // `@@unique([projectId, key])`. Allocating off the project's counter is what
+  // `createWorkItem` does in production and cannot collide with anything the
+  // project was born with, whatever is seeded next.
+  const { lastWorkItemNumber: key } = await adminDb.project.update({
+    where: { id: args.projectId },
+    data: { lastWorkItemNumber: { increment: 1 } },
+    select: { lastWorkItemNumber: true },
+  });
   const row = await adminDb.workItem.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
       reporterId: args.reporterId,
       kind: args.kind,
-      key: args.key,
+      key,
       identifier: `WI-${args.key}-${args.projectId.slice(-4)}`,
       title: `Item ${args.key}`,
       position: nextPosition(),
@@ -223,7 +242,20 @@ async function makeWorkItemTenants(): Promise<WorkItemTenantFixture> {
     itemP2bId: itemP2b,
     linkW1Id: linkW1.id,
     linkW2Id: linkW2.id,
+    containerP1Id: await seededContainerId(p1.id),
+    containerP1bId: await seededContainerId(p1b.id),
+    containerP2Id: await seededContainerId(p2.id),
   };
+}
+
+/** The container `createProject` seeded, read off the project's destination
+ *  pointer — never by title, which is the one lookup this story removes. */
+async function seededContainerId(projectId: string): Promise<string> {
+  const project = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
+  if (project.bugDestinationId == null) {
+    throw new Error(`project ${projectId} was created without a bug destination`);
+  }
+  return project.bugDestinationId;
 }
 
 /**
@@ -392,9 +424,20 @@ describe('work_item RLS — read isolation', () => {
       (tx) => tx.workItem.findMany(),
     );
     const ids = rows.map((r) => r.id).sort();
-    expect(ids).toEqual([fx.itemP1aId, fx.itemP1bId_inP1, fx.itemP1b_otherProjectId].sort());
+    expect(ids).toEqual(
+      [
+        fx.itemP1aId,
+        fx.itemP1bId_inP1,
+        fx.itemP1b_otherProjectId,
+        fx.containerP1Id,
+        fx.containerP1bId,
+      ].sort(),
+    );
     expect(ids).not.toContain(fx.itemP2aId);
     expect(ids).not.toContain(fx.itemP2bId);
+    // W2's own seeded container is a work item too, and it must be just as
+    // invisible as W2's other rows.
+    expect(ids).not.toContain(fx.containerP2Id);
   });
 
   it("tenant A cannot SELECT tenant B's work item by id", async () => {
@@ -415,7 +458,7 @@ describe('work_item RLS — project narrowing (restrictive policy)', () => {
       (tx) => tx.workItem.findMany(),
     );
     const ids = rows.map((r) => r.id).sort();
-    expect(ids).toEqual([fx.itemP1aId, fx.itemP1bId_inP1].sort());
+    expect(ids).toEqual([fx.itemP1aId, fx.itemP1bId_inP1, fx.containerP1Id].sort());
     // The P1b-project item shares the workspace but a different project — the
     // restrictive policy AND-narrows it out.
     expect(ids).not.toContain(fx.itemP1b_otherProjectId);
@@ -428,7 +471,15 @@ describe('work_item RLS — project narrowing (restrictive policy)', () => {
       (tx) => tx.workItem.findMany(),
     );
     const ids = rows.map((r) => r.id).sort();
-    expect(ids).toEqual([fx.itemP1aId, fx.itemP1bId_inP1, fx.itemP1b_otherProjectId].sort());
+    expect(ids).toEqual(
+      [
+        fx.itemP1aId,
+        fx.itemP1bId_inP1,
+        fx.itemP1b_otherProjectId,
+        fx.containerP1Id,
+        fx.containerP1bId,
+      ].sort(),
+    );
   });
 
   it('project narrowing does NOT widen across workspaces (W1 GUC + P2 id sees nothing)', async () => {

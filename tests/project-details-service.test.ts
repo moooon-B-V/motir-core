@@ -252,8 +252,16 @@ describe('changeKey', () => {
 
     expect(updated.identifier).toBe('NIF');
     expect(updated.previousKeys).toEqual([{ identifier: 'PROD', retiredAt: expect.any(String) }]);
-    // Every identifier re-rendered NIF-<key>, numbers preserved.
-    expect(await identifiersOf(project.id)).toEqual(keys.map((k) => `NIF-${k}`).sort());
+    // Every identifier re-rendered NIF-<key>, numbers preserved — across EVERY
+    // row in the project, including the seeded bug container at key 1
+    // (MOTIR-4935), which is not exempt from a re-key. Derived from the rows
+    // rather than from `seeded` so the assertion cannot drift as more is seeded
+    // at project birth.
+    const allKeys = (
+      await adminDb.workItem.findMany({ where: { projectId: project.id }, select: { key: true } })
+    ).map((r) => r.key);
+    expect(allKeys).toEqual(expect.arrayContaining(keys));
+    expect(await identifiersOf(project.id)).toEqual(allKeys.map((k) => `NIF-${k}`).sort());
     // The alias row for the old key exists, owned by this project.
     expect(
       await adminDb.projectKeyAlias.count({ where: { projectId: updated.id, identifier: 'PROD' } }),
@@ -270,10 +278,15 @@ describe('changeKey', () => {
     // The repository stays the code under test on `@/lib/db`; it is handed the
     // transaction production hands it, which binds the GUCs the work_item policy
     // reads. A bare db.$transaction reaches it with no tenant bound.
+    // The row total is the seeded items PLUS the project's bug container
+    // (MOTIR-4935), so it is READ rather than assumed to be `n` — the claim is
+    // "the update touched every row", and the row count is what states it.
+    const total = await adminDb.workItem.count({ where: { projectId: project.id } });
+    expect(total).toBe(n + 1);
     const count = await withWorkspaceContext(ownerCtx, (tx) =>
       workItemRepository.rewriteIdentifiersForProject(project.id, 'ZAP', tx),
     );
-    expect(count).toBe(n);
+    expect(count).toBe(total);
     expect((await identifiersOf(project.id)).every((id) => id.startsWith('ZAP-'))).toBe(true);
   });
 
@@ -296,7 +309,9 @@ describe('changeKey', () => {
       where: { projectId: project.id },
     });
     expect(projectKeyAliasCount).toBe(0);
-    expect(before).toEqual([]);
+    // A brand-new project is not empty any more: it carries its seeded bug
+    // container (MOTIR-4935), and PROD-1 is that container.
+    expect(before).toEqual(['PROD-1']);
   });
 
   it("rejects collisions: a live identifier → Taken, another project's alias → Reserved", async () => {
@@ -379,8 +394,11 @@ describe('changeKey', () => {
       ),
     ]);
 
+    // 2 seeded + the racer + the project's seeded bug container (MOTIR-4935).
     const ids = await identifiersOf(project.id);
-    expect(ids).toHaveLength(3);
+    expect(ids).toHaveLength(4);
+    // The property under test: EVERY identifier ends up on the canonical prefix,
+    // whichever order the lock granted.
     expect(ids.every((id) => /^NIF-\d+$/.test(id))).toBe(true);
   });
 });

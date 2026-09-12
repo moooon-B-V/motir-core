@@ -56,6 +56,12 @@ import { extractReferencedAttachmentIdsFromBodies } from '@/lib/blob/referencedU
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
+import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import {
+  DEFAULT_BUG_CONTAINER_DESCRIPTION_MD,
+  DEFAULT_BUG_CONTAINER_KIND,
+  DEFAULT_BUG_CONTAINER_TITLE,
+} from '@/lib/bugs/defaultBugContainer';
 import {
   QUICK_SEARCH_DEFAULT_LIMIT,
   QUICK_SEARCH_MAX_LIMIT,
@@ -1101,6 +1107,76 @@ async function recordBugFiledFinding(
 }
 
 export const workItemsService = {
+  /**
+   * Seed the project's BUG CONTAINER inside a caller-supplied transaction —
+   * Story MOTIR-4927 · Subtask MOTIR-4935. Returns the created row so the caller
+   * can point `project.bugDestinationId` at it in the SAME transaction.
+   *
+   * ⚠️ IT TAKES A `tx` AND `createWorkItem` CANNOT, WHICH IS WHY THIS EXISTS.
+   * `createWorkItem` owns its own transaction (it must — the key allocation and
+   * the insert have to be atomic against concurrent creates), so calling it from
+   * inside `insertProjectWithSeedsInTx` would seed the container in a SECOND
+   * transaction. Project creation retries an identifier collision by rolling
+   * back and starting fresh, so that container would survive the rollback and
+   * orphan itself in `work_item` on every collision — a stray row in a table
+   * nobody would ever think to look in. Same-transaction is the whole point,
+   * exactly as the comment above `seedDefaultWorkflow` says of the workflow: a
+   * project either has its seeds or does not exist.
+   *
+   * ORDERING: must run AFTER `seedDefaultWorkflow`, because the row needs the
+   * project's initial status to exist — the same constraint `seedDefaultBoard`
+   * already documents for itself. The status is READ BACK from the statuses just
+   * written rather than assumed to be `todo`, so a project whose seeded workflow
+   * ever changes its initial status cannot silently mint an illegal row.
+   *
+   * ⚠️ IT MINTS A TITLE AND NOTHING RESOLVES BY IT. The destination is the
+   * POINTER the caller sets; `DEFAULT_BUG_CONTAINER_TITLE` is a label a team may
+   * rename freely. Re-introducing a title lookup here would rebuild the exact
+   * fragility `lib/ai/plannerBugHome.ts` has, and it would work perfectly until
+   * the first rename.
+   */
+  async seedBugContainer(
+    projectId: string,
+    workspaceId: string,
+    reporterId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItem> {
+    // The initial status, read from the workflow this transaction just seeded.
+    // `workflowsService.getInitialStatusKey` opens a context of its OWN, so it
+    // cannot be used here — the statuses are not visible outside this tx yet.
+    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId, tx);
+    const statusKey = statuses.find((s) => s.isInitial)?.key;
+    if (statusKey == null) throw new NoInitialStatusError(projectId);
+
+    // The container is the project's first work item, so the key allocation is
+    // uncontended — but it goes through `allocateWorkItemNumber` anyway rather
+    // than assuming `1`, because `ensureDefaultProject` can reach this seam for
+    // a project that already exists and the invariant "a key is allocated, never
+    // guessed" should not have an exception nobody can see.
+    const key = await projectRepository.allocateWorkItemNumber(projectId, tx);
+    const project = await projectRepository.findById(projectId, tx);
+    if (!project) throw new ProjectNotFoundError(projectId);
+
+    return workItemRepository.create(
+      {
+        workspaceId,
+        projectId,
+        parentId: null,
+        kind: DEFAULT_BUG_CONTAINER_KIND,
+        key,
+        identifier: `${project.identifier}-${key}`,
+        title: DEFAULT_BUG_CONTAINER_TITLE,
+        descriptionMd: DEFAULT_BUG_CONTAINER_DESCRIPTION_MD,
+        status: statusKey,
+        reporterId,
+        // First item in a brand-new project: both orderings start at the head.
+        position: keyForAppend(null),
+        backlogRank: keyForAppend(null),
+      },
+      tx,
+    );
+  },
+
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
    * the initial revision, all in ONE transaction (the key allocation and the

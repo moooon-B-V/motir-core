@@ -113,7 +113,9 @@ describe('createProject — happy path', () => {
     const persisted = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(persisted).not.toBeNull();
     expect(persisted?.workspaceId).toBe(workspace.id);
-    expect(persisted?.lastWorkItemNumber).toBe(0);
+    // 1, not 0: `createProject` seeds a bug container in the same transaction
+    // (MOTIR-4935) and it takes the project's first key.
+    expect(persisted?.lastWorkItemNumber).toBe(1);
     expect(persisted?.archivedAt).toBeNull();
   });
 
@@ -390,6 +392,8 @@ describe('allocateWorkItemNumber — monotonic + independent per project', () =>
     // hand it the transaction it gets in production, rather than a bare one with
     // no tenant bound.
     const ctx = { userId: owner.id, workspaceId: workspace.id };
+    const base = (await adminDb.project.findUniqueOrThrow({ where: { id: project.id } }))
+      .lastWorkItemNumber;
     const n1 = await withWorkspaceContext(ctx, (tx) =>
       projectRepository.allocateWorkItemNumber(project.id, tx),
     );
@@ -400,7 +404,11 @@ describe('allocateWorkItemNumber — monotonic + independent per project', () =>
       projectRepository.allocateWorkItemNumber(project.id, tx),
     );
 
-    expect([n1, n2, n3]).toEqual([1, 2, 3]);
+    // Relative to where the counter already stands: the seeded bug container
+    // holds key 1, so the first allocation here is 2. The PROPERTY under test —
+    // sequential and gap-free — is unchanged, and asserting it relatively keeps
+    // the test true whatever a project is born with.
+    expect([n1, n2, n3]).toEqual([base + 1, base + 2, base + 3]);
   });
 
   it('keeps the counter independent across projects (A and B do not interfere)', async () => {
@@ -424,18 +432,20 @@ describe('allocateWorkItemNumber — monotonic + independent per project', () =>
     await withWorkspaceContext(ctx, (tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
     await withWorkspaceContext(ctx, (tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
 
+    // B is untouched by A's three allocations: it still stands where its own
+    // seeded container left it (1), not at 4.
     const bRowBefore = await adminDb.project.findUnique({ where: { id: b.id } });
-    expect(bRowBefore?.lastWorkItemNumber).toBe(0);
+    expect(bRowBefore?.lastWorkItemNumber).toBe(1);
 
-    // Now allocate B's first number — it must be 1, not 4.
+    // B's next number follows B's OWN counter — the independence this is about.
     const b1 = await withWorkspaceContext(ctx, (tx) =>
       projectRepository.allocateWorkItemNumber(b.id, tx),
     );
-    expect(b1).toBe(1);
+    expect(b1).toBe(2);
 
-    // Confirm A's counter is at 3 (unaffected by B's allocation).
+    // Confirm A's counter advanced by exactly three and was unaffected by B.
     const aRow = await adminDb.project.findUnique({ where: { id: a.id } });
-    expect(aRow?.lastWorkItemNumber).toBe(3);
+    expect(aRow?.lastWorkItemNumber).toBe(4);
   });
 
   it('throws ProjectNotFoundError when allocating against a missing project id', async () => {
