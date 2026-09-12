@@ -8111,6 +8111,31 @@
         "title": "此 Motir 部署尚未配置 Sentry。",
         "body": "需要管理员添加 Sentry 集成的凭据。"
       }
+    },
+    "picker": {
+      "title": "选择 Sentry 项目",
+      "subtitle": "来自 {org}。你所选项目中的问题会成为本看板上的缺陷工作项。",
+      "loading": "正在加载 {org} 的项目…",
+      "filter": "筛选项目",
+      "alreadyMonitored": "已受监控",
+      "nowMonitored": "现已受监控",
+      "chosen": "已选择",
+      "notChosen": "未选择",
+      "monitor": "{count, plural, =0 {监控项目} other {监控 # 个项目}}",
+      "partial": "已添加 {added}/{attempted} 个项目。{failed, plural, other {其余项目未能添加。}}",
+      "rowError": "无法添加——请重试",
+      "done": "完成",
+      "retry": "重试",
+      "cancel": "取消",
+      "reconnect": "重新连接",
+      "noProjects": "{org} 暂无可监控的项目。",
+      "noMatch": "没有符合筛选条件的项目。",
+      "loadFailed": "无法加载 {org} 的项目。请关闭后稍后重试。",
+      "degraded": {
+        "title": "无法加载 {org} 的项目。",
+        "says": "Sentry 返回：{reason}",
+        "body": "Motir 需要可用的连接才能列出这些项目。请重新连接 Sentry，然后选择你的项目。"
+      }
     }
   }
 }

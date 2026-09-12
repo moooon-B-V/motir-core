@@ -23,13 +23,14 @@ import type { MonitorConnectionDto, MonitorConnectionViewDto } from '@/lib/dto/m
 import type { MonitorBannerTone, MonitoringBannerCopy } from '@/lib/monitors/returnBanner';
 import { monitorConnectHref } from '@/lib/monitors/returnSurface';
 import { recheckMonitorHealthAction } from '../actions';
+import { MonitoringProjectPicker } from './MonitoringProjectPicker';
 
 // The Monitoring room's CLIENT island (Story MOTIR-4928 · MOTIR-5262).
 //
 // ⚠️ IT KEEPS NO COPY OF THE VIEW. Everything below renders straight from props,
 // so the server read re-runs on `router.refresh()` and this re-renders with it —
 // after Re-check, after Disconnect, and after the picker (MOTIR-5297) binds a
-// project. Local state holds only what is genuinely local: which confirmation is
+// project — the picker is handed `router.refresh()` as its `onBound`. Local state holds only what is genuinely local: which confirmation is
 // open, whether a request is in flight, and whether the return banner was
 // dismissed.
 
@@ -41,12 +42,6 @@ export interface MonitoringRoomProps {
   checkedLabel: string | null;
   /** "Bound N days ago" per connection id, formatted on the server. */
   boundLabels: Record<string, string>;
-  /**
-   * Opens the project picker. MOTIR-5297 owns the picker and wires this; the two
-   * buttons that open it are this room's (panels 1b and 2–4) and render either
-   * way, so the room's shape does not change when the picker lands.
-   */
-  onChooseProjects?: () => void;
 }
 
 const BANNER_CLASS: Record<MonitorBannerTone, string> = {
@@ -73,7 +68,6 @@ export function MonitoringRoom({
   banner,
   checkedLabel,
   boundLabels,
-  onChooseProjects,
 }: MonitoringRoomProps) {
   const t = useTranslations('monitoring');
   const router = useRouter();
@@ -81,6 +75,7 @@ export function MonitoringRoom({
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [removing, setRemoving] = useState<MonitorConnectionDto | null>(null);
   const [busy, setBusy] = useState<'recheck' | 'disconnect' | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const connectHref = monitorConnectHref(projectKey);
   const degraded = view.health === 'degraded';
@@ -231,7 +226,7 @@ export function MonitoringRoom({
                 {t('unbound.body', { org })}
               </p>
             </span>
-            <Button variant="primary" size="sm" onClick={onChooseProjects}>
+            <Button variant="primary" size="sm" onClick={() => setPickerOpen(true)}>
               {t('unbound.action')}
             </Button>
           </div>
@@ -271,13 +266,23 @@ export function MonitoringRoom({
               ))}
             </ul>
             <div>
-              <Button variant="secondary" size="sm" onClick={onChooseProjects}>
+              <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
                 {t('section.add')}
               </Button>
             </div>
           </>
         )}
       </section>
+
+      {/* PANELS 6–7 — the picker, opened by both Choose buttons. */}
+      <MonitoringProjectPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        projectKey={projectKey}
+        org={org}
+        connectHref={connectHref}
+        onBound={() => router.refresh()}
+      />
 
       {/* PANEL 8 — the confirmation says what disconnect DOES, in its two cases. */}
       <Modal

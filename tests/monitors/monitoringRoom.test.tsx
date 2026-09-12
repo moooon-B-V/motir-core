@@ -102,16 +102,21 @@ describe('panel 1 — no grant', () => {
 });
 
 describe('panel 1b — connected, nothing monitored', () => {
-  it('names the organisation and offers Choose Sentry projects as the primary action', () => {
-    const onChooseProjects = vi.fn();
-    renderRoom({ onChooseProjects });
+  it('names the organisation and offers Choose Sentry projects, which opens the picker', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([])));
+    renderRoom();
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.getByText('checked 4 minutes ago')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'No Sentry projects monitored yet' })).toBeTruthy();
     expect(screen.getByText(/Sentry is connected to acme-inc\./)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Sentry projects' }));
-    expect(onChooseProjects).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('list')).toBeNull();
+    // The room makes no provider read until the picker opens.
+    expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Choose Sentry projects' }));
+    });
+    expect(screen.getByRole('dialog', { name: 'Choose Sentry projects' })).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith('/api/projects/ACME/monitors/available');
   });
 });
 
