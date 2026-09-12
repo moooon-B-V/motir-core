@@ -1,4 +1,4 @@
-import { db } from './db-reset';
+import { adminDb, db } from './db-reset';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -101,7 +101,15 @@ export async function setProjectAcceptanceVideo(
   projectId: string,
   enabled: boolean,
 ): Promise<void> {
-  await db.project.update({
+  // ⚠️ `adminDb`, NOT the `db` singleton its org-tier sibling above uses.
+  // `UNCONVERTED_E2E_CEILING` (`tests/rls/test-singleton-statement-guard.test.ts`)
+  // is a ratchet that only ever falls, and a new direct singleton statement under
+  // `tests/e2e/**` raises it — the guard's own message says to seed through
+  // `adminDb` rather than raise the number. It is also the correct client on the
+  // merits: under `motir_app` this write would be REFUSED and would not raise, so
+  // the spec would drive a browser against a switch it believes it set. The
+  // sibling is left as it is; converting it is the ratchet's own card.
+  await adminDb.project.update({
     where: { id: projectId },
     data: { acceptanceVideoEnabled: enabled },
   });
