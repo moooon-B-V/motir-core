@@ -195,6 +195,17 @@ export const aiWorkItemsService = {
         ctx,
       );
       parentId = parent.id;
+    } else {
+      // ⚠️ MOTIR-4937 — A PARENTLESS PLANNER BUG GOES TO THE PROJECT'S DESTINATION.
+      // Story MOTIR-4927 names this sink ("the MCP's `log_bug`") as one of the
+      // three consumers that must route through the resolver, and it was missed
+      // the first time because the caller sweep enumerated readers of the legacy
+      // home's TITLE — which this filer never reads. A supplied `parentKey` above
+      // is still kept: a filed bug that names a parent keeps it, which is what the
+      // Bugs room promises. Only the "planner said nowhere" case changes, from the
+      // root to wherever the project has chosen (which may itself be the root).
+      const destination = await bugDestinationService.resolve(projectId, ctx.workspaceId);
+      parentId = destination.parentId;
     }
 
     // The native planning triple (`work-item-provenance.md` Decision 5) — the

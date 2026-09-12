@@ -103,13 +103,17 @@ describe('POST /api/internal/ai/log-bug — the filing, and what it records', ()
     expect(json.key).toMatch(/^PROD-\d+$/);
 
     // The row: kind fixed, project + tenant the token's, the actor the reporter,
-    // at the project root, and the NATIVE planning triple stamped.
+    // under the project's BUG DESTINATION (no `parentKey` was supplied, so it goes
+    // wherever the project has chosen — MOTIR-4937), and the NATIVE planning
+    // triple stamped. Read off the project's pointer rather than asserted to be
+    // the root: a project is born with a seeded container (MOTIR-4935).
     const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(row?.kind).toBe('bug');
     expect(row?.projectId).toBe(fx.projectId);
     expect(row?.workspaceId).toBe(fx.workspaceId);
     expect(row?.reporterId).toBe(fx.ownerId);
-    expect(row?.parentId).toBeNull();
+    expect(row?.parentId).toBe(project.bugDestinationId);
     expect(row?.descriptionMd).toBe('Reproduced on the items list.');
     expect(row?.planningSource).toBe('native');
     expect(row?.planningHarness).toBe(NATIVE_PLANNER_HARNESS);
@@ -165,6 +169,67 @@ describe('POST /api/internal/ai/log-bug — the filing, and what it records', ()
   });
 });
 
+describe('a parentless planner bug follows the project’s BUG DESTINATION (MOTIR-4937)', () => {
+  // Story MOTIR-4927 names this sink — "the MCP's `log_bug`" — as one of the
+  // three consumers that must route through `bugDestinationService.resolve`. It
+  // was missed the first time because the caller sweep enumerated readers of the
+  // legacy home's TITLE, which this filer never reads. A SUPPLIED `parentKey` is
+  // still kept (the case above this block); only "the planner said nowhere"
+  // changes, from the root to wherever the project has chosen.
+
+  it('files under a RE-POINTED container, and at the ROOT once the root is chosen', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_log_bug_destination';
+    await openPlan(fx, jobId);
+
+    const triage = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Triage' },
+      fx.ctx,
+    );
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { bugDestinationId: triage.id },
+    });
+
+    const underContainer = await file(fx, jobId, { title: 'Filed while pointed at Triage' });
+    expect(underContainer.status).toBe(201);
+    const a = (await underContainer.json()) as { id: string };
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: a.id } })).parentId).toBe(
+      triage.id,
+    );
+
+    // `null` is the ROOT, chosen — a real destination, not a missing one.
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { bugDestinationId: null } });
+    const atRoot = await file(fx, jobId, { title: 'Filed once the root was chosen' });
+    expect(atRoot.status).toBe(201);
+    const b = (await atRoot.json()) as { id: string };
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: b.id } })).parentId).toBeNull();
+  });
+
+  it('never files under an ARCHIVED destination — it recovers to the root', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_log_bug_archived_destination';
+    await openPlan(fx, jobId);
+
+    const gone = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Archived triage' },
+      fx.ctx,
+    );
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { bugDestinationId: gone.id },
+    });
+    await adminDb.workItem.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
+
+    const res = await file(fx, jobId, { title: 'Filed after the container was archived' });
+    expect(res.status).toBe(201);
+    const json = (await res.json()) as { id: string };
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: json.id } })).parentId,
+    ).toBeNull();
+  });
+});
+
 describe('the PROJECT bound — the token’s project, and only the token’s', () => {
   it('a job token for project A cannot file on a job whose plan is project B’s → 404 NO_PLAN_FOR_JOB', async () => {
     // Two projects in ONE workspace: the tenant gate alone would not separate
@@ -183,7 +248,12 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
     );
     expect(res.status).toBe(404);
     expect((await res.json()).code).toBe('NO_PLAN_FOR_JOB');
-    expect(await adminDb.workItem.count({ where: { workspaceId: fx.workspaceId } })).toBe(0);
+    // "Nothing was filed", stated as NO BUG: every project is born with a seeded
+    // bug container (MOTIR-4935), which is a `task`, so a bare row count is not
+    // zero before this test does anything.
+    expect(
+      await adminDb.workItem.count({ where: { workspaceId: fx.workspaceId, kind: 'bug' } }),
+    ).toBe(0);
   });
 
   it('a token from ANOTHER TENANT cannot see the job’s plan at all → 404, and the bound read is what hides it', async () => {
@@ -205,7 +275,10 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
     );
     expect(seenByB).toBeNull();
     expect(await adminDb.plan.findUnique({ where: { id: planId } })).not.toBeNull();
-    expect(await adminDb.workItem.count()).toBe(0);
+    // "Nothing was filed", stated as NO BUG: every project is born with a seeded
+    // bug container (MOTIR-4935), which is a `task`, so a bare row count is not
+    // zero before this test does anything.
+    expect(await adminDb.workItem.count({ where: { kind: 'bug' } })).toBe(0);
   });
 
   it('a `parentKey` from another project is 404 WORK_ITEM_NOT_FOUND — typed apart from a bad token', async () => {
@@ -225,7 +298,12 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
     const res = await file(fx, jobId, { title: 'x', parentKey: foreign.identifier });
     expect(res.status).toBe(404);
     expect((await res.json()).code).toBe('WORK_ITEM_NOT_FOUND');
-    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    // "Nothing was filed", stated as NO BUG: every project is born with a seeded
+    // bug container (MOTIR-4935), which is a `task`, so a bare row count is not
+    // zero before this test does anything.
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId, kind: 'bug' } })).toBe(
+      0,
+    );
   });
 
   it('a parent the kind-parent matrix forbids is 422 ILLEGAL_PARENT_TYPE', async () => {
@@ -272,7 +350,10 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
       }),
     );
     expect(res.status).toBe(404);
-    expect(await adminDb.workItem.count()).toBe(0);
+    // "Nothing was filed", stated as NO BUG: every project is born with a seeded
+    // bug container (MOTIR-4935), which is a `task`, so a bare row count is not
+    // zero before this test does anything.
+    expect(await adminDb.workItem.count({ where: { kind: 'bug' } })).toBe(0);
   });
 
   it('a LIMITED project the token’s user may browse but not edit is 403 PROJECT_ACCESS_DENIED', async () => {
@@ -301,7 +382,10 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
     );
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe('PROJECT_ACCESS_DENIED');
-    expect(await adminDb.workItem.count()).toBe(0);
+    // "Nothing was filed", stated as NO BUG: every project is born with a seeded
+    // bug container (MOTIR-4935), which is a `task`, so a bare row count is not
+    // zero before this test does anything.
+    expect(await adminDb.workItem.count({ where: { kind: 'bug' } })).toBe(0);
   });
 
   it('a token naming a user who is NOT a member of the workspace is an invariant breach — the route rethrows, and writes nothing', async () => {
@@ -328,7 +412,10 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
         }),
       ),
     ).rejects.toBeInstanceOf(ReporterNotInWorkspaceError);
-    expect(await adminDb.workItem.count()).toBe(0);
+    // "Nothing was filed", stated as NO BUG: every project is born with a seeded
+    // bug container (MOTIR-4935), which is a `task`, so a bare row count is not
+    // zero before this test does anything.
+    expect(await adminDb.workItem.count({ where: { kind: 'bug' } })).toBe(0);
     expect(await adminDb.planRevision.count({ where: { changeKind: 'bug_filed' } })).toBe(0);
   });
 
@@ -358,7 +445,10 @@ describe('the VOLUME bound — at most PLANNER_BUGS_PER_JOB, counted on the trai
     expect(body.filed).toBe(PLANNER_BUGS_PER_JOB);
 
     // The refusal wrote NOTHING — neither a card nor a trail row.
-    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(
+    // "Nothing was filed", stated as NO BUG: every project is born with a seeded
+    // bug container (MOTIR-4935), which is a `task`, so a bare row count is not
+    // zero before this test does anything.
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId, kind: 'bug' } })).toBe(
       PLANNER_BUGS_PER_JOB,
     );
     const filed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
