@@ -115,15 +115,26 @@ export type TurnOnAcceptanceVideoResult = { ok: true } | { ok: false; error: str
  * what swaps State B for State A — so it is case 2 of the page-state contract
  * exactly as the decide path is, and the same second-apply race can drop it.
  *
- * THE DEFECT DID NOT REPRODUCE, which is the same answer MOTIR-5160 got one
- * surface over: `tests/e2e/cloud-acceptance-toggle-repaint.spec.ts` passed 5/5
- * against this action unfixed (2026-09-12). What the guard DOES prove is that it
- * can SEE the defect — commenting out `AcceptancePanel.turnOn`'s
- * `router.refresh()` fails it at the State-A assertion, and not before. So the
- * fix ships on the same footing MOTIR-5160's did: a mechanism measured on a
- * sibling, a guard demonstrated able to go red, and no claim that the race was
- * observed here. Read a green run of that file as "no repaint regression", never
- * as "the race cannot happen".
+ * THE DEFECT REPRODUCED — the first time in this family, and unlike MOTIR-5160
+ * one surface over. `tests/e2e/cloud-acceptance-toggle-repaint.spec.ts` went red
+ * **2 of 8** against this action unfixed (2026-09-12), each failure the panel
+ * still reading State B twenty seconds after the press. So no deliberate break
+ * was needed to establish that the guard can go red; the unfixed build did it.
+ *
+ * ⚠️ AND THE FIX DOES NOT FULLY CLOSE IT — said here because the next reader of
+ * this function is owed it. The same guard is **1/8 and then 1/16 red against
+ * this FIXED build**, while the shipped sibling guard is 0/16 twice on the same
+ * machine at higher load. On a failing run the action returned **200 in 193 ms**
+ * and the refresh `GET …?_rsc=…` returned **200**, so the MOTIR-5118 race —
+ * a fresh tree arriving on a second apply that goes missing — is EXCLUDED by
+ * the trace: both halves fired and succeeded and the panel did not move. The
+ * residual is filed as its own bug, with that spec as its reproduction, and the
+ * difference worth chasing is that this panel renders inside the item page's
+ * late `<Suspense>` stack (MOTIR-3436) while the sibling's status rail does not.
+ *
+ * So this `revalidatePath` is shipped as a MEASURED IMPROVEMENT, not as a
+ * closure: it is the same server half two sibling surfaces already carry, and it
+ * lowers the failure rate, and it is not the whole story here.
  *
  * ⚠️ AND `router.refresh()` STAYS IN THE CALLER. Removing it is a SEPARATE claim
  * nobody has tested, and on the design gate one tier over it was measured

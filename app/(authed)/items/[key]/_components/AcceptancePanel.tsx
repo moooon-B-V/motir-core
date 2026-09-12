@@ -117,10 +117,17 @@ export function AcceptancePanel({
       // MOTIR-5196) — the same disposition `decide` above carries. Both halves
       // ship: the action puts the fresh tree on its own response where nothing
       // can race it, and this reaches the surfaces a server tree does not cover.
-      // Removing it is a SEPARATE claim nobody has tested, and it is also what
-      // this card's guard breaks to prove itself able to go red — commenting it
-      // out fails `tests/e2e/cloud-acceptance-toggle-repaint.spec.ts` at the
-      // State-A assertion.
+      // Removing it is a SEPARATE claim nobody has tested — and here there is a
+      // second reason not to touch it: against the FIXED action this surface
+      // still fails to repaint about 1 run in 16, so the client half is
+      // currently doing work the server half demonstrably does not cover. The
+      // measurements are on `turnOnAcceptanceVideoAction`.
+      //
+      // ⚠️ AND A COMMITTED STATE UPDATE HERE IS NOT THE REMEDY — it was TRIED.
+      // `decide` above calls `setEvidence` before its refresh and never flakes,
+      // so an empty transition looked like the cause; adding a state commit in
+      // front of this line measured 6/16 red rather than 0/16. The hypothesis is
+      // recorded as FALSIFIED so nobody spends the run again.
       router.refresh();
     });
   }

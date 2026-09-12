@@ -27,15 +27,40 @@ import {
 // surface had no detector, and a defect with no detector is indistinguishable
 // from no defect.
 //
-// ⚠️ AND IT IS PROVEN ABLE TO GO RED — read this before trusting a green run.
-// The defect did NOT reproduce here, exactly as it did not on MOTIR-5160:
-// against the unfixed action this test passed 5/5 (five repeats, 2026-09-12).
-// Red-ability was therefore established the way both siblings establish theirs:
-// commenting out the single `router.refresh()` in `AcceptancePanel.turnOn` fails
-// this test at the State-A assertion and not before, with the switch's own
-// `disabled` release passing first. The run is quoted in the pull request.
-// **A green run of this file means "no repaint regression", never "the race
-// cannot happen".**
+// ⚠️ THE DEFECT REPRODUCED HERE — the first time in this family — AND THE FIX
+// DOES NOT FULLY CLOSE IT. Read this before trusting either colour of run.
+// Measured 2026-09-12, `playwright.cloud.config.ts` on one developer box, one
+// worker, against a production build:
+//
+//   | build                                   | red   |
+//   |-----------------------------------------|-------|
+//   | UNFIXED action (no `revalidatePath`)    |  2/8  |
+//   | FIXED action (this branch)              |  1/8, then 1/16 |
+//   | sibling `cloud-acceptance-repaint` (CONTROL, shipped) | 0/16, twice |
+//
+// So no deliberate break was needed to establish red-ability: the unfixed build
+// supplies it. What the numbers also say, and it is the finding rather than a
+// caveat, is that **`revalidatePath` reduces this failure and does not
+// eliminate it.**
+//
+// ⚠️ AND THE RESIDUAL IS NOT THE MOTIR-5118 RACE — the trace excludes it. On a
+// failing run against the FIXED build the action `POST /items/<key>` returned
+// **200 in 193 ms** and the refresh `GET /items/<key>?_rsc=…` returned **200**,
+// and the panel still read State B twenty seconds later with the switch still
+// `disabled` (the transition never settled). Both halves fired and succeeded, so
+// nothing was raced away.
+//
+// ⚠️ THE CONTROL IS WHAT MAKES THAT A FINDING RATHER THAN A FLAKY BOX. The
+// sibling guard passed 16/16 twice in this same lane on this same machine, once
+// at load ~8 and once at load ~11–14 — so "the sandbox is contended" does not
+// explain it. The structural difference between the two is the one to chase:
+// the sibling asserts the STATUS RAIL, which the item page renders eagerly,
+// while this file asserts the ACCEPTANCE PANEL, which sits inside the page's
+// late `<Suspense>` stack (MOTIR-3436). Filed as its own bug; this file is its
+// reproduction.
+//
+// **So a green run of this file means "no repaint regression", never "the race
+// cannot happen" — and a RED one is not automatically your diff.**
 //
 // ⚠️ THE MECHANISM, for the reader who meets a green run and wonders what is
 // being guarded. `turnOnAcceptanceVideoAction` called one service and returned
@@ -140,17 +165,22 @@ test.describe('turning the acceptance video on repaints the panel in place', () 
     await expect(turnOn).toBeVisible();
     await turnOn.click();
 
-    // ⚠️ THE AUTHORITATIVE SIGNAL that the server recorded the write: the switch
-    // is `disabled={pending}`, so the transition ending is the panel's own
-    // statement that the action RETURNED. Everything after this line is a claim
-    // about the SERVER-rendered surface the same press moved.
+    // ⚠️ NO INTERMEDIATE WAIT, AND THE REASON IS A PROPERTY OF THIS SURFACE
+    // RATHER THAN A RELAXATION OF THE E2E RULE. `decide()` one function over has
+    // a genuine authoritative signal — it calls `setEvidence(res.evidence)`, so
+    // the panel's own pill states that the server RETURNED, and the sibling
+    // guard waits behind it. `turnOn()` sets no local state at all: it awaits
+    // the action and calls `router.refresh()`. So the ONLY thing this press ever
+    // makes observable is the server tree arriving, and every candidate signal
+    // in between is either racing the repaint or destroyed by it. Measured,
+    // against the unfixed action: the switch's own `disabled={pending}` release
+    // reported `element(s) not found` on the three runs where the repaint LANDED
+    // (the switch unmounts with State B) and `disabled` on the two where it did
+    // not — an assertion that fails on success and on failure alike, for
+    // different reasons. The assertion below IS the wait, which is the shape
+    // `docs/e2e/mutation-assert-sweep.md` describes as the common and correct
+    // one.
     //
-    // It is read defensively: on a repaint the switch is unmounted with State B,
-    // so `toBeEnabled` would race the very repaint under test. `not.toBeDisabled`
-    // on a detached element is satisfied for either reason, which is exactly
-    // right here — both outcomes mean the action came back.
-    await expect(turnOn).not.toBeDisabled();
-
     // The page-state contract's case 2 (`motir-core/CLAUDE.md`). The panel is a
     // Server-Component surface seeded from `eligibility`; the press changed it,
     // so the press owes it a repaint. This is the assertion the defect fails.
