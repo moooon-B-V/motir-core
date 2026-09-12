@@ -1,11 +1,7 @@
 import { resolveServiceProjectByKey } from '@/lib/ai/serviceAuth';
 import { workItemsService } from '@/lib/services/workItemsService';
-import {
-  isPlannerBugHomeMarker,
-  PLANNER_BUG_HOME_MARKER,
-  PLANNER_BUG_HOME_STORY_TITLE,
-  PlannerBugHomeNotProvisionedError,
-} from '@/lib/ai/plannerBugHome';
+import { isPlannerBugHomeMarker, PLANNER_BUG_HOME_MARKER } from '@/lib/ai/plannerBugHome';
+import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { JobRequestAuth } from '@/lib/ai/jobAuth';
@@ -42,11 +38,20 @@ export interface FileServiceBugInput {
   title: string;
   descriptionMd?: string | null;
   /** Optional parent work-item key (e.g. `MOTIR-819`) in the SAME project, OR the
-   *  drift-proof `PLANNER_BUG_HOME_MARKER` sentinel (`@planner-bug-home`), which
-   *  resolves to the planner-bug home STORY by TITLE — the reseed-durable handle
-   *  the self-learning loop targets instead of a volatile numeric key
-   *  (MOTIR-1466; MOTIR-2201). When omitted, the bug is filed at project-root (a
-   *  top-level `bug` is matrix-legal). */
+   *  drift-proof `PLANNER_BUG_HOME_MARKER` sentinel (`@planner-bug-home`) — the
+   *  reseed-durable handle the self-learning loop targets instead of a volatile
+   *  numeric key (MOTIR-1466; MOTIR-2201).
+   *
+   *  ⚠️ WHAT THE MARKER RESOLVES TO CHANGED IN MOTIR-4937, and the marker itself
+   *  did NOT: it is now the project's configured BUG DESTINATION
+   *  (`bugDestinationService.resolve`) rather than a story matched by title, so a
+   *  team that renames or re-points its container keeps filing correctly. The
+   *  title lookup survives only as that resolver's transitional branch. No
+   *  motir-ai change is required — same literal, same contract, different answer.
+   *
+   *  When omitted, the bug is filed at project-root (a top-level `bug` is
+   *  matrix-legal) — the same place the marker now lands when a project has
+   *  deliberately chosen the root. */
   parentKey?: string | null;
 }
 
@@ -59,30 +64,51 @@ export const aiWorkItemsService = {
     if (rawParentKey !== '') {
       if (isPlannerBugHomeMarker(rawParentKey)) {
         // MOTIR-1466 — the DRIFT-PROOF path: the config carries the marker, not a
-        // numeric key, so it never dangles across deploys. MOTIR-2201 — ONE hop:
-        // the home STORY, found PROJECT-WIDE by its own title, IS the bug parent.
-        // It used to take a second hop — the home epic by title, then *that epic's
-        // first `story` child* — and that read of mutable tree position broke the
-        // moment the story was re-parented. A project-wide title lookup does not
-        // care where the story sits, so no `move_to_parent` can void it.
-        // Browse-gated here. A missing home is a server invariant breach, not a
-        // caller error: logged + 500, never a quiet 404 the filing path swallows.
-        const home = await workItemsService.getWorkItemByProjectKindAndTitle(
-          project.id,
-          'story',
-          PLANNER_BUG_HOME_STORY_TITLE,
-          ctx,
-        );
-        if (!home) {
-          console.error('[aiWorkItemsService] the planner-bug home story is missing', {
+        // numeric key, so it never dangles across deploys.
+        //
+        // ⚠️ MOTIR-4937 — THE MARKER NOW RESOLVES THROUGH THE ONE SEAM, and this
+        // is the only filer that had a second answer. It used to do the title
+        // lookup inline (`getWorkItemByProjectKindAndTitle` against
+        // `PLANNER_BUG_HOME_STORY_TITLE`); `bugDestinationService.resolve` reads
+        // the project's POINTER first and keeps that title lookup only as its
+        // documented transitional branch. Two resolvers with different fallbacks
+        // answering one question is what the move removes, and the failure that
+        // shape produces is invisible until somebody renames a container.
+        //
+        // ⚠️ AND `PlannerBugHomeNotProvisionedError` IS NO LONGER THROWN HERE —
+        // deliberately, and this is the sentence that records it. Its 500 was the
+        // right answer while an absent home meant the loop was silently deaf:
+        // there was nowhere else for the bug to go. There is now — the PROJECT
+        // ROOT, which the resolver returns with a reason — so a missing container
+        // can no longer lose a bug, and refusing to file one because a container
+        // is absent would be strictly worse than filing it parentless where
+        // somebody will see it. The class and its 500 mapping in
+        // `app/api/internal/ai/work-items/route.ts` are KEPT rather than deleted:
+        // the marker contract is public (motir-ai passes it through), and the
+        // route must keep translating the error for as long as anything can
+        // throw it.
+        // The workspace comes from the CONTEXT, not from `project`:
+        // `resolveServiceProjectByKey` returns a `ProjectDTO`, which carries no
+        // `workspaceId` at all — reading one off it yields `undefined`, the GUC
+        // binds empty, the row policy hides the project and the resolver's own
+        // `ProjectNotFoundError` surfaces as a 404 on a project that plainly
+        // exists. `ctx.workspaceId` is the tenant the service bearer resolved.
+        const destination = await bugDestinationService.resolve(project.id, ctx.workspaceId);
+        // Log the RECOVERY only. A deliberate root is a normal, configured
+        // outcome and deserves no line at all; a container that went away under
+        // the project is worth telling an operator about, because the bug landed
+        // somewhere other than where the team pointed. That is exactly what the
+        // `reason` is for — it separates the two cases, which a bare null parent
+        // cannot.
+        if (destination.reason === 'container_archived') {
+          console.warn('[aiWorkItemsService] bug destination unavailable; filing at the root', {
             projectKey: input.projectKey,
             projectId: project.id,
             marker: PLANNER_BUG_HOME_MARKER,
-            expectedStoryTitle: PLANNER_BUG_HOME_STORY_TITLE,
+            reason: destination.reason,
           });
-          throw new PlannerBugHomeNotProvisionedError(input.projectKey);
         }
-        parentId = home.id;
+        parentId = destination.parentId;
       } else {
         // A literal `MOTIR-<n>` identifier. The parent must live in the SAME
         // project. `getWorkItemByIdentifier` applies the tenant gate + browse check
