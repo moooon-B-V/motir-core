@@ -38,6 +38,21 @@ import { projectsService } from '@/lib/services/projectsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
+import { Prisma } from '@/generated/prisma/client';
+import { buildFleetCostReadout, type FleetCostReadout } from '../../scripts/fleetCostReadoutQuery';
+
+/**
+ * What a container that never started is measured at (MOTIR-4545): ZERO billable
+ * seconds, and it still COUNTS as a container on the `index` line.
+ *
+ * ⚠️ THE ZERO IS A MEASUREMENT HERE, NOT A PLACEHOLDER. The provider never reported
+ * a start, so there is no running interval to bill — `buildContainerAccrual`
+ * measures from `startedAt`, and a teardown with none has nothing to measure. The
+ * container still occupied a slot and a provision call, which is why it is counted.
+ * Read off the rehearsal's own run and pinned, so a change in how that path is
+ * metered is a decision in a diff rather than a drift.
+ */
+const NEVER_STARTED_BILLABLE_SECONDS = 0;
 
 // THE INDEX DISPATCH SERVICE (Story MOTIR-1981 · MOTIR-2026) —
 // `docs/decisions/code-graph-index-fleet.md` §2 · §4 · §5 · §10.
@@ -1549,6 +1564,125 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     expect(rollup.containerCount).toBe(1);
     // The rollup equals the row — the invariant a signed-delta rollup has to keep.
     expect(rollup.containerSeconds).toBe(row.billableSeconds);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE END-TO-END REHEARSAL (Story MOTIR-4335 · MOTIR-4545) — a container ran →
+  // rows were written → "what did indexing cost?" is answered, by THE SHIPPED
+  // READOUT (`scripts/fleetCostReadoutQuery.ts`, the function `pnpm ops:fleet-cost`
+  // prints), over the rows this real dispatch wrote to real Postgres.
+  //
+  // ⚠️ EVERY FIGURE ASSERTED IS THE READOUT'S. The expected values come from the
+  // container itself — the controlled observation clock, and the settled
+  // outcome's own `billableSeconds` / `costUsd` — never from a query this test
+  // wrote. The orchestrator is faked at the port; the claim that a REAL production
+  // container wrote a real row is the production verification task's, not this.
+  //
+  // ⚠️ Internal COGS. Nothing here is a charge.
+  describe('the END-TO-END REHEARSAL — dispatch → rows → the shipped readout answers (MOTIR-4545)', () => {
+    type Lines = NonNullable<NonNullable<FleetCostReadout['input']>['org']>['lines'];
+    const indexLineOf = (lines: Lines) => lines.find((line) => line.workload === 'index');
+
+    async function readoutAt(at: Date) {
+      const readout = await buildFleetCostReadout({ organizationId: tenant.organizationId, at });
+      if (!readout.input?.org) throw new Error('the meter must be enabled for the rehearsal');
+      return { readout, lines: readout.input.org.lines, metaSplit: readout.input.metaSplit };
+    }
+
+    it('the HEALTHY run: a checkpoint, a replayed poll that adds nothing, then teardown reconciles — reported under `index`, never `ci`', async () => {
+      const booted = await bootWithSkew();
+      if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+      const session = booted.session;
+      const observedAt = observedAtFor(session);
+      const pollOptions = { ...FAST, indexTimeoutMs: 600_000, now: () => observedAt };
+
+      // (1) Poll while it runs — the CHECKPOINT writes a partial figure.
+      await codeGraphIndexDispatchService.pollIndexContainer(
+        session,
+        INITIAL_INDEX_POLL_STATE,
+        pollOptions,
+      );
+      const partial = await readoutAt(observedAt);
+      expect(indexLineOf(partial.lines)).toMatchObject({
+        containerCount: 1,
+        containerSeconds: OBSERVED_AT_MS / 1000,
+      });
+
+      // (2) A REPLAYED poll — the ordinary durable-step path — adds nothing.
+      await codeGraphIndexDispatchService.pollIndexContainer(
+        session,
+        INITIAL_INDEX_POLL_STATE,
+        pollOptions,
+      );
+      const replayed = await readoutAt(observedAt);
+      expect(indexLineOf(replayed.lines)).toEqual(indexLineOf(partial.lines));
+
+      // (3) Teardown reconciles the partial accrual to the true total — one container.
+      const live = fakeOrchestrator.liveContainerIds();
+      if (live[0]) fakeOrchestrator.completeJob(live[0], { exitCode: 0 });
+      const settled = await codeGraphIndexDispatchService.settleIndexContainer(session, {
+        done: true,
+        reason: 'job_completed',
+        startedAt: session.handle.createdAt,
+        exitCode: 0,
+        failureDetail: null,
+      });
+      if (settled.outcome !== 'settled') throw new Error('expected a settled outcome');
+      expect(settled.verdict.indexed).toBe(true);
+
+      // (4) The shipped readout answers the question from the rows that wrote.
+      const { readout, lines, metaSplit } = await readoutAt(new Date(session.handle.createdAt));
+      const index = indexLineOf(lines);
+      expect(index).toMatchObject({ containerCount: 1, containerSeconds: settled.billableSeconds });
+      expect(new Prisma.Decimal(index!.costUsd).equals(new Prisma.Decimal(settled.costUsd))).toBe(
+        true,
+      );
+      expect(lines.map((line) => line.workload)).toEqual(['index']);
+      // The platform-wide split carries the same container as a TENANT index line.
+      expect(metaSplit.find((row) => !row.isMeta && row.workload === 'index')).toMatchObject({
+        containerCount: 1,
+        containerSeconds: settled.billableSeconds,
+      });
+      // And what the operator reads says so: the line is printed, `ci` is an absence.
+      expect(readout.text).toMatch(new RegExp(`\\bindex\\s+1\\s+${settled.billableSeconds}\\s`));
+      expect(readout.text).toContain('This is an ABSENCE, not a measured zero: ci');
+    });
+
+    it('the FAILED run: a non-zero exit still writes a row and still appears in the `index` total', async () => {
+      const outcome = await codeGraphIndexDispatchService.runIndexContainer(dbInput, {
+        ...FAST,
+        sleep: completeWith(30),
+      });
+      if (outcome.outcome !== 'settled') throw new Error('expected a settled outcome');
+      expect(outcome.verdict).toMatchObject({ exitClass: 'graph_unbuildable', indexed: false });
+
+      const { lines } = await readoutAt(new Date());
+      // A cost line that excluded failures would be the flattering number, not the true one.
+      expect(indexLineOf(lines)).toMatchObject({
+        containerCount: 1,
+        containerSeconds: outcome.billableSeconds,
+      });
+    });
+
+    it('the NEVER-STARTED run: counted as a container, with the seconds its row actually carries', async () => {
+      fakeOrchestrator.setBootBehaviour('never_start');
+      const outcome = await codeGraphIndexDispatchService.runIndexContainer(dbInput, {
+        ...FAST,
+        bootDeadlineMs: 0,
+      });
+      if (outcome.outcome !== 'settled') throw new Error('expected a settled outcome');
+      expect(outcome.verdict).toMatchObject({ exitClass: 'never_started', indexed: false });
+
+      const { lines } = await readoutAt(new Date());
+      // STATED, not inferred: the readout COUNTS the container that never started —
+      // teardown wrote its row like every other path — and its seconds are exactly
+      // what that row measured, never a figure made up to look like one.
+      expect(indexLineOf(lines)).toMatchObject({
+        containerCount: 1,
+        containerSeconds: outcome.billableSeconds,
+      });
+      expect(outcome.billableSeconds).toBe(NEVER_STARTED_BILLABLE_SECONDS);
+    });
   });
 });
 
