@@ -1,4 +1,14 @@
-import { mintCodeGraphRunCredential, motirAiContainerBaseUrl } from '@/lib/ai/motirAiClient';
+import {
+  checkIndexAllowance,
+  drawIndexAllowance,
+  mintCodeGraphRunCredential,
+  motirAiContainerBaseUrl,
+} from '@/lib/ai/motirAiClient';
+import {
+  indexDrawKey,
+  indexPauseReasonFor,
+  type IndexPauseReason,
+} from '@/lib/ciFleet/indexAllowance';
 import { CodeGraphRunCredentialTooShortError } from '@/lib/ai/errors';
 import {
   codeGraphIndexAdmissionService,
@@ -650,6 +660,22 @@ export interface IndexExitVerdict {
   readonly detail: string;
 }
 
+/**
+ * The answer to "may this organisation's next index container boot?" — what
+ * {@link codeGraphIndexDispatchService.askIndexAllowance} returns (MOTIR-4593).
+ *
+ * JSON-serializable: the job memoizes it in a step, so a replay pass acts on the
+ * answer the first pass got rather than asking again mid-run.
+ */
+export type IndexAllowanceAsk =
+  | {
+      proceed: true;
+      /** The verdict that let it boot; `null` when the allowance could not be
+       *  asked, or was not asked because this run's container was already booted. */
+      outcome: string | null;
+    }
+  | { proceed: false; outcome: string; reason: IndexPauseReason };
+
 /** What {@link codeGraphIndexDispatchService.bootIndexContainer} returns: either
  *  nothing was provisioned and the dispatch is over, or a container is up and
  *  must be supervised to its end. */
@@ -966,6 +992,35 @@ function supervisionVerdict(
 }
 
 export const codeGraphIndexDispatchService = {
+  /**
+   * ASK THE INDEX ALLOWANCE BEFORE ANYTHING BOOTS (MOTIR-4593 · Story MOTIR-4335).
+   *
+   * Only a HARD STOP refuses (`isIndexHardStop` — the outcome FAMILY, so a stop
+   * motir-ai adds later is refused with no change here). `soft_gate_crossed`
+   * BOOTS: a paid tier past its allowance keeps indexing and motir-ai records the
+   * crossing. `exempt` (a meta organisation) and `no_allowance_configured` boot.
+   *
+   * ⚠️ NO ENTITLEMENT CHECK (decision A, MOTIR-4541). On cloud every connected
+   * repository is indexed; nothing here asks whether the organisation has an AI
+   * plan or has ever run an AI job. motir-ai provisions its billing identity on
+   * the ask itself.
+   *
+   * ⚠️ "COULD NOT ASK" BOOTS. The client returns `null` for an unreachable,
+   * unconfigured or older motir-ai, and a dispatcher that refused on `null` would
+   * stop every index in the fleet on a transport blip — and on the day this lands
+   * ahead of motir-ai's route. The container is still metered as COGS either way.
+   *
+   * Never throws.
+   */
+  async askIndexAllowance(organizationId: string): Promise<IndexAllowanceAsk> {
+    const verdict = await checkIndexAllowance(organizationId);
+    if (!verdict) return { proceed: true, outcome: null };
+    const reason = indexPauseReasonFor(verdict.outcome);
+    return reason
+      ? { proceed: false, outcome: verdict.outcome, reason }
+      : { proceed: true, outcome: verdict.outcome };
+  },
+
   /**
    * STEP 0 — THE ADMISSION CAP (MOTIR-1990). Ask for a slot; do not boot without
    * one.
@@ -1468,6 +1523,24 @@ export const codeGraphIndexDispatchService = {
     // aggregated, tenant-attributed one the margin readout reads.
     await recordContainerUsage(usage);
 
+    const exitVerdict = exitVerdictFor(verdict);
+
+    // DRAW THE INDEX ALLOWANCE (MOTIR-4593) — ONE draw per container, here and only
+    // here. Teardown is reached on every path out of supervision, so a FAILED
+    // container draws exactly like an indexed one: it ran, and its seconds were
+    // Motir's.
+    //
+    // ⚠️ NOT ON THE ACCRUAL. `recordContainerAccrual` writes `billable_seconds` as a
+    // TOTAL to date, never a delta; drawing there as well would attribute the same
+    // seconds twice.
+    //
+    // ⚠️ Motir does not charge for code indexing. This is internal accounting, and
+    // it cannot move the organisation's visible credit balance — motir-ai has no
+    // path from the draw to the ledger. The client is total and the key is the
+    // container, so a replayed settle attributes once and a failed draw never
+    // fails a teardown.
+    await drawAllowanceForContainer(session, handle, usage, exitVerdict);
+
     // AND GIVE THE CAPACITY BACK (MOTIR-1990). After the cost is recorded, so the
     // slot a queued dispatch is about to claim is never freed before the spend it
     // stood for has been written down. The container is provably gone, so the
@@ -1486,7 +1559,7 @@ export const codeGraphIndexDispatchService = {
     return {
       outcome: 'settled',
       reason: verdict.reason,
-      verdict: exitVerdictFor(verdict),
+      verdict: exitVerdict,
       containerId: handle.id,
       billableSeconds: usage.billableSeconds,
       costUsd: usage.costUsd,
@@ -1888,6 +1961,50 @@ export const codeGraphIndexDispatchService = {
     };
   },
 };
+
+/**
+ * One torn-down container's draw against its organisation's index allowance
+ * (MOTIR-4593). Never throws: the client is total, and this only logs.
+ *
+ * ⚠️ A FAILED CONTAINER IS LOGGED AS ONE. It draws like any other — it ran — but
+ * a run of failures must read as failures rather than as ordinary consumption
+ * (MOTIR-4519: 259 rows said `succeeded` while every observed run exited 40). The
+ * line carries the organisation, the exit class and what was attributed, so a
+ * search for it groups one organisation's failing containers.
+ */
+async function drawAllowanceForContainer(
+  session: IndexSession,
+  handle: ContainerHandle,
+  usage: ContainerUsage,
+  exitVerdict: IndexExitVerdict,
+): Promise<void> {
+  const drawn = await drawIndexAllowance({
+    coreOrganizationId: session.attribution.orgId,
+    containerSeconds: Math.max(0, Math.floor(usage.billableSeconds)),
+    idempotencyKey: indexDrawKey(handle.provider, handle.id),
+  });
+  if (!drawn) {
+    console.error('[codeGraphIndexDispatchService] index allowance draw not recorded', {
+      organizationId: session.attribution.orgId,
+      containerId: handle.id,
+      billableSeconds: usage.billableSeconds,
+    });
+    return;
+  }
+  if (!exitVerdict.indexed) {
+    console.warn(
+      '[codeGraphIndexDispatchService] index allowance drawn by a container that did not index',
+      {
+        organizationId: session.attribution.orgId,
+        repoRef: session.repoRef,
+        containerId: handle.id,
+        exitClass: exitVerdict.exitClass,
+        attributedCredits: drawn.attributedCredits,
+        outcome: drawn.outcome,
+      },
+    );
+  }
+}
 
 /**
  * The `failureDetail` a supervision writes when it settles for a reason of its

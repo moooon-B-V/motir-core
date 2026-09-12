@@ -6201,6 +6201,25 @@ model GithubRepo {
   /// whatever its shas say, because an abandoned run is not an index in progress.
   indexingRunId String? @map("indexing_run_id")
 
+  /// WHY INDEXING IS PAUSED FOR THIS REPOSITORY, or null (MOTIR-4593 · Story
+  /// MOTIR-4335). Set when a dispatch was refused by a HARD STOP of the
+  /// organisation's internal index allowance — `paused_index_no_credit`,
+  /// `paused_index_allowance_exhausted`, and whatever `paused_index_<stop>` a
+  /// later hard stop names. Cleared by the next dispatch the allowance lets boot.
+  ///
+  /// ⚠️ INTERNAL. Motir does not charge for code indexing, and this reason is the
+  /// internal cause: a surface may say a refresh is `paused`, never why
+  /// (`lib/codeGraph/refreshReason.ts`). It is the input the catch-up sweep
+  /// (MOTIR-5290) selects on — a repository with no recorded pause is never
+  /// re-asked.
+  ///
+  /// ⚠️ A POINTER-FREE STATE, UNLIKE `indexingRunId`: nothing else can say a
+  /// dispatch was refused, because a refused dispatch writes no ledger row that
+  /// names the repository.
+  indexPausedReason String?   @map("index_paused_reason")
+  /// When the pause above was recorded.
+  indexPausedAt     DateTime? @map("index_paused_at")
+
   /// THE DRIFT COUNT — how many commits the default branch is ahead of the graph
   /// (MOTIR-4644), and the exact PAIR it was computed for.
   ///

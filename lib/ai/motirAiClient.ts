@@ -12,6 +12,10 @@ import 'server-only';
 
 import { mintJobToken } from './jobToken';
 import {
+  parseIndexAllowanceVerdict,
+  type IndexAllowanceVerdict,
+} from '@/lib/ciFleet/indexAllowance';
+import {
   MotirAiConfigError,
   MotirAiUnavailableError,
   errorFromProblem,
@@ -351,6 +355,67 @@ export async function debitCiOverage(
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawCiOverageDebitResponse;
+}
+
+/**
+ * POST /v1/credits/index-check — may this organisation's next index container
+ * boot? (MOTIR-4593; motir-ai MOTIR-5284.)
+ *
+ * ⚠️ Motir does not charge for code indexing. This reads an internal allowance and
+ * attributes nothing.
+ *
+ * ⚠️ TOTAL, like {@link fetchCodeGraphRunVerdict}: every failure — unconfigured,
+ * unreachable, a non-2xx, an older motir-ai that does not serve the route, a body
+ * that is not a verdict — returns `null`. `null` means "could not ask", and the
+ * DISPATCHER decides what that means (it boots: see
+ * `codeGraphIndexDispatchService.askIndexAllowance`). That is also what lets the
+ * two repositories' pull requests merge in either order.
+ */
+export async function checkIndexAllowance(
+  coreOrganizationId: string,
+): Promise<IndexAllowanceVerdict | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/credits/index-check`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ coreOrganizationId }),
+    });
+    if (!res.ok) return null;
+    return parseIndexAllowanceVerdict(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /v1/credits/index-draw — attribute ONE torn-down container's seconds to the
+ * organisation's index allowance (MOTIR-4593; motir-ai MOTIR-5284). Idempotent on
+ * `idempotencyKey`, so a replayed settle attributes once.
+ *
+ * ⚠️ Never a charge, and it cannot move the visible balance — motir-ai has no
+ * path from this route to the ledger.
+ *
+ * ⚠️ TOTAL: `null` on every failure, for the reason above. A draw that could not
+ * be sent is a gap in internal accounting; it must never fail a teardown.
+ */
+export async function drawIndexAllowance(input: {
+  coreOrganizationId: string;
+  containerSeconds: number;
+  idempotencyKey: string;
+}): Promise<IndexAllowanceVerdict | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/credits/index-draw`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return null;
+    return parseIndexAllowanceVerdict(await res.json());
+  } catch {
+    return null;
+  }
 }
 
 /**

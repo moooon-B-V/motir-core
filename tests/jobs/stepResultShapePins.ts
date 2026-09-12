@@ -174,6 +174,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ detail: string; reference: string; verdict: "indeterminate" } | { detail: string; reference: string; verdict: "unpullable" } | { detail: string; verdict: "not_applicable" } | { digest: null | string; reference: string; verdict: "bootable" }',
   },
+  'index-allowance': {
+    file: 'lib/jobs/indexFleetSteps.ts',
+    shape:
+      '{ outcome: null | string; proceed: true } | { outcome: string; proceed: false; reason: `paused_index_${string}` }',
+  },
   'index-container-ai-address': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
     shape:

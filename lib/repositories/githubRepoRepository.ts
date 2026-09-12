@@ -269,6 +269,40 @@ export const githubRepoRepository = {
     return result.count;
   },
 
+  /** Record that indexing is PAUSED for a repository by a hard stop of its
+   *  organisation's internal index allowance (MOTIR-4593), and release any claim —
+   *  a refused dispatch booted nothing, so no run is in flight for it. The
+   *  `indexedHeadSha` is untouched: the graph that exists is still the graph. */
+  async markIndexPaused(
+    repoRef: string,
+    args: { reason: string; at?: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name },
+      data: {
+        indexPausedReason: args.reason,
+        indexPausedAt: args.at ?? new Date(),
+        indexingRunId: null,
+      },
+    });
+    return result.count;
+  },
+
+  /** Lift a recorded pause — the allowance let a dispatch boot (MOTIR-4593). A
+   *  repository that was not paused is not written. */
+  async clearIndexPause(repoRef: string, tx: Prisma.TransactionClient): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name, indexPausedReason: { not: null } },
+      data: { indexPausedReason: null, indexPausedAt: null },
+    });
+    return result.count;
+  },
+
   /** One repo by its INTERNAL id — the lookup a link write does after a picker
    *  hands back an id it read from `listByOrganization` (MOTIR-4678). Returns
    *  null when the id names nothing the current RLS context admits, which is the
