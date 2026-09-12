@@ -264,6 +264,14 @@ population and IN the allow-list either way: the exemption the scanner grants is
 `.first()` / `.nth()` / `.last()` and nothing else, deliberately, so that the
 inventory and MOTIR-5037's guard cannot disagree about what the population is.
 
+> **⚠️ THE PARAGRAPH DIRECTLY ABOVE IS SUPERSEDED — see
+> [ADDENDUM 2](#addendum-2-2026-09-11--the-count-arm-joined-the-exemption-and-the-reason-given-here-did-not-survive-the-mechanism).**
+> Its FINDING stands and is the reason this section exists; its DISPOSITION —
+> that the rows stay ruled, and why — does not. The count arm is exempt in the
+> predicate as of MOTIR-5186, and the figure is **169**, not 250, measured with
+> the scanner rather than with a line window. Left in place unedited, per this
+> record's own rule that a dated measurement is not rewritten.
+
 **What follows from it:** 1157 permitted rows is not 1157 latent merge-queue
 ejections. Roughly a fifth of the list is structurally safe, and whoever shortens
 the list should convert the assertions that can actually throw first.
@@ -348,15 +356,81 @@ were observed. By that ADR's own terms ("if a merge queue ever lands, this decis
 is superseded"), its preamble convention is due a re-read. Not taken here: it
 reaches every ratchet under `tests/rls/` and is not this card's to decide.
 
+### ADDENDUM 2 (2026-09-11) — the count arm joined the exemption, and the reason given here did not survive the mechanism
+
+Appended, not woven in, for the same reason as ADDENDUM 1: every figure above
+stays measured where it was taken. **MOTIR-5186 reverses this record's
+disposition of the count arm.** It is recorded here because the paragraph it
+reverses is one a reader would otherwise follow.
+
+**What this record got right, and it is the whole finding:** a `toHaveCount`
+assertion resolves the WHOLE match set, so it cannot throw strict mode, and a
+page-rooted locator in an absence assertion is outside the defect class by
+construction. Converting one makes the test prove strictly LESS. None of that
+changed — it is quoted unaltered in the scanner's `COUNT_MATCHER` comment.
+
+**What it got wrong is the step from that finding to leaving the rows ruled.**
+The stated ground was that a wider exemption would let "the inventory and
+MOTIR-5037's guard disagree about what the population is." They cannot. They
+share ONE predicate, by construction and on purpose: `tests/e2e-page-rooted-locators.test.ts`
+runs `scripts/enumerate-page-locators.mjs --worktree` as a subprocess rather than
+re-implementing it, and both files' headers say so in as many words — the
+`--worktree` entry point exists FOR the guard. A change to the exemption moves
+both in the same commit. The property this record was protecting is real and is
+protected by the shared script, never by the contents of the exemption list.
+
+**And the disposition had a cost this record could not have seen**, because the
+guard did not exist yet when it was written: it made a new absence assertion
+**unwritable**. The table below told an author to leave such an assertion
+page-rooted; the guard's FORWARD assertion refused it as a new page-rooted site;
+and the allow-list may only shrink, so there was no row to add. Three correct
+rules, no legal path between them. That is what the predicate change removes.
+
+**The measurement, with the scanner's own predicate rather than a line window:**
+
+```sh
+node scripts/enumerate-page-locators.mjs --ref origin/main
+```
+
+at `origin/main` = `faeb26e618ef7a30aab807526639e6a2ab2f0912`:
+
+|                    | before | after    | delta    |
+| ------------------ | ------ | -------- | -------- |
+| rows               | 1321   | 1321     | 0        |
+| **ruled**          | 1189   | **1020** | **−169** |
+| exempt             | 132    | 301      | +169     |
+| `getByText`        | 496    | 394      | −102     |
+| `getByTestId`      | 631    | 569      | −62      |
+| `getByLabel`       | 4      | 0        | −4       |
+| `getByPlaceholder` | 58     | 57       | −1       |
+
+**169 of 1189 (14.2%), across 78 files** — not the 250 estimated above. The
+three-line window over-counted, exactly as this record warned it might; the tail
+parse is per-row and has no window at all. `totals.rows` is unchanged because an
+exempt row is enumerated rather than dropped, which is the property that lets the
+two numbers be compared at all.
+
+**The allow-list shrank by exactly those rows and by nothing else** — 1189 →
+1020, `comm -23` = 169, `comm -13` = 0, both under `LC_ALL=C`. That is a shrink
+BY A PREDICATE CHANGE, not the regeneration its own note forbids: nothing was
+converted, nothing was silenced, and no site that can still throw left the list.
+The guard's _"no exempt row was banked"_ assertion in fact REQUIRES the removal —
+an exempt row left in the list fails it.
+
+**The limit, stated rather than discovered later:** the check reads the parsed
+TAIL, so a locator bound to a `const` and counted several lines below is still
+ruled. That is the safe direction — over-reporting costs a reader, under-reporting
+costs a merge-queue slot — and it is the same limit `usageOf` already records.
+
 ### What a future reader should do, by case
 
-| you are…                                        | do this                                                                                                                              |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| editing a spec that has rows on the allow-list  | convert its page-rooted sites to `getByRole(<role>, { name })`, or scope them to a live subtree, and DELETE those rows               |
-| writing a NEW spec                              | never write a page-rooted `getByTestId` / `getByText` / `getByLabel` / `getByPlaceholder` assertion; the guard will refuse a new row |
-| holding an ABSENCE assertion (`toHaveCount(0)`) | leave it page-rooted, and say so in a comment beside it — scoping it proves less                                                     |
-| looking at 1157 and reaching for a sweep        | read this record; the disposition is taken                                                                                           |
-| about to add a row to the allow-list            | you cannot. The list only shrinks — the ONE re-measurement, taken before the guard landed, is the ADDENDUM above and is closed       |
+| you are…                                        | do this                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| editing a spec that has rows on the allow-list  | convert its page-rooted sites to `getByRole(<role>, { name })`, or scope them to a live subtree, and DELETE those rows                                                                                                                                                                                                      |
+| writing a NEW spec                              | never write a page-rooted `getByTestId` / `getByText` / `getByLabel` / `getByPlaceholder` assertion; the guard will refuse a new row                                                                                                                                                                                        |
+| holding an ABSENCE assertion (`toHaveCount(0)`) | leave it page-rooted — and the guard now agrees: the scanner marks it `exempt` and it is not on the allow-list at all (ADDENDUM 2). A comment beside it is still welcome and no longer load-bearing. If the guard DOES fire on one, the tail parse missed your shape; widen `endsInCountAssertion`, do not convert the site |
+| looking at 1157 and reaching for a sweep        | read this record; the disposition is taken                                                                                                                                                                                                                                                                                  |
+| about to add a row to the allow-list            | you cannot. The list only shrinks — the ONE re-measurement, taken before the guard landed, is the ADDENDUM above and is closed                                                                                                                                                                                              |
 
 ### No code changes with this decision
 
@@ -396,17 +470,19 @@ a confident wrong answer.
 
 ## Numbers — every figure with its command and its ref
 
-| figure                                                                                                      | command                                                                                                                                    | ref                                                                          |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| 1289 rows / **1157 ruled** / 132 exempt; 277 files scanned, 150 with ruled rows; per-arm 606 / 489 / 4 / 58 | `node scripts/enumerate-page-locators.mjs --ref origin/main`                                                                               | `65116fb19`                                                                  |
-| the ref trace (1400 / 1314 / 1295 / 1238 / 1151 / 1157)                                                     | the same, with `--ref <each commit>`                                                                                                       | `e4b8e9484`, `78579f21d`, `934b690be`, `7c3ae250b`, `3c16a6aaf`, `65116fb19` |
-| **29** converted surfaces                                                                                   | `for c in 7c3ae250b 934b690be 3c16a6aaf; do git show --pretty="" --name-only $c; done \| grep '^tests/e2e/' \| sort -u \| wc -l`           | those three commits                                                          |
-| 199 → 14 ruled rows on those 29 surfaces (**185 converted**)                                                | the enumeration above, rows filtered to that file set                                                                                      | `e4b8e9484` → `65116fb19`                                                    |
-| per-card 8 / 33 / 57 / 87                                                                                   | the same, differenced across consecutive conversion merges                                                                                 | `78579f21d`, `934b690be`, `7c3ae250b`, `3c16a6aaf`                           |
-| those deltas are card-attributable (0 / 0 / 0 from the three sibling commits)                               | the `git show … \| grep -cE '^[+-].*page\.getBy…'` loop under [the ref trace](#the-population-re-measured)                                 | `b265d0423`, `1b8f67e1f`, `10989eff9`                                        |
-| **250 of 1157 (21.6%)** in 82 files are `toHaveCount(0)`                                                    | the three-line-window script in [the third category](#the-third-category-the-two-way-split-does-not-name); an approximation, stated as one | `65116fb19`                                                                  |
-| 6 ruled rows added since the last conversion                                                                | row-id set difference between the two enumerations                                                                                         | `3c16a6aaf` → `65116fb19`                                                    |
-| the six incident arms                                                                                       | `git show <fix sha>` for each of the six                                                                                                   | `f9e7c1ced`, `3dd63c87e`, `e18a50a3b`, `4b67a68c1`, `cf3226dfa`, `300d0ab43` |
+| figure                                                                                                      | command                                                                                                                                                                      | ref                                                                          |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1289 rows / **1157 ruled** / 132 exempt; 277 files scanned, 150 with ruled rows; per-arm 606 / 489 / 4 / 58 | `node scripts/enumerate-page-locators.mjs --ref origin/main`                                                                                                                 | `65116fb19`                                                                  |
+| the ref trace (1400 / 1314 / 1295 / 1238 / 1151 / 1157)                                                     | the same, with `--ref <each commit>`                                                                                                                                         | `e4b8e9484`, `78579f21d`, `934b690be`, `7c3ae250b`, `3c16a6aaf`, `65116fb19` |
+| **29** converted surfaces                                                                                   | `for c in 7c3ae250b 934b690be 3c16a6aaf; do git show --pretty="" --name-only $c; done \| grep '^tests/e2e/' \| sort -u \| wc -l`                                             | those three commits                                                          |
+| 199 → 14 ruled rows on those 29 surfaces (**185 converted**)                                                | the enumeration above, rows filtered to that file set                                                                                                                        | `e4b8e9484` → `65116fb19`                                                    |
+| per-card 8 / 33 / 57 / 87                                                                                   | the same, differenced across consecutive conversion merges                                                                                                                   | `78579f21d`, `934b690be`, `7c3ae250b`, `3c16a6aaf`                           |
+| those deltas are card-attributable (0 / 0 / 0 from the three sibling commits)                               | the `git show … \| grep -cE '^[+-].*page\.getBy…'` loop under [the ref trace](#the-population-re-measured)                                                                   | `b265d0423`, `1b8f67e1f`, `10989eff9`                                        |
+| **250 of 1157 (21.6%)** in 82 files are `toHaveCount(0)`                                                    | the three-line-window script in [the third category](#the-third-category-the-two-way-split-does-not-name); an approximation, stated as one — **superseded by the row below** | `65116fb19`                                                                  |
+| **169 of 1189 (14.2%)** in 78 files end in a `toHaveCount` assertion, and are now `exempt` (ADDENDUM 2)     | `node scripts/enumerate-page-locators.mjs --ref origin/main`, the scanner's own tail parse rather than a line window                                                         | `faeb26e61`                                                                  |
+| the allow-list shrank 1189 → 1020, removing those 169 and nothing else                                      | `comm -23` = 169 / `comm -13` = 0 over the id sets, both sides `LC_ALL=C sort`                                                                                               | `faeb26e61`                                                                  |
+| 6 ruled rows added since the last conversion                                                                | row-id set difference between the two enumerations                                                                                                                           | `3c16a6aaf` → `65116fb19`                                                    |
+| the six incident arms                                                                                       | `git show <fix sha>` for each of the six                                                                                                                                     | `f9e7c1ced`, `3dd63c87e`, `e18a50a3b`, `4b67a68c1`, `cf3226dfa`, `300d0ab43` |
 
 ---
 
