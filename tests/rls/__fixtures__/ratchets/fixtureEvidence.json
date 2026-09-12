@@ -1,0 +1,6 @@
+{
+  "$schema": "MOTIR-5207 EVIDENCE fixture — the NEGATIVE case",
+  "note": "Regenerated evidence, not a contract: it declares no top-level `count`, so it is NOT enrolled. This is the fixture for the real pair in tests/helpers/ — pageRootedLocatorAllowList.json (the hand-shrunk contract) beside pageLocatorInventory.json (the re-run snapshot). A rule that enrolled both would demand a re-measure preamble from a file nobody reads a failure out of.",
+  "totals": { "rows": 3 },
+  "rows": ["a.spec.ts:1:getByText", "a.spec.ts:2:getByTestId", "b.spec.ts:9:getByLabel"]
+}
