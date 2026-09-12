@@ -1,5 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
@@ -24,8 +25,10 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // deleted that resolver simply THE way a pull request reaches a card from this
 // surface. Two operations back the detail-page "+ Link pull request" affordance:
 //   * searchLinkCandidates — the query-driven picker's server search over the
-//     workspace's ingested PRs (installation → repo → PR), annotating any PR
-//     already delivering another item (the takeover chip).
+//     ORGANISATION's ingested PRs (installation → repo → PR), annotating any PR
+//     already delivering another item (the takeover chip). Organisation, not
+//     workspace, since MOTIR-5152: a repository is connected once to the org
+//     (MOTIR-4669), so every workspace of that org links pull requests on it.
 //   * linkPullRequest — write the `work_item_delivery` row (a re-link/takeover is
 //     allowed, no confirm). It used to stamp `linkedManually` alongside, to keep
 //     the link sticky against the webhook resolver; there is no resolver to be
@@ -74,13 +77,35 @@ export const githubPullRequestService = {
     query: string,
     ctx: ServiceContext,
   ): Promise<PullRequestLinkCandidateDto[]> {
-    // Tenant gate + connectivity, both under workspace context so the work_item
-    // RLS policy scopes the read (a cross-workspace id then reads as absent).
-    const connected = await withWorkspaceContext(ctx, async (tx) => {
+    // ⚠️ TWO TIERS IN ONE TRANSACTION, and NOTHING BINDS `app.organization_id`.
+    // The org read arms resolve the organisation from the bound WORKSPACE
+    // (`app_caller_organization_id()`), which is what the migration adding them
+    // was written for — `withWorkspaceContext` binds no org GUC. Binding one
+    // would buy nothing and would drag this transaction's workspace-keyed reads
+    // (`work_item`, `work_item_delivery`) into the swept population of
+    // `tests/rls/org-context-arm-guard.test.ts`, where the honest verdict is
+    // that they are not org-spanning at all. Measured under `motir_app` in
+    // `tests/github/prLinkOrganisationTenancy.test.ts`.
+    //
+    // The ITEM gate stays WORKSPACE-scoped — `work_item` has no org read arm and
+    // must not get one here, so a cross-workspace id still reads as absent. The
+    // REPOSITORY read is ORGANISATION-scoped, because a repository is connected
+    // once to the org (Story MOTIR-4669) and any of its workspaces may link a
+    // pull request on it. Asking the workspace returned zero rows in every
+    // workspace but the one the App was installed from, and the zero became
+    // `GithubNotConnectedError` — the picker reporting a disconnected
+    // organisation that was connected, on a page whose org-tier sibling was
+    // listing those very repositories.
+    const { connected, organizationId } = await withWorkspaceContext(ctx, async (tx) => {
       const item = await workItemRepository.findById(currentItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(currentItemId);
-      return githubRepoRepository.listByWorkspace(ctx.workspaceId, tx);
+      // Trusted resolution off the workspace ROW, never request input.
+      const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+      return {
+        connected: await githubRepoRepository.listByOrganization(organizationId, tx),
+        organizationId,
+      };
     });
     if (connected.length === 0) throw new GithubNotConnectedError();
 
@@ -88,9 +113,13 @@ export const githubPullRequestService = {
     // ONE transaction for both reads: the delivery table's only tenant gate is an
     // RLS policy on `app.workspace_id`, so a read outside the bound context comes
     // back EMPTY rather than raising — every candidate would then look unlinked.
+    // ⚠️ AND NOTHING BINDS `app.organization_id` — see the note on the gate
+    // above. The candidates come back across the organisation anyway, while the
+    // chip's identifiers stay scoped to this workspace, which is exactly the
+    // pair of answers the picker wants.
     const { rows, deliveredBy } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
       const found = await githubPullRequestRepository.searchCandidates(
-        ctx.workspaceId,
+        organizationId,
         query,
         PR_CANDIDATE_LIMIT,
         tx,
@@ -152,15 +181,21 @@ export const githubPullRequestService = {
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(currentItemId);
 
+      const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+
       const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
-      // The REPO row is the tenant (MOTIR-1931), not its installation. A `!==`
-      // against a now-nullable column still compiles, so the compiler could not
-      // name this site the way it named the other ten — but the behaviour is the
-      // same class: for a repo behind Motir's shared provisioning installation
-      // `installation.workspaceId` is NULL, so this gate rejected every hosted
-      // repo's PR (fail-CLOSED, so never a leak — but the explicit item→PR link
-      // affordance would have been permanently broken for created repos).
-      if (!pr || pr.repo.workspaceId !== ctx.workspaceId)
+      // The REPO row is the tenant (MOTIR-1931), not its installation — and the
+      // TIER is the ORGANISATION (MOTIR-4649), not the workspace, since
+      // MOTIR-5152. This gate read `pr.repo.workspaceId !== ctx.workspaceId`,
+      // which is the tier a repository is connected FROM; in any other workspace
+      // of the same organisation it refused a pull request the picker had just
+      // OFFERED. Widening `searchLinkCandidates` without widening this one
+      // would have shipped exactly that: a list whose every row answers "that
+      // pull request could not be found" when you click it. The item gate above
+      // stays workspace-scoped — the CARD is the workspace's, the REPOSITORY is
+      // the organisation's, and that asymmetry is the model rather than an
+      // oversight.
+      if (!pr || pr.repo.organizationId !== organizationId)
         throw new GithubPullRequestNotFoundError(pullRequestId);
 
       // ⚠️ NO WRITE TO THE MIRROR ROW AT ALL (MOTIR-4894). A stamp used to go
@@ -428,10 +463,16 @@ export const githubPullRequestService = {
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(workItemId);
 
+      const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+
       const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
-      // The REPO row is the tenant (MOTIR-1931), never its installation — the
-      // same gate the link arms use, and for the same reason.
-      if (!pr || pr.repo.workspaceId !== ctx.workspaceId)
+      // The REPO row is the tenant (MOTIR-1931), never its installation, at the
+      // ORGANISATION tier (MOTIR-4649) — the same gate the link arm uses, and
+      // for the same reason. It travels WITH that arm rather than after it: a
+      // link a member can make and cannot remove is a worse state than one they
+      // can make neither of, and leaving this workspace-scoped would have built
+      // exactly that trap for every sibling workspace (MOTIR-5152).
+      if (!pr || pr.repo.organizationId !== organizationId)
         throw new GithubPullRequestNotFoundError(pullRequestId);
 
       const count = await workItemDeliveryRepository.remove(workItemId, pullRequestId, tx);

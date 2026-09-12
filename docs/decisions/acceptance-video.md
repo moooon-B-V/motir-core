@@ -13,6 +13,13 @@
   decision-subtask ladder). This is the rung-1 policy the rest of MOTIR-1627
   implements — no acceptance-video code ships until these four decisions are
   pinned. **No application behaviour ships in this subtask** (the ADR only).
+- **Amendment (2026-09-11, MOTIR-4925 / MOTIR-5169) — §3's TIER is reversed: the
+  switch is `Project.acceptanceVideoEnabled`, not an org column.** A setting's tier
+  follows its readers and writers, and §3 chose its own by analogy to the
+  neighbouring columns on `Organization`. **Decision 1's entitlement is NOT
+  amended** — `hasPaidAiPlan` stays org-resolved. §3's default (`true`) stands, with
+  existing projects backfilled from their organisation's value. See the amendment
+  under §3.
 - **Amendment (2026-07-06, MOTIR-1648 / MOTIR-1649) — CI-upload auth (§4) now
   PREFERS keyless GitHub OIDC; the `integration` PAT becomes the FALLBACK.**
   §4 originally pinned a per-org `integration`-scoped API token stored as a CI
@@ -316,6 +323,83 @@ behind `assertOrgAdmin` + `PATCH /api/organizations/[orgId]`, surfaced on
 Default ON (not OFF) because the feature is the story's whole point and the cost
 is already bounded by decisions 1–2; forcing every paid org to hunt for a switch
 before their first acceptance video is friction with no cost upside.
+
+#### Amendment 2026-09-11 (MOTIR-4925 / MOTIR-5169) — the switch is PROJECT-scoped; §3's TIER is reversed, its DEFAULT stands
+
+**§3 above is superseded on one axis and unchanged on every other.** The switch is
+now **`Project.acceptanceVideoEnabled`**, written at the project tier behind that
+project's own manage authority. The `Organization` column is RETIRED rather than
+kept as a floor, in three phases (see _How it was removed_, below).
+
+**Why the original tier was wrong — and the general rule, which is the part worth
+keeping.** §3 chose the tier in its own first sentence, by ANALOGY: _"an org-wide
+Boolean column on `Organization` (mirrors `aiIncludedSeat` / the existing org
+flags)"_. Everything after that sentence argues the DEFAULT, ably; nothing argues
+the tier at all. And a survey of a table's existing columns can only return one of
+them, so it returns the best-fitting neighbour and never the finding that the value
+is an instance of a concept the product already has a container for.
+
+> **Decide a setting's tier by tracing its READERS and its WRITERS, never by which
+> surface or column it resembles.**
+
+Applied here, the trace is short and it does not point at the organisation. The
+readers are the item panel, the CI publish gate and the MCP publish gate; the
+writers are the settings control and the panel's own turn-on action. Nothing in
+billing, identity or security touches the flag — and nothing in planning, board,
+estimation, fields or components does either. What those consumers add up to is an
+**approval gate**: the flag decides whether a finished story is held for a person's
+decision. That is a question about how a team works, and every other work-process
+setting in this product is already `projectId`-scoped, without exception. The
+organisation column was the single row breaking an otherwise total rule, which is
+exactly why it read as a convention until somebody checked.
+
+**What it cost while it stood.** One org admin answered for every project beneath
+them. A UI product and a library in the same organisation want opposite answers,
+and the person who owns a project's process could not set it — while an org admin
+who need not belong to that project could.
+
+**⚠️ DECISION 1 IS NOT AMENDED. The ENTITLEMENT stays with the organisation.**
+`hasPaidAiPlan` is bought once, for the account, and
+`acceptanceVideoEligibilityService` remains the only place the AND of the two is
+computed. The two halves now live at different tiers on purpose: _may this account
+use the feature_ is a billing fact, and _does this project hold its stories for
+approval_ is a process fact. Moving the second one is not an argument for moving the
+first — per-project entitlement would be a billing change wearing a settings
+change, and this amendment does not make it.
+
+**§3's DEFAULT survives verbatim, and so does its reasoning.** The project column
+is `@default(true)` for exactly the reason §3 gives. But the default is not what
+makes the migration safe: every existing project is **BACKFILLED from its owning
+organisation's current value**, because an organisation that had deliberately turned
+acceptance video OFF must not find every project under it turned back on. A switch
+that flips itself is a worse failure than the wrong tier it replaces — the wrong
+tier at least does what the person who set it asked.
+
+**Where the switch now lives.** `Project settings ▸ Approvals`
+(`/settings/project/approvals`), a room for the switches that decide which approval
+gates a project raises, gated on `workflow:manage`. The room's argument — its
+readers/writers table, the three rejected candidate rooms, and why a room rather
+than a card bolted onto an existing page — is
+`design/projects/design-notes.md` § _⭐ Approvals — the gate switches_ (MOTIR-4942).
+It is NOT restated here: a decision with two homes drifts.
+
+**How it was removed, and why not in one change.** A Prisma read with no explicit
+`select` emits every scalar the model DECLARES, so the datamodel line is itself the
+last reader of a column, and `fly.toml`'s `release_command` migrates before any new
+machine takes traffic. Dropping the column in the same release that removes the
+field therefore runs the migration under the PREVIOUS image and 500s every read of
+`Organization` for the length of the rollout. So the removal is three phases —
+readers first, then `@ignore` the field and RELEASE, then drop the column carrying
+the `-- @client-stopped-selecting:` marker `tests/contract-phase-guard.test.ts`
+requires. `docs/decisions/delivery-reader-migration.md` §6a / §6b is the record.
+
+**The reversal condition.** This amendment would be wrong if an organisation needed
+to IMPOSE acceptance approval on every project beneath it — a floor a project cannot
+raise. That is a different feature from a switch, not a rollback of this one: it
+wants an org-tier POLICY plus a project-tier setting that the policy constrains, and
+both tiers would exist. Nobody has asked for it, and the request that produced this
+amendment was the opposite one. So if an org-wide answer returns, it returns as a
+policy beside this switch, never as this switch moving back.
 
 ### 4. CI upload auth (BYOK) — keyless GitHub OIDC, `integration` PAT fallback
 

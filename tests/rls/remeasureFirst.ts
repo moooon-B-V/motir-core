@@ -20,30 +20,47 @@
 // `docs/decisions/ratchet-constant-staleness.md` for the decision this
 // implements and the two alternatives it rejects.
 
+/** The command that re-runs a guard at `origin/main`. The `tests/rls/` ratchets
+ *  and MOTIR-5037's allow-list all live in the STRUCTURAL GUARD lane, so this is
+ *  their command; a guard outside that lane passes its own. It is a parameter
+ *  rather than a constant because a preamble that prints a command which does
+ *  not run the failing guard is a re-measure instruction the reader cannot
+ *  follow — and `pnpm vitest run tests/rls/` was exactly that from the moment
+ *  MOTIR-3144 moved these files out of the root config's `include`. */
+export const GUARD_LANE_RERUN = 'pnpm test:guards';
+
 /**
  * The re-measure-first preamble for `name`, to be concatenated at the FRONT of
- * a ratchet assertion's failure message.
+ * an exposed guard's failure message.
  *
- * Required on every ratchet whose value is non-zero. A ratchet of exactly 0 is
- * exempt and does not need it: a count cannot fall below zero and a floor of
- * zero cannot fail, so nothing a sibling merges can move it. That exemption is
+ * `name` is the BASELINE the guard holds — a ratchet constant (`*_CEILING` /
+ * `*_FLOOR`) or a contract file's declared population. `rerun` is the command
+ * that re-runs THIS guard; it defaults to the structural-guard lane's.
+ *
+ * Required on every baseline that is non-zero. A ratchet of exactly 0 is exempt
+ * and does not need it: a count cannot fall below zero and a floor of zero
+ * cannot fail, so nothing a sibling merges can move it. That exemption is
  * enforced (not merely documented) by `ratchet-staleness-guard.test.ts`, so a
  * ratchet that later moves OFF zero starts failing the meta-guard until this is
  * added — which is the moment it becomes exposed.
  */
-export function remeasureFirst(name: string): string {
+export function remeasureFirst(name: string, rerun: string = GUARD_LANE_RERUN): string {
   return (
     `⚠️ FIRST, CHECK WHETHER IT MOVED AT ALL — THIS MAY NOT BE YOUR CHANGE (MOTIR-2941).\n\n` +
-    `\`${name}\` is a constant measured on somebody's BRANCH. A sibling merging beneath it ` +
-    `moves the counted population without touching the constant, so this guard fails on a ` +
+    `\`${name}\` is a baseline measured on somebody's BRANCH. A sibling merging beneath it ` +
+    `moves the counted population without touching the baseline, so this guard fails on a ` +
     `composed tree that nobody ever measured — which is precisely how ` +
     `\`UNCONVERTED_E2E_CEILING\` failed on its OWN merge commit the day it landed, taking ` +
-    `every open PR red with it (MOTIR-2939). Only a value of 0 is immune.\n\n` +
+    `every open PR red with it (MOTIR-2939). Only a baseline of 0 over a population that ` +
+    `cannot grow is immune.\n\n` +
+    `⚠️ THE MERGE QUEUE DOES NOT SPARE YOU THIS READING. It builds the COMPOSED tree, so it ` +
+    `is where a stale baseline now fails — as an EJECTION rather than as a red check, which ` +
+    `is harder to read, not easier (MOTIR-5207).\n\n` +
     `So re-measure at \`origin/main\` BEFORE looking for a culprit:\n\n` +
     `    git fetch origin && git worktree add ../recheck origin/main\n` +
-    `    cd ../recheck && pnpm install --frozen-lockfile && pnpm vitest run tests/rls/\n\n` +
+    `    cd ../recheck && pnpm install --frozen-lockfile && ${rerun}\n\n` +
     `If it already fails there, \`${name}\` is STALE and the fix is to RE-MEASURE it — ` +
-    `recording the commits that moved it, the way the comment block above the constant does — ` +
+    `recording the commits that moved it, the way the comment block above the baseline does — ` +
     `not to hunt for a change that did not happen. Only if \`origin/main\` is green did your ` +
     `branch move it, and only then does the rest of this message apply to you.\n\n`
   );

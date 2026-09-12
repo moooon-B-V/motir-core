@@ -114,7 +114,12 @@ describe('a seeded role renders exactly what it holds', () => {
     const s = await seed('admin-path');
     const shell = await renderFor(s.projectId, s.ctxs.admin);
 
-    expect(shell.settingsEntries.length).toBe(12);
+    // 12 → 13 (MOTIR-4925 · MOTIR-5170): the `approvals` room joined the `work`
+    // group, gated on `workflow:manage`, which an admin holds. The number alone
+    // cannot say WHICH entry moved it — so the membership assertion below is
+    // what makes the count readable the next time it changes.
+    expect(shell.settingsEntries.length).toBe(13);
+    expect(shell.settingsEntries).toContain('approvals');
     expect(shell.settingsGroups).toEqual(['general', 'access', 'work', 'automation']);
     expect(shell.areaDoor).toBe(true);
     expect(shell.navRows).toEqual(PROJECT_NAV_ACCESS.map((e) => e.href));

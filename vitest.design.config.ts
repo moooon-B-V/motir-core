@@ -163,6 +163,17 @@ export default defineConfig({
       // both the only thing that can break it and the only thing that can fix
       // it, and it costs a file read and a regex.
       'tests/design-lesson-phase-chips.test.ts',
+      // `design-github-development-copy` (MOTIR-5152) reads `design/github/design-notes.md`
+      // §5c and `messages/{en,zh}.json` together, and asserts the PR-link picker's
+      // typed-error banner says what the asset specifies — the same shape as its
+      // neighbour above. The two disagreed about the tenant for six days (the asset
+      // said *organisation*, the catalogue said *workspace*) because the shipped gate
+      // really did check a workspace; widening that gate is what made the design's
+      // sentence true, so the agreement is worth a standing guard. It is here rather
+      // than beside the service tests that widened the gate because those need a
+      // database and this lane must not: a `design/*` PR editing §5c skips every app
+      // lane, and is exactly the pull request that must not skip this.
+      'tests/design-github-development-copy.test.ts',
     ],
   },
   resolve: {

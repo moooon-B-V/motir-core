@@ -8,6 +8,7 @@ import {
   KeyRound,
   Link2,
   Shield,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Tag,
@@ -402,6 +403,21 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // VERIFIED: `workflowsService`'s module-private `assertProjectAdmin` asserts
     // `workflow:manage` (the helper's NAME predates MOTIR-2256's split — reading
     // the body rather than the name is the point, `notes.html` #231).
+    permission: 'workflow:manage',
+  },
+  {
+    id: 'approvals',
+    group: 'work',
+    href: '/settings/project/approvals',
+    icon: ShieldCheck,
+    labelKey: 'nav.approvals',
+    // VERIFIED: `approvalGateSettingsService`'s `getSettings` / `updateSettings`
+    // both assert `workflow:manage` through `projectAccessService.assertPermission`
+    // (Story MOTIR-4925 · Subtask MOTIR-5170). The key is the shipped one for
+    // *may you configure how work moves through this project* — a status graph and
+    // an approval gate are the two things that decide when work may move, which is
+    // also why this row sits directly after `workflow` rather than inside it. A
+    // dedicated `gate:manage` is a reasonable later split and is NOT made here.
     permission: 'workflow:manage',
   },
   {

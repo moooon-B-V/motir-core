@@ -23,6 +23,7 @@ declare const expect: (
 };
 declare const remeasureFirst: (name: string) => string;
 declare const population: { length: number };
+declare const ratio: number;
 
 // ── Enrolled: a non-zero CEILING carrying the preamble ──────────────────────
 const FIXTURE_COMPLIANT_CEILING = 12;
@@ -50,6 +51,14 @@ const FIXTURE_ORPHAN_CEILING = 41;
 // ── NOT enrolled: named, numeric, and not a ratchet. The suffix is the
 // enrolment mechanism.
 const FIXTURE_MAX_HOPS = 3;
+
+// ── NOT enrolled: correctly suffixed, and NOT an integer (MOTIR-5207). A
+// ratchet counts a POPULATION, so a fractional value is measuring something
+// else — a ratio, a scale, a duration — which `origin/main` cannot adjudicate.
+// The real instance is `ARRIVAL_FLOOR = 0.8` in `cloud-roadmap-arrival.spec.ts`,
+// the design's legibility floor, which the widened root would otherwise have
+// swept in as an orphan.
+const FIXTURE_GEOMETRY_FLOOR = 0.8;
 
 export function fixtureAssertions(): void {
   expect(
@@ -81,5 +90,8 @@ export function fixtureAssertions(): void {
   ).toBeGreaterThanOrEqual(FIXTURE_COMPLIANT_FLOOR);
 
   expect(population.length).toBeLessThanOrEqual(FIXTURE_MAX_HOPS);
+  expect(ratio, 'a fractional floor is not a population count').toBeGreaterThanOrEqual(
+    FIXTURE_GEOMETRY_FLOOR,
+  );
   void FIXTURE_ORPHAN_CEILING;
 }

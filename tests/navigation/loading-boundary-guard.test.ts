@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { remeasureFirst } from '../rls/remeasureFirst';
+
 // MOTIR-3437 — the two guards a coverage percentage cannot see.
 //
 // Both halves of this story decay silently. A `router.push` on a client-only
@@ -343,6 +345,11 @@ describe('a client-only view switch does not ask the server (MOTIR-3437)', () =>
 // the reads did, not because the counter is lenient.
 const SERIAL_READ_CEILING = 4;
 
+/** This guard runs in the SHARDED root Vitest job, not the structural-guard
+ *  lane, so its re-measure command is its own path rather than `pnpm
+ *  test:guards` (MOTIR-5207). */
+const RERUN = 'pnpm vitest run tests/navigation/loading-boundary-guard.test.ts';
+
 /** Awaits that resolve from the request or a per-request cache — not round trips. */
 const REQUEST_LOCAL = new Set([
   'params',
@@ -469,10 +476,25 @@ describe('no page arrives SERIAL — the ratchet (MOTIR-3449)', () => {
 
   it('no page exceeds the ceiling except the ones listed, with their reasons', () => {
     const listed = new Set(SERIAL_READ_DEBT.map((d) => d.page));
-    const offenders = counted
-      .filter((r) => r.count > SERIAL_READ_CEILING && !listed.has(r.page))
+    const unlisted = counted.filter((r) => !listed.has(r.page));
+    const offenders = unlisted
+      .filter((r) => r.count > SERIAL_READ_CEILING)
       .map((r) => `${r.page} (${r.count} serial reads, ceiling ${SERIAL_READ_CEILING})`);
-    expect(offenders).toEqual([]);
+
+    // ⚠️ Stated as the ratchet it is — `max(unlisted counts) <= CEILING`, which
+    // is the same claim as `offenders === []` — for two reasons, both MOTIR-5207.
+    // The COMPARATOR is what attributes this assertion to the constant, so the
+    // staleness meta-guard can see that the preamble reaches it; and the failure
+    // now prints the number AND the ceiling rather than a bare array diff.
+    expect(
+      Math.max(0, ...unlisted.map((r) => r.count)),
+      remeasureFirst('SERIAL_READ_CEILING', RERUN) +
+        `These pages arrive with more than ${SERIAL_READ_CEILING} SERIAL reads and are not ` +
+        `listed as debt:\n\n  ${offenders.join('\n  ')}\n\n` +
+        `Collapse the chain into one wave (\`allSettledOrThrow([...])\`) — the fixtures in this ` +
+        `file's FIRES / does NOT fire pair are the before and after. A page that genuinely ` +
+        `cannot is an entry in SERIAL_READ_DEBT with its reason.`,
+    ).toBeLessThanOrEqual(SERIAL_READ_CEILING);
   });
 
   it('carries no debt entry that has stopped applying — the list only shrinks', () => {
@@ -482,7 +504,12 @@ describe('no page arrives SERIAL — the ratchet (MOTIR-3449)', () => {
     const stale = SERIAL_READ_DEBT.filter(
       (d) => !now.has(d.page) || now.get(d.page)! <= SERIAL_READ_CEILING,
     ).map((d) => d.page);
-    expect(stale).toEqual([]);
+    expect(
+      stale,
+      remeasureFirst('SERIAL_READ_DEBT', RERUN) +
+        `These SERIAL_READ_DEBT entries no longer describe the tree — the page came back under ` +
+        `the ceiling, or it is gone. DELETE each one; the list only shrinks.`,
+    ).toEqual([]);
   });
 
   it('records each listed page’s count accurately — the list cannot drift from the tree', () => {
@@ -540,8 +567,16 @@ describe('no page arrives SERIAL — the ratchet (MOTIR-3449)', () => {
       '  return null;',
       '}',
     ].join('\n');
-    expect(serialReadCount(fixed)).toBe(3);
-    expect(serialReadCount(fixed)!).toBeLessThanOrEqual(SERIAL_READ_CEILING);
+    // ⚠️ Asserted as a RELATION rather than through `toBeLessThanOrEqual`, so the
+    // staleness meta-guard does not attribute this CONTROL to the ratchet
+    // (MOTIR-5207). The fixture is a string literal in this file: nothing a
+    // sibling merges can move it, so a re-measure-at-`origin/main` preamble here
+    // would be an instruction the reader cannot act on. The ratchet's REAL
+    // assertion, forty lines up, is the one that owes it.
+    expect({
+      count: serialReadCount(fixed),
+      clearsCeiling: serialReadCount(fixed)! <= SERIAL_READ_CEILING,
+    }).toEqual({ count: 3, clearsCeiling: true });
   });
 
   it('counts a helper component’s reads as BELOW the flush, not on the page', () => {
