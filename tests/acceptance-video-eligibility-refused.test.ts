@@ -54,10 +54,29 @@ function access(partial: Partial<AiAccessDTO>): AiAccessDTO {
   };
 }
 
+let projectSeq = 0;
+
 async function seed(name: string) {
   const { workspace, owner } = await createTestWorkspace({ name });
   const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } });
-  return { workspaceId: workspace.id, ownerId: owner.id, organizationId: ws.organizationId };
+  // The gate reads the STORY'S project now (MOTIR-5168), so every resolve needs
+  // one. Seeded explicitly rather than relying on the workspace's default project,
+  // because this suite is about the FAN-OUT and wants no second variable in it.
+  const n = projectSeq++;
+  const project = await adminDb.project.create({
+    data: {
+      name: `${name} P`,
+      slug: `elig-refused-p-${n}`,
+      identifier: `ERF${n}`,
+      workspaceId: workspace.id,
+    },
+  });
+  return {
+    workspaceId: workspace.id,
+    ownerId: owner.id,
+    organizationId: ws.organizationId,
+    projectId: project.id,
+  };
 }
 
 beforeEach(async () => {
@@ -83,6 +102,7 @@ describe('a REFUSED eligibility resolve leaves no work in flight (MOTIR-3077)', 
       acceptanceVideoEligibilityService.resolve({
         actorUserId: home.ownerId,
         workspaceId: home.workspaceId,
+        projectId: home.projectId,
       }),
     ).rejects.toBeInstanceOf(OrganizationNotFoundError);
 
@@ -118,6 +138,7 @@ describe('a REFUSED eligibility resolve leaves no work in flight (MOTIR-3077)', 
         acceptanceVideoEligibilityService.resolve({
           actorUserId: fx.ownerId,
           workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
         }),
       ).rejects.toBeInstanceOf(OrganizationNotFoundError);
 
@@ -140,6 +161,7 @@ describe('a REFUSED eligibility resolve leaves no work in flight (MOTIR-3077)', 
     const r = await acceptanceVideoEligibilityService.resolve({
       actorUserId: fx.ownerId,
       workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
     });
 
     expect(r).toMatchObject({

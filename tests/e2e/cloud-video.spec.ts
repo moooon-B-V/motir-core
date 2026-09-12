@@ -12,6 +12,7 @@ import {
   seedInReviewStory,
   seedPendingEvidence,
   setOrgAcceptanceVideo,
+  setProjectAcceptanceVideo,
 } from './_helpers/acceptance-seed';
 
 // The story-acceptance E2E + the SELF-TEST DOGFOOD (Story MOTIR-1627 · Subtask
@@ -59,7 +60,7 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
   acceptanceStory('MOTIR-1627');
   const seed = await seedBillingOwner(page, 'dogfood@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
-  await setOrgAcceptanceVideo(seed.organizationId, true);
+  await setProjectAcceptanceVideo(seed.projectId, true);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, 'Acceptance dogfood');
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);
@@ -115,7 +116,7 @@ test('the acceptance video is served through the authenticated content route —
 }) => {
   const seed = await seedBillingOwner(page, 'access@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
-  await setOrgAcceptanceVideo(seed.organizationId, true);
+  await setProjectAcceptanceVideo(seed.projectId, true);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, 'Access controlled');
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);
@@ -143,7 +144,7 @@ test('the acceptance video is served through the authenticated content route —
 test('paid + on → Request changes sends the story back to In Progress', async ({ page }) => {
   const seed = await seedBillingOwner(page, 'revise@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
-  await setOrgAcceptanceVideo(seed.organizationId, true);
+  await setProjectAcceptanceVideo(seed.projectId, true);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, 'Needs changes');
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);
@@ -171,7 +172,7 @@ test('paid + on → Request changes sends the story back to In Progress', async 
 test('paid + on, no evidence yet → the pending "waiting for the video" state', async ({ page }) => {
   const seed = await seedBillingOwner(page, 'pending@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
-  await setOrgAcceptanceVideo(seed.organizationId, true);
+  await setProjectAcceptanceVideo(seed.projectId, true);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, 'No video yet');
 
@@ -188,7 +189,14 @@ test('paid + on, no evidence yet → the pending "waiting for the video" state',
 test('paid + toggle OFF (admin) → the Turn-on switch + Go to settings', async ({ page }) => {
   const seed = await seedBillingOwner(page, 'toggleoff@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
-  await setOrgAcceptanceVideo(seed.organizationId, false);
+  // ⚠️ THE TWO TIERS DISAGREE ON PURPOSE (MOTIR-4925 · MOTIR-5168). The switch is
+  // a PROJECT setting now, so this seeds the organisation's own column ON and the
+  // project's OFF: the panel may only reach its off state by reading the project.
+  // Setting both OFF would pass whichever tier it read, which is what this spec
+  // asserted before the switch moved — and what made it the one E2E leg the tier
+  // change broke.
+  await setOrgAcceptanceVideo(seed.organizationId, true);
+  await setProjectAcceptanceVideo(seed.projectId, false);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, 'Toggle off');
 
@@ -223,7 +231,7 @@ test('no plan → the Upgrade CTA (no player)', async ({ page }) => {
 test('the board shows the "Awaiting acceptance" badge, cleared on approve', async ({ page }) => {
   const seed = await seedBillingOwner(page, 'board@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
-  await setOrgAcceptanceVideo(seed.organizationId, true);
+  await setProjectAcceptanceVideo(seed.projectId, true);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, 'On the board');
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);

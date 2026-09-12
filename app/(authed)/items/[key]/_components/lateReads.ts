@@ -165,6 +165,9 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
         ? acceptanceVideoEligibilityService.resolve({
             actorUserId: ctx.userId,
             workspaceId: ctx.workspaceId,
+            // The gate is the STORY'S OWN project's (MOTIR-5168) — `projectId` is
+            // the item's, already resolved for this page's other reads.
+            projectId,
           })
         : null,
       showAcceptance ? acceptanceEvidenceService.getCurrentForStory(itemId, ctx) : null,

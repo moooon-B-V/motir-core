@@ -113,9 +113,14 @@ export async function authorizeAcceptancePublish(
   if (story instanceof Response) return story;
 
   // Eligibility gate (MOTIR-1630) — reject with the reason BEFORE any blob spend.
+  // The gate is the STORY'S OWN project's (MOTIR-5168), not the publisher's
+  // workspace-wide one: a CI credential authorised for the workspace publishes
+  // into whichever project the story belongs to, and each project answers for
+  // itself. `story` is a resolved `WorkItem`, so its `projectId` is already here.
   const eligibility = await acceptanceVideoEligibilityService.resolve({
     actorUserId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    projectId: story.projectId,
   });
   if (!eligibility.eligible) {
     const status = eligibility.reason === 'no_plan' ? 402 : 403;

@@ -10,7 +10,7 @@ import {
 import {
   seedInReviewStory,
   seedPendingEvidence,
-  setOrgAcceptanceVideo,
+  setProjectAcceptanceVideo,
 } from './_helpers/acceptance-seed';
 
 // THE GUARD FOR *DECIDING THE ACCEPTANCE GATE REPAINTS THE PAGE* (Bug
@@ -121,7 +121,7 @@ function statusCard(page: Page) {
 async function arriveAtTheGate(page: Page, email: string, title: string) {
   const seed = await seedBillingOwner(page, email);
   setOrgBillingState(seed.organizationId, paidOrgState());
-  await setOrgAcceptanceVideo(seed.organizationId, true);
+  await setProjectAcceptanceVideo(seed.projectId, true);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, title);
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);

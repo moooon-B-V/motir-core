@@ -1261,6 +1261,30 @@ model Project {
   /// upward-only, the commonest preference. Default `true` for the same reason as
   /// its sibling.
   autoCompleteChildrenOnParentDone Boolean               @default(true) @map("auto_complete_children_on_parent_done")
+  /// Whether this project raises the ACCEPTANCE-VIDEO approval gate (MOTIR-4925,
+  /// `docs/decisions/acceptance-video.md` §3 as amended). When true, a story that
+  /// HAS an acceptance video is held until a person approves it; when false, no
+  /// acceptance video is accepted for this project and no story is held. It does
+  /// NOT govern recording — a run records either way, and the recording stays in
+  /// the run's own report.
+  ///
+  /// PROJECT-scoped, and that is the point of the column: whether a finished story
+  /// owes a receipt is a question about how a TEAM works, and every other
+  /// work-process setting in this schema (workflow, board, estimation, fields,
+  /// components, automation, AI planning) is already `projectId`-scoped. Its
+  /// predecessor `Organization.acceptanceVideoEnabled` was the single exception,
+  /// chosen by analogy to its billing-and-security neighbours, so a UI product and
+  /// a library under one organisation could not disagree.
+  ///
+  /// The ENTITLEMENT stays with the organisation and is untouched: `hasPaidAiPlan`
+  /// is bought once, for the account, and `acceptanceVideoEligibilityService`
+  /// remains the one place the AND of the two is computed.
+  ///
+  /// Default `true` to match the org column it replaces — but the default is NOT
+  /// what makes the migration safe. Existing rows are BACKFILLED from their owning
+  /// organisation's value, because an org that had deliberately turned acceptance
+  /// video OFF must not find every project under it turned back on.
+  acceptanceVideoEnabled           Boolean               @default(true) @map("acceptance_video_enabled")
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the
