@@ -182,6 +182,10 @@ describe('⚠️ ONE derivation — no second implementation of "stale" under li
       'lib/repositories/projectRepoRepository.ts',
       'lib/services/codeContextService.ts',
       'lib/services/codeGraphDriftService.ts',
+      // MOTIR-5290 — the index catch-up sweep. An ASSEMBLER like the two above: it
+      // hands a paused row's facts to `deriveCodeGraphIndexState` to decide whether
+      // a refresh is owed, and compares nothing itself.
+      'lib/services/codeGraphIndexCatchUpService.ts',
       'lib/services/organizationRepoService.ts',
     ]);
 
