@@ -48,3 +48,33 @@ export class UnknownMonitorProviderError extends Error {
     this.name = 'UnknownMonitorProviderError';
   }
 }
+
+/**
+ * A provider call failed — a non-2xx, an unreachable host, or a response whose
+ * shape the adapter could not read.
+ *
+ * ⚠️ IT CARRIES THE PROVIDER'S OWN REASON STRING, and that is the whole point of
+ * the type. The credential-lifecycle card (MOTIR-5261) surfaces this string to a
+ * person on the settings surface, so the adapter may not swallow it, summarise
+ * it, or replace it with one of ours: a connection that says "something went
+ * wrong" is a connection nobody can act on, which is the failure shape
+ * MOTIR-4918 recorded one tier up.
+ *
+ * `status` is null when the call never got a response (a timeout, a dead host) —
+ * which is a DIFFERENT fact from a 500, and the one an operator needs to tell
+ * "the provider refused us" from "we could not reach the provider".
+ */
+export class MonitorProviderCallError extends Error {
+  readonly code = 'MONITOR_PROVIDER_CALL_FAILED' as const;
+  constructor(
+    readonly operation: string,
+    readonly status: number | null,
+    /** The provider's OWN words, passed through unaltered. */
+    readonly providerReason: string,
+  ) {
+    super(
+      `Monitor provider call "${operation}" failed${status === null ? '' : ` (${status})`}: ${providerReason}`,
+    );
+    this.name = 'MonitorProviderCallError';
+  }
+}
