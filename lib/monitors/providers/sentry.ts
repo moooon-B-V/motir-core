@@ -254,6 +254,11 @@ export const sentryMonitorProvider: MonitorProvider = {
       if (err instanceof MonitorProviderCallError) {
         return { status: 'degraded', reason: err.providerReason, checkedAt };
       }
+      /* v8 ignore next 6 -- unreachable: `call()` wraps every failure it can
+         produce in a MonitorProviderCallError. Asserted by
+         `monitorStoryArms.test.ts` › "call() surfaces EVERY failure as a
+         MonitorProviderCallError"; kept so a future non-`call` read inside the try
+         still yields a verdict rather than a throw. */
       return {
         status: 'degraded',
         reason: err instanceof Error ? err.message : 'unknown failure',

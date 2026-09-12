@@ -1,5 +1,4 @@
 import { Prisma, type MonitorInstallation } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 
 // Monitor-installation repository — single Prisma operations on the
 // `monitor_installation` table (Story MOTIR-4926 · MOTIR-5258). The service
@@ -61,16 +60,6 @@ const SUMMARY_SELECT = {
 } as const;
 
 export const monitorInstallationRepository = {
-  /** Create a grant. Keyed on nothing — the caller has already resolved that this
-   *  installation is new; a re-install of the same id collides on the
-   *  `(provider, installation_id)` unique index, which is the correct refusal. */
-  async create(
-    input: CreateMonitorInstallationInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<MonitorInstallation> {
-    return tx.monitorInstallation.create({ data: input });
-  },
-
   /** Create-or-refresh a grant, keyed on the provider's own installation id.
    *  Re-authorising the same installation replaces the token set in place rather
    *  than accumulating grants — the credential lives on the grant, so a second
@@ -87,30 +76,15 @@ export const monitorInstallationRepository = {
     });
   },
 
-  /** One grant by the provider's own installation id — the callback path's read,
-   *  which runs inside the connect transaction. Returns the FULL row (credential
-   *  columns included) because the callback is a credential writer; a render path
-   *  uses `listSummariesForWorkspace` instead. */
-  async findByProviderInstallation(
-    provider: string,
-    installationId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<MonitorInstallation | null> {
-    return tx.monitorInstallation.findUnique({
-      where: { provider_installationId: { provider, installationId } },
-    });
-  },
-
   /** The workspace's grants, WITHOUT their credentials — the settings room's
    *  read. Ordered deterministically (`created_at`, then `id`) and carrying no
    *  preference: a stable order is what keeps a render from reshuffling between
    *  two reads of the same page. */
   async listSummariesForWorkspace(
     workspaceId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<MonitorInstallationSummary[]> {
-    const client = tx ?? dbRead;
-    return client.monitorInstallation.findMany({
+    return tx.monitorInstallation.findMany({
       where: { workspaceId },
       select: SUMMARY_SELECT,
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

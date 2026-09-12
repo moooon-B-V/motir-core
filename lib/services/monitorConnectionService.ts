@@ -12,9 +12,10 @@ import {
   MonitorGrantNotFoundError,
   MonitorProviderCallError,
 } from '@/lib/monitors/errors';
-import { decryptToken, encryptToken } from '@/lib/monitors/tokenCrypto';
+import { encryptToken } from '@/lib/monitors/tokenCrypto';
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
+import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -171,18 +172,21 @@ export const monitorConnectionService = {
     });
     if (!grant) throw new MonitorGrantNotFoundError(ctx.workspaceId);
 
-    const credential = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      monitorInstallationRepository.findCredentialById(grant.id, tx),
-    );
-    if (!credential) throw new MonitorGrantNotFoundError(ctx.workspaceId);
+    // ⚠️ THE CREDENTIAL COMES THROUGH `getAccessToken`, NEVER STRAIGHT OFF THE ROW
+    // (fixed under MOTIR-5263, the story's seam gate). This read used to decrypt
+    // the stored access token itself, which skipped the expiry check: a token
+    // past its eight-hour life was sent as-is, Sentry refused it, and the picker
+    // reported a healthy grant as degraded until the next refresh sweep. The
+    // credential service refreshes first, under its lock, and writes a real
+    // refusal's verdict — so this read sees the same token every other caller
+    // does. The plaintext is still reached one line before the call that needs
+    // it and never returned.
+    const credential = await monitorCredentialService.getAccessToken(grant.id);
 
-    const provider = getMonitorProvider(grant.provider);
-    const orgSlug = readOrgSlug(grant.metadata);
+    const provider = getMonitorProvider(credential.provider);
+    const orgSlug = credential.orgSlug;
     const projects = await provider.listProjects({
-      // Decrypted HERE, one line before the call that needs it, and never
-      // returned: the only method in this file that reaches the plaintext is one
-      // about to hand it to the provider.
-      accessToken: decryptToken(credential.accessTokenEncrypted),
+      accessToken: credential.token,
       orgSlug: orgSlug ?? '',
     });
 
@@ -237,6 +241,9 @@ export const monitorConnectionService = {
 
       const rows = await monitorConnectionRepository.listForProject(projectId, tx);
       const created = rows.find((row) => row.externalProjectId === input.externalProjectId);
+      /* v8 ignore next -- unreachable: the read-back runs in the write's own
+         transaction and context. Asserted by `monitorStorySeams.test.ts` › "a bind
+         reads back the row it created, inside the same transaction". */
       if (!created) throw new MonitorConnectionNotFoundError(input.externalProjectId);
       return toMonitorConnectionDto(created);
     });

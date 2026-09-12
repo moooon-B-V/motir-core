@@ -1,5 +1,4 @@
 import { Prisma, type MonitorConnection } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
 import { MonitorConnectionAlreadyExistsError } from '@/lib/monitors/errors';
 
 // Monitor-connection repository — single Prisma operations on the
@@ -157,10 +156,9 @@ export const monitorConnectionRepository = {
    *  settings room's list does not reshuffle between reads. */
   async listForProject(
     projectId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<MonitorConnectionWithGrant[]> {
-    const client = tx ?? dbRead;
-    return client.monitorConnection.findMany({
+    return tx.monitorConnection.findMany({
       where: { projectId },
       include: { installation: { select: GRANT_SELECT } },
       orderBy: [{ externalProjectSlug: 'asc' }, { id: 'asc' }],
@@ -182,19 +180,6 @@ export const monitorConnectionRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     return tx.monitorConnection.count({ where: { installationId } });
-  },
-
-  /** Every binding on a grant — the credential-lifecycle path's read (MOTIR-5261),
-   *  which reports a degraded grant against the rows a person actually sees. */
-  async listForInstallation(
-    installationId: string,
-    tx?: Prisma.TransactionClient,
-  ): Promise<MonitorConnection[]> {
-    const client = tx ?? dbRead;
-    return client.monitorConnection.findMany({
-      where: { installationId },
-      orderBy: [{ externalProjectSlug: 'asc' }, { id: 'asc' }],
-    });
   },
 
   /** Remove one binding. `deleteMany` (not `delete`) so a retried disconnect

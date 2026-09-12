@@ -302,6 +302,10 @@ export const monitorCredentialService = {
         const row = await withSystemContext((tx) =>
           monitorInstallationRepository.findCredentialById(installationRowId, tx),
         );
+        /* v8 ignore next 5 -- the fallbacks are unreachable: the refused refresh
+           writes all three fields before it throws. Asserted by
+           `monitorStorySeams.test.ts` › "a refused refresh has written all three
+           health fields before probeHealth reads them back". */
         return {
           health: row?.health ?? 'degraded',
           healthReason: row?.healthReason ?? err.providerReason,
