@@ -41,9 +41,11 @@ const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const;
 
 export interface AcceptancePanelProps {
   workItemId: string;
-  /** The card whose page this panel is on — the path the decide action
-   *  revalidates on success (Bug MOTIR-5160). The action knows a work-item ID;
-   *  the path is the card's IDENTIFIER, and `LateSections` already holds it. */
+  /** The card whose page this panel is on — the path BOTH of this panel's
+   *  actions revalidate on success (Bug MOTIR-5160 for `decide`, Bug MOTIR-5196
+   *  for `turnOn`). Each action knows an id of its own — a work item, an
+   *  organisation — and neither is the path; the path is the card's IDENTIFIER,
+   *  and `LateSections` already holds it. */
   itemIdentifier: string;
   organizationId: string | null;
   eligibility: AcceptanceVideoEligibilityDTO;
@@ -106,11 +108,26 @@ export function AcceptancePanel({
     if (!organizationId) return;
     setError(null);
     startTransition(async () => {
-      const res = await turnOnAcceptanceVideoAction(organizationId);
+      const res = await turnOnAcceptanceVideoAction({ organizationId, itemIdentifier });
       if (!res.ok) {
         setError(res.error);
         return;
       }
+      // ⚠️ KEPT DELIBERATELY, BESIDE THE ACTION'S OWN `revalidatePath` (Bug
+      // MOTIR-5196) — the same disposition `decide` above carries. Both halves
+      // ship: the action puts the fresh tree on its own response where nothing
+      // can race it, and this reaches the surfaces a server tree does not cover.
+      // Removing it is a SEPARATE claim nobody has tested — and here there is a
+      // second reason not to touch it: against the FIXED action this surface
+      // still fails to repaint about 1 run in 16, so the client half is
+      // currently doing work the server half demonstrably does not cover. The
+      // measurements are on `turnOnAcceptanceVideoAction`.
+      //
+      // ⚠️ AND A COMMITTED STATE UPDATE HERE IS NOT THE REMEDY — it was TRIED.
+      // `decide` above calls `setEvidence` before its refresh and never flakes,
+      // so an empty transition looked like the cause; adding a state commit in
+      // front of this line measured 6/16 red rather than 0/16. The hypothesis is
+      // recorded as FALSIFIED so nobody spends the run again.
       router.refresh();
     });
   }

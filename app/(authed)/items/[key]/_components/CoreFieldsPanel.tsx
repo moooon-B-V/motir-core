@@ -51,6 +51,7 @@ import { LabelsCard } from './LabelsCard';
 import { ComponentsCard } from './ComponentsCard';
 import { ProvenanceSection } from './ProvenanceSection';
 import { StatusPill } from '@/components/issues/StatusPill';
+import { useDisplayedStatus } from './OptimisticStatusProvider';
 
 // The issue detail metadata rail (Story 2.4 · Subtasks 2.4.2 + 2.4.4). Per the
 // mockup `design/work-items/detail.png`: a stack of field cards that DISPLAY the
@@ -198,7 +199,21 @@ export function CoreFieldsPanel({
   const [parentOverride, setParentOverride] = useState<
     Pick<WorkItemSummaryDto, 'identifier' | 'title'> | null | undefined
   >(undefined);
-  const eff = { ...item, ...overrides };
+  // THE STATUS ANOTHER ISLAND ON THIS PAGE JUST MOVED (Bug MOTIR-5212). An
+  // approval gate is decided in its own frame further down the page, and the
+  // decision writes the card's status — a surface only this panel draws. The
+  // provider carries the status key the decide response RECORDED the server
+  // writing, so the rail repaints without waiting for the RSC apply that
+  // MOTIR-5118 measured being intermittently lost. Outside the provider (unit
+  // call sites, the peek) it is `item.status` unchanged.
+  const pageStatus = useDisplayedStatus(item.status);
+  // ⚠️ PRECEDENCE: this reader's OWN inline edit outranks the page channel, and
+  // the order is the whole rule. Someone who has just picked a status by hand is
+  // looking at the cell they picked it in — case 1 of the page-state contract,
+  // where the response IS the confirmation. A gate decided elsewhere must never
+  // pull that value out from under them; the reconcile above settles both the
+  // instant a server render lands.
+  const eff = { ...item, status: pageStatus, ...overrides };
   const effParent = parentOverride !== undefined ? parentOverride : parent;
 
   const typeMeta = ISSUE_TYPE_META[eff.kind];

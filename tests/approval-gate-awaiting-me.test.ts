@@ -337,6 +337,20 @@ describe('approvalGatesService.listAwaitingMe — the pager', () => {
       pageSize: 25,
     });
   });
+
+  it('a page of 0 — or one that truncates to 0 — is served as page 1, never as page 0', async () => {
+    // The LOW end of the clamp, where the test above covers the HIGH end. The
+    // window is 1-based and `skip` is `(page - 1) * pageSize`, so a page that
+    // reached 0 would ask Postgres for `OFFSET -pageSize` — an error, on an
+    // input a hand-typed `?page=0` produces. `Math.trunc(page ?? 1) || 1` is the
+    // guard; nothing asserted the `|| 1` arm, which is the one a simplification
+    // to `page ?? 1` would silently remove.
+    for (const page of [0, 0.4, Number.NaN]) {
+      const served = await approvalGatesService.listAwaitingMe(meCtx, { page, limit: 3 });
+      expect(served).toMatchObject({ page: 1, pageSize: 3 });
+      expect(served.items).toEqual([]);
+    }
+  });
 });
 
 describe('approvalGatesService.countAwaitingMe', () => {

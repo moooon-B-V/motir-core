@@ -144,6 +144,30 @@ describe('AcceptancePanel', () => {
     expect(screen.getByRole('switch')).toBeTruthy();
   });
 
+  it('the Turn-on switch passes the identifier the action revalidates on', async () => {
+    renderPanel({
+      ...baseProps,
+      eligibility: eligibility({ eligible: false, reason: 'toggle_off', toggleEnabled: false }),
+      initialEvidence: null,
+      canDecide: false,
+    });
+    fireEvent.click(screen.getByRole('switch'));
+    // ⚠️ THE MIRROR OF THE APPROVE ASSERTION ABOVE, and it exists for the same
+    // reason one surface over (Bug MOTIR-5196). `turnOnAcceptanceVideoAction`
+    // revalidates the card's path on its success branch, and the path comes from
+    // THIS argument — a panel that stopped passing it would still turn the
+    // toggle on, still refresh, and silently stop repainting the page. The E2E
+    // guard sees the repaint; this sees the argument that carries it, which is
+    // the half a browser test cannot name.
+    await waitFor(() =>
+      expect(turnOnAcceptanceVideoAction).toHaveBeenCalledWith({
+        organizationId: 'org_1',
+        itemIdentifier: 'MOTIR-1',
+      }),
+    );
+    expect(refresh).toHaveBeenCalled();
+  });
+
   it('no_plan + owner → the Upgrade CTA linking to billing', () => {
     renderPanel({
       ...baseProps,

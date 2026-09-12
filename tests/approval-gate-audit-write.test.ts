@@ -231,6 +231,28 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
     // And the routing FK goes the same way, on a row the publish path wrote.
     expect(row.routedToId).toBeNull();
   });
+
+  it('a decider with a BLANK name degrades to the bare email — never to `<email>`', async () => {
+    // `actorLabel`'s own header says this in as many words — *"`User.name` is
+    // non-nullable but not non-EMPTY, so a blank one degrades to the bare email
+    // rather than to `<email>`"* — and nothing asserted it. A documented degrade
+    // with no test is a sentence, not a behaviour: the arm that produces
+    // `<email>` is one missing falsy check away, and `<jo@example.com>` in an
+    // audit column reads as a bug in the name rather than as an absent name.
+    const decider = await member('member');
+    await adminDb.user.update({ where: { id: decider.id }, data: { name: '' } });
+    await assignTo(decider.id);
+    const gate = await gateFor((await publish('frame')).id);
+
+    await approvalGatesService.decide(
+      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      { userId: decider.id, workspaceId: fx.workspaceId },
+    );
+
+    const row = await rowOf(gate.id);
+    expect(row.decidedByLabel).toBe(decider.email);
+    expect(row.decidedByLabel).not.toContain('<');
+  });
 });
 
 describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, §6a)', () => {
@@ -254,7 +276,10 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
 
   it('the REPORTER’s press records `reporter`', async () => {
     // `fx.ownerId` reports everything the fixture creates, and the card has no
-    // assignee — which is the routing fallback §2 names.
+    // assignee — which is the routing fallback §2 names, and (since §2's
+    // 2026-09-11 amendment, MOTIR-5192) the ONLY state in which the reporter arm
+    // is reachable at all. The `reporter` member of the vocabulary survives that
+    // narrowing unchanged; it simply stops being reachable on an assigned item.
     await assignTo(null);
     const gate = await gateFor((await publish('frame')).id);
 
@@ -292,6 +317,35 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
     );
 
     expect((await rowOf(gate.id)).decidedUnderAuthority).toBe('assignee');
+  });
+
+  it('⚠️ a HISTORICAL `reporter` row on an ASSIGNED item is left exactly as it was — no migration, no backfill (MOTIR-5192)', async () => {
+    // §2's 2026-09-11 amendment made the reporter arm unreachable on an assigned
+    // item. Rows written BEFORE it record a press that really happened under the
+    // rule in force at the time, and §6a freezes the arm precisely so a later
+    // rule change cannot rewrite history — a backfill or a re-derivation would
+    // destroy the one thing the column exists to preserve.
+    //
+    // The row is written directly rather than through the door, because the door
+    // can no longer produce it. That is the point: this asserts the absence of a
+    // data migration, which no test driving the current door could reach.
+    const assignee = await member('member');
+    await assignTo(assignee.id);
+    const gate = await gateFor((await publish('frame')).id);
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: {
+        state: 'approved',
+        decidedById: fx.ownerId,
+        decidedAt: new Date('2026-09-09T10:00:00.000Z'),
+        decidedUnderAuthority: 'reporter',
+      },
+    });
+
+    const row = await rowOf(gate.id);
+    expect(row.decidedUnderAuthority).toBe('reporter');
+    expect(row.decidedById).toBe(fx.ownerId);
+    expect(row.state).toBe('approved');
   });
 });
 

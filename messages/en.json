@@ -7970,7 +7970,7 @@
       },
       "notAuthorised": {
         "title": "This decision is not yours to make.",
-        "next": "It can be decided by the work item's assignee, its reporter, or a workspace admin."
+        "next": "It can be decided by the work item's assignee — or its reporter when it has no assignee — or a workspace admin."
       },
       "notFound": {
         "title": "This decision is no longer here.",

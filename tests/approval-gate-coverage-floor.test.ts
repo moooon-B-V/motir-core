@@ -264,8 +264,9 @@ describe('ApprovalGateAlreadyDecidedError — the message degrades honestly (MOT
 
 describe('getForWorkItem — `canDecide` resolves the ADMIN arm too (MOTIR-4796)', () => {
   it('is true for a workspace admin who is neither assignee nor reporter', async () => {
-    // The frame's own read composes the SAME three-term authority the door
-    // applies, and its admin term is the one the per-card suite never reached:
+    // The frame's own read and the door now call the SAME function
+    // (`approvalGatesService.resolveGateAuthority`, MOTIR-5192), and its ADMIN
+    // arm is the one the per-card suite never reached:
     // `approval-gate-read.test.ts` drives the assignee and reporter arms, so an
     // admin opening somebody else's card would have been shown a port with no
     // verbs by a read nothing had exercised — while the door would have

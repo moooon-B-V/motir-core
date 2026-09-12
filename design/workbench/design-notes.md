@@ -920,7 +920,7 @@ it draws IN PLACE rather than throwing. The props the row supplies:
 | prop                                            | what the row supplies                                                                                                                    |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `gate`                                          | the `ApprovalGateDTO` behind the row                                                                                                     |
-| `canDecide`                                     | the AUTHORITY answer — assignee OR reporter OR admin (ADR §2's amendment), never the routing one                                         |
+| `canDecide`                                     | the AUTHORITY answer — assignee, reporter when there is no assignee, or admin (ADR §2's 2026-09-11 amendment), never the routing one     |
 | `kindLabel` / `subjectMeta`                     | band 1: _Design result_, and _Published 4 days ago · 3 files · `9840d00ea1b2`_ — where `subject.noteExcerpt` lands                       |
 | `port`                                          | band 2, the subject RENDERED. **Its contents are the KIND's, not this asset's** — the mock draws a token stand-in, never a specification |
 | `verbs` / `consequence` / `confirmConsequences` | band 3                                                                                                                                   |
@@ -971,9 +971,11 @@ rule, in one sentence: a decided row keeps its position, swaps its Decide cell
 for a state pill, and leaves on the NEXT LOAD — it never vanishes under the
 cursor.**
 
-**Why.** This is a SHARED queue: routing shows a gate to one person, but ADR §2's
-amendment lets assignee OR reporter OR admin press it, so a row can be decided by
-somebody else while you are reading it. A surface that sometimes removes a row
+**Why.** This is a SHARED queue: routing shows a gate to one person, but ADR §2
+lets an ADMIN press any gate, so a row can be decided by somebody else while you
+are reading it. (Before §2's 2026-09-11 amendment the reporter of an ASSIGNED
+item could press it too; narrowing that arm removed one route into this state and
+not the state itself, so the rule below is unchanged.) A surface that sometimes removes a row
 silently and sometimes explains one teaches the reader that **disappearance is
 ambiguous**, which is the most expensive thing a queue can teach. And the frame
 already refuses to vanish one interaction over — when somebody else decides

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from './DesignResultPanel';
+import { useOptimisticStatusWriter } from './OptimisticStatusProvider';
 import { decideApprovalGateAction } from '../approvalGateActions';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { DesignEvidenceDTO, DesignGateSubjectDTO } from '@/lib/dto/designEvidence';
@@ -66,6 +67,10 @@ export function DesignResultSection({
   const t = useTranslations('approvalGate');
   const tDesign = useTranslations('approvalGate.designResult');
   const router = useRouter();
+  // The IN-BROWSER path to the status rail (Bug MOTIR-5212). A no-op outside the
+  // item page's provider — this same frame renders on the Workbench's Approvals
+  // tab, where there is no rail to move.
+  const { applyOptimisticStatus } = useOptimisticStatusWriter();
 
   // The gate as the SECTION currently knows it: the server's, until this reader
   // decides — then the decided row THIS response returned. Reconciling from the
@@ -137,12 +142,36 @@ export function DesignResultSection({
       decision,
       identifier: itemIdentifier,
     });
+    // ⚠️ A REFUSAL APPLIES NOTHING, WHICH IS THIS PATH'S WHOLE ROLLBACK. The
+    // optimistic status is read OFF the response, so on a non-2xx there is no
+    // value to apply and no override to retract — the frame draws the typed
+    // refusal in place, exactly as it did before, and the rail never moved. That
+    // ordering is deliberate rather than incidental: an optimistic value taken
+    // from a write's own result cannot outlive a write that did not happen.
     if (!result.ok) return result.refusal;
     setCurrent(result.gate);
-    // The SERVER surfaces the decision also moved: the status pill above, and
-    // the readiness of every card this one was blocking. `router.refresh()` is
-    // the only thing that reaches them, and it cannot reach this component's own
-    // state — which is why both halves are here.
+    // THE RAIL, IN THE BROWSER (Bug MOTIR-5212) — before the refresh, because
+    // the whole defect is that the refresh's apply is intermittently lost.
+    //
+    // `outcomeRef` is the status key the deciding transaction RECORDED writing
+    // (`approvalGatesService.decide` → `effect.statusWritten`), so this repeats
+    // the server's own answer rather than re-deriving "approve is terminal for
+    // this kind" client-side. It is NULL on every arm that moved nothing —
+    // `request_changes` among them — so the second test in
+    // `approval-gate-repaint.spec.ts`, which asserts the rail does NOT move,
+    // holds here by there being nothing to apply.
+    applyOptimisticStatus(result.gate.outcomeRef);
+    // The SERVER surfaces the decision also moved: the record band's `Files
+    // kept` line, and the readiness of every card this one was blocking.
+    // `router.refresh()` is what reaches them, and it cannot reach this
+    // component's own state — which is why both halves are here.
+    //
+    // ⚠️ IT IS NO LONGER THE ONLY THING THAT REACHES THE STATUS RAIL, AND THIS
+    // COMMENT USED TO SAY IT WAS (Bug MOTIR-5212). The rail now has the
+    // in-browser path directly above; the refresh still runs, still reaches the
+    // surfaces that have no such path, and still RECONCILES the rail — an
+    // arriving server render supersedes the optimistic value in the same render,
+    // including when it disagrees with it.
     //
     // ⚠️ AND IT IS NOT THE ONLY THING THAT REACHES THEM ANY MORE — THE ACTION
     // REVALIDATES TOO, AND THAT IS THE HALF THAT HAD BEEN MISSING (Bug
