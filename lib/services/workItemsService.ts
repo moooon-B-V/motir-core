@@ -6315,6 +6315,18 @@ async function collectReadyLeaves(
   const scopedContainers = new Set<string>();
   const scopedLeafIds = new Set<string>();
 
+  // ⚠️ THE BUG DESTINATION IS NEVER DISPATCHABLE (MOTIR-4927). Every project is
+  // created with a container its filed bugs land in, and while it is empty it is
+  // a childless `todo` leaf — so without this the dispatch read would hand an
+  // agent the container itself. It is skipped only as a LEAF: once bugs land in
+  // it, it is a ready container like any other and the walk descends into it.
+  const bugDestinationId =
+    (
+      await withWorkspaceServiceContext(workspaceId, (tx) =>
+        projectRepository.findById(projectId, tx),
+      )
+    )?.bugDestinationId ?? null;
+
   let frontier = await withWorkspaceServiceContext(workspaceId, (tx) =>
     workItemRepository.findReadyLayer(projectId, workspaceId, null, tx),
   );
@@ -6335,7 +6347,7 @@ async function collectReadyLeaves(
         if (inScope || (ancestorIds !== null && ancestorIds.has(row.id))) {
           scopedContainers.add(row.id);
         }
-      } else if (row.statusCategory === 'todo') {
+      } else if (row.statusCategory === 'todo' && row.id !== bugDestinationId) {
         leaves.push(row); // ready, childless, to-start
         if (inScope) scopedLeafIds.add(row.id);
       }

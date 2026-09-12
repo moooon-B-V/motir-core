@@ -99,12 +99,12 @@ test('@smoke shell: sidebar nav renders, navigates, and marks the active item', 
   );
   await expect(issuesLink).not.toHaveAttribute('aria-current', 'page');
 
-  // Navigate to Issues → the real issue list renders (empty state for a fresh
-  // project, Subtask 2.5.3) + Issues becomes current.
+  // Navigate to Issues → the real issue list renders (a fresh project's only row
+  // is its seeded bug container, MOTIR-4927) + Issues becomes current.
   await issuesLink.click();
   await page.waitForURL('**/items');
   await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'No work items yet' })).toBeVisible();
+  await expect(page.locator('[data-testid^="issue-row-"]')).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'Work Items' })).toHaveAttribute(
     'aria-current',
     'page',

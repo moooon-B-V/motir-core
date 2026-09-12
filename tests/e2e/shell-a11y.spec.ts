@@ -43,14 +43,14 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
   },
   {
     path: '/items',
-    // The sweep's user has a project but no issues → the real route renders its
-    // empty state inside a Suspense boundary. Wait for BOTH the page h1 (level:1
-    // — the empty-state h2 "No issues yet" substring-matches a bare name:'Work Items')
-    // AND the resolved empty state, so axe analyses the settled DOM, not a
-    // mid-stream frame. (2.5.6 adds the POPULATED /items sweep with a fixture.)
+    // The sweep's user has a fresh project, which is NOT empty: it is created with
+    // its bug container (MOTIR-4927), so the real route renders that one row
+    // inside a Suspense boundary. Wait for BOTH the page h1 (level:1) AND the
+    // resolved row, so axe analyses the settled DOM, not a mid-stream frame.
+    // (2.5.6 adds the POPULATED /items sweep with a fixture.)
     ready: async (page) => {
       await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'No work items yet' })).toBeVisible();
+      await expect(page.locator('[data-testid^="issue-row-"]')).toHaveCount(1);
     },
   },
   {

@@ -129,7 +129,18 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
     const migrated = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       workItemRepository.findByProjectAndStatusKey(fx.projectId, 'todo', tx),
     );
-    expect(migrated.map((w) => w.id).sort()).toEqual([...ids].sort());
+    // The project's bug container (MOTIR-4927) was seeded in `todo` already; it
+    // is not one of the migrated items.
+    const { bugDestinationId } = await adminDb.project.findUniqueOrThrow({
+      where: { id: fx.projectId },
+      select: { bugDestinationId: true },
+    });
+    expect(
+      migrated
+        .map((w) => w.id)
+        .filter((id) => id !== bugDestinationId)
+        .sort(),
+    ).toEqual([...ids].sort());
   });
 
   it('also migrates ARCHIVED referencing items (their status still points at the deleted key)', async () => {
