@@ -30,6 +30,7 @@
     "db:backfill:pull-requests": "tsx --tsconfig tsconfig.node.json scripts/backfill-historical-pull-requests.ts",
     "db:backfill:pr-base-ref": "tsx --tsconfig tsconfig.node.json scripts/backfill-pull-request-base-ref.ts",
     "db:reevaluate:repo-set": "tsx --tsconfig tsconfig.node.json scripts/reevaluate-repo-set-completion.ts",
+    "ops:fleet-cost": "tsx --tsconfig tsconfig.node.json scripts/fleet-cost-readout.ts",
     "db:backfill:embeddings": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-embeddings.ts",
     "db:stamp:onboarding": "tsx --tsconfig tsconfig.node.json scripts/stamp-onboarding-ran.ts",
     "test": "vitest run",
