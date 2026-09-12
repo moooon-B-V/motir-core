@@ -123,6 +123,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ childIds: Array<string>; itemId: string; outcome: "cascaded"; postDatedIds?: Array<string> | undefined; toStatus: string } | { itemId: string; outcome: "access_denied" } | { itemId: string; outcome: "no_matching_status" } | { itemId: string; outcome: "no_open_children" } | { itemId: string; outcome: "post_dated_only"; postDatedIds: Array<string> } | { itemId: string; outcome: "toggle_off" } | { outcome: "not_done" } | { outcome: "unresolvable" }',
   },
+  'catch-up-paused-indexes': {
+    file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
+    shape:
+      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
+  },
   'deliver-digest': {
     file: 'lib/jobs/definitions/publicFollowDigestDeliver.ts',
     shape: '{ itemCount: number; sent: boolean }',
