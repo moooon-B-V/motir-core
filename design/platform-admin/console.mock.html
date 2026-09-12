@@ -719,6 +719,43 @@
       .seg-opt.active svg {
         color: var(--el-accent-on-surface);
       }
+      /* MOTIR-4594 rev 2 - a segment carries its row COUNT, and a reason that is not
+         active yet is drawn disabled rather than omitted. The disabled state is carried
+         by its WORDS and the cursor, not by a fainter ink: faint and muted inks fail AA
+         on the segmented surface (tests/design-ink-contrast.test.ts). */
+      .seg-count {
+        margin-left: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .seg-opt.is-disabled {
+        cursor: not-allowed;
+      }
+      .seg-opt.is-disabled .seg-count {
+        font-weight: 500;
+        font-style: italic;
+      }
+      .stopped-tools {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .stopped-tools .stopped-search {
+        max-width: 260px;
+      }
+      .tbl th.sorted {
+        color: var(--el-text-strong);
+      }
+      .tbl th.sorted svg {
+        width: 12px;
+        height: 12px;
+        margin-left: 4px;
+        vertical-align: -2px;
+      }
 
       /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
       .card {
@@ -5089,8 +5126,9 @@
       on the SHIPPED Monitoring page, not a segment of the unshipped Usage &amp; cost page (Yue,
       2026-09-12). The headline is the per-tier CROSSING RATE against the recalculate threshold; the
       Free row shows an exhausted count instead, because its one-time allowance is a hard stop.
-      Below it, the THREE hard-stop lists — no credit, Free allowance used, and the margin ceiling
-      drawn not-yet-active. Internal COGS only: Motir does not charge for code indexing.
+      Below it, ONE list of stopped orgs — the reason is a filter and a column, so it holds 212 Free
+      orgs as easily as 2; the margin ceiling is a disabled filter until MOTIR-5280 lands. Internal
+      COGS only: Motir does not charge for code indexing.
     </div>
     <div class="panel">
       <div class="stage">
@@ -5343,120 +5381,144 @@
                     >
                   </div>
                 </div>
-                <div class="grid-2">
-                  <div class="card">
-                    <div class="card-head">
-                      <div class="ttl">
-                        <span class="ico ent-org" style="width: 30px; height: 30px"
-                          ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg
-                        ></span>
-                        <div>
-                          <h3>Stopped · no credit</h3>
-                          <p class="hsub">Hard gate A — visible balance at zero.</p>
-                        </div>
-                      </div>
-                      <span class="pill pill-down">2 stopped</span>
-                    </div>
-                    <div class="card-body flush">
-                      <table class="tbl">
-                        <thead>
-                          <tr>
-                            <th>Org</th>
-                            <th>Tier</th>
-                            <th class="num">Stopped for</th>
-                            <th class="num">Graph behind</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td>Globex</td>
-                            <td>Standard</td>
-                            <td class="num">3 days</td>
-                            <td class="num">41 commits</td>
-                          </tr>
-                          <tr>
-                            <td>Initech</td>
-                            <td>Pro</td>
-                            <td class="num">6 h</td>
-                            <td class="num">2 commits</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    <div class="card-foot">
-                      <span style="font-size: 12px; color: var(--el-text-secondary)"
-                        >Resumes on its own at a top-up; the catch-up refreshes only repos that
-                        moved.</span
-                      >
-                    </div>
-                  </div>
-                  <div class="card">
-                    <div class="card-head">
-                      <div class="ttl">
-                        <span class="ico ent-org" style="width: 30px; height: 30px"
-                          ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg
-                        ></span>
-                        <div>
-                          <h3>Stopped · Free allowance used</h3>
-                          <p class="hsub">One-time index allowance exhausted — Free tier only.</p>
-                        </div>
-                      </div>
-                      <span class="pill pill-down">2 stopped</span>
-                    </div>
-                    <div class="card-body flush">
-                      <table class="tbl">
-                        <thead>
-                          <tr>
-                            <th>Org</th>
-                            <th class="num">Stopped for</th>
-                            <th class="num">Graph behind</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td>Hooli Labs</td>
-                            <td class="num">9 days</td>
-                            <td class="num">118 commits</td>
-                          </tr>
-                          <tr>
-                            <td>Pied Piper</td>
-                            <td class="num">1 day</td>
-                            <td class="num">7 commits</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    <div class="card-foot">
-                      <span style="font-size: 12px; color: var(--el-text-secondary)"
-                        >Resumes when the org upgrades to a paid plan. The graph is frozen, not
-                        withheld.</span
-                      >
-                    </div>
-                  </div>
-                </div>
-                <div class="card reserved">
+                <div class="card">
                   <div class="card-head">
                     <div class="ttl">
                       <span class="ico ent-org" style="width: 30px; height: 30px"
                         ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg
                       ></span>
                       <div>
-                        <h3>Stopped · margin ceiling</h3>
+                        <h3>Stopped orgs</h3>
                         <p class="hsub">
-                          Hard gate B — index COGS reached the reserved headroom (paid tiers).
+                          Indexing paused by a hard stop. Every one resumes on its own — nobody
+                          re-arms it.
                         </p>
                       </div>
                     </div>
-                    <span class="pill pill-neutral">Not active · MOTIR-5280</span>
+                    <span class="pill pill-down">219 stopped</span>
                   </div>
-                  <div class="card-body">
-                    <p class="reserved-note">
-                      <strong>Not active yet.</strong> This gate waits on the agent-lane margin
-                      calibration (MOTIR-4483) and the cost-basis decision (MOTIR-4598). Until it
-                      lands nothing is ever listed here — so an empty list means
-                      <strong>the gate is off</strong>, not that no org is near the ceiling. No
-                      figure is drawn, deliberately.
-                    </p>
+                  <!-- ONE collection, ONE layout (Yue, 2026-09-12): the reason is a FILTER and a
+                       COLUMN, never a card per reason. Two cards cannot show 212 orgs. -->
+                  <div class="card-body stopped-tools">
+                    <div class="segmented" role="group" aria-label="Stop reason">
+                      <button class="seg-opt active" aria-pressed="true">
+                        All<span class="seg-count">219</span>
+                      </button>
+                      <button class="seg-opt" aria-pressed="false">
+                        No credit<span class="seg-count">7</span>
+                      </button>
+                      <button class="seg-opt" aria-pressed="false">
+                        Free allowance used<span class="seg-count">212</span>
+                      </button>
+                      <button
+                        class="seg-opt is-disabled"
+                        aria-disabled="true"
+                        title="Hard gate B is not active yet (MOTIR-5280)"
+                      >
+                        Margin ceiling<span class="seg-count">not active</span>
+                      </button>
+                    </div>
+                    <div class="searchbar stopped-search">
+                      <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Find an org…
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th class="name">Org</th>
+                          <th>Tier</th>
+                          <th>Reason</th>
+                          <th class="num sorted" aria-sort="descending">
+                            Stopped for<svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>
+                          </th>
+                          <th class="num">Graph behind</th>
+                          <th>Resumes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">H</span
+                              ><span class="nm">Hooli Labs</span></span
+                            >
+                          </td>
+                          <td>Free</td>
+                          <td><span class="pill pill-down">Free allowance used</span></td>
+                          <td class="num">41 days</td>
+                          <td class="num">1,204 commits</td>
+                          <td><span class="muted">on upgrade</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">P</span
+                              ><span class="nm">Pied Piper</span></span
+                            >
+                          </td>
+                          <td>Free</td>
+                          <td><span class="pill pill-down">Free allowance used</span></td>
+                          <td class="num">23 days</td>
+                          <td class="num">118 commits</td>
+                          <td><span class="muted">on upgrade</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">G</span
+                              ><span class="nm">Globex</span></span
+                            >
+                          </td>
+                          <td>Standard</td>
+                          <td><span class="pill pill-down">No credit</span></td>
+                          <td class="num">9 days</td>
+                          <td class="num">41 commits</td>
+                          <td><span class="muted">on top-up or renewal</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">V</span
+                              ><span class="nm">Vandelay Imports</span></span
+                            >
+                          </td>
+                          <td>Free</td>
+                          <td><span class="pill pill-down">Free allowance used</span></td>
+                          <td class="num">6 days</td>
+                          <td class="num">0 commits</td>
+                          <td><span class="muted">on upgrade</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">I</span
+                              ><span class="nm">Initech</span></span
+                            >
+                          </td>
+                          <td>Pro</td>
+                          <td><span class="pill pill-down">No credit</span></td>
+                          <td class="num">6 h</td>
+                          <td class="num">2 commits</td>
+                          <td><span class="muted">on top-up or renewal</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–25 of 219 ·
+                      longest-stopped first · the catch-up refreshes only repos that moved</span
+                    >
+                    <div class="pager">
+                      <span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                      >
+                      <span>Page 1 of 9</span>
+                      <span class="pbtn"
+                        >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                      ></span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5787,6 +5849,27 @@
             <p>
               Its billing and one-time index allowance were provisioned on the first index draw. A
               normal row, not an empty one.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+            ></span>
+            <h4>No org is stopped</h4>
+            <p>
+              The Stopped orgs list says so in words, with the filter counts at 0 — not an empty
+              table a reader has to interpret.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg
+            ></span>
+            <h4>Margin ceiling · not active</h4>
+            <p>
+              The filter is drawn <strong>disabled</strong>, never omitted. Hard gate B waits on
+              MOTIR-4483 and MOTIR-4598 (MOTIR-5280), so an empty result would mean
+              <strong>the gate is off</strong>, not that no org is near the ceiling.
             </p>
           </div>
           <div class="state">

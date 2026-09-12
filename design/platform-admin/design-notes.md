@@ -921,15 +921,13 @@ twin: _is the gate sized right?_
 - **Enterprise** reads `Allowance not configured` — set on the plan by staff.
 - **Internal cost basis** is `advertised credits + index allowance`, drawn as a sum with its cadence,
   so it can never be read as the advertised figure (which stays `catalog.ts`'s `monthlyCredits`).
-- **THREE hard-stop lists, never merged:**
-  1. **Stopped · no credit** (hard gate A) — org, tier, stopped for, graph behind. Foot: resumes on
-     its own at a top-up; the catch-up refreshes only repos that moved.
-  2. **Stopped · Free allowance used** — org, stopped for, graph behind. Foot: resumes on upgrade;
-     the graph is frozen, not withheld.
-  3. **Stopped · margin ceiling** (hard gate B) — a `card.reserved` with a
-     `Not active · MOTIR-5280` pill and a note. **No list, no figure.** Hard gate B waits on the
-     agent-lane margin calibration (MOTIR-4483) and the cost-basis decision (MOTIR-4598), and the
-     note says outright that an empty list means _the gate is off_, not _no org is near the ceiling_.
+- **ONE list of stopped orgs, the reason as a FILTER and a COLUMN** _(revised 2026-09-12, Yue: "Stopped · no credit and Stopped · Free allowance used are designed as 2 cards, I don't see how I can see a large list of orgs there")._ The first revision drew one card per reason, and it contradicted its own table: the Free row counts **212** exhausted orgs, and a card of rows cannot hold them. The stopped set is one collection, so it gets one layout:
+  - **Head:** `Stopped orgs` + a `pill-down` total (`219 stopped`).
+  - **Toolbar:** a `Segmented` reason filter, each option carrying its count — `All 219` · `No credit 7` · `Free allowance used 212` · `Margin ceiling · not active`. The last is **drawn disabled, never omitted**: hard gate B waits on MOTIR-4483 / MOTIR-4598 (MOTIR-5280), and a missing option would read as "no such stop". An org search sits beside it.
+  - **Table:** `Org` · `Tier` · `Reason` (`pill-down`) · `Stopped for` (sorted, longest first) · `Graph behind` · `Resumes` (`on top-up or renewal` / `on upgrade`). The two reasons stay distinguishable per row, which is the point the separate cards were trying to make.
+  - **Foot:** `Showing 1–25 of 219 · longest-stopped first` + the shipped `pager`, exactly Panel 4's at-scale grammar.
+  - The per-tier counts above (the Free row's `212 exhausted`, the no-credit total) are the list's filter counts. MOTIR-4595 links a count to the filtered list, so a count and its list can never disagree.
+- **The "nothing" states** (Panel 14b) gain two: `No org is stopped` (said in words, filter counts at 0) and `Margin ceiling · not active` (the disabled filter's meaning, moved from the retired reserved card).
 - **Every figure is illustrative.** The index:token ratio and the recalculate threshold are
   MOTIR-4588's to measure and propose, and the card foot says so.
 
@@ -1017,10 +1015,23 @@ by-workspace and by-model usage rollup; MOTIR-732 keeps the Usage & cost page.
 | `monitoring.indexAllowance.reading.free`         | No soft gate — hard stop                                                                                           |
 | `monitoring.indexAllowance.reading.unconfigured` | Allowance not configured                                                                                           |
 | `monitoring.indexAllowance.foot`                 | Crossing the allowance does not stop indexing on a paid tier — Motir absorbs the overrun and records the crossing. |
-| `monitoring.stopped.noCredit`                    | Stopped · no credit                                                                                                |
-| `monitoring.stopped.freeUsed`                    | Stopped · Free allowance used                                                                                      |
-| `monitoring.stopped.margin`                      | Stopped · margin ceiling                                                                                           |
-| `monitoring.stopped.marginInactive`              | Not active yet. An empty list means the gate is off, not that no org is near the ceiling.                          |
+| `monitoring.stopped.title`                       | Stopped orgs                                                                                                       |
+| `monitoring.stopped.subtitle`                    | Indexing paused by a hard stop. Every one resumes on its own — nobody re-arms it.                                  |
+| `monitoring.stopped.total`                       | {count} stopped                                                                                                    |
+| `monitoring.stopped.filter.all`                  | All                                                                                                                |
+| `monitoring.stopped.filter.noCredit`             | No credit                                                                                                          |
+| `monitoring.stopped.filter.freeUsed`             | Free allowance used                                                                                                |
+| `monitoring.stopped.filter.margin`               | Margin ceiling                                                                                                     |
+| `monitoring.stopped.filter.marginInactive`       | not active                                                                                                         |
+| `monitoring.stopped.filter.marginInactiveHint`   | Hard gate B is not active yet. An empty result would mean the gate is off, not that no org is near the ceiling.    |
+| `monitoring.stopped.search`                      | Find an org…                                                                                                       |
+| `monitoring.stopped.col.stoppedFor`              | Stopped for                                                                                                        |
+| `monitoring.stopped.col.graphBehind`             | Graph behind                                                                                                       |
+| `monitoring.stopped.col.resumes`                 | Resumes                                                                                                            |
+| `monitoring.stopped.resumes.topUp`               | on top-up or renewal                                                                                               |
+| `monitoring.stopped.resumes.upgrade`             | on upgrade                                                                                                         |
+| `monitoring.stopped.foot`                        | Showing {from}–{to} of {total} · longest-stopped first · the catch-up refreshes only repos that moved              |
+| `monitoring.stopped.empty`                       | No org is stopped.                                                                                                 |
 | `orgs.indexCost.title`                           | Index & fleet cost · this period                                                                                   |
 | `orgs.indexCost.creditBalance`                   | Credit balance                                                                                                     |
 | `orgs.indexCost.customerSees`                    | Customer sees this                                                                                                 |
