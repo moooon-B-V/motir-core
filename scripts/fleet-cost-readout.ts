@@ -42,10 +42,8 @@
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
 import { db } from '@/lib/db';
-import { isCloudBilling } from '@/lib/billing/availability';
-import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
-import { periodEndFor, periodStartFor } from '@/lib/ciMetering/period';
-import { parsePeriodArg, renderMeterDisabled, renderReadout } from './fleetCostReadout';
+import { parsePeriodArg } from './fleetCostReadout';
+import { buildFleetCostReadout } from './fleetCostReadoutQuery';
 
 const TAG = '[fleet-cost]';
 
@@ -70,36 +68,10 @@ function parseArgs(argv: string[]): Args {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-
-  // The disabled path prints and STOPS — it never reaches the database. Off-cloud
-  // the rollup is empty because no fleet ever ran, and reporting that emptiness as
-  // figures would state a fact the build cannot have.
-  if (!isCloudBilling()) {
-    console.log(renderMeterDisabled());
-    return;
-  }
-
-  const periodStart = periodStartFor(args.at);
-
-  const metaSplit = await ciFleetCostMeterService.getMetaPeriodCostSplit(args.at);
-  const org = args.organizationId
-    ? {
-        organizationId: args.organizationId,
-        lines: await ciFleetCostMeterService.getOrgPeriodCostByWorkload(
-          args.organizationId,
-          args.at,
-        ),
-      }
-    : undefined;
-
-  console.log(
-    renderReadout({
-      periodStart,
-      periodEnd: periodEndFor(periodStart),
-      org,
-      metaSplit,
-    }),
-  );
+  // The read and the render live in `fleetCostReadoutQuery.ts` so the story's
+  // rehearsal can call the SAME readout this prints (MOTIR-4545).
+  const { text } = await buildFleetCostReadout(args);
+  console.log(text);
 }
 
 main()
