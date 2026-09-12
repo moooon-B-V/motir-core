@@ -231,6 +231,28 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
     // And the routing FK goes the same way, on a row the publish path wrote.
     expect(row.routedToId).toBeNull();
   });
+
+  it('a decider with a BLANK name degrades to the bare email — never to `<email>`', async () => {
+    // `actorLabel`'s own header says this in as many words — *"`User.name` is
+    // non-nullable but not non-EMPTY, so a blank one degrades to the bare email
+    // rather than to `<email>`"* — and nothing asserted it. A documented degrade
+    // with no test is a sentence, not a behaviour: the arm that produces
+    // `<email>` is one missing falsy check away, and `<jo@example.com>` in an
+    // audit column reads as a bug in the name rather than as an absent name.
+    const decider = await member('member');
+    await adminDb.user.update({ where: { id: decider.id }, data: { name: '' } });
+    await assignTo(decider.id);
+    const gate = await gateFor((await publish('frame')).id);
+
+    await approvalGatesService.decide(
+      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      { userId: decider.id, workspaceId: fx.workspaceId },
+    );
+
+    const row = await rowOf(gate.id);
+    expect(row.decidedByLabel).toBe(decider.email);
+    expect(row.decidedByLabel).not.toContain('<');
+  });
 });
 
 describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, §6a)', () => {
