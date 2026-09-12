@@ -680,9 +680,15 @@ export const projectAccessService = {
    * almost everywhere. This answers the narrower *is this actor a manager of the
    * whole workspace?*, which is only ever correct as ONE ARM of a rule whose
    * other arms are not permissions either — a RELATIONSHIP to a specific row.
-   * Its one caller is the approval-gate decide door, whose authority ADR
-   * `approval-gates.md` §2 settles as **assignee OR reporter OR admin** on top of
-   * the kind's permission floor (`docs/decisions/permission-inventory.md` R64).
+   * Its one caller is the approval-gate authority rule
+   * (`approvalGatesService.resolveGateAuthority`, read by the decide door and by
+   * the render read), which ADR `approval-gates.md` §2's 2026-09-11 amendment
+   * settles as **the assignee, or the reporter when there is no assignee, or an
+   * admin** on top of the kind's permission floor
+   * (`docs/decisions/permission-inventory.md` R64). That amendment narrowed the
+   * relationship arms onto §2's routing rule and left THIS arm untouched — it is
+   * now the only escape hatch when the routed recipient is unavailable, which is
+   * precisely the job a role-derived override should be doing.
    * Reach for `assertPermission` first; reach for this only when the rule you are
    * expressing genuinely is not a permission.
    *

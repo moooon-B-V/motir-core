@@ -220,12 +220,13 @@ export interface GateHandler<TSubject = unknown> {
    * WHO the gate is shown to — ADR §2: `assigneeId ?? reporterId`, exactly ONE
    * recipient.
    *
-   * ⚠️ ROUTING is not AUTHORITY. This answers *whose job is it to look?*; who may
-   * PRESS is assignee OR reporter OR admin, applied by the door for every kind
-   * (§2's amendment). A gate shown to one person can be decided by three, and
-   * that is coherent rather than sloppy — widening authority costs the queue
-   * nothing, because a reporter deciding from the item page never sees the gate
-   * in their own tab.
+   * ⚠️ ROUTING is not AUTHORITY, though after §2's 2026-09-11 amendment the two
+   * COINCIDE here. This answers *whose job is it to look?*; who may PRESS is the
+   * assignee, the reporter WHEN THERE IS NO ASSIGNEE, or an admin, applied by
+   * the door for every kind. The first two arms are exactly the recipient this
+   * method returns — the gate is pressed by the person it is shown to — and an
+   * admin is the escape hatch, deciding from the item page without the gate
+   * appearing in their own tab.
    *
    * ⚠️ TAKES {@link GateRoutingArgs}, NOT `GateEffectArgs`, and that narrowing is
    * what gives this method a caller at all — see the note on that type. The

@@ -16,9 +16,10 @@ import { createTestPerson } from './testPerson';
 //     person's queue is defined by what is routed TO them. The reviewer has a
 //     gate; the READER has none (the empty state); the VIEWER has one routed to
 //     them that they may not decide.
-//   · A `viewer` for the see-but-not-decide row. `canDecide` is *assignee OR
-//     reporter OR workspace manager*, applied ON TOP of the kind's permission
-//     FLOOR (`work_item:edit`). A project `viewer` who is the ASSIGNEE is
+//   · A `viewer` for the see-but-not-decide row. `canDecide` is *assignee, or
+//     reporter when there is NO assignee, or workspace manager* (ADR §2's
+//     2026-09-11 amendment), applied ON TOP of the kind's permission FLOOR
+//     (`work_item:edit`). A project `viewer` who is the ASSIGNEE is
 //     therefore routed a gate they cannot press — the only shape that produces
 //     the frame's state `B` on this surface, and one a member or an owner
 //     cannot stand in for.
@@ -96,10 +97,12 @@ export async function seedApprovalsTab(slug: string): Promise<ApprovalsTabSeed> 
     });
   }
 
-  // ⚠️ ALL THREE ARE PLAIN WORKSPACE MEMBERS. `canDecide`'s third arm is read
+  // ⚠️ ALL THREE ARE PLAIN WORKSPACE MEMBERS. `canDecide`'s ADMIN arm is read
   // off the WORKSPACE role, so seeding any of them as owner or admin would make
   // them able to decide everything and the see-but-not-decide assertion would
-  // pass without the permission floor existing at all.
+  // pass without the permission floor existing at all. Since §2's 2026-09-11
+  // amendment that arm is the ONLY authority a non-recipient has, which makes
+  // this seeding choice load-bearing rather than merely tidy.
   async function member(label: string, name: string, role: 'member' | 'viewer'): Promise<string> {
     const user = await createTestPerson({
       email: `at-${label}-${slug}@example.com`,
