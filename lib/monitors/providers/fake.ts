@@ -37,6 +37,8 @@ export interface FakeMonitorState {
   projects: NormalizedMonitorProject[];
   issues: NormalizedMonitorIssue[];
   health: NormalizedMonitorHealth;
+  /** The organisation the fake's installation belongs to. */
+  orgSlug: string | null;
   /** Installation ids passed to `verifyInstall`, in order — what proves the
    *  CONNECT card verified rather than only exchanged. */
   verifiedInstallations: string[];
@@ -77,6 +79,7 @@ const freshState = (): FakeMonitorState => ({
     },
   ],
   health: { status: 'connected', reason: null, checkedAt: new Date() },
+  orgSlug: 'fake-org',
   verifiedInstallations: [],
   resolvedIssues: [],
   refreshCount: 0,
@@ -116,6 +119,11 @@ export const fakeMonitorProvider: MonitorProvider = {
   async verifyInstall({ installationId }): Promise<void> {
     guard('verifyInstall');
     state.verifiedInstallations.push(installationId);
+  },
+
+  async describeInstallation(): Promise<{ orgSlug: string | null }> {
+    guard('describeInstallation');
+    return { orgSlug: state.orgSlug };
   },
 
   async refreshCredential(): Promise<MonitorCredential> {

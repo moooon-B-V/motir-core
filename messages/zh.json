@@ -371,6 +371,7 @@
       "estimation": "估算",
       "report": "报表与筛选器",
       "repository": "代码仓库",
+      "integration": "集成",
       "import": "导入",
       "ai": "AI规划"
     },
@@ -485,6 +486,10 @@
     "repository_manage_access": {
       "label": "管理代码访问权限",
       "description": "决定哪些团队成员可以克隆项目代码。"
+    },
+    "integration_manage": {
+      "label": "管理集成",
+      "description": "为本项目连接和断开第三方服务——错误监控、其存储的凭据，以及绑定了它的哪些项目。"
     },
     "import_run": {
       "label": "导入工作项",

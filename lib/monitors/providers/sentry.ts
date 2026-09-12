@@ -194,6 +194,21 @@ export const sentryMonitorProvider: MonitorProvider = {
     );
   },
 
+  /** `GET /sentry-app-installations/{installationId}/` — the same resource the
+   *  verify PUTs to. The organisation is what every org-scoped method needs and
+   *  what the install redirect does not carry (see the interface's note). */
+  async describeInstallation({ installationId, accessToken }): Promise<{ orgSlug: string | null }> {
+    const res = await call(
+      'describeInstallation',
+      MONITOR_VERIFY_INSTALL_TIMEOUT_MS,
+      `${apiBase()}/sentry-app-installations/${encodeURIComponent(installationId)}/`,
+      { method: 'GET', headers: jsonHeaders(accessToken) },
+    );
+    const body = (await res.json()) as { organization?: { slug?: unknown } };
+    const slug = body.organization?.slug;
+    return { orgSlug: typeof slug === 'string' && slug.length > 0 ? slug : null };
+  },
+
   /** The SAME authorizations endpoint as the exchange, with
    *  `grant_type: 'refresh_token'`. */
   async refreshCredential({ installationId, refreshToken }): Promise<MonitorCredential> {

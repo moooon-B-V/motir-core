@@ -78,3 +78,36 @@ export class MonitorProviderCallError extends Error {
     this.name = 'MonitorProviderCallError';
   }
 }
+
+/**
+ * This workspace has no monitor grant at all — nothing has been connected, or
+ * the last binding was removed and took its credential with it.
+ *
+ * A distinct type from {@link MonitorConnectionAlreadyExistsError} because the
+ * remedy is opposite: this one means "start the install", that one means
+ * "you already have this".
+ */
+export class MonitorGrantNotFoundError extends Error {
+  readonly code = 'MONITOR_GRANT_NOT_FOUND' as const;
+  constructor(readonly workspaceId: string) {
+    super('This workspace has no connected error monitor.');
+    this.name = 'MonitorGrantNotFoundError';
+  }
+}
+
+/**
+ * No such binding — or one in another workspace, which is the SAME answer
+ * deliberately.
+ *
+ * The no-existence-leak posture every project-scoped service here keeps: a row
+ * that does not exist and a row belonging to another tenant are literally
+ * indistinguishable to a caller, so a cross-tenant id cannot be confirmed as
+ * real by the shape of the refusal.
+ */
+export class MonitorConnectionNotFoundError extends Error {
+  readonly code = 'MONITOR_CONNECTION_NOT_FOUND' as const;
+  constructor(readonly connectionId: string) {
+    super('That monitor connection does not exist.');
+    this.name = 'MonitorConnectionNotFoundError';
+  }
+}

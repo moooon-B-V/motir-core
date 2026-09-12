@@ -371,6 +371,7 @@
       "estimation": "Estimation",
       "report": "Reports & filters",
       "repository": "Repositories",
+      "integration": "Integrations",
       "import": "Import",
       "ai": "AI planning"
     },
@@ -485,6 +486,10 @@
     "repository_manage_access": {
       "label": "Manage code access",
       "description": "Decide which team members may clone the project’s code."
+    },
+    "integration_manage": {
+      "label": "Manage integrations",
+      "description": "Connect and disconnect third-party services for this project — an error monitor, its stored credential, and which of its projects are bound."
     },
     "import_run": {
       "label": "Import work items",

@@ -134,6 +134,13 @@ export const PERMISSION_DOMAINS = [
   'estimation',
   'report',
   'repository',
+  // MOTIR-5258 · MOTIR-5260 — a third-party CREDENTIAL is its own domain. It is
+  // not `repository` (that domain governs which repositories a project uses, and
+  // an error monitor is not one) and folding it onto `project:administer` would
+  // silently widen a project-admin key into credential management, which is a
+  // grant nobody chose. One key per manageable domain is the catalog's own
+  // pattern — `repository:manage`, `automation:manage`, `workflow:manage`.
+  'integration',
   'import',
   'ai',
 ] as const;
@@ -217,6 +224,10 @@ export const PERMISSIONS = [
   'saved_filter:manage',
   'repository:manage',
   'repository:manage_access',
+  // MOTIR-5260 — connecting, listing and disconnecting a third-party MONITOR
+  // credential. Placed BESIDE its domain's start, contiguously, because the
+  // token picker groups by domain while rendering in this order (MOTIR-3361).
+  'integration:manage',
   'import:run',
   'ai:configure',
   'ai:plan',
@@ -317,6 +328,7 @@ const PERMISSION_META: Record<
   'saved_filter:manage': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2352
   'repository:manage': { domain: 'repository', enforcement: 'enforced' },
   'repository:manage_access': { domain: 'repository', enforcement: 'enforced' },
+  'integration:manage': { domain: 'integration', enforcement: 'enforced' }, // MOTIR-5260
   'import:run': { domain: 'import', enforcement: 'enforced' }, // MOTIR-2353
   'ai:configure': { domain: 'ai', enforcement: 'enforced' },
   'ai:plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2355 / -2357 / -2358 / -2359

@@ -125,6 +125,30 @@ export interface MonitorProvider {
   verifyInstall(input: { installationId: string; accessToken: string }): Promise<void>;
 
   /**
+   * WHICH ORGANISATION this installation belongs to.
+   *
+   * `GET /api/0/sentry-app-installations/{installationId}/` — the same resource
+   * {@link verifyInstall} PUTs to, read rather than written.
+   *
+   * ⚠️ IT WAS ADDED BY ITS CONSUMER, WHICH IS THIS SEAM'S OWN RULE WORKING. The
+   * interface is defined alongside its first implementation, and MOTIR-5260 —
+   * the first real caller — found that every other org-scoped method takes an
+   * `orgSlug` and nothing could supply one: the install redirect carries an
+   * installation id and no organisation. So the grant has to ASK, once, at
+   * connect, and record the answer on the installation row. A seam whose
+   * consumer cannot use it is the failure the alongside rule exists to prevent,
+   * and finding that out at the first call site rather than in a vacuum is
+   * precisely the intended outcome.
+   *
+   * Bounded by {@link MONITOR_VERIFY_INSTALL_TIMEOUT_MS} — it is the same
+   * resource, read on the same interactive leg.
+   */
+  describeInstallation(input: {
+    installationId: string;
+    accessToken: string;
+  }): Promise<{ orgSlug: string | null }>;
+
+  /**
    * Mint the next credential from the stored refresh token.
    *
    * The SAME authorizations endpoint as {@link exchangeGrant}, with
