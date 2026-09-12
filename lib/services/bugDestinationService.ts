@@ -1,6 +1,11 @@
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { PLANNER_BUG_HOME_STORY_TITLE } from '@/lib/ai/plannerBugHome';
 
@@ -113,5 +118,83 @@ export const bugDestinationService = {
 
       return { parentId: null, reason: 'root_selected' as const };
     });
+  },
+
+  /**
+   * ONE-TIME BACKFILL of a project that predates the pointer — Subtask
+   * MOTIR-4936. Gives every existing project a destination, so no project is
+   * left without one and `resolve`'s transitional branch can eventually be
+   * retired.
+   *
+   * Two outcomes, and which one applies is decided by what the project ALREADY
+   * has:
+   *
+   *   * a project that already carries a LEGACY title-matched home gets a
+   *     POINTER AT THAT HOME — it is not given a second container, and the
+   *     existing one is not renamed, re-kinded or moved. This is the meta
+   *     tenant's case, and `PLANNER_BUG_HOME_STORY_TITLE` keeps meaning exactly
+   *     what it meant;
+   *   * any other project gets a freshly seeded container and a pointer at it.
+   *
+   * ⚠️ **IT MUST NEVER FILL A NULL THAT SOMEBODY CHOSE**, and that is the one
+   * way this method could do real damage: `null` is the ROOT, a first-class
+   * choice, so a sweep that "tidies" every null would silently move a team's
+   * incoming bugs out of the place they deliberately put them. Two things keep
+   * that safe, and both are load-bearing:
+   *
+   *   1. **It is a no-op for any project that ALREADY has a pointer** — so
+   *      re-running it is free, which is what makes it safe as operator tooling.
+   *   2. ⚠️ **IT MUST RUN BEFORE MOTIR-4938 SHIPS THE PICKER.** Until a person
+   *      can choose the root, a null pointer can only mean *not configured yet*,
+   *      and the ambiguity this method cannot resolve does not exist. After the
+   *      picker ships, a null is no longer evidence of anything and this sweep
+   *      must not be run again. That ordering is the reason it is a script an
+   *      operator runs once rather than a reconciler on a timer.
+   *
+   * Returns what it did, so the sweep can report rather than guess.
+   */
+  async backfillDestination(
+    projectId: string,
+    actorUserId: string,
+  ): Promise<'already_pointed' | 'pointed_at_legacy_home' | 'seeded_container'> {
+    // The OPENING read is the one context nothing can supply: the sweep hands
+    // this a bare projectId and the workspace is what the read RESOLVES. That is
+    // exactly the case `project_workspace_or_system_read`'s `app.system_admin`
+    // arm exists for, and it is how `boardsService.backfillDefaultBoard` does
+    // the same thing. Everything after runs tenant-scoped.
+    const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
+    if (!project) throw new ProjectNotFoundError(projectId);
+
+    return withWorkspaceContext(
+      { userId: actorUserId, workspaceId: project.workspaceId },
+      async (tx) => {
+        // Re-read INSIDE the tenant transaction rather than trusting the system
+        // read above: a project that gained a pointer between the sweep's query
+        // and this call must be a no-op, which is what makes re-running free.
+        const current = await projectRepository.findById(projectId, tx);
+        if (!current) throw new ProjectNotFoundError(projectId);
+        if (current.bugDestinationId != null) return 'already_pointed' as const;
+
+        const legacy = await workItemRepository.findByProjectKindAndTitle(
+          projectId,
+          'story',
+          PLANNER_BUG_HOME_STORY_TITLE,
+          tx,
+        );
+        if (legacy) {
+          await projectRepository.updateBugDestination(projectId, legacy.id, tx);
+          return 'pointed_at_legacy_home' as const;
+        }
+
+        const container = await workItemsService.seedBugContainer(
+          projectId,
+          project.workspaceId,
+          actorUserId,
+          tx,
+        );
+        await projectRepository.updateBugDestination(projectId, container.id, tx);
+        return 'seeded_container' as const;
+      },
+    );
   },
 };
