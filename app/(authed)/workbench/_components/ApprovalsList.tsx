@@ -38,9 +38,11 @@ import type { GateRefusal } from '@/lib/approvalGates/refusals';
 // ONE row open at a time.
 //
 // ⚠️ A DECIDED ROW SETTLES IN PLACE — it does not vanish under the cursor. This
-// is a SHARED queue: routing shows a gate to one person, but ADR §2's amendment
-// lets assignee OR reporter OR admin press it, so a row can be decided by
-// somebody else while you are reading it. A surface that sometimes removes a row
+// is a SHARED queue: routing shows a gate to one person, but ADR §2 lets an
+// ADMIN press any gate, so a row can be decided by somebody else while you are
+// reading it. (Until §2's 2026-09-11 amendment the reporter of an ASSIGNED item
+// could press it too; narrowing that arm removed one way this happens and not
+// the shape itself, so the rule below is unchanged.) A surface that sometimes removes a row
 // silently and sometimes explains one teaches that disappearance is ambiguous —
 // and the frame already draws its refusal IN PLACE one interaction over, so a
 // list that removed rows would contradict the panel inside it. The read returns
@@ -358,7 +360,11 @@ function ApprovalRow({
                 tDesign('confirm.keepsFiles'),
                 tDesign('confirm.movesToDone', { key: row.workItem.identifier }),
               ]}
-              routedToLabel={null}
+              // Panel 5's *see but not decide* line — "the Decide cell names
+              // who it is waiting on" (`design/workbench/design-notes.md` § 20).
+              // The ROW's answer, never the session's: see
+              // `ApprovalQueueRowDto.routedToName`.
+              routedToLabel={row.routedToName}
               filesKept={subject ? subject.filesKept : null}
               onDecide={onDecide}
             />

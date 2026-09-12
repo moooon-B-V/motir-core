@@ -262,13 +262,6 @@ describe('row-level security over the new column, under the non-bypass role', ()
     });
     expect(untouched.bugDestinationId).toBeNull();
   });
-
-  it('runs under a role that does NOT bypass RLS', async () => {
-    // The guard on every assertion above: if `@/lib/db` were the owner, each
-    // "refused" case would be vacuous. Pinned here rather than assumed.
-    const rows = await db.$queryRaw<Array<{ rolbypassrls: boolean }>>`
-      SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user
-    `;
-    expect(rows[0]!.rolbypassrls).toBe(false);
-  });
+  // Every "refused" case above is vacuous if `@/lib/db` bypasses RLS; that the
+  // harness role does not is pinned once, in `tests/app-role-identity.test.ts`.
 });

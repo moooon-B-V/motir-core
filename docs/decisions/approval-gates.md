@@ -33,15 +33,15 @@
   on nothing. **No behaviour ships in the amendment either** — the ADR only, plus
   the one-line pointer §6c owes `design-result.md` §7.
 
-  | clause                    | what changed                                                                                                                    |
-  | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-  | **§1** (INCOMPLETE)       | `decision_approval` joins the enum, and the SUBJECT is re-stated as _a document with a resolver_ rather than a concrete row     |
-  | **§2** (WRONG)            | AUTHORITY is **assignee OR reporter OR admin** for both verbs, not two permission keys. ROUTING is unchanged                    |
-  | **§3** (WRONG)            | approving writes `done` **only when there is no linked open pull request**; otherwise it writes `approved` and the merge closes |
-  | **§4** (partly falsified) | the merge gate DOES write a status — `approved` — and still does not write `done`                                               |
-  | **§6b** (incomplete)      | the `approved` WORK-ITEM status, and `decisionSource: github` with the unmappable-actor rule                                    |
-  | **§6c** (FAILS SILENTLY)  | the pin is keyed on the **SUBJECT**, not on the gate kind                                                                       |
-  | **§8 · §9** (new)         | THE TWO WORKFLOWS, and HOW TO TEST as a first-class deliverable                                                                 |
+  | clause                    | what changed                                                                                                                                                                                                                    |
+  | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | **§1** (INCOMPLETE)       | `decision_approval` joins the enum, and the SUBJECT is re-stated as _a document with a resolver_ rather than a concrete row                                                                                                     |
+  | **§2** (WRONG)            | AUTHORITY is **assignee OR reporter OR admin** for both verbs, not two permission keys. ROUTING is unchanged. **⚠️ The reporter arm was itself narrowed on 2026-09-11 — see §2's SECOND amendment, which is the rule in force** |
+  | **§3** (WRONG)            | approving writes `done` **only when there is no linked open pull request**; otherwise it writes `approved` and the merge closes                                                                                                 |
+  | **§4** (partly falsified) | the merge gate DOES write a status — `approved` — and still does not write `done`                                                                                                                                               |
+  | **§6b** (incomplete)      | the `approved` WORK-ITEM status, and `decisionSource: github` with the unmappable-actor rule                                                                                                                                    |
+  | **§6c** (FAILS SILENTLY)  | the pin is keyed on the **SUBJECT**, not on the gate kind                                                                                                                                                                       |
+  | **§8 · §9** (new)         | THE TWO WORKFLOWS, and HOW TO TEST as a first-class deliverable                                                                                                                                                                 |
 
   **§8 is the one to read first.** It is the discriminator the other five
   amendments are consequences of.
@@ -299,6 +299,88 @@ gate but not decide it sees its state and no control.
 > by a person pressing a button on an item that is already theirs, and a team
 > that wants a narrower rule sets `prMergeMode` per project (§7) rather than
 > per role.
+
+> ### §2 — SECOND AMENDMENT (MOTIR-5192, 2026-09-11): the REPORTER may press only when there is NO ASSIGNEE
+>
+> **This REVERSES the reporter half of the amendment directly above.** That
+> amendment is dated, reasoned and was right about the question it was answering;
+> it stays in full, above, so a reader can see that authority was considered the
+> other way round and why. What follows is the rule in force.
+>
+> **ROUTING IS STILL UNCHANGED.** `assigneeId ?? reporterId`, exactly one
+> recipient, for the reason §2's original paragraphs give. Every amendment to
+> this section so far has left routing alone, and this one does too.
+>
+> **THE RULE IS: the ASSIGNEE, or the REPORTER WHEN THE ITEM HAS NO ASSIGNEE, or
+> an ADMIN.** The reporter arm becomes conditional on `assigneeId === null`.
+>
+> | axis                                          | rule                                                                                                    |
+> | --------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+> | **ROUTING** — whose Approvals tab it lands in | `assigneeId ?? reporterId` — exactly ONE recipient. **Unchanged, again**                                |
+> | **AUTHORITY** — who may press                 | **assignee, or reporter when there is no assignee, or admin**, both verbs; an admin may act on ANY item |
+>
+> **AUTHORITY NOW COLLAPSES ONTO THE ROUTING RULE for the relationship arms.**
+> `assigneeId ?? reporterId` and _"the assignee, or the reporter when there is no
+> assignee"_ are the same person, term for term. A gate is pressed by the person
+> it is shown to, or by an admin. The two axes have not stopped being different
+> questions — they part company at the admin override, and only there.
+>
+> **WHY, and it is a different failure from the one the first amendment
+> optimised for.** An approval is a statement that somebody looked, and it means
+> less when it is ambiguous who. With an assignee on the item and two people able
+> to press, the decision belongs to neither in particular: either can sign off
+> work the other was accountable for, and each can reasonably assume the other
+> is the one being asked. Ownership is the whole question a gate exists to ask,
+> and the routing rule already answers it — the amendment above then let two
+> people answer it.
+>
+> **WHY THE ADMIN ARM IS A SUFFICIENT ESCAPE HATCH, stated rather than assumed —
+> because the worry it is answering is a real one.** The 2026-09-08 amendment's
+> stated reason was _"a gate whose single recipient is on leave, has left the
+> company, or was never the right person, with nobody able to unblock the work."_
+> That stall is still possible and still must be answerable. **It is now answered
+> by an admin instead of by the reporter, and that is a better shape for an
+> override, not merely an equivalent one:**
+>
+> - **It is VISIBLE.** Workspace owner/admin is a role in the permission grid. A
+>   team can see who can unblock a stuck gate without reading a work item's
+>   reporter column.
+> - **It is GRANTABLE.** A team that needs more unblockers grants the role; a
+>   team that needs fewer does not. The reporter arm was un-tunable — it came
+>   attached to whoever happened to file the item, which for an MCP-filed card is
+>   an automation's account.
+> - **It is AUDITABLE.** `decided_under_authority` records `admin`, and a reader
+>   of that row can ask what that role was and who held it. `reporter` on an
+>   assigned item recorded a relationship that answered no question anybody was
+>   asking.
+> - **It costs the queue nothing**, exactly as the first amendment's own argument
+>   had it: an admin pressing from the item page never sees the gate in their own
+>   tab.
+>
+> **WHAT THIS COSTS.** An unblock now needs an admin rather than anyone with a
+> relationship to the item, so a small team with one admin has one unblocker. That
+> is the accepted trade: the stall is rare, an admin is reachable, and the thing
+> being bought — an approval that belongs to exactly one person — is paid for on
+> every gate rather than on the rare one.
+>
+> **WHAT WOULD REVERSE THIS AGAIN.** Evidence that gates actually stall: a
+> measurable population of `awaiting` gates whose routed recipient is inactive
+> and whose project has no reachable admin. The instrument is the gate table's own
+> `created_at` against `routed_to_id` — if such gates accumulate, the answer is to
+> widen the ESCAPE HATCH (a project-scoped approver role, say), and **not** to
+> re-widen the relationship arms, which is what makes ownership ambiguous. A
+> narrower `prMergeMode` per project (§7) remains the per-team dial either way.
+>
+> **`decided_under_authority` IS UNCHANGED, and historical rows are NOT
+> migrated.** The `reporter` member stays legal in the vocabulary — it simply
+> becomes reachable only on an unassigned item. Rows that say `reporter` on an
+> assigned item record what was true when the press happened, which is the entire
+> reason §6a freezes the arm rather than re-deriving it; a migration over them
+> would destroy the one thing the column exists to preserve.
+>
+> **THE FLOOR IS UNCHANGED.** The kind's permission key is still asserted first
+> and independently, and the relationship test is applied on top of it. A project
+> `viewer` who is the assignee is still refused, at the floor.
 
 ### 3. What approving a DESIGN result does — DECIDED BY THE PLANNER (rung 3: the story's own stated intent)
 

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { ApprovalGateNotAuthorisedError } from '@/lib/approvalGates/errors';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
@@ -19,13 +20,20 @@ import { truncateAuthTables } from './helpers/db';
 //     `(workItemId, kind, subjectId)`), so a read that returned "the awaiting
 //     gate" would hand the design section a merge gate the moment that kind
 //     ships. This is the assertion that stops it.
-//   · `canDecide` IS THE AUTHORITY ANSWER, NOT THE ROUTING ONE. A gate is SHOWN
-//     to one person and may be PRESSED by three. A read that returned the
-//     routing answer would draw state `B` — the port, no verbs — for a reporter
-//     who is perfectly entitled to decide, and the work would sit there.
-//   · IT AGREES WITH THE DOOR. `canDecide: true` from this read and a refusal
-//     from `decide` is the one disagreement that matters: it draws verbs the
-//     door then refuses. So the composition is asserted to be the same one.
+//   · `canDecide` IS THE AUTHORITY ANSWER, NOT THE ROUTING ONE — and after ADR
+//     §2's 2026-09-11 amendment (MOTIR-5192) the two COINCIDE for the
+//     relationship arms and part company only at the ADMIN override. The rule is
+//     the assignee, or the reporter WHEN THERE IS NO ASSIGNEE, or an admin. A
+//     read that returned the routing answer would draw state `B` — the port, no
+//     verbs — for an admin who is perfectly entitled to decide, and the work
+//     would sit there.
+//   · IT AGREES WITH THE DOOR, ASSERTED OVER THE WHOLE MATRIX rather than case
+//     by case. `canDecide: true` and a refusal from `decide` draws verbs the
+//     door refuses; `canDecide: false` and a successful `decide` withholds verbs
+//     from somebody entitled to them. BOTH are failures, and only a matrix
+//     catches the second — which is exactly the half a narrowing applied to one
+//     site and not the other produces. The two now read ONE function
+//     (`resolveGateAuthority`), and this matrix is what proves it.
 //   · NO EXISTENCE LEAK. A cross-workspace card reads as "nothing awaiting",
 //     never as a gate somebody else's tenant owns.
 
@@ -42,8 +50,26 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/**
+ * ⚠️ `reporterId` EXISTS BECAUSE `fx.ownerId` IS ALSO A WORKSPACE OWNER, and
+ * that overlap made the reporter arm untestable in isolation (MOTIR-5192).
+ *
+ * Everything the fixture creates is reported by `fx.ownerId`, who is the
+ * workspace's owner — so `isWorkspaceManagerFor` is true for them and the ADMIN
+ * arm authorises them whatever the reporter arm says. Under the old
+ * `assignee OR reporter OR admin` rule the reporter term short-circuited first
+ * and nobody noticed; the moment that term became conditional, every "the
+ * reporter is refused" assertion started passing through the admin arm instead.
+ *
+ * So a test about the REPORTER arm reports the item as a PLAIN MEMBER. A test
+ * about the admin arm is the one that keeps the owner.
+ */
 async function designSubtaskWithGate(
-  opts: { assigneeId?: string | null; kind?: 'design_result' | 'pull_request_merge' } = {},
+  opts: {
+    assigneeId?: string | null;
+    reporterId?: string;
+    kind?: 'design_result' | 'pull_request_merge';
+  } = {},
 ) {
   const story = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'story', title: 'Approve a design' },
@@ -60,10 +86,13 @@ async function designSubtaskWithGate(
   // authority.
   await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
   await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
-  if (opts.assigneeId !== undefined) {
+  if (opts.assigneeId !== undefined || opts.reporterId !== undefined) {
     await adminDb.workItem.update({
       where: { id: item.id },
-      data: { assigneeId: opts.assigneeId },
+      data: {
+        ...(opts.assigneeId !== undefined ? { assigneeId: opts.assigneeId } : {}),
+        ...(opts.reporterId !== undefined ? { reporterId: opts.reporterId } : {}),
+      },
     });
   }
   const gate = await withWorkspaceContext(fx.ctx, (tx) =>
@@ -79,6 +108,16 @@ async function designSubtaskWithGate(
     ),
   );
   return { story, item, gate };
+}
+
+/** A workspace member with no administrative role — see the helper's note on why
+ *  the fixture OWNER cannot stand in for a reporter or an assignee. */
+async function plainMember() {
+  const user = await createTestUser();
+  await adminDb.workspaceMembership.create({
+    data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+  });
+  return user;
 }
 
 describe('approvalGatesService.getAwaitingForWorkItem', () => {
@@ -141,42 +180,187 @@ describe('approvalGatesService.getAwaitingForWorkItem', () => {
 });
 
 describe('canDecide — the AUTHORITY answer, and it agrees with the door', () => {
-  it('is true for the REPORTER even when the gate is routed to somebody else', async () => {
-    // Routing is `assigneeId ?? reporterId` — ONE recipient. Authority is
-    // assignee OR reporter OR admin. The fixture owner is the reporter here and
-    // the assignee is a different member, so a read that returned the ROUTING
-    // answer would say false.
-    const other = await createTestUser();
-    const { item } = await designSubtaskWithGate({ assigneeId: other.id });
+  it('is FALSE for the REPORTER when the gate is routed to an assignee (ADR §2, 2026-09-11)', async () => {
+    // Routing is `assigneeId ?? reporterId` — ONE recipient. Authority is the
+    // assignee, the reporter WHEN THERE IS NO ASSIGNEE, or an admin. Here the
+    // assignee is somebody else, so the reporter arm is closed and this reader
+    // gets state `B`: the port, no verbs.
+    //
+    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT SAID UNTIL 2026-09-11, and the
+    // inversion is the card's whole subject. The 2026-09-08 amendment let three
+    // people press a gate shown to one; an approval that two people could have
+    // made is owned by neither. Kept rather than deleted, with its reason, so
+    // the file records that authority was once the other way round.
+    const reporter = await plainMember();
+    const assignee = await plainMember();
+    const { item } = await designSubtaskWithGate({
+      assigneeId: assignee.id,
+      reporterId: reporter.id,
+    });
 
     const read = await approvalGatesService.getAwaitingForWorkItem(
       { workItemId: item.id, kind: 'design_result' },
-      fx.ctx,
+      { userId: reporter.id, workspaceId: fx.workspaceId },
+    );
+
+    // The gate is READ — being unable to press is not being unable to see.
+    expect(read.gate).not.toBeNull();
+    expect(read.canDecide).toBe(false);
+  });
+
+  it('is TRUE for the SAME reporter when the item has NO assignee — the condition DISCRIMINATES', async () => {
+    // The pair of the case above, differing in exactly one field. Without it the
+    // assertion above is satisfied by a `canDecide` that is simply always false,
+    // which is precisely what a careless narrowing writes.
+    const reporter = await plainMember();
+    const { item } = await designSubtaskWithGate({
+      assigneeId: null,
+      reporterId: reporter.id,
+    });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      { userId: reporter.id, workspaceId: fx.workspaceId },
     );
 
     expect(read.gate).not.toBeNull();
     expect(read.canDecide).toBe(true);
   });
 
-  it('agrees with the DOOR: a reader it says may decide is not refused by decide()', async () => {
-    const other = await createTestUser();
-    const { item, gate } = await designSubtaskWithGate({ assigneeId: other.id });
+  it('is TRUE for an ADMIN on an item that HAS an assignee — the escape hatch the narrowing left standing', async () => {
+    const assignee = await createTestUser();
+    const admin = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
+    });
+    const { item } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
     const read = await approvalGatesService.getAwaitingForWorkItem(
       { workItemId: item.id, kind: 'design_result' },
-      fx.ctx,
+      { userId: admin.id, workspaceId: fx.workspaceId },
     );
-    expect(read.canDecide).toBe(true);
 
-    // ⚠️ THE AGREEMENT IS THE POINT. Drawing verbs the door then refuses is the
-    // failure this pair exists to catch, and it can only be caught by running
-    // BOTH — either half alone is self-consistent.
-    const decided = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
-      fx.ctx,
-    );
-    expect(decided.gate.state).toBe('approved');
+    expect(read.canDecide).toBe(true);
   });
+});
+
+describe('canDecide AGREES WITH THE DOOR over the whole authority matrix (MOTIR-5192)', () => {
+  // ⚠️ A MATRIX, NOT A CASE LIST, and the difference is the point. The authority
+  // rule is resolved for TWO questions — what the surface renders (`canDecide`)
+  // and what the door enforces (`authority`) — and the failure this card exists
+  // to prevent is one of them being narrowed and the other not. Per-case
+  // assertions catch that only where somebody thought to write the case; running
+  // every row through BOTH halves catches it wherever the two disagree.
+  //
+  // Read each row as: for this relationship, with the item assigned or not, the
+  // surface says X and the door must agree with X. Either direction of
+  // disagreement is a failure — verbs drawn that are refused, and verbs withheld
+  // from somebody entitled to press.
+  const MATRIX: {
+    label: string;
+    relationship: 'assignee' | 'reporter' | 'admin' | 'bystander';
+    assigned: boolean;
+    canDecide: boolean;
+  }[] = [
+    { label: 'the ASSIGNEE', relationship: 'assignee', assigned: true, canDecide: true },
+    {
+      label: 'the REPORTER of an ASSIGNED item',
+      relationship: 'reporter',
+      assigned: true,
+      canDecide: false,
+    },
+    {
+      label: 'the REPORTER of an UNASSIGNED item',
+      relationship: 'reporter',
+      assigned: false,
+      canDecide: true,
+    },
+    {
+      label: 'an ADMIN on an ASSIGNED item',
+      relationship: 'admin',
+      assigned: true,
+      canDecide: true,
+    },
+    {
+      label: 'an ADMIN on an UNASSIGNED item',
+      relationship: 'admin',
+      assigned: false,
+      canDecide: true,
+    },
+    {
+      label: 'a plain MEMBER who is neither',
+      relationship: 'bystander',
+      assigned: true,
+      canDecide: false,
+    },
+    {
+      label: 'a plain MEMBER on an UNASSIGNED item',
+      relationship: 'bystander',
+      assigned: false,
+      canDecide: false,
+    },
+  ];
+
+  // BOTH VERBS, because the rule is stated for both and a conditional applied to
+  // one branch of the decide switch would pass an approve-only matrix.
+  const VERBS = ['approve', 'request_changes'] as const;
+
+  for (const row of MATRIX) {
+    for (const verb of VERBS) {
+      it(`${row.label}: canDecide is ${row.canDecide}, and \`${verb}\` agrees`, async () => {
+        // ⚠️ EVERY ACTOR IS A PLAIN MEMBER EXCEPT THE DELIBERATE ADMIN, and the
+        // REPORTER is written onto the item rather than inherited from the
+        // fixture. `fx.ownerId` reports everything the fixture creates AND owns
+        // the workspace, so a matrix built on it would resolve four of these
+        // seven rows through the admin arm and prove nothing about the
+        // relationship arms at all (see the helper's note).
+        const assignee = await plainMember();
+        const reporter = await plainMember();
+
+        let actorId: string;
+        if (row.relationship === 'assignee') actorId = assignee.id;
+        else if (row.relationship === 'reporter') actorId = reporter.id;
+        else if (row.relationship === 'admin') {
+          const admin = await createTestUser();
+          await adminDb.workspaceMembership.create({
+            data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
+          });
+          actorId = admin.id;
+        } else actorId = (await plainMember()).id;
+
+        const { item, gate } = await designSubtaskWithGate({
+          assigneeId: row.assigned ? assignee.id : null,
+          reporterId: reporter.id,
+        });
+        const ctx = { userId: actorId, workspaceId: fx.workspaceId };
+
+        const read = await approvalGatesService.getAwaitingForWorkItem(
+          { workItemId: item.id, kind: 'design_result' },
+          ctx,
+        );
+        expect(read.canDecide).toBe(row.canDecide);
+
+        const press = approvalGatesService.decide(
+          { gateId: gate.id, decision: verb, source: 'ui' },
+          ctx,
+        );
+
+        if (row.canDecide) {
+          const decided = await press;
+          expect(decided.gate.state).toBe(verb === 'approve' ? 'approved' : 'changes_requested');
+        } else {
+          await expect(press).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
+          // Nothing was written — a refusal that half-decided would be worse
+          // than one that let the press through.
+          const persisted = await adminDb.approvalGate.findUniqueOrThrow({
+            where: { id: gate.id },
+          });
+          expect(persisted.state).toBe('awaiting');
+          expect(persisted.decidedUnderAuthority).toBeNull();
+        }
+      });
+    }
+  }
 });
 
 describe('no existence leak', () => {
@@ -193,5 +377,112 @@ describe('no existence leak', () => {
     // the decide door takes with its 404.
     expect(read.gate).toBeNull();
     expect(read.canDecide).toBe(false);
+  });
+});
+
+describe('routedToLabel — the *waiting on* line NAMES somebody (MOTIR-5191)', () => {
+  // ⚠️ THIS BLOCK IS THE HALF THE COMPONENT TESTS STRUCTURALLY CANNOT COVER.
+  // `tests/components/approval-gate-control.test.tsx` renders the frame with
+  // `routedToLabel: 'Mara S.'` and asserts the sentence — and it passed on the
+  // defect, because it supplied the name the application did not. A test that
+  // hands a component its input cannot discover that no caller ever does. So
+  // the assertions here drive the READ, and the guard beside them
+  // (`tests/approval-gate-routed-to-wiring.test.ts`) drives the CALL SITE.
+
+  it('names the ASSIGNEE the gate is routed to', async () => {
+    const other = await createTestUser({ name: 'Mara Sandoval' });
+    const { item } = await designSubtaskWithGate({ assigneeId: other.id });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    expect(read.routedToLabel).toBe('Mara Sandoval');
+  });
+
+  it('falls through to the REPORTER when the card has no assignee — §2 exactly', async () => {
+    const { item } = await designSubtaskWithGate({ assigneeId: null });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    // `assigneeId ?? reporterId`: the fixture owner reports every card it makes.
+    const reporter = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    expect(read.routedToLabel).toBe(reporter.name?.trim() || reporter.email);
+  });
+
+  it('degrades to the EMAIL when the routed member has a blank name', async () => {
+    // `User.name` is non-nullable but not non-EMPTY, so the display rule has to
+    // be `name || email` rather than `name ?? email` — a blank one would
+    // otherwise render *"Waiting on ."*
+    const nameless = await createTestUser();
+    await adminDb.user.update({ where: { id: nameless.id }, data: { name: '   ' } });
+    const { item } = await designSubtaskWithGate({ assigneeId: nameless.id });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    expect(read.routedToLabel).toBe(nameless.email);
+  });
+
+  it('SURVIVES the routed member being deleted — it does not strand the surface', async () => {
+    // Criterion 6, and the answer is structural rather than defensive:
+    // `WorkItem.assignee` is `onDelete: SetNull`, so deleting the assignee nulls
+    // the column and §2's rule falls through to the reporter — who is
+    // `onDelete: Restrict` and therefore cannot be deleted while they report the
+    // card at all. The surface degrades to a DIFFERENT REAL NAME, never to a
+    // broken read. This is also why ADR §3 is right that the routing column
+    // needs no surviving label beside it.
+    const leaver = await createTestUser({ name: 'Departed Member' });
+    const { item } = await designSubtaskWithGate({ assigneeId: leaver.id });
+
+    await adminDb.user.delete({ where: { id: leaver.id } });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    const reporter = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    expect(read.routedToLabel).toBe(reporter.name?.trim() || reporter.email);
+  });
+
+  it('tracks a REASSIGNMENT — the label is the LIVE routing answer, not the gate’s frozen `routedToId`', async () => {
+    // ⚠️ THE CARD PRESCRIBED `routedToId` AND THIS IS WHY IT DOES NOT.
+    // `routedToId` is written at gate CREATION (ADR §6a: *"the assignee can
+    // change afterwards"*) and is the AUDIT record of who was ASKED. The
+    // sentence it would feed is present tense and its reader's next act is to go
+    // and ask somebody — so on a reassigned card the frozen column names a
+    // person who no longer sees the gate at all. `approvalGateRepository`'s
+    // queue predicate makes the same choice for the same reason, in as many
+    // words. Both columns are right, about different questions.
+    const first = await createTestUser({ name: 'First Owner' });
+    const { item, gate } = await designSubtaskWithGate({ assigneeId: first.id });
+    // The helper creates the gate without one, so write the audit column the
+    // publish path would have written — otherwise the frozen-vs-live assertion
+    // below compares against a null and passes for the wrong reason.
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: { routedToId: first.id },
+    });
+
+    const second = await createTestUser({ name: 'Second Owner' });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: second.id } });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    expect(read.routedToLabel).toBe('Second Owner');
+    // And the audit column is untouched by the reassignment, which is the whole
+    // reason it exists — asserted here so the two can never be collapsed.
+    const frozen = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(frozen.routedToId).toBe(first.id);
   });
 });

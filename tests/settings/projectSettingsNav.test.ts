@@ -323,6 +323,10 @@ describe('projectSettingsNav registry — grouping', () => {
     ]);
     expect(groups.find((g) => g.group === 'work')?.entries.map((e) => e.id)).toEqual([
       'workflow',
+      // MOTIR-5170 — `approvals` sits directly after `workflow`, and the ORDER is
+      // the assertion: a status graph and an approval gate are the two things that
+      // decide when work may move, so they are neighbours rather than nested.
+      'approvals',
       'board',
       'estimation',
       'fields',
@@ -465,6 +469,16 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     permission: 'workflow:manage',
     source: 'lib/services/workflowsService.ts',
     gate: 'assertProjectAdmin',
+  },
+  // MOTIR-4925 · MOTIR-5170. The SAME key as `workflow`, and deliberately: a
+  // status graph and an approval gate are the two things that decide when work
+  // may move. Unlike its neighbour this service names the gate plainly —
+  // `projectAccessService.assertPermission(projectId, ctx, 'workflow:manage')`
+  // on both `getSettings` and `updateSettings` — so the evidence is the literal.
+  approvals: {
+    permission: 'workflow:manage',
+    source: 'lib/services/approvalGateSettingsService.ts',
+    gate: 'assertPermission',
   },
   board: {
     permission: 'board:configure',

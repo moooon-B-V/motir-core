@@ -337,6 +337,20 @@ describe('approvalGatesService.listAwaitingMe — the pager', () => {
       pageSize: 25,
     });
   });
+
+  it('a page of 0 — or one that truncates to 0 — is served as page 1, never as page 0', async () => {
+    // The LOW end of the clamp, where the test above covers the HIGH end. The
+    // window is 1-based and `skip` is `(page - 1) * pageSize`, so a page that
+    // reached 0 would ask Postgres for `OFFSET -pageSize` — an error, on an
+    // input a hand-typed `?page=0` produces. `Math.trunc(page ?? 1) || 1` is the
+    // guard; nothing asserted the `|| 1` arm, which is the one a simplification
+    // to `page ?? 1` would silently remove.
+    for (const page of [0, 0.4, Number.NaN]) {
+      const served = await approvalGatesService.listAwaitingMe(meCtx, { page, limit: 3 });
+      expect(served).toMatchObject({ page: 1, pageSize: 3 });
+      expect(served.items).toEqual([]);
+    }
+  });
 });
 
 describe('approvalGatesService.countAwaitingMe', () => {
@@ -527,5 +541,55 @@ describe('designEvidenceRepository.findManyByIds — the batch behind the subjec
     // the caller decides what a row with an unresolvable subject says.
     expect(rows.has('ev-that-is-gone')).toBe(false);
     expect(rows.size).toBe(1);
+  });
+});
+
+describe('approvalGatesService.listAwaitingMe — the *waiting on* name (MOTIR-5191)', () => {
+  // The Approvals tab mounts the SAME approval frame the item page does, so it
+  // inherited the same hardcoded `routedToLabel={null}` when MOTIR-4879 added
+  // it — a second instance of the defect, created two hours after the bug that
+  // reported the first. The row carries the name so the frame's state `B` line
+  // ("see but not decide", Panel 5) can draw it.
+
+  it('names the routed person on every row', async () => {
+    await gateOn({ title: 'Assigned to me', assigneeId: fx.ctx.userId });
+
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
+
+    const me = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]!.routedToName).toBe(me.name?.trim() || me.email);
+  });
+
+  it('reads it off the ROW, not off the session — an unassigned card names its REPORTER', async () => {
+    // ⚠️ THE ASSERTION THAT MAKES THE FIELD WORTH CARRYING. Every row in this
+    // queue is routed to the reader by the predicate, so a surface that drew
+    // the SESSION user's name would pass every other test in this file. It
+    // would also start lying the day §2's routing widened past one recipient.
+    // Here the reader is the reporter and the assignee column is empty, so the
+    // two derivations coincide in VALUE while differing in SOURCE — which is
+    // why the next assertion drives them apart.
+    await gateOn({ title: 'Unassigned, reported by me', assigneeId: null });
+
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
+
+    const me = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    expect(page.items[0]!.routedToName).toBe(me.name?.trim() || me.email);
+  });
+
+  it('resolves a whole page of names without a per-row read', async () => {
+    // The same property `summarizeGateSubjects` is asserted for one read up: a
+    // 25-row queue that named its recipients one at a time would be 25 round
+    // trips to draw one list. Asserted by OUTCOME — every row named, over a
+    // page with repeats — because the batch is what makes that affordable.
+    for (const title of ['One', 'Two', 'Three']) {
+      await gateOn({ title, assigneeId: fx.ctx.userId });
+    }
+
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
+
+    expect(page.items).toHaveLength(3);
+    expect(page.items.every((row) => row.routedToName !== null)).toBe(true);
+    expect(new Set(page.items.map((row) => row.routedToName)).size).toBe(1);
   });
 });

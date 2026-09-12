@@ -936,6 +936,27 @@ export const projectRepository = {
   },
 
   /**
+   * Update a project's APPROVAL-GATE switches (Story MOTIR-4925 · Subtask
+   * MOTIR-5170) — which gates this project raises. `tx` REQUIRED; the caller
+   * (`approvalGateSettingsService`) has already resolved the project and asserted
+   * `workflow:manage`, so this is a plain id-keyed update.
+   *
+   * Written as a SUBSET object rather than a single boolean because a second
+   * project-tier gate switch is already decided (`approval-gates.md` §7's merge
+   * mode), and the mirror of `updateStatusAutomation` above is the shape this
+   * repository already uses for a pair of related project booleans.
+   */
+  async updateApprovalGateSettings(
+    id: string,
+    data: {
+      acceptanceVideoEnabled?: boolean;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data });
+  },
+
+  /**
    * The CROSS-WORKSPACE scan behind the auto-plan cadence tick (MOTIR-916):
    * every non-archived project that opted into auto-planning, keyset-paginated
    * by id so the sweep is bounded per page (the `listDueByHour` precedent —

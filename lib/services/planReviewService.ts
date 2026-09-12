@@ -544,14 +544,28 @@ export const planReviewService = {
     // legitimately propose under many.
     //
     // The frontier is seeded with every id that must END UP in `ancestorById`:
-    // the committed parents' own parents (their rows came back in round 1), and
-    // — MOTIR-3191 — the inherited parents themselves, which did not.
+    // the committed parents' own parents (their rows came back in round 1),
+    // — MOTIR-3191 — the inherited parents themselves, which did not, and
+    // — bug MOTIR-5272 — the RE-PARENT DESTINATIONS' own parents, which are the
+    // third carrier and were the one this seeding never named.
+    //
+    // ⚠️ ALL THREE CARRIERS, because `lookupIds` has three and this list had two.
+    // `reparentIds` (a `modify`'s `patch.parentRef`, MOTIR-3859) rode the batched
+    // ROW read and nothing else, so a proposed MOVE resolved its destination and
+    // then walked the chain the card is LEAVING — `targetParentIds` is the
+    // target's CURRENT parent. `trailFor` therefore broke at the destination's
+    // own parent and returned the destination alone, and the breadcrumb drew
+    // `Roadmap › <destination>` with every ancestor above it missing: the exact
+    // shape `PlanReviewCanvas.trailTo` uses to mean *an archived ancestor*.
+    // Every earlier re-parent test moved a card onto a ROOT epic, where a
+    // one-element trail is correct, which is why this held for so long.
     const ancestorById = new Map(targets.map((t) => [t.id, t]));
     let frontier = Array.from(
       new Set([
         ...committedParentIds
           .map((id) => targetById.get(id)?.parentId)
           .filter((id): id is string => !!id),
+        ...reparentIds.map((id) => targetById.get(id)?.parentId).filter((id): id is string => !!id),
         ...targetParentIds,
       ]),
     );

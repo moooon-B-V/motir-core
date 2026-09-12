@@ -5,6 +5,7 @@ import type {
   GateHandler,
   GateRoutingArgs,
 } from '@/lib/approvalGates/registry';
+import { routingTargetId } from '@/lib/approvalGates/routing';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -74,7 +75,7 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
    *  It reads nothing but the item, which is exactly what §2's rule quantifies
    *  over. */
   routeTo({ item }: GateRoutingArgs): string | null {
-    return item.assigneeId ?? item.reporterId ?? null;
+    return routingTargetId(item);
   },
 
   /**

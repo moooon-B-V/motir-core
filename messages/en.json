@@ -1636,7 +1636,8 @@
       "components": "Components",
       "aiPlanning": "AI planning",
       "rules": "Rules",
-      "repositories": "Repositories"
+      "repositories": "Repositories",
+      "approvals": "Approvals"
     },
     "roles": {
       "admin": {
@@ -3570,6 +3571,7 @@
         "roles": "What each role in this project can do is managed by project admins. Ask an admin if a role needs changing.",
         "code-access": "Who on this team can clone and push this project's code is managed by project admins. You can still connect your own GitHub account from Git settings.",
         "workflow": "Statuses and the transitions between them are managed by project admins. Ask an admin if the workflow needs changing.",
+        "approvals": "Which approvals this project asks for — and the gates that hold work until somebody presses them — is managed by project admins. Ask an admin if a gate needs turning on or off.",
         "board": "Board configuration — columns, limits and swimlanes — is managed by project admins. Ask an admin if a column or a limit needs changing.",
         "estimation": "How this project estimates work is managed by project admins. Ask an admin if the scale needs changing.",
         "fields": "Custom fields are managed by project admins. Ask an admin if a field needs adding or changing.",
@@ -3619,6 +3621,10 @@
         "title": "Your account is connected. Your organisation’s is not.",
         "body": "That is a working state, not a problem — the two are independent. Connecting the organisation to a git host is something an organisation admin does, in Settings → Organisation → Git."
       }
+    },
+    "approvals": {
+      "title": "Approvals",
+      "pageDescription": "Which decisions this project asks a person to make before work is finished."
     }
   },
   "boards": {
@@ -7959,7 +7965,7 @@
       },
       "notAuthorised": {
         "title": "This decision is not yours to make.",
-        "next": "It can be decided by the work item's assignee, its reporter, or a workspace admin."
+        "next": "It can be decided by the work item's assignee — or its reporter when it has no assignee — or a workspace admin."
       },
       "notFound": {
         "title": "This decision is no longer here.",
@@ -7994,6 +8000,18 @@
         "keepsFiles": "keep this version's files, so the decision stays checkable;",
         "movesToDone": "move {key} to Done, starting the work items waiting on it."
       }
+    }
+  },
+  "approvals": {
+    "acceptanceVideo": {
+      "title": "Acceptance video approval",
+      "desc": "A story that has an acceptance video is held until a person approves it. It makes no difference where the video came from: a Motir agent run publishes one, and so does anything using the acceptance API.",
+      "on": "On",
+      "off": "Off",
+      "onWhat": "Any story with an acceptance video waits for approval — whoever published it.",
+      "offWhat": "No acceptance video is accepted for this project, and no story is held.",
+      "saved": "Saved",
+      "saveError": "Couldn't save — try again."
     }
   }
 }

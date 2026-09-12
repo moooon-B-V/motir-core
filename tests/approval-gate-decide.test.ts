@@ -56,9 +56,31 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/** A workspace member with no administrative role — see `designSubtaskWithGate`'s
+ *  note on why the fixture OWNER cannot stand in for one. */
+async function plainMember() {
+  const user = await createTestUser();
+  await adminDb.workspaceMembership.create({
+    data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+  });
+  return user;
+}
+
 /** A design subtask sitting in review with an `awaiting` design-result gate on
- *  it — the shape the publish path produces. */
-async function designSubtaskWithGate(opts: { assigneeId?: string | null } = {}) {
+ *  it — the shape the publish path produces.
+ *
+ *  ⚠️ `reporterId` EXISTS BECAUSE `fx.ownerId` IS ALSO A WORKSPACE OWNER, and
+ *  that overlap made the reporter arm untestable in isolation (MOTIR-5192).
+ *  Everything the fixture creates is reported by `fx.ownerId`, for whom
+ *  `isWorkspaceManagerFor` is true — so the ADMIN arm authorises them whatever
+ *  the reporter arm says. Under the old `assignee OR reporter OR admin` rule the
+ *  reporter term short-circuited first and the overlap was invisible; the moment
+ *  that term became conditional, every "the reporter is refused" assertion
+ *  started passing through the admin arm instead. So a test about the REPORTER
+ *  arm reports the item as a PLAIN MEMBER. */
+async function designSubtaskWithGate(
+  opts: { assigneeId?: string | null; reporterId?: string } = {},
+) {
   // A subtask must have a parent (`lib/issues/parentRules.ts`), which is also
   // the real shape: a design card hangs under the story it draws.
   const story = await workItemsService.createWorkItem(
@@ -71,10 +93,13 @@ async function designSubtaskWithGate(opts: { assigneeId?: string | null } = {}) 
   );
   await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
   await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
-  if (opts.assigneeId !== undefined) {
+  if (opts.assigneeId !== undefined || opts.reporterId !== undefined) {
     await adminDb.workItem.update({
       where: { id: item.id },
-      data: { assigneeId: opts.assigneeId },
+      data: {
+        ...(opts.assigneeId !== undefined ? { assigneeId: opts.assigneeId } : {}),
+        ...(opts.reporterId !== undefined ? { reporterId: opts.reporterId } : {}),
+      },
     });
   }
   const gate = await withWorkspaceContext(fx.ctx, (tx) =>
@@ -353,44 +378,95 @@ describe('approvalGatesService.decide — state refusals', () => {
   });
 });
 
-describe('approvalGatesService.decide — AUTHORITY is assignee OR reporter OR admin (ADR §2 amendment)', () => {
-  it('the REPORTER may decide, even with no assignee', async () => {
-    const { gate } = await designSubtaskWithGate({ assigneeId: null });
-    // `fx.ownerId` is the reporter of everything the fixture creates.
-    const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
-      fx.ctx,
-    );
-    expect(result.gate.state).toBe('approved');
-  });
+describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTER only when UNASSIGNED, or an ADMIN (ADR §2, 2026-09-11)', () => {
+  // ⚠️ THIS BLOCK WAS REVERSED ON 2026-09-11 (MOTIR-5192). Until then the
+  // reporter arm was UNCONDITIONAL — §2's MOTIR-4911 amendment of 2026-09-08 —
+  // and these tests asserted that a reporter could press a gate on an ASSIGNED
+  // item. The narrowing collapses authority onto the routing rule for the two
+  // relationship arms: the gate is pressed by the person it is SHOWN to, or by
+  // an admin. The superseded reasoning stays visible in the ADR rather than
+  // being deleted from it.
+  //
+  // ⚠️ EVERY ARM IS ASSERTED FOR BOTH VERBS. The rule is stated for approve and
+  // request_changes alike, and a conditional applied to one branch of the decide
+  // path would pass an approve-only suite while leaving the refusal unreachable
+  // on the other.
+  const VERBS = ['approve', 'request_changes'] as const;
+  const STATE_OF = { approve: 'approved', request_changes: 'changes_requested' } as const;
 
-  it('the ASSIGNEE may decide when they are not the reporter', async () => {
-    const assignee = await createTestUser();
-    await adminDb.workspaceMembership.create({
-      data: { userId: assignee.id, workspaceId: fx.workspaceId, role: 'member' },
+  for (const verb of VERBS) {
+    it(`the REPORTER may \`${verb}\` when the item has NO assignee`, async () => {
+      // A PLAIN MEMBER reports the item, so this exercises the reporter arm and
+      // only that arm. With no assignee §2 routes the gate to them, so authority
+      // and routing name the same person — the whole shape of the amendment.
+      const reporter = await plainMember();
+      const { gate } = await designSubtaskWithGate({
+        assigneeId: null,
+        reporterId: reporter.id,
+      });
+
+      const result = await approvalGatesService.decide(
+        { gateId: gate.id, decision: verb, source: 'ui' },
+        { userId: reporter.id, workspaceId: fx.workspaceId },
+      );
+      expect(result.gate.state).toBe(STATE_OF[verb]);
     });
-    const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
-    const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
-      { userId: assignee.id, workspaceId: fx.workspaceId },
-    );
-    expect(result.gate.state).toBe('approved');
-  });
+    it(`the SAME reporter may NOT \`${verb}\` once the item HAS an assignee — the pair of the case above`, async () => {
+      // ⚠️ THE DISCRIMINATING PAIR. These two tests differ in exactly one field,
+      // so together they show the condition SELECTS rather than merely forbids:
+      // an implementation that refused the reporter outright would pass this one
+      // and fail its twin.
+      const reporter = await plainMember();
+      const assignee = await plainMember();
+      const { gate } = await designSubtaskWithGate({
+        assigneeId: assignee.id,
+        reporterId: reporter.id,
+      });
 
-  it('a workspace ADMIN may decide ANY work item — neither assignee nor reporter', async () => {
-    const admin = await createTestUser();
-    await adminDb.workspaceMembership.create({
-      data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
+      await expect(
+        approvalGatesService.decide(
+          { gateId: gate.id, decision: verb, source: 'ui' },
+          { userId: reporter.id, workspaceId: fx.workspaceId },
+        ),
+      ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
+
+      const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+      expect(row.state).toBe('awaiting');
+      expect(row.decidedUnderAuthority).toBeNull();
     });
-    const { gate } = await designSubtaskWithGate({ assigneeId: null });
 
-    const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
-      { userId: admin.id, workspaceId: fx.workspaceId },
-    );
-    expect(result.gate.state).toBe('approved');
-  });
+    it(`the ASSIGNEE may \`${verb}\` when they are not the reporter`, async () => {
+      const assignee = await plainMember();
+      const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
+
+      const result = await approvalGatesService.decide(
+        { gateId: gate.id, decision: verb, source: 'ui' },
+        { userId: assignee.id, workspaceId: fx.workspaceId },
+      );
+      expect(result.gate.state).toBe(STATE_OF[verb]);
+    });
+
+    it(`a workspace ADMIN may \`${verb}\` an item that HAS an assignee — the escape hatch SURVIVES`, async () => {
+      // ⚠️ ASSIGNED, DELIBERATELY. This assertion used to run on an UNASSIGNED
+      // item, where the admin arm is never the only thing standing between the
+      // work and a stall. The narrowing makes admins the ONLY remaining
+      // unblocker for a gate routed to somebody unavailable, so the case that
+      // has to be pinned is exactly the one with an assignee on the item.
+      const assignee = await plainMember();
+      const admin = await createTestUser();
+      await adminDb.workspaceMembership.create({
+        data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
+      });
+      const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
+
+      const result = await approvalGatesService.decide(
+        { gateId: gate.id, decision: verb, source: 'ui' },
+        { userId: admin.id, workspaceId: fx.workspaceId },
+      );
+      expect(result.gate.state).toBe(STATE_OF[verb]);
+    });
+  }
 
   it('a plain MEMBER who is neither assignee nor reporter is refused — and it is a 403-shaped refusal, not a 404', async () => {
     const bystander = await createTestUser();

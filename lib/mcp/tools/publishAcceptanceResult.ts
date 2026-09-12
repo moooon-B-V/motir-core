@@ -175,16 +175,23 @@ async function resolveEligibleStory(
     ? { id: parent.id, identifier: `${projectKeyOf(normalizeIdentifier(key))}-${parent.key}` }
     : { id: item.id, identifier: item.identifier };
 
+  // The gate is the STORY'S OWN project's (MOTIR-5168). `item.projectId` IS the
+  // story's: the hop above only ever lands on a parent in the SAME project (the
+  // read raises `CrossProjectParentError` otherwise, which is the invariant the
+  // identifier line above already leans on), so there is no case where the item's
+  // project and the resolved story's differ. Taken from the resolved row rather
+  // than re-derived from the key string, which is a label and not a lookup.
   const eligibility = await acceptanceVideoEligibilityService.resolve({
     actorUserId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    projectId: item.projectId,
   });
   if (!eligibility.eligible) {
     return {
       ok: false,
       refusal: toolError(
         'ACCEPTANCE_VIDEO_INELIGIBLE',
-        `This workspace may not publish an acceptance video (${eligibility.reason}). The recording is still in the run’s Playwright report; nothing is lost by stopping here.`,
+        `This project may not publish an acceptance video (${eligibility.reason}). The recording is still in the run’s Playwright report; nothing is lost by stopping here.`,
       ),
     };
   }
