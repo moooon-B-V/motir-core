@@ -47,6 +47,11 @@ export interface MonitorConnectionViewDto {
   orgSlug: string | null;
   health: string | null;
   healthReason: string | null;
+  /** When the grant's health was last established (a refresh or a probe), as
+   *  ISO. On the VIEW rather than only on each row because the room says
+   *  "checked N minutes ago" on a grant with NO rows yet (design panel 1b), and a
+   *  value read off `connections[0]` does not exist there. */
+  healthCheckedAt: string | null;
   connections: MonitorConnectionDto[];
 }
 

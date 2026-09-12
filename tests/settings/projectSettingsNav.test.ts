@@ -323,6 +323,9 @@ describe('projectSettingsNav registry — grouping', () => {
     expect(groups.find((g) => g.group === 'general')?.entries.map((e) => e.id)).toEqual([
       'details',
       'repositories',
+      // MOTIR-5262 — `monitoring` directly under `repositories`: both hold a third
+      // party's credential and the inventory bound to it (design/monitoring §6).
+      'monitoring',
     ]);
     expect(groups.find((g) => g.group === 'work')?.entries.map((e) => e.id)).toEqual([
       'workflow',
@@ -431,6 +434,11 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
   repositories: {
     permission: 'repository:manage',
     source: 'lib/services/projectRepoSetService.ts',
+    gate: 'assertPermission',
+  },
+  monitoring: {
+    permission: 'integration:manage',
+    source: 'lib/services/monitorConnectionService.ts',
     gate: 'assertPermission',
   },
   members: {

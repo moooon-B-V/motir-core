@@ -148,6 +148,7 @@ export const monitorConnectionService = {
         orgSlug: grant ? readOrgSlug(grant.metadata) : null,
         health: grant?.health ?? null,
         healthReason: grant?.healthReason ?? null,
+        healthCheckedAt: grant?.healthCheckedAt?.toISOString() ?? null,
         connections: connections.map(toMonitorConnectionDto),
       };
     });

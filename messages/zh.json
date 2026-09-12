@@ -1642,6 +1642,7 @@
       "aiPlanning": "AI规划",
       "rules": "规则",
       "repositories": "代码仓库",
+      "monitoring": "监控",
       "approvals": "审批"
     },
     "roles": {
@@ -3582,7 +3583,8 @@
         "fields": "自定义字段由项目管理员管理。如需新增或修改字段，请联系管理员。",
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——节奏与规划模型——由项目管理员配置。如需调整，请联系管理员。",
-        "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。"
+        "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
+        "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。"
       }
     },
     "organization": {
@@ -8013,6 +8015,102 @@
       "offWhat": "该项目不接受任何验收视频，也不会保留任何故事。",
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
+    }
+  },
+  "monitoring": {
+    "title": "监控",
+    "description": "连接你的服务已在上报的错误监控，Motir 会把其中的问题转成本项目看板上的工作项。",
+    "loading": "正在加载监控…",
+    "error": {
+      "title": "无法加载本项目的监控",
+      "body": "没有任何更改。请重试；如果问题持续，请刷新页面。",
+      "retry": "重试"
+    },
+    "empty": {
+      "title": "尚未连接错误监控",
+      "body": "连接 Sentry 后，它为你所选项目记录的问题会作为缺陷工作项出现在这里——放入本项目选定的容器中，并附带问题本身的出错位置和返回链接。",
+      "action": "连接 Sentry"
+    },
+    "grant": {
+      "provider": "Sentry",
+      "unknownOrg": "你的 Sentry 组织",
+      "checked": "{when}检查",
+      "recheck": "重新检查",
+      "reconnect": "重新连接"
+    },
+    "health": {
+      "connected": "已连接",
+      "degraded": "已降级"
+    },
+    "degraded": {
+      "says": "Sentry 返回：",
+      "consequence": "在有人重新连接之前，Motir 无法读取该组织的问题——在此期间不会有新内容进入看板。"
+    },
+    "section": {
+      "label": "受监控的项目",
+      "hint": "这些 Sentry 项目中的问题会成为本看板上的缺陷工作项。",
+      "hintDegraded": "连接处于降级状态期间，这些项目不会有新内容进入。",
+      "add": "添加受监控的项目"
+    },
+    "unbound": {
+      "title": "尚未监控任何 Sentry 项目",
+      "body": "Sentry 已连接到 {org}。选择其中哪些项目向本看板发送问题——在你选择之前不会有任何内容进入。",
+      "action": "选择 Sentry 项目"
+    },
+    "row": {
+      "bound": "{when}绑定",
+      "disconnect": "停止监控 {slug}"
+    },
+    "confirm": {
+      "cancel": "取消",
+      "one": {
+        "title": "停止监控 {slug}？",
+        "body": "来自 <b>{slug}</b> 的新问题将不再进入本看板。<b>{others}</b> 仍会继续受监控。",
+        "action": "停止监控"
+      },
+      "last": {
+        "title": "断开 Sentry？",
+        "body": "<b>{slug}</b> 是最后一个受监控的项目，因此这也会移除 Motir 已存储的 <b>{org}</b> 访问权限。之后如需再次监控其中任何项目，你需要通过 Sentry 重新连接。",
+        "action": "断开 Sentry"
+      }
+    },
+    "recheckFailed": "无法重新检查连接，请稍后重试。",
+    "disconnectFailed": "无法停止监控该项目。没有任何更改——请重试。",
+    "banner": {
+      "dismiss": "关闭",
+      "connected": {
+        "title": "Sentry 已连接。",
+        "body": "选择 {org} 的哪些项目向本看板发送问题。"
+      },
+      "error": {
+        "title": "无法连接 Sentry。",
+        "body": "未保存任何内容——请重新连接。",
+        "bodyWithReason": "Sentry 返回：{reason} 未保存任何内容——请重新连接。"
+      },
+      "denied": {
+        "title": "Sentry 未连接。",
+        "body": "该请求在 Sentry 中被拒绝——未保存任何内容。"
+      },
+      "no_state": {
+        "title": "该安装并非从这里发起。",
+        "body": "如需将 Sentry 连接到本项目，请使用下方的“连接 Sentry”——未保存任何内容。"
+      },
+      "state_error": {
+        "title": "无法连接 Sentry。",
+        "body": "无法验证该请求，因此未保存任何内容。请重新连接。"
+      },
+      "forbidden": {
+        "title": "你无法管理本项目的集成。",
+        "body": "请联系项目管理员连接 Sentry。"
+      },
+      "no_project": {
+        "title": "无法确定要连接的项目。",
+        "body": "请从项目设置中打开“监控”后重试。"
+      },
+      "not_configured": {
+        "title": "此 Motir 部署尚未配置 Sentry。",
+        "body": "需要管理员添加 Sentry 集成的凭据。"
+      }
     }
   }
 }

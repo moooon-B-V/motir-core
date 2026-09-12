@@ -52,3 +52,14 @@ export function resolveMonitorReturnPath(value: string | null | undefined): stri
   const id = parseMonitorReturnSurfaceId(value);
   return id ? MONITOR_RETURN_SURFACES[id] : DEFAULT_MONITOR_RETURN_PATH;
 }
+
+/** Where a room's Connect and Reconnect go (MOTIR-5262). The flow starts at
+ *  Motir, not at the provider, because the start route sets the state cookie the
+ *  callback checks (MOTIR-5260); `return` names the surface it lands back on. */
+export function monitorConnectHref(
+  projectKey: string,
+  returnSurfaceId: MonitorReturnSurfaceId = 'projectMonitoring',
+): string {
+  const params = new URLSearchParams({ project: projectKey, return: returnSurfaceId });
+  return `/api/monitors/sentry/oauth/start?${params.toString()}`;
+}

@@ -248,6 +248,9 @@ describe('the plaintext appears in NO DTO and NO response body', () => {
     // What the view DOES carry: the health the room draws a degraded row from.
     expect(view.health).toBe('connected');
     expect(view.orgSlug).toBe('fake-org');
+    // The grant carries its own check time, so a grant with no rows can still say
+    // when it was last checked (design panel 1b).
+    expect(view.healthCheckedAt).toBe(view.connections[0]!.healthCheckedAt);
     expect(view.connections).toHaveLength(1);
     expect(view.connections[0]!.externalProjectSlug).toBe('web');
   });
@@ -323,6 +326,7 @@ describe('binding and re-binding', () => {
       orgSlug: null,
       health: null,
       healthReason: null,
+      healthCheckedAt: null,
       connections: [],
     });
   });

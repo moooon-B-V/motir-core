@@ -64,6 +64,7 @@ const ALIAS_ASSERTS: Partial<Record<PermissionKey, string>> = {
 const SERVICE_OF: Record<string, string> = {
   details: 'lib/services/projectAccessService.ts',
   repositories: 'lib/services/projectRepoSetService.ts',
+  monitoring: 'lib/services/monitorConnectionService.ts',
   members: 'lib/services/projectMembersService.ts',
   'public-page': 'lib/services/projectsService.ts',
   // MOTIR-4221. The room's WRITES are the customer-domain lifecycle's —
