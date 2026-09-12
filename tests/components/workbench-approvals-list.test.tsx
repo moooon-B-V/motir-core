@@ -64,6 +64,7 @@ function designRow(over: Partial<ApprovalQueueRowDto> = {}): ApprovalQueueRowDto
     kind: 'design_result',
     state: 'awaiting',
     canDecide: true,
+    routedToName: 'Mara S.',
     waitingSince: new Date(Date.now() - 4 * 86_400_000).toISOString(),
     workItem: {
       id: 'wi-1',

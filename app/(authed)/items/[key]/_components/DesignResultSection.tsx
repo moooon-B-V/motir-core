@@ -44,6 +44,14 @@ export interface DesignResultSectionProps {
   subject: DesignGateSubjectDTO | null;
   /** The card's `MOTIR-<n>`, for the sentence saying what approving will DO. */
   itemIdentifier: string;
+  /**
+   * WHOSE DECISION this is waiting on, named — the frame's state `B` line
+   * (MOTIR-5191). Resolved by `approvalGatesService.getForWorkItem`, which is
+   * the read this section is already fed by; null when the routing resolves to
+   * nobody or to a user row that has gone, and the frame's generic fallback
+   * renders instead.
+   */
+  routedToLabel: string | null;
 }
 
 export function DesignResultSection({
@@ -53,6 +61,7 @@ export function DesignResultSection({
   canDecide,
   subject,
   itemIdentifier,
+  routedToLabel,
 }: DesignResultSectionProps) {
   const t = useTranslations('approvalGate');
   const tDesign = useTranslations('approvalGate.designResult');
@@ -169,7 +178,7 @@ export function DesignResultSection({
         tDesign('confirm.keepsFiles'),
         tDesign('confirm.movesToDone', { key: itemIdentifier }),
       ]}
-      routedToLabel={null}
+      routedToLabel={routedToLabel}
       // The `design_result` kind's answer to *were the files kept?* —
       // `design_evidence.pinned_at`, read off the decided row. Null while
       // awaiting or withdrawn, which renders no line at all rather than a

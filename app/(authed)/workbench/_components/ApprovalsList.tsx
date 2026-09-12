@@ -358,7 +358,11 @@ function ApprovalRow({
                 tDesign('confirm.keepsFiles'),
                 tDesign('confirm.movesToDone', { key: row.workItem.identifier }),
               ]}
-              routedToLabel={null}
+              // Panel 5's *see but not decide* line — "the Decide cell names
+              // who it is waiting on" (`design/workbench/design-notes.md` § 20).
+              // The ROW's answer, never the session's: see
+              // `ApprovalQueueRowDto.routedToName`.
+              routedToLabel={row.routedToName}
               filesKept={subject ? subject.filesKept : null}
               onDecide={onDecide}
             />

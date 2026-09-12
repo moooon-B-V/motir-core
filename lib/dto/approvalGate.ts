@@ -222,6 +222,19 @@ export interface ApprovalQueueRowDto {
    * disagreement `approvalGatesService.getForWorkItem` records.
    */
   canDecide: boolean;
+  /**
+   * WHOSE DECISION THIS IS — the name the row's *waiting on* line draws when the
+   * reader may see the gate but not press it (Panel 5, `design/workbench/design-notes.md`
+   * § 20; MOTIR-5191). Null when the routing resolves to nobody or to a user row
+   * that has gone, and the frame draws its generic fallback instead.
+   *
+   * ⚠️ IT IS THE LIVE ROUTING ANSWER, and on this read that is very nearly
+   * always the READER — the predicate selected these rows BY it. It is carried
+   * per row anyway rather than being taken from the session, because a row that
+   * names its own recipient keeps saying something true if §2's routing is ever
+   * widened past one person, and a surface reading the session would not.
+   */
+  routedToName: string | null;
   /** ISO-8601 — when the question was asked. The row renders how long ago. */
   waitingSince: string;
   workItem: ApprovalQueueWorkItemRefDto;

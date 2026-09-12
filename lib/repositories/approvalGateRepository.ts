@@ -509,7 +509,23 @@ const AWAITING_GATE_SELECT = {
   subjectId: true,
   createdAt: true,
   workItem: {
-    select: { id: true, key: true, identifier: true, title: true, kind: true, type: true },
+    // ⚠️ `assigneeId` / `reporterId` are here for the ROW's *waiting on* line
+    // (MOTIR-5191), not for the predicate — `awaitingRoutedToWhere` selects on
+    // them in SQL and never returns them. Reading them back lets the service
+    // name the recipient from the ROW rather than from the fact that the
+    // predicate pinned it to the reader; the two agree today, and a surface
+    // that depended on them agreeing would start lying silently the day §2's
+    // routing widened.
+    select: {
+      id: true,
+      key: true,
+      identifier: true,
+      title: true,
+      kind: true,
+      type: true,
+      assigneeId: true,
+      reporterId: true,
+    },
   },
 } as const satisfies Prisma.ApprovalGateSelect;
 

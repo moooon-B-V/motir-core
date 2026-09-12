@@ -196,7 +196,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
               : null;
           return { ...read, subject };
         } catch {
-          return { gate: null, canDecide: false, subject: null };
+          return { gate: null, canDecide: false, routedToLabel: null, subject: null };
         }
       })(),
       (async () => {

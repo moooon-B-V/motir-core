@@ -10,6 +10,7 @@ import type {
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { handlerFor } from '@/lib/approvalGates/registry';
+import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotAuthorisedError,
@@ -101,6 +102,25 @@ export interface DecideGateResult {
 export interface WorkItemGateRead {
   gate: ApprovalGateDTO | null;
   canDecide: boolean;
+  /**
+   * WHOSE DECISION THIS IS WAITING ON, as a name a reader can act on — the
+   * frame's state `B` line, *"Waiting on Mara S."* (MOTIR-5191). Null when the
+   * routing resolves to nobody or to a user row that has gone, and the frame
+   * then draws its generic fallback.
+   *
+   * ⚠️ IT IS THE LIVE ROUTING ANSWER, NOT THE GATE'S `routedToId`, AND THE
+   * DISTINCTION IS THE WHOLE OF WHY THIS FIELD EXISTS ON THE READ RATHER THAN
+   * BEING READ OFF THE DTO. `routedToId` is frozen at CREATION (ADR §6a: *"the
+   * assignee can change afterwards"*) and is the AUDIT record of who was asked.
+   * The sentence this feeds is present tense, and the reader's next act is to go
+   * and ask somebody — so on a reassigned card the frozen column names a person
+   * who no longer sees the gate at all. `approvalGateRepository`'s queue
+   * predicate makes the same choice for the same reason, in as many words:
+   * answering *whose job is it to look, now* from the frozen column *"would
+   * strand every gate on a reassigned card in the previous assignee's tab"*.
+   * The two columns are both right, about different questions.
+   */
+  routedToLabel: string | null;
 }
 
 /**
@@ -236,14 +256,15 @@ export const approvalGatesService = {
       const item = await workItemRepository.findById(input.workItemId, tx);
       // A cross-workspace row is indistinguishable from one that never existed,
       // exactly as the decide door has it — no existence leak through a read.
-      if (!item || item.workspaceId !== ctx.workspaceId) return { gate: null, canDecide: false };
+      if (!item || item.workspaceId !== ctx.workspaceId)
+        return { gate: null, canDecide: false, routedToLabel: null };
 
       const row = await approvalGateRepository.findLatestByWorkItem(
         input.workItemId,
         input.kind,
         tx,
       );
-      if (!row) return { gate: null, canDecide: false };
+      if (!row) return { gate: null, canDecide: false, routedToLabel: null };
 
       // The SAME composition the decide door applies, and composed the same way
       // — the admin arm is ASKED of `projectAccessService`, never derived here
@@ -254,7 +275,23 @@ export const approvalGatesService = {
         item.reporterId === ctx.userId ||
         (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
 
-      return { gate: toApprovalGateDto(row), canDecide };
+      // WHO the frame says it is waiting on — §2's routing rule asked of the
+      // item as it stands NOW, which is the question the sentence poses. The id
+      // comes from the KIND's own `routeTo` rather than from a second copy of
+      // the rule here, so a kind that routes differently draws its own answer.
+      //
+      // ⚠️ ONE read, and only when there is somebody to name: this is the item
+      // page's render path, so a per-render round trip is exactly what it may
+      // not add. `routeTo` reads the item already in hand and resolves no row of
+      // its own.
+      const routedToId = handlerFor(input.kind).routeTo({ item, ctx, tx });
+      const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
+
+      return {
+        gate: toApprovalGateDto(row),
+        canDecide,
+        routedToLabel: routedToDisplayName(routedTo),
+      };
     });
   },
 
@@ -327,9 +364,29 @@ export const approvalGatesService = {
         scope.projectIds.length > 0 &&
         (await projectAccessService.getCapabilities(ctx.projectId, ctx, tx)).canEdit;
 
+      // THE *WAITING ON* NAMES, resolved ONCE for the page — the same discipline
+      // `summarizeGateSubjects` keeps one read up, and for the same reason: a
+      // 25-row queue that named its recipients one at a time would be 25 round
+      // trips to draw one list. The ids are §2's routing rule read off each row,
+      // never the session: see `ApprovalQueueRowDto.routedToName`.
+      const routedToIds = rows.map((row) => routingTargetId(row.workItem));
+      const namesById = new Map(
+        (await userRepository.findByIds([...new Set(routedToIds.filter((id) => id !== null))], tx))
+          .map((user) => [user.id, routedToDisplayName(user)] as const)
+          .filter((entry): entry is readonly [string, string] => entry[1] !== null),
+      );
+
       return {
-        items: rows.map((row) =>
-          toApprovalQueueRowDto(row, subjects.get(row.id) ?? null, canDecide),
+        items: rows.map((row, index) =>
+          toApprovalQueueRowDto(
+            row,
+            subjects.get(row.id) ?? null,
+            canDecide,
+            // A routed user whose row has gone resolves to nothing here, exactly
+            // as it does on the item page — the frame's fallback copy is what
+            // renders, which is the case that fallback is FOR (ADR §3).
+            namesById.get(routedToIds[index] ?? '') ?? null,
+          ),
         ),
         total,
         page,
@@ -393,7 +450,8 @@ export const approvalGatesService = {
     // The general read returns the awaiting gate FIRST when one exists, so a
     // non-awaiting answer here means this kind has no live question — never
     // that one was hidden behind a decided row.
-    if (read.gate?.state !== 'awaiting') return { gate: null, canDecide: false };
+    if (read.gate?.state !== 'awaiting')
+      return { gate: null, canDecide: false, routedToLabel: null };
     return read;
   },
 

@@ -195,3 +195,110 @@ describe('no existence leak', () => {
     expect(read.canDecide).toBe(false);
   });
 });
+
+describe('routedToLabel — the *waiting on* line NAMES somebody (MOTIR-5191)', () => {
+  // ⚠️ THIS BLOCK IS THE HALF THE COMPONENT TESTS STRUCTURALLY CANNOT COVER.
+  // `tests/components/approval-gate-control.test.tsx` renders the frame with
+  // `routedToLabel: 'Mara S.'` and asserts the sentence — and it passed on the
+  // defect, because it supplied the name the application did not. A test that
+  // hands a component its input cannot discover that no caller ever does. So
+  // the assertions here drive the READ, and the guard beside them
+  // (`tests/approval-gate-routed-to-wiring.test.ts`) drives the CALL SITE.
+
+  it('names the ASSIGNEE the gate is routed to', async () => {
+    const other = await createTestUser({ name: 'Mara Sandoval' });
+    const { item } = await designSubtaskWithGate({ assigneeId: other.id });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    expect(read.routedToLabel).toBe('Mara Sandoval');
+  });
+
+  it('falls through to the REPORTER when the card has no assignee — §2 exactly', async () => {
+    const { item } = await designSubtaskWithGate({ assigneeId: null });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    // `assigneeId ?? reporterId`: the fixture owner reports every card it makes.
+    const reporter = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    expect(read.routedToLabel).toBe(reporter.name?.trim() || reporter.email);
+  });
+
+  it('degrades to the EMAIL when the routed member has a blank name', async () => {
+    // `User.name` is non-nullable but not non-EMPTY, so the display rule has to
+    // be `name || email` rather than `name ?? email` — a blank one would
+    // otherwise render *"Waiting on ."*
+    const nameless = await createTestUser();
+    await adminDb.user.update({ where: { id: nameless.id }, data: { name: '   ' } });
+    const { item } = await designSubtaskWithGate({ assigneeId: nameless.id });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    expect(read.routedToLabel).toBe(nameless.email);
+  });
+
+  it('SURVIVES the routed member being deleted — it does not strand the surface', async () => {
+    // Criterion 6, and the answer is structural rather than defensive:
+    // `WorkItem.assignee` is `onDelete: SetNull`, so deleting the assignee nulls
+    // the column and §2's rule falls through to the reporter — who is
+    // `onDelete: Restrict` and therefore cannot be deleted while they report the
+    // card at all. The surface degrades to a DIFFERENT REAL NAME, never to a
+    // broken read. This is also why ADR §3 is right that the routing column
+    // needs no surviving label beside it.
+    const leaver = await createTestUser({ name: 'Departed Member' });
+    const { item } = await designSubtaskWithGate({ assigneeId: leaver.id });
+
+    await adminDb.user.delete({ where: { id: leaver.id } });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    const reporter = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    expect(read.routedToLabel).toBe(reporter.name?.trim() || reporter.email);
+  });
+
+  it('tracks a REASSIGNMENT — the label is the LIVE routing answer, not the gate’s frozen `routedToId`', async () => {
+    // ⚠️ THE CARD PRESCRIBED `routedToId` AND THIS IS WHY IT DOES NOT.
+    // `routedToId` is written at gate CREATION (ADR §6a: *"the assignee can
+    // change afterwards"*) and is the AUDIT record of who was ASKED. The
+    // sentence it would feed is present tense and its reader's next act is to go
+    // and ask somebody — so on a reassigned card the frozen column names a
+    // person who no longer sees the gate at all. `approvalGateRepository`'s
+    // queue predicate makes the same choice for the same reason, in as many
+    // words. Both columns are right, about different questions.
+    const first = await createTestUser({ name: 'First Owner' });
+    const { item, gate } = await designSubtaskWithGate({ assigneeId: first.id });
+    // The helper creates the gate without one, so write the audit column the
+    // publish path would have written — otherwise the frozen-vs-live assertion
+    // below compares against a null and passes for the wrong reason.
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: { routedToId: first.id },
+    });
+
+    const second = await createTestUser({ name: 'Second Owner' });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: second.id } });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+
+    expect(read.routedToLabel).toBe('Second Owner');
+    // And the audit column is untouched by the reassignment, which is the whole
+    // reason it exists — asserted here so the two can never be collapsed.
+    const frozen = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(frozen.routedToId).toBe(first.id);
+  });
+});
