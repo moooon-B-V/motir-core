@@ -19,6 +19,7 @@ import {
   type IndexCatchUpDeps,
 } from '@/lib/services/codeGraphIndexCatchUpService';
 import { fakeOrchestrator } from '@motir/orchestrator';
+import * as indexEnqueue from '@/lib/github/indexEnqueue';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -403,5 +404,79 @@ describe('the words (AC 8)', () => {
       .filter((line) => /^\s*(it|describe)\(/.test(line))
       .filter((line) => affirmative.test(line) && !negated.test(line));
     expect(testNames).toEqual([]);
+  });
+});
+
+describe('the sweep’s own seams (MOTIR-4544 top-up)', () => {
+  it('with NO injected deps it asks the real client and enqueues through the real enqueue functions', async () => {
+    await seedOrg('cu-defaults', ['moved', 'fresh']);
+    await setRepo('moved', {
+      paused: 'paused_index_no_credit',
+      indexedHeadSha: GRAPH_SHA,
+      defaultBranchHeadSha: MOVED_SHA,
+    });
+    await setRepo('fresh', { paused: 'paused_index_no_credit', indexedHeadSha: null });
+    stubIndexFleet();
+    indexAllowanceWorld.checkOutcome = 'ok';
+    const refresh = vi.spyOn(indexEnqueue, 'enqueueCodeGraphRefresh').mockResolvedValue();
+    const index = vi.spyOn(indexEnqueue, 'enqueueCodeGraphIndex').mockResolvedValue();
+
+    await codeGraphIndexCatchUpService.catchUp();
+
+    expect(indexAllowanceWorld.checks).toHaveLength(1);
+    expect(refresh.mock.calls.map(([data]) => data.repoName)).toEqual(['moved']);
+    expect(index.mock.calls.map(([data]) => data.repoName)).toEqual(['fresh']);
+  });
+
+  it('one repository whose action throws is reported and keeps its pause; the rest proceed', async () => {
+    await seedOrg('cu-throw', ['bad', 'good']);
+    await setRepo('bad', {
+      paused: 'paused_index_no_credit',
+      indexedHeadSha: GRAPH_SHA,
+      defaultBranchHeadSha: MOVED_SHA,
+    });
+    await setRepo('good', {
+      paused: 'paused_index_no_credit',
+      indexedHeadSha: GRAPH_SHA,
+      defaultBranchHeadSha: GRAPH_SHA,
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps } = fakeDeps(() => 'ok');
+    deps.enqueueRefresh = async () => {
+      throw new Error('queue down');
+    };
+
+    const summary = await codeGraphIndexCatchUpService.catchUp({ deps });
+
+    const byRepo = Object.fromEntries(summary.outcomes.map((o) => [o.repoRef, o.outcome]));
+    expect(byRepo).toEqual({ 'moooon/bad': 'action_failed', 'moooon/good': 'pause_cleared' });
+    expect(await pauseOf('bad')).toBe('paused_index_no_credit');
+    expect(await pauseOf('good')).toBeNull();
+    expect(error).toHaveBeenCalled();
+  });
+
+  it('honours a per-tick limit, oldest pause first', async () => {
+    await seedOrg('cu-limit', ['older', 'newer']);
+    await setRepo('older', {
+      paused: 'paused_index_no_credit',
+      indexedHeadSha: GRAPH_SHA,
+      defaultBranchHeadSha: GRAPH_SHA,
+    });
+    await adminDb.githubRepo.updateMany({
+      where: { owner: 'moooon', name: 'older' },
+      data: { indexPausedAt: new Date('2026-01-01T00:00:00Z') },
+    });
+    await setRepo('newer', {
+      paused: 'paused_index_no_credit',
+      indexedHeadSha: GRAPH_SHA,
+      defaultBranchHeadSha: GRAPH_SHA,
+    });
+    const { deps } = fakeDeps(() => 'ok');
+
+    const summary = await codeGraphIndexCatchUpService.catchUp({ deps, limit: 1 });
+
+    expect(summary.scanned).toBe(1);
+    expect(summary.outcomes.map((o) => o.repoRef)).toEqual(['moooon/older']);
+    expect(await pauseOf('newer')).toBe('paused_index_no_credit');
   });
 });
