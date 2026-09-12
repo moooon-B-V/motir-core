@@ -1,0 +1,2039 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Monitoring — a project binds its error monitor (MOTIR-5256)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE `MONITORING` ROOM: the project-settings
+      surface a workspace binds its error monitor on, and the settings-rail entry
+      that opens it. Story MOTIR-4926 · Subtask MOTIR-5256. Layout source of
+      truth for MOTIR-5262, which implements it.
+
+      ── WHAT THIS ASSET DECIDES, AND WHAT IT ONLY COMPOSES ──
+      It COMPOSES two shipped surfaces and re-specifies neither:
+        · design/projects/settings-area.mock.html owns the area chrome — the
+          15rem rail, its groups, the pane, the eyebrow/serif-title head;
+        · design/repository-set/repositories-room.mock.html is the nearest ROOM
+          precedent, a connection inventory with per-row lifecycle state and a
+          destructive action. Its token, chrome and primitive layers are reused
+          verbatim so the two assets of this area cannot drift apart.
+      What it ADDS is this room's own content: the GRANT header, the connection
+      rows, the health treatment, and the rail entry.
+
+      ── A SET OF ROWS, NOT A QUESTION ──
+      A Motir project may hold MORE THAN ONE monitor connection (the story's
+      cardinality argument, and the schema's — MOTIR-5258 made it a join table
+      rather than a column on `project`). So the room is a ROW LIST with an empty
+      state, drawn at real-product scale: zero, one and several.
+
+      ── GROUNDED IN THE CARDS THAT SPECIFY THE FLOW, NOT INVENTED ──
+      The design-content dependency rule. Every interaction drawn below comes
+      from one of the two cards whose `descriptionMd` IS the spec, and
+      design-notes.md names which behaviour came from which:
+        · MOTIR-5260 — the start route, the authorisation leg, the callback and
+          its four named failure states, and the disconnect that removes the
+          credential when it was the last binding;
+        · MOTIR-5261 — the eight-hourly refresh, the on-demand probe, and the
+          stored `degraded` verdict carrying the PROVIDER'S OWN reason.
+      They are linked `relates_to` and not `blocked_by`, because both are
+      themselves behind this design and an edge would deadlock the pair.
+
+      ── THE STATE SET IS THE CHECKLIST ──
+      `connecting` · `connected` · `degraded` · (none). `degraded` is the value
+      this whole epic exists to make visible: MOTIR-4918 measured a signal that
+      stopped reaching anyone while every component reported success, and a
+      credential that has quietly expired reproduces that shape one level up. It
+      is drawn so it cannot be mistaken for healthy — a filled warning chip, a
+      banner carrying the provider's sentence, and the two affordances that fix
+      it — and never by a border STYLE, which is a decoration a reader has to be
+      taught.
+
+      ── TOKENS ──
+      Colour flows through `--el-*` element tokens and shape through the
+      element-semantic shape tokens; no Tier-0 `--color-*` and no raw
+      `rounded-md` / `p-2` / `h-9` appears in any product element below. Two
+      tokens this asset deliberately does NOT use are named where they would
+      have been: `--el-warning-border` and `--el-success-text` do not exist in
+      the theme, and inventing either is the failure the never-invent-a-colour
+      rule forbids. The only raw values authored anywhere are the non-semantic
+      board backdrop and the panel scaffolding.
+
+      ── ICONS ──
+      Every symbol in the sheet is EXTRACTED from the installed `lucide-react`
+      and carries its provenance comment, so `scripts/audit-mock-sprites.mjs`
+      can rule on it: a hand-typed path is an unmeasured claim, and the ones
+      that get trusted are the ones that look deliberate.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ═══ MOCK BOARD CHROME (not product UI — the panel scaffolding) ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--el-page-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      .board > header {
+        margin-bottom: 32px;
+      }
+      .board h1 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 84ch;
+      }
+      .panel-label {
+        margin: 44px 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        border-top: 1px solid var(--el-border);
+        padding-top: 14px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel {
+        margin-bottom: 8px;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code.k {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      svg.i.lg {
+        width: 18px;
+        height: 18px;
+      }
+      svg.gh {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: currentColor;
+      }
+      svg.gh.lg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ═══ SHIPPED PRIMITIVES — classes mirror the cva recipes ═══ */
+      /* Button (packages/design-system/src/components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding-inline: var(--spacing-btn-x);
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        color: var(--el-text);
+      }
+      .btn-ghost {
+        color: var(--el-text);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding-inline: var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      /* Card */
+      .card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      /* Pill */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* Input + FormField */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .field > label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .helper {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-helper);
+        margin: 0;
+      }
+      .helper.xs {
+        font-size: 12px;
+      }
+      /* SectionLabel */
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Spinner */
+      .spin {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      /* QuietAction — the shipped RepositoryRow affordance */
+      .quiet {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      /* Combobox trigger */
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .combo.disabled {
+        opacity: 0.6;
+      }
+      .listbox {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      /* ⚠️ --el-text-secondary, not --el-text-muted (MOTIR-4674). This rule was
+         carried over from takeover.mock.html and never exercised in this asset;
+         the picker is its first use, and muted is 4.12:1 on
+         --el-option-active-bg — the surface an ACTIVE option paints. */
+      .listbox .opt .sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* ⚠️ --el-text-eyebrow, not --el-text-faint (MOTIR-4674). Same story as
+         `.opt .sub` above — carried over, never exercised, and the picker's two
+         SEGMENT headings are the information the whole panel turns on, so they
+         are not decoration. Faint clears AA on no surface at all. */
+      .listbox .grp {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Modal */
+      .modal {
+        border-radius: var(--radius-modal);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 34rem;
+      }
+      .modal-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .modal-head h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--el-text);
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .scrim {
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        padding: 28px;
+        display: flex;
+        justify-content: center;
+      }
+
+      /* ═══ THE ROOM — /settings/project/repositories ═══ */
+      .settings {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        overflow: hidden;
+        min-height: 460px;
+      }
+      .set-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 20px 12px;
+      }
+      .set-rail .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .set-rail .grp > .h {
+        padding: 6px var(--spacing-control-x) 2px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row svg {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row.active svg {
+        color: var(--el-icon-active);
+      }
+      .set-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 28px;
+        min-width: 0;
+      }
+      .pane-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pane-head h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pane-head p {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* callouts — every fill a palette token */
+      .note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .note svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .note .door {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+      }
+      .banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .banner.warn {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .banner.warn svg {
+        color: var(--el-warning);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner.info {
+        background: var(--el-notice-info-bg);
+        color: var(--el-text-strong);
+      }
+      .banner.info svg {
+        color: var(--el-info);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner b {
+        font-weight: 600;
+      }
+
+      /* ═══ ADDED BY THIS ASSET — the Monitoring room ═══ */
+      /* SectionLabel (packages/design-system/src/components/ui/SectionLabel.tsx) */
+      .seclabel {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .section > .hint {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* The GRANT header — one card naming WHICH organisation is connected and
+         whether its credential still works. It sits above the rows because the
+         health belongs to the grant: every binding on one authorisation reports
+         the same verdict, which is the truth rather than a simplification.
+         Card (packages/design-system/src/components/ui/Card.tsx). */
+      .grant-card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      /* A degraded grant is carried by the FILL of its health chip and by the
+         banner beneath it, never by a border STYLE or an invented border colour:
+         `--el-warning-border` does not exist in the theme, and a dashed edge is
+         a decoration a reader has to be taught. So the card keeps its ordinary
+         border and the state reads from the tokens that exist for it. */
+      .grant-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .grant-mark {
+        width: 34px;
+        height: 34px;
+        flex: none;
+        display: grid;
+        place-items: center;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        color: var(--el-icon-muted);
+      }
+      .grant-who {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        flex: 1;
+      }
+      .grant-who .org {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .grant-who .meta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .grant-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      /* The HEALTH chip. Its fill is a palette token per value and never a
+         border STYLE: a dashed edge is a decoration a reader has to be taught,
+         and a state has to read at a glance. */
+      .health {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: 2px 9px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .health.ok {
+        background: var(--el-success-surface);
+        /* The ink is the ordinary strong text token — there is no
+           `--el-success-text` in the theme, and the shipped state chip inks its
+           label the same way, colouring only the GLYPH with the state hue. */
+        color: var(--el-text-strong);
+      }
+      .health.ok svg {
+        color: var(--el-success);
+      }
+      .health.bad {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .health.bad svg {
+        color: var(--el-warning);
+      }
+      .health.pending {
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+      }
+      .health.pending svg {
+        color: var(--el-icon-muted);
+      }
+      /* The CONNECTION ROWS — one per bound monitored project. A LIST with an
+         empty state, never a single field: a project holds zero, one or many,
+         and the degenerate case of one is a row count. */
+      .conn-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .conn-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 12px 14px;
+      }
+      .conn-row.is-pending {
+        background: var(--el-surface-soft);
+      }
+      .conn-row .glyph {
+        color: var(--el-icon-muted);
+        flex: none;
+      }
+      .conn-row .body {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        flex: 1;
+      }
+      .conn-row .nm {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .conn-row .nm .slug {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 600;
+      }
+      .conn-row .sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .conn-row .aside {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+      }
+      /* The room's EMPTY state — the shipped EmptyState primitive
+         (packages/design-system/src/components/ui/EmptyState.tsx): a Card,
+         centred, a muted mark over a serif title over the copy, with the ONE
+         affordance the room exists to offer. */
+      .emptystate {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 40px 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+      }
+      .emptystate .glyph {
+        width: 46px;
+        height: 46px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--radius-pill);
+        background: var(--el-surface-soft);
+        color: var(--el-icon-muted);
+      }
+      .emptystate h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .emptystate p {
+        margin: 0;
+        max-width: 54ch;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .emptystate .cta {
+        margin-top: 6px;
+      }
+      /* The RAIL-ENTRY panel — the access path, drawn rather than described. */
+      .rail-solo {
+        display: flex;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      .rail-solo .set-rail {
+        width: 15rem;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .rail-solo .callout {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .lands {
+        margin: 12px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .lands b {
+        color: var(--el-text);
+      }
+      .statetable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin: 6px 0 0;
+      }
+      .statetable th,
+      .statetable td {
+        text-align: left;
+        vertical-align: top;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+      }
+      .statetable th {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .statetable td:first-child {
+        color: var(--el-text);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sr" aria-hidden="true">
+      <defs>
+        <!-- lucide `activity` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-activity" viewBox="0 0 24 24">
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </symbol>
+        <!-- lucide `sliders-horizontal` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </symbol>
+        <!-- lucide `folder-git-2` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-folder-git-2" viewBox="0 0 24 24">
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
+        </symbol>
+        <!-- lucide `users` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-users" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+        </symbol>
+        <!-- lucide `key-round` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-key-round" viewBox="0 0 24 24">
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <!-- lucide `workflow` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-workflow" viewBox="0 0 24 24">
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </symbol>
+        <!-- lucide `columns-3` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-columns-3" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </symbol>
+        <!-- lucide `sparkles` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-sparkles" viewBox="0 0 24 24">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </symbol>
+        <!-- lucide `bot` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-bot" viewBox="0 0 24 24">
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </symbol>
+        <!-- lucide `circle-check-big` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <!-- lucide `triangle-alert` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <!-- lucide `loader-circle` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-loader-circle" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </symbol>
+        <!-- lucide `refresh-cw` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </symbol>
+        <!-- lucide `trash-2` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-trash-2" viewBox="0 0 24 24">
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </symbol>
+        <!-- lucide `plus` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </symbol>
+        <!-- lucide `external-link` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-external-link" viewBox="0 0 24 24">
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </symbol>
+        <!-- lucide `ellipsis` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-ellipsis" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </symbol>
+        <!-- lucide `clock` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </symbol>
+        <!-- lucide `circle-alert` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-circle-alert" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </symbol>
+        <!-- lucide `bug` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-bug" viewBox="0 0 24 24">
+          <path d="M12 20v-9" />
+          <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M21 21a4 4 0 0 0-3.81-4" />
+          <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+          <path d="M22 13h-4" />
+          <path d="M3 21a4 4 0 0 1 3.81-4" />
+          <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+          <path d="M6 13H2" />
+          <path d="m8 2 1.88 1.88" />
+          <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+        </symbol>
+        <!-- lucide `shield-check` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-shield-check" viewBox="0 0 24 24">
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header>
+        <h1>Monitoring — a project binds its error monitor</h1>
+        <p>
+          The project-settings room a workspace connects Sentry in, binds one or more of its Sentry
+          projects to this Motir project, sees the connection&rsquo;s health, and disconnects one.
+          Story MOTIR-4926 · Subtask MOTIR-5256; implemented by MOTIR-5262.
+        </p>
+        <p>
+          It COMPOSES the settings-area chrome and the repositories room&rsquo;s inventory shape and
+          re-specifies neither. What it decides is this room&rsquo;s own content: the grant header,
+          the connection rows, the health treatment, and the rail entry. Every interaction is
+          grounded in the two cards that specify the flow — the notes name which came from which.
+        </p>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 1 — (none): the EMPTY state, carrying the one affordance
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 1 &middot; <b>Nothing connected</b> &mdash; the empty state, and the door out to the
+        provider
+      </div>
+      <p class="panel-note">
+        The room&rsquo;s first state, and the one every workspace meets.
+        <b>One line saying what connecting DOES</b>, because &ldquo;connect Sentry&rdquo; on its own
+        does not say that issues become work items on this board &mdash; which is the whole
+        proposition. One affordance, primary, and nothing else to decide yet: which monitored
+        projects to bind is a choice made after the authorisation, when there is a list to choose
+        from.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="emptystate">
+              <span class="glyph"
+                ><svg class="i" style="width: 22px; height: 22px">
+                  <use href="#i-activity" /></svg
+              ></span>
+              <h4>No error monitor connected</h4>
+              <p>
+                Connect Sentry and the issues it records for the projects you choose arrive here as
+                bug work items &mdash; in the container this project picks, with the issue&rsquo;s
+                own culprit and a link back.
+              </p>
+              <span class="cta">
+                <button class="btn btn-primary" type="button">
+                  <svg class="i sm"><use href="#i-plus" /></svg>
+                  Connect Sentry
+                </button>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 2 — `connected`, ONE monitored project
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 2 &middot; <b>Connected, one monitored project</b> &mdash; the degenerate case of the
+        SET
+      </div>
+      <p class="panel-note">
+        <b>The grant is drawn ABOVE the rows, and the health belongs to it.</b> A provider
+        authorises at the organisation tier, so one authorisation covers every project in it
+        (MOTIR-5258 stores the credential on the grant for exactly that reason) &mdash; which means
+        the health verdict is a property of the connection and not of each row. Drawing a badge per
+        row would imply three independently-broken things where there is one.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="grant-card">
+              <div class="grant-top">
+                <span class="grant-mark"
+                  ><svg class="i lg"><use href="#i-activity" /></svg
+                ></span>
+                <span class="grant-who">
+                  <span class="org">
+                    Sentry
+                    <span class="health ok">
+                      <svg class="i sm"><use href="#i-circle-check-big" /></svg>
+                      Connected
+                    </span>
+                  </span>
+                  <span class="meta">
+                    <span class="mono">acme-inc</span> &middot;
+                    <svg class="i sm"><use href="#i-clock" /></svg>
+                    checked 4 minutes ago
+                  </span>
+                </span>
+                <span class="grant-actions">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                    Re-check
+                  </button>
+                </span>
+              </div>
+            </div>
+            <div class="section">
+              <div class="seclabel">Monitored projects</div>
+              <p class="hint">
+                Issues from these Sentry projects become bug work items on this board.
+              </p>
+              <div class="conn-rows">
+                <div class="conn-row">
+                  <span class="glyph"
+                    ><svg class="i lg"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="body">
+                    <span class="nm"><span class="slug">acme-web</span></span>
+                    <span class="sub">Bound 3 days ago &middot; 41 issues seen</span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-ghost btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-external-link" /></svg>
+                      Open in Sentry
+                    </button>
+                    <button class="icon-btn" type="button" aria-label="Disconnect this project">
+                      <svg class="i"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+              <div>
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-plus" /></svg>
+                  Add a monitored project
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 3 — `connected` + `connecting`, SEVERAL monitored projects
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 3 &middot; <b>Several monitored projects, one still arriving</b> &mdash; the list at
+        real-product scale
+      </div>
+      <p class="panel-note">
+        Drawn at the scale a real team reaches: a web app, a worker and a payments service are three
+        Sentry projects on one Motir project, which is the argument for a row list rather than a
+        field. The fourth row is <code class="k">connecting</code> &mdash;
+        <b>the return leg is in flight, so the row EXISTS and is not yet usable</b>. It carries no
+        actions at all, because every one of them would be a promise the server has not made yet.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="grant-card">
+              <div class="grant-top">
+                <span class="grant-mark"
+                  ><svg class="i lg"><use href="#i-activity" /></svg
+                ></span>
+                <span class="grant-who">
+                  <span class="org">
+                    Sentry
+                    <span class="health ok">
+                      <svg class="i sm"><use href="#i-circle-check-big" /></svg>
+                      Connected
+                    </span>
+                  </span>
+                  <span class="meta">
+                    <span class="mono">acme-inc</span> &middot;
+                    <svg class="i sm"><use href="#i-clock" /></svg>
+                    checked 4 minutes ago
+                  </span>
+                </span>
+                <span class="grant-actions">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                    Re-check
+                  </button>
+                </span>
+              </div>
+            </div>
+            <div class="section">
+              <div class="seclabel">Monitored projects</div>
+              <p class="hint">
+                Issues from these Sentry projects become bug work items on this board.
+              </p>
+              <div class="conn-rows">
+                <div class="conn-row">
+                  <span class="glyph"
+                    ><svg class="i lg"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="body">
+                    <span class="nm"><span class="slug">acme-web</span></span>
+                    <span class="sub">Bound 3 days ago &middot; 41 issues seen</span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-ghost btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-external-link" /></svg>
+                      Open in Sentry
+                    </button>
+                    <button class="icon-btn" type="button" aria-label="Disconnect this project">
+                      <svg class="i"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="conn-row">
+                  <span class="glyph"
+                    ><svg class="i lg"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="body">
+                    <span class="nm"><span class="slug">acme-worker</span></span>
+                    <span class="sub">Bound 3 days ago &middot; 12 issues seen</span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-ghost btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-external-link" /></svg>
+                      Open in Sentry
+                    </button>
+                    <button class="icon-btn" type="button" aria-label="Disconnect this project">
+                      <svg class="i"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="conn-row">
+                  <span class="glyph"
+                    ><svg class="i lg"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="body">
+                    <span class="nm"><span class="slug">acme-payments</span></span>
+                    <span class="sub">Bound yesterday &middot; 2 issues seen</span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-ghost btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-external-link" /></svg>
+                      Open in Sentry
+                    </button>
+                    <button class="icon-btn" type="button" aria-label="Disconnect this project">
+                      <svg class="i"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="conn-row is-pending">
+                  <span class="glyph"
+                    ><svg class="i lg"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="body">
+                    <span class="nm"
+                      ><span class="slug">acme-mobile</span
+                      ><span class="health pending">
+                        <svg class="i sm"><use href="#i-loader-circle" /></svg>
+                        Connecting
+                      </span></span
+                    >
+                    <span class="sub">Waiting for Sentry to confirm the install</span>
+                  </span>
+                </div>
+              </div>
+              <div>
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-plus" /></svg>
+                  Add a monitored project
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 4 — `degraded`, carrying the PROVIDER'S OWN reason
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 4 &middot; <b>Degraded</b> &mdash; the state this epic exists to make unmissable
+      </div>
+      <p class="panel-note">
+        <b
+          >MOTIR-4918 measured a signal that stopped reaching anyone while every component reported
+          success</b
+        >, and a credential that has quietly expired reproduces that shape one level up: the poll
+        runs, finds nothing, and the board stays empty in a way indistinguishable from a quiet week.
+        So this state is drawn three ways at once &mdash; a FILLED warning chip, a banner, and the
+        two affordances that fix it &mdash; and the banner quotes
+        <b>Sentry&rsquo;s own sentence</b> rather than one of ours, because
+        <i>&ldquo;the connection failed&rdquo;</i> tells a person nothing about whether to
+        re-authorise or wait. The rows stay visible and stay accurate: they are what is bound, and
+        the grant is what is broken.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="grant-card">
+              <div class="grant-top">
+                <span class="grant-mark"
+                  ><svg class="i lg"><use href="#i-activity" /></svg
+                ></span>
+                <span class="grant-who">
+                  <span class="org">
+                    Sentry
+                    <span class="health bad">
+                      <svg class="i sm"><use href="#i-triangle-alert" /></svg>
+                      Degraded
+                    </span>
+                  </span>
+                  <span class="meta">
+                    <span class="mono">acme-inc</span> &middot;
+                    <svg class="i sm"><use href="#i-clock" /></svg>
+                    checked 2 minutes ago
+                  </span>
+                </span>
+                <span class="grant-actions">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                    Re-check
+                  </button>
+                  <button class="btn btn-primary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-plus" /></svg>
+                    Reconnect
+                  </button>
+                </span>
+              </div>
+              <div class="banner warn">
+                <svg class="i"><use href="#i-triangle-alert" /></svg>
+                <span>
+                  <b>Sentry says:</b> The authorization has been revoked. Motir cannot read this
+                  organisation&rsquo;s issues until somebody reconnects it &mdash; nothing new will
+                  reach the board in the meantime.
+                </span>
+              </div>
+            </div>
+            <div class="section">
+              <div class="seclabel">Monitored projects</div>
+              <p class="hint">Nothing new arrives from these while the connection is degraded.</p>
+              <div class="conn-rows">
+                <div class="conn-row">
+                  <span class="glyph"
+                    ><svg class="i lg"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="body">
+                    <span class="nm"><span class="slug">acme-web</span></span>
+                    <span class="sub">Bound 3 days ago &middot; last issue 6 hours ago</span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-ghost btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-external-link" /></svg>
+                      Open in Sentry
+                    </button>
+                    <button class="icon-btn" type="button" aria-label="Disconnect this project">
+                      <svg class="i"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="conn-row">
+                  <span class="glyph"
+                    ><svg class="i lg"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="body">
+                    <span class="nm"><span class="slug">acme-worker</span></span>
+                    <span class="sub">Bound 3 days ago &middot; last issue yesterday</span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-ghost btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-external-link" /></svg>
+                      Open in Sentry
+                    </button>
+                    <button class="icon-btn" type="button" aria-label="Disconnect this project">
+                      <svg class="i"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+              <div>
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-plus" /></svg>
+                  Add a monitored project
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 5 — THE ACCESS PATH: the rail entry that opens the room
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 5 &middot; <b>The access path</b> &mdash; the door, drawn rather than described
+      </div>
+      <p class="panel-note">
+        <b>Naming the route in prose is not drawing the entrance.</b> The row below is the whole
+        access path: <code class="k">Monitoring</code> in the <b>General</b> group, third, directly
+        under <code class="k">Repositories</code>, with the lucide
+        <code class="k">Activity</code> mark. Grounded in
+        <code class="k">PROJECT_SETTINGS_NAV</code>&rsquo;s own convention rather than invented here
+        &mdash; the rail groups are General &rarr; Access &rarr; Work &rarr; Automation, and the
+        reasoning for this group is in the notes.
+      </p>
+      <div class="panel">
+        <div class="rail-solo">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="callout">
+            <div class="note">
+              <svg class="i"><use href="#i-circle-alert" /></svg>
+              <span>
+                <b>General, not Automation.</b> This room holds a third party&rsquo;s CREDENTIAL and
+                an inventory of what it is bound to &mdash; the same shape as
+                <code class="k">Repositories</code>, which is its named precedent and which sits in
+                this group. The Automation group holds rooms that configure Motir&rsquo;s OWN
+                behaviour (the planner&rsquo;s cadence, the rule engine). The ingestion
+                story&rsquo;s per-connection filter may well belong there, and that is its own
+                card&rsquo;s call.
+              </span>
+            </div>
+            <table class="statetable">
+              <thead>
+                <tr>
+                  <th>value</th>
+                  <th>what the row shows</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>connecting</td>
+                  <td>
+                    The return leg is in flight. The row exists, is visibly not usable, and carries
+                    no action &mdash; each would be a promise the server has not made.
+                  </td>
+                </tr>
+                <tr>
+                  <td>connected</td>
+                  <td>
+                    The organisation and the bound projects, with when the credential was last
+                    checked. A filled success chip on the GRANT, not per row.
+                  </td>
+                </tr>
+                <tr>
+                  <td>degraded</td>
+                  <td>
+                    The provider&rsquo;s own reason, verbatim, in a filled warning banner, with
+                    <b>Re-check</b> and <b>Reconnect</b>. Never a border style.
+                  </td>
+                </tr>
+                <tr>
+                  <td>(none)</td>
+                  <td>
+                    The empty state, one line saying what connecting does, and one primary
+                    affordance.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <p class="lands">
+        <b>What lands from this panel:</b> one entry in <code class="k">PROJECT_SETTINGS_NAV</code>,
+        in the <code class="k">general</code> group after <code class="k">repositories</code>, gated
+        on the <code class="k">integration:manage</code> permission MOTIR-5260 added &mdash; so a
+        member who cannot manage the credential does not see the door at all, which is how every
+        other row in this rail behaves.
+      </p>
+    </div>
+  </body>
+</html>

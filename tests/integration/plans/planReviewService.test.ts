@@ -1,8 +1,9 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planReviewService } from '@/lib/services/planReviewService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -1184,6 +1185,112 @@ describe('planReviewService.getPlanReview', () => {
     expect(review.items[0]!.parentTrail).toEqual([
       { id: epic.id, identifier: epic.identifier, title: 'A root epic' },
     ]);
+  });
+
+  // ── A RE-PARENTING modify carries the DESTINATION's chain (bug MOTIR-5272) ──
+  //
+  // The walk above is seeded from two of the three carriers that reach
+  // `lookupIds`: an `add`'s own `parentRef`, and the TARGET's CURRENT `parentId`.
+  // A `modify` that proposes a MOVE (MOTIR-3859) states its destination in
+  // `patch.parentRef` — the third carrier — whose ROW was read and whose own
+  // parent was never queued, so the walk climbed the chain the card is LEAVING
+  // and `trailFor` stopped at the destination parent. The breadcrumb then drew
+  // `Roadmap › <destination>` with every ancestor above it missing, which is the
+  // shape this surface uses to mean *an ancestor was archived*.
+  //
+  // Why no existing case caught it: every other re-parent test in this file moves
+  // a card onto a ROOT epic, where a one-element trail is the correct answer.
+  it('carries the DESTINATION’s chain for a modify that RE-PARENTS its target (MOTIR-5272)', async () => {
+    const fx = await makeWorkItemFixture();
+    // The chain the card is LEAVING — deep enough that walking it would look like
+    // a working walk.
+    const oldEpic = await seedChild(fx, 'epic', 'Where it lives now');
+    const oldStory = await seedChild(fx, 'story', 'Its current story', oldEpic.id);
+    const card = await seedChild(fx, 'task', 'The card that moves', oldStory.id);
+    // …and the chain it is JOINING, whose top crumb is the one that went missing.
+    const newEpic = await seedChild(fx, 'epic', 'Where it should land');
+    const newStory = await seedChild(fx, 'story', 'Its destination story', newEpic.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Move it' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: card.id, patch: { parentRef: newStory.id } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const item = review.items[0]!;
+
+    expect(item.parentNodeId).toBe(newStory.id);
+    expect(item.parentTrail).toEqual([
+      { id: newEpic.id, identifier: newEpic.identifier, title: 'Where it should land' },
+      { id: newStory.id, identifier: newStory.identifier, title: 'Its destination story' },
+    ]);
+    // The trail is the DESTINATION's, so nothing from the chain it leaves is in it.
+    expect(item.parentTrail.map((c) => c.id)).not.toContain(oldEpic.id);
+    expect(item.parentTrail.at(-1)!.id).toBe(item.parentNodeId);
+  });
+
+  it('resolves MANY re-parents onto one destination in the SAME rounds as one (MOTIR-5272)', async () => {
+    // The seeding this card widens is a FRONTIER, and the property that makes it
+    // safe to widen is the one the walk was built for: ids are collected per
+    // ROUND and de-duplicated, so a destination named by thirty proposals is
+    // resolved once. Asserted RELATIVELY — many vs one — rather than as a fixed
+    // number, so an unrelated batched read added later does not read as a
+    // regression here while the N+1 this guards against still would.
+    const fx = await makeWorkItemFixture();
+    const oldEpic = await seedChild(fx, 'epic', 'The old epic');
+    const oldStory = await seedChild(fx, 'story', 'The old story', oldEpic.id);
+    const newEpic = await seedChild(fx, 'epic', 'The new epic');
+    const newStory = await seedChild(fx, 'story', 'The new story', newEpic.id);
+    const cards = [
+      await seedChild(fx, 'task', 'Mover one', oldStory.id),
+      await seedChild(fx, 'task', 'Mover two', oldStory.id),
+      await seedChild(fx, 'task', 'Mover three', oldStory.id),
+    ];
+
+    const movePlan = async (moving: { id: string }[]) => {
+      const plan = await plansService.createPlan(fx.projectId, { title: 'Move them' }, fx.ctx);
+      await plansService.addProposals(
+        plan.id,
+        moving.map((c) => ({
+          op: 'modify' as const,
+          workItemId: c.id,
+          patch: { parentRef: newStory.id },
+        })),
+        fx.ctx,
+      );
+      await plansService.markPlanned(plan.id, fx.ctx);
+      return plan.id;
+    };
+    const onePlan = await movePlan(cards.slice(0, 1));
+    const manyPlan = await movePlan(cards);
+
+    // A pass-through counter, never a mock: the reads still hit the real database.
+    const batched = vi.spyOn(workItemRepository, 'findByIdsInWorkspace');
+    const perParent = vi.spyOn(workItemRepository, 'findAncestors');
+
+    await planReviewService.getPlanReview(onePlan, fx.ctx);
+    const roundsForOne = batched.mock.calls.length;
+    // The counter must be able to go RED: a spy that records nothing would make
+    // the comparison below pass vacuously. One batched read for the targets plus
+    // at least one walk round is the floor.
+    expect(roundsForOne).toBeGreaterThanOrEqual(2);
+    batched.mockClear();
+
+    const many = await planReviewService.getPlanReview(manyPlan, fx.ctx);
+    expect(batched.mock.calls.length).toBe(roundsForOne);
+    // …and the alternative this walk exists to avoid is still not taken.
+    expect(perParent).not.toHaveBeenCalled();
+    batched.mockRestore();
+    perParent.mockRestore();
+
+    // The trails are right on every one of them, not merely cheap.
+    expect(many.items).toHaveLength(3);
+    for (const item of many.items) {
+      expect(item.parentTrail.map((c) => c.id)).toEqual([newEpic.id, newStory.id]);
+    }
   });
 
   it('is EMPTY for a root proposal, an intra-plan parent, and a deleted parent', async () => {
