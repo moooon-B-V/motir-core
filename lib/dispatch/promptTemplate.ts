@@ -283,6 +283,14 @@ export interface DispatchPromptSource {
   /** The inherited session branch, or null for the per-item-PR workflow. */
   sessionBranch: string | null;
   /**
+   * The RUN TARGET's key when this item is dispatched as part of a run launched
+   * against ANOTHER item — a scoped run's scope (Story MOTIR-4906 · MOTIR-5334).
+   * Omitted, null, or equal to {@link key} means this item IS its own run target,
+   * so its agent publishes How to test on it. Otherwise the run's close-out step
+   * publishes on the target and this agent is told not to.
+   */
+  runTargetKey?: string | null;
+  /**
    * The `likely-missing-edge` PROSE-vs-GRAPH advisories for this item
    * (MOTIR-2079) — items the card's ACCEPTANCE CRITERIA name but that it carries
    * no `blocked_by` edge to. Omitted or empty renders NOTHING (no empty
@@ -1249,7 +1257,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
         `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
         '       you are the first item to reach this point in it',
       ]
-    : ['    3. open the pull request'];
+    : openPullRequestStep();
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
@@ -1302,15 +1310,21 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
 }
 
 /**
- * Step 4b of the FINISHED order — publish HOW TO TEST onto the work item (Story
- * MOTIR-4906 · MOTIR-5334; `docs/decisions/approval-gates.md` §9).
+ * Step 4b of the FINISHED order — publish the RUN's HOW TO TEST onto the RUN
+ * TARGET (Story MOTIR-4906 · MOTIR-5334; `docs/decisions/approval-gates.md` §9
+ * and its 2026-09-13 amendment: per RUN, on the run target, before the run
+ * finishes; the pull-request body keeps its own section).
  *
- * ⚠️ THE STEP IS UNCONDITIONAL ON A CARD THAT OPENS A PULL REQUEST; ONLY THE
- * CLICK-PATH IS GATED. §9 makes How to test an authoring obligation on every
- * card that produces a pull request, because "run it locally" and "what CI
- * proved" apply to every change — and the story's criterion ties the trigger to
- * the runbook's rule. The two are reconciled by gating the one part that only a
- * visible change has, {@link RENDERED_SURFACE_TRIGGER}, rather than by picking one.
+ * ⚠️ WHO PUBLISHES DEPENDS ON WHAT THE RUN WAS LAUNCHED AGAINST. A card dispatched
+ * on its own — or as one card of an unscoped batch — IS its run target, so its
+ * agent publishes on its own key. A card dispatched inside a SCOPED run is one
+ * child of a target this agent cannot see whole, so it does NOT publish: the run's
+ * close-out step does, once, for the target (MOTIR-5357). Asking every child as
+ * well would produce fragments on the wrong cards.
+ *
+ * ⚠️ THE STEP IS UNCONDITIONAL ON A RUN TARGET THAT OPENS A PULL REQUEST; ONLY THE
+ * CLICK-PATH IS GATED by {@link RENDERED_SURFACE_TRIGGER}. "Run it locally" and
+ * "what CI proved" apply to every change; only a visible change has a click-path.
  *
  * ⚠️ BEFORE `implemented`, AND A REFUSAL DOES NOT BLOCK IT. The reviewer's
  * evidence should exist when the card says it is ready for them; but a card stuck
@@ -1321,20 +1335,43 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
  * request and gets no protocol at all, so it gets no step.
  */
 function howToTestStep(src: DispatchPromptSource): string[] {
+  if (src.runTargetKey && src.runTargetKey !== src.key) {
+    return [
+      `    4b. do NOT publish How to test for ${src.key}. This item is part of a run`,
+      `        launched against ${src.runTargetKey}; How to test for that run is written`,
+      `        once, onto ${src.runTargetKey}, by the run's close-out step.`,
+    ];
+  }
   return [
-    `    4b. publish HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool — once per`,
-    '        repository you linked a pull request in, for the commit you just pushed',
-    `        (key ${src.key}, that repository, commitSha = the pushed head). Give the`,
-    '        setup commands a reviewer runs after checking out the branch: install,',
-    '        migrate, seed, run. Give the precondition: the sign-in, role, or data',
-    '        the surface needs. Motir fills in the branch fetch itself — do not',
-    '        include it.',
+    `    4b. publish this run's HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool —`,
+    `        ONCE, on ${src.key} (this item is the run's target), with one "repos"`,
+    '        entry per repository you pushed to: that repository, commitSha = its',
+    '        pushed head, and the setup commands a reviewer runs after checking out',
+    '        the branch — install, migrate, seed, run. Motir fills in the branch',
+    '        fetch itself — do not include it. Give the precondition: the sign-in,',
+    '        role, or data the surface needs.',
     `        If this change ${RENDERED_SURFACE_TRIGGER},`,
     '        give the click-path, with a previewPath when there is one. Otherwise pass',
     '        clickPathNotApplicable with the reason, e.g. "no rendered surface',
     '        changed: a service and its tests".',
     '        If the publish is refused, say so in your FINISHED report and still do',
     '        step 5 — a refused publish does not prevent the transition.',
+  ];
+}
+
+/**
+ * Step 3 in the per-item lane — the pull request this agent OPENS carries a
+ * `## How to test` section in its body (Story MOTIR-4906 · MOTIR-5334). The
+ * record on the work item is what Motir renders; the body is what a reviewer on
+ * the host reads, and §9's amendment keeps both.
+ */
+function openPullRequestStep(): string[] {
+  return [
+    '    3. open the pull request. Its body carries a "## How to test" section: the',
+    '       precondition, the setup commands after checking out the branch, and the',
+    '       click-path — or, when no rendered surface changed, one sentence saying',
+    '       why there is none. It is the same content step 4b publishes on the',
+    '       run target; write both.',
   ];
 }
 

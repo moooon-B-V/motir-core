@@ -1730,20 +1730,21 @@ describe('the acceptance-receipt steps are conditional on the card recording one
   });
 });
 
-describe('assembleDispatchPrompt — HOW TO TEST is owed before implemented (MOTIR-5334)', () => {
+describe('assembleDispatchPrompt — HOW TO TEST is per RUN, on the run target (MOTIR-5334)', () => {
   const GRAMMARS = [
     ['per_item_pr', null],
     ['session_lineage', 'motir/auto-20260913-120000'],
   ] as const;
+  const flat = (prompt: string) => prompt.replace(/\n\s+/g, ' ');
 
   it.each(GRAMMARS)(
-    'the %s grammar renders step 4b between the link and the transition',
+    'the %s grammar, with the item as its own run target, renders step 4b between the link and the transition',
     (_mode, sessionBranch) => {
       const { prompt } = assembleDispatchPrompt(source({ sessionBranch }));
       const order = prompt.slice(prompt.indexOf('IN THIS ORDER'));
       const link = order.indexOf('4. link it with the link_pull_request tool');
       const publish = order.indexOf(
-        `4b. publish HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool`,
+        `4b. publish this run's HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool`,
       );
       const transition = order.indexOf('5. move PROD-7 to Implemented');
       expect(link).toBeGreaterThan(-1);
@@ -1751,6 +1752,28 @@ describe('assembleDispatchPrompt — HOW TO TEST is owed before implemented (MOT
       expect(transition).toBeGreaterThan(publish);
     },
   );
+
+  it('an UNSCOPED session lineage (runTargetKey null) still renders the step, on the card', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ sessionBranch: 'motir/auto-20260913-120000', runTargetKey: null }),
+    );
+    expect(flat(prompt)).toContain(`ONCE, on PROD-7 (this item is the run's target)`);
+  });
+
+  it('a run targeting the item ITSELF renders the step, on the card', () => {
+    const { prompt } = assembleDispatchPrompt(source({ runTargetKey: 'PROD-7' }));
+    expect(prompt).toContain(HOW_TO_TEST_TOOL_NAME);
+  });
+
+  it('a SCOPED run on another item renders NO publish, and names the run target the close-out writes to', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ sessionBranch: 'motir/run-20260913-120000', runTargetKey: 'PROD-1' }),
+    );
+    expect(prompt).not.toContain(HOW_TO_TEST_TOOL_NAME);
+    const text = flat(prompt);
+    expect(text).toContain('4b. do NOT publish How to test for PROD-7.');
+    expect(text).toContain("written once, onto PROD-1, by the run's close-out step");
+  });
 
   it('interpolates the runbook trigger, byte for byte', () => {
     // The scope sentence of motir-meta `prompts/run.md` § "The how-to-test rule —
@@ -1761,22 +1784,35 @@ describe('assembleDispatchPrompt — HOW TO TEST is owed before implemented (MOT
       'creates or changes any rendered surface (a UI `type: code` subtask, or any subtask adding/editing a page, component, route-rendered view, modal, or interactive control)',
     );
     const { prompt } = assembleDispatchPrompt(source());
-    expect(prompt.replace(/\n\s+/g, ' ')).toContain(`If this change ${RENDERED_SURFACE_TRIGGER}`);
+    expect(flat(prompt)).toContain(`If this change ${RENDERED_SURFACE_TRIGGER}`);
   });
 
-  it('tells the agent: once per repository, no branch fetch, not-applicable with a reason', () => {
-    const flat = assembleDispatchPrompt(source()).prompt.replace(/\n\s+/g, ' ');
-    expect(flat).toContain('once per repository you linked a pull request in');
-    expect(flat).toContain('for the commit you just pushed');
-    expect(flat).toContain('Motir fills in the branch fetch itself — do not include it.');
-    expect(flat).toContain('Otherwise pass clickPathNotApplicable with the reason');
-    expect(flat).toContain('key PROD-7');
+  it('tells the agent: ONE call on the card, a repos entry per repository, no branch fetch, not-applicable with a reason', () => {
+    const text = flat(assembleDispatchPrompt(source()).prompt);
+    expect(text).toContain('ONCE, on PROD-7');
+    expect(text).toContain('one "repos" entry per repository you pushed to');
+    expect(text).toContain('commitSha = its pushed head');
+    expect(text).toContain('Motir fills in the branch fetch itself — do not include it.');
+    expect(text).toContain('Otherwise pass clickPathNotApplicable with the reason');
   });
 
   it('tells the agent a refused publish is reported and does not block the transition', () => {
-    const flat = assembleDispatchPrompt(source()).prompt.replace(/\n\s+/g, ' ');
-    expect(flat).toContain('If the publish is refused, say so in your FINISHED report');
-    expect(flat).toContain('a refused publish does not prevent the transition');
+    const text = flat(assembleDispatchPrompt(source()).prompt);
+    expect(text).toContain('If the publish is refused, say so in your FINISHED report');
+    expect(text).toContain('a refused publish does not prevent the transition');
+  });
+
+  it('the per-item lane requires a "## How to test" section in the pull request body it opens', () => {
+    const text = flat(assembleDispatchPrompt(source({ sessionBranch: null })).prompt);
+    expect(text).toContain('3. open the pull request. Its body carries a "## How to test" section');
+    expect(text).toContain('write both.');
+  });
+
+  it('the session lineage opens no pull request of its own, so it carries no body section instruction', () => {
+    const text = flat(
+      assembleDispatchPrompt(source({ sessionBranch: 'motir/auto-20260913-120000' })).prompt,
+    );
+    expect(text).not.toContain('"## How to test" section');
   });
 
   it('a MANUAL item — the lane that opens no pull request — renders no publish step', () => {
