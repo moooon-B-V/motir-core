@@ -69,6 +69,7 @@ import {
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
+import { patchRescopes, resetsOnRescope } from '@/lib/plans/rescopeReset';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
@@ -2022,6 +2023,8 @@ async function materialize(
   const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
   /** The re-parents this pass performed (MOTIR-3859) — see {@link ReparentMove}. */
   const reparented: ReparentMove[] = [];
+  /** The re-scope resets this pass performed (MOTIR-5359) — see {@link RescopeResetMove}. */
+  const rescopeResets: RescopeResetMove[] = [];
 
   // modify + remove against existing targets (locked + re-read inside the tx).
   //
@@ -2039,7 +2042,7 @@ async function materialize(
   // `normalizeBodyRefs` are for; only the edge write is withheld.
   for (const item of items) {
     if (item.op === 'modify') {
-      const moved = await applyModify(
+      const { reparent: moved, reset } = await applyModify(
         item,
         ctx,
         resolveRef,
@@ -2051,6 +2054,7 @@ async function materialize(
         plan.id,
       );
       if (moved) reparented.push(moved);
+      if (reset) rescopeResets.push(reset);
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
       // than re-guarded, which would add a branch nothing can take.
@@ -2091,14 +2095,16 @@ async function materialize(
     tx,
   );
 
-  return { touchedWorkItemIds, reparented };
+  return { touchedWorkItemIds, reparented, rescopeResets };
 }
 
 /** What one `materialize` pass did to the tree — the ids it touched (the
- *  embedding trigger's input) and the re-parents it performed (MOTIR-3859). */
+ *  embedding trigger's input), the re-parents it performed (MOTIR-3859) and the
+ *  re-scope resets it wrote (MOTIR-5359). */
 interface MaterializeResult {
   touchedWorkItemIds: string[];
   reparented: ReparentMove[];
+  rescopeResets: RescopeResetMove[];
 }
 
 /**
@@ -2199,7 +2205,7 @@ async function applyModify(
   // already has its row and the map is complete by the time we are called.
   planItemToWorkItem: ReadonlyMap<string, string>,
   planId: string,
-): Promise<ReparentMove | null> {
+): Promise<{ reparent: ReparentMove | null; reset: RescopeResetMove | null }> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
   if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
@@ -2429,6 +2435,23 @@ async function applyModify(
     }
   }
 
+  // THE RE-SCOPE RESET (bug MOTIR-5359) — see the status rule below the write.
+  const statusReset = await resolveRescopeReset(current, patch, ctx, tx);
+  if (statusReset) {
+    update.status = statusReset.toStatusKey;
+    // The integration branch goes with the claim, as it does on a `done` write in
+    // `applyStatusTransition`: readiness treats a blocker carrying a
+    // `sessionBranch` as satisfied (`isOpenBlocker`), so a reset card that kept it
+    // would go on unblocking its dependents on the OLD body's branch. Bookkeeping,
+    // not a content edit — kept out of the diff, the same convention.
+    update.sessionBranch = null;
+    diff.status = { from: statusReset.fromStatusKey, to: statusReset.toStatusKey };
+    // The REASON, on the same one revision: which plan re-scoped the card, and
+    // whether the workflow declares the edge (`transition`) or the approve wrote
+    // it as a plan-driven reset past a `restricted` graph (`plan_reset`).
+    diff.statusReset = { planId, reason: 'rescoped', arm: statusReset.arm };
+  }
+
   if (Object.keys(update).length > 0) {
     await workItemRepository.update(item.workItemId, update, tx);
   }
@@ -2438,18 +2461,32 @@ async function applyModify(
   // workItemsService uses ({ added/removed: [{ toId, kind }] }) — so the activity
   // feed renders them through the already-registered `links` disposition
   // (lib/activity/renderers.ts) rather than a new, undispositioned key.
-  // ⚠️ A `modify` WIRES THE EDGE AND LEAVES THE STATUS ALONE — deliberately
-  // (MOTIR-3050 AC 3). The `add` path above derives a materialized card's FIRST
-  // status from its edges, and the obvious symmetry would be to move an existing
-  // card to `blocked` when a `blockedByAdd` newly gates it. It is not symmetric,
-  // for one reason: an `add` has no prior status to overwrite, and a `modify`
-  // target has one that somebody RECORDED. That card may be `in_progress` with a
-  // live worktree — the exact state `run.md`'s guards produce — or `in_review`
-  // with an open PR, or `done`, from which `blocked` is not even a legal move.
-  // An approve cannot see any of that, so writing the column here would silently
-  // walk back a fact in order to display a dependency the edge already carries
-  // and readiness already computes. The mover stays explicit: whoever finds the
-  // missing prerequisite calls `transition_status` themselves.
+  //
+  // ⚠️ TWO STATUS RULES, and they do not contradict each other.
+  //
+  // (1) FOR AN EDGE, A `modify` NEVER MOVES THE STATUS ON ITS OWN ACCOUNT —
+  // deliberately (MOTIR-3050 AC 3). The `add` path above derives a materialized
+  // card's FIRST status from its edges, and the obvious symmetry would be to move
+  // an existing card to `blocked` when a `blockedByAdd` newly gates it. It is not
+  // symmetric, for one reason: an `add` has no prior status to overwrite, and a
+  // `modify` target has one that somebody RECORDED. That card may be `in_progress`
+  // with a live worktree — the exact state `run.md`'s guards produce — or
+  // `in_review` with an open PR, or `done`, from which `blocked` is not even a
+  // legal move. An approve cannot see any of that, so writing the column here
+  // would silently walk back a fact in order to display a dependency the edge
+  // already carries and readiness already computes. The mover stays explicit:
+  // whoever finds the missing prerequisite calls `transition_status` themselves.
+  //
+  // (2) THE RE-SCOPE RESET IS THAT EXPLICIT MOVER (bug MOTIR-5359). A patch that
+  // changes WHAT the card asks for — its title, its description, the repository it
+  // ships in (`patchRescopes`) — on a card in the `in_progress` CATEGORY moves it
+  // back to the project's initial status, above. Rule (1)'s objection does not
+  // reach it: the fact being walked back is *"work matching this body is under way
+  // or built"*, and approving a new body is what made that fact false. A person
+  // approved the re-scope, and the review diff showed them the reset before they
+  // pressed the button (`planReviewService.buildChanges`). Left alone, an
+  // `implemented` card goes on claiming the OLD body is on the remote, and
+  // readiness, the board, the parent rollup and dispatch all read that claim.
   const linkAdded: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByAdd ?? []) {
     const toId = resolveRef(ref);
@@ -2488,7 +2525,7 @@ async function applyModify(
 
   // ONE revision for the whole modify (same id — lands as a single entry in the
   // existing work-item revision/activity log; identity is never re-minted).
-  await workItemRevisionsService.recordRevision(
+  const revisionId = await workItemRevisionsService.recordRevision(
     { workItemId: item.workItemId, changedById: ctx.userId, changeKind: 'updated', diff },
     tx,
   );
@@ -2497,8 +2534,91 @@ async function applyModify(
   // whole-pass facts. The repo-set recompute has to run once per container after
   // every op has landed (the rollup below), and the `child-set.changed` event has
   // to be emitted AFTER the approve transaction commits, like every `work-item/*`
-  // event on this path.
-  return reparent;
+  // event on this path. The status reset's `work-item/transitioned` is the same:
+  // a rolled-back approve must not have announced a transition.
+  return {
+    reparent,
+    reset: statusReset
+      ? {
+          workItemId: item.workItemId,
+          fromStatusKey: statusReset.fromStatusKey,
+          toStatusKey: statusReset.toStatusKey,
+          revisionId,
+        }
+      : null,
+  };
+}
+
+/** A re-scope reset the approve performed (bug MOTIR-5359) — the payload its
+ *  post-commit `work-item/transitioned` carries. */
+interface RescopeResetMove {
+  workItemId: string;
+  fromStatusKey: string;
+  toStatusKey: string;
+  revisionId: string;
+}
+
+/**
+ * Decide the RE-SCOPE RESET for one `modify` target (bug MOTIR-5359), inside the
+ * approve transaction, against the row `applyModify` has just locked and re-read —
+ * so the status judged is the status written over, never a snapshot from before
+ * the lock.
+ *
+ * Returns null when the patch does not re-scope the card (`patchRescopes`), when
+ * its status is outside the `in_progress` CATEGORY (`resetsOnRescope` — a `todo` /
+ * `blocked` card claims nothing, a `done` one never reaches here), or when the
+ * project has no initial status to return to.
+ *
+ * ⚠️ WHY THIS IS NOT `workItemsService.applyStatusTransition`. That funnel asserts
+ * `work_item:edit` (`assertCanEdit`), and the approve is gated by `ai:decide_plan`
+ * alone — every other write a plan makes to a card (its title, its body, its
+ * parent, its edges, Pass 2b's birth status) rides that key. Routing only the
+ * reset through the edit gate would refuse the whole approve for a custom role
+ * holding `ai:decide_plan` without `work_item:edit`. So the approve makes the
+ * write itself, the way Pass 2b does, and keeps what the funnel guarantees: the
+ * row lock (taken by the caller), a real project status as the target, the
+ * legality read, and the status on a revision.
+ *
+ * THE TWO ARMS. Under an `open` policy, or where a `restricted` workflow DECLARES
+ * the edge, the reset is an ordinary `transition`. Where it does not, it is still
+ * written — as a `plan_reset` — rather than failing the approve: a person approved
+ * the re-scope, and refusing it would strand the plan for a graph that was never
+ * drawn with re-planning in mind. In the default workflow (`DEFAULT_TRANSITIONS`)
+ * `in_progress → todo` and `planning → todo` are declared, so those two are
+ * `transition`s; `implemented`, `in_review` and `approved` have no edge to `todo`
+ * and take the `plan_reset` arm.
+ */
+async function resolveRescopeReset(
+  current: WorkItem,
+  patch: PlanItemPatch,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<{
+  fromStatusKey: string;
+  toStatusKey: string;
+  arm: 'transition' | 'plan_reset';
+} | null> {
+  if (!patchRescopes(patch, current)) return null;
+  const statuses = await workflowsRepository.findStatuses(current.projectId, ctx.workspaceId, tx);
+  const from = statuses.find((s) => s.key === current.status);
+  if (!from || !resetsOnRescope(from.category)) return null;
+  const initial = statuses.find((s) => s.isInitial);
+  if (!initial || initial.key === from.key) return null;
+  const project = await projectRepository.findById(current.projectId, tx);
+  const declared =
+    project?.workflowPolicyMode === 'open' ||
+    (await workflowsRepository.findTransition(
+      current.projectId,
+      from.id,
+      initial.id,
+      ctx.workspaceId,
+      tx,
+    )) !== null;
+  return {
+    fromStatusKey: from.key,
+    toStatusKey: initial.key,
+    arm: declared ? 'transition' : 'plan_reset',
+  };
 }
 
 /**
@@ -4770,135 +4890,137 @@ export const plansService = {
       // reference a materialized card stores.
       const repoRefs = await resolveProposalRepoRefs(plan.projectId, ctx);
 
-      const { row, items, firstOnboarding, projectKey, touchedWorkItemIds, reparented } =
-        await withWorkspaceContext(
-          { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-          async (tx) => {
-            const locked = await planRepository.lockById(planId, tx);
-            if (!locked) throw new PlanNotFoundError(planId);
-            const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-            if (!fresh) throw new PlanNotFoundError(planId);
-            if (fresh.status !== 'planned') {
-              throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
-            }
-            // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
-            // under the lock, before a single row is materialized. Approve is
-            // one-shot, so the only safe answer to "a revision is halfway through
-            // rewriting this set" is not to materialize it. The reviewer waits,
-            // reads what changed, and approves the plan they asked for.
-            await assertNoRevisionInFlight(planId, tx);
-            const proposals = await planItemRepository.findByPlan(planId, tx);
-            // …AND THE EMPTINESS CHECK AGAIN, ON THE FRESH SET UNDER THE LOCK
-            // (MOTIR-4146). Same placement and same reason as `assertRepoPins
-            // Unmoved` below: the pre-transaction pass is a SNAPSHOT, and a
-            // withdrawal committed between it and this lock would otherwise
-            // materialize nothing while recording an approval. The pre-pass is
-            // the courtesy; this one is the guarantee.
-            assertPlanHasProposals(planId, proposals);
-            // THE GATE, under the plan lock + the targets' row locks, on the FRESH
-            // proposal set — nothing has been written yet, so a rejection here rolls
-            // back a transaction that touched no work-item row.
-            await assertProposalsPersistable(
-              proposals,
-              ctx,
-              terminalStatusKeys,
-              plan.projectId,
-              tx,
-            );
-            // …AND THE PINS THE SNAPSHOT RESOLVED ARE STILL THE PINS THESE ROWS
-            // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
-            // under the lock, before a single row is materialized.
-            assertRepoPinsUnmoved(snapshotPins, proposals, snapshotRepoSets);
-            const { touchedWorkItemIds, reparented } = await materialize(
-              proposals,
-              fresh,
-              ctx,
-              tx,
-              repoPins,
-              repoRefs,
-              repoSets,
-            );
-            // Read the project ONCE, before `markOnboardingRan` writes: its
-            // pre-write `onboardingRanAt` gates the rename below, and its
-            // `identifier` (the tenant projectKey) + the first-onboarding signal both
-            // feed the fresh-establish convention trigger fired after the tx commits.
-            const project = await projectRepository.findById(fresh.projectId, tx);
-            // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
-            // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
-            // apply it here — but ONLY on the FIRST onboarding approve of a draft the
-            // user hasn't already named. Read BEFORE `markOnboardingRan` below (which
-            // sets `onboardingRanAt`), so `onboardingRanAt == null` is the "first
-            // onboarding" gate; the `name === provisionalProjectName` check (the
-            // caller passes the current-locale "Untitled project" placeholder) means a
-            // user rename during review is never clobbered. A reconciliation re-plan
-            // carries no `productName`, so it never reaches here. Best-effort: rename
-            // failure would abort the tx, so keep it a plain guarded write. Done via
-            // the repo in-tx — `renameProject` opens its own workspace context.
+      const {
+        row,
+        items,
+        firstOnboarding,
+        projectKey,
+        touchedWorkItemIds,
+        reparented,
+        rescopeResets,
+      } = await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+        async (tx) => {
+          const locked = await planRepository.lockById(planId, tx);
+          if (!locked) throw new PlanNotFoundError(planId);
+          const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+          if (!fresh) throw new PlanNotFoundError(planId);
+          if (fresh.status !== 'planned') {
+            throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
+          }
+          // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
+          // under the lock, before a single row is materialized. Approve is
+          // one-shot, so the only safe answer to "a revision is halfway through
+          // rewriting this set" is not to materialize it. The reviewer waits,
+          // reads what changed, and approves the plan they asked for.
+          await assertNoRevisionInFlight(planId, tx);
+          const proposals = await planItemRepository.findByPlan(planId, tx);
+          // …AND THE EMPTINESS CHECK AGAIN, ON THE FRESH SET UNDER THE LOCK
+          // (MOTIR-4146). Same placement and same reason as `assertRepoPins
+          // Unmoved` below: the pre-transaction pass is a SNAPSHOT, and a
+          // withdrawal committed between it and this lock would otherwise
+          // materialize nothing while recording an approval. The pre-pass is
+          // the courtesy; this one is the guarantee.
+          assertPlanHasProposals(planId, proposals);
+          // THE GATE, under the plan lock + the targets' row locks, on the FRESH
+          // proposal set — nothing has been written yet, so a rejection here rolls
+          // back a transaction that touched no work-item row.
+          await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, plan.projectId, tx);
+          // …AND THE PINS THE SNAPSHOT RESOLVED ARE STILL THE PINS THESE ROWS
+          // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
+          // under the lock, before a single row is materialized.
+          assertRepoPinsUnmoved(snapshotPins, proposals, snapshotRepoSets);
+          const { touchedWorkItemIds, reparented, rescopeResets } = await materialize(
+            proposals,
+            fresh,
+            ctx,
+            tx,
+            repoPins,
+            repoRefs,
+            repoSets,
+          );
+          // Read the project ONCE, before `markOnboardingRan` writes: its
+          // pre-write `onboardingRanAt` gates the rename below, and its
+          // `identifier` (the tenant projectKey) + the first-onboarding signal both
+          // feed the fresh-establish convention trigger fired after the tx commits.
+          const project = await projectRepository.findById(fresh.projectId, tx);
+          // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
+          // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
+          // apply it here — but ONLY on the FIRST onboarding approve of a draft the
+          // user hasn't already named. Read BEFORE `markOnboardingRan` below (which
+          // sets `onboardingRanAt`), so `onboardingRanAt == null` is the "first
+          // onboarding" gate; the `name === provisionalProjectName` check (the
+          // caller passes the current-locale "Untitled project" placeholder) means a
+          // user rename during review is never clobbered. A reconciliation re-plan
+          // carries no `productName`, so it never reaches here. Best-effort: rename
+          // failure would abort the tx, so keep it a plain guarded write. Done via
+          // the repo in-tx — `renameProject` opens its own workspace context.
+          if (
+            fresh.productName &&
+            fresh.productName.trim().length > 0 &&
+            opts.provisionalProjectName
+          ) {
             if (
-              fresh.productName &&
-              fresh.productName.trim().length > 0 &&
-              opts.provisionalProjectName
+              project &&
+              project.onboardingRanAt == null &&
+              project.name === opts.provisionalProjectName
             ) {
-              if (
-                project &&
-                project.onboardingRanAt == null &&
-                project.name === opts.provisionalProjectName
-              ) {
-                await projectRepository.update(project.id, { name: fresh.productName.trim() }, tx);
-              }
+              await projectRepository.update(project.id, { name: fresh.productName.trim() }, tx);
             }
-            // Stamp the immutable onboarding-ran marker the FIRST time this project's
-            // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
-            // null-guarded write makes it set-once, so calling it on every approve is
-            // safe — only the first materialized tree writes it. This is the single
-            // source of truth the /onboarding redirect AND the roadmap planning-origin
-            // cluster (MOTIR-1013) read. Its return count (1 on the first approve, 0
-            // after) IS the onboarding-completion signal the convention trigger fires on.
-            const firstOnboarding =
-              (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
-            const updated = await planRepository.update(
+          }
+          // Stamp the immutable onboarding-ran marker the FIRST time this project's
+          // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
+          // null-guarded write makes it set-once, so calling it on every approve is
+          // safe — only the first materialized tree writes it. This is the single
+          // source of truth the /onboarding redirect AND the roadmap planning-origin
+          // cluster (MOTIR-1013) read. Its return count (1 on the first approve, 0
+          // after) IS the onboarding-completion signal the convention trigger fires on.
+          const firstOnboarding =
+            (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
+          const updated = await planRepository.update(
+            planId,
+            { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
+            tx,
+          );
+          // The approval, on the plan's content trail (MOTIR-3535), inside the
+          // very transaction that materialized the tree — so a rolled-back
+          // approve (the in-transaction status re-read rejecting, or the budget
+          // expiring) leaves no row claiming it happened.
+          //
+          // A decision is always a PERSON's: `ai:decide_plan` has no machine
+          // path, so the row records the decider and NO agent triple, however the
+          // plan itself was written. `touchedWorkItemCount` is what the approve
+          // actually did to the tree, which is the fact `itemCount` alone cannot
+          // give (a plan of `remove`s materializes none).
+          await planRevisionsService.recordRevision(
+            {
               planId,
-              { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
-              tx,
-            );
-            // The approval, on the plan's content trail (MOTIR-3535), inside the
-            // very transaction that materialized the tree — so a rolled-back
-            // approve (the in-transaction status re-read rejecting, or the budget
-            // expiring) leaves no row claiming it happened.
-            //
-            // A decision is always a PERSON's: `ai:decide_plan` has no machine
-            // path, so the row records the decider and NO agent triple, however the
-            // plan itself was written. `touchedWorkItemCount` is what the approve
-            // actually did to the tree, which is the fact `itemCount` alone cannot
-            // give (a plan of `remove`s materializes none).
-            await planRevisionsService.recordRevision(
-              {
-                planId,
-                changeKind: 'approved',
-                changedById: ctx.userId,
-                diff: {
-                  itemCount: proposals.length,
-                  touchedWorkItemCount: touchedWorkItemIds.length,
-                },
+              changeKind: 'approved',
+              changedById: ctx.userId,
+              diff: {
+                itemCount: proposals.length,
+                touchedWorkItemCount: touchedWorkItemIds.length,
               },
-              tx,
-            );
-            // Re-read so the returned items carry the written-back work-item ids.
-            const finalItems = await planItemRepository.findByPlan(planId, tx);
-            return {
-              row: updated,
-              items: finalItems,
-              firstOnboarding,
-              projectKey: project?.identifier ?? null,
-              touchedWorkItemIds,
-              reparented,
-            };
-          },
-          // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
-          // two fixes, not the first: the edge pass above was batched before this
-          // number was touched (MOTIR-3396).
-          APPROVE_TX_BUDGET,
-        ).catch((err: unknown) => translateApproveTimeout(err, planId, preItems.length));
+            },
+            tx,
+          );
+          // Re-read so the returned items carry the written-back work-item ids.
+          const finalItems = await planItemRepository.findByPlan(planId, tx);
+          return {
+            row: updated,
+            items: finalItems,
+            firstOnboarding,
+            projectKey: project?.identifier ?? null,
+            touchedWorkItemIds,
+            reparented,
+            rescopeResets,
+          };
+        },
+        // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
+        // two fixes, not the first: the edge pass above was batched before this
+        // number was touched (MOTIR-3396).
+        APPROVE_TX_BUDGET,
+      ).catch((err: unknown) => translateApproveTimeout(err, planId, preItems.length));
 
       // Plan-tree embedding, MATERIALIZE trigger (Story MOTIR-2694 · MOTIR-2696,
       // ADR §6.3.1). AFTER the commit, for the same two reasons the create path
@@ -4944,6 +5066,25 @@ export const plansService = {
           // nothing it can read dates the change (MOTIR-2965, the same argument
           // `moveWorkItem` makes).
           occurredAt: new Date().toISOString(),
+        });
+      }
+
+      // THE RE-SCOPE RESETS' TRANSITIONS (bug MOTIR-5359). Every other status write
+      // in the product announces itself with `work-item/transitioned` after its
+      // transaction commits — the watcher email, the bell, automation's
+      // `transitioned` trigger and status derivation all ride it — and a card the
+      // approve walked back from `implemented` to To Do is a status change like any
+      // other: its parent's derived status can move with it. POST-COMMIT and
+      // best-effort, for the two reasons the events above give. `revisionId` is the
+      // modify's ONE revision, which carries the `status` cell.
+      for (const reset of rescopeResets) {
+        await sendEvent('work-item/transitioned', {
+          workspaceId: ctx.workspaceId,
+          workItemId: reset.workItemId,
+          actorId: ctx.userId,
+          fromStatusKey: reset.fromStatusKey,
+          toStatusKey: reset.toStatusKey,
+          revisionId: reset.revisionId,
         });
       }
 

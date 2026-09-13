@@ -71,6 +71,11 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
    *  of every ancestor; it is the wrong field to be silent about. */
   'targetRepo',
   'targetRepoRole',
+  /** The target's STATUS when the approve will RESET it (bug MOTIR-5359) — a
+   *  `modify` that re-scopes a card in the `in_progress` category walks it back to
+   *  the initial status. The only member no patch key produces: the approve
+   *  DERIVES it, and the reviewer has to see it before approving. */
+  'status',
 ] as const;
 
 export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];

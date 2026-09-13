@@ -236,6 +236,14 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // the card to `todo` on approval would put it back in the pickable set before
   // anyone corrected it, and the run would re-dispatch the same defective card —
   // the exact loop this status exists to break.
+  //
+  // ⚠️ ONE EXCEPTION, and it does not reopen that loop (bug MOTIR-5359): an
+  // approved plan whose `modify` RE-SCOPES this very card — its title, its body
+  // or its repository — returns it to the initial status, as it does any card in
+  // the `in_progress` category. That is the first outcome above with the
+  // correction already made: the card is not re-dispatched unchanged, it is
+  // re-dispatched as the plan rewrote it. A plan that only splits or replaces the
+  // card does not re-scope it, so the human still moves those.
   ['planning', 'todo'],
   ['planning', 'in_progress'],
   ['planning', 'cancelled'],
