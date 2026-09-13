@@ -1294,9 +1294,10 @@
          two corrected what had moved; this one changes where the numbers come
          from, so the fourth has nothing to find. ─────────────────────────── */
 
-      /* class="mt-2 flex items-center gap-2.5 rounded-(--radius-control)
+      /* class="mt-2 flex items-center gap-2.5 gap-y-1 rounded-(--radius-control)
                 border border-(--el-border) bg-(--el-surface)
-                px-(--spacing-control-x) py-(--spacing-control-y)" */
+                px-(--spacing-control-x) py-(--spacing-control-y) @max-[30rem]:flex-wrap"
+         (the `@max-[30rem]:` variants are the narrow row — `.pr-row.dvb-row-narrow` below) */
       .pr-row {
         display: flex;
         align-items: center;
@@ -2726,18 +2727,18 @@
         text-decoration: underline;
       }
 
-      /* ── THE NARROW ROW — drawn for MOTIR-5351 to build to (Panel 12n) ───────────────────────
-         NOT a change to the derived `.pr-row` above: this is the row that bug's component change
-         produces, drawn so the fix and the asset land together per §19. Below a 30rem container the
+      /* ── THE NARROW ROW — SHIPPED by MOTIR-5351 (Panel 12n), DERIVED like the block above ──────
+         The component's `@max-[30rem]:` variants, against the `@container` on the rows' list, drawn
+         as a static class because a board panel is not a 30rem container. Below a 30rem column the
          row WRAPS: glyph · title · link-out stay on line 1, the pill group drops to line 2 under the
-         title. The title then keeps the whole first line instead of one or two characters.
-         class="@container … @max-[30rem]:flex-wrap @max-[30rem]:gap-y-1" */
+         title, so the title keeps the whole first line instead of one or two characters.
+         class="@max-[30rem]:flex-wrap" (+ gap-y-1 on the row) — `<ul className="@container list-none">` */
       .pr-row.dvb-row-narrow {
         flex-wrap: wrap;
         row-gap: 2px;
       }
       /* class="@max-[30rem]:order-last @max-[30rem]:basis-full @max-[30rem]:flex-wrap
-                @max-[30rem]:pl-[27px] @max-[30rem]:pb-1" */
+                @max-[30rem]:pb-1 @max-[30rem]:pl-[27px]" */
       .pr-row.dvb-row-narrow .pr-states {
         order: 3;
         flex-basis: 100%;

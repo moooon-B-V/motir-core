@@ -121,3 +121,41 @@ describe('the diff is a link OUT, from each row only', () => {
     }
   });
 });
+
+describe('the NARROW row — pills wrap under the title below a 30rem column (MOTIR-5351, Panel 12n)', () => {
+  it('the rows sit in a size container, and each row wraps its pill group to its own indented line at @max-[30rem]', () => {
+    const { container } = renderBlock(null);
+    const row = container.querySelector(`a[href="${CORE_PR.url}"]`)!.closest('li')!;
+    // The query is against the rows' LIST, not the viewport: the peek and a narrow
+    // late-stack column are narrow on a wide screen.
+    expect(row.closest('ul')!.className.split(' ')).toContain('@container');
+    const rowClasses = row.className.split(' ');
+    expect(rowClasses).toContain('@max-[30rem]:flex-wrap');
+    // The title block keeps the first line: it still grows and truncates.
+    const title = within(row).getByText(CORE_PR.title);
+    expect(title.parentElement!.className).toContain('min-w-0 flex-1');
+    // The pill group is the element carrying the state pill.
+    const pills = within(row)
+      .getByText(messages.github.development.prState.open)
+      .closest('span.flex')!;
+    for (const cls of [
+      '@max-[30rem]:order-last',
+      '@max-[30rem]:basis-full',
+      '@max-[30rem]:flex-wrap',
+      '@max-[30rem]:pl-[27px]',
+    ]) {
+      expect(pills.className.split(' '), cls).toContain(cls);
+    }
+    // The link-out stays on line 1, after the title.
+    const linkOut = row.querySelector(`a[href="${CORE_PR.url}"]`)!;
+    expect(linkOut.className.split(' ')).toContain('@max-[30rem]:order-2');
+  });
+
+  it('at desktop width nothing wraps: the only row classes that change layout are behind the container variant', () => {
+    const { container } = renderBlock(null);
+    const row = container.querySelector(`a[href="${CORE_PR.url}"]`)!.closest('li')!;
+    const unconditional = row.className.split(' ').filter((c) => !c.startsWith('@'));
+    expect(unconditional).not.toContain('flex-wrap');
+    expect(unconditional).toEqual(expect.arrayContaining(['flex', 'items-center', 'gap-2.5']));
+  });
+});

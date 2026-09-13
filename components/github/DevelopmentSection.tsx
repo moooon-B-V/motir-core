@@ -99,7 +99,7 @@ function PullRequestRow({
   const StateGlyph = state.icon;
   const PrPillGlyph = state.icon;
   return (
-    <li className="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)">
+    <li className="mt-2 flex items-center gap-2.5 gap-y-1 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y) @max-[30rem]:flex-wrap">
       <StateGlyph className="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" aria-hidden />
       <div className="min-w-0 flex-1 py-1">
         <div className="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
@@ -131,7 +131,10 @@ function PullRequestRow({
               the link — and that is a new field, not this one. */}
         </div>
       </div>
-      <span className="flex shrink-0 items-center gap-1.5">
+      {/* NARROW (MOTIR-5351, Panel 12n): below a 30rem column the pill group drops to
+          its own line under the title, so the title keeps the first line instead
+          of one or two characters. Indented 27px — the 17px glyph plus the row gap. */}
+      <span className="flex shrink-0 items-center gap-1.5 @max-[30rem]:order-last @max-[30rem]:basis-full @max-[30rem]:flex-wrap @max-[30rem]:pb-1 @max-[30rem]:pl-[27px]">
         <Pill {...state.pill}>
           <PrPillGlyph className="h-3 w-3" aria-hidden />
           {t(`development.prState.${pr.state}`)}
@@ -161,7 +164,7 @@ function PullRequestRow({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={t('development.openOnGithub')}
-        className="shrink-0 rounded-(--radius-control) p-1 text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="shrink-0 rounded-(--radius-control) p-1 text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
       >
         <ExternalLink className="h-4 w-4" aria-hidden />
       </a>
@@ -435,7 +438,10 @@ export function DevelopmentSectionBody({
     </>
   ) : (
     <>
-      <ul className="list-none">
+      {/* `@container`: the rows wrap their pill group below a 30rem COLUMN, not a
+          30rem viewport (MOTIR-5351, design/github Panel 12n) — a narrow late-stack
+          column is narrow on a wide screen. */}
+      <ul className="@container list-none">
         {rows.map((row) => (
           <PullRequestRow
             key={`${row.repo}#${row.number}`}
