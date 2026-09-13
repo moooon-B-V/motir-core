@@ -2603,7 +2603,12 @@ async function resolveRescopeReset(
   const from = statuses.find((s) => s.key === current.status);
   if (!from || !resetsOnRescope(from.category)) return null;
   const initial = statuses.find((s) => s.isInitial);
-  if (!initial || initial.key === from.key) return null;
+  // …and only INTO the `todo` category. The source is `in_progress`-category by
+  // the check above, so the write can never LEAVE the done category; this makes
+  // it unable to ENTER it either, even under a custom workflow whose initial
+  // status is not a to-do one — so no `completedAt` stamp is ever owed
+  // (`tests/work-items/status-write-guard.test.ts` rules on it as never-terminal).
+  if (!initial || initial.key === from.key || initial.category !== 'todo') return null;
   const project = await projectRepository.findById(current.projectId, tx);
   const declared =
     project?.workflowPolicyMode === 'open' ||
