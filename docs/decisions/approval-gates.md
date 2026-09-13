@@ -976,6 +976,52 @@ MOTIR-4527 (_Hosting what the agent builds — tenant applications on
 motir.site_)** and is not decided here. Until it lands, a project whose
 repositories produce no preview has two paths rather than three, and says so.
 
+> ### 9 — AMENDMENT: HOW TO TEST is per RUN (MOTIR-4906 re-plan, 2026-09-13), DECIDED BY THE REQUESTER (Yue, 2026-09-13)
+>
+> _"'how to test' should not be per PR, it should be per run, so the design is
+> not right for a story/container run. how to test in the PR should still be
+> there, the agent should produce 'how to test' in the run target before finish
+> the run"_ — Yue, 2026-09-13.
+>
+> §9 said the section belongs on _the work item_ and the consequences amendment
+> made it _"an authoring obligation on every card that produces a pull
+> request"_. Read literally, that keys HOW TO TEST per card and per pull request,
+> and that is the reading the first design of MOTIR-4906 drew: a block under
+> every Development row. **For a story run that is wrong** — nobody accepts a
+> story one child's pull request at a time. This amendment settles the unit:
+>
+> 1. **The unit is the RUN.** One HOW TO TEST record per run, written onto the
+>    **run target** — the work item the run was launched against:
+>    - a **container / parent run** (the runbook's parent run of a story) — the
+>      container;
+>    - a **scoped CLI run** — its scope target;
+>    - a **single-card dispatch** (and each card of an unscoped batch) — the card
+>      itself.
+>
+>    A run that touches several repositories writes **one** record with a
+>    **section per repository** (that repository's head commit and setup
+>    commands). The click-path is one, for the run. A child card of a container
+>    run writes none of its own.
+>
+> 2. **The agent writes it BEFORE THE RUN FINISHES** — for a run delivered
+>    through a session or parent pull request, before that pull request is
+>    marked ready; for a single card, before `implemented`. Where a run finishes
+>    in orchestrator code with no agent in it, the run gains a close-out step
+>    that puts one there.
+> 3. **The pull-request body KEEPS its How to test section.** This amends §9's
+>    _"not into the pull-request body"_: the record on the work item is what
+>    Motir renders; the body is what a reviewer on the host reads. Both carry the
+>    same content, and neither replaces the other.
+> 4. **Where it renders:** on the run target's item page, and in the approval
+>    port of the run target's `pull_request_approval` gate(s). **Not** under each
+>    Development row. A child card of a container run shows a pointer to its run
+>    target instead.
+> 5. **Which record is current:** the newest run's. Earlier runs' records remain
+>    as history.
+>
+> The three paths, the _an unavailable path is SAID_ rule and the self-hosted
+> scope above are unchanged.
+
 ---
 
 ## Consequences
@@ -1015,7 +1061,7 @@ repositories produce no preview has two paths rather than three, and says so.
 >   amendment pull request, for §6c's re-keying. It remains the only file outside
 >   this one that changes.
 > - **A coding card's deliverable grows a HOW TO TEST section** (§9), written onto
->   the work item. That is an authoring obligation on every card that produces a
+>   the work item (per RUN, on the run target — see §9's 2026-09-13 amendment). That is an authoring obligation on every card that produces a
 >   pull request, and it is what the approval port renders.
 
 ## What SHIPPED — the dated close-out (MOTIR-4795, 2026-09-10)
