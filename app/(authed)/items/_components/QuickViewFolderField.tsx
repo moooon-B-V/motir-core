@@ -57,6 +57,11 @@ export function QuickViewFolderControl({
     };
   }, [t]);
 
+  /* v8 ignore next 4 -- the two `?? []` fallbacks are UNREACHABLE: the panel's
+     options are the root (`null`, answered by the first arm) plus one per
+     loaded folder, and it hands back only an option's own id — so a non-null id
+     is always in `loaded.folders`. Asserted by folder-ui-coverage.test.tsx ›
+     'every folder the field offers hands back its full path'. */
   const pathOf = (id: string | null): string[] =>
     id === null
       ? []
