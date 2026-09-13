@@ -8017,6 +8017,14 @@
   "folders": {
     "expandAria": "Expand folder {name}",
     "collapseAria": "Collapse folder {name}",
-    "emptyFolder": "Nothing is filed here yet."
+    "emptyFolder": "Nothing is filed here yet.",
+    "newFolder": "New folder",
+    "newFolderInside": "New folder inside",
+    "rename": "Rename",
+    "actionsAria": "Folder actions for {name}",
+    "nameLabel": "Folder name",
+    "nameHint": "Press Enter to save, Esc to cancel.",
+    "nameRequired": "Enter a name.",
+    "nameTaken": "A folder named “{name}” is already here."
   }
 }

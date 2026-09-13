@@ -8013,6 +8013,14 @@
   "folders": {
     "expandAria": "展开文件夹“{name}”",
     "collapseAria": "收起文件夹“{name}”",
-    "emptyFolder": "这里还没有归档任何内容。"
+    "emptyFolder": "这里还没有归档任何内容。",
+    "newFolder": "新建文件夹",
+    "newFolderInside": "在其中新建文件夹",
+    "rename": "重命名",
+    "actionsAria": "“{name}”的文件夹操作",
+    "nameLabel": "文件夹名称",
+    "nameHint": "按 Enter 保存，按 Esc 取消。",
+    "nameRequired": "请输入名称。",
+    "nameTaken": "此处已有名为“{name}”的文件夹。"
   }
 }

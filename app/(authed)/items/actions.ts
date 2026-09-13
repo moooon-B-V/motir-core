@@ -11,7 +11,7 @@ import { isRelationshipKind } from '@/lib/workItems/linkRelationships';
 import { parseSort } from '@/lib/issues/issueListView';
 import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
 import {
   IllegalParentTypeError,
@@ -19,7 +19,14 @@ import {
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkItemLinkError } from '@/lib/workItems/linkErrors';
-import { FolderNotFoundError } from '@/lib/folders/errors';
+import {
+  CrossProjectFolderError,
+  FolderNameTakenError,
+  FolderNotFoundError,
+  InvalidFolderNameError,
+} from '@/lib/folders/errors';
+import { foldersService } from '@/lib/services/foldersService';
+import type { FolderDto } from '@/lib/dto/folders';
 import type {
   CreateWorkItemLinkInput,
   WorkItemKindDto,
@@ -308,6 +315,86 @@ export async function listFolderLevelAction(
     if (err instanceof FolderNotFoundError) {
       return { ok: false, error: 'That folder no longer exists.' };
     }
+    throw err;
+  }
+}
+
+// ── Folder create + rename (Story MOTIR-5308 · MOTIR-5344) ─────────────────
+// Transport for the tree's inline folder name row: resolve the session + active
+// project, call ONE `foldersService` method, and hand every expected refusal back
+// as a stable `code` — the tree renders the name collision inline and toasts the
+// rest. No folder rule lives here (CLAUDE.md's 4-layer contract).
+
+export type FolderWriteErrorCode =
+  | 'FOLDER_NAME_TAKEN'
+  | 'INVALID_FOLDER_NAME'
+  | 'FOLDER_NOT_FOUND'
+  | 'CROSS_PROJECT_FOLDER'
+  | 'PROJECT_ACCESS_DENIED'
+  | 'NO_ACTIVE_PROJECT';
+
+export type FolderWriteResult =
+  | { ok: true; folder: FolderDto }
+  | { ok: false; code: FolderWriteErrorCode; error: string };
+
+function folderWriteFailure(err: unknown): Extract<FolderWriteResult, { ok: false }> | null {
+  if (err instanceof FolderNameTakenError || err instanceof InvalidFolderNameError) {
+    return { ok: false, code: err.code, error: err.message };
+  }
+  if (err instanceof FolderNotFoundError) {
+    return { ok: false, code: err.code, error: 'That folder no longer exists.' };
+  }
+  if (err instanceof CrossProjectFolderError) {
+    return { ok: false, code: err.code, error: 'That folder belongs to another project.' };
+  }
+  if (err instanceof ProjectAccessDeniedError) {
+    return { ok: false, code: err.code, error: 'You can’t change folders in this project.' };
+  }
+  return null;
+}
+
+export async function createFolderAction(input: {
+  parentFolderId: string | null;
+  name: string;
+}): Promise<FolderWriteResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const folder = await foldersService.createFolder(
+      {
+        projectId: ctx.projectId,
+        parentFolderId: input.parentFolderId ?? null,
+        name: String(input.name ?? ''),
+      },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, folder };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
+    throw err;
+  }
+}
+
+export async function renameFolderAction(input: {
+  folderId: string;
+  name: string;
+}): Promise<FolderWriteResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const folder = await foldersService.renameFolder(
+      { projectId: ctx.projectId, folderId: input.folderId, name: String(input.name ?? '') },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, folder };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
     throw err;
   }
 }

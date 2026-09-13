@@ -10,9 +10,19 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronUp, Folder as FolderIcon, Loader2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Folder as FolderIcon,
+  FolderPlus,
+  Loader2,
+  Pencil,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
+import { useToast } from '@/components/ui/Toast';
+import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
+import type { FolderDto } from '@/lib/dto/folders';
 import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
 import {
@@ -31,7 +41,17 @@ import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { usePeekRowClick } from './IssueQuickView';
 import { makeRowShaper, type IssueRowData } from './issueRows';
-import { listChildIssuesAction, listFolderLevelAction, listRootIssuesAction } from '../actions';
+import {
+  createFolderAction,
+  listChildIssuesAction,
+  listFolderLevelAction,
+  listRootIssuesAction,
+  renameFolderAction,
+  type FolderWriteResult,
+} from '../actions';
+import { useFolderCommands } from './FolderCommands';
+import { FolderNameField } from './FolderNameField';
+import { FolderRowMenu, type FolderMenuEntry } from './FolderRowMenu';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 
 // The /items TREE table (Subtask 2.5.3, made LAZY + SORTABLE in 2.5.14 for
@@ -61,10 +81,19 @@ const folderKey = (folderId: string) => `${FOLDER_PREFIX}${folderId}`;
  *  or an expanded folder's "nothing filed here" row. */
 type TreeNode =
   | { kind: 'issue'; row: IssueRowData }
-  | { kind: 'folder'; folder: FolderTreeRowDto; expanded: boolean }
+  | { kind: 'folder'; folder: FolderTreeRowDto; expanded: boolean; renaming: boolean }
+  | { kind: 'folderDraft' }
   | { kind: 'loading' }
   | { kind: 'emptyFolder' }
   | { kind: 'loadmore'; parentKey: string; loaded: number; total: number };
+
+/**
+ * The inline folder NAME ROW that is open, if any (MOTIR-5344): a new folder
+ * being named in one level, or an existing folder being renamed. One at a time.
+ */
+type FolderDraft =
+  | { mode: 'create'; levelKey: string; parentFolderId: string | null }
+  | { mode: 'rename'; folderId: string };
 
 /** One lazily-loaded level: the accumulated rows + the level's full total. */
 interface LevelState {
@@ -90,6 +119,12 @@ export interface IssueTreeTableProps {
    * gated on it, and those read it from here.
    */
   canEdit?: boolean;
+  /**
+   * What an EMPTY project renders (the section's drawn empty state). The tree
+   * stays mounted for an empty project so the toolbar's "New folder" has a level
+   * to put the new folder in; this is shown whenever there is nothing to draw.
+   */
+  emptyState?: ReactNode;
 }
 
 export function IssueTreeTable({
@@ -98,8 +133,12 @@ export function IssueTreeTable({
   filter,
   workflow,
   members,
+  canEdit = false,
+  emptyState,
 }: IssueTreeTableProps) {
   const t = useTranslations();
+  const tv = useTranslations('issueViews');
+  const { toast } = useToast();
   const locale = useLocale() as Locale;
   const router = useRouter();
   const pathname = usePathname();
@@ -123,6 +162,14 @@ export function IssueTreeTable({
       loading: false,
     },
   }));
+
+  // The open folder name row (MOTIR-5344), its refusal, and whether its write is
+  // in flight. `draftSeq` retires a write whose row was closed or replaced while
+  // it was pending, so a late answer never reopens or refuses a newer row.
+  const [draft, setDraft] = useState<FolderDraft | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftPending, setDraftPending] = useState(false);
+  const draftSeq = useRef(0);
 
   // ⚠️ THE ONE PLACE LEVEL STATE CHANGES. Every level — the roots, a work item's
   // children, a folder's contents — lives in `levels`, keyed by its container,
@@ -215,6 +262,176 @@ export function IssueTreeTable({
     [expanded, levels, fetchLevel],
   );
 
+  // ── Folder create + rename (MOTIR-5344) ─────────────────────────────────────
+  const openDraft = useCallback((next: FolderDraft) => {
+    draftSeq.current += 1;
+    setDraftPending(false);
+    setDraftError(null);
+    setDraft(next);
+  }, []);
+  const cancelDraft = useCallback(() => {
+    draftSeq.current += 1;
+    setDraftPending(false);
+    setDraftError(null);
+    setDraft(null);
+  }, []);
+  const clearDraftError = useCallback(() => setDraftError(null), []);
+
+  const startRootCreate = useCallback(
+    () => openDraft({ mode: 'create', levelKey: ROOTS, parentFolderId: null }),
+    [openDraft],
+  );
+  // "New folder inside" expands the parent first, so the name row opens in view.
+  const startCreateInside = useCallback(
+    (folder: FolderTreeRowDto) => {
+      const key = folderKey(folder.id);
+      if (!expanded.has(key)) onExpandedChange(new Set(expanded).add(key));
+      openDraft({ mode: 'create', levelKey: key, parentFolderId: folder.id });
+    },
+    [expanded, onExpandedChange, openDraft],
+  );
+  const startRename = useCallback(
+    (folder: FolderTreeRowDto) => openDraft({ mode: 'rename', folderId: folder.id }),
+    [openDraft],
+  );
+
+  // The toolbar's "New folder" reaches this island through the command channel.
+  const folderCommands = useFolderCommands();
+  useEffect(() => {
+    if (!folderCommands || !canEdit) return;
+    folderCommands.registerNewRootFolder(startRootCreate);
+    return () => folderCommands.registerNewRootFolder(null);
+  }, [folderCommands, canEdit, startRootCreate]);
+
+  // A created folder joins its level IN PLACE, after the level's last folder and
+  // before its work items — where the service appended it — and its parent folder
+  // now has children. Bumping the level's sequence retires any read of that level
+  // still in flight, which was taken before the folder existed.
+  const insertFolder = useCallback((levelKey: string, folder: FolderDto) => {
+    levelSeq.current[levelKey] = (levelSeq.current[levelKey] ?? 0) + 1;
+    setLevels((prev) => {
+      const level = prev[levelKey];
+      if (!level) return prev;
+      const row: FolderTreeRowDto = {
+        kind: 'folder',
+        id: folder.id,
+        parentId: null,
+        parentFolderId: folder.parentFolderId,
+        name: folder.name,
+        position: folder.position,
+        hasChildren: false,
+      };
+      let lastFolder = -1;
+      level.rows.forEach((r, i) => {
+        if (r.kind === 'folder') lastFolder = i;
+      });
+      const next: Record<string, LevelState> = {
+        ...prev,
+        [levelKey]: {
+          ...level,
+          rows: [...level.rows.slice(0, lastFolder + 1), row, ...level.rows.slice(lastFolder + 1)],
+          total: level.total + 1,
+          loading: false,
+        },
+      };
+      if (folder.parentFolderId !== null) {
+        const parentId = folder.parentFolderId;
+        for (const [key, lvl] of Object.entries(next)) {
+          if (lvl.rows.some((r) => r.kind === 'folder' && r.id === parentId)) {
+            next[key] = {
+              ...lvl,
+              rows: lvl.rows.map((r) =>
+                r.kind === 'folder' && r.id === parentId ? { ...r, hasChildren: true } : r,
+              ),
+            };
+          }
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  // A rename replaces the name wherever the folder is loaded, in place.
+  const renameInLevels = useCallback((folder: FolderDto) => {
+    setLevels((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [key, lvl] of Object.entries(prev)) {
+        if (lvl.rows.some((r) => r.kind === 'folder' && r.id === folder.id)) {
+          changed = true;
+          next[key] = {
+            ...lvl,
+            rows: lvl.rows.map((r) =>
+              r.kind === 'folder' && r.id === folder.id ? { ...r, name: folder.name } : r,
+            ),
+          };
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, []);
+
+  const submitDraft = useCallback(
+    (raw: string) => {
+      if (!draft) return;
+      const name = raw.trim();
+      if (name.length === 0) {
+        setDraftError(t('folders.nameRequired'));
+        return;
+      }
+      const current = draft;
+      const seq = ++draftSeq.current;
+      setDraftPending(true);
+      startTransition(async () => {
+        let res: FolderWriteResult;
+        try {
+          res =
+            current.mode === 'create'
+              ? await createFolderAction({ parentFolderId: current.parentFolderId, name })
+              : await renameFolderAction({ folderId: current.folderId, name });
+        } catch (err) {
+          if (draftSeq.current !== seq) return;
+          setDraftPending(false);
+          toast({ variant: 'error', title: tv(serverActionRejectionKey(err)) });
+          return;
+        }
+        if (draftSeq.current !== seq) return; // the row was closed or replaced meanwhile
+        setDraftPending(false);
+        if (!res.ok) {
+          if (res.code === 'FOLDER_NAME_TAKEN') setDraftError(t('folders.nameTaken', { name }));
+          else if (res.code === 'INVALID_FOLDER_NAME') setDraftError(t('folders.nameRequired'));
+          else toast({ variant: 'error', title: res.error });
+          return;
+        }
+        setDraft(null);
+        setDraftError(null);
+        if (current.mode === 'create') insertFolder(current.levelKey, res.folder);
+        else renameInLevels(res.folder);
+      });
+    },
+    [draft, t, tv, toast, insertFolder, renameInLevels],
+  );
+
+  const folderMenuEntries = useCallback(
+    (folder: FolderTreeRowDto): FolderMenuEntry[] => [
+      {
+        kind: 'item',
+        key: 'new-folder-inside',
+        label: t('folders.newFolderInside'),
+        icon: FolderPlus,
+        onSelect: () => startCreateInside(folder),
+      },
+      {
+        kind: 'item',
+        key: 'rename',
+        label: t('folders.rename'),
+        icon: Pencil,
+        onSelect: () => startRename(folder),
+      },
+    ],
+    [t, startCreateInside, startRename],
+  );
+
   // A folder row's whole-row target (and Enter on the row) toggles it — a folder
   // has no quick view, so expanding is the only thing its row does.
   const toggleFolder = useCallback(
@@ -232,7 +449,7 @@ export function IssueTreeTable({
   const onRowActivate = useCallback(
     (id: string, data: TreeNode) => {
       if (data.kind === 'loadmore') fetchLevel(data.parentKey, data.loaded, true);
-      else if (data.kind === 'folder') toggleFolder(id);
+      else if (data.kind === 'folder' && !data.renaming) toggleFolder(id);
     },
     [fetchLevel, toggleFolder],
   );
@@ -260,11 +477,12 @@ export function IssueTreeTable({
         return;
       }
       node.busy = lvl.loading;
-      if (isFolder && lvl.rows.length === 0 && !lvl.hasMore) {
+      const namingHere = draft?.mode === 'create' && draft.levelKey === key;
+      if (isFolder && lvl.rows.length === 0 && !lvl.hasMore && !namingHere) {
         node.children = [{ id: `${key}::empty`, data: { kind: 'emptyFolder' } }];
         return;
       }
-      const childRows = buildLevel(lvl.rows, lvl.total);
+      const childRows = buildLevel(lvl.rows, lvl.total, key);
       node.children = lvl.hasMore
         ? [
             ...childRows,
@@ -276,15 +494,25 @@ export function IssueTreeTable({
         : childRows;
     };
 
-    // A level is its FOLDERS, then its work items (MOTIR-5314's read order).
-    const buildLevel = (level: ProjectTreeRowDto[], total: number): TreeTableRow<TreeNode>[] =>
-      level.map((dto, i) => {
+    // A level is its FOLDERS, then its work items (MOTIR-5314's read order). An
+    // open NEW-folder name row sits between the two, where the folder will land.
+    const buildLevel = (
+      level: ProjectTreeRowDto[],
+      total: number,
+      levelKey: string,
+    ): TreeTableRow<TreeNode>[] => {
+      const nodes = level.map((dto, i): TreeTableRow<TreeNode> => {
         if (dto.kind === 'folder') {
           const key = folderKey(dto.id);
           const isExpanded = expanded.has(key);
           const node: TreeTableRow<TreeNode> = {
             id: key,
-            data: { kind: 'folder', folder: dto, expanded: isExpanded },
+            data: {
+              kind: 'folder',
+              folder: dto,
+              expanded: isExpanded,
+              renaming: draft?.mode === 'rename' && draft.folderId === dto.id,
+            },
             // Always expandable: an empty folder opens onto its empty row.
             hasChildren: true,
             posinset: i + 1,
@@ -303,9 +531,21 @@ export function IssueTreeTable({
         if (dto.hasChildren && expanded.has(dto.id)) expandInto(node, dto.id, false);
         return node;
       });
+      if (draft?.mode === 'create' && draft.levelKey === levelKey) {
+        let lastFolder = -1;
+        level.forEach((r, i) => {
+          if (r.kind === 'folder') lastFolder = i;
+        });
+        nodes.splice(lastFolder + 1, 0, {
+          id: `${levelKey}::new-folder`,
+          data: { kind: 'folderDraft' },
+        });
+      }
+      return nodes;
+    };
 
     const root = levels[ROOTS] ?? { rows: [], total: 0, hasMore: false, loading: false };
-    const rootRows = buildLevel(root.rows, root.total);
+    const rootRows = buildLevel(root.rows, root.total, ROOTS);
     return root.hasMore
       ? [
           ...rootRows,
@@ -320,14 +560,15 @@ export function IssueTreeTable({
           },
         ]
       : rootRows;
-  }, [levels, expanded, shape]);
+  }, [levels, expanded, shape, draft]);
 
   // Columns: the shared issue cells, wrapped to (a) render synthetic status rows
   // in the tree column only, (b) make every header a sort button with aria-sort.
   const columns = useMemo<TreeTableColumn<TreeNode>[]>(
     () =>
-      buildIssueColumns(t).map((col, idx) => {
+      buildIssueColumns(t).map((col, idx, all) => {
         const isTree = idx === 0;
+        const isLast = idx === all.length - 1;
         // A column with no sortColumn gets a plain screen-reader-only header
         // (no sort button, no aria-sort). None declares that today — MOTIR-4258
         // removed the trailing actions column, which was the only one.
@@ -365,8 +606,37 @@ export function IssueTreeTable({
           cell: (node: TreeNode) => {
             if (node.kind === 'issue') return col.cell(node.row);
             // Folder and synthetic rows render only in the tree column — a folder
-            // has no status, type or assignee, so its other cells stay EMPTY.
-            if (!isTree) return null;
+            // has no status, type or assignee, so its other cells stay EMPTY. The
+            // one exception is a folder's actions button, trailing the row, for an
+            // editor (MOTIR-5344).
+            if (!isTree) {
+              if (isLast && node.kind === 'folder' && canEdit && !node.renaming) {
+                return (
+                  <FolderRowMenu
+                    label={t('folders.actionsAria', { name: node.folder.name })}
+                    entries={folderMenuEntries(node.folder)}
+                  />
+                );
+              }
+              return null;
+            }
+            if (node.kind === 'folderDraft' || (node.kind === 'folder' && node.renaming)) {
+              return (
+                <>
+                  <FolderIcon className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+                  <div className="ml-2 flex min-w-0 flex-1">
+                    <FolderNameField
+                      initialName={node.kind === 'folder' ? node.folder.name : ''}
+                      error={draftError}
+                      pending={draftPending}
+                      onSubmit={submitDraft}
+                      onCancel={cancelDraft}
+                      onEdit={clearDraftError}
+                    />
+                  </div>
+                </>
+              );
+            }
             if (node.kind === 'folder') {
               const { name } = node.folder;
               return (
@@ -422,8 +692,24 @@ export function IssueTreeTable({
           },
         };
       }),
-    [sort, onSort, t, toggleFolder],
+    [
+      sort,
+      onSort,
+      t,
+      toggleFolder,
+      canEdit,
+      folderMenuEntries,
+      draftError,
+      draftPending,
+      submitDraft,
+      cancelDraft,
+      clearDraftError,
+    ],
   );
+
+  // An empty project draws the section's empty state — unless a new root folder
+  // is being named, which is a row to draw.
+  if (emptyState && rows.length === 0) return <>{emptyState}</>;
 
   return (
     <IssueInlineEditProvider workflow={workflow} members={members}>
@@ -447,7 +733,9 @@ export function IssueTreeTable({
             ? `issue-row-${node.row.identifier}`
             : node.kind === 'folder'
               ? `folder-row-${node.folder.id}`
-              : undefined
+              : node.kind === 'folderDraft'
+                ? 'folder-draft-row'
+                : undefined
         }
       />
     </IssueInlineEditProvider>
