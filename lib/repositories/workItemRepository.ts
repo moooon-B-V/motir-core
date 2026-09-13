@@ -795,6 +795,15 @@ export const workItemRepository = {
   },
 
   /**
+   * How many work items are filed DIRECTLY in a folder — exactly the set
+   * `findFiledInFolder` returns (no archive or triage filter), so a delete
+   * confirmation counts what `foldersService.deleteFolder` will move.
+   */
+  async countFiledInFolder(folderId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workItem.count({ where: { folderId } });
+  },
+
+  /**
    * The last position among the work items at one FOLDER LEVEL — filed in
    * `folderId`, or at the project root (no parent and no folder) when it is
    * `null`. A filed or un-filed item is appended after it.

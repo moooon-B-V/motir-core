@@ -5,7 +5,7 @@ import {
   FolderNameTakenError,
   FolderNotFoundError,
 } from '@/lib/folders/errors';
-import type { FolderTreeRow } from '@/lib/mappers/folderMappers';
+import type { FolderTreeRow, ProjectFolderRow } from '@/lib/mappers/folderMappers';
 
 // Folder repository — single operations on the `folder` table (Epic MOTIR-5307
 // · Story MOTIR-5308 · MOTIR-5313). The persistence leaf under `foldersService`,
@@ -205,6 +205,47 @@ export const folderRepository = {
          AND f."workspace_id" = ${workspaceId}
          AND ${parentPred}`;
     return Number(rows[0]?.count ?? 0);
+  },
+
+  /**
+   * EVERY folder of a project, for the folder picker (Story MOTIR-5308 ·
+   * MOTIR-5343), reading at most `limit + 1` rows so the caller can tell a
+   * truncated list from a complete one.
+   *
+   * ⚠️ ORDERED BY DEPTH FIRST, then `position` / `name` / `id`. The picker shows
+   * each folder by its PATH, so a folder whose ancestor was cut off by the limit
+   * could not be named. Reading shallow levels before deep ones makes every
+   * returned folder's ancestors part of the same page: a truncated list loses
+   * whole leaves, never a link in a chain.
+   */
+  async findProjectFolders(
+    projectId: string,
+    workspaceId: string,
+    page: { limit: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectFolderRow[]> {
+    return tx.$queryRaw<ProjectFolderRow[]>`
+      WITH RECURSIVE tree AS (
+        SELECT f."id", f."parent_folder_id", f."name", f."position", 0 AS depth
+          FROM "folder" f
+         WHERE f."project_id" = ${projectId}
+           AND f."workspace_id" = ${workspaceId}
+           AND f."parent_folder_id" IS NULL
+        UNION ALL
+        SELECT f."id", f."parent_folder_id", f."name", f."position", t.depth + 1
+          FROM "folder" f
+          JOIN tree t ON f."parent_folder_id" = t."id"
+         WHERE t.depth < 1000
+      )
+      SELECT "id", "parent_folder_id" AS "parentFolderId", "name", "position"
+        FROM tree
+       ORDER BY depth ASC, "position" ASC, "name" ASC, "id" ASC
+       LIMIT ${page.limit + 1}`;
+  },
+
+  /** How many folders sit directly inside `folderId` — the set `deleteFolder` moves. */
+  async countChildFolders(folderId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.folder.count({ where: { parentFolderId: folderId } });
   },
 
   /** A folder's direct child folders, in display order. */

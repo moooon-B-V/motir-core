@@ -77,3 +77,55 @@ export interface FileWorkItemResultDto {
   parentId: string | null;
   position: string;
 }
+
+/**
+ * One option of the folder picker (Story MOTIR-5308 · MOTIR-5343). `path` is the
+ * folder's name and every ancestor's, root first — what the picker shows
+ * (*Later ▸ 2025*) and what its search matches.
+ */
+export interface FolderPickerNodeDto {
+  id: string;
+  parentFolderId: string | null;
+  name: string;
+  position: string;
+  path: string[];
+}
+
+export interface ListProjectFoldersInput {
+  projectId: string;
+  /**
+   * At most this many folders; clamped to `FOLDER_PICKER_MAX`. Only a test
+   * lowers it — every surface takes the default.
+   */
+  limit?: number;
+}
+
+/**
+ * A project's folders in TREE ORDER — each folder followed by its descendants,
+ * siblings by position. `truncated` says the project holds more than were read,
+ * so a picker states it rather than silently omitting folders.
+ */
+export interface ProjectFoldersDto {
+  folders: FolderPickerNodeDto[];
+  truncated: boolean;
+}
+
+export interface DescribeFolderDeletionInput {
+  projectId: string;
+  folderId: string;
+}
+
+/**
+ * What deleting a folder WOULD move, and where — read before the person
+ * confirms. The counts are the sets `deleteFolder` moves: direct child folders,
+ * and every work item filed directly in the folder (archived and triaged ones
+ * included, because they move too).
+ */
+export interface FolderDeletionPreviewDto {
+  folderId: string;
+  name: string;
+  childFolderCount: number;
+  workItemCount: number;
+  /** The deleted folder's parent; both fields `null` for the project root. */
+  destination: { folderId: string | null; name: string | null };
+}

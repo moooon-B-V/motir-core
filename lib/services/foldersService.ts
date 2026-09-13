@@ -5,7 +5,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { toFolderDto } from '@/lib/mappers/folderMappers';
+import { toFolderDto, toFolderPickerNodeDtos } from '@/lib/mappers/folderMappers';
 import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
 import {
   CrossProjectFolderError,
@@ -20,10 +20,14 @@ import type {
   CreateFolderInput,
   DeleteFolderInput,
   DeleteFolderResultDto,
+  DescribeFolderDeletionInput,
   FileWorkItemInput,
   FileWorkItemResultDto,
+  FolderDeletionPreviewDto,
   FolderDto,
+  ListProjectFoldersInput,
   MoveFolderInput,
+  ProjectFoldersDto,
   RenameFolderInput,
 } from '@/lib/dto/folders';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -58,6 +62,13 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //    work-item parent is a re-parent to the root, so it owes the same container
 //    rollup and child-set event `moveWorkItem` emits, and those helpers are that
 //    service's. `fileWorkItem` below is the folder-domain door onto it.
+
+/**
+ * The most folders the picker reads (MOTIR-5343). A project past it gets the
+ * first this-many and `truncated: true`; the read stays bounded like every other
+ * list the tree serves.
+ */
+export const FOLDER_PICKER_MAX = 1000;
 
 function normalizeFolderName(raw: string): string {
   const name = raw.trim();
@@ -101,6 +112,66 @@ async function lockDestination(
 }
 
 export const foldersService = {
+  /**
+   * Every folder of a project, in tree order with each one's name path — what
+   * the Move to… picker and the quick view's Folder field choose from. A READ,
+   * so it is gated on browse (contract 1 is about the writes).
+   */
+  async listProjectFolders(
+    input: ListProjectFoldersInput,
+    ctx: ServiceContext,
+  ): Promise<ProjectFoldersDto> {
+    const limit = Math.max(1, Math.min(input.limit ?? FOLDER_PICKER_MAX, FOLDER_PICKER_MAX));
+    return withWorkspaceContext(ctx, async (tx) => {
+      await projectAccessService.assertCanBrowse(input.projectId, ctx, tx);
+      const rows = await folderRepository.findProjectFolders(
+        input.projectId,
+        ctx.workspaceId,
+        { limit },
+        tx,
+      );
+      return {
+        folders: toFolderPickerNodeDtos(rows.slice(0, limit)),
+        truncated: rows.length > limit,
+      };
+    });
+  },
+
+  /**
+   * What deleting a folder would move, and where — the delete confirmation's
+   * sentence. Gated on edit, because only a person who can delete sees it.
+   *
+   * ⚠️ The counts are defined by `deleteFolder`, not by the tree: direct child
+   * folders, and every work item filed directly in the folder whether or not the
+   * tree shows it. If the two ever disagree, this read is the wrong one.
+   */
+  async describeFolderDeletion(
+    input: DescribeFolderDeletionInput,
+    ctx: ServiceContext,
+  ): Promise<FolderDeletionPreviewDto> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      await projectAccessService.assertCanEdit(input.projectId, ctx, tx);
+      const folder = await folderRepository.findById(input.folderId, tx);
+      if (!folder || folder.projectId !== input.projectId) {
+        throw new FolderNotFoundError(input.folderId);
+      }
+      const [childFolderCount, workItemCount, parent] = await Promise.all([
+        folderRepository.countChildFolders(folder.id, tx),
+        workItemRepository.countFiledInFolder(folder.id, tx),
+        folder.parentFolderId === null
+          ? Promise.resolve(null)
+          : folderRepository.findById(folder.parentFolderId, tx),
+      ]);
+      return {
+        folderId: folder.id,
+        name: folder.name,
+        childFolderCount,
+        workItemCount,
+        destination: { folderId: parent?.id ?? null, name: parent?.name ?? null },
+      };
+    });
+  },
+
   async createFolder(input: CreateFolderInput, ctx: ServiceContext): Promise<FolderDto> {
     return withWorkspaceContext(ctx, async (tx) => {
       await projectAccessService.assertCanEdit(input.projectId, ctx, tx);
