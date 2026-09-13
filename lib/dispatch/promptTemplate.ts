@@ -1344,16 +1344,17 @@ function howToTestStep(src: DispatchPromptSource): string[] {
   }
   return [
     `    4b. publish this run's HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool —`,
-    `        ONCE, on ${src.key} (this item is the run's target), with one "repos"`,
-    '        entry per repository you pushed to: that repository, commitSha = its',
-    '        pushed head, and the setup commands a reviewer runs after checking out',
-    '        the branch — install, migrate, seed, run. Motir fills in the branch',
-    '        fetch itself — do not include it. Give the precondition: the sign-in,',
-    '        role, or data the surface needs.',
+    `        ONCE, on ${src.key} (this item is the run's target). "bodyMd" is RICH TEXT`,
+    '        (Markdown) with sections: the precondition (the sign-in, role, or data',
+    '        the surface needs), local setup after checking out the branch (install,',
+    '        migrate, seed, run), and the click-path. Put EVERY command in its own',
+    '        fenced code block — the reviewer copies it with one click. Motir fills in',
+    '        the branch fetch itself — do not include it. Give one "repos" entry per',
+    '        repository you pushed to (that repository, commitSha = its pushed head),',
+    '        and a previewPath when there is one.',
     `        If this change ${RENDERED_SURFACE_TRIGGER},`,
-    '        give the click-path, with a previewPath when there is one. Otherwise pass',
-    '        clickPathNotApplicable with the reason, e.g. "no rendered surface',
-    '        changed: a service and its tests".',
+    '        include the click-path section. Otherwise say in the body why there is',
+    '        none, e.g. "no rendered surface changed: a service and its tests".',
     '        If the publish is refused, say so in your FINISHED report and still do',
     '        step 5 — a refused publish does not prevent the transition.',
   ];
@@ -1367,11 +1368,9 @@ function howToTestStep(src: DispatchPromptSource): string[] {
  */
 function openPullRequestStep(): string[] {
   return [
-    '    3. open the pull request. Its body carries a "## How to test" section: the',
-    '       precondition, the setup commands after checking out the branch, and the',
-    '       click-path — or, when no rendered surface changed, one sentence saying',
-    '       why there is none. It is the same content step 4b publishes on the',
-    '       run target; write both.',
+    '    3. open the pull request. Its body carries a "## How to test" section with',
+    '       the SAME Markdown step 4b publishes on the run target — its sections and',
+    '       its fenced commands. Write both.',
   ];
 }
 

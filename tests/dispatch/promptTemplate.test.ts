@@ -1787,13 +1787,15 @@ describe('assembleDispatchPrompt — HOW TO TEST is per RUN, on the run target (
     expect(flat(prompt)).toContain(`If this change ${RENDERED_SURFACE_TRIGGER}`);
   });
 
-  it('tells the agent: ONE call on the card, a repos entry per repository, no branch fetch, not-applicable with a reason', () => {
+  it('tells the agent: ONE call on the card, a rich-text body with sections and fenced commands, a repos entry per repository, no branch fetch', () => {
     const text = flat(assembleDispatchPrompt(source()).prompt);
     expect(text).toContain('ONCE, on PROD-7');
+    expect(text).toContain('"bodyMd" is RICH TEXT (Markdown) with sections');
+    expect(text).toContain('Put EVERY command in its own fenced code block');
     expect(text).toContain('one "repos" entry per repository you pushed to');
     expect(text).toContain('commitSha = its pushed head');
     expect(text).toContain('Motir fills in the branch fetch itself — do not include it.');
-    expect(text).toContain('Otherwise pass clickPathNotApplicable with the reason');
+    expect(text).toContain('Otherwise say in the body why there is none');
   });
 
   it('tells the agent a refused publish is reported and does not block the transition', () => {
@@ -1805,7 +1807,7 @@ describe('assembleDispatchPrompt — HOW TO TEST is per RUN, on the run target (
   it('the per-item lane requires a "## How to test" section in the pull request body it opens', () => {
     const text = flat(assembleDispatchPrompt(source({ sessionBranch: null })).prompt);
     expect(text).toContain('3. open the pull request. Its body carries a "## How to test" section');
-    expect(text).toContain('write both.');
+    expect(text).toContain('the SAME Markdown step 4b publishes on the run target');
   });
 
   it('the session lineage opens no pull request of its own, so it carries no body section instruction', () => {
