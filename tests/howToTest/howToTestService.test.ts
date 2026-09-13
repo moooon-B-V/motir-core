@@ -5,7 +5,6 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
-import { workItemsService } from '@/lib/services/workItemsService';
 import { howToTestService, dispatchRunLabel } from '@/lib/services/howToTestService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -14,15 +13,16 @@ import { testInstructionsRepository } from '@/lib/repositories/testInstructionsR
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import {
-  assembleHowToTest,
+  assembleHowToTestRepo,
   fetchCommandFor,
   joinPreviewUrl,
   pickDeployment,
+  pickPullRequest,
   shellQuote,
   toCheckConclusion,
   toDeploymentState,
 } from '@/lib/howToTest/assemble';
-import type { TestInstructionsDTO } from '@/lib/dto/testInstructions';
+import type { TestInstructionsRepoDTO } from '@/lib/dto/testInstructions';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -30,12 +30,13 @@ import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
 import { randomToken } from '../helpers/random';
 
-// The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5333). Two halves:
+// The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5333 — per RUN TARGET). Two halves:
 //
 //   - the PURE assembly, where every "why a path is missing" arm is enumerated;
-//   - the SERVICE on real Postgres, where the keys must be the ids the item
-//     page's rows carry, the head must be the one `prCiState` names, and the
-//     query count must not grow with the number of pull requests.
+//   - the SERVICE on real Postgres, where a story's sections must bind to the
+//     story's own session pull requests before a child's, a child with no record
+//     must point at its run target, the head must be the one `prCiState` names,
+//     and the query count must not grow with the number of repositories.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -53,22 +54,11 @@ afterAll(async () => {
 const HEAD = 'a'.repeat(40);
 const OLD = 'b'.repeat(40);
 
-function record(over: Partial<TestInstructionsDTO> = {}): TestInstructionsDTO {
+function section(over: Partial<TestInstructionsRepoDTO> = {}): TestInstructionsRepoDTO {
   return {
-    id: 'rec',
-    workItemId: 'wi',
     repoId: 'repo-1',
     commitSha: HEAD,
-    clickPathSteps: ['Open the item'],
-    clickPathNotApplicable: false,
-    clickPathNotApplicableReason: null,
-    previewPath: '/items/ACME-1',
     setupCommands: [{ label: 'Install', command: 'pnpm install' }],
-    preconditionMd: 'Sign in.',
-    dispatchRunId: null,
-    publishedById: null,
-    isCurrent: true,
-    createdAt: '2026-09-13T00:00:00.000Z',
     ...over,
   };
 }
@@ -83,7 +73,7 @@ function check(
   return { checkName: name, conclusion, commitSha, createdAt: new Date(at), checkSuiteId: suite };
 }
 
-function pr(over: Partial<Parameters<typeof assembleHowToTest>[0]> = {}) {
+function pr(over: Partial<NonNullable<Parameters<typeof assembleHowToTestRepo>[2]>> = {}) {
   return {
     id: 'pr-1',
     repoId: 'repo-1',
@@ -108,21 +98,32 @@ function deployment(over: Record<string, unknown> = {}) {
   };
 }
 
-describe('assembleHowToTest — the pure arms', () => {
-  it('fills all three paths when a record, a success deployment and checks exist', () => {
-    const dto = assembleHowToTest(pr(), record(), [deployment()]);
+const assemble = (
+  prInput: ReturnType<typeof pr> | null,
+  deployments: ReturnType<typeof deployment>[] = [],
+  over: Partial<TestInstructionsRepoDTO> = {},
+  previewPath: string | null = '/items/ACME-1',
+) => assembleHowToTestRepo(section(over), 'acme/web', prInput, deployments, previewPath);
+
+describe('assembleHowToTestRepo — the pure arms', () => {
+  it('fills all three paths when the section, its pull request, a success deployment and checks exist', () => {
+    const dto = assemble(pr(), [deployment()]);
     expect(dto).toMatchObject({
-      pullRequestId: 'pr-1',
-      headRef: 'feat/MOTIR-7-change',
-      headSha: HEAD,
-      state: 'open',
-      merged: false,
-      clickPathSteps: ['Open the item'],
+      repoId: 'repo-1',
+      repoName: 'acme/web',
+      commitSha: HEAD,
+      pullRequest: {
+        id: 'pr-1',
+        headRef: 'feat/MOTIR-7-change',
+        headSha: HEAD,
+        state: 'open',
+        merged: false,
+      },
+      stale: false,
       local: {
         status: 'available',
         fetchCommand: 'git fetch origin feat/MOTIR-7-change && git checkout feat/MOTIR-7-change',
         setupCommands: [{ label: 'Install', command: 'pnpm install' }],
-        preconditionMd: 'Sign in.',
       },
       preview: {
         status: 'available',
@@ -138,7 +139,6 @@ describe('assembleHowToTest — the pure arms', () => {
           { name: 'Vitest', conclusion: 'success', rawConclusion: null },
         ],
       },
-      record: { commitSha: HEAD, stale: false, clickPathNotApplicable: false },
     });
     expect(JSON.stringify(dto)).not.toContain('github.com');
   });
@@ -146,7 +146,7 @@ describe('assembleHowToTest — the pure arms', () => {
   it.each(['queued', 'pending', 'in_progress', 'failure', 'error', 'inactive', 'canceled'])(
     'a %s deployment is deployment_not_ready with its state',
     (state) => {
-      const dto = assembleHowToTest(pr(), record(), [deployment({ state, environmentUrl: null })]);
+      const dto = assemble(pr(), [deployment({ state, environmentUrl: null })]);
       expect(dto.preview).toEqual({
         status: 'deployment_not_ready',
         state,
@@ -157,7 +157,7 @@ describe('assembleHowToTest — the pure arms', () => {
   );
 
   it('an unknown stored state maps to the unknown arm, raw value kept', () => {
-    const dto = assembleHowToTest(pr(), record(), [deployment({ state: 'exploded' })]);
+    const dto = assemble(pr(), [deployment({ state: 'exploded' })]);
     expect(dto.preview).toEqual({
       status: 'deployment_not_ready',
       state: 'unknown',
@@ -172,25 +172,22 @@ describe('assembleHowToTest — the pure arms', () => {
   });
 
   it('no deployment for the head commit is no_deployment_reported', () => {
-    const dto = assembleHowToTest(pr(), record(), [deployment({ commitSha: OLD })]);
+    const dto = assemble(pr(), [deployment({ commitSha: OLD })]);
     expect(dto.preview).toEqual({ status: 'no_deployment_reported' });
   });
 
-  it('with NO head sha, a deployment matched by headRef is used', () => {
-    const dto = assembleHowToTest(pr({ checkRuns: [] }), record(), [
-      deployment({ commitSha: OLD }),
-    ]);
-    expect(dto.headSha).toBeNull();
+  it('with NO head sha, a deployment matched by headRef is used, and the section cannot be stale', () => {
+    const dto = assemble(pr({ checkRuns: [] }), [deployment({ commitSha: OLD })], {
+      commitSha: OLD,
+    });
+    expect(dto.pullRequest?.headSha).toBeNull();
     expect(dto.preview).toMatchObject({ status: 'available', deployedSha: OLD });
     expect(dto.ci).toEqual({ status: 'no_checks_reported' });
-    // No head known → the record cannot be called stale.
-    expect(dto.record?.stale).toBe(false);
+    expect(dto.stale).toBe(false);
   });
 
   it('a deployment in ANOTHER repository never matches', () => {
-    const dto = assembleHowToTest(pr({ checkRuns: [] }), record(), [
-      deployment({ repoId: 'repo-2' }),
-    ]);
+    const dto = assemble(pr({ checkRuns: [] }), [deployment({ repoId: 'repo-2' })]);
     expect(dto.preview).toEqual({ status: 'no_deployment_reported' });
   });
 
@@ -203,44 +200,30 @@ describe('assembleHowToTest — the pure arms', () => {
     expect(pickDeployment([])).toBeNull();
   });
 
-  it('no record is record_missing, with the other paths still reported', () => {
-    const dto = assembleHowToTest(pr(), null, [deployment()]);
-    expect(dto.local).toEqual({ status: 'record_missing' });
-    expect(dto.record).toBeNull();
-    expect(dto.clickPathSteps).toEqual([]);
-    expect(dto.preview).toMatchObject({
-      status: 'available',
-      url: 'https://acme-preview.vercel.app/',
+  it('a section with NO pull request says so on every path', () => {
+    const dto = assemble(null, [deployment()]);
+    expect(dto).toMatchObject({
+      pullRequest: null,
+      stale: false,
+      local: { status: 'no_pull_request' },
+      preview: { status: 'no_deployment_reported' },
+      ci: { status: 'no_checks_reported' },
     });
   });
 
-  it('a record for an older commit is stale; an abbreviated head sha is not', () => {
-    expect(assembleHowToTest(pr(), record({ commitSha: OLD }), []).record?.stale).toBe(true);
-    expect(assembleHowToTest(pr(), record({ commitSha: HEAD.slice(0, 7) }), []).record?.stale).toBe(
-      false,
-    );
+  it('a section for an older commit is stale; an abbreviated head sha is not', () => {
+    expect(assemble(pr(), [], { commitSha: OLD }).stale).toBe(true);
+    expect(assemble(pr(), [], { commitSha: HEAD.slice(0, 7) }).stale).toBe(false);
   });
 
-  it('a not-applicable click-path carries its reason and no steps', () => {
-    const dto = assembleHowToTest(
-      pr(),
-      record({
-        clickPathSteps: [],
-        clickPathNotApplicable: true,
-        clickPathNotApplicableReason: 'no rendered surface changed',
-      }),
-      [],
-    );
-    expect(dto.clickPathSteps).toEqual([]);
-    expect(dto.record).toMatchObject({
-      clickPathNotApplicable: true,
-      clickPathNotApplicableReason: 'no rendered surface changed',
-    });
+  it('with no previewPath the preview is the bare deployment URL', () => {
+    const dto = assemble(pr(), [deployment()], {}, null);
+    expect(dto.preview).toMatchObject({ url: 'https://acme-preview.vercel.app/' });
   });
 
   it('a merged pull request reports closed + merged, for the collapsed state', () => {
-    const dto = assembleHowToTest(pr({ state: 'closed', merged: true }), record(), []);
-    expect(dto).toMatchObject({ state: 'closed', merged: true });
+    const dto = assemble(pr({ state: 'closed', merged: true }));
+    expect(dto.pullRequest).toMatchObject({ state: 'closed', merged: true });
   });
 
   it('ci.checks are the live rows at the head — the rows prCiState judges — across a re-run and an older sha', () => {
@@ -251,8 +234,8 @@ describe('assembleHowToTest — the pure arms', () => {
       check('Vitest', 'success', HEAD, '2026-09-13T10:05:00Z', 'run-2'),
       check('Lint', 'success', HEAD, '2026-09-13T10:05:30Z', 'run-2'),
     ];
-    const dto = assembleHowToTest(pr({ checkRuns: rows }), null, []);
-    expect(dto.headSha).toBe(HEAD);
+    const dto = assemble(pr({ checkRuns: rows }));
+    expect(dto.pullRequest?.headSha).toBe(HEAD);
     expect(dto.ci).toEqual({
       status: 'available',
       checks: [
@@ -262,6 +245,33 @@ describe('assembleHowToTest — the pure arms', () => {
     });
     // The pill over the same rows agrees: everything live at the head passed.
     expect(derivePrCiState(rows)).toBe('passing');
+  });
+});
+
+describe('pickPullRequest — the run target first, then its descendants', () => {
+  const row = (id: string, repoId: string, state = 'open') => ({ id, repoId, state });
+
+  it("prefers the target's own pull request in the repository over a descendant's", () => {
+    expect(pickPullRequest('web', [row('own', 'web', 'closed')], [row('child', 'web')])?.id).toBe(
+      'own',
+    );
+  });
+
+  it('falls back to a descendant, preferring an open one, else the most recently linked', () => {
+    expect(
+      pickPullRequest(
+        'web',
+        [row('own-api', 'api')],
+        [row('c1', 'web', 'closed'), row('c2', 'web')],
+      )?.id,
+    ).toBe('c2');
+    expect(
+      pickPullRequest('web', [], [row('c1', 'web', 'closed'), row('c2', 'web', 'closed')])?.id,
+    ).toBe('c2');
+  });
+
+  it('returns null when no pull request anywhere is in the repository', () => {
+    expect(pickPullRequest('web', [row('a', 'api')], [row('b', 'api')])).toBeNull();
   });
 });
 
@@ -364,32 +374,51 @@ async function linkedPr(
   return row;
 }
 
+const SETUP = [{ label: 'Run', command: 'pnpm dev' }];
+
 describe('howToTestService.getForWorkItem', () => {
-  it('returns an empty map for an item with no linked pull request', async () => {
+  it('an item with no record, no ancestor record and no run is record_missing with nobody owed', async () => {
     const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Nothing linked' });
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Nothing' });
     await expect(howToTestService.getForWorkItem(card.id, fx.ctx)).resolves.toEqual({
-      byPullRequestId: {},
+      state: 'record_missing',
+      runTarget: null,
       owedBy: null,
+      record: null,
+      repos: [],
+      history: [],
     });
   });
 
-  it('keys one entry per linked pull request by the id the Development rows carry — two repositories, two blocks', async () => {
+  it("a STORY run: two repository sections bound to the story's own session pull requests, with preview and checks", async () => {
     const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Two repos' });
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'A child',
+      parentId: story.id,
+    });
     const web = await connectRepo(fx, 'web');
     const api = await connectRepo(fx, 'api');
-    await linkedPr(fx, card.id, web.id, 'feat/web-side', [
+    // A child's own per-card pull request in web, which must NOT win over the story's.
+    await linkedPr(fx, child.id, web.id, 'subtask/child-web', [
+      { name: 'Vitest', conclusion: 'failure', sha: OLD },
+    ]);
+    const storyWeb = await linkedPr(fx, story.id, web.id, 'parent/story-web', [
       { name: 'Vitest', conclusion: 'success', sha: HEAD },
     ]);
-    await linkedPr(fx, card.id, api.id, 'feat/api-side');
+    // api has no pull request on the story — the child's is the fallback.
+    const childApi = await linkedPr(fx, child.id, api.id, 'subtask/child-api');
     await testInstructionsService.publish(
       {
-        workItemId: card.id,
-        repoId: web.id,
-        commitSha: HEAD,
-        clickPathSteps: ['Open the board'],
-        setupCommands: [{ label: 'Run', command: 'pnpm dev' }],
+        workItemId: story.id,
+        clickPathSteps: ['Open the story', 'Scroll to How to test'],
+        previewPath: '/items/ACME-1',
+        preconditionMd: 'Sign in.',
+        repos: [
+          { repoId: web.id, commitSha: HEAD, setupCommands: SETUP },
+          { repoId: api.id, commitSha: OLD },
+        ],
       },
       fx.ctx,
     );
@@ -400,7 +429,7 @@ describe('howToTestService.getForWorkItem', () => {
         provider: 'github',
         providerDeploymentId: '1',
         commitSha: HEAD,
-        ref: 'feat/web-side',
+        ref: 'parent/story-web',
         environment: 'Preview',
         state: 'success',
         environmentUrl: 'https://web-preview.example',
@@ -408,49 +437,149 @@ describe('howToTestService.getForWorkItem', () => {
       },
     });
 
-    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
-    const rows = await workItemsService.listLinkedPullRequests(card.id, fx.ctx);
-    expect(Object.keys(dto.byPullRequestId).sort()).toEqual(rows.map((r) => r.id).sort());
-
-    const webBlock = Object.values(dto.byPullRequestId).find((b) => b.repoId === web.id)!;
-    const apiBlock = Object.values(dto.byPullRequestId).find((b) => b.repoId === api.id)!;
-    expect(webBlock.local).toMatchObject({
-      status: 'available',
-      fetchCommand: 'git fetch origin feat/web-side && git checkout feat/web-side',
+    const dto = await howToTestService.getForWorkItem(story.id, fx.ctx);
+    expect(dto.state).toBe('record');
+    expect(dto.record).toMatchObject({
+      run: null,
+      preconditionMd: 'Sign in.',
+      clickPathSteps: ['Open the story', 'Scroll to How to test'],
+      previewPath: '/items/ACME-1',
     });
-    expect(webBlock.preview).toMatchObject({
-      status: 'available',
-      url: 'https://web-preview.example',
+    expect(dto.repos.map((r) => r.repoId)).toEqual([web.id, api.id]);
+    const [webSection, apiSection] = dto.repos;
+    expect(webSection).toMatchObject({
+      repoName: 'acme/web',
+      pullRequest: { id: storyWeb.id, headRef: 'parent/story-web', headSha: HEAD },
+      stale: false,
+      local: {
+        status: 'available',
+        fetchCommand: 'git fetch origin parent/story-web && git checkout parent/story-web',
+        setupCommands: SETUP,
+      },
+      preview: { status: 'available', url: 'https://web-preview.example/items/ACME-1' },
+      ci: { status: 'available' },
     });
-    expect(webBlock.ci).toMatchObject({ status: 'available' });
-    expect(apiBlock.local).toEqual({ status: 'record_missing' });
-    expect(apiBlock.preview).toEqual({ status: 'no_deployment_reported' });
-    expect(apiBlock.ci).toEqual({ status: 'no_checks_reported' });
+    expect(apiSection).toMatchObject({
+      repoName: 'acme/api',
+      pullRequest: { id: childApi.id, headRef: 'subtask/child-api', headSha: null },
+      local: { status: 'available', setupCommands: [] },
+      preview: { status: 'no_deployment_reported' },
+      ci: { status: 'no_checks_reported' },
+    });
   });
 
-  it('names the latest dispatch run that claimed the item as owedBy', async () => {
+  it('a section whose repository has no pull request anywhere reads no_pull_request', async () => {
     const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Owed' });
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'No PR' });
+    const web = await connectRepo(fx, 'web');
+    await testInstructionsService.publish(
+      {
+        workItemId: card.id,
+        clickPathNotApplicable: true,
+        clickPathNotApplicableReason: 'a service only',
+        repos: [{ repoId: web.id, commitSha: HEAD }],
+      },
+      fx.ctx,
+    );
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    expect(dto.record).toMatchObject({
+      clickPathSteps: [],
+      clickPathNotApplicable: true,
+      clickPathNotApplicableReason: 'a service only',
+    });
+    expect(dto.repos[0]).toMatchObject({ pullRequest: null, local: { status: 'no_pull_request' } });
+  });
+
+  it('a CHILD with no record of its own answers tested_via_ancestor, naming the nearest ancestor that has one', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story' });
+    const task = await createTestWorkItem(fx, { kind: 'task', title: 'Task', parentId: story.id });
+    const leaf = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Leaf',
+      parentId: task.id,
+    });
+    const web = await connectRepo(fx, 'web');
+    const publish = (workItemId: string) =>
+      testInstructionsService.publish(
+        { workItemId, clickPathSteps: ['Open'], repos: [{ repoId: web.id, commitSha: HEAD }] },
+        fx.ctx,
+      );
+    await publish(story.id);
+    expect(await howToTestService.getForWorkItem(leaf.id, fx.ctx)).toMatchObject({
+      state: 'tested_via_ancestor',
+      runTarget: { key: story.identifier },
+      record: null,
+      repos: [],
+    });
+    await publish(task.id);
+    expect((await howToTestService.getForWorkItem(leaf.id, fx.ctx)).runTarget).toEqual({
+      key: task.identifier,
+    });
+  });
+
+  it('record_missing names the latest run that targeted OR carried the item as owedBy', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Owed' });
     await adminDb.dispatchRun.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         command: 'run',
         startedAt: new Date('2026-09-01T08:00:00Z'),
-        cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
+        cards: { create: { workspaceId: fx.workspaceId, workItemId: story.id, position: 0 } },
       },
     });
-    const latest = await adminDb.dispatchRun.create({
+    const scoped = await adminDb.dispatchRun.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
-        command: 'auto',
+        command: 'run_scope',
+        scopeWorkItemId: story.id,
         startedAt: new Date('2026-09-13T12:04:00Z'),
-        cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
       },
     });
+    const dto = await howToTestService.getForWorkItem(story.id, fx.ctx);
+    expect(dto.state).toBe('record_missing');
+    expect(dto.owedBy).toEqual({ runId: scoped.id, label: 'motir run · 2026-09-13 12:04 UTC' });
+  });
+
+  it('names the run that wrote the current record, and lists earlier runs newest first', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Runs' });
+    const web = await connectRepo(fx, 'web');
+    const runs: string[] = [];
+    for (const [n, at] of [
+      [1, '2026-09-10T08:00:00Z'],
+      [2, '2026-09-11T08:00:00Z'],
+      [3, '2026-09-12T08:00:00Z'],
+    ] as const) {
+      const run = await adminDb.dispatchRun.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          command: 'run',
+          status: 'running',
+          startedAt: new Date(at),
+          cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
+        },
+      });
+      runs.push(run.id);
+      await testInstructionsService.publish(
+        {
+          workItemId: card.id,
+          clickPathSteps: [`Run ${n}`],
+          repos: [{ repoId: web.id, commitSha: HEAD }],
+          attributeToRunningDispatch: true,
+        },
+        fx.ctx,
+      );
+      await adminDb.dispatchRun.update({ where: { id: run.id }, data: { status: 'succeeded' } });
+    }
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
-    expect(dto.owedBy).toEqual({ runId: latest.id, label: 'motir auto · 2026-09-13 12:04 UTC' });
+    expect(dto.record?.run).toEqual({ runId: runs[2], label: 'motir run · 2026-09-12 08:00 UTC' });
+    expect(dto.record?.clickPathSteps).toEqual(['Run 3']);
+    expect(dto.history.map((h) => h.run?.runId)).toEqual([runs[1], runs[0]]);
   });
 
   it('refuses a reader who cannot browse the project, with the not-found the item page raises', async () => {
@@ -512,26 +641,44 @@ describe('howToTestService.getForWorkItem', () => {
     expect(role, 'a custom role without project:browse could not be created').not.toBeNull();
   });
 
-  it('issues the SAME number of reads for 1 and for 3 linked pull requests', async () => {
+  it('issues the SAME number of reads for a 1-repository and a 3-repository record', async () => {
     const fx = await makeWorkItemFixture();
-    const web = await connectRepo(fx, 'web');
-    const one = await createTestWorkItem(fx, { kind: 'task', title: 'One' });
-    const three = await createTestWorkItem(fx, { kind: 'task', title: 'Three' });
-    await linkedPr(fx, one.id, web.id, 'feat/one', [
+    const repos = await Promise.all(['web', 'api', 'docs'].map((n) => connectRepo(fx, n)));
+    const one = await createTestWorkItem(fx, { kind: 'story', title: 'One' });
+    const three = await createTestWorkItem(fx, { kind: 'story', title: 'Three' });
+    await linkedPr(fx, one.id, repos[0]!.id, 'feat/one', [
       { name: 'A', conclusion: 'success', sha: HEAD },
     ]);
-    for (const n of [1, 2, 3]) {
-      await linkedPr(fx, three.id, web.id, `feat/three-${n}`, [
-        { name: 'A', conclusion: 'success', sha: `${n}`.repeat(40) },
+    for (const [n, repo] of repos.entries()) {
+      await linkedPr(fx, three.id, repo.id, `feat/three-${n}`, [
+        { name: 'A', conclusion: 'success', sha: `${n + 1}`.repeat(40) },
       ]);
     }
+    await testInstructionsService.publish(
+      {
+        workItemId: one.id,
+        clickPathSteps: ['Go'],
+        repos: [{ repoId: repos[0]!.id, commitSha: HEAD }],
+      },
+      fx.ctx,
+    );
+    await testInstructionsService.publish(
+      {
+        workItemId: three.id,
+        clickPathSteps: ['Go'],
+        repos: repos.map((r) => ({ repoId: r.id, commitSha: HEAD })),
+      },
+      fx.ctx,
+    );
 
     const spies = [
-      vi.spyOn(workItemDeliveryRepository, 'listByWorkItemWithChecks'),
-      vi.spyOn(testInstructionsRepository, 'listCurrentByWorkItem'),
+      vi.spyOn(workItemDeliveryRepository, 'listByWorkItemsWithChecks'),
+      vi.spyOn(testInstructionsRepository, 'listHistoryForWorkItem'),
+      vi.spyOn(testInstructionsRepository, 'listCurrentByWorkItems'),
       vi.spyOn(repoDeploymentRepository, 'listLatestByCommits'),
       vi.spyOn(repoDeploymentRepository, 'listLatestByRefs'),
       vi.spyOn(dispatchRunRepository, 'listByWorkItem'),
+      vi.spyOn(dispatchRunRepository, 'listByScope'),
     ];
     const count = () => spies.reduce((sum, s) => sum + s.mock.calls.length, 0);
 
@@ -541,7 +688,7 @@ describe('howToTestService.getForWorkItem', () => {
     const dto = await howToTestService.getForWorkItem(three.id, fx.ctx);
     const forThree = count();
 
-    expect(Object.keys(dto.byPullRequestId)).toHaveLength(3);
+    expect(dto.repos).toHaveLength(3);
     expect(forThree).toBe(forOne);
   });
 });

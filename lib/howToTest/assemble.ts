@@ -1,19 +1,19 @@
 // The HOW TO TEST assembly — PURE (Story MOTIR-4906 · Subtask MOTIR-5333).
 //
 // `howToTestService.getForWorkItem` does the reads; this turns their rows into
-// the per-pull-request DTO. Kept pure so every arm — and every "why a path is
+// one repository section of the run target's block. Kept pure so every arm — and every "why a path is
 // missing" — is testable without a database, and so the one head-sha rule it
 // shares with the Development section's CI pill is visible in one place.
 
 import { liveRowsAtLatestSha, type PrCheckRunSlice } from '@/lib/github/prCiState';
 import { DEPLOYMENT_STATES } from '@/lib/git/types';
-import type { TestInstructionsDTO } from '@/lib/dto/testInstructions';
+import type { TestInstructionsRepoDTO } from '@/lib/dto/testInstructions';
 import type {
   HowToTestCheckConclusion,
   HowToTestCheckDto,
   HowToTestDeploymentState,
   HowToTestPreviewDto,
-  HowToTestPullRequestDto,
+  HowToTestRepoDto,
 } from '@/lib/dto/howToTest';
 
 /** The slice of a delivery's pull request the assembly reads. */
@@ -114,13 +114,13 @@ export function pickDeployment<T extends HowToTestDeploymentInput>(candidates: T
 
 function previewFor(
   deployment: HowToTestDeploymentInput | null,
-  record: TestInstructionsDTO | null,
+  previewPath: string | null,
 ): HowToTestPreviewDto {
   if (!deployment) return { status: 'no_deployment_reported' };
   if (deployment.state === 'success' && deployment.environmentUrl !== null) {
     return {
       status: 'available',
-      url: joinPreviewUrl(deployment.environmentUrl, record?.previewPath ?? null),
+      url: joinPreviewUrl(deployment.environmentUrl, previewPath),
       environment: deployment.environment,
       state: 'success',
       deployedSha: deployment.commitSha,
@@ -133,18 +133,56 @@ function previewFor(
 }
 
 /**
- * Assemble ONE pull request's block.
- *
- * @param record       the CURRENT record for the pull request's repository, or null
- * @param deployments  every latest-per-environment deployment for the pull
- *                     request's repository — matched here on the head sha, or on
- *                     the head REF when no check has reported a head yet
+ * Choose the pull request a repository section binds to: the RUN TARGET's own
+ * delivery in that repository first (a story run's session pull request is
+ * linked to the story), and only then one of its descendants'. Within a tier,
+ * an OPEN pull request wins; otherwise the most recently linked.
  */
-export function assembleHowToTest(
-  pr: HowToTestPullRequestInput,
-  record: TestInstructionsDTO | null,
+export function pickPullRequest<T extends { repoId: string; state: string }>(
+  repoId: string,
+  own: readonly T[],
+  descendants: readonly T[],
+): T | null {
+  for (const tier of [own, descendants]) {
+    const inRepo = tier.filter((pr) => pr.repoId === repoId);
+    if (inRepo.length === 0) continue;
+    return inRepo.find((pr) => pr.state === 'open') ?? inRepo[inRepo.length - 1]!;
+  }
+  return null;
+}
+
+/**
+ * Assemble ONE repository section of the run target's block.
+ *
+ * @param section      the record's section for this repository
+ * @param repoName     `owner/name`, for the sub-heading
+ * @param pr           the pull request {@link pickPullRequest} bound, or null
+ * @param deployments  every latest-per-environment deployment read for the block —
+ *                     matched here on the head sha, or on the head REF when no
+ *                     check has reported a head yet
+ * @param previewPath  the record's `previewPath` (one for the run)
+ */
+export function assembleHowToTestRepo(
+  section: TestInstructionsRepoDTO,
+  repoName: string,
+  pr: HowToTestPullRequestInput | null,
   deployments: HowToTestDeploymentInput[],
-): HowToTestPullRequestDto {
+  previewPath: string | null,
+): HowToTestRepoDto {
+  if (!pr) {
+    return {
+      repoId: section.repoId,
+      repoName,
+      commitSha: section.commitSha,
+      pullRequest: null,
+      stale: false,
+      local: { status: 'no_pull_request' },
+      // Without a branch there is neither a head to match a preview on nor checks.
+      preview: { status: 'no_deployment_reported' },
+      ci: { status: 'no_checks_reported' },
+    };
+  }
+
   // THE head, by the rule the Development section's CI pill uses — one helper,
   // so "what CI proved" and the pill can never name different commits.
   const atHead = liveRowsAtLatestSha(pr.checkRuns);
@@ -160,31 +198,24 @@ export function assembleHowToTest(
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return {
-    pullRequestId: pr.id,
-    repoId: pr.repoId,
-    headRef: pr.headRef,
-    headSha,
-    state: pr.state === 'open' ? 'open' : 'closed',
-    merged: pr.merged,
-    clickPathSteps: record && !record.clickPathNotApplicable ? record.clickPathSteps : [],
-    local: record
-      ? {
-          status: 'available',
-          fetchCommand: fetchCommandFor(pr.headRef),
-          setupCommands: record.setupCommands,
-          preconditionMd: record.preconditionMd,
-        }
-      : { status: 'record_missing' },
-    preview: previewFor(pickDeployment(candidates), record),
+    repoId: section.repoId,
+    repoName,
+    commitSha: section.commitSha,
+    pullRequest: {
+      id: pr.id,
+      headRef: pr.headRef,
+      headSha,
+      state: pr.state === 'open' ? 'open' : 'closed',
+      merged: pr.merged,
+    },
+    // A section written against an ABBREVIATED sha of the head is not stale.
+    stale: headSha !== null && !headSha.startsWith(section.commitSha),
+    local: {
+      status: 'available',
+      fetchCommand: fetchCommandFor(pr.headRef),
+      setupCommands: section.setupCommands,
+    },
+    preview: previewFor(pickDeployment(candidates), previewPath),
     ci: checks.length > 0 ? { status: 'available', checks } : { status: 'no_checks_reported' },
-    record: record
-      ? {
-          commitSha: record.commitSha,
-          // A record written against an ABBREVIATED sha of the head is not stale.
-          stale: headSha !== null && !headSha.startsWith(record.commitSha),
-          clickPathNotApplicable: record.clickPathNotApplicable,
-          clickPathNotApplicableReason: record.clickPathNotApplicableReason,
-        }
-      : null,
   };
 }

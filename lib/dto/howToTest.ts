@@ -1,14 +1,15 @@
 // Wire DTOs for the HOW TO TEST read (Story MOTIR-4906 · Subtask MOTIR-5333).
 //
-// The PINNED shape is the design's Fields-read table
-// (`design/github/design-notes.md` §20.3): one entry per linked pull request,
-// keyed by `GithubPullRequest.id` — the same id `LinkedPullRequestDto.id` carries
-// to `PullRequestRow`, so a Development row looks up its own block. Every path is
-// either filled or carries WHY it is unavailable, so a reviewer can tell "there is
-// no preview" from "nobody wrote one".
+// HOW TO TEST is per RUN, on the RUN TARGET (`docs/decisions/approval-gates.md`
+// §9's 2026-09-13 amendment). The read answers for ONE item: its current run's
+// record — one click-path, one precondition — and, per repository section, that
+// repository's pull request, preview and checks. Every path is either filled or
+// carries WHY it is unavailable, so a reviewer can tell "there is no preview"
+// from "nobody wrote one". The PINNED shape is the design's Fields-read table
+// (MOTIR-5327).
 //
-// ⚠️ NO URL TO THE DIFF. The row's own `LinkedPullRequestDto.url` is the diff
-// link-out, and the block draws none.
+// ⚠️ NO URL TO THE DIFF. The Development row's own `LinkedPullRequestDto.url` is
+// the diff link-out, and the block draws none.
 
 import type { SetupCommandDTO } from '@/lib/dto/testInstructions';
 import type { DeploymentState } from '@/lib/git/types';
@@ -55,47 +56,79 @@ export type HowToTestLocalDto =
       /** `git fetch origin <headRef> && git checkout <headRef>`, the ref shell-quoted. */
       fetchCommand: string;
       setupCommands: SetupCommandDTO[];
-      preconditionMd: string | null;
     }
-  | { status: 'record_missing' };
+  /** The run published a section for this repository, but no pull request carries its branch. */
+  | { status: 'no_pull_request' };
 
 export type HowToTestCiDto =
   | { status: 'available'; checks: HowToTestCheckDto[] }
   | { status: 'no_checks_reported' };
 
-export interface HowToTestRecordDto {
-  commitSha: string;
-  /** True when a head is known and the record was written for a different commit. */
-  stale: boolean;
-  clickPathNotApplicable: boolean;
-  clickPathNotApplicableReason: string | null;
-}
-
-/** One linked pull request's block. */
-export interface HowToTestPullRequestDto {
-  pullRequestId: string;
-  repoId: string;
+/** The pull request a repository section is bound to. */
+export interface HowToTestPullRequestRefDto {
+  id: string;
   headRef: string;
   /** The PR's latest recorded check-row sha (the `prCiState` head), or null before any check. */
   headSha: string | null;
   state: 'open' | 'closed';
   merged: boolean;
-  /** The record's click-path; empty when there is no record or it is not applicable. */
-  clickPathSteps: string[];
+}
+
+/** One repository's section of the run's block. */
+export interface HowToTestRepoDto {
+  repoId: string;
+  /** `owner/name`, for the section's sub-heading. */
+  repoName: string;
+  /** The commit the run wrote this section for. */
+  commitSha: string;
+  pullRequest: HowToTestPullRequestRefDto | null;
+  /** True when a head is known and the section was written for a different commit. */
+  stale: boolean;
   local: HowToTestLocalDto;
   preview: HowToTestPreviewDto;
   ci: HowToTestCiDto;
-  record: HowToTestRecordDto | null;
 }
 
-/** The dispatch run that owed the instructions — the latest run that claimed the card. */
-export interface HowToTestOwedByDto {
+/** A dispatch run, as the block names it. */
+export interface HowToTestRunDto {
   runId: string;
   label: string;
 }
 
+/** The current run's record — what is ONE for the run. */
+export interface HowToTestRecordDto {
+  id: string;
+  run: HowToTestRunDto | null;
+  createdAt: string;
+  preconditionMd: string | null;
+  clickPathSteps: string[];
+  clickPathNotApplicable: boolean;
+  clickPathNotApplicableReason: string | null;
+  previewPath: string | null;
+}
+
+/** An earlier run's record, for the "Earlier runs" disclosure. */
+export interface HowToTestHistoryEntryDto {
+  recordId: string;
+  run: HowToTestRunDto | null;
+  createdAt: string;
+}
+
 export interface HowToTestDto {
-  /** Empty when the item has no linked pull request. */
-  byPullRequestId: Record<string, HowToTestPullRequestDto>;
-  owedBy: HowToTestOwedByDto | null;
+  /**
+   * `record` — this item is a run target with a current record.
+   * `record_missing` — no run has written one here (and no ancestor carries one).
+   * `tested_via_ancestor` — this item has none, and its nearest ancestor that
+   * does is `runTarget` (a child of a container run).
+   */
+  state: 'record' | 'record_missing' | 'tested_via_ancestor';
+  /** The ancestor holding the record, for `tested_via_ancestor`; null otherwise. */
+  runTarget: { key: string } | null;
+  /** The latest run that targeted or carried this item, for `record_missing`. */
+  owedBy: HowToTestRunDto | null;
+  record: HowToTestRecordDto | null;
+  /** One per record section, in the record's order; empty unless `state` is `record`. */
+  repos: HowToTestRepoDto[];
+  /** Earlier runs' records, newest first (the current one excluded). */
+  history: HowToTestHistoryEntryDto[];
 }

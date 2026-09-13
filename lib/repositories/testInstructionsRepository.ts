@@ -16,6 +16,11 @@ export type TestInstructionsCreateInput = Prisma.TestInstructionsUncheckedCreate
 /** A record row with its repository sections, as every read here returns it. */
 export type TestInstructionsWithRepos = TestInstructions & { repos: TestInstructionsRepo[] };
 
+/** A history row: the record, its sections, and the run that wrote it (when one did). */
+export type TestInstructionsHistoryRow = TestInstructionsWithRepos & {
+  dispatchRun: { command: string; startedAt: Date } | null;
+};
+
 const WITH_REPOS = { repos: { orderBy: { position: 'asc' } } } as const;
 
 export const testInstructionsRepository = {
@@ -75,14 +80,17 @@ export const testInstructionsRepository = {
     });
   },
 
-  /** Every record ever written for one run target, newest first — the earlier runs. */
+  /**
+   * Every record ever written for one run target, newest first, each with the
+   * command and start of the run that wrote it — the "Earlier runs" read.
+   */
   async listHistoryForWorkItem(
     workItemId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<TestInstructionsWithRepos[]> {
+  ): Promise<TestInstructionsHistoryRow[]> {
     return tx.testInstructions.findMany({
       where: { workItemId },
-      include: WITH_REPOS,
+      include: { ...WITH_REPOS, dispatchRun: { select: { command: true, startedAt: true } } },
       orderBy: { createdAt: 'desc' },
     });
   },
