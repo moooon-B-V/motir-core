@@ -59,26 +59,6 @@ export class TestInstructionsCapExceededError extends TestInstructionsError {
   }
 }
 
-/**
- * The click-path is neither given nor declared not-applicable — or is both.
- * Exactly one must hold, so "nobody wrote a walk-through" can never be stored
- * looking like "there is nothing to click". → 422.
- */
-export class TestInstructionsClickPathError extends TestInstructionsError {
-  readonly code = 'TEST_INSTRUCTIONS_CLICK_PATH_INVALID' as const;
-  readonly status = 422;
-  constructor(readonly reason: 'neither' | 'both' | 'reason_missing') {
-    super(
-      reason === 'both'
-        ? 'Give "clickPathSteps" OR set "clickPathNotApplicable" — not both.'
-        : reason === 'neither'
-          ? 'Give at least one "clickPathSteps" entry, or set "clickPathNotApplicable: true" with a "clickPathNotApplicableReason".'
-          : '"clickPathNotApplicable" needs a "clickPathNotApplicableReason" saying why no rendered surface changed.',
-    );
-    this.name = 'TestInstructionsClickPathError';
-  }
-}
-
 /** A field is present but malformed (an empty step, a non-hex sha, a bad path). → 422. */
 export class TestInstructionsInvalidFieldError extends TestInstructionsError {
   readonly code = 'TEST_INSTRUCTIONS_INVALID_FIELD' as const;

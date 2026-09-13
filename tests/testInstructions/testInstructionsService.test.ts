@@ -14,17 +14,12 @@ import {
 } from '@/lib/services/testInstructionsService';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
 import {
-  TEST_INSTRUCTIONS_MAX_COMMAND_CHARS,
-  TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES,
+  TEST_INSTRUCTIONS_MAX_BODY_BYTES,
   TEST_INSTRUCTIONS_MAX_REPOS,
-  TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS,
   TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS,
-  TEST_INSTRUCTIONS_MAX_STEP_CHARS,
-  TEST_INSTRUCTIONS_MAX_STEPS,
 } from '@/lib/testInstructions/caps';
 import {
   TestInstructionsCapExceededError,
-  TestInstructionsClickPathError,
   TestInstructionsConflictError,
   TestInstructionsInvalidFieldError,
   TestInstructionsRepoNotInProjectError,
@@ -50,6 +45,8 @@ import { randomToken } from '../helpers/random';
 //     lets both inserts through and one dies on the partial unique index;
 //   - the two-repository case asserts ONE record with TWO sections, so a
 //     per-repository key (the superseded shape) fails it;
+//   - the body case asserts the rich text is stored BYTE-FOR-BYTE — sections and
+//     fenced code blocks untouched, because the one Markdown pipeline renders it;
 //   - the idempotency case asserts the ROW COUNT, not only the returned id;
 //   - the permission case uses a CUSTOM role that can browse but not edit, so a
 //     browse-only gate would pass it and fail the test.
@@ -101,6 +98,24 @@ async function connectRepo(fx: WorkItemFixture, name: string, link = true): Prom
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
 
+const BODY = [
+  '## Precondition',
+  '',
+  'Sign in as a project **member**.',
+  '',
+  '## Locally',
+  '',
+  '```sh',
+  'pnpm install --frozen-lockfile',
+  'pnpm dev',
+  '```',
+  '',
+  '## Click-path',
+  '',
+  '1. Open `/items/ACME-7`',
+  '2. Scroll to How to test',
+].join('\n');
+
 function input(
   workItemId: string,
   repoId: string,
@@ -108,9 +123,8 @@ function input(
 ): PublishTestInstructionsInput {
   return {
     workItemId,
-    clickPathSteps: ['Open /items/ACME-7', 'Scroll to How to test'],
+    bodyMd: BODY,
     previewPath: '/items/ACME-7',
-    preconditionMd: 'Sign in as a project **member**.',
     repos: [section(repoId)],
     ...over,
   };
@@ -120,15 +134,7 @@ function section(
   repoId: string,
   over: Partial<PublishTestInstructionsRepoInput> = {},
 ): PublishTestInstructionsRepoInput {
-  return {
-    repoId,
-    commitSha: SHA_A,
-    setupCommands: [
-      { label: 'Install', command: 'pnpm install --frozen-lockfile' },
-      { label: 'Run', command: 'pnpm dev' },
-    ],
-    ...over,
-  };
+  return { repoId, commitSha: SHA_A, ...over };
 }
 
 async function runningRunFor(fx: WorkItemFixture, workItemId: string): Promise<string> {
@@ -157,7 +163,7 @@ async function rowsFor(workItemId: string) {
 }
 
 describe('testInstructionsService.publish', () => {
-  it('writes ONE record for a two-repository run — one current row, two sections in order', async () => {
+  it('writes ONE record for a two-repository run — the rich-text body BYTE-FOR-BYTE, two sections in order', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'A story run' });
     const web = await connectRepo(fx, 'web');
@@ -165,34 +171,28 @@ describe('testInstructionsService.publish', () => {
 
     const { record, created } = await testInstructionsService.publish(
       input(story.id, web, {
-        repos: [section(web), section(api, { commitSha: SHA_B, setupCommands: [] })],
+        bodyMd: `\n\n${BODY}\n  `,
+        repos: [section(web), section(api, { commitSha: SHA_B })],
       }),
       fx.ctx,
     );
     expect(created).toBe(true);
     expect(record).toMatchObject({
       workItemId: story.id,
-      clickPathSteps: ['Open /items/ACME-7', 'Scroll to How to test'],
-      clickPathNotApplicable: false,
+      bodyMd: BODY,
       previewPath: '/items/ACME-7',
       publishedById: fx.ctx.userId,
       dispatchRunId: null,
       isCurrent: true,
     });
     expect(record.repos).toEqual([
-      {
-        repoId: web,
-        commitSha: SHA_A,
-        setupCommands: [
-          { label: 'Install', command: 'pnpm install --frozen-lockfile' },
-          { label: 'Run', command: 'pnpm dev' },
-        ],
-      },
-      { repoId: api, commitSha: SHA_B, setupCommands: [] },
+      { repoId: web, commitSha: SHA_A },
+      { repoId: api, commitSha: SHA_B },
     ]);
 
     const rows = await rowsFor(story.id);
     expect(rows).toHaveLength(1);
+    expect(rows[0]!.bodyMd).toBe(BODY);
     expect(rows[0]!.repos.map((r) => r.repoId)).toEqual([web, api]);
   });
 
@@ -242,7 +242,7 @@ describe('testInstructionsService.publish', () => {
     const b = await testInstructionsService.publish(
       input(card.id, repoId, {
         attributeToRunningDispatch: true,
-        clickPathSteps: ['  Open /items/ACME-7 ', 'Scroll to How to test'],
+        bodyMd: `  ${BODY}\n`,
         repos: [section(repoId, { commitSha: SHA_A.toUpperCase() })],
       }),
       fx.ctx,
@@ -270,25 +270,19 @@ describe('testInstructionsService.publish', () => {
     expect(rows.filter((r) => r.isCurrent).map((r) => r.id)).toEqual([amended.record.id]);
   });
 
-  it('stores a not-applicable click-path with its reason', async () => {
+  it('stores a body with no click-path section as written — the agent says why in prose', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'Backend only' });
     const repoId = await connectRepo(fx, 'api');
+    const body =
+      'No rendered surface changed: a service and its tests.\n\n```sh\npnpm vitest run tests/foo\n```';
 
     const { record } = await testInstructionsService.publish(
-      input(card.id, repoId, {
-        clickPathSteps: [],
-        clickPathNotApplicable: true,
-        clickPathNotApplicableReason: 'no rendered surface changed: a service and its tests',
-        previewPath: null,
-      }),
+      input(card.id, repoId, { bodyMd: body, previewPath: null }),
       fx.ctx,
     );
-    expect(record.clickPathSteps).toEqual([]);
-    expect(record.clickPathNotApplicable).toBe(true);
-    expect(record.clickPathNotApplicableReason).toBe(
-      'no rendered surface changed: a service and its tests',
-    );
+    expect(record.bodyMd).toBe(body);
+    expect(record.previewPath).toBeNull();
   });
 
   it('resolves a section named by `name` or `owner/name`', async () => {
@@ -403,10 +397,10 @@ describe('testInstructionsService.publish', () => {
     const api = await connectRepo(fx, 'api');
 
     const left = input(card.id, web, {
-      clickPathSteps: ['Left step'],
+      bodyMd: '## Left',
       repos: [section(web), section(api)],
     });
-    const right = input(card.id, web, { clickPathSteps: ['Right step'] });
+    const right = input(card.id, web, { bodyMd: '## Right' });
 
     // Separate pooled connections — each publish opens its own transaction.
     const results = await Promise.all([
@@ -418,10 +412,10 @@ describe('testInstructionsService.publish', () => {
     const current = (await rowsFor(card.id)).filter((r) => r.isCurrent);
     expect(current).toHaveLength(1);
     const winner = current[0]!;
-    if (JSON.stringify(winner.clickPathSteps) === JSON.stringify(['Left step'])) {
+    if (winner.bodyMd === '## Left') {
       expect(winner.repos.map((r) => r.repoId)).toEqual([web, api]);
     } else {
-      expect(winner.clickPathSteps).toEqual(['Right step']);
+      expect(winner.bodyMd).toBe('## Right');
       expect(winner.repos.map((r) => r.repoId)).toEqual([web]);
     }
   });
@@ -430,21 +424,9 @@ describe('testInstructionsService.publish', () => {
 describe('normalizeTestInstructionsContent — every cap is a typed refusal naming the field', () => {
   const base = input('wi', 'repo');
   const long = (n: number) => 'x'.repeat(n);
-  const withSection = (over: Partial<PublishTestInstructionsRepoInput>) => ({
-    repos: [section('repo', over)],
-  });
 
   const cases: Array<[string, Partial<PublishTestInstructionsInput>, string]> = [
-    [
-      'too many steps',
-      { clickPathSteps: Array.from({ length: TEST_INSTRUCTIONS_MAX_STEPS + 1 }, () => 'step') },
-      'clickPathSteps',
-    ],
-    [
-      'a step too long',
-      { clickPathSteps: [long(TEST_INSTRUCTIONS_MAX_STEP_CHARS + 1)] },
-      'clickPathSteps[0]',
-    ],
+    ['a body over 32 KiB', { bodyMd: long(TEST_INSTRUCTIONS_MAX_BODY_BYTES + 1) }, 'bodyMd'],
     [
       'too many repository sections',
       {
@@ -453,44 +435,6 @@ describe('normalizeTestInstructionsContent — every cap is a typed refusal nami
         ),
       },
       'repos',
-    ],
-    [
-      'too many setup commands',
-      withSection({
-        setupCommands: Array.from({ length: TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS + 1 }, () => ({
-          label: 'l',
-          command: 'c',
-        })),
-      }),
-      'repos[0].setupCommands',
-    ],
-    [
-      'a label too long',
-      withSection({
-        setupCommands: [{ label: long(TEST_INSTRUCTIONS_MAX_STEP_CHARS + 1), command: 'c' }],
-      }),
-      'repos[0].setupCommands[0].label',
-    ],
-    [
-      'a command too long',
-      withSection({
-        setupCommands: [{ label: 'l', command: long(TEST_INSTRUCTIONS_MAX_COMMAND_CHARS + 1) }],
-      }),
-      'repos[0].setupCommands[0].command',
-    ],
-    [
-      'a precondition over 8 KiB',
-      { preconditionMd: long(TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES + 1) },
-      'preconditionMd',
-    ],
-    [
-      'a not-applicable reason too long',
-      {
-        clickPathSteps: [],
-        clickPathNotApplicable: true,
-        clickPathNotApplicableReason: long(TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS + 1),
-      },
-      'clickPathNotApplicableReason',
     ],
     [
       'a preview path too long',
@@ -511,63 +455,33 @@ describe('normalizeTestInstructionsContent — every cap is a typed refusal nami
     expect((err as TestInstructionsCapExceededError).code).toBe('TEST_INSTRUCTIONS_CAP_EXCEEDED');
   });
 
-  it('counts the precondition cap in UTF-8 bytes, not characters', () => {
+  it('counts the body cap in UTF-8 bytes, not characters', () => {
     // 3 bytes per character: under the cap in characters, over it in bytes.
-    const multibyte = '界'.repeat(Math.floor(TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES / 3) + 1);
-    expect(multibyte.length).toBeLessThan(TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES);
-    expect(() => normalizeTestInstructionsContent({ ...base, preconditionMd: multibyte })).toThrow(
+    const multibyte = '界'.repeat(Math.floor(TEST_INSTRUCTIONS_MAX_BODY_BYTES / 3) + 1);
+    expect(multibyte.length).toBeLessThan(TEST_INSTRUCTIONS_MAX_BODY_BYTES);
+    expect(() => normalizeTestInstructionsContent({ ...base, bodyMd: multibyte })).toThrow(
       TestInstructionsCapExceededError,
     );
   });
 
-  it('accepts every field exactly AT its cap', () => {
-    expect(() =>
-      normalizeTestInstructionsContent({
-        ...base,
-        clickPathSteps: Array.from({ length: TEST_INSTRUCTIONS_MAX_STEPS }, () =>
-          long(TEST_INSTRUCTIONS_MAX_STEP_CHARS),
-        ),
-        repos: Array.from({ length: TEST_INSTRUCTIONS_MAX_REPOS }, (_, i) =>
-          section(`repo-${i}`, {
-            setupCommands: Array.from({ length: TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS }, () => ({
-              label: long(TEST_INSTRUCTIONS_MAX_STEP_CHARS),
-              command: long(TEST_INSTRUCTIONS_MAX_COMMAND_CHARS),
-            })),
-          }),
-        ),
-        preconditionMd: long(TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES),
-        previewPath: `/${long(TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS - 1)}`,
-      }),
-    ).not.toThrow();
+  it('accepts every field exactly AT its cap, and keeps the body untouched but trimmed', () => {
+    const body = long(TEST_INSTRUCTIONS_MAX_BODY_BYTES);
+    const out = normalizeTestInstructionsContent({
+      ...base,
+      bodyMd: `  ${body}  `,
+      repos: Array.from({ length: TEST_INSTRUCTIONS_MAX_REPOS }, (_, i) => section(`repo-${i}`)),
+      previewPath: `/${long(TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS - 1)}`,
+    });
+    expect(out.bodyMd).toBe(body);
   });
 
   it.each([
-    ['both steps and not-applicable', { clickPathNotApplicable: true }, 'both'],
-    ['neither', { clickPathSteps: [], clickPathNotApplicable: false }, 'neither'],
-    [
-      'not-applicable without a reason',
-      { clickPathSteps: [], clickPathNotApplicable: true, clickPathNotApplicableReason: '  ' },
-      'reason_missing',
-    ],
-  ] as const)('refuses a click-path with %s', (_label, over, reason) => {
-    let err: unknown;
-    try {
-      normalizeTestInstructionsContent({ ...base, ...over });
-    } catch (e) {
-      err = e;
-    }
-    expect(err).toBeInstanceOf(TestInstructionsClickPathError);
-    expect((err as TestInstructionsClickPathError).reason).toBe(reason);
-  });
-
-  it.each([
+    ['a blank body', { bodyMd: '  \n ' }, 'bodyMd'],
     ['no repository sections', { repos: [] }, 'repos'],
-    ['a non-hex commit sha', withSection({ commitSha: 'not-a-sha' }), 'repos[0].commitSha'],
-    ['an empty step', { clickPathSteps: ['ok', '   '] }, 'clickPathSteps[1]'],
     [
-      'a setup command with no label',
-      withSection({ setupCommands: [{ label: '', command: 'x' }] }),
-      'repos[0].setupCommands[0]',
+      'a non-hex commit sha',
+      { repos: [section('repo', { commitSha: 'not-a-sha' })] },
+      'repos[0].commitSha',
     ],
     ['a section naming no repository', { repos: [{ commitSha: SHA_A }] }, 'repos[0].repo'],
     [
@@ -677,42 +591,32 @@ describe('testInstructionsRepository.listCurrentByWorkItems', () => {
 });
 
 describe('toTestInstructionsDto', () => {
-  it('drops malformed JSON entries rather than handing a component a non-string, and orders sections by position', () => {
+  it('passes the body through untouched and orders sections by position', () => {
     const now = new Date('2026-09-13T00:00:00Z');
-    const repo = (repoId: string, position: number, setupCommands: unknown) => ({
+    const repo = (repoId: string, position: number) => ({
       id: `s-${repoId}`,
       workspaceId: 'ws',
       projectId: 'p',
       testInstructionsId: 'id',
       repoId,
       commitSha: SHA_A,
-      setupCommands: setupCommands as PrismaNs.JsonValue,
       position,
     });
-    const row = {
+    const dto = toTestInstructionsDto({
       id: 'id',
       workspaceId: 'ws',
       projectId: 'p',
       workItemId: 'wi',
-      clickPathSteps: ['ok', 7, null] as unknown as PrismaNs.JsonValue,
-      clickPathNotApplicable: false,
-      clickPathNotApplicableReason: null,
+      bodyMd: BODY,
       previewPath: null,
-      preconditionMd: null,
       dispatchRunId: null,
       publishedById: null,
       isCurrent: true,
       createdAt: now,
-      repos: [
-        repo('second', 1, null),
-        repo('first', 0, [{ label: 'Install', command: 'pnpm i' }, { label: 'broken' }, 'nope']),
-      ],
-    };
-    const dto = toTestInstructionsDto(row);
-    expect(dto.clickPathSteps).toEqual(['ok']);
+      repos: [repo('second', 1), repo('first', 0)],
+    });
+    expect(dto.bodyMd).toBe(BODY);
     expect(dto.repos.map((r) => r.repoId)).toEqual(['first', 'second']);
-    expect(dto.repos[0]!.setupCommands).toEqual([{ label: 'Install', command: 'pnpm i' }]);
-    expect(dto.repos[1]!.setupCommands).toEqual([]);
     expect(dto.createdAt).toBe(now.toISOString());
   });
 });

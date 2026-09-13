@@ -3,16 +3,8 @@
 // before returning. Dates are ISO strings, matching the other evidence DTOs.
 //
 // The record is per RUN on the run target (`docs/decisions/approval-gates.md` §9's
-// 2026-09-13 amendment): one click-path for the run, and one section per
-// repository the run touched.
-
-/** One setup step a reviewer runs after checking out the branch. */
-export interface SetupCommandDTO {
-  /** What the step is, e.g. `Install`. */
-  label: string;
-  /** The command itself, e.g. `pnpm install --frozen-lockfile`. */
-  command: string;
-}
+// 2026-09-13 amendment): one rich-text body for the run, and one section per
+// repository the run touched (the commit it was written for).
 
 /** One repository's section of a run's HOW TO TEST. */
 export interface TestInstructionsRepoDTO {
@@ -20,8 +12,6 @@ export interface TestInstructionsRepoDTO {
   repoId: string;
   /** The head commit this repository's section was written for. */
   commitSha: string;
-  /** Install / migrate / seed / run — never the branch fetch, which the read composes. */
-  setupCommands: SetupCommandDTO[];
 }
 
 /** One stored version of a run target's HOW TO TEST — the output of one run. */
@@ -29,13 +19,10 @@ export interface TestInstructionsDTO {
   id: string;
   /** The run target. */
   workItemId: string;
-  /** Ordered click-path for the run; empty exactly when `clickPathNotApplicable`. */
-  clickPathSteps: string[];
-  clickPathNotApplicable: boolean;
-  clickPathNotApplicableReason: string | null;
+  /** The run's HOW TO TEST as rich text (Markdown), exactly as the agent wrote it. */
+  bodyMd: string;
   /** The path to open on the preview host, e.g. `/items/ACME-7`. */
   previewPath: string | null;
-  preconditionMd: string | null;
   /** One section per repository, in the order the publisher gave them. */
   repos: TestInstructionsRepoDTO[];
   /** The dispatch run that wrote it, when one did. */

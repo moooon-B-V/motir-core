@@ -14,21 +14,15 @@ import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import type {
   CurrentTestInstructionsDTO,
   PublishTestInstructionsResultDTO,
-  SetupCommandDTO,
   TestInstructionsDTO,
 } from '@/lib/dto/testInstructions';
 import {
-  TEST_INSTRUCTIONS_MAX_COMMAND_CHARS,
-  TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES,
+  TEST_INSTRUCTIONS_MAX_BODY_BYTES,
   TEST_INSTRUCTIONS_MAX_REPOS,
-  TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS,
   TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS,
-  TEST_INSTRUCTIONS_MAX_STEP_CHARS,
-  TEST_INSTRUCTIONS_MAX_STEPS,
 } from '@/lib/testInstructions/caps';
 import {
   TestInstructionsCapExceededError,
-  TestInstructionsClickPathError,
   TestInstructionsConflictError,
   TestInstructionsInvalidFieldError,
   TestInstructionsRepoNotInProjectError,
@@ -41,8 +35,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
  * `docs/decisions/approval-gates.md` §9 and its 2026-09-13 amendment).
  *
  * HOW TO TEST is per RUN. A run writes ONE record onto its RUN TARGET — the item
- * it was launched against — with one click-path for the run and one section per
- * repository it touched. The target keeps exactly one CURRENT record (the newest
+ * it was launched against — its content RICH TEXT (`bodyMd`, sections allowed,
+ * commands in fenced code blocks) and one section per repository it touched. The target keeps exactly one CURRENT record (the newest
  * run's) and every earlier run's as history — the `design_evidence` shape. This
  * service is the only writer. It ends at a record that can be written and read;
  * the MCP door (MOTIR-5331), the read (MOTIR-5333) and the rendering (MOTIR-5336)
@@ -58,20 +52,17 @@ export interface PublishTestInstructionsRepoInput {
    */
   repoId?: string | null;
   repoRef?: string | null;
-  /** The head commit this repository's section was written for. */
+  /** The head commit the run pushed to this repository. */
   commitSha: string;
-  setupCommands?: readonly SetupCommandDTO[] | null;
 }
 
 export interface PublishTestInstructionsInput {
   /** The run target. */
   workItemId: string;
-  clickPathSteps?: readonly string[] | null;
-  clickPathNotApplicable?: boolean | null;
-  clickPathNotApplicableReason?: string | null;
+  /** The run's HOW TO TEST as rich text (Markdown). Stored as written, trimmed. */
+  bodyMd: string;
   previewPath?: string | null;
-  preconditionMd?: string | null;
-  /** One entry per repository the run touched — at least one. */
+  /** One entry per repository the run pushed to — at least one. */
   repos: readonly PublishTestInstructionsRepoInput[];
   /**
    * Attribute the record to the newest RUNNING dispatch run targeting or
@@ -87,16 +78,12 @@ interface NormalizedRepoSection {
   repoId: string | null;
   repoRef: string | null;
   commitSha: string;
-  setupCommands: SetupCommandDTO[];
 }
 
 /** The validated, normalised content a record stores — also what "identical" compares. */
 interface NormalizedContent {
-  clickPathSteps: string[];
-  clickPathNotApplicable: boolean;
-  clickPathNotApplicableReason: string | null;
+  bodyMd: string;
   previewPath: string | null;
-  preconditionMd: string | null;
   repos: NormalizedRepoSection[];
 }
 
@@ -115,50 +102,23 @@ function assertChars(field: string, value: string, cap: number): void {
 /**
  * Validate and normalise a publish's content. Every bound is a typed refusal
  * naming the field — never a silent truncation (lib/testInstructions/caps.ts).
+ * The body is NOT parsed: its sections and code blocks are the agent's, and the
+ * one Markdown pipeline renders them.
  *
  * Exported so the rules are unit-testable without a database.
  */
 export function normalizeTestInstructionsContent(
   input: PublishTestInstructionsInput,
 ): NormalizedContent {
-  const rawSteps = input.clickPathSteps ?? [];
-  if (rawSteps.length > TEST_INSTRUCTIONS_MAX_STEPS) {
-    throw new TestInstructionsCapExceededError(
-      'clickPathSteps',
-      TEST_INSTRUCTIONS_MAX_STEPS,
-      'items',
+  const bodyMd = (input.bodyMd ?? '').trim();
+  if (!bodyMd) {
+    throw new TestInstructionsInvalidFieldError(
+      'bodyMd',
+      'write How to test as Markdown — sections for the precondition, local setup and click-path, every command in a fenced code block.',
     );
   }
-  const clickPathSteps = rawSteps.map((step, index) => {
-    const trimmed = step.trim();
-    if (!trimmed) {
-      throw new TestInstructionsInvalidFieldError(
-        `clickPathSteps[${index}]`,
-        'a step cannot be empty.',
-      );
-    }
-    assertChars(`clickPathSteps[${index}]`, trimmed, TEST_INSTRUCTIONS_MAX_STEP_CHARS);
-    return trimmed;
-  });
-
-  // Exactly one of: steps given, or declared not applicable (with a reason).
-  const clickPathNotApplicable = input.clickPathNotApplicable === true;
-  const clickPathNotApplicableReason = blankToNull(input.clickPathNotApplicableReason);
-  if (clickPathNotApplicable && clickPathSteps.length > 0) {
-    throw new TestInstructionsClickPathError('both');
-  }
-  if (!clickPathNotApplicable && clickPathSteps.length === 0) {
-    throw new TestInstructionsClickPathError('neither');
-  }
-  if (clickPathNotApplicable && !clickPathNotApplicableReason) {
-    throw new TestInstructionsClickPathError('reason_missing');
-  }
-  if (clickPathNotApplicableReason) {
-    assertChars(
-      'clickPathNotApplicableReason',
-      clickPathNotApplicableReason,
-      TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS,
-    );
+  if (Buffer.byteLength(bodyMd, 'utf8') > TEST_INSTRUCTIONS_MAX_BODY_BYTES) {
+    throw new TestInstructionsCapExceededError('bodyMd', TEST_INSTRUCTIONS_MAX_BODY_BYTES, 'bytes');
   }
 
   // A PATH on the preview host, never a URL. A protocol-relative `//host` would
@@ -172,18 +132,6 @@ export function normalizeTestInstructionsContent(
       );
     }
     assertChars('previewPath', previewPath, TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS);
-  }
-
-  const preconditionMd = blankToNull(input.preconditionMd);
-  if (
-    preconditionMd &&
-    Buffer.byteLength(preconditionMd, 'utf8') > TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES
-  ) {
-    throw new TestInstructionsCapExceededError(
-      'preconditionMd',
-      TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES,
-      'bytes',
-    );
   }
 
   const rawRepos = input.repos ?? [];
@@ -205,35 +153,6 @@ export function normalizeTestInstructionsContent(
         'expected a hex commit id of 7 to 64 characters.',
       );
     }
-    const rawCommands = entry.setupCommands ?? [];
-    if (rawCommands.length > TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS) {
-      throw new TestInstructionsCapExceededError(
-        `${field}.setupCommands`,
-        TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS,
-        'items',
-      );
-    }
-    const setupCommands = rawCommands.map((cmd, index) => {
-      const label = cmd.label.trim();
-      const command = cmd.command.trim();
-      if (!label || !command) {
-        throw new TestInstructionsInvalidFieldError(
-          `${field}.setupCommands[${index}]`,
-          'both "label" and "command" are required.',
-        );
-      }
-      assertChars(
-        `${field}.setupCommands[${index}].label`,
-        label,
-        TEST_INSTRUCTIONS_MAX_STEP_CHARS,
-      );
-      assertChars(
-        `${field}.setupCommands[${index}].command`,
-        command,
-        TEST_INSTRUCTIONS_MAX_COMMAND_CHARS,
-      );
-      return { label, command };
-    });
     const repoId = blankToNull(entry.repoId);
     const repoRef = blankToNull(entry.repoRef);
     if ((repoId === null) === (repoRef === null)) {
@@ -242,24 +161,16 @@ export function normalizeTestInstructionsContent(
         'name exactly one repository — by id or by name.',
       );
     }
-    return { repoId, repoRef, commitSha, setupCommands };
+    return { repoId, repoRef, commitSha };
   });
 
-  return {
-    clickPathSteps,
-    clickPathNotApplicable,
-    clickPathNotApplicableReason: clickPathNotApplicable ? clickPathNotApplicableReason : null,
-    previewPath,
-    preconditionMd,
-    repos,
-  };
+  return { bodyMd, previewPath, repos };
 }
 
 /** A section once its repository is resolved to a project `GithubRepo` id. */
 interface ResolvedRepoSection {
   repoId: string;
   commitSha: string;
-  setupCommands: SetupCommandDTO[];
 }
 
 /** Does a stored record carry exactly this content? (The idempotency comparison.) */
@@ -270,11 +181,8 @@ function sameContent(
 ): boolean {
   const dto = toTestInstructionsDto(row);
   return (
-    dto.clickPathNotApplicable === content.clickPathNotApplicable &&
-    dto.clickPathNotApplicableReason === content.clickPathNotApplicableReason &&
+    dto.bodyMd === content.bodyMd &&
     dto.previewPath === content.previewPath &&
-    dto.preconditionMd === content.preconditionMd &&
-    JSON.stringify(dto.clickPathSteps) === JSON.stringify(content.clickPathSteps) &&
     JSON.stringify(dto.repos) === JSON.stringify(repos)
   );
 }
@@ -334,7 +242,7 @@ async function resolveProjectRepoSections(
       );
     }
     seen.add(repoId);
-    return { repoId, commitSha: section.commitSha, setupCommands: section.setupCommands };
+    return { repoId, commitSha: section.commitSha };
   });
 }
 
@@ -403,11 +311,8 @@ export const testInstructionsService = {
               workspaceId: ctx.workspaceId,
               projectId: item.projectId,
               workItemId: item.id,
-              clickPathSteps: content.clickPathSteps,
-              clickPathNotApplicable: content.clickPathNotApplicable,
-              clickPathNotApplicableReason: content.clickPathNotApplicableReason,
+              bodyMd: content.bodyMd,
               previewPath: content.previewPath,
-              preconditionMd: content.preconditionMd,
               dispatchRunId,
               publishedById: ctx.userId,
               isCurrent: true,
@@ -421,10 +326,6 @@ export const testInstructionsService = {
               testInstructionsId: id,
               repoId: section.repoId,
               commitSha: section.commitSha,
-              setupCommands: section.setupCommands.map((c) => ({
-                label: c.label,
-                command: c.command,
-              })),
               position,
             })),
             tx,

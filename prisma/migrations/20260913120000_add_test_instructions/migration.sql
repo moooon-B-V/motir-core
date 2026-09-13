@@ -5,8 +5,8 @@
 -- nothing existing changes — it ships in one deploy with no expand/contract).
 --
 -- Two tables: `test_instructions` is one row per publish (one per RUN) on the run
--- target, carrying the run's single click-path; `test_instructions_repo` is that
--- record's per-repository sections (commit + setup commands).
+-- target, carrying the run's rich-text body (`body_md`); `test_instructions_repo`
+-- is that record's per-repository sections (the commit each was written for).
 --
 -- RLS shape = a PURE active-workspace gate on BOTH tables, identical to
 -- `design_evidence` (20260811145123): every row carries a NON-NULL
@@ -24,11 +24,8 @@ CREATE TABLE "test_instructions" (
     "workspace_id" TEXT NOT NULL,
     "project_id" TEXT NOT NULL,
     "work_item_id" TEXT NOT NULL,
-    "click_path_steps" JSONB NOT NULL,
-    "click_path_not_applicable" BOOLEAN NOT NULL DEFAULT false,
-    "click_path_not_applicable_reason" TEXT,
+    "body_md" TEXT NOT NULL,
     "preview_path" TEXT,
-    "precondition_md" TEXT,
     "dispatch_run_id" TEXT,
     "published_by_id" TEXT,
     "is_current" BOOLEAN NOT NULL DEFAULT true,
@@ -45,7 +42,6 @@ CREATE TABLE "test_instructions_repo" (
     "test_instructions_id" TEXT NOT NULL,
     "repo_id" TEXT NOT NULL,
     "commit_sha" TEXT NOT NULL,
-    "setup_commands" JSONB NOT NULL,
     "position" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "test_instructions_repo_pkey" PRIMARY KEY ("id")
