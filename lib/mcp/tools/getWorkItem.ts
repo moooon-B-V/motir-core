@@ -193,8 +193,12 @@ export async function runGetWorkItem(
   // is the ordinary answer and means nothing is recorded, never that nothing has
   // landed. It rides the `catchall`-open envelope, so no payload schema widens.
   const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx);
+  // `placementFolder` (MOTIR-5375) is the work item PAGE's placement read and is
+  // deliberately NOT published: which folder vocabulary agents see is Story
+  // MOTIR-5310's to design, and the spread below would hand it a half-contract.
+  const { placementFolder: _pagePlacementOnly, ...publishedDetail } = detail;
   const structured = {
-    ...detail,
+    ...publishedDetail,
     item,
     children: detail.children.map((child) =>
       presentMcpWorkItemChild(child, edges[child.id], (id) => keyById.get(id)),

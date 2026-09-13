@@ -426,6 +426,33 @@ export interface WorkItemLineageDto {
   ancestors: WorkItemSummaryDto[];
 }
 
+/**
+ * The folder a work item EFFECTIVELY sits in (Story MOTIR-5309 · MOTIR-5375) —
+ * its own, else its root ancestor's. Only a root can be filed (the CHECK
+ * `work_item_parent_xor_folder`), so a story under a filed epic lives in the
+ * epic's folder without recording one.
+ */
+export interface PlacementFolderDto {
+  folderId: string;
+  /** The folder's name path, ROOT FIRST ("Later", "2025"). */
+  path: string[];
+  /** The root ancestor the folder is inherited from, or `null` when filed directly. */
+  via: WorkItemSummaryDto | null;
+}
+
+/**
+ * Where ONE work item sits right now — the placement slice of
+ * {@link IssueDetailDto}, built by the same mapper, which the work item page
+ * re-asks after the item moves on the page (MOTIR-5375).
+ */
+export interface WorkItemPlacementDto {
+  /** The item's OWN folder (never inherited), as on `IssueDetailDto.folderId`. */
+  folderId: string | null;
+  parent: WorkItemSummaryDto | null;
+  ancestors: WorkItemSummaryDto[];
+  placementFolder: PlacementFolderDto | null;
+}
+
 export interface IssueDetailDto {
   item: WorkItemDto;
   /**
@@ -434,6 +461,12 @@ export interface IssueDetailDto {
    * than `WorkItemDto`, whose wire shape `/api/v1` and the MCP publish.
    */
   folderId: string | null;
+  /**
+   * The item's EFFECTIVE folder, or `null` (MOTIR-5375) — what the page's Folder
+   * field and breadcrumb read. ⚠️ Kept OUT of MCP `get_work_item` (which spreads
+   * this aggregate) and `/api/v1`: how agents learn folders is Story MOTIR-5310's.
+   */
+  placementFolder: PlacementFolderDto | null;
   ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];
