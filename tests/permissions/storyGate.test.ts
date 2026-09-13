@@ -562,3 +562,70 @@ describe('guard 3 — every route that can RAISE the new refusal can also MAP it
     ).toEqual([]);
   });
 });
+
+/** Comment-stripped source by repo-relative path, for following a route's imports. */
+const SOURCE_BY_PATH = new Map(SOURCES.map((s) => [s.path, s.code]));
+
+function importedSources(code: string, fromPath: string): { path: string; code: string }[] {
+  const out: { path: string; code: string }[] = [];
+  for (const m of code.matchAll(/from '((?:@\/|\.)[^']+)'/g)) {
+    const spec = m[1]!;
+    const base = spec.startsWith('@/')
+      ? spec.slice(2)
+      : join(dirname(fromPath), spec).replace(/\\/g, '/');
+    for (const candidate of [`${base}.ts`, `${base}.tsx`, `${base}/index.ts`]) {
+      const src = SOURCE_BY_PATH.get(candidate);
+      if (src !== undefined) {
+        out.push({ path: candidate, code: src });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Does this route map the not-found refusal — itself, or through a mapper it
+ * imports, two hops deep (a route → its `withV1Route` wrapper → the status table)?
+ * By class name or by the stable code, since the v1 table keys on the code.
+ */
+function mapsProjectNotFound(code: string, path: string, depth = 2): boolean {
+  if (/\bProjectNotFoundError\b|'PROJECT_NOT_FOUND'|\bPROJECT_NOT_FOUND:/.test(code)) return true;
+  if (depth === 0) return false;
+  return importedSources(code, path).some(
+    (imp) =>
+      !imp.path.endsWith('lib/projects/errors.ts') &&
+      mapsProjectNotFound(imp.code, imp.path, depth - 1),
+  );
+}
+
+describe('guard 4 — every route that resolves a project BY KEY maps the not-found refusal (MOTIR-5320)', () => {
+  it('finds no route calling projectsService.getByKey / resolveByKey without a ProjectNotFoundError arm', () => {
+    // ⚠️ THE OTHER HALF OF THIS GUARD IS BEHAVIOURAL, AND THIS HALF IS NOT ENOUGH
+    // ALONE. Before MOTIR-5320 every one of these routes already mapped
+    // `ProjectNotFoundError` — and a workspace member who could not browse a
+    // private project still got a 500 from some and a 403 from others, because
+    // the lookup threw `ProjectAccessDeniedError` instead. So the contract has two
+    // halves, each with its own test:
+    //   1. the lookup refuses a non-browser with `ProjectNotFoundError` —
+    //      `tests/projects/key-lookup-browse-denial.test.ts`, against Postgres;
+    //   2. every route that calls the lookup MAPS that error — here.
+    // Together they make a route added later answer a non-browser with the same
+    // 404 a missing key gets, without anybody remembering to write the arm.
+    const offenders: string[] = [];
+    let reached = 0;
+    for (const { path, code } of SOURCES) {
+      if (!path.startsWith('app/api/') || !path.endsWith('/route.ts')) continue;
+      if (!/\bprojectsService\.(?:getByKey|resolveByKey)\s*\(/.test(code)) continue;
+      reached += 1;
+      if (!mapsProjectNotFound(code, path)) offenders.push(path);
+    }
+
+    expect(reached, 'no route resolves a project by key — the walk is broken').toBeGreaterThan(20);
+    expect(
+      offenders,
+      'these routes resolve a project by key and have no ProjectNotFoundError arm, so a missing ' +
+        'or un-browsable project becomes a 500 instead of a 404. Map it in the route or its mapper.',
+    ).toEqual([]);
+  });
+});
