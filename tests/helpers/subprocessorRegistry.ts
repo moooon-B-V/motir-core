@@ -76,7 +76,19 @@ export const VENDOR_SIGNATURES: readonly VendorSignature[] = [
   { vendor: 'Fly.io', hosts: ['fly.io', 'api.machines.dev'] },
   { vendor: 'Tigris', packages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'] },
   { vendor: 'Resend', hosts: ['api.resend.com'] },
-  { vendor: 'Sentry', packages: ['@sentry/nextjs'] },
+  // ⚠️ THE HOST WAS ADDED BY MOTIR-5260, AND IT MOVED OUT OF `NOT_A_VENDOR_HOST`
+  // TO GET HERE. `sentry.io` sat in the exclusion list with the reason
+  // "operator link to Sentry's issue list; never requested by the server", which
+  // was TRUE for as long as the only Sentry in the tree was `@sentry/nextjs`
+  // reporting Motir's own errors. The error-monitor integration makes the server
+  // call `https://sentry.io/api/0` on a customer's behalf — a grant exchange, a
+  // refresh, a health probe — so an access token and an organisation slug now
+  // LEAVE for this host, which is exactly what a signature means and exactly
+  // what the excuse denied. The operator console link
+  // (`lib/services/platformHealthService.ts`) still exists and is still never
+  // requested; it is simply no longer the ONLY reason the string is in the tree,
+  // and the stronger fact is the one that has to be recorded.
+  { vendor: 'Sentry', packages: ['@sentry/nextjs'], hosts: ['sentry.io'] },
   { vendor: 'Google', hosts: ['accounts.google.com', 'oauth2.googleapis.com'] },
   { vendor: 'Plausible', hosts: ['plausible.io'] },
   {
@@ -145,7 +157,15 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   // covered by their own entries. (`app.inngest.com` sat here until MOTIR-3418
   // deleted the last link to it.)
   'console.neon.tech': "operator link to Neon's console; never requested by the server",
-  'sentry.io': "operator link to Sentry's issue list; never requested by the server",
+  // `sentry.io` WAS here, on exactly that reasoning. MOTIR-5260 falsified it —
+  // see the note on Sentry's `VendorSignature` above.
+
+  // Documentation and fixture hosts added by the error-monitor integration
+  // (MOTIR-5259 / MOTIR-5260). Neither is ever requested.
+  'docs.sentry.io':
+    "Sentry's integration-platform documentation, cited in comments in `lib/monitors/` so the adapter's endpoint claims name their source. Comments only — nothing fetches it (the sibling of `evil.test` above)",
+  'fake.invalid':
+    'RFC 2606 invalid TLD, used as the issue permalink the FAKE monitor provider returns (`lib/monitors/providers/fake.ts`). The fake calls no `fetch` at all, and its own test asserts the suite opens no socket',
 };
 
 /**

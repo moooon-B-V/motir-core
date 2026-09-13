@@ -283,6 +283,19 @@ const LESSON_LIBRARY_ENFORCED: PermissionKey[] = [
  */
 const REMOVAL_SPLIT_ENFORCED: PermissionKey[] = ['work_item:archive'];
 
+/**
+ * MOTIR-5260's INTEGRATION key — its own list, on exactly the terms the four
+ * lists above give for not being appended to an earlier one: membership here is
+ * evidence about the STORY that wired the key, and this one was wired by none of
+ * MOTIR-2256, MOTIR-2291, MOTIR-3188, MOTIR-3336 or MOTIR-3629.
+ *
+ * It arrives `enforced` because the gate moves in the same change — the key and
+ * `monitorConnectionService`'s `assertPermission` land in one pull request, so
+ * there was never a moment where the catalog advertised it and nothing asserted
+ * it. That is also what the orphan guard requires of it.
+ */
+const INTEGRATION_ENFORCED: PermissionKey[] = ['integration:manage'];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -350,13 +363,18 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => REMOVAL_SPLIT_ENFORCED.includes(k)).sort()).toEqual(
       [...REMOVAL_SPLIT_ENFORCED].sort(),
     );
+    // …and MOTIR-5260's integration key, on the same terms again.
+    expect(ENFORCED_PERMISSIONS.filter((k) => INTEGRATION_ENFORCED.includes(k)).sort()).toEqual(
+      [...INTEGRATION_ENFORCED].sort(),
+    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
         MEMBER_FACING_ENFORCED.length +
         PLAN_DECISION_ENFORCED.length +
         LESSON_LIBRARY_ENFORCED.length +
-        REMOVAL_SPLIT_ENFORCED.length,
+        REMOVAL_SPLIT_ENFORCED.length +
+        INTEGRATION_ENFORCED.length,
     );
   });
 

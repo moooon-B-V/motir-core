@@ -118,8 +118,12 @@ describe('a seeded role renders exactly what it holds', () => {
     // group, gated on `workflow:manage`, which an admin holds. The number alone
     // cannot say WHICH entry moved it — so the membership assertion below is
     // what makes the count readable the next time it changes.
-    expect(shell.settingsEntries.length).toBe(13);
+    //
+    // 13 → 14 (MOTIR-4928 · MOTIR-5262): the `monitoring` room joined `general`,
+    // gated on `integration:manage`, which an admin holds.
+    expect(shell.settingsEntries.length).toBe(14);
     expect(shell.settingsEntries).toContain('approvals');
+    expect(shell.settingsEntries).toContain('monitoring');
     expect(shell.settingsGroups).toEqual(['general', 'access', 'work', 'automation']);
     expect(shell.areaDoor).toBe(true);
     expect(shell.navRows).toEqual(PROJECT_NAV_ACCESS.map((e) => e.href));

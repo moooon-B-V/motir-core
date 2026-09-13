@@ -20,7 +20,7 @@
     {
       "vendor": "Sentry",
       "basis": "repository-evidence",
-      "evidence": ["package @sentry/nextjs"]
+      "evidence": ["package @sentry/nextjs", "host sentry.io"]
     },
     {
       "vendor": "Google",
