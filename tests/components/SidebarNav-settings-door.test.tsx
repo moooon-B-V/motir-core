@@ -65,12 +65,15 @@ describe('the Project settings door (design panel 1)', () => {
     expect(settingsRow()?.getAttribute('href')).toBe('/settings/project');
   });
 
-  it('a MEMBER gets NO door — and nothing marks the gap', () => {
+  // ⚠️ INVERTED BY MOTIR-5278, DELIBERATELY (`design/projects/design-notes.md`
+  // § ⭐ Approvals §6, decided on MOTIR-5190). These read "a MEMBER gets NO door —
+  // and nothing marks the gap", "a VIEWER gets no door either" and "`project:browse`
+  // alone earns NO door". `approvals` opens on `project:browse`, so every browser
+  // has one room behind the door, and the door is correct: Amendment 2026-08-08
+  // hides it only when EVERY entry inside filters away.
+  it('a MEMBER gets the door — there is one room behind it now', () => {
     renderRail(MEMBER);
-    expect(settingsRow()).toBeNull();
-    // The decided treatment: no disabled stand-in, no "ask an admin" row. The
-    // footer is simply one row shorter, so the rows below close up.
-    expect(screen.queryByText('Settings')).toBeNull();
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project');
     // ⚠️ AMENDED TWICE, AND THE SECOND ONE EMPTIES THE SECTION (MOTIR-4847,
     // then MOTIR-4643). This once asserted a `Job runs` row and a `Git` row
     // survived beside the absent door. Both are gone now: the workspace rows
@@ -87,9 +90,9 @@ describe('the Project settings door (design panel 1)', () => {
     expect(screen.queryByRole('link', { name: 'Git' })).toBeNull();
   });
 
-  it('a VIEWER gets no door either', () => {
+  it('a VIEWER gets the door too', () => {
     renderRail(VIEWER);
-    expect(settingsRow()).toBeNull();
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project');
   });
 
   it('ONE administrative key is enough to earn the door', () => {
@@ -97,9 +100,9 @@ describe('the Project settings door (design panel 1)', () => {
     expect(settingsRow()?.getAttribute('href')).toBe('/settings/project');
   });
 
-  it('`project:browse` alone earns NO door — every actor in this shell holds it', () => {
+  it('`project:browse` alone earns the door — Approvals opens on it', () => {
     renderRail(['project:browse']);
-    expect(settingsRow()).toBeNull();
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project');
   });
 
   it('an ABSENT prop defaults closed — a missing value never leaks a door', () => {
@@ -147,7 +150,13 @@ describe('the Project settings door (design panel 1)', () => {
     // `bottomItems` is empty — so the guard fires and there is NO bottom
     // section. Re-measured to the arm the design draws, which is what the case
     // was for all along.
-    const { container } = renderRail(MEMBER);
+    //
+    // ⚠️ RE-FIXTURED BY MOTIR-5278. This rendered a MEMBER, who no longer reaches
+    // the arm: Approvals gives every project browser the door, so their bottom
+    // section holds a Settings row. The arm is still reachable, by the actor whose
+    // permissions did not resolve — the ABSENT prop, which defaults closed — so
+    // that is the fixture now, and the claim about an empty section is unchanged.
+    const { container } = renderRail(undefined);
     // `Sidebar` wraps each section in its own div inside the scroll container
     // and draws the separator INSIDE that wrapper, so an empty section is
     // exactly "a wrapper with no rows" — which is what this walks for.

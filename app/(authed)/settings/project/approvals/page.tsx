@@ -3,8 +3,9 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
-import { guardSettingsPage } from '../_guard';
+import { guardSettingsPage, settingsEntryKeys } from '../_guard';
 
 // `Project settings ▸ Approvals` — server component (Story MOTIR-4925 · Subtask
 // MOTIR-5170), built to `design/projects/approvals.mock.html` panel 0 (the door)
@@ -41,10 +42,18 @@ export default async function ProjectApprovalsPage() {
   const refused = await guardSettingsPage('approvals', ctx);
   if (refused) return refused;
 
-  const settings = await approvalGateSettingsService.getSettings(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  // ⚠️ THE GUARD ADMITS ON THE VIEW KEY, SO THE ACTOR HERE MAY CHANGE NOTHING
+  // (MOTIR-5278). `approvals` opens on `project:browse`, so the switch is live
+  // only for an actor holding the entry's WRITE key — looked up through the
+  // registry, never typed: `tests/settings/projectSettingsNav.test.ts` fails this
+  // page if it names the literal. `canManage` decides only whether the control is
+  // offered; the read-only STATE, with the reason it carries, is MOTIR-5171's.
+  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const [held, settings] = await Promise.all([
+    projectAccessService.getPermissions(ctx.projectId, actor),
+    approvalGateSettingsService.getSettings(ctx.projectId, actor),
+  ]);
+  const canManage = held.has(settingsEntryKeys('approvals').write);
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -60,6 +69,7 @@ export default async function ProjectApprovalsPage() {
       <AcceptanceVideoGateCard
         projectKey={ctx.project.identifier}
         initialEnabled={settings.acceptanceVideoEnabled}
+        canManage={canManage}
       />
     </div>
   );

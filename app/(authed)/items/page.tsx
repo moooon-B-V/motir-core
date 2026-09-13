@@ -72,9 +72,9 @@ export default async function IssuesPage({
 
   // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
   // project renders the no-access state, not the list. The same resolve also
-  // yields the saved-filter share/admin tiers the 6.2.3 [Saved] dropdown +
+  // yields the saved-filter share/manage-any tiers the 6.2.3 [Saved] dropdown +
   // save dialog gate over (one round-trip — the getSavedFilterCapabilities
-  // shape is canBrowse + canShare + isAdmin).
+  // shape is canBrowse + canShare + canManageAny).
   const caps = await projectAccessService.getSavedFilterCapabilities(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,

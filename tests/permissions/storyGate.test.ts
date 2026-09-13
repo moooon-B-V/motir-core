@@ -117,12 +117,15 @@ const POLICY_OWNERS = [
  * wires `sprint:manage`, `report:view` and `saved_filter:manage`, its cards delete
  * these lines — which is exactly the signal this list is meant to carry, and the
  * `sprintsService` line is the first one MOTIR-2350 collected.
+ *
+ * `lib/savedFilters/access.ts` left with MOTIR-5293. Its entry said the file
+ * answered a per-ROW question and stayed — right about ownership, wrong about the
+ * "admin" half, which was a role read (`isWorkspaceManager || projectRole ===
+ * 'admin'`) no custom role could ever hold. That half is now
+ * `saved_filter:manage_any`, the file derives nothing, and the staleness test
+ * below would have failed on the entry had it stayed.
  */
 const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
-  {
-    file: 'lib/savedFilters/access.ts',
-    why: 'the saved-filter ROW-LEVEL tier — an owner manages their own filter, an admin any project-shared one. MOTIR-2352 wired `saved_filter:manage` beside it as the project-level question; this derivation answers the per-ROW one and stays',
-  },
   {
     file: 'lib/services/jobsDashboardService.ts',
     why: 'a WORKSPACE-level jobs dashboard, gated on the workspace role. No project is resolved, so no project permission can govern it (the `repository:connect` argument, MOTIR-2294)',

@@ -368,7 +368,7 @@ export const savedFiltersService = {
       const listArgs = {
         projectId: pc.project.id,
         actorUserId: ctx.userId,
-        actorIsAdmin: pc.caps.isAdmin,
+        actorCanManageAny: pc.caps.canManageAny,
         view,
         q: input.q,
       };

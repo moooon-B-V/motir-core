@@ -31,7 +31,7 @@ function inputs(over: Partial<ProjectAccessInputs> = {}): ProjectAccessInputs {
 }
 
 function caps(over: Partial<SavedFilterProjectCapabilities> = {}): SavedFilterProjectCapabilities {
-  return { canBrowse: true, canShare: true, isAdmin: false, ...over };
+  return { canBrowse: true, canShare: true, canManageAny: false, ...over };
 }
 
 describe('savedFilterCapabilities — the project-level tier', () => {
@@ -39,12 +39,12 @@ describe('savedFilterCapabilities — the project-level tier', () => {
     expect(savedFilterCapabilities(inputs({ workspaceRole: 'owner' }))).toEqual({
       canBrowse: true,
       canShare: true,
-      isAdmin: true,
+      canManageAny: true,
     });
     expect(savedFilterCapabilities(inputs({ workspaceRole: 'admin' }))).toEqual({
       canBrowse: true,
       canShare: true,
-      isAdmin: true,
+      canManageAny: true,
     });
   });
 
@@ -52,12 +52,12 @@ describe('savedFilterCapabilities — the project-level tier', () => {
     expect(savedFilterCapabilities(inputs({ projectRole: 'admin' }))).toEqual({
       canBrowse: true,
       canShare: true,
-      isAdmin: true,
+      canManageAny: true,
     });
     expect(savedFilterCapabilities(inputs({ projectRole: 'member' }))).toEqual({
       canBrowse: true,
       canShare: true,
-      isAdmin: false,
+      canManageAny: false,
     });
   });
 
@@ -65,7 +65,7 @@ describe('savedFilterCapabilities — the project-level tier', () => {
     expect(savedFilterCapabilities(inputs({ projectRole: 'viewer' }))).toEqual({
       canBrowse: true,
       canShare: false,
-      isAdmin: false,
+      canManageAny: false,
     });
   });
 
@@ -73,13 +73,13 @@ describe('savedFilterCapabilities — the project-level tier', () => {
     expect(savedFilterCapabilities(inputs({ workspaceRole: null }))).toEqual({
       canBrowse: false,
       canShare: false,
-      isAdmin: false,
+      canManageAny: false,
     });
   });
 });
 
 describe('the row predicates under a non-browsing actor (the rail the service 404s first)', () => {
-  const noBrowse = caps({ canBrowse: false, canShare: false, isAdmin: false });
+  const noBrowse = caps({ canBrowse: false, canShare: false, canManageAny: false });
 
   it('cannot see, manage, create, or take ownership of anything', () => {
     const row = { isOwner: true, visibility: 'project' as const };
@@ -92,7 +92,7 @@ describe('the row predicates under a non-browsing actor (the rail the service 40
 
 describe('the row predicates — the cells the integration matrix pins end-to-end', () => {
   it('an admin sees but does not manage another user’s PRIVATE filter', () => {
-    const admin = caps({ isAdmin: true });
+    const admin = caps({ canManageAny: true });
     const privateRow = { isOwner: false, visibility: 'private' as const };
     expect(canSeeSavedFilter(admin, privateRow)).toBe(true);
     expect(canManageSavedFilter(admin, privateRow)).toBe(false);
@@ -181,5 +181,38 @@ describe('retryOnceOnUniqueRace — the unique-race backstop', () => {
     const other = vi.fn<() => Promise<string>>().mockRejectedValue(new Error('boom'));
     await expect(retryOnceOnUniqueRace(other)).rejects.toThrow('boom');
     expect(other).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the manage-any tier is read off the PERMISSION, not the role (MOTIR-5293)', () => {
+  it('a custom role that lists saved_filter:manage_any holds the tier; the same role without it does not', () => {
+    // A custom-role membership always carries the `member` tier in its role
+    // column, so the old role read (`projectRole === 'admin'`) could never be
+    // true for one — the defect in one line.
+    const custom = (customRolePermissions: string[]): ProjectAccessInputs =>
+      inputs({ projectRole: 'member', customRolePermissions });
+    expect(
+      savedFilterCapabilities(
+        custom(['project:browse', 'saved_filter:manage', 'saved_filter:manage_any']),
+      ).canManageAny,
+    ).toBe(true);
+    expect(
+      savedFilterCapabilities(custom(['project:browse', 'saved_filter:manage'])).canManageAny,
+    ).toBe(false);
+  });
+
+  it('a custom role holding only the key sees and manages exactly what the admin tier did', () => {
+    const tier = savedFilterCapabilities(
+      inputs({
+        projectRole: 'member',
+        customRolePermissions: ['project:browse', 'saved_filter:manage_any'],
+      }),
+    );
+    const otherPrivate = { isOwner: false, visibility: 'private' } as const;
+    const otherShared = { isOwner: false, visibility: 'project' } as const;
+    expect(canSeeSavedFilter(tier, otherPrivate)).toBe(true);
+    expect(canManageSavedFilter(tier, otherPrivate)).toBe(false);
+    expect(canManageSavedFilter(tier, otherShared)).toBe(true);
+    expect(canChangeSavedFilterOwner(tier, otherShared)).toBe(true);
   });
 });

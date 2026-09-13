@@ -203,7 +203,15 @@ test.describe('settings-area — the project-settings area journey', () => {
   // The amendment reverses which direction leaks: an entry offering a room the
   // actor cannot enter is the leak, and the rail is now empty for this actor, so
   // the area door is gone with it.
-  test('a non-admin member is REFUSED the settings area entirely', async ({ page }) => {
+  //
+  // ⚠️ AND AMENDED BY MOTIR-5278 (`design/projects/design-notes.md` § ⭐ Approvals
+  // §6, decided on MOTIR-5190). "REFUSED the settings area entirely" stopped being
+  // true on purpose: Approvals opens on `project:browse`, so the door is back and
+  // the rail holds that one room. What this test is FOR survives unchanged — the
+  // member still meets `Admins only` on Details, with no Danger zone.
+  test('a non-admin member gets ONE readable room, and is still REFUSED the administrative area', async ({
+    page,
+  }) => {
     const tenant = await seedTenant('sa-owner-3@example.com');
     // A plain workspace member (no project admin role) on the open project: can
     // browse the project, holds no administrative key, so the area has nothing
@@ -214,12 +222,19 @@ test.describe('settings-area — the project-settings area journey', () => {
 
     await signIn(page, member.email, PWD);
 
-    // The bottom-nav door is not offered at all — the area has nothing behind it.
-    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
-    // …and it is not merely unmentioned: typing the URL meets the refusal.
+    // The bottom-nav door IS offered now (MOTIR-5278) — the area has a room behind it.
+    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute(
+      'href',
+      '/settings/project',
+    );
+    // …and Details still refuses on the typed URL.
     await page.goto('/settings/project');
     await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
-    // No rail row survives for them, and the danger zone is gone with the page.
+    // The rail holds Approvals and no administrative row, and the danger zone is
+    // gone with the page.
+    await expect(
+      settingsNav(page).getByRole('link', { name: 'Approvals', exact: true }),
+    ).toBeVisible();
     await expect(
       settingsNav(page).getByRole('link', { name: 'Workflow', exact: true }),
     ).toHaveCount(0);

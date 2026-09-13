@@ -293,8 +293,8 @@ export const projectAccessService = {
    * gates (the getCommentCapabilities pattern): `canBrowse` (the 404 gate;
    * browsing is all that creating/starring PRIVATE filters needs — filters
    * are a read-layer construct, viewers included), `canShare` (role ≥ member
-   * — may publish at visibility `project`), `isAdmin` (project admin or
-   * workspace owner/admin — sees every row, manages the shared ones). The
+   * — may publish at visibility `project`), `canManageAny` (holds
+   * `saved_filter:manage_any` — sees every row, manages the shared ones). The
    * per-row predicates live in lib/savedFilters/access.ts. Throws only
    * ProjectNotFoundError (cross-workspace project ids stay hidden).
    */

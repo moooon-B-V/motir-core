@@ -118,6 +118,15 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'sprint:manage',
   'report:view',
   'saved_filter:manage',
+  // MOTIR-5293 — the saved-filter "anyone's" tier, and it lands in `admin` ALONE
+  // (not `member`, `viewer` or the implicit grant). It replaces a ROLE read —
+  // workspace owner/admin, or project role `admin` — and the manager rail plus
+  // this set resolve to exactly those actors; `levelGrants` does not name it, so
+  // a project admin keeps it on every level, as the role read (which ignored the
+  // level) did. Behaviour-neutral for every built-in role, proved over all 64
+  // inputs in `tests/permissions/accessParity.test.ts`. What it ADDS is that a
+  // custom role can list it.
+  'saved_filter:manage_any',
   'import:run',
   'work_item:delete',
   'work_item:triage',
@@ -149,7 +158,8 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
  *
  *   * **admin**  — the whole role-gated catalog: administers the project (and
  *                  each of MOTIR-2256's twelve per-domain administrative keys),
- *                  moderates comments and attachments, manages watchers.
+ *                  moderates comments and attachments, manages watchers, and
+ *                  (MOTIR-5293) manages anyone's saved filters.
  *   * **member** — browses, edits work items, comments, attaches, and (MOTIR-2291)
  *                  runs the planner, manages sprints and saved filters, triages
  *                  and acts on a generated plan, and (MOTIR-3629) ARCHIVES a work
