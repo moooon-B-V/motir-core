@@ -108,6 +108,20 @@ describe('readOnboardingSubstrate', () => {
     expect(substrate.itemCountTruncated).toBe(false);
   });
 
+  it('does NOT count the project’s bug destination — but does count the bugs filed into it (MOTIR-4927)', async () => {
+    const fx = await makeWorkItemFixture();
+    // Guard against a vacuous pass: the container this read must skip exists.
+    const { bugDestinationId } = await adminDb.project.findUniqueOrThrow({
+      where: { id: fx.projectId },
+      select: { bugDestinationId: true },
+    });
+    expect(bugDestinationId).not.toBeNull();
+    expect((await read(fx)).itemCount).toBe(0);
+
+    await createTestWorkItem(fx, { kind: 'bug', title: 'Filed bug', parentId: bugDestinationId });
+    expect((await read(fx)).itemCount).toBe(1);
+  });
+
   describe('the truncation flag, at the boundary in BOTH directions', () => {
     it('is FALSE at exactly the cap, and the count is exact', async () => {
       const fx = await makeWorkItemFixture();

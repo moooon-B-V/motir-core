@@ -53,11 +53,26 @@ function ctxOf(fx: Fixture) {
   return { userId: fx.userId, workspaceId: fx.workspaceId };
 }
 
+/**
+ * ⚠️ THE COUNTER NO LONGER STARTS AT 1 FOR A NEW PROJECT, and that is not what
+ * these tests are about. Since MOTIR-4935, `createProject` seeds a bug container
+ * in the same transaction, and it takes the project's first key. The PROPERTY
+ * under test here is unchanged — allocation is sequential, gap-free and
+ * serialized — so each assertion is made RELATIVE to the counter's value at the
+ * moment the test starts rather than against an absolute 1. That is the
+ * stronger form anyway: it keeps passing whatever a project is born with.
+ */
+async function counterNow(projectId: string): Promise<number> {
+  const row = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
+  return row.lastWorkItemNumber;
+}
+
 describe('allocateWorkItemNumber', () => {
   it('returns sequential, gap-free numbers (1, 2, 3, …)', async () => {
     const fx = await makeWorkspaceWithProject('owner@example.com', 'Motir Core');
     const { projectId } = fx;
     const ctx = ctxOf(fx);
+    const base = await counterNow(projectId);
 
     const n1 = await withWorkspaceContext(ctx, (tx) =>
       projectRepository.allocateWorkItemNumber(projectId, tx),
@@ -69,15 +84,17 @@ describe('allocateWorkItemNumber', () => {
       projectRepository.allocateWorkItemNumber(projectId, tx),
     );
 
-    expect([n1, n2, n3]).toEqual([1, 2, 3]);
+    expect([n1, n2, n3]).toEqual([base + 1, base + 2, base + 3]);
 
     const row = await adminDb.project.findUnique({ where: { id: projectId } });
-    expect(row?.lastWorkItemNumber).toBe(3);
+    expect(row?.lastWorkItemNumber).toBe(base + 3);
   });
 
   it('keeps each project on an independent counter', async () => {
     const a = await makeWorkspaceWithProject('a@example.com', 'Apollo', 'APOL');
     const b = await makeWorkspaceWithProject('b@example.com', 'Beacon', 'BEAC');
+    const baseA = await counterNow(a.projectId);
+    const baseB = await counterNow(b.projectId);
 
     // Interleave allocations across the two projects.
     const a1 = await withWorkspaceContext(ctxOf(a), (tx) =>
@@ -96,18 +113,19 @@ describe('allocateWorkItemNumber', () => {
       projectRepository.allocateWorkItemNumber(a.projectId, tx),
     );
 
-    expect([a1, a2, a3]).toEqual([1, 2, 3]);
-    expect([b1, b2]).toEqual([1, 2]);
+    expect([a1, a2, a3]).toEqual([baseA + 1, baseA + 2, baseA + 3]);
+    expect([b1, b2]).toEqual([baseB + 1, baseB + 2]);
   });
 
   it('is gap-free under concurrent allocation', async () => {
     const fx = await makeWorkspaceWithProject('owner@example.com', 'Motir Core');
     const { projectId } = fx;
     const ctx = ctxOf(fx);
+    const base = await counterNow(projectId);
 
     // Fire 20 allocations concurrently. UPDATE … RETURNING serializes on the
-    // row, so the set of returned numbers must be exactly {1..20} with no
-    // gaps and no duplicates.
+    // row, so the set of returned numbers must be exactly the 20 consecutive
+    // values after the counter's current position — no gaps, no duplicates.
     const results = await Promise.all(
       Array.from({ length: 20 }, () =>
         withWorkspaceContext(ctx, (tx) => projectRepository.allocateWorkItemNumber(projectId, tx)),
@@ -115,7 +133,7 @@ describe('allocateWorkItemNumber', () => {
     );
 
     const sorted = [...results].sort((x, y) => x - y);
-    expect(sorted).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+    expect(sorted).toEqual(Array.from({ length: 20 }, (_, i) => base + i + 1));
     expect(new Set(results).size).toBe(20);
   });
 });

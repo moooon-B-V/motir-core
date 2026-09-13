@@ -208,7 +208,20 @@ describe('clear_cancelled_manual_provenance — clears exactly the rows the bug 
       where: { implementationSource: 'manual' },
     });
     expect(workItemCount).toBe(1);
-    const workItemCount2 = await adminDb.workItem.count({ where: { implementationSource: null } });
+    // The three the migration cleared — EXCLUDING the project's seeded bug
+    // container (MOTIR-4935), which also carries a null `implementationSource`
+    // because nothing implemented it. Excluding it by id keeps this number
+    // meaning "the rows the migration touched" rather than "every null row in
+    // the database", which is what the assertion is actually about.
+    const seededContainerId = (
+      await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } })
+    ).bugDestinationId;
+    const workItemCount2 = await adminDb.workItem.count({
+      where: {
+        implementationSource: null,
+        ...(seededContainerId ? { id: { not: seededContainerId } } : {}),
+      },
+    });
     expect(workItemCount2).toBe(3);
     const workItemCount3 = await adminDb.workItem.count({
       where: { implementationSource: 'byok' },

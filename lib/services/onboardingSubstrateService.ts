@@ -1,5 +1,6 @@
 import 'server-only';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
@@ -67,9 +68,15 @@ export async function readOnboardingSubstrate(
 ): Promise<OnboardingSubstrate> {
   const itemCap = options.itemCap ?? ONBOARDING_SUBSTRATE_ITEM_CAP;
   const [items, code] = await Promise.all([
-    withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.findByProject(projectId, { take: itemCap + 1 }, tx),
-    ),
+    withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      // ⚠️ THE BUG DESTINATION IS NOT WORK (MOTIR-4927). Every project is created
+      // with a container its filed bugs land in, so counting that row would make
+      // a brand-new project read as one that already has a plan — and route it
+      // away from the start-fresh entrance. The bugs filed INTO it still count.
+      const project = await projectRepository.findById(projectId, tx);
+      const excludeIds = project?.bugDestinationId ? [project.bugDestinationId] : [];
+      return workItemRepository.findByProject(projectId, { take: itemCap + 1, excludeIds }, tx);
+    }),
     resolveWorkspaceConnectedRepos({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
   ]);
 

@@ -145,11 +145,19 @@ describe('workItemsService.quickSearch — correctness', () => {
     const fx = await makeWorkItemFixture({ identifier: 'PROD' });
     // PROD-1 (exact) … then enough items so PROD-10/PROD-11 exist (prefix of
     // "PROD-1"), plus a late item whose TITLE — not key — mentions "PROD-1".
-    const first = await seedItem({
-      ...projectOf(fx),
-      reporterId: fx.ownerId,
-      title: 'alpha',
-    }); // PROD-1
+    //
+    // ⚠️ PROD-1 IS THE PROJECT'S SEEDED BUG CONTAINER (MOTIR-4935), not an item
+    // this test creates: `createProject` mints it in the same transaction, so it
+    // holds the first key. It is read off the project's POINTER — never by title
+    // — and it plays the exact-match role here exactly as a hand-seeded PROD-1
+    // used to. The ranking rule under test is untouched.
+    const projectRow = await adminDb.project.findUniqueOrThrow({
+      where: { id: projectOf(fx).projectId },
+    });
+    if (projectRow.bugDestinationId == null) {
+      throw new Error('the fixture project was created without a bug destination');
+    }
+    const first = { id: projectRow.bugDestinationId }; // PROD-1
     for (let i = 0; i < 8; i++) {
       await seedItem({ ...projectOf(fx), reporterId: fx.ownerId, title: `filler ${i}` });
     } // PROD-2 … PROD-9

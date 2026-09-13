@@ -191,9 +191,15 @@ describe('ensure_planner_bug_home migration (MOTIR-1466)', () => {
       actorUserId: owner.id,
     });
 
+    const before = await adminDb.workItem.count({ where: { projectId: project.id } });
+
     await runMigration(); // must not throw
 
+    // The claim is that the migration CREATED nothing here, not that the
+    // project is empty: since MOTIR-4935 every project is born with a seeded
+    // bug container, so the baseline is no longer zero. A delta says what the
+    // test means and does not drift as more is seeded at birth.
     const count = await adminDb.workItem.count({ where: { projectId: project.id } });
-    expect(count).toBe(0);
+    expect(count).toBe(before);
   });
 });

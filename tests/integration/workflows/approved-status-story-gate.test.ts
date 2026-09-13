@@ -341,9 +341,10 @@ describe('every surface that counts open work counts an approved card', () => {
 
     // Two cards existed throughout; exactly one of them finished. The approved
     // one is still being counted, which is the whole assertion — the count fell
-    // by one, not by two.
-    expect(openBefore).toBe(2);
-    expect(openAfter).toBe(1);
+    // by one, not by two. Asserted as the DROP: the project also holds its own
+    // open bug container (MOTIR-4927), which neither card's move touches.
+    expect(openBefore).toBeGreaterThanOrEqual(2);
+    expect(openBefore - openAfter).toBe(1);
   });
 
   it('REPORTS — approving does not RESOLVE; the merge does', async () => {

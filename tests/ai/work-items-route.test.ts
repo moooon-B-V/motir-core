@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -229,9 +229,28 @@ describe('POST /api/internal/ai/work-items — validation + guards (typed, never
   });
 });
 
-describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-1466 · MOTIR-2201)', () => {
-  /** The home STORY the marker resolves to, by its own title. `parentId` lets a
-   *  test place it anywhere in the tree — resolution must not care (MOTIR-2201). */
+describe('POST /api/internal/ai/work-items — the planner-bug-home marker resolves through the project’s BUG DESTINATION (MOTIR-1466 · MOTIR-2201 · MOTIR-4937)', () => {
+  // ⚠️ WHAT CHANGED, AND WHY THIS BLOCK LOOKS DIFFERENT FROM ITS HISTORY.
+  //
+  // `@planner-bug-home` is unchanged as a marker — motir-ai still passes the
+  // same literal — but MOTIR-4937 changed what it RESOLVES TO. It used to be a
+  // project-wide match on a story titled `PLANNER_BUG_HOME_STORY_TITLE`; it is
+  // now `bugDestinationService.resolve`, which reads the project's POINTER
+  // first and keeps that title lookup only as a documented transitional branch.
+  //
+  // Two consequences this block is organised around:
+  //
+  //   1. Every project created through `createProject` now carries a SEEDED
+  //      container and a pointer at it (MOTIR-4935), so the pointer is set in
+  //      the common case and the legacy branch is not reached. The legacy tests
+  //      below therefore CLEAR the pointer first — which is exactly the state
+  //      the branch exists for: a project MOTIR-4936's backfill has not reached.
+  //   2. An absent home no longer 500s. It files at the PROJECT ROOT. That is a
+  //      deliberate contract change, and the test that used to assert the 500
+  //      now asserts the root; see its own comment for the argument.
+
+  /** A story titled like the legacy home. `parentId` lets a test place it
+   *  anywhere — the legacy branch must not care where it sits. */
   async function createHomeStory(
     projectId: string,
     ctx: ServiceContext,
@@ -255,78 +274,118 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     );
   }
 
-  it('files under the home STORY when it sits under the home epic — the provisioned shape', async () => {
-    const { ownerCtx, project } = await makeMetaTenant();
-    const epic = await createHomeEpic(project.id, ownerCtx);
-    const home = await createHomeStory(project.id, ownerCtx, epic.id);
+  /** Put the project back into the pre-backfill state the legacy branch serves:
+   *  no pointer. Written through `adminDb` because this is fixture setup
+   *  standing in for "a project that predates MOTIR-4934", not a user action. */
+  async function clearDestination(projectId: string): Promise<void> {
+    await adminDb.project.update({ where: { id: projectId }, data: { bugDestinationId: null } });
+  }
 
-    const res = await post({
-      projectKey: 'MOTIR',
-      kind: 'bug',
-      title: 'auto-filed planner bug',
-      parentKey: PLANNER_BUG_HOME_MARKER,
-    });
+  /** The container `createProject` seeded — read off the POINTER, never by
+   *  title, which is the lookup this story exists to remove. */
+  async function seededContainerId(projectId: string): Promise<string> {
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
+    if (row.bugDestinationId == null) throw new Error('project has no seeded destination');
+    return row.bugDestinationId;
+  }
+
+  async function fileViaMarker(title: string, marker = PLANNER_BUG_HOME_MARKER) {
+    const res = await post({ projectKey: 'MOTIR', kind: 'bug', title, parentKey: marker });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
-    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
-    expect(row?.parentId).toBe(home.id); // the home story, not the epic, not root
+    return adminDb.workItem.findUnique({ where: { id: json.id } });
+  }
+
+  // ── the POINTER, which is now the primary answer ────────────────────────
+
+  it('files under the SEEDED container — the pointer is what the marker resolves through', async () => {
+    const { project } = await makeMetaTenant();
+    const container = await seededContainerId(project.id);
+
+    const row = await fileViaMarker('auto-filed planner bug');
+    expect(row?.parentId).toBe(container);
   });
 
-  it('files under the home STORY even when the home epic has ONLY non-story children — the live 2026-08-05 state (MOTIR-2201)', async () => {
+  it('follows a RE-POINTED destination — the whole point of a pointer over a title', async () => {
     const { ownerCtx, project } = await makeMetaTenant();
-    const epic = await createHomeEpic(project.id, ownerCtx);
-    // Exactly the shape that broke the old two-hop resolution: the home story was
-    // re-parented AWAY from the epic, which was left with `bug` + `task` children
-    // only. Under `getFirstChildOfKind(epic, 'story')` this 404'd. A project-wide
-    // title lookup finds the story wherever it went.
-    const home = await createHomeStory(project.id, ownerCtx); // root-level, NOT under the epic
-    await workItemsService.createWorkItem(
-      {
-        projectId: project.id,
-        kind: 'bug',
-        title: 'a previously auto-filed bug',
-        parentId: epic.id,
-      },
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'Triage', explanationMd: null },
       ownerCtx,
     );
-    await workItemsService.createWorkItem(
-      { projectId: project.id, kind: 'task', title: 'a triage task', parentId: epic.id },
-      ownerCtx,
-    );
-    const storyChildren = await adminDb.workItem.count({
-      where: { parentId: epic.id, kind: 'story' },
+    await adminDb.project.update({
+      where: { id: project.id },
+      data: { bugDestinationId: elsewhere.id },
     });
-    expect(storyChildren).toBe(0); // the precondition this test exists to cover
 
-    const res = await post({
-      projectKey: 'MOTIR',
-      kind: 'bug',
-      title: 'auto-filed planner bug',
-      parentKey: PLANNER_BUG_HOME_MARKER,
-    });
-    expect(res.status).toBe(201);
-    const json = (await res.json()) as { id: string };
-    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
-    expect(row?.parentId).toBe(home.id);
+    const row = await fileViaMarker('filed after re-pointing');
+    expect(row?.parentId).toBe(elsewhere.id);
   });
 
-  it('files under the home STORY when NO home epic exists at all — the epic is not a resolution input', async () => {
+  it('files at the ROOT when the destination is deliberately null and nothing legacy exists', async () => {
+    const { project } = await makeMetaTenant();
+    await clearDestination(project.id);
+
+    const row = await fileViaMarker('root by choice');
+    // `null` is a DESTINATION, not a failure. A parentless bug is top-level and
+    // impossible to miss, which is the case the story says teams will pick more
+    // often than it looks.
+    expect(row?.parentId).toBeNull();
+  });
+
+  it('recovers to the ROOT when the pointed-at container is ARCHIVED — never a dangling parent', async () => {
+    const { project } = await makeMetaTenant();
+    const container = await seededContainerId(project.id);
+    await adminDb.workItem.update({
+      where: { id: container },
+      data: { archivedAt: new Date() },
+    });
+
+    const row = await fileViaMarker('container archived under us');
+    // Archiving is a soft remove, so no foreign key can see it; the resolver is
+    // the only thing that can. A person tidying their board must not be able to
+    // turn filing into an outage.
+    expect(row?.parentId).toBeNull();
+  });
+
+  it('recovers to the ROOT when the pointed-at container is DELETED — the FK nulls the pointer', async () => {
+    const { project } = await makeMetaTenant();
+    const container = await seededContainerId(project.id);
+    await adminDb.workItem.delete({ where: { id: container } });
+
+    const row = await fileViaMarker('container deleted under us');
+    expect(row?.parentId).toBeNull();
+    // The truth landed IN the column (`ON DELETE SET NULL`, MOTIR-4934) rather
+    // than being inferred from a lookup miss.
+    const project2 = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
+    expect(project2.bugDestinationId).toBeNull();
+  });
+
+  it('resolves the marker case-insensitively (config value casing is not load-bearing)', async () => {
+    const { project } = await makeMetaTenant();
+    const container = await seededContainerId(project.id);
+
+    const row = await fileViaMarker('upper-cased marker', PLANNER_BUG_HOME_MARKER.toUpperCase());
+    expect(row?.parentId).toBe(container);
+  });
+
+  // ── the LEGACY title branch, which survives only until the backfill ──────
+
+  it('falls through to the legacy home STORY when the project has NO pointer yet', async () => {
+    // The transitional branch, and the state it exists for: a project
+    // MOTIR-4936's backfill has not reached. Asserted rather than assumed —
+    // this is what makes MOTIR-4937 safe to ship before the backfill has run
+    // everywhere.
     const { ownerCtx, project } = await makeMetaTenant();
+    await clearDestination(project.id);
     const home = await createHomeStory(project.id, ownerCtx);
-    const res = await post({
-      projectKey: 'MOTIR',
-      kind: 'bug',
-      title: 'no epic, still resolves',
-      parentKey: PLANNER_BUG_HOME_MARKER,
-    });
-    expect(res.status).toBe(201);
-    const json = (await res.json()) as { id: string };
-    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
+
+    const row = await fileViaMarker('pre-backfill filing still lands at the home');
     expect(row?.parentId).toBe(home.id);
   });
 
-  it('follows the home STORY when it is re-parented under an UNRELATED epic — no move_to_parent can void the marker', async () => {
+  it('finds the legacy home wherever it SITS — no move_to_parent can void the fallback', async () => {
     const { ownerCtx, project } = await makeMetaTenant();
+    await clearDestination(project.id);
     const epic = await createHomeEpic(project.id, ownerCtx);
     const home = await createHomeStory(project.id, ownerCtx, epic.id);
     // The 2026-08-05 move, replayed: the story goes somewhere else entirely.
@@ -336,72 +395,51 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     );
     await workItemsService.moveWorkItem(home.id, { newParentId: elsewhere.id }, ownerCtx);
 
-    const res = await post({
-      projectKey: 'MOTIR',
-      kind: 'bug',
-      title: 'filed after the home story moved',
-      parentKey: PLANNER_BUG_HOME_MARKER,
-    });
-    expect(res.status).toBe(201);
-    const json = (await res.json()) as { id: string };
-    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
-    expect(row?.parentId).toBe(home.id); // still the home story, now under `elsewhere`
-  });
-
-  it('resolves the marker case-insensitively (config value casing is not load-bearing)', async () => {
-    const { ownerCtx, project } = await makeMetaTenant();
-    const home = await createHomeStory(project.id, ownerCtx);
-    const res = await post({
-      projectKey: 'MOTIR',
-      kind: 'bug',
-      title: 'upper-cased marker',
-      parentKey: PLANNER_BUG_HOME_MARKER.toUpperCase(),
-    });
-    expect(res.status).toBe(201);
-    const json = (await res.json()) as { id: string };
-    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
+    const row = await fileViaMarker('filed after the home story moved');
     expect(row?.parentId).toBe(home.id);
   });
 
-  it('an ABSENT home story fails LOUDLY — 500 `planner_bug_home_not_provisioned`, logged at error level (MOTIR-2201)', async () => {
+  it('ignores the home EPIC — the epic was never a resolution input', async () => {
     const { ownerCtx, project } = await makeMetaTenant();
-    // The epic alone is not a home: resolution keys on the STORY's title.
-    await createHomeEpic(project.id, ownerCtx);
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const res = await post({
-        projectKey: 'MOTIR',
-        kind: 'bug',
-        title: 'no home yet',
-        parentKey: PLANNER_BUG_HOME_MARKER,
-      });
+    await clearDestination(project.id);
+    const epic = await createHomeEpic(project.id, ownerCtx);
+    await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'a triage task', parentId: epic.id },
+      ownerCtx,
+    );
+    const storyChildren = await adminDb.workItem.count({
+      where: { parentId: epic.id, kind: 'story' },
+    });
+    expect(storyChildren).toBe(0); // the precondition this test exists to cover
 
-      // A server invariant, NOT a caller error: never the 404 an unknown
-      // `parentKey` gets, because the consumer swallows a failed file by design
-      // and a 404 there reads as "that parent doesn't exist" rather than "core's
-      // meta tenant is broken".
-      expect(res.status).toBe(500);
-      const body = (await res.json()) as { code: string; error: string };
-      expect(body.code).toBe('planner_bug_home_not_provisioned');
-      expect(body.error).toContain(PLANNER_BUG_HOME_STORY_TITLE);
-
-      // The failure signal a human actually sees in the logs.
-      expect(logged).toHaveBeenCalledTimes(1);
-      const [message, detail] = logged.mock.calls[0]!;
-      expect(message).toContain('planner-bug home story is missing');
-      expect(detail).toMatchObject({
-        projectKey: 'MOTIR',
-        marker: PLANNER_BUG_HOME_MARKER,
-        expectedStoryTitle: PLANNER_BUG_HOME_STORY_TITLE,
-      });
-    } finally {
-      logged.mockRestore();
-    }
+    const row = await fileViaMarker('epic present, no home story');
+    // No home STORY and no pointer ⇒ the root. The epic contributes nothing.
+    expect(row?.parentId).toBeNull();
   });
 
-  it('a home story in ANOTHER workspace does not resolve the marker (tenant gate)', async () => {
-    // The meta tenant the route acts in has no home; a same-titled story in an
-    // unrelated workspace must not be adopted.
+  it('an ABSENT home no longer fails loudly — it files at the ROOT', async () => {
+    // ⚠️ THE DELIBERATE CONTRACT CHANGE (MOTIR-4937). This assertion was a 500
+    // (`planner_bug_home_not_provisioned`) and is now the root.
+    //
+    // The 500 was RIGHT while an absent home meant the loop was silently deaf:
+    // there was nowhere else for the bug to go, motir-ai's filing path swallows
+    // failures by design, and a quiet 404 would have let the self-learning loop
+    // rot for weeks. There IS somewhere else now. Refusing to file a bug because
+    // a container is missing would lose the bug outright, which is strictly
+    // worse than filing it parentless where somebody will see it.
+    //
+    // `PlannerBugHomeNotProvisionedError` and its 500 mapping in the route are
+    // KEPT, not deleted — the marker contract is public and the route must keep
+    // translating the error for as long as anything can throw it.
+    const { ownerCtx, project } = await makeMetaTenant();
+    await clearDestination(project.id);
+    await createHomeEpic(project.id, ownerCtx); // an epic alone is not a home
+
+    const row = await fileViaMarker('no home yet');
+    expect(row?.parentId).toBeNull();
+  });
+
+  it('never adopts a same-titled home from ANOTHER workspace (tenant gate)', async () => {
     const other = await usersService.createUser({
       email: 'other@example.com',
       password: PASSWORD,
@@ -418,20 +456,15 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
       actorUserId: other.id,
     });
     await createHomeStory(otherProject.id, { userId: other.id, workspaceId: otherWs.id });
-    await makeMetaTenant();
 
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const res = await post({
-        projectKey: 'MOTIR',
-        kind: 'bug',
-        title: 'cross-tenant home must not be used',
-        parentKey: PLANNER_BUG_HOME_MARKER,
-      });
-      expect(res.status).toBe(500);
-      expect((await res.json()).code).toBe('planner_bug_home_not_provisioned');
-    } finally {
-      logged.mockRestore();
-    }
+    const { project } = await makeMetaTenant();
+    await clearDestination(project.id);
+
+    const row = await fileViaMarker('cross-tenant home must not be used');
+    // The meta tenant has no home of its own, so the answer is its own root —
+    // never the neighbour's story. The legacy lookup is project-scoped, and the
+    // pointer could not name a foreign row even if something tried (the
+    // database refuses it: `trg_project_bug_destination_tenancy`).
+    expect(row?.parentId).toBeNull();
   });
 });

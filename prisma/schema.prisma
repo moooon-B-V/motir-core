@@ -1639,6 +1639,31 @@ model Project {
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
   approvalGates    ApprovalGate[]
 
+  /// WHERE a filed bug lands in this project (Story MOTIR-4927 · Subtask
+  /// MOTIR-4934) — the container the monitor ingestion, the MCP's `log_bug` and
+  /// `aiWorkItemsService.fileBug` all file into.
+  ///
+  /// ⚠️ `null` is a MEANINGFUL value, not an unset one: it means **the project
+  /// ROOT** — filed bugs are parentless — and that is a first-class choice a
+  /// person makes in project settings, not a misconfiguration. So the column is
+  /// nullable, carries NO non-null default, and must never be "tidied" into a
+  /// required column: doing so silently overwrites the answer a team gave.
+  ///
+  /// `SetNull` on delete, decided rather than inherited (the same shape, for the
+  /// same reason, as `primaryAddressId` above). A deleted container must not
+  /// cascade into the project and must not leave a dangling id that every reader
+  /// then has to re-check — nulling it puts the truth IN the column, so the
+  /// resolver's root fallback reads a fact instead of inferring one from a
+  /// lookup miss.
+  ///
+  /// The pointer must address a work item in THIS project. That is enforced in
+  /// the DATABASE by `trg_project_bug_destination_tenancy` rather than by a
+  /// caller, because a caller-side check is exactly what the trigger exists to
+  /// backstop (the argument is `20260817160000_work_item_parent_tenancy`'s,
+  /// which this mirrors).
+  bugDestinationId String?         @map("bug_destination_id")
+  bugDestination   WorkItem?       @relation("ProjectBugDestination", fields: [bugDestinationId], references: [id], onDelete: SetNull)
+
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -1648,6 +1673,13 @@ model Project {
   /// the drift `CLAUDE.md`'s migration rules describe — the `build` job's
   /// `prisma migrate diff` assertion caught this one before it shipped.
   @@index([primaryAddressId])
+  /// Same reason as `primaryAddressId` directly above: `work_item.id` is SET
+  /// NULL when the container is deleted, so that delete scans `project` for
+  /// referencing rows. Declared in the datamodel as well as the migration —
+  /// a database index the datamodel does not carry is the drift `CLAUDE.md`'s
+  /// migration rules describe, and the `build` job's `prisma migrate diff`
+  /// assertion fails on it.
+  @@index([bugDestinationId])
   // pg_trgm GIN over the public-project DIRECTORY's free-text contains-match
   // columns (Story 6.13 · Subtask 6.13.3, finding #57): the project-square
   // search compiles to ILIKE '%…%' over the project `name` + the public
@@ -2270,6 +2302,11 @@ model WorkItem {
 
   workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// The back-relation of `project.bugDestinationId` (Subtask MOTIR-4934) — the
+  /// projects that file their bugs into THIS container. A list rather than a
+  /// single project because nothing forbids two projects pointing at one
+  /// container; `onDelete: SetNull` lives on the forward side.
+  bugDestinationFor    Project[]                 @relation("ProjectBugDestination")
   parent               WorkItem?                 @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
   children             WorkItem[]                @relation("WorkItemParent")
   assignee             User?                     @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)

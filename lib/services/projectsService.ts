@@ -43,6 +43,7 @@ import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
@@ -231,7 +232,18 @@ async function recordLastActiveProjectBestEffort(userId: string, projectId: stri
  * outside itself.
  */
 async function insertProjectWithSeedsInTx(
-  input: { workspaceId: string; name: string; slug: string; identifier: string },
+  input: {
+    workspaceId: string;
+    name: string;
+    slug: string;
+    identifier: string;
+    /** The creating actor — the seeded bug container's `reporterId` (Subtask
+     *  MOTIR-4935). Both callers already bind this same id as the `app.user_id`
+     *  GUC of the transaction they hand in, so it is threaded rather than
+     *  re-resolved: a work item's reporter is NOT NULL with `onDelete: Restrict`,
+     *  and there is no system principal at project-creation time to stand in. */
+    actorUserId: string;
+  },
   tx: Prisma.TransactionClient,
 ): Promise<Project> {
   // §4 project cap (8.1.11): block before any work when the org is at
@@ -270,7 +282,28 @@ async function insertProjectWithSeedsInTx(
   // one column per status, so it MUST run after the workflow seed and
   // within the same tx (the statuses aren't visible outside it yet).
   await boardsService.seedDefaultBoard(created.id, input.workspaceId, tx);
-  return created;
+  // Then seed the BUG CONTAINER and point the project at it (Story MOTIR-4927 ·
+  // Subtask MOTIR-4935) — in the SAME transaction, for the reason the workflow
+  // seed above states: a project either has its seeds or does not exist. A
+  // container created in a second transaction would survive the identifier-
+  // collision rollback this function's callers retry on, and orphan itself.
+  //
+  // AFTER the workflow seed, because the row takes its initial status from the
+  // statuses written there — the same ordering constraint the board seed has.
+  // Its position relative to the BOARD seed is free; it is placed last so the
+  // two pre-existing seeds keep their documented adjacency.
+  //
+  // This is what turns `ensure_planner_bug_home`'s ONE-SHOT backfill into a
+  // standing invariant: every project created from here on has a destination,
+  // so `aiWorkItemsService.fileBug` can never again 500 on a project that
+  // simply postdates a migration.
+  const container = await workItemsService.seedBugContainer(
+    created.id,
+    input.workspaceId,
+    input.actorUserId,
+    tx,
+  );
+  return projectRepository.updateBugDestination(created.id, container.id, tx);
 }
 
 /**
@@ -397,7 +430,13 @@ export const projectsService = {
           { userId: input.actorUserId, workspaceId: input.workspaceId },
           (tx) =>
             insertProjectWithSeedsInTx(
-              { workspaceId: input.workspaceId, name: trimmedName, slug, identifier },
+              {
+                workspaceId: input.workspaceId,
+                name: trimmedName,
+                slug,
+                identifier,
+                actorUserId: input.actorUserId,
+              },
               tx,
             ),
         );
@@ -502,7 +541,13 @@ export const projectsService = {
             if (first) return first;
 
             return insertProjectWithSeedsInTx(
-              { workspaceId: input.workspaceId, name, slug, identifier },
+              {
+                workspaceId: input.workspaceId,
+                name,
+                slug,
+                identifier,
+                actorUserId: input.actorUserId,
+              },
               tx,
             );
           },

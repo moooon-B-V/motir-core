@@ -61,6 +61,18 @@ async function makeScenario(email: string) {
   return { user, workspace, project, item, ctx };
 }
 
+/**
+ * The identifier of the item `makeScenario` tracks — **ACME-2, not ACME-1**.
+ *
+ * ⚠️ Since MOTIR-4935 `createProject` seeds a bug container in the same
+ * transaction, and it takes the project's FIRST key. So `ACME-1` is that
+ * container and `ACME-2` is the `task` these tests actually drive. Naming it
+ * once, here, keeps the reason legible: a bare `ACME-1` in a payload below
+ * would resolve to the container and the transition would come back
+ * `illegal_transition` against a card nobody meant to touch.
+ */
+const TRACKED = 'ACME-2';
+
 function prPayload(opts: {
   action: string;
   identifier?: string;
@@ -90,8 +102,8 @@ function prPayload(opts: {
       number: opts.number ?? 7,
       state: opts.state ?? 'open',
       merged: opts.merged ?? false,
-      title: opts.title ?? `Some change (${opts.identifier ?? 'ACME-1'})`,
-      head: { ref: opts.headRef ?? `feat/${opts.identifier ?? 'ACME-1'}-a-change` },
+      title: opts.title ?? `Some change (${opts.identifier ?? TRACKED})`,
+      head: { ref: opts.headRef ?? `feat/${opts.identifier ?? TRACKED}-a-change` },
       base: { ref: opts.baseRef ?? 'main' },
       ...(opts.user === null ? {} : { user: opts.user ?? { id: 4242 } }),
     },
@@ -174,9 +186,9 @@ afterAll(async () => {
 });
 
 /** MOTIR-3674 — the link that used to come from the head ref. Every case below
- *  that means *this pull request delivers ACME-1* calls this first; the ones
+ *  that means *this pull request delivers the tracked item* calls this first; the ones
  *  about an UNRESOLVABLE delivery deliberately do not. */
-async function linkDefaultPr(identifier = 'ACME-1', number = 7) {
+async function linkDefaultPr(identifier: string = TRACKED, number = 7) {
   await linkPrByIdentifier({
     identifier,
     owner: 'moooon',
@@ -473,8 +485,8 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
       'pull_request',
       prPayload({
         action: 'opened',
-        headRef: 'feat/ACME-1-a-change',
-        title: 'Fixes ZZZ-9 ACME-1 (ACME-1)',
+        headRef: `feat/${TRACKED}-a-change`,
+        title: `Fixes ZZZ-9 ${TRACKED} (${TRACKED})`,
       }),
     );
     expect(result).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });

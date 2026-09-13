@@ -25,6 +25,7 @@
     "db:seed:reporting": "tsx --tsconfig tsconfig.node.json scripts/seed-reporting.ts",
     "bench:bound-read-shape": "tsx --tsconfig tsconfig.node.json scripts/bench/boundReadTransactionShape.ts",
     "db:backfill:boards": "tsx --tsconfig tsconfig.node.json scripts/backfill-default-boards.ts",
+    "db:backfill:bug-destinations": "tsx --tsconfig tsconfig.node.json scripts/backfill-bug-destinations.ts",
     "db:backfill:provenance": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-provenance.ts",
     "db:backfill:code-graph-index": "tsx --tsconfig tsconfig.node.json scripts/backfill-code-graph-index.ts",
     "db:backfill:pull-requests": "tsx --tsconfig tsconfig.node.json scripts/backfill-historical-pull-requests.ts",
