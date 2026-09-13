@@ -53,6 +53,8 @@ const MODIFY: PlanReviewItemDto = planReviewItem({
 
 /** The target's payload the peek fetches on open, for a `modify` / `remove`. */
 const PEEK_RESPONSE = {
+  folderId: null,
+  folderPath: [],
   id: 'wi_1',
   identifier: 'MOTIR-7',
   title: 'One peek for a proposal',

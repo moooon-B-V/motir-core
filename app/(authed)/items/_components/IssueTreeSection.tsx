@@ -187,7 +187,9 @@ export async function IssueTreeSection({
   // island outright instead of relying on the project key to re-seed it. The
   // key stays because the OTHER remount reasons above are untouched.
   const initialLevel = await workItemsService.listRootIssues(projectId, { sort }, ctx);
-  if (initialLevel.total === 0) return empty;
+  // An EDITOR's empty project still mounts the tree (which draws the same empty
+  // state) so the toolbar's "New folder" has a level to create into (MOTIR-5344).
+  if (initialLevel.total === 0 && !caps.canEdit) return empty;
   return withEstimation(
     <IssueTreeTable
       key={`${projectId}:${serializeSort(sort)}`}
@@ -196,6 +198,8 @@ export async function IssueTreeSection({
       filter={filter}
       workflow={workflow}
       members={members}
+      canEdit={caps.canEdit}
+      emptyState={empty}
     />,
   );
 }

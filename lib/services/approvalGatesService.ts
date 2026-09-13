@@ -112,13 +112,13 @@ export interface DecideGateResult {
  *
  * ⚠️ `canDecide` is the AUTHORITY answer, not the ROUTING one — and after §2's
  * 2026-09-11 amendment the two axes COINCIDE for the relationship arms and part
- * company only at the admin override. ROUTING is `assigneeId ?? reporterId`;
- * AUTHORITY is **the assignee, or the reporter WHEN THERE IS NO ASSIGNEE, or an
- * admin**. So the person a gate is shown to is exactly the person who may press
- * it, plus admins — who are the only remaining escape hatch when that person is
- * unavailable. State `B` — the port live, the verbs absent — is exactly a reader
- * for whom this is `false`: an admin-less bystander, or an actor below the
- * kind's permission floor.
+ * company only at the escape hatch. ROUTING is `assigneeId ?? reporterId`;
+ * AUTHORITY is **the assignee, or the reporter WHEN THERE IS NO ASSIGNEE, or
+ * anyone holding `approval:decide_any`** (MOTIR-5292). So the person a gate is
+ * shown to is exactly the person who may press it, plus the key's holders — the
+ * only remaining escape hatch when that person is unavailable. State `B` — the
+ * port live, the verbs absent — is exactly a reader for whom this is `false`: a
+ * bystander without the key, or an actor below the kind's permission floor.
  */
 export interface WorkItemGateRead {
   gate: ApprovalGateDTO | null;
@@ -246,7 +246,8 @@ async function routingScope(
  *
  * **THE RULE — §2's 2026-09-11 amendment (Yue), which REVERSED the MOTIR-4911
  * one of 2026-09-08: the assignee, or the reporter WHEN THE ITEM HAS NO
- * ASSIGNEE, or an admin on ANY item.** The reporter arm is CONDITIONAL now; it
+ * ASSIGNEE, or — since MOTIR-5292 — anyone holding `approval:decide_any`, on
+ * ANY item.** The reporter arm is CONDITIONAL now; it
  * used to be unconditional, and the paragraph that argued for that is
  * superseded on the record in the ADR rather than deleted.
  *
@@ -258,23 +259,38 @@ async function routingScope(
  * to one person and pressable by two belongs to neither in particular, and
  * either can sign off work the other was accountable for.
  *
- * ⚠️ THE ADMIN ARM IS THE ONLY REMAINING ESCAPE HATCH, and it is the whole of
+ * ⚠️ THE `_any` ARM IS THE ONLY REMAINING ESCAPE HATCH, and it is the whole of
  * the risk this rule accepts. The 2026-09-08 amendment widened authority to the
  * reporter to prevent the opposite failure — a gate whose single recipient is on
  * leave or has left, with nobody able to unblock the work. That worry is not
- * wrong and is not being dismissed: it is now answered by an admin rather than
- * by the reporter, which is a better shape for an override because a role is
- * visible in the permission grid, grantable to a custom role and auditable,
- * which a relationship somebody happens to have to a row is not.
+ * wrong and is not being dismissed: it is now answered by whoever holds
+ * `approval:decide_any` rather than by the reporter.
  *
- * ⚠️ THE ADMIN ARM IS **ASKED**, NEVER DERIVED HERE. Reading this actor's own
- * membership row and testing `isWorkspaceManager(...)` in this file is exactly
- * the SECOND POLICY PATH the model forbids — `tests/permissions/storyGate.test.ts`
- * guard 1 and `memberFacingGate.integration.test.ts` both refuse it by name,
- * because such a rule is *"invisible in the grid, un-grantable to a custom role,
- * and un-auditable by the guard."* So the question goes to
- * `projectAccessService`, which owns the always-pass rail; this function
- * composes the answer and derives nothing.
+ * ⚠️ THE ESCAPE HATCH IS A PERMISSION, NEVER A ROLE (MOTIR-5292). Until then
+ * this arm asked whether the actor was a WORKSPACE owner/admin, and a role is
+ * not grantable in the sense the model means: no custom role could ever carry
+ * it, and even a project `admin` whose workspace role is `member` was refused.
+ * It is now the shape Motir already uses for acting on what is not yours —
+ * your OWN row by relationship, ANYONE's by an `_any` key
+ * (`attachment:delete_any`, `comment:moderate`). Workspace owners/admins keep it
+ * through the always-pass rail, the built-in project Admin holds it, and a team
+ * can grant it to whoever should unblock without granting anything else.
+ *
+ * ⚠️ THE KEY IS **ASKED**, NEVER DERIVED HERE. Reading this actor's own
+ * membership row and testing a role in this file is exactly the SECOND POLICY
+ * PATH the model forbids — `tests/permissions/storyGate.test.ts` guard 1 and
+ * `memberFacingGate.integration.test.ts` both refuse it by name, because such a
+ * rule is *"invisible in the grid, un-grantable to a custom role, and
+ * un-auditable by the guard."* So the question goes to
+ * `projectAccessService.getPermissions`; this function composes the answer and
+ * derives nothing.
+ *
+ * ⚠️ THE ARM IS STILL RECORDED AS `admin`, and that is a decision, not an
+ * oversight. `decided_under_authority`'s `admin` member now MEANS *decided under
+ * `approval:decide_any`* — every row written before this change was written by a
+ * workspace owner/admin, who holds the key, so no historical row becomes false,
+ * nothing is migrated, and one authority does not end up with two names
+ * (`docs/decisions/approval-gates.md` §2's third amendment).
  *
  * ⚠️ IT RESOLVES TO **WHICH ARM**, NOT TO A BOOLEAN (MOTIR-5046; ADR §6a —
  * *under which PERMISSION*). A boolean answers *may this press be honoured?* and
@@ -300,9 +316,8 @@ async function resolveGateAuthority(
 ): Promise<ApprovalGateAuthorityDTO | null> {
   if (item.assigneeId === ctx.userId) return 'assignee';
   if (item.assigneeId === null && item.reporterId === ctx.userId) return 'reporter';
-  return (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx))
-    ? 'admin'
-    : null;
+  const held = await projectAccessService.getPermissions(item.projectId, ctx, tx);
+  return held.has('approval:decide_any') ? 'admin' : null;
 }
 
 export const approvalGatesService = {
@@ -690,9 +705,10 @@ export const approvalGatesService = {
       await projectAccessService.assertPermission(item.projectId, ctx, handler.permission, tx);
 
       // (b) THE RELATIONSHIP — ADR §2's 2026-09-11 amendment (Yue): **the
-      //     assignee, or the reporter WHEN THE ITEM HAS NO ASSIGNEE, or an
-      //     admin on ANY work item**, for both verbs. Authority follows a
-      //     relationship to the item, not a permission a role happens to carry.
+      //     assignee, or the reporter WHEN THE ITEM HAS NO ASSIGNEE, or anyone
+      //     holding `approval:decide_any` on ANY work item**, for both verbs.
+      //     Your OWN gate follows a relationship to the item; ANYONE's follows a
+      //     permission a team can grant (MOTIR-5292) — never a role.
       //
       //     ⚠️ It is APPLIED ON TOP OF the floor, never instead of it — that
       //     half is unchanged, and it is what a project `viewer` who happens to
@@ -701,18 +717,18 @@ export const approvalGatesService = {
       //     ⚠️ AUTHORITY AND ROUTING NOW COINCIDE for the relationship arms.
       //     §2 routes a gate to `assigneeId ?? reporterId`, exactly one person,
       //     and that person is exactly who these two arms authorise. The gate is
-      //     pressed by the person it is shown to, or by an admin. (Until
+      //     pressed by the person it is shown to, or by a key-holder. (Until
       //     2026-09-11 the reporter arm was UNCONDITIONAL and the two axes were
       //     deliberately apart; the ADR keeps that argument visible as
       //     superseded rather than deleting it, and this comment no longer
       //     makes it.)
       //
-      //     ⚠️ THE ADMIN ARM IS THE ONLY REMAINING ESCAPE HATCH. The rule it
-      //     replaced existed to prevent a gate whose single recipient is on
-      //     leave or has left from holding the work for ever — a real failure,
-      //     not a dismissed one. An admin still unblocks it, and does so under
-      //     an authority that is visible in the permission grid, grantable to a
-      //     custom role and auditable, which the reporter's never was.
+      //     ⚠️ THE `approval:decide_any` ARM IS THE ONLY REMAINING ESCAPE
+      //     HATCH. The rule it replaced existed to prevent a gate whose single
+      //     recipient is on leave or has left from holding the work for ever — a
+      //     real failure, not a dismissed one. A key-holder still unblocks it,
+      //     under a PERMISSION a team can grant to a custom role (MOTIR-5292) —
+      //     not the workspace role it used to be, which nobody could be given.
       //
       //     The rule itself lives in `resolveGateAuthority` above — ONE
       //     statement, called by the render read and by this door, so the two

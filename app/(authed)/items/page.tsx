@@ -22,6 +22,7 @@ import { SavedFilterSessionProvider } from './_components/SavedFilterContext';
 import { IssueAppliedFilterBar } from './_components/IssueAppliedFilterBar';
 import { InvalidFilterCallout } from './_components/InvalidFilterCallout';
 import { IssueListToolbar } from './_components/IssueListToolbar';
+import { FolderCommandsProvider } from './_components/FolderCommands';
 import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
 import { IssueQuickViewController } from './_components/IssueQuickViewController';
@@ -71,9 +72,9 @@ export default async function IssuesPage({
 
   // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
   // project renders the no-access state, not the list. The same resolve also
-  // yields the saved-filter share/admin tiers the 6.2.3 [Saved] dropdown +
+  // yields the saved-filter share/manage-any tiers the 6.2.3 [Saved] dropdown +
   // save dialog gate over (one round-trip — the getSavedFilterCapabilities
-  // shape is canBrowse + canShare + isAdmin).
+  // shape is canBrowse + canShare + canManageAny).
   const caps = await projectAccessService.getSavedFilterCapabilities(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
@@ -151,53 +152,22 @@ export default async function IssuesPage({
 
   return (
     <AdvancedFilterProvider>
-      <SavedFilterSessionProvider>
-        <div className="flex flex-col gap-6">
-          <header className="flex flex-wrap items-end justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-              <p className="text-sm text-(--el-text-muted)">
-                {t('allIssuesIn', { project: ctx.project.name })}
-              </p>
-            </div>
-            <IssueListToolbar
-              view={view}
-              sort={sort}
-              filter={filter}
-              ast={ast}
-              statuses={workflow.statuses}
-              members={members}
-              sprints={sprints}
-              customFields={customFields}
-              components={components}
-              referencedLabels={referencedLabels}
-              projectKey={ctx.project.identifier}
-              viewer={viewer}
-              archivedCount={archivedCount}
-            />
-          </header>
-
-          {/* The invalid `?filter=` recovery callout (6.1.4, mock panel 6) —
-            above the UNFILTERED list, never a crash, never a silent drop. */}
-          {advanced.state === 'invalid' ? (
-            <InvalidFilterCallout view={view} sort={sort} filter={filter} />
-          ) : null}
-
-          {/* The applied-filter bar (6.2.3, mock panel 0) — the saved-filter name
-            chip + dirty state + Save / Save-as / Discard, prepended to the
-            6.1.4 condition-chip readout (panel 5, read-only; any chip reopens
-            the builder). The bar renders nothing when no filter is applied and
-            the builder is empty. */}
-          <IssueAppliedFilterBar
-            projectKey={ctx.project.identifier}
-            viewer={viewer}
-            view={view}
-            sort={sort}
-            filter={filter}
-            ast={ast}
-          >
-            {ast !== null ? (
-              <AdvancedFilterSummary
+      <FolderCommandsProvider>
+        <SavedFilterSessionProvider>
+          <div className="flex flex-col gap-6">
+            <header className="flex flex-wrap items-end justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+                  {t('heading')}
+                </h1>
+                <p className="text-sm text-(--el-text-muted)">
+                  {t('allIssuesIn', { project: ctx.project.name })}
+                </p>
+              </div>
+              <IssueListToolbar
+                view={view}
+                sort={sort}
+                filter={filter}
                 ast={ast}
                 statuses={workflow.statuses}
                 members={members}
@@ -205,36 +175,71 @@ export default async function IssuesPage({
                 customFields={customFields}
                 components={components}
                 referencedLabels={referencedLabels}
+                projectKey={ctx.project.identifier}
+                viewer={viewer}
+                archivedCount={archivedCount}
               />
-            ) : null}
-          </IssueAppliedFilterBar>
+            </header>
 
-          <Suspense
-            key={`${ctx.projectId}:${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
-            fallback={<IssueTreeSkeleton flat={view === 'list'} />}
-          >
-            <IssueTreeSection
-              projectId={ctx.projectId}
-              workspaceId={ctx.workspaceId}
-              userId={ctx.userId}
+            {/* The invalid `?filter=` recovery callout (6.1.4, mock panel 6) —
+            above the UNFILTERED list, never a crash, never a silent drop. */}
+            {advanced.state === 'invalid' ? (
+              <InvalidFilterCallout view={view} sort={sort} filter={filter} />
+            ) : null}
+
+            {/* The applied-filter bar (6.2.3, mock panel 0) — the saved-filter name
+            chip + dirty state + Save / Save-as / Discard, prepended to the
+            6.1.4 condition-chip readout (panel 5, read-only; any chip reopens
+            the builder). The bar renders nothing when no filter is applied and
+            the builder is empty. */}
+            <IssueAppliedFilterBar
+              projectKey={ctx.project.identifier}
+              viewer={viewer}
               view={view}
               sort={sort}
               filter={filter}
               ast={ast}
-              page={page}
-              workflow={workflow}
-              members={members}
-            />
-          </Suspense>
+            >
+              {ast !== null ? (
+                <AdvancedFilterSummary
+                  ast={ast}
+                  statuses={workflow.statuses}
+                  members={members}
+                  sprints={sprints}
+                  customFields={customFields}
+                  components={components}
+                  referencedLabels={referencedLabels}
+                />
+              ) : null}
+            </IssueAppliedFilterBar>
 
-          {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
+            <Suspense
+              key={`${ctx.projectId}:${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
+              fallback={<IssueTreeSkeleton flat={view === 'list'} />}
+            >
+              <IssueTreeSection
+                projectId={ctx.projectId}
+                workspaceId={ctx.workspaceId}
+                userId={ctx.userId}
+                view={view}
+                sort={sort}
+                filter={filter}
+                ast={ast}
+                page={page}
+                workflow={workflow}
+                members={members}
+              />
+            </Suspense>
+
+            {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
           watches `?peek` and renders the modal frame + skeleton instantly, then
           client-fetches the item from /api/work-items/peek. Decoupled from this
           page's server render, so opening/closing is a pure shallow URL change
           with no underlying-list refetch. */}
-          <IssueQuickViewController />
-        </div>
-      </SavedFilterSessionProvider>
+            <IssueQuickViewController />
+          </div>
+        </SavedFilterSessionProvider>
+      </FolderCommandsProvider>
     </AdvancedFilterProvider>
   );
 }

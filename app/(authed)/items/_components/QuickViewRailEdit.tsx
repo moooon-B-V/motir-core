@@ -60,6 +60,7 @@ export type RailEditKey =
   | 'assignee'
   | 'sprint'
   | 'parent'
+  | 'folder'
   | 'labels'
   | 'components';
 

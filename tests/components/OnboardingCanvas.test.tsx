@@ -23,6 +23,8 @@ vi.mock('next/navigation', () => ({
 
 // A condensed peek payload the /api/work-items/peek read returns for MOTIR-1.
 const PEEK = {
+  folderId: null,
+  folderPath: [],
   identifier: 'MOTIR-1',
   title: 'Epic one',
   kind: 'epic',

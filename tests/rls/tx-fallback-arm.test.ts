@@ -371,7 +371,7 @@ describe('the `tx ?? dbRead` fallback arm of the saved-filter reads', () => {
     const listArgs = {
       projectId: fx.projectId,
       actorUserId: fx.ownerId,
-      actorIsAdmin: true,
+      actorCanManageAny: true,
       view: 'all' as const,
     };
     const rows = await savedFilterRepository.listPage({ ...listArgs, take: 10 });

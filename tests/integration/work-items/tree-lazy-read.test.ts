@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { DEFAULT_SORT, type IssueSort } from '@/lib/issues/issueListView';
+import type { ProjectTreeRowDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
@@ -47,6 +48,10 @@ async function buildForest(fx: WorkItemFixture) {
 
 const sort = (s: Partial<IssueSort> = {}): IssueSort => ({ ...DEFAULT_SORT, ...s });
 
+/** A level's WORK-ITEM row by id — a level can also carry folder rows (MOTIR-5314). */
+const itemRow = (rows: ProjectTreeRowDto[], id: string): WorkItemTreeRowDto | undefined =>
+  rows.find((r): r is WorkItemTreeRowDto => r.kind !== 'folder' && r.id === id);
+
 describe('listRootIssues', () => {
   it('returns the project roots (key asc) with hasChildren + no nesting', async () => {
     const fx = await makeFixture();
@@ -69,8 +74,8 @@ describe('listRootIssues', () => {
 
     const level = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
 
-    expect(level.rows.find((r) => r.id === X.id)?.type).toBe('code'); // bug X — a leaf
-    expect(level.rows.find((r) => r.id === E.id)?.type).toBeNull(); // epic — no work type
+    expect(itemRow(level.rows, X.id)?.type).toBe('code'); // bug X — a leaf
+    expect(itemRow(level.rows, E.id)?.type).toBeNull(); // epic — no work type
   });
 
   // MOTIR-2098 — the LAZY level is the /items tree's normal path (the forest CTE
@@ -93,9 +98,9 @@ describe('listRootIssues', () => {
     const roots = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
     const children = await workItemsService.listChildIssues(A.id, { sort: sort() }, fx.ctx);
 
-    expect(roots.rows.find((r) => r.id === X.id)?.hasDescription).toBe(true);
-    expect(roots.rows.find((r) => r.id === E.id)?.hasDescription).toBe(false); // '' is none
-    expect(children.rows.find((r) => r.id === A1.id)?.hasDescription).toBe(true);
+    expect(itemRow(roots.rows, X.id)?.hasDescription).toBe(true);
+    expect(itemRow(roots.rows, E.id)?.hasDescription).toBe(false); // '' is none
+    expect(itemRow(children.rows, A1.id)?.hasDescription).toBe(true);
   });
 
   it('pages with take/offset and reports hasMore', async () => {

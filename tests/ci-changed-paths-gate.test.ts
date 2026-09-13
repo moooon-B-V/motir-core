@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -31,6 +31,10 @@ import { dirname, join } from 'node:path';
 //      referencing the job would run unconditionally (merely wasteful) or, if
 //      its `needs` were dropped, read an empty output and skip forever
 //      (silently un-tested).
+//   4. Each PACKAGE lane runs on its own package's paths and on every input it
+//      installs from (MOTIR-5323). Those inputs are re-derived from the lane's
+//      job body, the composite action it uses and the package's own manifest,
+//      so a lane that gains an input the classifier lacks fails here.
 //
 // Same mould, and the same no-YAML-parser constraint, as
 // `tests/ci-complete-gate.test.ts` and `tests/ci-design-guards-lane.test.ts`.
@@ -43,6 +47,16 @@ const IMAGE_WORKFLOWS = [
   '.github/workflows/sandbox-images.yml',
   '.github/workflows/runner-image.yml',
 ];
+
+/** The Vitest force-full globs (MOTIR-5325) — one file, read here as the job reads it. */
+const FORCE_FULL_FILE = '.github/ci/full-suite-paths.txt';
+const forceFullGlobs = read(FORCE_FULL_FILE)
+  .split('\n')
+  .map((line) => line.trim())
+  .filter((line) => line !== '' && !line.startsWith('#'));
+
+/** A concrete path under a glob — every `*` / `**` becomes one segment name. */
+const pathUnder = (glob: string): string => glob.replace(/\*\*/g, 'x').replace(/\*/g, 'x');
 
 /** Split a workflow's `jobs:` mapping into { jobId → body }. */
 function jobsOf(yaml: string): Map<string, string> {
@@ -84,6 +98,21 @@ const changesCode = codeOf(ciJobs.get('changes') ?? '');
 /** The shell `case` patterns that set a given output to true. */
 function patternsSetting(flag: string): string[] {
   return [...changesCode.matchAll(new RegExp(`^\\s*([^\\s].*?)\\)\\s*${flag}=true\\s*;;`, 'gm'))]
+    .flatMap((m) => m[1]!.split('|'))
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The `case` patterns of every arm whose action sets `flag` to true — including
+ * an arm that sets several flags at once, which `patternsSetting` (flag alone,
+ * last before `;;`) does not read. The package flags' shared install inputs are
+ * written that way. One line per arm: `[ \t]` rather than `\s`, or the first
+ * arm of a block would be read together with the `case` line above it.
+ */
+function armsSetting(flag: string): string[] {
+  return [...changesCode.matchAll(/^[ \t]*([^\s#][^)\n]*?)\)[ \t]*([^;\n]*?)[ \t]*;;[ \t]*$/gm)]
+    .filter((m) => new RegExp(`\\b${flag}=true\\b`).test(m[2]!))
     .flatMap((m) => m[1]!.split('|'))
     .map((s) => s.trim())
     .filter(Boolean);
@@ -173,7 +202,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       expect(changesCode).toMatch(/if \[ -z "\$files" \]/);
     });
 
-    it('emits `true true` on every one of those paths, and nowhere assumes false', () => {
+    it('emits every flag `true` on every one of those paths, and nowhere assumes false', () => {
       // Still THREE early exits, each emitting both flags true — MOTIR-5124
       // MERGED two cases into one arm rather than adding a fourth: the empty
       // base/head test now covers both the unclassifiable event the old
@@ -183,7 +212,12 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       // lands here. Every one of the three is EXECUTED in `the merge-queue arm`
       // below; this count is what catches an arm added with no case written for
       // it.
-      expect([...changesCode.matchAll(/^\s*emit true true$/gm)]).toHaveLength(3);
+      // Six flags — `app`, `images`, the three package lanes' (MOTIR-5323) and
+      // `vitest_full` (MOTIR-5325) — so an early exit that forgets a newer one
+      // is not counted.
+      expect([...changesCode.matchAll(/^\s*emit true true true true true true$/gm)]).toHaveLength(
+        3,
+      );
     });
 
     it('stops on the first failure', () => {
@@ -269,7 +303,9 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
      * `design-and-docs-only` is the ejected pull request's own shape (above).
      * The other three are the criterion's two image inputs and one app-only
      * control — the control is what stops `images` widening to "always true",
-     * which would make every assertion here pass for the wrong reason.
+     * which would make every assertion here pass for the wrong reason. The last
+     * three are MOTIR-5323's package-lane cases: one package, no package, and an
+     * install input every package lane shares.
      */
     const HEADS: Record<string, readonly string[]> = {
       'design-and-docs-only': [
@@ -282,6 +318,13 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       'ci-runner-image-input': ['infra/ci-runner/Dockerfile'],
       'runner-image-workflow': ['.github/workflows/runner-image.yml'],
       'app-only': ['app/page.tsx'],
+      'cli-package-only': ['packages/cli/src/index.ts'],
+      'lib-only': ['lib/db.ts'],
+      'lockfile-only': ['pnpm-lock.yaml'],
+      // One head per force-full glob (MOTIR-5325), derived from the list.
+      ...Object.fromEntries(
+        forceFullGlobs.map((glob) => [`force-full:${glob}`, [pathUnder(glob)]]),
+      ),
     };
 
     let repo: string;
@@ -309,6 +352,10 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         writeFileSync(full, `${path}\n`);
       };
       write('README.md');
+      // The classifier reads the force-full list from the checkout (MOTIR-5325),
+      // so the fixture carries the real file — a copy, not a restatement.
+      mkdirSync(join(repo, dirname(FORCE_FULL_FILE)), { recursive: true });
+      writeFileSync(join(repo, FORCE_FULL_FILE), read(FORCE_FULL_FILE));
       git('add', '-A');
       git('commit', '-qm', 'base');
       base = git('rev-parse', 'HEAD');
@@ -328,6 +375,17 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       if (repo) rmSync(repo, { recursive: true, force: true });
     });
 
+    /** Every output the `changes` job declares, plus what it printed. */
+    type Outputs = {
+      app: string;
+      images: string;
+      pkg_cli: string;
+      pkg_orchestrator: string;
+      pkg_design_system: string;
+      vitest_full: string;
+      stdout: string;
+    };
+
     /** Run the shipped classifier with these `env:` values, and read its outputs. */
     function classify(env: {
       EVENT: string;
@@ -335,7 +393,8 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       HEAD_SHA?: string;
       MERGE_BASE_SHA?: string;
       MERGE_HEAD_SHA?: string;
-    }): { app: string; images: string; stdout: string } {
+      FULL_LABEL?: string;
+    }): Outputs {
       const outPath = join(repo, 'github-output');
       writeFileSync(outPath, '');
       let stdout: string;
@@ -351,6 +410,8 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
             HEAD_SHA: '',
             MERGE_BASE_SHA: '',
             MERGE_HEAD_SHA: '',
+            // `contains()` over an absent label list renders `false`.
+            FULL_LABEL: 'false',
             ...env,
             GITHUB_OUTPUT: outPath,
           },
@@ -372,7 +433,15 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
             return [line.slice(0, at), line.slice(at + 1)] as const;
           }),
       ) as Record<string, string>;
-      return { app: outputs.app!, images: outputs.images!, stdout };
+      return {
+        app: outputs.app!,
+        images: outputs.images!,
+        pkg_cli: outputs.pkg_cli!,
+        pkg_orchestrator: outputs.pkg_orchestrator!,
+        pkg_design_system: outputs.pkg_design_system!,
+        vitest_full: outputs.vitest_full!,
+        stdout,
+      };
     }
 
     const asMergeGroup = (name: string) =>
@@ -417,18 +486,116 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       // longer disagree with the pull request that was just reviewed. A future
       // edit that gives the queue its own arm — a different exclusion set, a
       // different default — fails here rather than in the queue.
+      //
+      // ⚠️ EXCEPT `vitest_full`, and on purpose (MOTIR-5325): the queue runs the
+      // whole Vitest suite whatever the diff, and a pull request runs what its
+      // diff reaches. That one flag is asserted per event in its own block below.
+      const withoutVitestFull = ({ vitest_full, ...rest }: Outputs) => {
+        void vitest_full;
+        // The classifier also PRINTS the flag, so its log line differs by exactly it.
+        return { ...rest, stdout: rest.stdout.replace(/ vitest_full=\w+/, '') };
+      };
       for (const name of Object.keys(HEADS)) {
         const queue = asMergeGroup(name);
         const pr = asPullRequest(name);
-        expect({ name, ...queue }).toEqual({ name, ...pr });
+        expect(queue.vitest_full, `${name} runs the whole suite in the queue`).toBe('true');
+        expect({ name, ...withoutVitestFull(queue) }).toEqual({ name, ...withoutVitestFull(pr) });
       }
     });
+
+    describe('the package flags, executed (MOTIR-5323)', () => {
+      const packageFlags = ({ pkg_cli, pkg_orchestrator, pkg_design_system }: Outputs) => ({
+        pkg_cli,
+        pkg_orchestrator,
+        pkg_design_system,
+      });
+
+      it('runs only the CLI lane for a change inside packages/cli', () => {
+        const outputs = asPullRequest('cli-package-only');
+        expect(packageFlags(outputs)).toEqual({
+          pkg_cli: 'true',
+          pkg_orchestrator: 'false',
+          pkg_design_system: 'false',
+        });
+        // ⚠️ AND THE APP LANES STILL RUN. The app consumes the package and root
+        // tests such as `tests/api/public/contract-drift.test.ts` read its files,
+        // so these flags narrow the package lanes and nothing else.
+        expect(outputs.app).toBe('true');
+      });
+
+      it.each([['lib-only'], ['app-only']])('runs no package lane for %s', (name) => {
+        // The saving. If this flips, every pull request builds and tests all
+        // three packages again whatever it touched.
+        expect(packageFlags(asPullRequest(name))).toEqual({
+          pkg_cli: 'false',
+          pkg_orchestrator: 'false',
+          pkg_design_system: 'false',
+        });
+      });
+
+      it('runs every package lane when the lockfile changes', () => {
+        // An install input all three lanes consume, so none of them may skip.
+        expect(packageFlags(asPullRequest('lockfile-only'))).toEqual({
+          pkg_cli: 'true',
+          pkg_orchestrator: 'true',
+          pkg_design_system: 'true',
+        });
+      });
+    });
+
+    describe('the Vitest width flag, executed (MOTIR-5325)', () => {
+      it('lets a pull request that touches no force-full path run the affected subset', () => {
+        // The saving, and the control: if this flips, every `true` below passes
+        // for the wrong reason.
+        expect(asPullRequest('lib-only').vitest_full).toBe('false');
+        expect(asPullRequest('app-only').vitest_full).toBe('false');
+      });
+
+      it('runs the whole suite on every queue entry, whatever it touches', () => {
+        expect(asMergeGroup('lib-only').vitest_full).toBe('true');
+        expect(asMergeGroup('design-and-docs-only').vitest_full).toBe('true');
+      });
+
+      it('reads a force-full list with entries in it', () => {
+        // Without this the per-glob cases below would be an empty `it.each`.
+        expect(forceFullGlobs.length).toBeGreaterThan(10);
+      });
+
+      it.each(forceFullGlobs)('runs the whole suite for a pull request touching %s', (glob) => {
+        // One case per glob, derived from the list the job reads rather than
+        // typed out here, so a glob added to the file is exercised the day it
+        // lands.
+        expect(asPullRequest(`force-full:${glob}`).vitest_full).toBe('true');
+      });
+
+      it('runs the whole suite for a pull request carrying the `vitest-full` label', () => {
+        // The diagnosis door after a queue ejection (`ci-affected-tests.md` §5).
+        expect(
+          classify({
+            EVENT: 'pull_request',
+            BASE_SHA: base,
+            HEAD_SHA: head['lib-only']!,
+            FULL_LABEL: 'true',
+          }).vitest_full,
+        ).toBe('true');
+      });
+    });
+
+    /** What a fail-open arm must emit: every lane runs. */
+    const EVERY_FLAG_TRUE = {
+      app: 'true',
+      images: 'true',
+      pkg_cli: 'true',
+      pkg_orchestrator: 'true',
+      pkg_design_system: 'true',
+      vitest_full: 'true',
+    };
 
     describe('and every fail-open arm still fires — executed, not asserted in prose', () => {
       it.each([['push'], ['workflow_dispatch'], ['schedule']])(
         'runs everything on a `%s` event, which carries no base/head',
         (event) => {
-          expect(classify({ EVENT: event })).toMatchObject({ app: 'true', images: 'true' });
+          expect(classify({ EVENT: event })).toMatchObject(EVERY_FLAG_TRUE);
         },
       );
 
@@ -439,14 +606,8 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         // fail-closed, on the merge gate. Both recognised events are checked,
         // because the emptiness test is shared and a future edit could route
         // one of them around it.
-        expect(classify({ EVENT: 'merge_group' })).toMatchObject({
-          app: 'true',
-          images: 'true',
-        });
-        expect(classify({ EVENT: 'pull_request' })).toMatchObject({
-          app: 'true',
-          images: 'true',
-        });
+        expect(classify({ EVENT: 'merge_group' })).toMatchObject(EVERY_FLAG_TRUE);
+        expect(classify({ EVENT: 'pull_request' })).toMatchObject(EVERY_FLAG_TRUE);
       });
 
       it('runs everything when the diff FAILS', () => {
@@ -456,13 +617,13 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         const absent = '0'.repeat(40);
         expect(
           classify({ EVENT: 'merge_group', MERGE_BASE_SHA: absent, MERGE_HEAD_SHA: base }),
-        ).toMatchObject({ app: 'true', images: 'true' });
+        ).toMatchObject(EVERY_FLAG_TRUE);
       });
 
       it('runs everything when the changed-file set is empty', () => {
         expect(
           classify({ EVENT: 'merge_group', MERGE_BASE_SHA: base, MERGE_HEAD_SHA: base }),
-        ).toMatchObject({ app: 'true', images: 'true' });
+        ).toMatchObject(EVERY_FLAG_TRUE);
       });
     });
   });
@@ -728,6 +889,12 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       ['e2e-at-scale', 'app'],
       ['sandbox', 'images'],
       ['runner-image', 'images'],
+      ['design-system', 'pkg_design_system'],
+      ['cli', 'pkg_cli'],
+      ['orchestrator', 'pkg_orchestrator'],
+      // Coverage only merges a WHOLE suite's blobs (MOTIR-5325), so it reads
+      // the width flag as well as `app`.
+      ['coverage', 'vitest_full'],
     ])('%s is gated on needs.changes.outputs.%s', (job, flag) => {
       const code = codeOf(ciJobs.get(job) ?? '');
       expect(code, `${job} exists`).not.toBe('');
@@ -737,9 +904,256 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       expect(code, `${job} needs the changes job`).toMatch(/^\s*needs:.*\bchanges\b/m);
     });
 
-    it('declares both outputs it is read for', () => {
-      expect(changesCode).toMatch(/^\s*app: \$\{\{ steps\.classify\.outputs\.app \}\}$/m);
-      expect(changesCode).toMatch(/^\s*images: \$\{\{ steps\.classify\.outputs\.images \}\}$/m);
+    it('declares every output it is read for', () => {
+      for (const flag of [
+        'app',
+        'images',
+        'pkg_cli',
+        'pkg_orchestrator',
+        'pkg_design_system',
+        'vitest_full',
+      ]) {
+        expect(changesCode, flag).toMatch(
+          new RegExp(`^\\s*${flag}: \\$\\{\\{ steps\\.classify\\.outputs\\.${flag} \\}\\}$`, 'm'),
+        );
+      }
+    });
+  });
+
+  describe('a PULL REQUEST runs the Vitest files its diff reaches (MOTIR-5325)', () => {
+    const ADR = 'docs/decisions/ci-affected-tests.md';
+    const SCRIPT = 'scripts/ci/measure-affected-tests.mjs';
+
+    /** The `test` job's steps, one text each, comments dropped. */
+    const testSteps = codeOf(ciJobs.get('test') ?? '')
+      .split(/^ {6}- /m)
+      .slice(1);
+    const stepNamed = (name: string): string =>
+      testSteps.find((s) => new RegExp(`^name: ${escapeRe(name)}$`, 'm').test(s)) ?? '';
+    const selectStep = stepNamed('Select the affected test files');
+    const subsetStep = stepNamed('Vitest — the affected files');
+    const fullStep = testSteps.find((s) => s.includes('--reporter=blob')) ?? '';
+    const uploadStep = stepNamed('Upload coverage blob');
+
+    it('finds the steps it guards', () => {
+      // Without this every assertion below could pass against an empty string.
+      for (const [label, step] of Object.entries({
+        selectStep,
+        subsetStep,
+        fullStep,
+        uploadStep,
+      })) {
+        expect(step, label).not.toBe('');
+      }
+    });
+
+    it('keeps the force-full globs in ONE file, equal to the ADR §2.1 table', () => {
+      const adr = read(ADR);
+      const section = adr.slice(adr.indexOf('### §2.1'), adr.indexOf('### §2.2'));
+      const tableGlobs = section
+        .split('\n')
+        .filter((line) => line.startsWith('| `'))
+        .flatMap((line) => [...line.split('|')[1]!.matchAll(/`([^`]+)`/g)].map((m) => m[1]!));
+      expect(tableGlobs.length, 'the ADR table has rows').toBeGreaterThan(10);
+      expect([...new Set(tableGlobs)].sort()).toEqual([...new Set(forceFullGlobs)].sort());
+    });
+
+    it('is READ by the classifier and the selection script, never restated', () => {
+      expect(changesCode).toContain(FORCE_FULL_FILE);
+      const source = read(SCRIPT);
+      expect(source).toContain(FORCE_FULL_FILE);
+      // No second copy: none of the list's wildcard globs is a string literal there.
+      for (const glob of forceFullGlobs.filter((g) => g.includes('*'))) {
+        expect(source, glob).not.toContain(`'${glob}'`);
+      }
+    });
+
+    it('selects only when the flag says so, with the base sha through `env:`', () => {
+      expect(selectStep).toMatch(/^\s*if: needs\.changes\.outputs\.vitest_full != 'true'$/m);
+      expect(selectStep).toMatch(
+        /^\s*BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \}\}$/m,
+      );
+      const body = selectStep.split(/^\s*run: \|$/m)[1] ?? '';
+      expect(body, 'a block `run:` body').not.toBe('');
+      expect(body).not.toMatch(/\$\{\{/);
+      expect(body).toContain(`${SCRIPT} --select "$BASE_SHA"`);
+    });
+
+    it('runs the selected files in ONE invocation, with --passWithNoTests and no coverage', () => {
+      expect(subsetStep).toMatch(/^\s*if: steps\.select\.outputs\.mode == 'subset'$/m);
+      expect(subsetStep).toContain('--passWithNoTests');
+      expect(subsetStep).toContain('--shard=${{ matrix.leg }}/12 ');
+      expect(subsetStep).not.toContain('--coverage');
+      expect(subsetStep).not.toContain('--reporter=blob');
+      // `xargs` may split a long list into several runs, and each would be
+      // partitioned across the legs on its own.
+      expect(subsetStep).not.toMatch(/\bxargs\b/);
+    });
+
+    it('keeps the unchanged full-shard command, with coverage, for everything else', () => {
+      expect(fullStep).toContain(
+        'run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/12 --reporter=default --reporter=blob --coverage',
+      );
+      expect(fullStep).toMatch(/^\s*if: steps\.select\.outputs\.mode != 'subset'$/m);
+      expect(uploadStep).toMatch(/^\s*if: steps\.select\.outputs\.mode != 'subset'$/m);
+    });
+
+    describe('the selection step, executed — it FAILS OPEN', () => {
+      /** The step's shell body, de-dented, exactly as it ships. */
+      const selectScript = (selectStep.split(/^\s*run: \|$/m)[1] ?? '')
+        .split('\n')
+        .map((line) => line.replace(/^ {10}/, ''))
+        .join('\n');
+
+      let dir: string;
+      beforeAll(() => {
+        dir = mkdtempSync(join(tmpdir(), 'vitest-select-'));
+        mkdirSync(join(dir, 'bin'));
+      });
+      afterAll(() => {
+        if (dir) rmSync(dir, { recursive: true, force: true });
+      });
+
+      /** Run the shipped step with fake `git` and `pnpm`, and read back `mode`. */
+      function runSelect(pnpm: string, git: string): string {
+        writeFileSync(join(dir, 'bin', 'git'), `#!/bin/sh\n${git}\n`, { mode: 0o755 });
+        writeFileSync(join(dir, 'bin', 'pnpm'), `#!/bin/sh\n${pnpm}\n`, { mode: 0o755 });
+        const output = join(dir, 'github-output');
+        writeFileSync(output, '');
+        rmSync(join(dir, 'vitest-affected.txt'), { force: true });
+        execFileSync('bash', ['-c', selectScript], {
+          cwd: dir,
+          env: {
+            ...process.env,
+            PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}`,
+            BASE_SHA: 'abc123',
+            RUNNER_TEMP: dir,
+            GITHUB_OUTPUT: output,
+          },
+          stdio: 'pipe',
+        });
+        return /^mode=(.*)$/m.exec(readFileSync(output, 'utf8'))?.[1] ?? '';
+      }
+
+      /** A fake selection that writes `content` to the path after `--out`. */
+      const writesList = (content: string): string =>
+        `while [ $# -gt 0 ]; do if [ "$1" = --out ]; then printf '${content}' >"$2"; fi; shift; done; exit 0`;
+
+      it('lifted a script that actually runs', () => {
+        expect(selectScript).toMatch(/^set -uo pipefail$/m);
+      });
+
+      it('answers `subset` only when the base fetched and a list was written', () => {
+        expect(runSelect(writesList('tests/a.test.ts\\n'), 'exit 0')).toBe('subset');
+      });
+
+      it.each([
+        ['the base commit cannot be fetched', writesList('tests/a.test.ts\\n'), 'exit 1'],
+        ['the selection exits non-zero', 'exit 3', 'exit 0'],
+        ['the selection writes an empty list', writesList(''), 'exit 0'],
+      ])('answers `full` when %s', (label, pnpm, git) => {
+        expect(runSelect(pnpm, git), label).toBe('full');
+      });
+    });
+  });
+
+  describe('each PACKAGE lane runs on what it consumes (MOTIR-5323)', () => {
+    const LANES = [
+      { job: 'cli', flag: 'pkg_cli', dir: 'packages/cli' },
+      { job: 'orchestrator', flag: 'pkg_orchestrator', dir: 'packages/orchestrator' },
+      { job: 'design-system', flag: 'pkg_design_system', dir: 'packages/design-system' },
+    ] as const;
+
+    type Manifest = {
+      name?: string;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+    const manifest = (dir: string): Manifest => JSON.parse(read(`${dir}/package.json`)) as Manifest;
+
+    it.each(LANES)('$job runs on its own package directory', ({ flag, dir }) => {
+      const patterns = armsSetting(flag);
+      expect(patterns.length, `some arm sets ${flag}`).toBeGreaterThan(0);
+      for (const path of [
+        `${dir}/src/index.ts`,
+        `${dir}/package.json`,
+        `${dir}/test/any.test.ts`,
+      ]) {
+        expect(covers(patterns, path), path).toBe(true);
+      }
+    });
+
+    it.each(LANES)('$job skips the app, the docs and the other packages', ({ flag, dir }) => {
+      const others = LANES.filter((lane) => lane.dir !== dir).map(
+        (lane) => `${lane.dir}/src/index.ts`,
+      );
+      for (const path of [
+        'app/page.tsx',
+        'lib/db.ts',
+        'docs/decisions/x.md',
+        'prisma/schema.prisma',
+        ...others,
+      ]) {
+        expect(covers(armsSetting(flag), path), path).toBe(false);
+      }
+    });
+
+    it.each(LANES)('$job runs on every input its own job body reads', ({ job, flag }) => {
+      // Re-derived, not restated: the composite actions the lane `uses:`, every
+      // file the lane or those actions hash or `require`, and this workflow.
+      const body = codeOf(ciJobs.get(job) ?? '');
+      expect(body, `${job} exists`).not.toBe('');
+      const actions = [...body.matchAll(/uses: \.\/(\.github\/actions\/[A-Za-z0-9_-]+)/g)].map(
+        (m) => `${m[1]!}/action.yml`,
+      );
+      expect(actions.length, `${job} uses a composite action`).toBeGreaterThan(0);
+      const hashed = (text: string): string[] =>
+        [...text.matchAll(/hashFiles\('([^']+)'\)/g)].map((m) => m[1]!);
+      const required = (text: string): string[] =>
+        [...text.matchAll(/require\('\.\/([^']+)'\)/g)].map((m) => m[1]!);
+      const inputs = new Set([
+        '.github/workflows/ci.yml',
+        ...actions,
+        ...hashed(body),
+        ...actions.flatMap((action) => {
+          const code = codeOf(read(action));
+          return [...hashed(code), ...required(code)];
+        }),
+      ]);
+      const patterns = armsSetting(flag);
+      for (const input of inputs)
+        expect(covers(patterns, input), `${job} reads ${input}`).toBe(true);
+    });
+
+    it.each(LANES)('$job runs when a workspace package it depends on changes', ({ flag, dir }) => {
+      const own = manifest(dir);
+      expect(own.name, `${dir}/package.json names its package`).toMatch(/^@motir\//);
+      const workspace = new Map<string, string>(
+        readdirSync(join(ROOT, 'packages')).flatMap((entry): [string, string][] => {
+          try {
+            const name = manifest(`packages/${entry}`).name;
+            return name ? [[name, `packages/${entry}`]] : [];
+          } catch {
+            return [];
+          }
+        }),
+      );
+      expect(workspace.get(own.name!)).toBe(dir);
+      // None of the three depends on another workspace package today. This is
+      // what turns a future `@motir/*` dependency into a red suite rather than a
+      // lane that skips on the change most able to break it.
+      const deps = Object.keys({
+        ...own.dependencies,
+        ...own.devDependencies,
+        ...own.peerDependencies,
+      }).filter((name) => workspace.has(name));
+      for (const dep of deps) {
+        expect(
+          covers(armsSetting(flag), `${workspace.get(dep)!}/src/index.ts`),
+          `${dir} depends on ${dep}`,
+        ).toBe(true);
+      }
     });
   });
 

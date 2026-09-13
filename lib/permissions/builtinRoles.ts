@@ -89,6 +89,15 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'attachment:create',
   'attachment:delete_any',
   'watcher:manage',
+  // MOTIR-5292 — deciding an approval gate routed to somebody ELSE, the escape
+  // hatch when the routed recipient is away. It used to be the WORKSPACE ROLE
+  // itself (`isWorkspaceManager`), which no custom role could ever hold and which
+  // even a project `admin` failed. Entering here keeps every workspace owner/admin
+  // able to unblock (the always-pass rail resolves to this whole set) and GIVES
+  // it to the built-in project `admin` — a deliberate widening. `member`,
+  // `viewer` and the implicit workspace-member grant do not take it: deciding
+  // work that is not yours is an act of ownership over the project.
+  'approval:decide_any',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split
   // neutral wherever the umbrella already stood.
@@ -118,6 +127,15 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'sprint:manage',
   'report:view',
   'saved_filter:manage',
+  // MOTIR-5293 — the saved-filter "anyone's" tier, and it lands in `admin` ALONE
+  // (not `member`, `viewer` or the implicit grant). It replaces a ROLE read —
+  // workspace owner/admin, or project role `admin` — and the manager rail plus
+  // this set resolve to exactly those actors; `levelGrants` does not name it, so
+  // a project admin keeps it on every level, as the role read (which ignored the
+  // level) did. Behaviour-neutral for every built-in role, proved over all 64
+  // inputs in `tests/permissions/accessParity.test.ts`. What it ADDS is that a
+  // custom role can list it.
+  'saved_filter:manage_any',
   'import:run',
   'work_item:delete',
   'work_item:triage',
@@ -149,7 +167,8 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
  *
  *   * **admin**  — the whole role-gated catalog: administers the project (and
  *                  each of MOTIR-2256's twelve per-domain administrative keys),
- *                  moderates comments and attachments, manages watchers.
+ *                  moderates comments and attachments, manages watchers, and
+ *                  (MOTIR-5293) manages anyone's saved filters.
  *   * **member** — browses, edits work items, comments, attaches, and (MOTIR-2291)
  *                  runs the planner, manages sprints and saved filters, triages
  *                  and acts on a generated plan, and (MOTIR-3629) ARCHIVES a work

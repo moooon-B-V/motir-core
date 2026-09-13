@@ -7,7 +7,10 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { encodeFilterParam } from '@/lib/filters/ast';
 import type { FilterAst } from '@/lib/filters/ast';
 import { PermissionDeniedError } from '@/lib/projects/errors';
-import { SavedFilterForbiddenError } from '@/lib/savedFilters/errors';
+import { SavedFilterForbiddenError, SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
+import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
+import { adminDb } from '../../helpers/adminDb';
 import { makeWorkItemFixture } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -81,6 +84,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the WRITES ask saved_filter:manage', () => {
@@ -192,6 +196,130 @@ describe('the per-ROW rules survive alongside the key', () => {
     );
     await expect(
       savedFiltersService.changeOwner(t.key, owned.id, t.memberCtx.userId, t.memberCtx),
+    ).rejects.toBeInstanceOf(SavedFilterForbiddenError);
+  });
+});
+
+describe('the manage-ANY tier is a PERMISSION a custom role can hold (MOTIR-5293)', () => {
+  // The card's reproduction, end to end: a CUSTOM role with browse + manage is
+  // given to a workspace MEMBER, and another member's filters are what it acts
+  // on. Before MOTIR-5293 there was no key that could be added to that role to
+  // change the second test's answer — only the built-in project Admin role
+  // reached it.
+  async function customRoleActor(
+    t: Team,
+    slug: string,
+    permissions: string[],
+  ): Promise<ServiceContext> {
+    const user = await createTestUser({ email: `sfgate-${slug}-${seq}@example.com`, name: slug });
+    await workspacesService.addMember({
+      userId: user.id,
+      workspaceId: t.fx.workspaceId,
+      role: 'member',
+    });
+    await projectMembersService.addMember({
+      key: t.key,
+      actorUserId: t.fx.ownerId,
+      ctx: t.fx.ctx,
+      targetUserId: user.id,
+      role: 'member',
+    });
+    const definition = await adminDb.projectRoleDefinition.create({
+      data: {
+        workspaceId: t.fx.workspaceId,
+        projectId: t.fx.projectId,
+        name: `Curator ${slug}`,
+        permissions,
+      },
+    });
+    await adminDb.$transaction((tx) =>
+      projectMembershipRepository.setRoleDefinition(
+        user.id,
+        t.fx.projectId,
+        { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },
+        tx,
+      ),
+    );
+    return { userId: user.id, workspaceId: t.fx.workspaceId };
+  }
+
+  async function authorsFilters(t: Team) {
+    const privateFilter = await savedFiltersService.create(
+      t.key,
+      { name: 'Member’s private', visibility: 'private', filterParam: param() },
+      t.memberCtx,
+    );
+    const sharedFilter = await savedFiltersService.create(
+      t.key,
+      { name: 'Member’s shared', visibility: 'project', filterParam: param() },
+      t.memberCtx,
+    );
+    return { privateFilter, sharedFilter };
+  }
+
+  it('WITH saved_filter:manage_any: sees the private filter, manages and reassigns the shared one', async () => {
+    const t = await makeTeam();
+    const curator = await customRoleActor(t, 'curator', [
+      'project:browse',
+      'saved_filter:manage',
+      'saved_filter:manage_any',
+    ]);
+    const { privateFilter, sharedFilter } = await authorsFilters(t);
+
+    const listed = await savedFiltersService.list(t.key, {}, curator);
+    expect(listed.items.map((f) => f.id)).toEqual(
+      expect.arrayContaining([privateFilter.id, sharedFilter.id]),
+    );
+    await expect(
+      savedFiltersService.resolve(t.key, privateFilter.id, curator),
+    ).resolves.toBeTruthy();
+
+    const renamed = await savedFiltersService.update(
+      t.key,
+      sharedFilter.id,
+      { name: 'Curated' },
+      curator,
+    );
+    expect(renamed.name).toBe('Curated');
+    const reassigned = await savedFiltersService.changeOwner(
+      t.key,
+      sharedFilter.id,
+      t.ownerCtx.userId,
+      curator,
+    );
+    expect(reassigned.owner.id).toBe(t.ownerCtx.userId);
+    await expect(
+      savedFiltersService.delete(t.key, sharedFilter.id, curator),
+    ).resolves.toBeUndefined();
+
+    // …and the row rule the tier never had survives: it SEES another person's
+    // private filter, it does not rewrite it.
+    await expect(
+      savedFiltersService.update(t.key, privateFilter.id, { name: 'Nope' }, curator),
+    ).rejects.toBeInstanceOf(SavedFilterForbiddenError);
+  });
+
+  it('WITHOUT it — the same role minus one key — none of the three succeeds', async () => {
+    const t = await makeTeam();
+    const curator = await customRoleActor(t, 'nocurate', ['project:browse', 'saved_filter:manage']);
+    const { privateFilter, sharedFilter } = await authorsFilters(t);
+
+    const listed = await savedFiltersService.list(t.key, {}, curator);
+    const ids = listed.items.map((f) => f.id);
+    expect(ids).toContain(sharedFilter.id);
+    expect(ids).not.toContain(privateFilter.id);
+    await expect(
+      savedFiltersService.resolve(t.key, privateFilter.id, curator),
+    ).rejects.toBeInstanceOf(SavedFilterNotFoundError);
+
+    await expect(
+      savedFiltersService.update(t.key, sharedFilter.id, { name: 'Curated' }, curator),
+    ).rejects.toBeInstanceOf(SavedFilterForbiddenError);
+    await expect(
+      savedFiltersService.changeOwner(t.key, sharedFilter.id, t.ownerCtx.userId, curator),
+    ).rejects.toBeInstanceOf(SavedFilterForbiddenError);
+    await expect(
+      savedFiltersService.delete(t.key, sharedFilter.id, curator),
     ).rejects.toBeInstanceOf(SavedFilterForbiddenError);
   });
 });

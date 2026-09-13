@@ -50,6 +50,8 @@ export function toQuickViewData(
   /** The card's DELIVERY SET (MOTIR-3660) — the Development section's rows and
    *  the rail caption's subject. Empty on nearly every card. */
   deliveries: WorkItemDeliveryDto[],
+  /** The filed item's folder names, root first (MOTIR-5352); `[]` when unfiled. */
+  folderPath: string[],
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -110,6 +112,8 @@ export function toQuickViewData(
     // detail aggregate already read above; `canPlan` is the project capability
     // the service resolves (this mapper stays pure).
     hasChildren: detail.children.length > 0,
+    folderId: detail.folderId,
+    folderPath,
     canPlan,
     // MOTIR-2562 — the editor inputs. Raw values ALONGSIDE the display strings
     // above (never instead of them): the strings keep the panel presentational,

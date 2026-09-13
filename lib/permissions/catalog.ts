@@ -125,6 +125,12 @@ export const PERMISSION_DOMAINS = [
   'comment',
   'attachment',
   'watcher',
+  // MOTIR-5292 — DECIDING an approval gate routed to somebody else. Its own domain
+  // rather than `work_item`, because the act is on the GATE — a decision record
+  // with its own lifecycle (`docs/decisions/approval-gates.md`) — and the
+  // Approvals room's `approval:view_any` (MOTIR-5305) joins it here. Placed with
+  // the other acts on ONE item's belongings (comments, attachments, watchers).
+  'approval',
   'public_request',
   'member',
   'board',
@@ -207,6 +213,11 @@ export const PERMISSIONS = [
   'attachment:create',
   'attachment:delete_any',
   'watcher:manage',
+  // MOTIR-5292 — the `_any` half of the approval-gate authority rule: the
+  // assignee (or the reporter of an unassigned item) decides their OWN gate, and
+  // this key decides ANYONE's — the shape `attachment:delete_any` and
+  // `comment:moderate` already give "act on what is not yours".
+  'approval:decide_any',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -222,6 +233,13 @@ export const PERMISSIONS = [
   'estimation:manage',
   'report:view',
   'saved_filter:manage',
+  // MOTIR-5293 — the "ANYONE'S filters" tier: see other people's private
+  // filters, manage and reassign any project-shared one. Its own key rather than
+  // a widening of `saved_filter:manage`, which the built-in Member set holds —
+  // folding the two would let every member read every private filter. `_any`
+  // as in `attachment:delete_any`: the owner acts on their own row regardless,
+  // and this key is what reaches everybody else's.
+  'saved_filter:manage_any',
   'repository:manage',
   'repository:manage_access',
   // MOTIR-5260 — connecting, listing and disconnecting a third-party MONITOR
@@ -311,6 +329,7 @@ const PERMISSION_META: Record<
   'attachment:create': { domain: 'attachment', enforcement: 'enforced' },
   'attachment:delete_any': { domain: 'attachment', enforcement: 'enforced' },
   'watcher:manage': { domain: 'watcher', enforcement: 'enforced' },
+  'approval:decide_any': { domain: 'approval', enforcement: 'enforced' }, // MOTIR-5292
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
@@ -326,6 +345,7 @@ const PERMISSION_META: Record<
   'estimation:manage': { domain: 'estimation', enforcement: 'enforced' },
   'report:view': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2351
   'saved_filter:manage': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2352
+  'saved_filter:manage_any': { domain: 'report', enforcement: 'enforced' }, // MOTIR-5293
   'repository:manage': { domain: 'repository', enforcement: 'enforced' },
   'repository:manage_access': { domain: 'repository', enforcement: 'enforced' },
   'integration:manage': { domain: 'integration', enforcement: 'enforced' }, // MOTIR-5260

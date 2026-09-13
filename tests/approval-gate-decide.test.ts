@@ -14,6 +14,10 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import { makeWorkItemFixture, createTestLink, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
+import type { PermissionKey } from '@/lib/permissions/catalog';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectMembersService } from '@/lib/services/projectMembersService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { truncateAuthTables } from './helpers/db';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -72,7 +76,7 @@ async function plainMember() {
  *  ⚠️ `reporterId` EXISTS BECAUSE `fx.ownerId` IS ALSO A WORKSPACE OWNER, and
  *  that overlap made the reporter arm untestable in isolation (MOTIR-5192).
  *  Everything the fixture creates is reported by `fx.ownerId`, for whom
- *  `isWorkspaceManagerFor` is true — so the ADMIN arm authorises them whatever
+ *  `approval:decide_any` resolves (the always-pass rail) — so the ADMIN arm authorises them whatever
  *  the reporter arm says. Under the old `assignee OR reporter OR admin` rule the
  *  reporter term short-circuited first and the overlap was invisible; the moment
  *  that term became conditional, every "the reporter is refused" assertion
@@ -551,5 +555,176 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
         other.ctx,
       ),
     ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+  });
+});
+
+describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a workspace ROLE (MOTIR-5292)', () => {
+  // ⚠️ UNTIL MOTIR-5292 THE THIRD ARM ASKED `isWorkspaceManagerFor` — owner or
+  // admin of the WORKSPACE — and there was no key a team could grant. So every
+  // case below that turns on HOLDING THE KEY was unreachable: a custom role could
+  // carry any key in the catalog and none of them reached the arm, and a project
+  // Admin whose workspace role is `member` was refused. Each actor here is a
+  // PLAIN WORKSPACE MEMBER, so nothing can pass through the always-pass rail by
+  // accident (the `designSubtaskWithGate` note on why the fixture owner cannot
+  // stand in for one).
+  //
+  // ⚠️ `canDecide` AND THE DOOR ARE ASSERTED TOGETHER on every holder, because
+  // they call one function and the failure to prevent is one of them moving
+  // without the other — a verb drawn that the door refuses, or the reverse.
+  const FLOOR: PermissionKey[] = ['project:browse', 'work_item:edit'];
+  let roleSeq = 0;
+
+  function scoped() {
+    return { key: fx.projectIdentifier, actorUserId: fx.ownerId, ctx: fx.ctx };
+  }
+
+  /** A plain workspace member seated on the project with a CUSTOM role. */
+  async function onCustomRole(permissions: PermissionKey[]) {
+    const user = await plainMember();
+    roleSeq += 1;
+    const role = await projectRoleDefinitionService.create({
+      projectId: fx.projectId,
+      ctx: fx.ctx,
+      name: `Unblocker ${roleSeq}`,
+      permissions,
+    });
+    await projectMembersService.addMember({ ...scoped(), targetUserId: user.id, role: 'member' });
+    await projectMembersService.setRole({ ...scoped(), targetUserId: user.id, role: role.id });
+    return user;
+  }
+
+  /** A plain workspace member seated on the project with a BUILT-IN role. */
+  async function onBuiltInRole(role: 'admin' | 'member') {
+    const user = await plainMember();
+    await projectMembersService.addMember({ ...scoped(), targetUserId: user.id, role });
+    return user;
+  }
+
+  async function gateRoutedToSomebodyElse() {
+    const assignee = await plainMember();
+    return designSubtaskWithGate({ assigneeId: assignee.id, reporterId: assignee.id });
+  }
+
+  it('a CUSTOM role holding the key decides a gate routed to somebody else — `canDecide` and the door agree', async () => {
+    const holder = await onCustomRole([...FLOOR, 'approval:decide_any']);
+    const { item, gate } = await gateRoutedToSomebodyElse();
+    const ctx = { userId: holder.id, workspaceId: fx.workspaceId };
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      ctx,
+    );
+    expect(read.canDecide).toBe(true);
+
+    const result = await approvalGatesService.decide(
+      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      ctx,
+    );
+    expect(result.gate.state).toBe('approved');
+
+    // The recorded vocabulary is KEPT: `admin` now MEANS "decided under
+    // `approval:decide_any`" (ADR §2's third amendment), so a key-holder who is
+    // no kind of workspace admin is recorded under it.
+    const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(row.decidedUnderAuthority).toBe('admin');
+    expect(row.decidedById).toBe(holder.id);
+  });
+
+  it('the SAME role WITHOUT the key is refused — the pair of the case above, differing in one key', async () => {
+    const withoutKey = await onCustomRole([...FLOOR]);
+    const { item, gate } = await gateRoutedToSomebodyElse();
+    const ctx = { userId: withoutKey.id, workspaceId: fx.workspaceId };
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      ctx,
+    );
+    expect(read.canDecide).toBe(false);
+
+    // Cleared the FLOOR (`work_item:edit` is in the role), failed the authority
+    // test — the 403-shaped refusal, not a 404 and not a permission error.
+    await expect(
+      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, ctx),
+    ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
+
+    const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(row.state).toBe('awaiting');
+    expect(row.decidedUnderAuthority).toBeNull();
+  });
+
+  it('a project ADMIN whose WORKSPACE role is `member` decides an unrouted gate — the widening this card makes', async () => {
+    const projectAdmin = await onBuiltInRole('admin');
+    const { item, gate } = await gateRoutedToSomebodyElse();
+    const ctx = { userId: projectAdmin.id, workspaceId: fx.workspaceId };
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      ctx,
+    );
+    expect(read.canDecide).toBe(true);
+
+    for (const verb of ['request_changes', 'approve'] as const) {
+      // Both verbs, each on its own gate: a decision is terminal for the gate,
+      // and the rule is stated for approve and request_changes alike.
+      const fresh = verb === 'approve' ? gate : (await gateRoutedToSomebodyElse()).gate;
+      const result = await approvalGatesService.decide(
+        { gateId: fresh.id, decision: verb, source: 'ui' },
+        ctx,
+      );
+      expect(result.gate.state).toBe(verb === 'approve' ? 'approved' : 'changes_requested');
+    }
+  });
+
+  it('a project MEMBER does NOT hold the key — refused on a gate routed to somebody else', async () => {
+    const member = await onBuiltInRole('member');
+    const { item, gate } = await gateRoutedToSomebodyElse();
+    const ctx = { userId: member.id, workspaceId: fx.workspaceId };
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      ctx,
+    );
+    expect(read.canDecide).toBe(false);
+    await expect(
+      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, ctx),
+    ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
+  });
+
+  it('a WORKSPACE admin still decides — they hold the key through the always-pass rail, so nothing regressed', async () => {
+    const wsAdmin = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: wsAdmin.id, workspaceId: fx.workspaceId, role: 'admin' },
+    });
+    const ctx = { userId: wsAdmin.id, workspaceId: fx.workspaceId };
+    // Asserted as a PERMISSION the model resolves, which is the whole change: the
+    // arm now asks the model, so this is the fact that keeps them unblockers.
+    const held = await projectAccessService.getPermissions(fx.projectId, ctx);
+    expect(held.has('approval:decide_any')).toBe(true);
+
+    const { gate } = await gateRoutedToSomebodyElse();
+    const result = await approvalGatesService.decide(
+      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      ctx,
+    );
+    expect(result.gate.state).toBe('approved');
+    const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(row.decidedUnderAuthority).toBe('admin');
+  });
+
+  it('the ARM ORDER is unchanged — an ASSIGNEE who also holds the key is recorded as the assignee', async () => {
+    // Holding the key must not relabel a press the routing rule already
+    // explains. §2 routes to the assignee, so that is what the row must say.
+    const assigneeAdmin = await onBuiltInRole('admin');
+    const { gate } = await designSubtaskWithGate({
+      assigneeId: assigneeAdmin.id,
+      reporterId: assigneeAdmin.id,
+    });
+
+    await approvalGatesService.decide(
+      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { userId: assigneeAdmin.id, workspaceId: fx.workspaceId },
+    );
+    const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(row.decidedUnderAuthority).toBe('assignee');
   });
 });

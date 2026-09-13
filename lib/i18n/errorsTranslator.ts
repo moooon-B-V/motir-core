@@ -14,13 +14,23 @@ import { defaultLocale } from './locales';
 type ErrorTranslator = (key: string, values?: Record<string, string | number>) => string;
 
 export async function getErrorsTranslator(): Promise<ErrorTranslator> {
+  return getServerTranslator('errors');
+}
+
+/**
+ * The same in-request / out-of-request translator for any message namespace —
+ * a Server Action that answers with a string from a feature's own namespace
+ * (`folders.fileRefused`, MOTIR-5316) resolves it here rather than duplicating
+ * the fallback.
+ */
+export async function getServerTranslator(namespace: string): Promise<ErrorTranslator> {
   try {
-    return (await getTranslations('errors')) as unknown as ErrorTranslator;
+    return (await getTranslations(namespace as 'errors')) as unknown as ErrorTranslator;
   } catch {
     return createTranslator({
       locale: defaultLocale,
       messages: getMessagesFor(defaultLocale),
-      namespace: 'errors',
+      namespace: namespace as 'errors',
     }) as unknown as ErrorTranslator;
   }
 }

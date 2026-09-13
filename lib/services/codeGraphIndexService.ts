@@ -1,3 +1,4 @@
+import type { IndexPauseReason } from '@/lib/ciFleet/indexAllowance';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { getGitProvider, providerSupportsRepoTarballUrl } from '@/lib/git';
 import type { GitProviderId, NormalizedRepo } from '@/lib/git/types';
@@ -338,7 +339,13 @@ export interface IndexModeRecord {
  * the second field was added to end.
  */
 export type IndexRepoResult =
-  | { indexed: false; reason: IndexSkipReason }
+  | {
+      indexed: false;
+      /** A target verdict, or a HARD-STOP pause of the organisation's internal
+       *  index allowance (MOTIR-4593): nothing was admitted or booted, and the
+       *  repository row records the same reason. */
+      reason: IndexSkipReason | IndexPauseReason;
+    }
   | {
       indexed: true;
       repoRef: string;

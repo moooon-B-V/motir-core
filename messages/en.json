@@ -221,6 +221,7 @@
     "field_parent": "Parent",
     "field_targetRepo": "Repository",
     "field_targetRepoRole": "Repository role",
+    "field_status": "Status",
     "moreChanges": "+{n} more",
     "staleBadge": "Out of date",
     "staleSummary": "{n, plural, one {# item may be out of date} other {# items may be out of date}}",
@@ -338,6 +339,7 @@
     "field_parent": "Parent",
     "field_targetRepo": "Repository",
     "field_targetRepoRole": "Repository role",
+    "field_status": "Status",
     "noChanges": "No field changes",
     "approveCta": "Approve — add {n, plural, one {# item} other {# items}}",
     "declineCta": "Discard",
@@ -362,6 +364,7 @@
       "comment": "Comments",
       "attachment": "Attachments",
       "watcher": "Watchers",
+      "approval": "Approvals",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -418,6 +421,10 @@
     "watcher_manage": {
       "label": "Manage watchers",
       "description": "Add and remove other people from a work item's watcher list. Anyone who can view a work item may watch it themselves."
+    },
+    "approval_decide_any": {
+      "label": "Decide any approval",
+      "description": "Approve or request changes on an approval routed to someone else, not only one routed to you."
     },
     "public_request_comment": {
       "label": "Comment on requests",
@@ -478,6 +485,10 @@
     "saved_filter_manage": {
       "label": "Manage saved filters",
       "description": "Create, edit, share and subscribe to the project’s saved filters."
+    },
+    "saved_filter_manage_any": {
+      "label": "Manage anyone’s saved filters",
+      "description": "See other people’s private filters, edit or delete any shared filter, and hand a shared filter to a new owner."
     },
     "repository_manage": {
       "label": "Manage repositories",
@@ -6439,7 +6450,8 @@
           "links": "dependencies",
           "parent": "parent",
           "repo": "repository",
-          "repoRole": "repository role"
+          "repoRole": "repository role",
+          "status": "status"
         },
         "remove": "removed",
         "willRemove": "goes on approve"
@@ -7569,6 +7581,108 @@
         "colLastFired": "Last fired",
         "colExpected": "Expected",
         "never": "Never"
+      },
+      "indexAllowance": {
+        "title": "Index allowance · is the gate sized right?",
+        "subtitle": "This period, per tier. If a large share of a tier crossed, the gate is wrong — not the orgs.",
+        "internal": "Internal · never shown to customers",
+        "foot": "Crossing the allowance does not stop indexing on a paid tier — Motir absorbs the overrun and records the crossing, which is all this table counts. The Free tier has no soft gate: its one-time allowance is a hard stop.",
+        "thresholdProvisional": "The {pct}% threshold is provisional until MOTIR-4588 proposes one.",
+        "disabled": {
+          "title": "Meter disabled",
+          "body": "A self-hosted build has no fleet, so there is no index allowance and no figure to show. No zero is drawn, deliberately."
+        },
+        "unknown": {
+          "title": "Couldn’t read the allowance",
+          "body": "motir-ai did not answer. Every tier reads unknown — not zero — until it does."
+        },
+        "stat": {
+          "overThresholdValue": "{n} of {total}",
+          "overThreshold": "soft-gated tiers over the recalculate threshold",
+          "threshold": "recalculate threshold",
+          "thresholdProvisional": "recalculate threshold · provisional",
+          "freeExhausted": "Free orgs at their one-time limit"
+        },
+        "col": {
+          "tier": "Tier",
+          "orgs": "Orgs",
+          "crossed": "Crossed / at limit",
+          "rate": "Crossing rate",
+          "reading": "Reading",
+          "basis": "Internal cost basis (credits + index)"
+        },
+        "cadence": {
+          "one_time": "one-time · hard stop",
+          "monthly": "monthly"
+        },
+        "exhaustedCount": "{n} exhausted",
+        "crossedCount": "{n} crossed",
+        "rate": {
+          "noSoftGateAtLimit": "n/a — no soft gate · {pct} at limit",
+          "none": "—",
+          "noOrgs": "no orgs on this tier"
+        },
+        "reading": {
+          "holds": "Gate holds",
+          "recalc": "Recalculate — over {threshold}%",
+          "free": "No soft gate — hard stop",
+          "unconfigured": "Allowance not configured"
+        },
+        "basis": {
+          "unset": "set by staff",
+          "one_time": "{credits} + {index} one-time",
+          "monthly": "{credits} + {index} / mo"
+        }
+      },
+      "stopped": {
+        "title": "Stopped orgs",
+        "subtitle": "Indexing paused by a hard stop. Every one resumes on its own — nobody re-arms it.",
+        "total": "{count} stopped",
+        "foot": "Showing {from}–{to} of {total} · longest-stopped first · the catch-up refreshes only repos that moved",
+        "pagerLabel": "Stopped orgs pages",
+        "prev": "Prev",
+        "next": "Next",
+        "pageOf": "Page {page} of {pages}",
+        "filter": {
+          "label": "Stop reason",
+          "all": "All",
+          "noCredit": "No credit",
+          "freeUsed": "Free allowance used",
+          "margin": "Margin ceiling",
+          "marginInactive": "not active",
+          "marginInactiveHint": "Hard gate B is not active yet. An empty result would mean the gate is off, not that no org is near the ceiling."
+        },
+        "searchLabel": "Find an org",
+        "search": "Find an org…",
+        "empty": "No org is stopped.",
+        "emptyBody": "No dispatch has been refused by a hard stop — every organisation is indexing.",
+        "noMatch": "No stopped org matches this filter and search.",
+        "col": {
+          "org": "Org",
+          "tier": "Tier",
+          "reason": "Reason",
+          "stoppedFor": "Stopped for",
+          "graphBehind": "Graph behind",
+          "resumes": "Resumes"
+        },
+        "tierUnknown": "unknown",
+        "tierNone": "no tier yet",
+        "reason": {
+          "no_credit": "No credit",
+          "allowance_exhausted": "Free allowance used",
+          "other": "Stopped · {reason}"
+        },
+        "behind": "{n, plural, one {# commit} other {# commits}}",
+        "behindUnknown": "not counted yet",
+        "resumes": {
+          "upgrade": "on upgrade",
+          "topUp": "on top-up or renewal",
+          "gateLifts": "when the gate lifts"
+        },
+        "duration": {
+          "hours": "{n} h",
+          "days": "{n, plural, one {# day} other {# days}}"
+        }
       }
     },
     "orgs": {
@@ -7643,6 +7757,54 @@
         "emptyTitle": "No operator writes yet",
         "emptyDescription": "Every classification change appears here, with who made it and why. Reads are not actions and are not listed.",
         "noReason": "No reason recorded"
+      },
+      "indexCost": {
+        "title": "Index & fleet cost · this period",
+        "subtitle": "Both pools side by side, and what this org’s containers cost Motir.",
+        "foot": "The index line counts containers that FAILED. Internal COGS — nothing here is charged to the customer. Platform-wide meta / tenant split: the fleet-cost readout (MOTIR-4540), and later Usage & cost.",
+        "disabled": {
+          "title": "Meter disabled",
+          "body": "A self-hosted build has no fleet, so there are no figures to show. No zero is drawn, deliberately."
+        },
+        "unknown": {
+          "title": "Couldn’t read the pools",
+          "body": "motir-ai did not answer. Both pools read unknown — never zero — until it does."
+        },
+        "absent": "motir-ai has never seen this organisation: it has no credit ledger or index allowance yet. Its first index draw provisions both.",
+        "creditBalance": "Credit balance",
+        "customerSees": "Customer sees this",
+        "indexAllowance": "Index allowance",
+        "internalOnly": "Internal only",
+        "remaining": "remaining",
+        "grantedConsumed": "granted {granted} · consumed {consumed}",
+        "unknownFigure": "unknown",
+        "creditNote": "Drawn by the planner and the hosted agent. Token spend this period: {spend} credits.",
+        "creditNoteUnknownSpend": "Drawn by the planner and the hosted agent. Token spend this period: unknown.",
+        "indexNote": "Drawn by indexing only. Never touches the credit balance — under any condition.",
+        "notGrantedYet": "No allowance granted yet — nothing has indexed for this organisation in its current period.",
+        "notConfigured": "Allowance not configured — set on the plan by staff. Until then there is no gate to cross.",
+        "indexing": "Indexing",
+        "pausedSince": "paused since {at}",
+        "marginInactive": "Margin ceiling: Not active · MOTIR-5280",
+        "absorbedNote": "This is the normal, absorbed case — not a fault.",
+        "absorbedDetail": "Motir carries the overrun and records one crossing for the monthly calibration.",
+        "state": {
+          "under": "a · Under allowance",
+          "over_still_indexing": "b · Over allowance — still indexing",
+          "stopped_no_credit": "c · Stopped · no credit",
+          "stopped_allowance_exhausted": "c · Stopped · Free allowance used",
+          "exempt": "Exempt · Motir’s own",
+          "not_configured": "Allowance not configured",
+          "not_granted_yet": "Not granted yet",
+          "other": "Stopped · another gate"
+        },
+        "col": {
+          "workload": "Fleet workload",
+          "containers": "Containers",
+          "seconds": "Billable seconds",
+          "cogs": "Internal COGS"
+        },
+        "absentLine": "absent — no {workload} container ran this period (not a zero)"
       }
     }
   },
@@ -8020,6 +8182,47 @@
       "saved": "Saved",
       "saveError": "Couldn't save — try again."
     }
+  },
+  "folders": {
+    "expandAria": "Expand folder {name}",
+    "collapseAria": "Collapse folder {name}",
+    "emptyFolder": "Nothing is filed here yet.",
+    "newFolder": "New folder",
+    "newFolderInside": "New folder inside",
+    "rename": "Rename",
+    "actionsAria": "Folder actions for {name}",
+    "nameLabel": "Folder name",
+    "nameHint": "Press Enter to save, Esc to cancel.",
+    "nameRequired": "Enter a name.",
+    "nameTaken": "A folder named “{name}” is already here.",
+    "moveTo": "Move to…",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "pickerTitle": "Move “{name}” to…",
+    "pickerSearch": "Find a folder",
+    "pickerListLabel": "Folders",
+    "pickerLoading": "Loading folders…",
+    "pickerTruncated": "Showing the first {count} folders.",
+    "projectRoot": "Project root",
+    "currentLocation": "Current location",
+    "cannotMoveIntoSelf": "Can’t move a folder into itself.",
+    "insideFolder": "It’s inside “{name}”.",
+    "cycleRefused": "A folder can’t move into one of its own folders.",
+    "crossProjectRefused": "That folder belongs to another project.",
+    "folderGone": "That folder no longer exists.",
+    "noFolder": "No folder",
+    "fieldLabel": "Folder",
+    "removesFromParent": "Filing it removes it from {key} {title}.",
+    "fileRefused": "That folder belongs to another project, so this work item stayed where it was.",
+    "delete": "Delete…",
+    "deleteTitle": "Delete folder “{name}”?",
+    "deleteLead": "Only the folder is removed. Everything filed in it stays in the project.",
+    "deleteMoves": "<strong>{kinds, select, both {{folders, plural, one {# folder} other {# folders}} and {items, plural, one {# work item} other {# work items}}} folders {{folders, plural, one {# folder} other {# folders}}} other {{items, plural, one {# work item} other {# work items}}}}</strong> will move to <strong>{destination}</strong>. No work items are deleted.",
+    "deleteEmpty": "“{name}” is empty. Deleting it removes only the folder.",
+    "deleteConfirm": "Delete folder",
+    "deleteCounting": "Counting what moves…",
+    "deleteNameTaken": "A folder named “{name}” is already where these would move. Rename or move it first.",
+    "deleteSubtaskNeedsPlacement": "A subtask filed here would be left at the project root, where a subtask can’t sit. Move it into another folder or under a work item first."
   },
   "monitoring": {
     "title": "Monitoring",

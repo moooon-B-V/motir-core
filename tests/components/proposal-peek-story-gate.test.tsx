@@ -48,6 +48,8 @@ const OP_TOTALITY = {
 } satisfies Record<PlanItemOpDto, { identifier: string | null; expectedChip: string }>;
 
 const TARGET_PAYLOAD: Partial<QuickViewData> = {
+  folderId: null,
+  folderPath: [],
   id: 'wi_1',
   identifier: 'MOTIR-7',
   title: 'The committed title',

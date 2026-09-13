@@ -160,7 +160,7 @@ export default async function BoardsPage({
       }),
       componentsService.listComponents(ctx.project.identifier, wsCtx),
       labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
-      // The saved-filter tier (Subtask 6.2.3) — { canBrowse, canShare, isAdmin },
+      // The saved-filter tier (Subtask 6.2.3) — { canBrowse, canShare, canManageAny },
       // distinct from the drag-edit `caps` above. Powers the [Saved] dropdown +
       // the applied bar's save dialog (the same `Viewer` shape /items uses).
       projectAccessService.getSavedFilterCapabilities(ctx.projectId, wsCtx),

@@ -114,6 +114,7 @@ export type PersonalDataDelegate =
   | 'planChangeTurn'
   | 'planChangeMailboxEntry'
   | 'workItemTodo'
+  | 'folder'
   | 'approvalGate'
   | 'planRevision';
 
@@ -402,6 +403,16 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     model: 'workItemLink',
     tier: 'tenant',
     basis: 'Work-item links the reader created.',
+    where: (userId) => ({ createdById: userId }),
+  },
+  {
+    // `created_by_id` attributes an act — making this folder — to a person, the
+    // same shape as `work_item_link.created_by_id` directly above, so it is
+    // EXPORTED rather than excluded (Story MOTIR-5308 · MOTIR-5312).
+    table: 'folder',
+    model: 'folder',
+    tier: 'tenant',
+    basis: 'Folders the reader created.',
     where: (userId) => ({ createdById: userId }),
   },
   {

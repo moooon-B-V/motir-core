@@ -260,6 +260,33 @@ jobs:
   # the branch prefixes stood for. `images` is true only when something the
   # container images are actually built from changed.
   #
+  # ── One flag per workspace-package lane (MOTIR-5323) ───────────────────────
+  #
+  # `pkg_cli`, `pkg_orchestrator` and `pkg_design_system` are true only when the
+  # diff touches that package's own directory, or an input every package lane
+  # installs from: the lockfile, the workspace and root manifests, the `pnpm`
+  # composite action, and this workflow. That is what
+  # `docs/decisions/app-shell-over-packages.md` §1.4 asks for — "gated by the
+  # `changes` classifier's path sets" — and §2 of the same ADR is why the skip is
+  # safe rather than hopeful: a package may not import the app, so a change
+  # outside the package cannot change what the package's own suite executes.
+  # None of the three depends on another workspace package; if one ever does,
+  # `tests/ci-changed-paths-gate.test.ts` re-derives that from the manifests and
+  # fails until the dependency's directory sets the flag too.
+  #
+  # ⚠️ A PACKAGE-ONLY CHANGE STILL SETS `app=true`. The app consumes the
+  # packages and root tests read package files, so these flags narrow the three
+  # package lanes and nothing else. They fail open with the other two: a push to
+  # `main` has no base, so it still runs every package lane.
+  #
+  # ── And one flag for the Vitest lane's WIDTH (MOTIR-5325) ──────────────────
+  #
+  # `vitest_full` decides whether a pull request's `test` legs run the whole
+  # suite or only the files its diff reaches (`docs/decisions/ci-affected-tests.md`).
+  # It fails open like the others — `true` runs the whole suite — so every early
+  # exit, every event that is not a pull request, a missing force-full list, a
+  # force-full path and the `vitest-full` label all set it.
+  #
   # ⚠️ BOTH DEFAULT TO `true`, AND THAT DIRECTION IS THE WHOLE SAFETY ARGUMENT.
   # A predicate that fails open costs a wasted lane; one that fails closed
   # merges untested code, which is the defect this job was written to remove.
@@ -282,12 +309,16 @@ jobs:
     # Observed 0.4–2.4 min → 10 (~4x). Ten is the floor every short job
     # gets; see the ceilings block above.
     timeout-minutes: 10
-    # Reads the diff, writes two booleans. Nothing else.
+    # Reads the diff, writes six booleans. Nothing else.
     permissions:
       contents: read
     outputs:
       app: ${{ steps.classify.outputs.app }}
       images: ${{ steps.classify.outputs.images }}
+      pkg_cli: ${{ steps.classify.outputs.pkg_cli }}
+      pkg_orchestrator: ${{ steps.classify.outputs.pkg_orchestrator }}
+      pkg_design_system: ${{ steps.classify.outputs.pkg_design_system }}
+      vitest_full: ${{ steps.classify.outputs.vitest_full }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -313,13 +344,22 @@ jobs:
           # three-dot diff below is the batch's own change set.
           MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           MERGE_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          # ── A pull request may ask for the whole Vitest suite (MOTIR-5325) ──
+          #
+          # `true` / `false` and nothing else: `contains()` is evaluated by the
+          # runner and only its boolean reaches the script.
+          FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'vitest-full') }}
         run: |
           set -euo pipefail
 
           emit() {
             echo "app=$1" >>"$GITHUB_OUTPUT"
             echo "images=$2" >>"$GITHUB_OUTPUT"
-            echo "app=$1 images=$2"
+            echo "pkg_cli=$3" >>"$GITHUB_OUTPUT"
+            echo "pkg_orchestrator=$4" >>"$GITHUB_OUTPUT"
+            echo "pkg_design_system=$5" >>"$GITHUB_OUTPUT"
+            echo "vitest_full=$6" >>"$GITHUB_OUTPUT"
+            echo "app=$1 images=$2 pkg_cli=$3 pkg_orchestrator=$4 pkg_design_system=$5 vitest_full=$6"
           }
 
           # Resolve the pair to diff FROM THE EVENT, and fail open on any event
@@ -349,7 +389,7 @@ jobs:
           # fail-CLOSED direction.
           if [ -z "$base" ] || [ -z "$head" ]; then
             echo "::warning::No base/head commit for event '$EVENT' — running every lane."
-            emit true true
+            emit true true true true true true
             exit 0
           fi
 
@@ -357,18 +397,46 @@ jobs:
           # the diff's own exit status, which is the thing being guarded on.
           if ! files=$(git diff --name-only "$base...$head"); then
             echo '::warning::Could not diff against the merge base — running every lane.'
-            emit true true
+            emit true true true true true true
             exit 0
           fi
           if [ -z "$files" ]; then
             echo '::warning::Empty changed-file set — running every lane.'
-            emit true true
+            emit true true true true true true
             exit 0
           fi
           echo "$files"
 
           app=false
           images=false
+          pkg_cli=false
+          pkg_orchestrator=false
+          pkg_design_system=false
+
+          # ── The Vitest lane: a subset, or the whole suite (MOTIR-5325) ──────
+          #
+          # `vitest_full` is what `test` and `coverage` read. It is FALSE only on a
+          # pull request whose diff touches no path in the force-full list and
+          # that does not carry the `vitest-full` label; everything else — the
+          # merge queue above all — runs the whole suite with the coverage gate.
+          # The list is ONE file, read here, by the selection script and by the
+          # guard; `docs/decisions/ci-affected-tests.md` §2.1 is its reasoning.
+          vitest_full=false
+          if [ "$EVENT" != 'pull_request' ] || [ "${FULL_LABEL:-false}" = 'true' ]; then
+            vitest_full=true
+          fi
+          force_full=()
+          if [ -r .github/ci/full-suite-paths.txt ]; then
+            while IFS= read -r glob; do
+              case "$glob" in '' | '#'*) continue ;; esac
+              force_full+=("$glob")
+            done <.github/ci/full-suite-paths.txt
+          fi
+          if [ "${#force_full[@]}" -eq 0 ]; then
+            echo '::warning::No force-full list at .github/ci/full-suite-paths.txt — running the whole Vitest suite.'
+            vitest_full=true
+          fi
+
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             # Anything that is NOT docs / design / plan-seed makes this a code
@@ -420,9 +488,32 @@ jobs:
               .github/workflows/sandbox-images.yml|.github/workflows/runner-image.yml) images=true ;;
               .github/workflows/ci.yml|.github/actions/buildx/*) images=true ;;
             esac
+            # The package lanes (MOTIR-5323): the package's own directory, then
+            # the install inputs all three lanes consume. The guard re-derives
+            # those inputs from the lanes' job bodies and the composite action
+            # they use, so a lane that gains an input this list lacks goes red.
+            case "$f" in
+              packages/cli/*) pkg_cli=true ;;
+              packages/orchestrator/*) pkg_orchestrator=true ;;
+              packages/design-system/*) pkg_design_system=true ;;
+            esac
+            case "$f" in
+              pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc|.github/actions/pnpm/*|.github/workflows/ci.yml) pkg_cli=true pkg_orchestrator=true pkg_design_system=true ;;
+            esac
+            # A force-full path (MOTIR-5325). The glob is a PATTERN, so it is
+            # unquoted on the right of `==`; inside `[[ ]]` a `*` also spans `/`,
+            # which can only match MORE paths than picomatch would, never fewer.
+            # The `+` expansion keeps an empty array legal under `set -u` on
+            # older bash.
+            for glob in ${force_full[@]+"${force_full[@]}"}; do
+              if [[ "$f" == $glob ]]; then
+                echo "vitest_full: $f matches the force-full glob $glob"
+                vitest_full=true
+              fi
+            done
           done <<<"$files"
 
-          emit "$app" "$images"
+          emit "$app" "$images" "$pkg_cli" "$pkg_orchestrator" "$pkg_design_system" "$vitest_full"
 
   lint:
     name: Lint + Prettier
@@ -647,6 +738,11 @@ jobs:
     runs-on: ubuntu-latest
     # Observed 1.1–1.3 min → 10 (~8x, the short-job floor).
     timeout-minutes: 10
+    # Runs when the diff reaches this package — its own paths, or an install
+    # input every package lane shares (MOTIR-5323, `app-shell-over-packages.md`
+    # §1.4). `changes` fails open, so a push to `main` still runs it.
+    needs: changes
+    if: ${{ needs.changes.outputs.pkg_design_system == 'true' }}
     # The @motir/design-system package ships its own vitest suite (registries,
     # apply API, render, and the RSC-safe-barrel guard) that the root Vitest lane
     # does NOT run — its `include` globs only `tests/**`. Run it here so the
@@ -677,6 +773,9 @@ jobs:
     runs-on: ubuntu-latest
     # Observed 1.3–1.6 min → 10 (~6x, the short-job floor).
     timeout-minutes: 10
+    # Gated on its own package's paths, as `design-system` above (MOTIR-5323).
+    needs: changes
+    if: ${{ needs.changes.outputs.pkg_cli == 'true' }}
     # Same gap as the design-system job above: `@motir/cli`'s own vitest suite
     # (config stores, link resolution, dispatch, the client core, the agent
     # profile table, and the 7.9.7a sandbox-image invariants) lives at
@@ -713,6 +812,9 @@ jobs:
     # both take the 10-minute short-job floor. Re-derive it from this lane's own
     # runs once there are four, per MOTIR-3569's bar.
     timeout-minutes: 10
+    # Gated on its own package's paths, as `design-system` above (MOTIR-5323).
+    needs: changes
+    if: ${{ needs.changes.outputs.pkg_orchestrator == 'true' }}
     # Same gap as the two package jobs above, and the reason `@motir/orchestrator`
     # needed one the day it was extracted: its suite lives at
     # `packages/orchestrator/test/**`, which the root Vitest lane does NOT glob
@@ -1130,13 +1232,21 @@ jobs:
       # queue's `gh-readonly-queue/main/pr-<n>-<sha>` ref does not survive the
       # ejection, so its full fan-out could not be read even if it finished.
       #
-      # ⚠️ THE TWO HALVES ARE ONE CHANGE. Fail-fast here is only affordable
-      # because the pull-request lane still runs this whole suite. Measured over
-      # 2026-08-27 → 09-04, 81 failing PR CI runs: 77 involved a heavy job
-      # (Vitest 93 · Playwright 33 · coverage 9) and 4 were fast-job-only. Slim
-      # the PR lane to lint/typecheck and 95% of real failures arrive in the
-      # queue instead — at which point cancelling the fan-out leaves nowhere to
-      # read them. Do not do one without re-deciding the other.
+      # ⚠️ THE TWO HALVES ARE ONE CHANGE. Fail-fast here was affordable because
+      # the pull-request lane ran this whole suite. Measured over 2026-08-27 →
+      # 09-04, 81 failing PR CI runs: 77 involved a heavy job (Vitest 93 ·
+      # Playwright 33 · coverage 9) and 4 were fast-job-only. Slim the PR lane to
+      # lint/typecheck and 95% of real failures arrive in the queue instead — at
+      # which point cancelling the fan-out leaves nowhere to read them.
+      #
+      # ⚠️ RE-DECIDED BY MOTIR-5325, and deliberately NOT by reverting this line.
+      # A pull request now runs the Vitest files its diff reaches rather than all
+      # of them (`docs/decisions/ci-affected-tests.md`), so a break the subset
+      # missed surfaces HERE, cancelled. The queue still is not where a failure is
+      # read: the author adds the `vitest-full` label to the pull request and gets
+      # the whole, un-cancelled fan-out there. Why that trade is acceptable —
+      # Vitest was 3 of 23 failed queue builds, and the typical pull request's
+      # lane falls to ~19% of its cost — is that document's §5.
       fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         leg: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
@@ -1235,6 +1345,52 @@ jobs:
       # UNCONDITIONAL for that exact reason. See `tests/ci-package-build.test.ts`,
       # which pins this step in every lane that resolves a package at run time.
       - run: pnpm -r --filter './packages/*' build
+      # ── WHICH FILES THIS LEG RUNS (MOTIR-5325) ──────────────────────────────
+      #
+      # On a pull request whose `vitest_full` is false the leg runs only the
+      # files the diff reaches through the import graph, plus every test that
+      # reads the tree (`docs/decisions/ci-affected-tests.md` §2.2) — chosen by
+      # the SAME script that measured the rule. Every leg computes the same list
+      # from the same checkout and base, and the cost-balanced sequencer
+      # partitions it deterministically, so no file runs twice and none drops.
+      #
+      # ⚠️ IT FAILS OPEN. Any error while selecting — the base cannot be fetched,
+      # the diff is empty, the script refuses because a force-full path changed,
+      # the list comes back empty — leaves `mode` at `full` (or unset, when the
+      # step is skipped), and the full-shard step below runs exactly as it
+      # always has. The base sha arrives through `env:`, never spliced in.
+      - name: Select the affected test files
+        id: select
+        if: needs.changes.outputs.vitest_full != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -uo pipefail
+          list="$RUNNER_TEMP/vitest-affected.txt"
+          if git fetch --no-tags --depth=1 origin "$BASE_SHA" &&
+            pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --select "$BASE_SHA" --out "$list" &&
+            [ -s "$list" ]; then
+            echo "mode=subset" >>"$GITHUB_OUTPUT"
+          else
+            echo '::warning::Could not select the affected test files — this leg runs its full shard.'
+            echo "mode=full" >>"$GITHUB_OUTPUT"
+          fi
+      # One invocation, every selected path a positional filter: a filter
+      # narrows the files Vitest globs, and `--shard` partitions what is left.
+      # ⚠️ `--passWithNoTests` IS REQUIRED — without it Vitest throws when a
+      # subset holds fewer files than there are legs, and a leg whose slice is
+      # empty exits 1. No coverage: the per-file thresholds are enforced on a
+      # merged report of the WHOLE suite, which a subset cannot produce, so the
+      # `coverage` job is skipped as well. Read into an array rather than piped
+      # through `xargs`, which may split a long list into several invocations —
+      # each would partition its own share and the legs would disagree.
+      - name: Vitest — the affected files
+        if: steps.select.outputs.mode == 'subset'
+        run: |
+          set -euo pipefail
+          files=()
+          while IFS= read -r f; do files+=("$f"); done <"$RUNNER_TEMP/vitest-affected.txt"
+          pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/12 --passWithNoTests --reporter=default "${files[@]}"
       # Run this leg of the test suite, COLLECTING coverage into a per-leg blob
       # report (MOTIR-1711). `--config vitest.collect.config.ts` is the base
       # vitest.config.ts with the per-file thresholds STRIPPED (a leg only
@@ -1255,6 +1411,9 @@ jobs:
       # names into one directory, seven blobs overwrite each other, and the >=90%
       # gate measures a single leg while every check stays green.
       - run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/12 --reporter=default --reporter=blob --coverage
+        # Everything that did not select a subset: the merge queue, a force-full
+        # or labelled pull request, and every selection that failed.
+        if: steps.select.outputs.mode != 'subset'
       # Share this leg's blob report with the `coverage` merge job.
       # `include-hidden-files: true` is REQUIRED: the blob reporter writes to
       # .vitest-reports/ (a dot-directory), and upload-artifact EXCLUDES hidden
@@ -1262,6 +1421,7 @@ jobs:
       # uploads nothing, and the merge job crashes with ENOENT on
       # .vitest-reports. Same gotcha as the .next/ artifact (MOTIR-1706).
       - name: Upload coverage blob
+        if: steps.select.outputs.mode != 'subset'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-shard-${{ matrix.leg }}
@@ -1294,7 +1454,9 @@ jobs:
     # this job is ever observed near 10 again, the first question is which
     # step grew — not what the ceiling should be.
     timeout-minutes: 10
-    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    # Only when the legs ran the WHOLE suite (MOTIR-5325): a subset run uploads
+    # no blobs, and part of the suite cannot meet the per-file thresholds.
+    if: ${{ needs.changes.outputs.app == 'true' && needs.changes.outputs.vitest_full == 'true' && github.event_name != 'push' }}
     needs: [test, changes]
     env:
       # The merge step (`vitest --mergeReports`) does NOT run any tests, so it

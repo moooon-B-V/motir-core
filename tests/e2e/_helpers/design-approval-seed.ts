@@ -138,9 +138,9 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
   // ⚠️ BOTH ARE PLAIN WORKSPACE MEMBERS, and that is what makes the two
   // assertions mean anything. `approvalGatesService` composes `canDecide` as
   // *assignee, or reporter when there is NO assignee, or workspace manager* (ADR
-  // §2's 2026-09-11 amendment), and the manager arm is read off
-  // the WORKSPACE role (`projectAccessService.isWorkspaceManagerFor` →
-  // `isWorkspaceManager(inputs.workspaceRole)`). Seeding the reviewer as the
+  // §2's 2026-09-11 amendment), and the manager arm is the
+  // `approval:decide_any` permission (MOTIR-5292), which a workspace owner holds
+  // through the always-pass rail and a project `admin` holds too. Seeding the reviewer as the
   // workspace OWNER would make them able to decide everything, and the spec
   // would pass without the assignee arm existing at all.
   async function member(label: string, role: 'admin' | 'member' | 'viewer'): Promise<string> {

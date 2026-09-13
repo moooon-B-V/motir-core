@@ -1,4 +1,4 @@
-import { type GithubInstallation, type GithubRepo, type Prisma } from '@/generated/prisma/client';
+import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
 // GitHub-repo repository — single Prisma operations on the `github_repo` table
@@ -47,6 +47,67 @@ export interface DriftRecomputeCandidate {
   defaultBranchHeadSha: string;
   /** The id the HOST knows — what every provider method takes. */
   hostInstallationId: string;
+}
+
+/** One repository the index CATCH-UP sweep may re-ask about (MOTIR-5290) —
+ *  projected, not the whole model. */
+export interface IndexCatchUpCandidate {
+  id: string;
+  owner: string;
+  name: string;
+  provider: string;
+  workspaceId: string;
+  organizationId: string;
+  defaultBranch: string;
+  indexPausedReason: string;
+  indexedHeadSha: string | null;
+  defaultBranchHeadSha: string | null;
+  /** The id the HOST knows — what the index/refresh event carries. */
+  hostInstallationId: string;
+}
+
+/** One organisation whose indexing is paused, as the admin's Stopped orgs list pages
+ *  it (MOTIR-4595) — the org-level roll-up of its paused repositories. */
+export interface IndexPausedOrgRow {
+  organizationId: string;
+  organizationName: string;
+  /** The reason on the org's most recently paused repository. */
+  reason: string;
+  /** When the org's longest-paused repository was paused. */
+  stoppedSince: Date;
+  pausedRepos: number;
+}
+
+/** Escape LIKE metacharacters so a typed `%` or `_` matches itself. */
+function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
+ * The per-org roll-up of paused repositories, as one CTE both the page and the
+ * counts read — so a page and its counts cannot be computed from two different
+ * definitions of "a stopped org".
+ */
+function pausedOrgsCte(search: string | null): Prisma.Sql {
+  const nameFilter = search
+    ? Prisma.sql`AND o."name" ILIKE ${'%' + escapeLike(search) + '%'}`
+    : Prisma.empty;
+  return Prisma.sql`
+    WITH per_org AS (
+      SELECT
+        gr."organization_id" AS "organizationId",
+        MIN(gr."index_paused_at") AS "stoppedSince",
+        COUNT(*)::int AS "pausedRepos",
+        (ARRAY_AGG(gr."index_paused_reason" ORDER BY gr."index_paused_at" DESC NULLS LAST))[1] AS "reason"
+      FROM "github_repo" gr
+      WHERE gr."index_paused_reason" IS NOT NULL AND gr."archived" = false
+      GROUP BY gr."organization_id"
+    ),
+    stopped AS (
+      SELECT per_org.*, o."name" AS "organizationName"
+      FROM per_org JOIN "organization" o ON o."id" = per_org."organizationId"
+      WHERE true ${nameFilter}
+    )`;
 }
 
 export const githubRepoRepository = {
@@ -265,6 +326,162 @@ export const githubRepoRepository = {
           ? { indexedHeadSha: args.headSha, indexedAt: args.indexedAt ?? new Date() }
           : {}),
       },
+    });
+    return result.count;
+  },
+
+  /** Record that indexing is PAUSED for a repository by a hard stop of its
+   *  organisation's internal index allowance (MOTIR-4593), and release any claim —
+   *  a refused dispatch booted nothing, so no run is in flight for it. The
+   *  `indexedHeadSha` is untouched: the graph that exists is still the graph. */
+  async markIndexPaused(
+    repoRef: string,
+    args: { reason: string; at?: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name },
+      data: {
+        indexPausedReason: args.reason,
+        indexPausedAt: args.at ?? new Date(),
+        indexingRunId: null,
+      },
+    });
+    return result.count;
+  },
+
+  /**
+   * The repositories whose indexing is PAUSED by a hard stop of the internal index
+   * allowance (MOTIR-4593 records them) — the ONLY rows the catch-up sweep
+   * (MOTIR-5290) selects. A repository without a recorded pause is never re-asked
+   * about, so an organisation that was never stopped costs the sweep nothing.
+   *
+   * Oldest pause first, bounded per tick. Archived repositories are skipped: they
+   * accept no writes and are never re-indexed.
+   *
+   * ⚠️ A CROSS-TENANT SYSTEM READ — it takes `tx` for the reason
+   * {@link githubRepoRepository.listNeedingDriftRecompute} states: unbound, the
+   * policy returns zero rows and raises nothing. And every column is aliased,
+   * because `$queryRaw` applies no `@map`.
+   */
+  async listIndexPaused(
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<IndexCatchUpCandidate[]> {
+    return tx.$queryRaw<IndexCatchUpCandidate[]>`
+      SELECT
+        gr."id"                       AS "id",
+        gr."owner"                    AS "owner",
+        gr."name"                     AS "name",
+        gr."provider"                 AS "provider",
+        gr."workspace_id"             AS "workspaceId",
+        gr."organization_id"          AS "organizationId",
+        gr."default_branch"           AS "defaultBranch",
+        gr."index_paused_reason"      AS "indexPausedReason",
+        gr."indexed_head_sha"         AS "indexedHeadSha",
+        gr."default_branch_head_sha"  AS "defaultBranchHeadSha",
+        gi."installation_id"          AS "hostInstallationId"
+      FROM "github_repo" gr
+      JOIN "github_installation" gi ON gi."id" = gr."installation_id"
+      WHERE gr."index_paused_reason" IS NOT NULL
+        AND gr."archived" = false
+      ORDER BY gr."index_paused_at" ASC NULLS FIRST, gr."id" ASC
+      LIMIT ${limit}
+    `;
+  },
+
+  /**
+   * ONE PAGE of organisations whose indexing is paused (MOTIR-4595), longest-stopped
+   * first, optionally narrowed to one reason and an organisation-name search.
+   * Paged in SQL: the admin list holds hundreds of organisations.
+   *
+   * ⚠️ A CROSS-TENANT SYSTEM READ — it takes `tx` for the reason
+   * {@link githubRepoRepository.listNeedingDriftRecompute} states.
+   */
+  async listIndexPausedOrgs(
+    args: { reason: string | null; search: string | null; limit: number; offset: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<IndexPausedOrgRow[]> {
+    const reasonFilter = args.reason ? Prisma.sql`WHERE "reason" = ${args.reason}` : Prisma.empty;
+    return tx.$queryRaw<IndexPausedOrgRow[]>`
+      ${pausedOrgsCte(args.search)}
+      SELECT "organizationId", "organizationName", "reason", "stoppedSince", "pausedRepos"
+      FROM stopped ${reasonFilter}
+      ORDER BY "stoppedSince" ASC NULLS LAST, "organizationId" ASC
+      LIMIT ${args.limit} OFFSET ${args.offset}
+    `;
+  },
+
+  /** Stopped organisations per reason, over the same roll-up and search as
+   *  {@link githubRepoRepository.listIndexPausedOrgs} — the filter's counts. */
+  async countIndexPausedOrgsByReason(
+    args: { search: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ reason: string; orgs: number }[]> {
+    return tx.$queryRaw<{ reason: string; orgs: number }[]>`
+      ${pausedOrgsCte(args.search)}
+      SELECT "reason", COUNT(*)::int AS "orgs" FROM stopped GROUP BY "reason"
+    `;
+  },
+
+  /** The paused repositories of a page of organisations, with the columns the drift
+   *  count is resolved from (MOTIR-4595). */
+  async listIndexPausedReposForOrgs(
+    organizationIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Pick<
+      GithubRepo,
+      | 'organizationId'
+      | 'commitsBehind'
+      | 'commitsBehindBaseSha'
+      | 'commitsBehindHeadSha'
+      | 'indexedHeadSha'
+      | 'defaultBranchHeadSha'
+    >[]
+  > {
+    if (organizationIds.length === 0) return [];
+    return tx.githubRepo.findMany({
+      where: {
+        organizationId: { in: organizationIds },
+        indexPausedReason: { not: null },
+        archived: false,
+      },
+      select: {
+        organizationId: true,
+        commitsBehind: true,
+        commitsBehindBaseSha: true,
+        commitsBehindHeadSha: true,
+        indexedHeadSha: true,
+        defaultBranchHeadSha: true,
+      },
+    });
+  },
+
+  /** The most recently paused repository of one organisation — its pause reason and
+   *  when — or `null` when nothing is paused (MOTIR-5341). Archived repositories
+   *  are skipped, as in the Stopped orgs list. */
+  async findLatestIndexPauseForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ indexPausedReason: string | null; indexPausedAt: Date | null } | null> {
+    return tx.githubRepo.findFirst({
+      where: { organizationId, indexPausedReason: { not: null }, archived: false },
+      orderBy: { indexPausedAt: 'desc' },
+      select: { indexPausedReason: true, indexPausedAt: true },
+    });
+  },
+
+  /** Lift a recorded pause — the allowance let a dispatch boot (MOTIR-4593). A
+   *  repository that was not paused is not written. */
+  async clearIndexPause(repoRef: string, tx: Prisma.TransactionClient): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name, indexPausedReason: { not: null } },
+      data: { indexPausedReason: null, indexPausedAt: null },
     });
     return result.count;
   },

@@ -44,6 +44,9 @@ import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
+import { QuickViewFolderControl } from './QuickViewFolderField';
+import { useFolderCommands } from './FolderCommands';
+import { fileWorkItemAction } from '../[key]/edit/actions';
 import { useLabelEditing, useComponentEditing } from './fieldChipEditing';
 import { useCustomFieldEditing } from './customFieldEditing';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
@@ -334,6 +337,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // order), and `null` on every committed host (Part XIV §16.1, MOTIR-4472).
   const proposalOutcome: PlanItemOutcome | null =
     props.state === 'ready' ? (props.proposalOutcome ?? null) : null;
+  const tFolders = useTranslations('folders');
+  const folderCommands = useFolderCommands();
   const edit = useQuickViewRailEdit(
     props.state === 'ready' ? props.data : null,
     props.onEdited,
@@ -1121,6 +1126,48 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             ) : (
               <span className="text-(--el-text-secondary)">{t('none')}</span>
             )}
+          </EditableRailField>
+
+          {/* Folder (MOTIR-5316, folders design panel 6) — directly below Parent,
+              because the two are one fact about placement: an item sits under a
+              work item OR in a folder. Filing commits through the rail's own
+              optimistic path and, on success, tells the tree behind the dialog
+              where the row now sits. */}
+          <EditableRailField
+            label={tFolders('fieldLabel')}
+            fieldKey="folder"
+            edit={edit}
+            control={
+              <QuickViewFolderControl
+                folderId={view.folderId}
+                parent={view.parent}
+                onDismiss={edit.close}
+                onPick={(folderId, folderPath) => {
+                  edit.close();
+                  if (folderId === view.folderId) return;
+                  const workItemId = view.id;
+                  void edit.commitVia(
+                    'folder',
+                    { folderId, folderPath, parentId: null, parent: null },
+                    async () => {
+                      const res = await fileWorkItemAction({ workItemId, folderId });
+                      if (res.ok) {
+                        folderCommands?.reportWorkItemPlacement({
+                          workItemId,
+                          folderId,
+                          parentId: null,
+                        });
+                      }
+                      return res;
+                    },
+                  );
+                }}
+              />
+            }
+          >
+            <span className="truncate text-(--el-text-secondary)">
+              {view.folderPath.length > 0 ? view.folderPath.join(' ▸ ') : tFolders('noFolder')}
+            </span>
           </EditableRailField>
 
           {/* Labels — coloured chips. Reuses the SHIPPED ValueChip + name-hash

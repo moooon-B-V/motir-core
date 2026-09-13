@@ -161,9 +161,15 @@ const AGREEMENT: {
   {
     method: 'getSavedFilterCapabilities',
     // `canShare` is the shipped EDIT tier by construction (publishing into the
-    // project's shared namespace is a write); `isAdmin` is a role question the
-    // catalog does not model, so it is deliberately not in this map.
-    booleans: { canBrowse: 'project:browse', canShare: 'work_item:edit' },
+    // project's shared namespace is a write). `canManageAny` WAS a role question
+    // the catalog did not model, and sat outside this map for that reason;
+    // MOTIR-5293 made it `saved_filter:manage_any`, so it is held to the same
+    // agreement as every other boolean here.
+    booleans: {
+      canBrowse: 'project:browse',
+      canShare: 'work_item:edit',
+      canManageAny: 'saved_filter:manage_any',
+    },
   },
   {
     method: 'getSettingsCapabilities',

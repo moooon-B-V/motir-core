@@ -350,7 +350,9 @@ gate but not decide it sees its state and no control.
 > - **It is VISIBLE.** Workspace owner/admin is a role in the permission grid. A
 >   team can see who can unblock a stuck gate without reading a work item's
 >   reporter column.
-> - **It is GRANTABLE.** A team that needs more unblockers grants the role; a
+> - **It is GRANTABLE.** ⚠️ _False as written, and corrected on the record by the
+>   THIRD amendment below (MOTIR-5292): a workspace role is not grantable in the
+>   sense the permission model means._ A team that needs more unblockers grants the role; a
 >   team that needs fewer does not. The reporter arm was un-tunable — it came
 >   attached to whoever happened to file the item, which for an MCP-filed card is
 >   an automation's account.
@@ -386,6 +388,74 @@ gate but not decide it sees its state and no control.
 > **THE FLOOR IS UNCHANGED.** The kind's permission key is still asserted first
 > and independently, and the relationship test is applied on top of it. A project
 > `viewer` who is the assignee is still refused, at the floor.
+
+> ### §2 — THIRD AMENDMENT (MOTIR-5292, 2026-09-13): the escape hatch is a PERMISSION, `approval:decide_any` — not the workspace role
+>
+> **ROUTING IS UNCHANGED, and so are both relationship arms and their order.**
+> This amendment touches only the third arm — WHO ELSE may press — and it
+> corrects the second amendment's argument for that arm rather than reversing
+> its rule.
+>
+> **What was WRONG.** The second amendment defended the admin arm as _GRANTABLE_:
+> _"a team that needs more unblockers grants the role."_ The arm it shipped asked
+> `isWorkspaceManager(workspaceRole)` — owner or admin of the WORKSPACE — and that
+> is not grantable in the sense Motir's permission model means. A role in Motir
+> only CARRIES permissions; no custom role could carry this, because there was no
+> key. A team wanting its QA lead to unblock a stuck gate had one lever — making
+> them a workspace admin, which hands over every project and every setting — and
+> a user who is **Admin on the project itself** but a plain member of the
+> workspace was refused. The check was also invisible to the role editor and to
+> `tests/permissions/storyGate.test.ts`, because it was laundered through
+> `projectAccessService.isWorkspaceManagerFor`, inside the one file that guard
+> trusts to derive policy.
+>
+> **THE RULE IS: the ASSIGNEE, or the REPORTER WHEN THE ITEM HAS NO ASSIGNEE, or
+> anyone holding `approval:decide_any` on the project.** It is the shape Motir
+> already uses for acting on what is not yours — your OWN row by relationship,
+> ANYONE's by an `_any` key (`attachment:delete_any`, `comment:moderate`) — and
+> the reversal clause above had already named it: _"widen the ESCAPE HATCH (a
+> project-scoped approver role, say)."_
+>
+> | who                                                | before                      | after                                                          |
+> | -------------------------------------------------- | --------------------------- | -------------------------------------------------------------- |
+> | workspace owner / admin                            | may decide any gate         | **unchanged** — the always-pass rail holds the key             |
+> | project **Admin** (workspace `member`)             | refused                     | **may decide any gate** — the built-in Admin set holds the key |
+> | a CUSTOM role granted the key                      | impossible — no key existed | **may decide any gate**                                        |
+> | project Member / Viewer, implicit workspace member | refused                     | refused — none of those sets holds the key                     |
+>
+> **The widening to project Admins is the point, not a side effect**: they are
+> the people a project already names as able to run it.
+>
+> **The key.** `approval:decide_any`, domain `approval` (the Approvals room's
+> `approval:view_any`, MOTIR-5305, joins it), `enforcement: 'enforced'` in the
+> same change that consults it, in `ROLE_GATED_PERMISSIONS` and so in the built-in
+> Admin set, and in neither `member`, `viewer` nor
+> `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS`. `levelGrants` gives it the default arm,
+> so on a `private` project it still requires a project membership. It is
+> **UNGRANTABLE to an API token by derivation** (`lib/tokens/grant.ts`): the
+> decide route is session-authed and no MCP tool or `/api/v1` operation asserts
+> the key, and §6a's rule that a decision names a PERSON is exactly why none
+> should.
+>
+> **`decided_under_authority` — the vocabulary is KEPT, and its meaning is
+> restated.** The `admin` member now means **decided under
+> `approval:decide_any`**. No member is added. Every row that already says
+> `admin` was written by a workspace owner/admin, who holds the key, so no
+> historical row becomes false and nothing is migrated — the same treatment
+> `reporter` got in the second amendment. A second member would have given one
+> authority two names, split by the date of this amendment, and every reader of
+> the column would have had to know that date.
+>
+> **Asked, never derived.** `approvalGatesService.resolveGateAuthority` asks
+> `projectAccessService.getPermissions` for the key. `isWorkspaceManagerFor` is
+> deleted, and `tests/permissions/storyGate.test.ts` now refuses the access
+> service handing a bare role predicate back to a caller — the laundering path
+> this defect used.
+>
+> **What would reverse this.** Nothing in the second amendment's reversal
+> evidence changes: a population of stalled gates is answered by granting the key
+> more widely, which is now possible, and never by re-widening the relationship
+> arms.
 
 ### 3. What approving a DESIGN result does — DECIDED BY THE PLANNER (rung 3: the story's own stated intent)
 
