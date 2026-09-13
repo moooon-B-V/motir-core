@@ -89,6 +89,15 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'attachment:create',
   'attachment:delete_any',
   'watcher:manage',
+  // MOTIR-5292 — deciding an approval gate routed to somebody ELSE, the escape
+  // hatch when the routed recipient is away. It used to be the WORKSPACE ROLE
+  // itself (`isWorkspaceManager`), which no custom role could ever hold and which
+  // even a project `admin` failed. Entering here keeps every workspace owner/admin
+  // able to unblock (the always-pass rail resolves to this whole set) and GIVES
+  // it to the built-in project `admin` — a deliberate widening. `member`,
+  // `viewer` and the implicit workspace-member grant do not take it: deciding
+  // work that is not yours is an act of ownership over the project.
+  'approval:decide_any',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split
   // neutral wherever the umbrella already stood.

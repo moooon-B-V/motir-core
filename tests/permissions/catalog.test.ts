@@ -296,6 +296,13 @@ const REMOVAL_SPLIT_ENFORCED: PermissionKey[] = ['work_item:archive'];
  */
 const INTEGRATION_ENFORCED: PermissionKey[] = ['integration:manage'];
 
+/**
+ * MOTIR-5292's approval key — deciding a gate routed to somebody else. Enforced
+ * in the same pull request that consults it (`resolveGateAuthority`), so it
+ * never sat `planned`; its own list for the reason every list above gives.
+ */
+const APPROVAL_ENFORCED: PermissionKey[] = ['approval:decide_any'];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -367,6 +374,10 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => INTEGRATION_ENFORCED.includes(k)).sort()).toEqual(
       [...INTEGRATION_ENFORCED].sort(),
     );
+    // …and MOTIR-5292's approval key, on the same terms again.
+    expect(ENFORCED_PERMISSIONS.filter((k) => APPROVAL_ENFORCED.includes(k)).sort()).toEqual(
+      [...APPROVAL_ENFORCED].sort(),
+    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
@@ -374,7 +385,8 @@ describe('enforcement — the seam that lets naming and wiring land separately',
         PLAN_DECISION_ENFORCED.length +
         LESSON_LIBRARY_ENFORCED.length +
         REMOVAL_SPLIT_ENFORCED.length +
-        INTEGRATION_ENFORCED.length,
+        INTEGRATION_ENFORCED.length +
+        APPROVAL_ENFORCED.length,
     );
   });
 

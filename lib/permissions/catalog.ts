@@ -125,6 +125,12 @@ export const PERMISSION_DOMAINS = [
   'comment',
   'attachment',
   'watcher',
+  // MOTIR-5292 — DECIDING an approval gate routed to somebody else. Its own domain
+  // rather than `work_item`, because the act is on the GATE — a decision record
+  // with its own lifecycle (`docs/decisions/approval-gates.md`) — and the
+  // Approvals room's `approval:view_any` (MOTIR-5305) joins it here. Placed with
+  // the other acts on ONE item's belongings (comments, attachments, watchers).
+  'approval',
   'public_request',
   'member',
   'board',
@@ -207,6 +213,11 @@ export const PERMISSIONS = [
   'attachment:create',
   'attachment:delete_any',
   'watcher:manage',
+  // MOTIR-5292 — the `_any` half of the approval-gate authority rule: the
+  // assignee (or the reporter of an unassigned item) decides their OWN gate, and
+  // this key decides ANYONE's — the shape `attachment:delete_any` and
+  // `comment:moderate` already give "act on what is not yours".
+  'approval:decide_any',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -311,6 +322,7 @@ const PERMISSION_META: Record<
   'attachment:create': { domain: 'attachment', enforcement: 'enforced' },
   'attachment:delete_any': { domain: 'attachment', enforcement: 'enforced' },
   'watcher:manage': { domain: 'watcher', enforcement: 'enforced' },
+  'approval:decide_any': { domain: 'approval', enforcement: 'enforced' }, // MOTIR-5292
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
