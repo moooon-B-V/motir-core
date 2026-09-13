@@ -10,7 +10,9 @@ import { requirePlatformStaff } from '@/lib/platform/auth';
 import { PlatformOrganizationNotFoundError } from '@/lib/platform/errors';
 import { platformRoleAtLeast } from '@/lib/platform/auth';
 import { platformBillingClassificationService } from '@/lib/services/platformBillingClassificationService';
+import { platformOrgIndexCostService } from '@/lib/services/platformOrgIndexCostService';
 import { ClassificationBar } from './_components/ClassificationBar';
+import { OrgIndexCostCard } from './_components/OrgIndexCostCard';
 
 /**
  * The operator ORGANIZATION page — design
@@ -75,6 +77,10 @@ export default async function AdminOrganizationPage({
   }
 
   const { organization: org, actions } = page;
+  // Index & fleet cost (MOTIR-5341, design Panel 14) — read only once the page has
+  // established the organisation exists, so a 404 is never preceded by a read.
+  // Internal accounting only; Motir does not charge for code indexing.
+  const indexCost = await platformOrgIndexCostService.read(principal, org.id);
 
   return (
     <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
@@ -158,6 +164,8 @@ export default async function AdminOrganizationPage({
           </p>
         </Card>
       ) : null}
+
+      <OrgIndexCostCard data={indexCost} />
 
       {/* ── MOTIR-733's regions, RESERVED rather than faked ─────────────────
           Each renders the console's own `EmptyState` naming the card that brings

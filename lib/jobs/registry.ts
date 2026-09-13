@@ -49,6 +49,7 @@ import { planTargetLockSweep } from './definitions/planTargetLockSweep';
 import { supervisionSweep } from './definitions/supervisionSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { codeGraphDriftSweep } from './definitions/codeGraphDriftSweep';
+import { codeGraphIndexCatchUp } from './definitions/codeGraphIndexCatchUp';
 import { jobRunReap } from './definitions/jobRunReap';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
@@ -117,6 +118,7 @@ export const jobDefinitions = [
   supervisionSweep,
   abandonedPlanSweep,
   codeGraphDriftSweep,
+  codeGraphIndexCatchUp,
   jobRunReap,
   dataExportBuild,
   dataExportExpirySweep,

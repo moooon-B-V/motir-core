@@ -69,6 +69,36 @@ export function resetTarballBodyTrap(): void {
   tarballBodyTouched = false;
 }
 
+/**
+ * THE INDEX ALLOWANCE, AS THIS WORLD ANSWERS IT (MOTIR-4593). The neutral state is
+ * `ok` for the pre-boot ask and `ok` for every draw, so suites about the index
+ * SHAPE are unaffected. It is matched explicitly for the same reason the verdict
+ * read is: the fall-through below is the credential MINT, and a check that parsed
+ * a credential body as "could not ask" would boot for the wrong reason.
+ *
+ * `indexAllowanceWorld.checkOutcome` is a verdict outcome, or `'http_500'` for a
+ * motir-ai that could not answer. Every draw body is recorded, in order.
+ */
+export const indexAllowanceWorld: {
+  checkOutcome: string;
+  drawOutcome: string;
+  checks: { coreOrganizationId: string }[];
+  draws: { coreOrganizationId: string; containerSeconds: number; idempotencyKey: string }[];
+  /** Every motir-ai path this world was asked for, in order. */
+  aiPaths: string[];
+} = { checkOutcome: 'ok', drawOutcome: 'ok', checks: [], draws: [], aiPaths: [] };
+
+function allowanceVerdict(outcome: string, attributedCredits: number): unknown {
+  return {
+    outcome,
+    mayIndex: !outcome.startsWith('hard_stop_'),
+    window: '2026-09',
+    grantedCredits: 400,
+    consumedCredits: 0,
+    attributedCredits,
+  };
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -97,6 +127,11 @@ export function stubAppCredentials(): void {
  * quietly costing a few hundred megabytes.
  */
 export function stubIndexFleet(): void {
+  indexAllowanceWorld.checkOutcome = 'ok';
+  indexAllowanceWorld.drawOutcome = 'ok';
+  indexAllowanceWorld.checks = [];
+  indexAllowanceWorld.draws = [];
+  indexAllowanceWorld.aiPaths = [];
   stubAppCredentials();
   vi.stubEnv('MOTIR_AI_URL', INDEX_AI_URL);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', INDEX_SERVICE_TOKEN);
@@ -116,6 +151,19 @@ export function stubIndexFleet(): void {
       // a HIGH CodeQL alert in this repo, test fixtures included.
       const parsed = new URL(String(url));
       if (parsed.host === new URL(INDEX_AI_URL).host) {
+        indexAllowanceWorld.aiPaths.push(parsed.pathname);
+        if (parsed.pathname.endsWith('/v1/credits/index-check')) {
+          indexAllowanceWorld.checks.push(JSON.parse(String(init?.body)));
+          const outcome = indexAllowanceWorld.checkOutcome;
+          return outcome === 'http_500'
+            ? json(500, { code: 'internal_error' })
+            : json(200, allowanceVerdict(outcome, 0));
+        }
+        if (parsed.pathname.endsWith('/v1/credits/index-draw')) {
+          const body = JSON.parse(String(init?.body));
+          indexAllowanceWorld.draws.push(body);
+          return json(200, allowanceVerdict(indexAllowanceWorld.drawOutcome, 1));
+        }
         // ⚠️ THE CODE-AUDIT READ ANSWERS "ALREADY AUDITED", AND THAT IS THE
         // NEUTRAL STATE FOR THESE SUITES (MOTIR-2266). A successful index now
         // ends in a `derive-first-audit` step whose gate asks motir-ai whether

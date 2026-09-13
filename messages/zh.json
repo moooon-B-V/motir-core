@@ -7574,6 +7574,108 @@
         "colLastFired": "上次触发",
         "colExpected": "应触发于",
         "never": "从未"
+      },
+      "indexAllowance": {
+        "title": "索引额度 · 门槛设置得合适吗？",
+        "subtitle": "本周期，按套餐分列。如果某个套餐中有很大比例越过了门槛，说明门槛有误，而不是组织的问题。",
+        "internal": "内部 · 从不向客户展示",
+        "foot": "在付费套餐上越过额度不会停止索引——Motir 承担超出部分并记录这次越过，本表统计的仅此而已。免费套餐没有软门槛：其一次性额度是硬性停止。",
+        "thresholdProvisional": "在 MOTIR-4588 提出建议之前，{pct}% 的阈值为暂定值。",
+        "disabled": {
+          "title": "计量已停用",
+          "body": "自托管版本没有容器集群，因此没有索引额度，也没有可展示的数值。刻意不显示零。"
+        },
+        "unknown": {
+          "title": "无法读取额度",
+          "body": "motir-ai 没有响应。在它响应之前，每个套餐都显示为未知——而不是零。"
+        },
+        "stat": {
+          "overThresholdValue": "{total} 个中的 {n} 个",
+          "overThreshold": "超过重新计算阈值的软门槛套餐",
+          "threshold": "重新计算阈值",
+          "thresholdProvisional": "重新计算阈值 · 暂定",
+          "freeExhausted": "达到一次性上限的免费组织"
+        },
+        "col": {
+          "tier": "套餐",
+          "orgs": "组织数",
+          "crossed": "越过 / 达到上限",
+          "rate": "越过比例",
+          "reading": "解读",
+          "basis": "内部成本基数（额度 + 索引）"
+        },
+        "cadence": {
+          "one_time": "一次性 · 硬性停止",
+          "monthly": "每月"
+        },
+        "exhaustedCount": "{n} 个已用尽",
+        "crossedCount": "{n} 个已越过",
+        "rate": {
+          "noSoftGateAtLimit": "不适用——无软门槛 · {pct} 达到上限",
+          "none": "—",
+          "noOrgs": "该套餐没有组织"
+        },
+        "reading": {
+          "holds": "门槛有效",
+          "recalc": "需重新计算——超过 {threshold}%",
+          "free": "无软门槛——硬性停止",
+          "unconfigured": "未配置额度"
+        },
+        "basis": {
+          "unset": "由工作人员设置",
+          "one_time": "{credits} + {index} 一次性",
+          "monthly": "{credits} + {index} / 月"
+        }
+      },
+      "stopped": {
+        "title": "已停止的组织",
+        "subtitle": "索引因硬性停止而暂停。每一个都会自行恢复——无需任何人重新开启。",
+        "total": "{count} 个已停止",
+        "foot": "显示第 {from}–{to} 个，共 {total} 个 · 停止时间最长的在前 · 补齐刷新只处理有变动的仓库",
+        "pagerLabel": "已停止组织分页",
+        "prev": "上一页",
+        "next": "下一页",
+        "pageOf": "第 {page} 页，共 {pages} 页",
+        "filter": {
+          "label": "停止原因",
+          "all": "全部",
+          "noCredit": "无额度",
+          "freeUsed": "免费额度已用尽",
+          "margin": "利润上限",
+          "marginInactive": "未启用",
+          "marginInactiveHint": "硬性门槛 B 尚未启用。结果为空表示该门槛处于关闭状态，而不是没有组织接近上限。"
+        },
+        "searchLabel": "查找组织",
+        "search": "查找组织…",
+        "empty": "没有已停止的组织。",
+        "emptyBody": "没有任何调度被硬性停止拒绝——每个组织都在索引。",
+        "noMatch": "没有符合此筛选和搜索条件的已停止组织。",
+        "col": {
+          "org": "组织",
+          "tier": "套餐",
+          "reason": "原因",
+          "stoppedFor": "已停止时长",
+          "graphBehind": "代码图落后",
+          "resumes": "恢复条件"
+        },
+        "tierUnknown": "未知",
+        "tierNone": "尚无套餐",
+        "reason": {
+          "no_credit": "无额度",
+          "allowance_exhausted": "免费额度已用尽",
+          "other": "已停止 · {reason}"
+        },
+        "behind": "{n} 个提交",
+        "behindUnknown": "尚未统计",
+        "resumes": {
+          "upgrade": "升级后",
+          "topUp": "充值或续期后",
+          "gateLifts": "门槛解除后"
+        },
+        "duration": {
+          "hours": "{n} 小时",
+          "days": "{n} 天"
+        }
       }
     },
     "orgs": {
@@ -7648,6 +7750,54 @@
         "emptyTitle": "尚无操作者写入",
         "emptyDescription": "每次分类更改都会出现在这里，包含操作人与原因。读取不属于操作，不会列出。",
         "noReason": "未记录原因"
+      },
+      "indexCost": {
+        "title": "索引与容器集群成本 · 本周期",
+        "subtitle": "并排显示两个额度池，以及该组织的容器让 Motir 付出的成本。",
+        "foot": "索引行包含失败的容器。内部 COGS——这里的任何内容都不会向客户收费。平台范围的内部/租户拆分：见容器成本读数（MOTIR-4540），之后见“使用量与成本”。",
+        "disabled": {
+          "title": "计量已停用",
+          "body": "自托管版本没有容器集群，因此没有可展示的数值。刻意不显示零。"
+        },
+        "unknown": {
+          "title": "无法读取额度池",
+          "body": "motir-ai 没有响应。在它响应之前，两个额度池都显示为未知——绝不是零。"
+        },
+        "absent": "motir-ai 从未见过该组织：它还没有额度账本或索引额度。第一次索引扣减会同时开通两者。",
+        "creditBalance": "额度余额",
+        "customerSees": "客户可见",
+        "indexAllowance": "索引额度",
+        "internalOnly": "仅内部",
+        "remaining": "剩余",
+        "grantedConsumed": "已发放 {granted} · 已消耗 {consumed}",
+        "unknownFigure": "未知",
+        "creditNote": "由规划器和托管代理消耗。本周期 Token 花费：{spend} 额度。",
+        "creditNoteUnknownSpend": "由规划器和托管代理消耗。本周期 Token 花费：未知。",
+        "indexNote": "仅由索引消耗。在任何情况下都不会动用额度余额。",
+        "notGrantedYet": "尚未发放额度——该组织在当前周期内还没有进行过索引。",
+        "notConfigured": "未配置额度——由工作人员在套餐上设置。在此之前没有可越过的门槛。",
+        "indexing": "索引",
+        "pausedSince": "自 {at} 起暂停",
+        "marginInactive": "利润上限：未启用 · MOTIR-5280",
+        "absorbedNote": "这是正常的、已被承担的情况——不是故障。",
+        "absorbedDetail": "Motir 承担超出部分，并记录一次越过，用于每月校准。",
+        "state": {
+          "under": "a · 在额度内",
+          "over_still_indexing": "b · 超出额度——仍在索引",
+          "stopped_no_credit": "c · 已停止 · 无额度",
+          "stopped_allowance_exhausted": "c · 已停止 · 免费额度已用尽",
+          "exempt": "豁免 · Motir 自有",
+          "not_configured": "未配置额度",
+          "not_granted_yet": "尚未发放",
+          "other": "已停止 · 其他门槛"
+        },
+        "col": {
+          "workload": "容器工作负载",
+          "containers": "容器数",
+          "seconds": "计费秒数",
+          "cogs": "内部 COGS"
+        },
+        "absentLine": "缺失——本周期没有运行 {workload} 容器（不是零）"
       }
     }
   },

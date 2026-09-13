@@ -18,6 +18,8 @@ import type {
 } from '@/lib/dto/platformHealth';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import { platformHealthService } from '@/lib/services/platformHealthService';
+import { platformIndexAllowanceService } from '@/lib/services/platformIndexAllowanceService';
+import { IndexAllowanceSection } from './_components/IndexAllowanceSection';
 
 /**
  * The day-1 system-health glance — design `platform-admin/design-notes.md`
@@ -57,11 +59,21 @@ export const metadata: Metadata = {
  */
 export const dynamic = 'force-dynamic';
 
-export default async function AdminMonitoringPage() {
+export default async function AdminMonitoringPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string; q?: string; page?: string }>;
+}) {
   const principal = await requirePlatformStaff('support');
   const t = await getTranslations('platformAdmin');
   const format = await getFormatter();
-  const health = await platformHealthService.read(principal);
+  const params = await searchParams;
+  const [health, indexAllowance] = await Promise.all([
+    platformHealthService.read(principal),
+    // Monitoring · Index allowance (MOTIR-4595, design Panel 13) — internal
+    // accounting only; Motir does not charge for code indexing.
+    platformIndexAllowanceService.read(principal, params),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-[72rem] flex-col gap-4 px-6 py-6">
@@ -149,6 +161,8 @@ export default async function AdminMonitoringPage() {
           </div>
         )}
       </Card>
+
+      <IndexAllowanceSection data={indexAllowance} />
     </div>
   );
 }

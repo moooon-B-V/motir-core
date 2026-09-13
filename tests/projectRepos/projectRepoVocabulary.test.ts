@@ -68,6 +68,9 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
       commitsBehind: null,
       commitsBehindBaseSha: null,
       commitsBehindHeadSha: null,
+      // MOTIR-4593's index pause — part of the shape, irrelevant to name resolution.
+      indexPausedReason: null,
+      indexPausedAt: null,
       id: 'gr-1',
       provider: 'github',
       workspaceId: 'ws-1',
