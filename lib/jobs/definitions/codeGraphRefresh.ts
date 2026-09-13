@@ -64,6 +64,16 @@ import type { CodeGraphRefreshData } from '../types';
 // pushes to one repo, which do not arrive at that rate. The debounce is KEPT
 // unchanged and the limit recorded; see `docs/jobs.md` § Debounce for the table.
 //
+// ⚠️ ONE EMITTER DOES NOT WAIT OUT THE PERIOD (MOTIR-5360). A planning session
+// that starts on a stale graph enqueues with `trigger: 'session_start'`
+// (`enqueueCodeGraphRefresh`), which makes its arrival due NOW. It is the SAME
+// event under the SAME key, so it coalesces into a refresh already queued for the
+// repo and pulls it forward; it never queues a second one beside it. Pushes are
+// unchanged: they still wait out `period`, and the declaration below is still
+// the default for every emitter that says nothing. The per-arrival switch lives
+// on the dispatch rather than here because the period is right for one trigger
+// and wrong for the other, and a job declares one debounce.
+//
 // ⚠️ AND THE KEY BELOW MUST KEEP NAMING ONLY REQUIRED FIELDS. A `key` expression
 // that does not resolve merges every such event into ONE debounce bucket instead
 // of skipping the debounce, so making any of `installationId` / `repoOwner` /
