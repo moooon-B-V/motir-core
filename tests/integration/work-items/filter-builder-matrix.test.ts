@@ -39,7 +39,7 @@ async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "custom_field_value", "custom_field_option", "custom_field_definition", ' +
       '"work_item_label", "label", "work_item_component", "component", ' +
-      '"work_item_revision", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
+      '"work_item_revision", "work_item_link", "work_item", "folder", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
 }
@@ -66,6 +66,8 @@ interface Seeded {
   fx: WorkItemFixture;
   /** identifiers by handle (d nests under c — the Tree parity hierarchy). */
   ids: Record<'a' | 'b' | 'c' | 'd', string>;
+  /** Folder ids — `a` filed in Later, root `c` in Parked ▸ 2025 (so `d` too). */
+  folders: Record<'parked' | 'later', string>;
   memberId: string;
   sprintId: string;
   fields: Record<'severity' | 'effort' | 'golive' | 'owner' | 'notes', string>;
@@ -242,9 +244,29 @@ async function seedMatrix(): Promise<Seeded> {
     ],
   });
 
+  // Folders (MOTIR-5376): `a` filed in Later; ROOT `c` filed in Parked ▸ 2025,
+  // so its child `d` sits there too through its root; `b` filed nowhere.
+  const folderCommon = {
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    createdById: fx.ownerId,
+  };
+  const parked = await adminDb.folder.create({
+    data: { ...folderCommon, name: 'Parked', position: 'a0' },
+  });
+  const y2025 = await adminDb.folder.create({
+    data: { ...folderCommon, parentFolderId: parked.id, name: '2025', position: 'a0' },
+  });
+  const later = await adminDb.folder.create({
+    data: { ...folderCommon, name: 'Later', position: 'a1' },
+  });
+  await adminDb.workItem.update({ where: { id: a.id }, data: { folderId: later.id } });
+  await adminDb.workItem.update({ where: { id: c.id }, data: { folderId: y2025.id } });
+
   return {
     fx,
     ids: { a: a.identifier, b: b.identifier, c: c.identifier, d: d.identifier },
+    folders: { parked: parked.id, later: later.id },
     memberId: member.id,
     sprintId: sprint.id,
     fields: {
@@ -411,6 +433,12 @@ const CASES: MatrixCase[] = [
   builtin('cmp', 'is_none_of', [], ['b', 'c'], (s) => [s.components.api]),
   builtin('cmp', 'is_empty', null, ['b', 'c']),
   builtin('cmp', 'is_not_empty', null, ['a', 'd']),
+  // folder (the EFFECTIVE folder, sub-folders included — MOTIR-5376): `a` in
+  // Later, root `c` in Parked ▸ 2025 so its child `d` is there too, `b` unfiled
+  builtin('folder', 'is_any_of', [], ['c', 'd'], (s) => [s.folders.parked]),
+  builtin('folder', 'is_none_of', [], ['a', 'b'], (s) => [s.folders.parked]),
+  builtin('folder', 'is_empty', null, ['b']),
+  builtin('folder', 'is_not_empty', null, ['a', 'c', 'd']),
   // cf:select (Severity — archived option included in the option set)
   cf('select', 'severity', 'is_any_of', [], ['a'], (s) => [s.options.high]),
   cf('select', 'severity', 'is_none_of', [], ['b', 'c', 'd'], (s) => [s.options.high]),

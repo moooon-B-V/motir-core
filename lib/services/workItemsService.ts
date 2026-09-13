@@ -783,9 +783,9 @@ export async function loadFilterReferents(
 ): Promise<ProjectFilterReferents | undefined> {
   if (!astHasEpic5Conditions(ast)) return undefined;
   const ids = collectFilterReferentIds(ast);
-  // Four reads of four policy-gated tables, resolved together to decorate ONE
-  // filter — so they share one bound transaction rather than four.
-  const { definitions, options, labels, components } = await withWorkspaceServiceContext(
+  // Five reads of five policy-gated tables, resolved together to decorate ONE
+  // filter — so they share one bound transaction rather than five.
+  const { definitions, options, labels, components, folders } = await withWorkspaceServiceContext(
     workspaceId,
     async (tx) => ({
       definitions:
@@ -800,6 +800,9 @@ export async function loadFilterReferents(
       ),
       labels: await labelRepository.findByIds(ids.labelIds, projectId, tx),
       components: await componentRepository.findByIds(ids.componentIds, tx),
+      // The Folder field's value ids (MOTIR-5376) — bounded by the ids the
+      // filter names (empty input reads nothing).
+      folders: await folderRepository.findByIds(ids.folderIds, tx),
     }),
   );
 
@@ -818,6 +821,13 @@ export async function loadFilterReferents(
       components
         .filter((c) => c.projectId === projectId && c.workspaceId === workspaceId)
         .map((c) => c.id),
+    ),
+    // A folder of another project — or a deleted one — is absent, so its
+    // condition reads as a stale value and matches nothing.
+    folderIds: new Set(
+      folders
+        .filter((f) => f.projectId === projectId && f.workspaceId === workspaceId)
+        .map((f) => f.id),
     ),
   };
 }

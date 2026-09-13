@@ -64,6 +64,7 @@ export type FilterValueEditorKind =
   | 'sprint-select'
   | 'label-select'
   | 'component-select'
+  | 'folder-select'
   | 'cf-option-select'
   | 'text'
   | 'number'
@@ -180,6 +181,13 @@ export const FILTER_FIELDS: ReadonlyArray<FilterFieldDef> = [
   // resolution's job (`resolveFilterAst`), not a whitelist.
   enumField('lbl', 'label-select', { nullable: true }),
   enumField('cmp', 'component-select', { nullable: true }),
+  // The FOLDER field (Story MOTIR-5309 · MOTIR-5376) — a work item's EFFECTIVE
+  // folder: its own, else its root ancestor's (only a root can be filed). `is
+  // any of` / `is none of` include every folder INSIDE a chosen one. Nullable:
+  // an unfiled item has no effective folder, so `is none of` includes it (the
+  // enum none-of rule). Value ids are open folder cuids, stale-checked against
+  // the project's folders exactly like labels and components.
+  enumField('folder', 'folder-select', { nullable: true }),
 ];
 
 const FIELDS_BY_ID: ReadonlyMap<string, FilterFieldDef> = new Map(
@@ -420,12 +428,15 @@ export interface ProjectFilterReferents {
   customFields: ReadonlyMap<string, ProjectFilterCustomField>;
   labelIds: ReadonlySet<string>;
   componentIds: ReadonlySet<string>;
+  /** The project's folders the filter names that still exist (MOTIR-5376). */
+  folderIds: ReadonlySet<string>;
 }
 
 export const EMPTY_PROJECT_FILTER_REFERENTS: ProjectFilterReferents = {
   customFields: new Map(),
   labelIds: new Set(),
   componentIds: new Set(),
+  folderIds: new Set(),
 };
 
 /** Why a condition went stale (the per-row notice 6.1.5 renders). */
@@ -443,11 +454,15 @@ export interface ResolvedFilterAst {
   conditions: ResolvedFilterCondition[];
 }
 
-/** True when the AST carries any Epic-5 condition (label / component /
- * custom field) — the service's "do I need to load referents?" probe. */
+/** True when the AST carries any referent-backed condition (label / component
+ * / folder / custom field) — the service's "do I need to load referents?" probe. */
 export function astHasEpic5Conditions(ast: FilterAst): boolean {
   return ast.conditions.some(
-    (c) => c.field === 'lbl' || c.field === 'cmp' || customFieldIdOfFilterField(c.field) !== null,
+    (c) =>
+      c.field === 'lbl' ||
+      c.field === 'cmp' ||
+      c.field === 'folder' ||
+      customFieldIdOfFilterField(c.field) !== null,
   );
 }
 
@@ -455,12 +470,13 @@ export function astHasEpic5Conditions(ast: FilterAst): boolean {
  * custom-field definition ids, the string-list values of CF rows (candidate
  * option ids — which are options is only knowable after the definitions
  * load; non-option ids simply resolve to nothing), label ids, component
- * ids. */
+ * ids, folder ids. */
 export interface FilterReferentIds {
   customFieldIds: string[];
   customFieldValueIds: string[];
   labelIds: string[];
   componentIds: string[];
+  folderIds: string[];
 }
 
 export function collectFilterReferentIds(ast: FilterAst): FilterReferentIds {
@@ -468,6 +484,7 @@ export function collectFilterReferentIds(ast: FilterAst): FilterReferentIds {
   const customFieldValueIds = new Set<string>();
   const labelIds = new Set<string>();
   const componentIds = new Set<string>();
+  const folderIds = new Set<string>();
   for (const { field, value } of ast.conditions) {
     const values = Array.isArray(value) ? value.filter((v) => typeof v === 'string') : [];
     const cfId = customFieldIdOfFilterField(field);
@@ -478,6 +495,8 @@ export function collectFilterReferentIds(ast: FilterAst): FilterReferentIds {
       for (const v of values) labelIds.add(v);
     } else if (field === 'cmp') {
       for (const v of values) componentIds.add(v);
+    } else if (field === 'folder') {
+      for (const v of values) folderIds.add(v);
     }
   }
   return {
@@ -485,13 +504,14 @@ export function collectFilterReferentIds(ast: FilterAst): FilterReferentIds {
     customFieldValueIds: [...customFieldValueIds],
     labelIds: [...labelIds],
     componentIds: [...componentIds],
+    folderIds: [...folderIds],
   };
 }
 
 /** The value ids a resolved enum condition must find among the referents —
- * stale-checked sets only (CF select options, labels, components). Open id
- * spaces (members for user-CF / built-in pickers) stay unchecked: a deleted
- * user SetNulls values and simply matches nothing (the 2.5.4 rule). */
+ * stale-checked sets only (CF select options, labels, components, folders).
+ * Open id spaces (members for user-CF / built-in pickers) stay unchecked: a
+ * deleted user SetNulls values and simply matches nothing (the 2.5.4 rule). */
 function staleCheckedIdSet(def: FilterFieldDef, referents: ProjectFilterReferents) {
   if (def.customField) {
     return def.customField.fieldType === 'select'
@@ -500,6 +520,7 @@ function staleCheckedIdSet(def: FilterFieldDef, referents: ProjectFilterReferent
   }
   if (def.id === 'lbl') return referents.labelIds;
   if (def.id === 'cmp') return referents.componentIds;
+  if (def.id === 'folder') return referents.folderIds;
   return undefined;
 }
 

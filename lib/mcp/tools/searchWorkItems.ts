@@ -117,7 +117,9 @@ const conditionSchema = z.object({
     .describe(
       'Field id: a built-in (kind, status, priority, type, assignee, reporter, ' +
         'sprint, text, created, updated, due, storyPoints, estimate), a label/' +
-        'component (lbl, cmp), or a custom field (cf:<fieldId>).',
+        'component (lbl, cmp), a folder (folder — matches the item’s own folder, else ' +
+        'its root ancestor’s, including folders inside the chosen ones), or a custom ' +
+        'field (cf:<fieldId>).',
     ),
   operator: z.enum(FILTER_OPERATOR_IDS).describe('The operator (must be in the field’s set).'),
   value: conditionValueSchema,
