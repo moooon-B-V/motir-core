@@ -1095,6 +1095,8 @@ model Workspace {
   designAssets                DesignAsset[]
   // How-to-test records (Story MOTIR-4906 · MOTIR-5328). Cascade with the workspace.
   testInstructions            TestInstructions[]
+  // Preview deployments reported by connected repositories (MOTIR-5329). Cascade.
+  repoDeployments             RepoDeployment[]
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
   boards                      Board[]
@@ -6356,6 +6358,8 @@ model GithubRepo {
   projectRepos                ProjectRepo[]
   workItemDeliveries          WorkItemDelivery[]
   testInstructions            TestInstructions[]
+  /// Preview deployments this repository's host reported (MOTIR-5329). Cascade.
+  repoDeployments             RepoDeployment[]
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -6593,6 +6597,48 @@ model GithubCheckRun {
   @@unique([pullRequestId, commitSha, checkName, checkSuiteId])
   @@index([pullRequestId])
   @@map("github_check_run")
+}
+
+/// ONE DEPLOYMENT a repository's own host reported — the PREVIEW URL behind the
+/// HOW TO TEST block's "in the preview" path (Story MOTIR-4906 · MOTIR-5329).
+///
+/// Motir only LISTENS: it creates no deployment and posts no status. The row is
+/// the host's latest status for one deployment, keyed on the host's own id, and
+/// stored against the COMMIT it deployed (and the ref it was made from, for the
+/// read that knows a pull request's branch but not yet its head sha).
+///
+/// Out-of-order delivery is guarded IN THE WRITE: the upsert overwrites only when
+/// the incoming status is not older than the stored one, so a late `in_progress`
+/// never replaces a `success` that already arrived.
+model RepoDeployment {
+  id                   String   @id @default(cuid())
+  /// The repository's tenancy, copied onto the row so the policy is a pure gate
+  /// (the `test_instructions` / `work_item_delivery` precedent).
+  workspaceId          String   @map("workspace_id")
+  repoId               String   @map("repo_id")
+  provider             String
+  providerDeploymentId String   @map("provider_deployment_id")
+  commitSha            String   @map("commit_sha")
+  ref                  String
+  environment          String
+  /// One of `DEPLOYMENT_STATES` (`lib/git/types.ts`); text so a provider's new
+  /// state can be stored and rendered as `unknown` rather than refused.
+  state                String
+  /// Only an `http:` / `https:` URL is kept; anything else is stored NULL,
+  /// because the port renders this as a link.
+  environmentUrl       String?  @map("environment_url")
+  occurredAt           DateTime @map("occurred_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repo      GithubRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, provider, providerDeploymentId])
+  @@index([repoId, commitSha])
+  @@index([repoId, ref])
+  @@index([workspaceId])
+  @@map("repo_deployment")
 }
 
 /// THE CI feedback comment for one `(change request, head commit, work item)`

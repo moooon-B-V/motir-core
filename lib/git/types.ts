@@ -177,6 +177,41 @@ export interface NormalizedPushEvent {
   headSha: string | null;
 }
 
+/** The lifecycle of ONE deployment status a repository's host reported, normalized
+ *  across providers (Story MOTIR-4906 · MOTIR-5329). A CLOSED union so every
+ *  consumer's `switch` is total and a compiler proves a new member is handled. */
+export const DEPLOYMENT_STATES = [
+  'queued',
+  'pending',
+  'in_progress',
+  'success',
+  'failure',
+  'error',
+  'inactive',
+] as const;
+export type DeploymentState = (typeof DEPLOYMENT_STATES)[number];
+
+/** A deployment-status webhook, normalized across providers — the PREVIEW a
+ *  repository's own CI reported for a commit (Story MOTIR-4906 · MOTIR-5329).
+ *  Motir only LISTENS: it creates no deployment and posts no status.
+ *
+ *  `environmentUrl` is the APP the deployment serves (GitHub's
+ *  `environment_url`), never the log link (`target_url`), and is not yet
+ *  sanitised here — the store keeps it only when it is `http:` / `https:`.
+ *  `ref` is the branch or tag the deployment was made from. */
+export interface NormalizedDeploymentStatus {
+  providerRepoId: string;
+  /** The host's own deployment id (as a string — never do math on it). */
+  providerDeploymentId: string;
+  commitSha: string;
+  ref: string;
+  environment: string;
+  state: DeploymentState;
+  environmentUrl: string | null;
+  /** When the host recorded THIS status — the out-of-order guard's clock. */
+  occurredAt: Date;
+}
+
 /** A completed CI workflow run, normalized across providers — consumed by the
  *  CI-minutes meter (Story MOTIR-1775 · MOTIR-1896). DISTINCT from
  *  `NormalizedStatusEvent`, which is the *verification* signal (did CI pass?)

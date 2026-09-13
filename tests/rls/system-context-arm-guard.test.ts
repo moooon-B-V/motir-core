@@ -121,6 +121,14 @@ const WALLED_SITES: Record<string, string> = {
     'for MOTIR-2910: both reach github_installation and github_repo and nothing else, ' +
     'both armed, and neither resolves an author — the CI path attributes to no member. ' +
     'CLEAN, and recorded so the next reader does not have to re-read them.',
+  'lib/services/repoDeploymentService.ts#record':
+    'resolveRepo ∈ { the inline resolver in githubWebhookService.handleDeploymentStatus } ' +
+    '(MOTIR-5329; GitLab adds its own in MOTIR-5332). Read in full: ' +
+    'githubInstallationRepository.findByInstallationId + ' +
+    'githubRepoRepository.findByInstallationAndRepoId — github_installation and ' +
+    'github_repo, both armed — and nothing else. The write that follows is ' +
+    'repo_deployment, whose repo_deployment_workspace_or_system policy carries the arm. ' +
+    'No member, no work item, no tenant-only table. CLEAN.',
 };
 
 let rlsTables: Set<string>;
