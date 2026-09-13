@@ -1273,12 +1273,917 @@
             </div>
             <div class="port">
               <button class="portExpand" type="button">Expand ⤢</button>
-              <div class="portMock">
-                WHAT CHANGED, and HOW TO TEST IT<br />
-                <span class="portCite"
-                  >port contents owned by <strong>MOTIR-4906</strong>; the diff is a link out, not
-                  the lead (ADR §9)</span
-                >
+              <!-- THE DEVELOPMENT BLOCK — composed from design/github/github.mock.html Panel 12b (MOTIR-5327).
+     The rows are the derived PullRequestRow (§19); How to test is the run's, inside the same block.
+     No link to the diff other than each row's own link-out. -->
+              <style>
+                /* ══ PANEL U · the code frame's PORT is the item page's DEVELOPMENT BLOCK (MOTIR-5327) ══
+         Composed from design/github/github.mock.html Panel 12b — the same rows and the same How to
+         test, not a second drawing. Tokens the block reads that this board's :root predates are
+         declared on the block itself, each the value packages/design-system/theme.css gives it. */
+                .dvb-scope {
+                  --el-icon-muted: var(--color-muted-foreground);
+                  --el-card: var(--color-background);
+                  --el-code-bg: var(--color-muted);
+                  --el-code-text: var(--color-charcoal);
+                  margin-top: 26px;
+                  min-width: 0;
+                  font-size: 13px;
+                  color: var(--el-text);
+                }
+                /* class="mt-2 flex items-center gap-2.5 rounded-(--radius-control)
+                border border-(--el-border) bg-(--el-surface)
+                px-(--spacing-control-x) py-(--spacing-control-y)" */
+                .pr-row {
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  padding: var(--spacing-control-y) var(--spacing-control-x);
+                  border: 1px solid var(--el-border);
+                  border-radius: var(--radius-control);
+                  background: var(--el-surface);
+                  margin-top: 8px;
+                }
+                /* class="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" */
+                .pr-row .pr-ic {
+                  width: 17px;
+                  height: 17px;
+                  flex: none;
+                  color: var(--el-icon-muted);
+                }
+                /* class="min-w-0 flex-1 py-1" — the TEXT BLOCK is what grows, and that is
+         the whole of the truncation contract. The row used to give this element
+         `min-width: 0` alone and push the pills right with a separate
+         `.spacer { flex: 1 }`; the two draw the same picture at short titles and
+         different pictures at long ones, because a zero-basis block that cannot
+         grow never reaches its ellipsis. `.spacer` is deleted with this rule —
+         it had no other caller in the asset. */
+                .pr-text {
+                  min-width: 0;
+                  flex: 1;
+                  padding-top: 4px;
+                  padding-bottom: 4px;
+                }
+                /* class="truncate font-sans text-[13.5px] font-medium text-(--el-text)" */
+                .pr-title {
+                  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+                  font-size: 13.5px;
+                  font-weight: 500;
+                  color: var(--el-text);
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                }
+                /* class="truncate font-sans text-xs text-(--el-text-identifier)"
+         ⚠️ THE INK IS `--el-text-identifier`, NOT `--el-text-secondary`.
+         `owner/repo · #n` is an IDENTIFIER, and the identifier ink exists
+         because the caption inks were wrong for one at 12px — the same lesson
+         Panel 5b already cites for the picker's option rows. The two tokens
+         resolve to the same slate today, so nothing on screen moves; what moves
+         is which token a builder copies out of this asset, and that is what an
+         asset is for. */
+                .pr-meta {
+                  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+                  font-size: 12px;
+                  color: var(--el-text-identifier);
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                }
+                /* class="flex shrink-0 items-center gap-1.5" */
+                .pr-states {
+                  display: inline-flex;
+                  flex: none;
+                  gap: 6px;
+                  align-items: center;
+                }
+                /* class="shrink-0 rounded-(--radius-control) p-1 text-(--el-icon-muted)
+                hover:text-(--el-text) focus-visible:ring-2 …"
+         The `p-1` box is part of the affordance, not padding around a glyph:
+         it is what makes the link-out a 24px target, and what the per-row
+         remove control below was measured AGAINST ("its 24px box matches the
+         link-out beside it"). The asset asserted that in prose while drawing a
+         bare 15px glyph. */
+                .ext {
+                  display: inline-flex;
+                  flex: none;
+                  align-items: center;
+                  padding: 4px;
+                  border-radius: var(--radius-control);
+                  color: var(--el-icon-muted);
+                }
+                /* class="h-4 w-4" */
+                .ext svg {
+                  width: 16px;
+                  height: 16px;
+                }
+
+                /* the shipped Pill, under the block's own names so it cannot collide with this board's `.pill`
+         gate tones — tint bg + --el-text-strong (finding #35), as design/github/github.mock.html draws it */
+                .dvb-pill {
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 4px;
+                  border-radius: var(--radius-badge);
+                  padding: var(--spacing-chip-y) var(--spacing-chip-x);
+                  font-size: 12px;
+                  font-weight: 500;
+                  line-height: 1.3;
+                  border: 1px solid transparent;
+                  white-space: nowrap;
+                }
+                .dvb-pill svg {
+                  width: 12px;
+                  height: 12px;
+                }
+                .dvb-pill-sky {
+                  background: var(--el-tint-sky);
+                  color: var(--el-text-strong);
+                }
+                .dvb-pill-mint {
+                  background: var(--el-tint-mint);
+                  color: var(--el-text-strong);
+                }
+                .dvb-pill-peach {
+                  background: var(--el-tint-peach);
+                  color: var(--el-text-strong);
+                }
+
+                /* ══ THE DEVELOPMENT BLOCK — pull-request rows + the run's HOW TO TEST, ONE section card,
+         ONE gate (MOTIR-5327, 2026-09-13) ═══════════════════════════════════════════════════
+         The rows above are unchanged and still DERIVED (§19). Everything below is NEW, so it is
+         not derived from a component yet — each rule carries the class string MOTIR-5336 builds
+         it from, directly above it, so the component and this asset are a string diff from the
+         first commit. Inks: --el-text / --el-text-secondary / --el-text-identifier only, because
+         the block renders on --el-card (the section card) AND on --el-surface (the frame's port),
+         and --el-text-muted fails AA on the second. ───────────────────────────────────────── */
+
+                /* class="font-mono" */
+                .dvb-mono {
+                  font-family: var(--font-mono, ui-monospace, monospace);
+                }
+
+                /* the How to test PART of the block — below the rows, inside the same card
+         class="mt-4 flex flex-col gap-3 border-t border-(--el-border-soft) pt-4" */
+                .dvb-htt {
+                  margin-top: 16px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 12px;
+                  border-top: 1px solid var(--el-border-soft);
+                  padding-top: 16px;
+                  min-width: 0;
+                }
+                /* the part's head: a SUB-heading of the Development card, never a section header
+         class="flex flex-wrap items-baseline gap-x-2 gap-y-1" */
+                .dvb-htt-head {
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: baseline;
+                  gap: 4px 8px;
+                }
+                /* class="text-[13px] font-semibold text-(--el-text)" — an <h4> */
+                .dvb-htt-title {
+                  margin: 0;
+                  font-size: 13px;
+                  font-weight: 600;
+                  color: var(--el-text);
+                }
+                /* class="text-xs text-(--el-text-secondary)" */
+                .dvb-htt-by {
+                  font-size: 12px;
+                  color: var(--el-text-secondary);
+                }
+                /* class="font-medium text-(--el-text)" */
+                .dvb-htt-by b {
+                  font-weight: 500;
+                  color: var(--el-text);
+                }
+                /* the rows' caption, re-inked: the shipped caption is --el-text-muted, which fails AA on the
+         port's --el-surface (4.17:1). class="mt-3 font-sans text-xs text-(--el-text-secondary)" */
+                .dvb-caption {
+                  margin-top: 12px;
+                  font-size: 12px;
+                  color: var(--el-text-secondary);
+                }
+
+                /* STALE / RECORD MISSING — a callout at the head of the part
+         class="flex items-start gap-2.5 rounded-(--radius-card) px-3 py-2.5 text-[13px] leading-normal" */
+                .dvb-callout {
+                  display: flex;
+                  align-items: flex-start;
+                  gap: 10px;
+                  border-radius: var(--radius-card);
+                  padding: 10px 12px;
+                  font-size: 13px;
+                  line-height: 1.5;
+                }
+                /* class="mt-0.5 h-4 w-4 shrink-0" */
+                .dvb-callout svg {
+                  width: 16px;
+                  height: 16px;
+                  flex: none;
+                  margin-top: 2px;
+                }
+                /* stale — class="bg-(--el-warning-surface) text-(--el-text-strong)" (tint + strong ink, #35) */
+                .dvb-callout-stale {
+                  background: var(--el-warning-surface);
+                  color: var(--el-text-strong);
+                }
+                /* record missing — class="bg-(--el-callout-bg) text-(--el-callout-text)"; lavender, NOT a pill,
+         so it can never be read as a repository's "No preview reported" */
+                .dvb-callout-missing {
+                  background: var(--el-callout-bg);
+                  color: var(--el-callout-text);
+                }
+                /* class="font-semibold" */
+                .dvb-callout b {
+                  font-weight: 600;
+                }
+                /* class="font-mono text-xs" */
+                .dvb-sha {
+                  font-family: var(--font-mono, ui-monospace, monospace);
+                  font-size: 12px;
+                }
+
+                /* THE BODY — the agent's `bodyMd`, through the ONE render stack (MarkdownView → renderMarkdown).
+         The component renders <MarkdownView className="…"> (which adds `wmde-markdown motir-prose`); the
+         board carries only `dvb-md`, restating the prose rules it needs, with the block scaling
+         the agent's `##` sections down to sub-headings of the card.
+         class="motir-prose text-[13px] [&_h2]:text-[12.5px] [&_h2]:font-semibold …" */
+                .dvb-md {
+                  font-size: 13px;
+                  line-height: 1.6;
+                  color: var(--el-text);
+                  min-width: 0;
+                }
+                .dvb-md > * + * {
+                  margin-top: 0.6em;
+                }
+                /* an agent-written section heading — class="[&_h2]:text-[12.5px] [&_h2]:font-semibold
+         [&_h2]:uppercase [&_h2]:tracking-[0.04em] [&_h2]:text-(--el-text-secondary) [&_h2]:mt-4" */
+                .dvb-md h2 {
+                  margin: 16px 0 0;
+                  font-size: 12px;
+                  font-weight: 600;
+                  letter-spacing: 0.04em;
+                  text-transform: uppercase;
+                  color: var(--el-text-secondary);
+                }
+                /* class="[&_h2:first-child]:mt-0" */
+                .dvb-md h2:first-child {
+                  margin-top: 0;
+                }
+                .dvb-md p {
+                  margin-bottom: 0;
+                }
+                /* .motir-prose ol / ul — shipped */
+                .dvb-md ol,
+                .dvb-md ul {
+                  margin-bottom: 0;
+                  padding-left: 1.5rem;
+                }
+                .dvb-md ol {
+                  list-style: decimal;
+                }
+                .dvb-md ul {
+                  list-style: disc;
+                }
+                .dvb-md li + li {
+                  margin-top: 2px;
+                }
+                /* .motir-prose strong — shipped */
+                .dvb-md strong {
+                  font-weight: 600;
+                }
+                /* .motir-prose code — shipped, re-inked for the port: class="bg-(--el-code-bg) text-(--el-code-text)" */
+                .dvb-md code {
+                  font-family: var(--font-mono, ui-monospace, monospace);
+                  font-size: 0.85em;
+                  background: var(--el-code-bg);
+                  color: var(--el-code-text);
+                  padding: 0.1em 0.35em;
+                  border-radius: var(--radius-control);
+                }
+
+                /* THE CODE BLOCK — every fenced block, via a `pre` override in renderMarkdown's components
+         (opt-in `copyableCode`, so no other Markdown surface changes). A bar ABOVE the code holds
+         the language and the copy control, so the control never sits on top of a command that
+         scrolls sideways.
+         class="my-2 overflow-hidden rounded-(--radius-input) border border-(--el-border) bg-(--el-surface)" */
+                .dvb-code {
+                  margin: 8px 0 0;
+                  overflow: hidden;
+                  border: 1px solid var(--el-border);
+                  border-radius: var(--radius-input);
+                  background: var(--el-surface);
+                  min-width: 0;
+                }
+                /* the port is --el-surface too, so inside it the block lifts to --el-card
+         class="[[data-port]_&]:bg-(--el-card)" */
+                .dvb-in-port .dvb-code {
+                  background: var(--el-card);
+                }
+                /* class="flex min-h-7 items-center justify-between gap-2 border-b border-(--el-border-soft)
+                bg-(--el-surface-soft) pl-(--spacing-control-x) pr-1" */
+                .dvb-code-bar {
+                  display: flex;
+                  min-height: 28px;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 8px;
+                  border-bottom: 1px solid var(--el-border-soft);
+                  background: var(--el-surface-soft);
+                  padding: 0 4px 0 var(--spacing-control-x);
+                }
+                /* the fence's language AS WRITTEN — class="font-mono text-[11px] text-(--el-text-secondary)" */
+                .dvb-code-lang {
+                  font-family: var(--font-mono, ui-monospace, monospace);
+                  font-size: 11px;
+                  color: var(--el-text-secondary);
+                }
+                /* class="m-0 overflow-x-auto whitespace-pre px-(--spacing-input-x) py-(--spacing-input-y)
+                font-mono text-xs leading-relaxed text-(--el-code-text)" */
+                .dvb-code pre {
+                  margin: 0;
+                  overflow-x: auto;
+                  white-space: pre;
+                  padding: var(--spacing-input-y) var(--spacing-input-x);
+                  font-family: var(--font-mono, ui-monospace, monospace);
+                  font-size: 12px;
+                  line-height: 1.65;
+                  color: var(--el-code-text);
+                }
+                /* the COPY control — Button variant=ghost size=sm, icon + label
+         class="inline-flex h-6 items-center gap-1 rounded-(--radius-control) px-(--spacing-control-x)
+                text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted) hover:text-(--el-text)
+                focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)" */
+                .dvb-copy {
+                  display: inline-flex;
+                  height: 24px;
+                  align-items: center;
+                  gap: 4px;
+                  border: 0;
+                  border-radius: var(--radius-control);
+                  background: transparent;
+                  padding: 0 var(--spacing-control-x);
+                  font-family: inherit;
+                  font-size: 12px;
+                  font-weight: 500;
+                  color: var(--el-text-secondary);
+                  cursor: pointer;
+                }
+                .dvb-copy:hover {
+                  background: var(--el-muted);
+                  color: var(--el-text);
+                }
+                /* MOCK-ONLY: a board cannot hover, so the hover is drawn as a class */
+                .dvb-copy.is-hover {
+                  background: var(--el-muted);
+                  color: var(--el-text);
+                }
+                /* COPIED, for 2s — class="bg-(--el-tint-mint) text-(--el-text-strong)" (aria-live="polite") */
+                .dvb-copy.is-copied {
+                  background: var(--el-tint-mint);
+                  color: var(--el-text-strong);
+                }
+                /* class="h-3.5 w-3.5" */
+                .dvb-copy svg {
+                  width: 14px;
+                  height: 14px;
+                }
+
+                /* WHAT MOTIR DERIVES, per repository — beside the body, never written by the agent
+         class="flex flex-col gap-2" */
+                .dvb-repos {
+                  display: flex;
+                  flex-direction: column;
+                  gap: 8px;
+                  min-width: 0;
+                }
+                /* class="min-w-0 rounded-(--radius-control) border border-(--el-border) bg-(--el-card)
+                px-(--spacing-control-x) py-(--spacing-control-y)" */
+                .dvb-repo {
+                  min-width: 0;
+                  border: 1px solid var(--el-border);
+                  border-radius: var(--radius-control);
+                  background: var(--el-card);
+                  padding: var(--spacing-control-y) var(--spacing-control-x);
+                }
+                /* two or more repositories only — headed by the SAME string its pull-request row's meta line
+         carries. class="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 pb-1" */
+                .dvb-repo-head {
+                  display: flex;
+                  min-height: 28px;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 4px 8px;
+                  padding-bottom: 4px;
+                }
+                /* class="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" */
+                .dvb-repo-head > svg {
+                  width: 14px;
+                  height: 14px;
+                  flex: none;
+                  color: var(--el-icon-muted);
+                }
+                /* class="font-sans text-xs font-medium text-(--el-text-identifier)" */
+                .dvb-repo-name {
+                  font-size: 12px;
+                  font-weight: 500;
+                  color: var(--el-text-identifier);
+                }
+                /* class="ml-auto" */
+                .dvb-repo-end {
+                  margin-left: auto;
+                }
+                /* ONE fact — In the preview · Locally · What CI proved
+         class="border-t border-(--el-border-soft) py-1.5 first:border-t-0" */
+                .dvb-fact {
+                  border-top: 1px solid var(--el-border-soft);
+                  padding: 6px 0;
+                }
+                .dvb-fact-first {
+                  border-top: 0;
+                }
+                /* class="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1" */
+                .dvb-fact-line {
+                  display: flex;
+                  min-height: 24px;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 4px 8px;
+                }
+                /* class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-(--el-text)" */
+                .dvb-fact-label {
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                  white-space: nowrap;
+                  font-size: 12px;
+                  font-weight: 600;
+                  color: var(--el-text);
+                }
+                /* class="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" */
+                .dvb-fact-label svg {
+                  width: 14px;
+                  height: 14px;
+                  flex: none;
+                  color: var(--el-icon-muted);
+                }
+                /* class="ml-auto inline-flex flex-wrap items-center justify-end gap-1.5 text-xs text-(--el-text-secondary)" */
+                .dvb-fact-val {
+                  margin-left: auto;
+                  display: inline-flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  justify-content: flex-end;
+                  gap: 6px;
+                  font-size: 12px;
+                  color: var(--el-text-secondary);
+                }
+                /* class="mt-1 pl-5 text-[12.5px] leading-normal text-(--el-text-secondary)" */
+                .dvb-fact-body {
+                  margin: 4px 0 0;
+                  padding-left: 20px;
+                  font-size: 12.5px;
+                  line-height: 1.5;
+                  color: var(--el-text-secondary);
+                }
+                /* the fact's own code block sits under its label — class="ml-5" */
+                .dvb-fact .dvb-code {
+                  margin: 4px 0 0 20px;
+                }
+                /* the preview URL — the APP, in a new tab; never the diff
+         class="mt-1 ml-5 flex min-w-0 items-center gap-1 text-[12.5px] text-(--el-link) underline" */
+                .dvb-url {
+                  margin: 4px 0 0 20px;
+                  display: flex;
+                  min-width: 0;
+                  align-items: center;
+                  gap: 4px;
+                  font-size: 12.5px;
+                  color: var(--el-link);
+                  text-decoration: underline;
+                }
+                /* class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" */
+                .dvb-url-text {
+                  min-width: 0;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                }
+                /* class="h-3.5 w-3.5 shrink-0" */
+                .dvb-url svg {
+                  width: 13px;
+                  height: 13px;
+                  flex: none;
+                }
+                /* check rows — class="mt-1 ml-5 flex flex-col gap-1" */
+                .dvb-checks {
+                  margin: 4px 0 0 20px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 4px;
+                }
+                /* class="flex min-w-0 items-center gap-2" */
+                .dvb-check {
+                  display: flex;
+                  min-width: 0;
+                  align-items: center;
+                  gap: 8px;
+                }
+                /* class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs
+                text-(--el-text-identifier)" */
+                .dvb-check-name {
+                  flex: 1;
+                  min-width: 0;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  font-family: var(--font-mono, ui-monospace, monospace);
+                  font-size: 12px;
+                  color: var(--el-text-identifier);
+                }
+
+                /* EARLIER RUNS — a real <button aria-expanded="false">, collapsed by default
+         class="flex w-full items-center gap-1.5 rounded-(--radius-control) px-1 py-1 text-left
+                text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted)" */
+                .dvb-disclose {
+                  display: flex;
+                  width: 100%;
+                  align-items: center;
+                  gap: 6px;
+                  border: 0;
+                  border-radius: var(--radius-control);
+                  background: transparent;
+                  padding: 4px;
+                  font-family: inherit;
+                  font-size: 12px;
+                  font-weight: 500;
+                  text-align: left;
+                  color: var(--el-text-secondary);
+                  cursor: pointer;
+                }
+                .dvb-disclose:hover {
+                  background: var(--el-muted);
+                }
+                /* class="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" */
+                .dvb-disclose svg {
+                  width: 14px;
+                  height: 14px;
+                  flex: none;
+                  color: var(--el-icon-muted);
+                }
+
+                /* THE CHILD POINTER — one line in place of How to test
+         class="mt-4 flex flex-wrap items-center gap-2 border-t border-(--el-border-soft) pt-3
+                text-[13px] text-(--el-text-secondary)" */
+                .dvb-pointer {
+                  margin-top: 16px;
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 8px;
+                  border-top: 1px solid var(--el-border-soft);
+                  padding-top: 12px;
+                  font-size: 13px;
+                  color: var(--el-text-secondary);
+                }
+                /* class="h-4 w-4 shrink-0 text-(--el-icon-muted)" */
+                .dvb-pointer > svg {
+                  width: 16px;
+                  height: 16px;
+                  flex: none;
+                  color: var(--el-icon-muted);
+                }
+                /* the target, BY KEY — class="font-mono text-(--el-link) underline" */
+                .dvb-keylink {
+                  font-family: var(--font-mono, ui-monospace, monospace);
+                  font-size: 12.5px;
+                  color: var(--el-link);
+                  text-decoration: underline;
+                }
+              </style>
+              <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+                <defs>
+                  <!-- lucide `git-pull-request-arrow` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/git-pull-request-arrow.mjs), not hand-typed.
+                       PR_STATE_META.open.icon — the row's Open glyph, as design/github draws it. (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-git-pr"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="5" cy="6" r="3" />
+                    <path d="M5 9v12" />
+                    <circle cx="19" cy="18" r="3" />
+                    <path d="m15 9-3-3 3-3" />
+                    <path d="M12 6h5a2 2 0 0 1 2 2v7" />
+                  </symbol>
+
+                  <!-- lucide `circle-check` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/circle-check.mjs), not hand-typed.
+                       CI_STATE_META.passing.icon, and the Ready preview pill. (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-check"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m9 12 2 2 4-4" />
+                  </symbol>
+
+                  <!-- lucide `circle-ellipsis` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/circle-ellipsis.mjs), not hand-typed.
+                       CI_STATE_META.running.icon, and the Deploying preview pill. (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-dots"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M17 12h.01" />
+                    <path d="M12 12h.01" />
+                    <path d="M7 12h.01" />
+                  </symbol>
+
+                  <!-- lucide `external-link` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/external-link.mjs), not hand-typed.
+                       The row's link-out and the preview URL's glyph. (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-external"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M15 3h6v6" />
+                    <path d="M10 14 21 3" />
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  </symbol>
+
+                  <!-- lucide `folder-git-2` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/folder-git-2.mjs), not hand-typed.
+                       The repository sub-block heading (FolderGit2, as every repository surface renders it). (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-repo"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 19a5 5 0 0 1-5-5v8" />
+                    <path
+                      d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+                    />
+                    <circle cx="13" cy="12" r="2" />
+                    <circle cx="20" cy="19" r="2" />
+                  </symbol>
+
+                  <!-- lucide `copy` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/copy.mjs), not hand-typed.
+                       The fenced code block's click-to-copy control. (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-copy"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                  </symbol>
+
+                  <!-- lucide `globe` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/globe.mjs), not hand-typed.
+                       The In the preview fact. (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-globe"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                    <path d="M2 12h20" />
+                  </symbol>
+
+                  <!-- lucide `terminal` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/terminal.mjs), not hand-typed.
+                       The Locally fact (the branch fetch). (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-terminal"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 19h8" />
+                    <path d="m4 17 6-6-6-6" />
+                  </symbol>
+
+                  <!-- lucide `chevron-right` — EXTRACTED from the installed `lucide-react@1.16.0`
+                       (node_modules/lucide-react/dist/esm/icons/chevron-right.mjs), not hand-typed.
+                       The Earlier runs disclosure. (MOTIR-5327) -->
+                  <symbol
+                    viewBox="0 0 24 24"
+                    id="dv-chevron-right"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m9 18 6-6-6-6" />
+                  </symbol>
+                </defs>
+              </svg>
+              <div class="dvb-scope dvb-in-port" role="group" aria-label="Development">
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#dv-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Rate-limit the public API per key</div>
+                    <div class="pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="dvb-pill dvb-pill-sky"
+                      ><svg aria-hidden="true"><use href="#dv-git-pr" /></svg>Open</span
+                    ><span class="dvb-pill dvb-pill-mint"
+                      ><svg aria-hidden="true"><use href="#dv-check" /></svg>Checks passing</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#dv-external" /></svg
+                  ></a>
+                </div>
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#dv-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Throttle burst traffic on /v1</div>
+                    <div class="pr-meta">moooon/motir-gateway · #57</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="dvb-pill dvb-pill-sky"
+                      ><svg aria-hidden="true"><use href="#dv-git-pr" /></svg>Open</span
+                    ><span class="dvb-pill dvb-pill-peach"
+                      ><svg aria-hidden="true"><use href="#dv-dots" /></svg>Checks running</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#dv-external" /></svg
+                  ></a>
+                </div>
+                <p class="dvb-caption">
+                  Link with + Link pull request here, or with
+                  <span class="dvb-mono">link_pull_request</span> over the MCP.
+                </p>
+                <div class="dvb-htt" role="group" aria-label="How to test">
+                  <div class="dvb-htt-head">
+                    <h4 class="dvb-htt-title">How to test</h4>
+                    <span class="dvb-htt-by"
+                      >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                    >
+                  </div>
+                  <div class="dvb-md">
+                    <h2>Precondition</h2>
+                    <p>
+                      Run <strong>both</strong> repositories; the seed creates
+                      <strong>ada@acme.test</strong>, a workspace admin.
+                    </p>
+                    <h2>Set up</h2>
+                    <div class="dvb-code">
+                      <div class="dvb-code-bar">
+                        <span class="dvb-code-lang">bash</span
+                        ><button class="dvb-copy" type="button" aria-label="Copy code">
+                          <svg aria-hidden="true"><use href="#dv-copy" /></svg>Copy
+                        </button>
+                      </div>
+                      <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                      >
+                    </div>
+                    <h2>Click-path</h2>
+                    <ol>
+                      <li>
+                        Sign in as <strong>ada@acme.test</strong> and open
+                        <strong>Settings → API keys</strong>.
+                      </li>
+                      <li>Send 61 requests with that key — the 61st answers <code>429</code>.</li>
+                    </ol>
+                  </div>
+                  <div class="dvb-repos">
+                    <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                      <div class="dvb-repo-head">
+                        <svg aria-hidden="true"><use href="#dv-repo" /></svg
+                        ><span class="dvb-repo-name">moooon/motir-core · #131</span>
+                      </div>
+                      <div class="dvb-fact dvb-fact-first">
+                        <div class="dvb-fact-line">
+                          <span class="dvb-fact-label"
+                            ><svg aria-hidden="true"><use href="#dv-globe" /></svg>In the
+                            preview</span
+                          ><span class="dvb-fact-val"
+                            ><span>preview</span
+                            ><span class="dvb-pill dvb-pill-mint"
+                              ><svg aria-hidden="true"><use href="#dv-check" /></svg>Ready</span
+                            ></span
+                          >
+                        </div>
+                        <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                          ><span class="dvb-url-text"
+                            >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                          ><svg aria-hidden="true"><use href="#dv-external" /></svg
+                        ></a>
+                      </div>
+                      <div class="dvb-fact">
+                        <div class="dvb-fact-line">
+                          <span class="dvb-fact-label"
+                            ><svg aria-hidden="true"><use href="#dv-terminal" /></svg>Locally</span
+                          >
+                        </div>
+                        <div class="dvb-code">
+                          <div class="dvb-code-bar">
+                            <span class="dvb-code-lang">shell</span
+                            ><button class="dvb-copy" type="button" aria-label="Copy code">
+                              <svg aria-hidden="true"><use href="#dv-copy" /></svg>Copy
+                            </button>
+                          </div>
+                          <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway · #57">
+                      <div class="dvb-repo-head">
+                        <svg aria-hidden="true"><use href="#dv-repo" /></svg
+                        ><span class="dvb-repo-name">moooon/motir-gateway · #57</span>
+                      </div>
+                      <div class="dvb-fact dvb-fact-first">
+                        <div class="dvb-fact-line">
+                          <span class="dvb-fact-label"
+                            ><svg aria-hidden="true"><use href="#dv-globe" /></svg>In the
+                            preview</span
+                          ><span class="dvb-fact-val"
+                            ><span>preview</span
+                            ><span class="dvb-pill dvb-pill-peach"
+                              ><svg aria-hidden="true"><use href="#dv-dots" /></svg>Deploying</span
+                            ></span
+                          >
+                        </div>
+                        <p class="dvb-fact-body">
+                          The preview deployment for this head is deploying. Its link appears here
+                          when it succeeds.
+                        </p>
+                      </div>
+                      <div class="dvb-fact">
+                        <div class="dvb-fact-line">
+                          <span class="dvb-fact-label"
+                            ><svg aria-hidden="true"><use href="#dv-terminal" /></svg>Locally</span
+                          >
+                        </div>
+                        <div class="dvb-code">
+                          <div class="dvb-code-bar">
+                            <span class="dvb-code-lang">shell</span
+                            ><button class="dvb-copy" type="button" aria-label="Copy code">
+                              <svg aria-hidden="true"><use href="#dv-copy" /></svg>Copy
+                            </button>
+                          </div>
+                          <pre>
+git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;acme-12-throttle-v1&#x27;</pre
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="dvb-disclose" type="button" aria-expanded="false">
+                    <svg aria-hidden="true"><use href="#dv-chevron-right" /></svg>Earlier runs (2)
+                  </button>
+                </div>
               </div>
             </div>
             <div class="frameFoot">

@@ -1234,3 +1234,246 @@ card was a measurement.
 No panel gains or loses an element. This is a measurement correction, not a redesign: the eleven
 `.pr-row` instances across Panels 3, 4, 5a–5f keep their glyph, title, meta line, pill set, link-out
 and — where MOTIR-5007 put one — their remove control, in that order.
+
+## 20 · The Development block is the ONE gate — pull-request rows plus the run's HOW TO TEST (MOTIR-5327, 2026-09-13)
+
+Story [MOTIR-4906](motir:cmtt4ogi0000dhutx1ekfm43s) · card [MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2).
+Board: **Panels 12a–12o** in `github.mock.html` (+ `github.png`, `github.dark.png`), and the
+composed port in `design/work-items/approval-control.mock.html` Panel `U`.
+
+> **Yue, 2026-09-13:** _"'approve to merge the PRs' is the gate, how to test is telling user how to
+> validate the PRs, so they are the same gate, not 2 separated things"_ — and _"in the work item page
+> the PRs and how to test should be one block … like the design result"_.
+
+### The answer in one line
+
+The item page's **Development block** is the gate _approve to merge the pull requests_. Its content
+is the pull-request rows **and** the run's **How to test**, in **one section card**. When that gate is
+awaiting, the block **is** `ApprovalGateControl`'s frame: the rows and How to test are band 2, and
+band 3 is [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)'s **Approve and merge**. How to test is that
+gate's **evidence** — it has no section, no gate row, no verb and no approval of its own.
+
+### The no-gate / with-gate rule, and its precedent
+
+`app/(authed)/items/[key]/_components/DesignResultSection.tsx` on `origin/main` is the precedent, and
+the rule is its rule, applied to a second subject:
+
+| state                                   | the Development card renders                                                                                                          | panel    | precedent, quoted from `DesignResultSection.tsx`                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| **no gate** (today, every card)         | the rows, then How to test below them, in the same card — exactly what the port will hold                                             | 12a, 12b | _"NO GATE ⇒ NO FRAME. A card with nothing awaiting a decision renders exactly what it renders today"_ |
+| **an awaiting `pull_request_approval`** | the frame, inside the same `ContentSectionCard`: band 1 header · **band 2 = the block above, unchanged** · band 3 _Approve and merge_ | 12c, 12o | _"THE PANEL IS NOT DELETED — IT BECOMES THE PORT'S CONTENTS"_                                         |
+
+- **The section card stays.** `LateSections.tsx` wraps `DesignResultSection` in a
+  `ContentSectionCard` and the frame renders inside it; the Development card does the same, so its
+  title and its _Link pull request_ door stay where they are.
+- **One frame for all the run target's pull requests.** A two-repository story run has two pull
+  requests and ONE gate; Panel 12c draws one frame and one _Approve and merge_ over both rows. There is
+  never a frame per row.
+- **Nothing moves when the gate arrives.** The block is drawn in 12a/12b as the port content, so the
+  gate only adds bands 1 and 3 around it.
+- **No overlay and no full-screen view is drawn.** The port's _Expand_ control is drawn at rest
+  because it is part of the shipped band 2 (`PortBox`); what it opens, and any approval overlay, is
+  [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u) / [MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar)'s, for
+  every gate. This block relies on nothing from them.
+- **The frame's own bands are not redrawn.** Panel 12c re-declares `approval-control.mock.html`'s
+  `.frame` / `.frameHead` / `.port` / `.frameFoot` rules under `af-` names (this board already owns a
+  `.pill`), with the port ceiling at the shipped `34rem` (`PORT_CEILING` in `ApprovalGateControl.tsx`).
+
+### The per-run rule, with its ADR pointer
+
+`docs/decisions/approval-gates.md` §9 makes HOW TO TEST a first-class deliverable; its **per-RUN
+amendment** is [MOTIR-5356](motir:cmtztp593008ahwoi5h2k6ugl). A run writes **one record**, onto the
+**run target** — the item it was launched against. A **child card of a container run carries none of
+its own**: its Development card shows its own rows and one line, _Tested as part of_ **ACME-12**,
+linking the target by key (Panel 12m). The pull request's own row stays its link to the diff.
+
+### Placement inside the card (top to bottom)
+
+1. the pull-request rows — `PullRequestRow` / `AwaitingRepoRow`, **derived and unchanged** (§19);
+2. the rows' caption — the shipped string, re-inked `--el-text-secondary` (see _Decisions_);
+3. **How to test**, below a soft rule: the `h4` sub-heading and _Written by {run} · {time}_ → a stale
+   or record-missing callout, when there is one → the agent's **body** → the per-repository sub-blocks
+   Motir derives (**In the preview · Locally · What CI proved**) → _Earlier runs (n)_.
+
+For a **single-repository** run the sub-block has **no heading** (12a). For **two or more**, each is
+headed by **the same string its row's meta line carries** — `moooon/motir-core · #131` — so the two
+are read together (12b); an `AwaitingRepoRow`'s sub-block is headed by the repository alone, as that
+row's meta line is (12l).
+
+### The content is RICH TEXT
+
+- **The agent writes `bodyMd`** over MCP (`publish_test_instructions`, the same way
+  `publish_design_result` carries a design note). Its sections are its own — _Precondition_, _Set up_,
+  _Click-path_, one per repository, or none — and the block **imposes no section**, so a body with no
+  click-path renders what it has and nothing says _missing_ (12f).
+- **It renders through the ONE Markdown stack**, `components/ui/MarkdownView.tsx` →
+  `lib/markdown/render.tsx`. The block passes a className that scales the agent's `##` headings down to
+  card sub-headings (uppercase 12px, `--el-text-secondary`). The mock carries only `dvb-md` and restates
+  the prose rules it needs, because another asset in the tree already declares `motir-prose`.
+- **Every fenced code block carries a click-to-copy control** (12d). It is a `pre` override added to
+  `renderMarkdown`'s components behind an **opt-in** option, so no other Markdown surface changes. The
+  block gets a **bar above the code** holding the fence's language _as written_ and a ghost **Copy**
+  button; the code scrolls sideways inside its own block. States: **rest** (`--el-text-secondary`),
+  **hover** (`--el-muted` fill, `--el-text`), **copied** for 2s (`--el-tint-mint` + `--el-text-strong`,
+  a `check` glyph, announced with `aria-live="polite"`), then back. Copy writes the block's text exactly.
+- **An unknown fence language** (`nushell`, 12f) is printed as written, in one ink, and still copies.
+  `rehype-highlight` emits `hljs-*` spans for known ones, but no theme for them ships, so every block
+  renders in `--el-code-text` and this card adds none.
+- **Inline `code` gets no control.**
+
+### Decisions
+
+| decision                                    | chosen                                                                                                                         | why                                                                                                                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where How to test sits                      | **inside the Development card, below the rows**, under an `h4` — never a section card or section header of its own             | it is the gate's evidence, not a second subject (Yue's _"same gate"_)                                                                                                |
+| copy control position                       | **in a bar above the code**, right-aligned, never overlaid                                                                     | the long command in 12d scrolls sideways; at ~400px (12n) every block does, and an overlaid button would cover the command                                           |
+| open or disclosure                          | **open**; only _Earlier runs_ is a disclosure, collapsed                                                                       | the current record is what the reviewer reads before pressing the verb; a collapsed record adds a click to every decision                                            |
+| what Motir derives vs what the agent writes | the body is the agent's, verbatim; the **bordered sub-blocks** are Motir's (preview, branch fetch, checks)                     | the retired structured fields were the agent re-typing what Motir already knows; a derived fact cannot be mistyped                                                   |
+| order of the derived facts                  | **In the preview · Locally · What CI proved**                                                                                  | the card's own order; the fastest path first                                                                                                                         |
+| stale                                       | a **peach callout** naming the repository and both commits; the body **stays visible**; that sub-block carries **Stale** (12g) | instructions one push old are usually still right; only what the agent wrote can go stale                                                                            |
+| record missing                              | a **lavender callout at the head of the part**, with `file-question-mark`, naming the owing run; no sub-blocks (12i)           | it must never read like _No preview reported_, which is a neutral pill inside one repository's preview fact (12e) — different remedy, different treatment            |
+| a repository with a PR but no section       | a sub-block that SAYS so: _Not in this run's record_ + neutral **No section** (12k)                                            | a forgotten repository must not be silently absent from the evidence for a gate that merges it                                                                       |
+| the rows' caption                           | the shipped string, **re-inked `--el-text-secondary`**                                                                         | the shipped caption is `--el-text-muted`, which fails AA on the port's `--el-surface` (4.17:1). A one-token change for [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw) |
+| code block surface in the port              | `--el-surface` on the card, **`--el-card` inside the port**                                                                    | the port is `--el-surface`; the same fill would make the block's edge the only cue                                                                                   |
+| the diff                                    | **no link to the diff** other than each row's own link-out; the preview URL opens the **app**                                  | ADR §9: the diff is a link out, not the lead                                                                                                                         |
+| the quick-view peek                         | **not drawn, unchanged** — it keeps its rows                                                                                   | its contract is read-only and compressed; _Open full page_ reaches the block. A peek How to test would be its own card                                               |
+| the section gloss                           | `github.development.gloss` is **replaced**, not paralleled                                                                     | the card now holds more than status                                                                                                                                  |
+
+### The narrow row — drawn for MOTIR-5351 to build to (12n)
+
+At a ~400px column the shipped `PullRequestRow` shows one or two characters of its title, because its
+pill group is `shrink-0` ([MOTIR-5351](motir:cmtzsio9b01cjhvoirkfuxmxl)). Panel 12n draws the **fixed
+row**: below a `30rem` container the row wraps; glyph · title · link-out stay on line 1 and the pill
+group drops to line 2, indented under the title (`order-last basis-full pl-[27px]`). The desktop row
+is unchanged, so **§19's derived `.pr-row` block is not edited**: the narrow variant is a separate
+`.pr-row.dvb-row-narrow` rule with its intended class strings quoted above it. When MOTIR-5351 ships,
+that rule folds into the derived block, per §19. The block itself needs nothing new at that width:
+facts wrap their pill under the label and every code block scrolls inside itself.
+
+### Fields read
+
+The read is [MOTIR-5333](motir:cmtzoqr5000cghvtxnaytfoe0)'s `HowToTestDto` (re-planned 2026-09-13 to
+carry `bodyMd`). The rows' own fields stay `PullRequestRow`'s (`LinkedPullRequestDto`); the frame's gate
+fields are `ApprovalGateDTO`'s.
+
+| rendered element                      | field(s) read                                                                                                                                                                                                             | panel    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| which part renders                    | `state` ∈ `record` · `record_missing` · `tested_via_ancestor`                                                                                                                                                             | all      |
+| _Written by {run} · {time}_           | `record.run` → `{ runId, label }`, `record.createdAt`                                                                                                                                                                     | 12a      |
+| the body                              | `record.bodyMd`, rendered by `MarkdownView`                                                                                                                                                                               | 12d, 12f |
+| the preview URL                       | `repos[].preview.url` (the deployment URL joined with `record.previewPath`)                                                                                                                                               | 12a, 12e |
+| repository sub-heading                | `repos[].repoName` + `repos[].pullRequest` — shown only when `repos.length > 1`; matched to its row by `repoName`                                                                                                         | 12b      |
+| **Stale** pill + stale callout        | `repos[].stale`; the callout's two shas are `repos[].commitSha` and `repos[].pullRequest.headSha`                                                                                                                         | 12g      |
+| _In the preview_ pill + sentence      | `repos[].preview` → `status` ∈ `available` · `deployment_not_ready` · `no_deployment_reported`; `state` ∈ `queued` · `pending` · `in_progress` · `success` · `failure` · `error` · `inactive` · `canceled`; `environment` | 12e      |
+| _Locally_ code block                  | `repos[].fetchCommand` (composed from the pull request's `headRef`, shell-quoted by the read); `null` ⇒ _No branch to fetch_                                                                                              | 12a, 12l |
+| _What CI proved_                      | `repos[].ci` → `status` ∈ `available` · `no_checks_reported`; `checks[]` → `{ name, conclusion }`, `neutral` listed and not counted                                                                                       | 12h      |
+| record-missing callout                | `owedBy` → `{ runId, label }` (null ⇒ _No run is recorded for this item._)                                                                                                                                                | 12i      |
+| _Earlier runs (n)_                    | `history[]` → `{ recordId, run, createdAt }`, newest first                                                                                                                                                                | 12j      |
+| a repository with a PR but no section | derived: a row's repository with no `repos[].repoName` match — no new field                                                                                                                                               | 12k      |
+| the child pointer                     | `runTarget` → `{ key }` for `tested_via_ancestor`                                                                                                                                                                         | 12m      |
+| the frame (12c)                       | `ApprovalGateDTO` — `state`, `subjectVersion`, the routed-to label; verbs and consequence supplied by MOTIR-4909's kind                                                                                                   | 12c      |
+
+### Tone table (the shipped `Pill` axes — no new variant)
+
+| value                                               | pill                                                                | glyph (lucide)                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| preview `success`                                   | severity success (mint) · _Ready_                                   | `circle-check`                                                   |
+| preview `queued` / `pending`                        | severity warning (peach) · _Queued_ / _Pending_                     | `clock`                                                          |
+| preview `in_progress`                               | severity warning (peach) · _Deploying_                              | `circle-ellipsis`                                                |
+| preview `failure` / `error`                         | severity danger (rose) · _Deploy failed_ / _Deploy errored_         | `circle-x`                                                       |
+| preview `inactive` / `canceled`                     | tone neutral · _Inactive_ / _Canceled_                              | `circle-slash` / `ban`                                           |
+| no deployment · no checks · no branch               | tone neutral                                                        | `circle-dashed`                                                  |
+| check `success` / `failure` / `pending` / `neutral` | mint _Passed_ / rose _Failed_ / peach _Running_ / neutral _Neutral_ | `circle-check` / `circle-x` / `circle-ellipsis` / `circle-minus` |
+| no section in the record                            | tone neutral · _No section_                                         | `circle-minus`                                                   |
+| stale                                               | severity warning (peach) · _Stale_                                  | `history`                                                        |
+
+**Tokens.** `--el-*` colour and element-semantic shape tokens only. The block's inks are `--el-text`,
+`--el-text-secondary` and `--el-text-identifier`, because it renders on `--el-card` **and** on the
+port's `--el-surface`, where `--el-text-muted` measures 4.17:1. Callouts are tint + `--el-text-strong`
+(stale) and `--el-callout-bg` + `--el-callout-text` (missing). Every new rule carries the class string
+MOTIR-5336 builds it from, directly above it. The twelve new sprites are extracted from
+`lucide-react@1.16.0` (`node scripts/audit-mock-sprites.mjs design/github/github.mock.html --strict`:
+44 symbols, 0 drifted, 0 undeclared).
+
+### Copy — `en` + `zh`
+
+One namespace, **`github.development.howToTest`**, beside the rows' own `github.development.*`. The
+frame's kind label, consequence and verbs are MOTIR-4909's and are not keyed here.
+
+| key                                   | en                                                                                                                                                    | zh                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `github.development.gloss` (REPLACES) | Pull requests and how to test them · live PR and CI status                                                                                            | 拉取请求及其测试方法 · 实时 PR 与 CI 状态                                                 |
+| `title`                               | How to test                                                                                                                                           | 如何测试                                                                                  |
+| `writtenBy`                           | Written by {run} · {time}                                                                                                                             | 由 {run} 编写 · {time}                                                                    |
+| `latestRun`                           | Latest run {run} · finished {time}                                                                                                                    | 最近一次运行 {run} · 完成于 {time}                                                        |
+| `code.copy`                           | Copy                                                                                                                                                  | 复制                                                                                      |
+| `code.copyAria`                       | Copy code                                                                                                                                             | 复制代码                                                                                  |
+| `code.copied`                         | Copied                                                                                                                                                | 已复制                                                                                    |
+| `code.copyFailed`                     | Couldn't copy — select the text instead                                                                                                               | 无法复制——请手动选择文本                                                                  |
+| `stale.title`                         | Written for {recordSha} — {repo} is now at {headSha}.                                                                                                 | 针对 {recordSha} 编写——{repo} 现在位于 {headSha}。                                        |
+| `stale.body`                          | The instructions below may be out of date. The preview and CI follow the new head.                                                                    | 以下说明可能已过时。预览和 CI 跟随最新提交。                                              |
+| `stale.pill`                          | Stale                                                                                                                                                 | 已过时                                                                                    |
+| `preview.title`                       | In the preview                                                                                                                                        | 在预览环境中                                                                              |
+| `preview.state.success`               | Ready                                                                                                                                                 | 就绪                                                                                      |
+| `preview.state.queued`                | Queued                                                                                                                                                | 排队中                                                                                    |
+| `preview.state.pending`               | Pending                                                                                                                                               | 等待中                                                                                    |
+| `preview.state.in_progress`           | Deploying                                                                                                                                             | 部署中                                                                                    |
+| `preview.state.failure`               | Deploy failed                                                                                                                                         | 部署失败                                                                                  |
+| `preview.state.error`                 | Deploy errored                                                                                                                                        | 部署出错                                                                                  |
+| `preview.state.inactive`              | Inactive                                                                                                                                              | 已停用                                                                                    |
+| `preview.state.canceled`              | Canceled                                                                                                                                              | 已取消                                                                                    |
+| `preview.notReady`                    | The {environment} deployment for this head is {state}. Its link appears here when it succeeds.                                                        | 此提交的 {environment} 部署状态为{state}。部署成功后，链接会显示在这里。                  |
+| `preview.failed`                      | The {environment} deployment for this head did not succeed, so there is no preview to open. Test it locally, or wait for the next push.               | 此提交的 {environment} 部署未成功，因此没有可打开的预览。请在本地测试，或等待下一次推送。 |
+| `preview.inactive`                    | The {environment} deployment for this head is no longer active — a newer deployment replaced it.                                                      | 此提交的 {environment} 部署已不再活跃——已被更新的部署取代。                               |
+| `preview.canceled`                    | The {environment} deployment for this head was canceled before it finished.                                                                           | 此提交的 {environment} 部署在完成前已被取消。                                             |
+| `preview.none`                        | No preview reported                                                                                                                                   | 未报告预览                                                                                |
+| `preview.noneBody`                    | This repository's CI reported no deployment for this head. Motir does not create previews.                                                            | 此仓库的 CI 未为此提交报告任何部署。Motir 不会创建预览。                                  |
+| `local.title`                         | Locally                                                                                                                                               | 在本地                                                                                    |
+| `local.noBranch`                      | No branch to fetch                                                                                                                                    | 没有可获取的分支                                                                          |
+| `local.noBranchBody`                  | No pull request carries this repository's branch yet, so there is nothing to fetch.                                                                   | 尚无拉取请求包含此仓库的分支，因此没有可获取的内容。                                      |
+| `ci.title`                            | What CI proved                                                                                                                                        | CI 已验证的内容                                                                           |
+| `ci.summary`                          | {passed} of {total} checks passed                                                                                                                     | {total} 项检查中 {passed} 项通过                                                          |
+| `ci.conclusion.success`               | Passed                                                                                                                                                | 通过                                                                                      |
+| `ci.conclusion.failure`               | Failed                                                                                                                                                | 失败                                                                                      |
+| `ci.conclusion.pending`               | Running                                                                                                                                               | 运行中                                                                                    |
+| `ci.conclusion.neutral`               | Neutral                                                                                                                                               | 中性                                                                                      |
+| `ci.none`                             | No checks reported                                                                                                                                    | 未报告检查                                                                                |
+| `ci.noneBody`                         | No checks have reported for this head yet, so CI has proven nothing here.                                                                             | 此提交尚未报告任何检查，因此 CI 尚未验证任何内容。                                        |
+| `noSection.title`                     | Not in this run's record                                                                                                                              | 不在本次运行的记录中                                                                      |
+| `noSection.pill`                      | No section                                                                                                                                            | 无对应部分                                                                                |
+| `noSection.body`                      | {run} wrote no section for this repository, so its pull request is not covered by the instructions above. Its row still carries its PR and CI status. | {run} 未为此仓库编写对应部分，因此上方说明不涵盖其拉取请求。其行仍显示 PR 与 CI 状态。    |
+| `missing.title`                       | No run has written how to test this item.                                                                                                             | 尚无运行为此工作项编写测试说明。                                                          |
+| `missing.owedBy`                      | Owed by {run} (finished {time}). The pull requests above still carry their own status.                                                                | 应由 {run} 编写（完成于 {time}）。上方的拉取请求仍显示各自的状态。                        |
+| `missing.noRun`                       | No run is recorded for this item.                                                                                                                     | 此工作项没有记录的运行。                                                                  |
+| `earlier.toggle`                      | Earlier runs ({count})                                                                                                                                | 更早的运行（{count}）                                                                     |
+| `child.pointer`                       | Tested as part of {key}                                                                                                                               | 作为 {key} 的一部分进行测试                                                               |
+| `aria.part` / `aria.repo`             | How to test / {repo}                                                                                                                                  | 如何测试 / {repo}                                                                         |
+
+### Scope
+
+**Drawn:** the combined block with and without a gate, the rich-text body with click-to-copy commands,
+every state on the card's checklist, the child pointer, narrow and dark, the copy and the Fields-read
+table. **Not drawn, and whose it is:** the component — [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw);
+the data — [MOTIR-5333](motir:cmtzoqr5000cghvtxnaytfoe0); the gate kind and its verbs —
+[MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2); any overlay or full-screen view —
+[MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u) / [MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar); the
+frame's bands (composed, not redrawn); a diff inside Motir; a Motir-created preview —
+[MOTIR-4527](motir:cmtnee40x0000hvn8ruhq31go).
+
+### GIVES / TAKES
+
+| key                                                                                           | GIVES / TAKES                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)                                                 | **GIVES** the port for the ONE approve-and-merge gate — this block, covering all the run target's pull requests. **TAKES** its _Approve and merge_, kind label and consequence line |
+| [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u) / [MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar) | **nothing either way** — the overlay is theirs, for every gate, later                                                                                                               |
+| [MOTIR-4881](motir:cmtrwx33s0054hxphinsoyt0f)                                                 | **nothing either way** — the block draws no review or diff link                                                                                                                     |
+| [MOTIR-5351](motir:cmtzsio9b01cjhvoirkfuxmxl)                                                 | **GIVES** the narrow row (12n) and the rule it folds into §19's derived block                                                                                                       |
+| [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw)                                                 | **GIVES** the block, both states, every state panel, the copyable code block, the caption re-ink and the copy                                                                       |
+| [MOTIR-5333](motir:cmtzoqr5000cghvtxnaytfoe0)                                                 | **GIVES** the Fields-read table above as the shape to build to. **TAKES** `HowToTestDto`                                                                                            |
+| [MOTIR-5356](motir:cmtztp593008ahwoi5h2k6ugl)                                                 | **TAKES** the per-run rule (the ADR §9 amendment)                                                                                                                                   |
+| [MOTIR-4527](motir:cmtnee40x0000hvn8ruhq31go)                                                 | **nothing either way** — the excluded Motir-hosted preview                                                                                                                          |
+| [MOTIR-4906](motir:cmtt4ogi0000dhutx1ekfm43s)                                                 | the parent story                                                                                                                                                                    |
+
+Fixture items on the board use `ACME-n` keys and `acme-n-…` branches, so they link to nothing. Every
+other `MOTIR-n` in the two amended mocks is provenance the asset already carried, and GIVES or TAKES
+nothing here.
