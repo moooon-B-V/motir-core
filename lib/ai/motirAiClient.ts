@@ -14,8 +14,10 @@ import { mintJobToken } from './jobToken';
 import {
   parseIndexAllowanceSummary,
   parseIndexAllowanceVerdict,
+  parseOrgIndexPools,
   parseOrgTiers,
   type IndexAllowanceSummary,
+  type OrgIndexPools,
   type IndexAllowanceVerdict,
 } from '@/lib/ciFleet/indexAllowance';
 import {
@@ -442,6 +444,31 @@ export async function fetchIndexAllowanceSummary(
     });
     if (!res.ok) return null;
     return parseIndexAllowanceSummary(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /v1/admin/index-allowance/orgs/:coreOrganizationId — one organisation's two
+ * pools, never conflated, for the PLATFORM ADMIN's org page (MOTIR-5341; motir-ai
+ * MOTIR-5340). Internal accounting only.
+ *
+ * ⚠️ TOTAL: `null` on every failure, which the card renders as UNKNOWN — both pools,
+ * never zero. `{ known: false }` is a different answer: motir-ai has never seen the
+ * org.
+ */
+export async function fetchOrgIndexPools(
+  coreOrganizationId: string,
+): Promise<OrgIndexPools | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(
+      `${url}/v1/admin/index-allowance/orgs/${encodeURIComponent(coreOrganizationId)}`,
+      { method: 'GET', headers: authHeaders(serviceToken) },
+    );
+    if (!res.ok) return null;
+    return parseOrgIndexPools(await res.json());
   } catch {
     return null;
   }

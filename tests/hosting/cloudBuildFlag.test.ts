@@ -58,6 +58,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
     'lib/services/platformIndexAllowanceService.ts',
     'Monitoring · Index allowance (MOTIR-4595) — the internal allowance and the fleet meter it reads exist only on a billing build, the same switch ciFleetCostMeterService writes under',
   ],
+  [
+    'lib/services/platformOrgIndexCostService.ts',
+    'the org page’s Index & fleet cost card (MOTIR-5341) — the same billing-build switch as the fleet meter it reads',
+  ],
 ];
 
 const BILLING_FILES = BILLING_SURFACES.map(([file]) => file).sort();

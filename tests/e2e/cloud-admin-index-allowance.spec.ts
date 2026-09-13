@@ -31,7 +31,7 @@ test.afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-test('@smoke staff see the index allowance section and a stopped org; a tenant gets a 404', async ({
+test('@smoke staff see the index allowance section, a stopped org and its cost card; a tenant gets a 404', async ({
   page,
 }, testInfo) => {
   const email = 'e2e-index-allowance-tenant@example.com';
@@ -50,8 +50,9 @@ test('@smoke staff see the index allowance section and a stopped org; a tenant g
     },
   });
 
-  // The org's own owner cannot reach the console that lists it.
+  // The org's own owner cannot reach the console that lists it — nor its own org page.
   expect((await page.goto('/admin/monitoring'))?.status()).toBe(404);
+  expect((await page.goto(`/admin/tenants/${org.id}`))?.status()).toBe(404);
 
   await adminDb.user.update({ where: { id: user.id }, data: { platformRole: 'support' } });
   const res = await page.goto('/admin/monitoring');
@@ -94,4 +95,26 @@ test('@smoke staff see the index allowance section and a stopped org; a tenant g
     path: testInfo.outputPath('monitoring-index-allowance.png'),
     fullPage: true,
   });
+
+  // ── The org page's Index & fleet cost card (MOTIR-5341, design Panel 14), reached
+  //    from the stopped row's own link.
+  await page
+    .getByRole('main')
+    .locator(`tr[data-org="${org.id}"]`)
+    .getByRole('link', { name: org.name })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/admin/tenants/${org.id}$`));
+  await expect(
+    page.getByRole('heading', { name: 'Index & fleet cost · this period' }),
+  ).toBeVisible();
+  // motir-ai does not serve the pools read in this lane: UNKNOWN, never zero.
+  await expect(page.getByRole('heading', { name: 'Couldn’t read the pools' })).toBeVisible();
+  // No container ran for this org: every line is ABSENT, said in words.
+  const workloads = page.getByRole('main').getByTestId('org-fleet-workloads');
+  for (const workload of ['ci', 'index', 'agent']) {
+    await expect(workloads.locator(`tr[data-workload="${workload}"]`)).toContainText(
+      `absent — no ${workload} container ran this period (not a zero)`,
+    );
+  }
+  await page.screenshot({ path: testInfo.outputPath('org-index-cost.png'), fullPage: true });
 });

@@ -206,3 +206,88 @@ export function readRecalcThreshold(
     ? { pct, provisional: false }
     : { pct: DEFAULT_RECALC_THRESHOLD_PCT, provisional: true };
 }
+
+/** The org read's state vocabulary (motir-ai MOTIR-5340). Open on the wire. */
+export type OrgIndexState =
+  | 'exempt'
+  | 'stopped_no_credit'
+  | 'stopped_allowance_exhausted'
+  | 'over_still_indexing'
+  | 'under'
+  | 'not_configured'
+  | 'not_granted_yet';
+
+/** One organisation's two pools, as motir-ai's `GET /v1/admin/index-allowance/orgs/:id`
+ *  returns them. */
+export type OrgIndexPools =
+  | { known: false }
+  | {
+      known: true;
+      isMeta: boolean;
+      tier: {
+        key: string;
+        name: string;
+        cadence: 'one_time' | 'monthly';
+        allotmentCredits: number;
+      } | null;
+      credit: { balanceCredits: number };
+      index: {
+        window: string;
+        grantedCredits: number;
+        consumedCredits: number;
+        remainingCredits: number;
+        crossingRecorded: boolean;
+      } | null;
+      state: string;
+    };
+
+/** Parse the org read, or `null` when the body is not one — never a partial pool. */
+export function parseOrgIndexPools(body: unknown): OrgIndexPools | null {
+  if (!body || typeof body !== 'object') return null;
+  const b = body as Record<string, unknown>;
+  if (b['known'] === false) return { known: false };
+  if (b['known'] !== true || typeof b['state'] !== 'string') return null;
+  const credit = b['credit'] as Record<string, unknown> | null | undefined;
+  if (!credit || typeof credit['balanceCredits'] !== 'number') return null;
+  const rawTier = b['tier'] as Record<string, unknown> | null | undefined;
+  const tier =
+    rawTier &&
+    typeof rawTier['key'] === 'string' &&
+    typeof rawTier['name'] === 'string' &&
+    (rawTier['cadence'] === 'one_time' || rawTier['cadence'] === 'monthly') &&
+    isInt(rawTier['allotmentCredits'])
+      ? {
+          key: rawTier['key'],
+          name: rawTier['name'],
+          cadence: rawTier['cadence'] as 'one_time' | 'monthly',
+          allotmentCredits: rawTier['allotmentCredits'],
+        }
+      : null;
+  const rawIndex = b['index'] as Record<string, unknown> | null | undefined;
+  let index = null;
+  if (rawIndex) {
+    if (
+      typeof rawIndex['window'] !== 'string' ||
+      !isInt(rawIndex['grantedCredits']) ||
+      !isInt(rawIndex['consumedCredits']) ||
+      !isInt(rawIndex['remainingCredits'])
+    ) {
+      return null;
+    }
+    index = {
+      window: rawIndex['window'],
+      grantedCredits: rawIndex['grantedCredits'],
+      consumedCredits: rawIndex['consumedCredits'],
+      remainingCredits: rawIndex['remainingCredits'],
+      crossingRecorded: rawIndex['crossingRecorded'] === true,
+    };
+  }
+  return {
+    known: true,
+    isMeta: b['isMeta'] === true,
+    tier,
+    credit: { balanceCredits: credit['balanceCredits'] },
+    index,
+    state: b['state'],
+  };
+}

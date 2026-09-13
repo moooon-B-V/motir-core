@@ -7738,6 +7738,54 @@
         "emptyTitle": "No operator writes yet",
         "emptyDescription": "Every classification change appears here, with who made it and why. Reads are not actions and are not listed.",
         "noReason": "No reason recorded"
+      },
+      "indexCost": {
+        "title": "Index & fleet cost · this period",
+        "subtitle": "Both pools side by side, and what this org’s containers cost Motir.",
+        "foot": "The index line counts containers that FAILED. Internal COGS — nothing here is charged to the customer. Platform-wide meta / tenant split: the fleet-cost readout (MOTIR-4540), and later Usage & cost.",
+        "disabled": {
+          "title": "Meter disabled",
+          "body": "A self-hosted build has no fleet, so there are no figures to show. No zero is drawn, deliberately."
+        },
+        "unknown": {
+          "title": "Couldn’t read the pools",
+          "body": "motir-ai did not answer. Both pools read unknown — never zero — until it does."
+        },
+        "absent": "motir-ai has never seen this organisation: it has no credit ledger or index allowance yet. Its first index draw provisions both.",
+        "creditBalance": "Credit balance",
+        "customerSees": "Customer sees this",
+        "indexAllowance": "Index allowance",
+        "internalOnly": "Internal only",
+        "remaining": "remaining",
+        "grantedConsumed": "granted {granted} · consumed {consumed}",
+        "unknownFigure": "unknown",
+        "creditNote": "Drawn by the planner and the hosted agent. Token spend this period: {spend} credits.",
+        "creditNoteUnknownSpend": "Drawn by the planner and the hosted agent. Token spend this period: unknown.",
+        "indexNote": "Drawn by indexing only. Never touches the credit balance — under any condition.",
+        "notGrantedYet": "No allowance granted yet — nothing has indexed for this organisation in its current period.",
+        "notConfigured": "Allowance not configured — set on the plan by staff. Until then there is no gate to cross.",
+        "indexing": "Indexing",
+        "pausedSince": "paused since {at}",
+        "marginInactive": "Margin ceiling: Not active · MOTIR-5280",
+        "absorbedNote": "This is the normal, absorbed case — not a fault.",
+        "absorbedDetail": "Motir carries the overrun and records one crossing for the monthly calibration.",
+        "state": {
+          "under": "a · Under allowance",
+          "over_still_indexing": "b · Over allowance — still indexing",
+          "stopped_no_credit": "c · Stopped · no credit",
+          "stopped_allowance_exhausted": "c · Stopped · Free allowance used",
+          "exempt": "Exempt · Motir’s own",
+          "not_configured": "Allowance not configured",
+          "not_granted_yet": "Not granted yet",
+          "other": "Stopped · another gate"
+        },
+        "col": {
+          "workload": "Fleet workload",
+          "containers": "Containers",
+          "seconds": "Billable seconds",
+          "cogs": "Internal COGS"
+        },
+        "absentLine": "absent — no {workload} container ran this period (not a zero)"
       }
     }
   },

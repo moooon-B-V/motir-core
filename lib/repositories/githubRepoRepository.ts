@@ -460,6 +460,20 @@ export const githubRepoRepository = {
     });
   },
 
+  /** The most recently paused repository of one organisation — its pause reason and
+   *  when — or `null` when nothing is paused (MOTIR-5341). Archived repositories
+   *  are skipped, as in the Stopped orgs list. */
+  async findLatestIndexPauseForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ indexPausedReason: string | null; indexPausedAt: Date | null } | null> {
+    return tx.githubRepo.findFirst({
+      where: { organizationId, indexPausedReason: { not: null }, archived: false },
+      orderBy: { indexPausedAt: 'desc' },
+      select: { indexPausedReason: true, indexPausedAt: true },
+    });
+  },
+
   /** Lift a recorded pause — the allowance let a dispatch boot (MOTIR-4593). A
    *  repository that was not paused is not written. */
   async clearIndexPause(repoRef: string, tx: Prisma.TransactionClient): Promise<number> {
