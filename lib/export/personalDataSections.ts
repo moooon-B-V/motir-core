@@ -108,6 +108,7 @@ export type PersonalDataDelegate =
   | 'customFieldValue'
   | 'acceptanceEvidence'
   | 'designEvidence'
+  | 'testInstructions'
   | 'import'
   | 'plan'
   | 'planChangeSession'
@@ -438,6 +439,17 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Design results the reader withdrew.',
     where: (userId) => ({ withdrawnById: userId }),
+  },
+  {
+    table: 'test_instructions',
+    model: 'testInstructions',
+    tier: 'tenant',
+    // `published_by_id` attributes a How-to-test record to the person (or the
+    // person whose token a dispatched agent held) who wrote it — the same
+    // SetNull-preserved attribution as `design_evidence.withdrawnById`, so it
+    // is exported rather than excluded (MOTIR-5328).
+    basis: 'How-to-test instructions the reader published.',
+    where: (userId) => ({ publishedById: userId }),
   },
   {
     table: 'import',
