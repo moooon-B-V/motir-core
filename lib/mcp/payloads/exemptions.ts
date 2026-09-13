@@ -81,6 +81,12 @@ export const EXEMPT_TOOLS = {
   unlink_work_items:
     'Returns `{ removed, relationship }` — a removal COUNT. v1’s delete is a 204 with no body ' +
     'at all (idempotent by post-condition), so there is no shared shape (MOTIR-2229).',
+  delete_comment:
+    'Returns WHAT WAS REMOVED — `{ commentId, workItemKey, parentCommentId, replyCount }`. No ' +
+    '`/api/v1` operation deletes a comment (the v1 comments sub-resource is GET + POST only), ' +
+    'so there is no shared shape to derive from. `replyCount` is load-bearing rather than ' +
+    'decorative: deleting a root takes its whole thread, and a caller must be able to see how ' +
+    'much went with it without re-reading the item (MOTIR-5295).',
   delete_work_item:
     'Returns a cascade-delete summary (`totalCount`, `descendantCount`, `byKind`). ADR §3 ' +
     'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +
