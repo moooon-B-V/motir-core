@@ -165,6 +165,16 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `CommentForbiddenError`. Under the six scopes this hid inside
   // `work_items:write`; commenting is now withholdable on its own.
   add_comment: 'comment:add',
+  // `edit_comment` / `delete_comment` (MOTIR-5295) — the SAME key as the add,
+  // deliberately, and NOT `comment:moderate`. The service lets an author edit
+  // and delete their own comment on no key beyond browse, and lets a moderator
+  // touch anyone's — two reaches one tool key cannot tell apart. So both tools
+  // pass `ownOnly`, which makes them author-only, and are gated on the key that
+  // author path begins from: whoever may write a comment may correct it. A
+  // moderation key here would be ungrantable to every existing token AND would
+  // wrongly suggest the tool moderates.
+  edit_comment: 'comment:add',
+  delete_comment: 'comment:add',
   // `add_lesson` (Story MOTIR-3331 · MOTIR-3361) — the SAME key retiring a
   // lesson takes. `lesson:manage` is named for the LIBRARY rather than for
   // retiring precisely so this caller does not have to widen its meaning

@@ -301,6 +301,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },
         add_comment: { key: item1, body: 'leak?' },
+        // MOTIR-5295 — addressed by comment id, not by key. Any id reads as
+        // not-found to a non-member, since the comment's work item is hidden.
+        edit_comment: { commentId: 'cmt_whatever', body: 'leak?' },
+        delete_comment: { commentId: 'cmt_whatever' },
         // MOTIR-3361 — aimed at tenant A's PROJECT: a non-member must read the
         // key as not-found rather than write a standing planner instruction
         // into somebody else's project.
@@ -785,6 +789,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },
         add_comment: { key: item1, body: 'scoped comment' },
+        // MOTIR-5295 — comment:add-gated writes; the matrix asserts the GATE,
+        // and an id that names no comment is a not-found, never a scope denial.
+        edit_comment: { commentId: 'cmt_scoped', body: 'scoped edit' },
+        delete_comment: { commentId: 'cmt_scoped' },
         // MOTIR-3361 — the caller's OWN project. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate rather
         // than reaching motir-ai.

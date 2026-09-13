@@ -1,0 +1,2631 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Folders in the /items tree (MOTIR-5311)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for FOLDERS in the /items tree and for filing a
+      work item from its quick view — story MOTIR-5308, design card MOTIR-5311.
+
+      It COMPOSES two shipped surfaces and redraws neither:
+        • the tree — app/(authed)/items/_components/IssueTreeTable.tsx over the
+          components/ui/TreeTable primitive (role="treegrid", 22px per-level
+          indent, rotate-on-expand chevron, the stretched row target, the
+          "Load more children · Showing N of M" row). Its column set is the one
+          issueColumns.tsx ships TODAY: Title · Type · Priority · Assignee ·
+          Reporter · Est. · Points · Status (tree-scale.mock.html still draws the
+          older Due column; this asset follows the code, not that mock);
+        • the quick view's editable rail — QuickViewRailEdit.tsx, drawn in
+          quick-view.mock.html panels 7–10 (the caption-line chevron, the in-flow
+          menu inside a role="dialog", the pending / confirmed / refused states).
+
+      Behaviour is GROUNDED in the workflow-spec cards, never invented:
+        MOTIR-5313 (the folder service — name rule, cycle rule, delete moves the
+        contents up, filing clears the work-item parent), MOTIR-5314 (the tree
+        read — folders pinned above work items on every level, paging),
+        MOTIR-5315 (folder rows and their actions), MOTIR-5316 (the quick-view
+        Folder field). See design-notes.md § Folders for the spec and the copy.
+
+      Panels: (1) the access path · (2) folder rows at rest + the folder menu ·
+      (3) create + rename, with the sibling-name refusal · (4) Move to… · (5) the
+      delete confirmation, with contents and empty · (6) filing from the quick
+      view · (7) states — empty folder, paging, a member without work_item:edit,
+      and dark parity. Toggle dark mode to confirm token parity board-wide.
+    -->
+    <style>
+      /* ── Tier 0 — copied from packages/design-system/theme.css (light) ───── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-btn-x-sm: 12px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Tier 3 — the --el-* layer components consume. Emitted on :root AND
+         on every [data-theme] element, so the nested dark stage in panel 7
+         RE-COMPUTES it against its own Tier-0 values (a var() resolves where it
+         is declared, so a :root-only Tier-3 block would paint that stage light). */
+      :root,
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --focus-ring-color: var(--color-primary);
+      }
+
+      /* ── Board chrome (the review page — NOT part of the design) ─────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1232px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 90ch;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1232px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 40px auto 10px;
+        max-width: 1232px;
+      }
+      .panel-note {
+        margin: 12px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 110ch;
+      }
+      .panel-note strong {
+        color: var(--el-text-strong);
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-strong);
+      }
+      .sub-cap {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+        align-items: start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .trio {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+      /* A drawn annotation ring on the element a panel is ABOUT — board chrome. */
+      .is-callout {
+        box-shadow:
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--focus-ring-color);
+      }
+
+      /* ── Page shell — heading + toolbar (app/(authed)/items/page.tsx) ────── */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .tb-btn svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary svg {
+        color: var(--el-accent-text);
+      }
+
+      /* ── The tree-grid — the shipped TreeTable + issueColumns set ────────── */
+      .tree-table {
+        position: relative;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .tt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 116px 120px 150px 150px 72px 80px 108px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 16px;
+      }
+      .tt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+        border-radius: var(--radius-card) var(--radius-card) 0 0;
+      }
+      .th {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .th.end {
+        text-align: right;
+      }
+      .tt-row {
+        position: relative;
+        height: 40px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .tt-row:last-child {
+        border-bottom: 0;
+      }
+      .tt-row:hover,
+      .tt-row.is-active {
+        background: var(--el-surface);
+      }
+      /* The stretched row target — an <a> on a work-item row (opens the quick
+         view), a <button> on a folder row (expands it). Nothing nests inside it;
+         the chevron and the actions button raise themselves above it. */
+      .row-target {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        border: 0;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+      .cell-tree {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .chevron {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        flex: none;
+        padding: 0;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .chevron svg {
+        width: 12px;
+        height: 12px;
+      }
+      .chevron.is-open svg {
+        transform: rotate(90deg);
+      }
+      .chevron-slot {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .cell-person {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .nm,
+      .cell-meta {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .cell-meta.end {
+        text-align: right;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill--progress {
+        background: var(--el-tint-sky);
+      }
+      .pill--todo {
+        background: var(--el-tint-lavender);
+      }
+      .pill--high {
+        background: var(--el-tint-peach);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── FOLDER ROW (new) — same row, same indent, same chevron. A folder
+         glyph and its name; the work-item cells stay EMPTY (no dashes — a dash
+         says "unset", and a folder has no such field). Its one extra is the
+         trailing actions button, raised above the stretched target. ──────── */
+      .folder-glyph {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .folder-name {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .cell-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .row-actions {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .row-actions svg {
+        width: 16px;
+        height: 16px;
+      }
+      .row-actions.is-open {
+        background: var(--el-border-soft);
+        color: var(--el-text);
+      }
+
+      /* ── The folder MENU — the shipped Popover/menu grammar ─────────────── */
+      .menu {
+        position: absolute;
+        z-index: 5;
+        width: 220px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        text-align: left;
+        cursor: pointer;
+      }
+      .menu-item svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .menu-item.is-active {
+        background: var(--el-surface);
+      }
+      .menu-item:disabled {
+        color: var(--el-text-faint);
+        cursor: default;
+      }
+      .menu-item.is-danger {
+        color: var(--el-danger-on-surface);
+      }
+      .menu-item.is-danger svg {
+        color: var(--el-danger);
+      }
+      .menu-sep {
+        height: 1px;
+        margin: 4px 6px;
+        background: var(--el-border);
+      }
+
+      /* ── Inline name input (create + rename) ─────────────────────────────── */
+      .tt-row.is-input {
+        height: auto;
+        min-height: 40px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        background: var(--el-surface-soft);
+      }
+      .name-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
+      }
+      .name-input {
+        width: 100%;
+        max-width: 280px;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .name-input.is-invalid {
+        border-color: var(--el-danger);
+        outline-color: var(--el-danger);
+      }
+      .inline-msg {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .inline-msg.is-error {
+        color: var(--el-text);
+      }
+      .inline-msg svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+      .grid-span {
+        grid-column: 1 / -1;
+      }
+
+      /* ── The folder PICKER — one component, two modes (move a folder · file a
+         work item). A search field over a scrolling listbox; picking commits. */
+      .picker {
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .picker.is-inline {
+        width: 100%;
+        box-shadow: none;
+        margin-top: 4px;
+      }
+      .picker-head {
+        padding: 8px 10px 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .picker-search {
+        display: block;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .picker-opt {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        text-align: left;
+        cursor: pointer;
+      }
+      .picker-opt svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-secondary);
+      }
+      .picker-opt.is-active {
+        background: var(--el-surface);
+      }
+      .picker-opt:disabled {
+        color: var(--el-text-faint);
+        cursor: default;
+      }
+      .opt-body {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+        flex: 1;
+      }
+      .opt-reason {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .opt-tag {
+        margin-left: auto;
+        flex: none;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .opt-check {
+        margin-left: auto;
+        flex: none;
+        color: var(--el-accent);
+      }
+      .picker-refusal {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin: 2px 4px 6px;
+        padding: 8px 10px;
+        border: 1px solid var(--el-danger);
+        border-radius: var(--radius-control);
+        background: var(--el-tint-rose);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .picker-refusal svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+
+      /* ── Delete confirmation — the shipped Modal chrome (alertdialog) ────── */
+      .modal {
+        position: relative;
+        width: 440px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 14px;
+        padding-right: 28px;
+      }
+      .modal-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .modal-close svg {
+        width: 16px;
+        height: 16px;
+      }
+      .mdesc {
+        margin: 0 0 14px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .mdesc strong {
+        color: var(--el-text-strong);
+      }
+      .move-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-mint);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .move-line svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .btn.danger {
+        background: var(--el-danger);
+        border-color: transparent;
+        color: var(--el-danger-text);
+      }
+
+      /* ── Quick-view rail (QuickViewRailEdit — quick-view.mock.html 7–10) ─── */
+      .rail-solo {
+        width: 300px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .qv-rail {
+        margin: 0;
+        background: var(--el-surface-soft);
+        padding: 20px 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .rail-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .rail-field dt {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-field dd {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+      }
+      .rail-field.is-editing dd {
+        display: block;
+      }
+      .rail-field.is-pending dd {
+        opacity: 0.55;
+      }
+      .vg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .chev {
+        margin-left: auto;
+        padding: 1px;
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-faint);
+        cursor: pointer;
+        display: inline-flex;
+      }
+      .chev svg {
+        width: 14px;
+        height: 14px;
+      }
+      .rail-field.is-editing .chev svg {
+        transform: rotate(180deg);
+      }
+      .ok {
+        display: inline-flex;
+        color: var(--el-success);
+      }
+      .ok svg {
+        width: 13px;
+        height: 13px;
+      }
+      .rail-link {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .path-sep {
+        color: var(--el-text-secondary);
+      }
+      .rc-trigger {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        text-align: left;
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .rc-trigger svg {
+        width: 14px;
+        height: 14px;
+        margin-left: auto;
+        color: var(--el-text-secondary);
+      }
+      .rail-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 6px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .rail-note svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-secondary);
+      }
+      .rc-bar {
+        height: 2px;
+        margin-top: 6px;
+        border-radius: 9999px;
+        background: var(--el-border-soft);
+        overflow: hidden;
+      }
+      .rc-bar-fill {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .rc-err {
+        display: flex;
+        align-items: flex-start;
+        gap: 5px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .rc-err svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+      .mini-tree {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .mini-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .mini-row:last-child {
+        border-bottom: 0;
+      }
+      .mini-row.is-landed {
+        background: var(--el-tint-lavender);
+      }
+
+      /* ── States ──────────────────────────────────────────────────────────── */
+      .empty-note {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .loadmore-btn {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: 0;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .loadmore-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .loadmore-count {
+        margin-left: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .dark-stage {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+      .menu-anchor {
+        position: relative;
+        min-height: 360px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>
+          Folders in the /items tree — rows, the folder menu, Move to…, delete, and the Folder field
+        </h1>
+        <p>
+          Design card MOTIR-5311 for story MOTIR-5308. Composes the shipped TreeTable
+          (IssueTreeTable) and the quick view's editable rail (QuickViewRailEdit); behaviour from
+          MOTIR-5313 · 5314 · 5315 · 5316. Built from the design-system tokens only.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs — each group's geometry copied from the installed lucide-react __iconNode -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-folder-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 10v6" />
+          <path d="M9 13h6" />
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-folder-input"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"
+          />
+          <path d="M2 13h10" />
+          <path d="m9 16 3-3-3-3" />
+        </g>
+        <g
+          id="i-ellipsis"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-circle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-chevrons-up-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-list-tree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 5h13" />
+          <path d="M13 12h8" />
+          <path d="M13 19h8" />
+          <path d="M3 10a2 2 0 0 0 2 2h3" />
+          <path d="M3 5v12a2 2 0 0 0 2 2h3" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </g>
+        <!-- work-item KIND glyphs, as tree-scale.mock.html draws them -->
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 1 — the access path ════════════ -->
+    <div class="panel-label">
+      1 · The access path — /items in Tree view. "New folder" joins the toolbar between the view
+      switcher and "New work item", and creates at the root (MOTIR-5315)
+    </div>
+    <div class="panel stage">
+      <div class="page-head">
+        <h2>Work Items</h2>
+        <div class="toolbar">
+          <button class="tb-btn" aria-label="Filter">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list-tree" /></svg>Tree<svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn is-callout">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus" /></svg>New
+            folder
+          </button>
+          <button class="tb-btn primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus" /></svg>New work item
+          </button>
+        </div>
+      </div>
+      <p class="panel-note">
+        <strong>Why the toolbar and not a row.</strong> A root folder has no parent row to hang "New
+        folder inside" on, so the root's door is the toolbar — beside the other thing a person
+        creates from this page. It is a secondary button: filing work is the page's second job, not
+        its first. The button renders only in Tree view (the List lists work items, never folders —
+        MOTIR-5314) and only for a member holding <code>work_item:edit</code> (panel 7).
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 2 — folder rows at rest + the folder menu ════════════ -->
+    <div class="panel-label">
+      2 · Folder rows at rest — pinned above the level's work items, a folder glyph and a name, the
+      work-item cells left EMPTY, a trailing actions button. Right: the menu open on "Later"
+    </div>
+    <div class="panel stack">
+      <div>
+        <p class="sub-cap">
+          At rest — root: Later (expanded) › 2025, Research · then the root's work items
+        </p>
+        <div class="tree-table" role="treegrid" aria-label="Work items">
+          <div role="rowgroup">
+            <div class="tt-grid tt-head" role="row">
+              <span class="th" role="columnheader">Title</span>
+              <span class="th" role="columnheader">Type</span>
+              <span class="th" role="columnheader">Priority</span>
+              <span class="th" role="columnheader">Assignee</span>
+              <span class="th" role="columnheader">Reporter</span>
+              <span class="th end" role="columnheader">Est.</span>
+              <span class="th end" role="columnheader">Points</span>
+              <span class="th" role="columnheader">Status</span>
+            </div>
+          </div>
+          <div role="rowgroup">
+            <div
+              class="tt-grid tt-row"
+              role="row"
+              aria-level="1"
+              aria-posinset="1"
+              aria-setsize="4"
+              aria-expanded="true"
+            >
+              <span class="cell-tree">
+                <button class="row-target" aria-label="Collapse folder Later"></button>
+                <button class="chevron is-open" aria-label="Collapse folder Later" tabindex="-1">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Later</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+              <span class="cell-actions">
+                <button
+                  class="row-actions"
+                  aria-label="Folder actions for Later"
+                  aria-haspopup="menu"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                </button>
+              </span>
+            </div>
+            <div
+              class="tt-grid tt-row"
+              role="row"
+              aria-level="2"
+              aria-posinset="1"
+              aria-setsize="2"
+              aria-expanded="false"
+            >
+              <span class="cell-tree" style="padding-left: 22px">
+                <button class="row-target" aria-label="Expand folder 2025"></button>
+                <button class="chevron" aria-label="Expand folder 2025" tabindex="-1">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">2025</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+              <span class="cell-actions">
+                <button
+                  class="row-actions"
+                  aria-label="Folder actions for 2025"
+                  aria-haspopup="menu"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                </button>
+              </span>
+            </div>
+            <div
+              class="tt-grid tt-row"
+              role="row"
+              aria-level="2"
+              aria-posinset="2"
+              aria-setsize="2"
+            >
+              <span class="cell-tree" style="padding-left: 22px">
+                <a
+                  class="row-target"
+                  href="#"
+                  aria-label="PROD-49 OAuth callback drops the state param"
+                ></a>
+                <span class="chevron-slot"></span>
+                <svg class="type-icon t-bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" />
+                </svg>
+                <span class="lr-id">PROD-49</span>
+                <span class="ttl">OAuth callback drops the state param</span>
+              </span>
+              <span class="cell-meta">Code</span>
+              <span><span class="pill pill--high">High</span></span>
+              <span class="cell-person"
+                ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+              >
+              <span class="cell-person"
+                ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+              >
+              <span class="cell-meta end">2h</span>
+              <span class="cell-meta end">3</span>
+              <span><span class="pill pill--progress">In Progress</span></span>
+            </div>
+            <div
+              class="tt-grid tt-row"
+              role="row"
+              aria-level="1"
+              aria-posinset="2"
+              aria-setsize="4"
+              aria-expanded="false"
+            >
+              <span class="cell-tree">
+                <button class="row-target" aria-label="Expand folder Research"></button>
+                <button class="chevron" aria-label="Expand folder Research" tabindex="-1">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Research</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+              <span class="cell-actions">
+                <button
+                  class="row-actions"
+                  aria-label="Folder actions for Research"
+                  aria-haspopup="menu"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                </button>
+              </span>
+            </div>
+            <div
+              class="tt-grid tt-row"
+              role="row"
+              aria-level="1"
+              aria-posinset="3"
+              aria-setsize="4"
+              aria-expanded="false"
+            >
+              <span class="cell-tree">
+                <a
+                  class="row-target"
+                  href="#"
+                  aria-label="PROD-12 Q3 launch — Auth and sign-in"
+                ></a>
+                <button class="chevron" aria-label="Expand row">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="type-icon t-epic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-zap" />
+                </svg>
+                <span class="lr-id">PROD-12</span>
+                <span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+              </span>
+              <span></span>
+              <span><span class="pill pill--high">High</span></span>
+              <span class="cell-person"
+                ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+              >
+              <span class="cell-person"
+                ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+              >
+              <span></span>
+              <span></span>
+              <span><span class="pill pill--progress">In Progress</span></span>
+            </div>
+            <div
+              class="tt-grid tt-row"
+              role="row"
+              aria-level="1"
+              aria-posinset="4"
+              aria-setsize="4"
+            >
+              <span class="cell-tree">
+                <a class="row-target" href="#" aria-label="PROD-34 Password reset email"></a>
+                <span class="chevron-slot"></span>
+                <svg class="type-icon t-task" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-task" />
+                </svg>
+                <span class="lr-id">PROD-34</span>
+                <span class="ttl">Password reset email</span>
+              </span>
+              <span class="cell-meta">Copy</span>
+              <span><span class="pill pill--neutral">Medium</span></span>
+              <span class="cell-person"
+                ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+              >
+              <span class="cell-person"
+                ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+              >
+              <span class="cell-meta end">3h</span>
+              <span class="cell-meta end">2</span>
+              <span><span class="pill pill--todo">To Do</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="sub-cap">The menu — opened from the actions button on "Later"</p>
+        <div class="menu-anchor">
+          <div class="tree-table" role="treegrid" aria-label="Work items">
+            <div role="rowgroup">
+              <div class="tt-grid tt-head" role="row">
+                <span class="th" role="columnheader">Title</span>
+                <span class="th" role="columnheader">Type</span>
+                <span class="th" role="columnheader">Priority</span>
+                <span class="th" role="columnheader">Assignee</span>
+                <span class="th" role="columnheader">Reporter</span>
+                <span class="th end" role="columnheader">Est.</span>
+                <span class="th end" role="columnheader">Points</span>
+                <span class="th" role="columnheader">Status</span>
+              </div>
+            </div>
+            <div role="rowgroup">
+              <div
+                class="tt-grid tt-row is-active"
+                role="row"
+                aria-level="1"
+                aria-posinset="1"
+                aria-setsize="4"
+                aria-expanded="true"
+              >
+                <span class="cell-tree">
+                  <button class="row-target" aria-label="Collapse folder Later"></button>
+                  <button class="chevron is-open" aria-label="Collapse folder Later" tabindex="-1">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" />
+                    </svg>
+                  </button>
+                  <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  <span class="folder-name">Later</span>
+                </span>
+                <span></span><span></span><span></span><span></span><span></span><span></span>
+                <span class="cell-actions">
+                  <button
+                    class="row-actions is-open"
+                    aria-label="Folder actions for Later"
+                    aria-haspopup="menu"
+                    aria-expanded="true"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </span>
+              </div>
+              <div
+                class="tt-grid tt-row"
+                role="row"
+                aria-level="2"
+                aria-posinset="1"
+                aria-setsize="2"
+                aria-expanded="false"
+              >
+                <span class="cell-tree" style="padding-left: 22px">
+                  <button class="row-target" aria-label="Expand folder 2025"></button>
+                  <button class="chevron" aria-label="Expand folder 2025" tabindex="-1">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" />
+                    </svg>
+                  </button>
+                  <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  <span class="folder-name">2025</span>
+                </span>
+                <span></span><span></span><span></span><span></span><span></span><span></span
+                ><span></span>
+              </div>
+              <div
+                class="tt-grid tt-row"
+                role="row"
+                aria-level="2"
+                aria-posinset="2"
+                aria-setsize="2"
+              >
+                <span class="cell-tree" style="padding-left: 22px">
+                  <a
+                    class="row-target"
+                    href="#"
+                    aria-label="PROD-49 OAuth callback drops the state param"
+                  ></a>
+                  <span class="chevron-slot"></span>
+                  <svg class="type-icon t-bug" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-bug" />
+                  </svg>
+                  <span class="lr-id">PROD-49</span>
+                  <span class="ttl">OAuth callback drops the state param</span>
+                </span>
+                <span class="cell-meta">Code</span>
+                <span><span class="pill pill--high">High</span></span>
+                <span class="cell-person"
+                  ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+                >
+                <span class="cell-person"
+                  ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+                >
+                <span class="cell-meta end">2h</span>
+                <span class="cell-meta end">3</span>
+                <span><span class="pill pill--progress">In Progress</span></span>
+              </div>
+              <div
+                class="tt-grid tt-row"
+                role="row"
+                aria-level="1"
+                aria-posinset="2"
+                aria-setsize="4"
+                aria-expanded="false"
+              >
+                <span class="cell-tree">
+                  <button class="row-target" aria-label="Expand folder Research"></button>
+                  <button class="chevron" aria-label="Expand folder Research" tabindex="-1">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevron-right" />
+                    </svg>
+                  </button>
+                  <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  <span class="folder-name">Research</span>
+                </span>
+                <span></span><span></span><span></span><span></span><span></span><span></span
+                ><span></span>
+              </div>
+              <div
+                class="tt-grid tt-row"
+                role="row"
+                aria-level="1"
+                aria-posinset="3"
+                aria-setsize="4"
+              >
+                <span class="cell-tree">
+                  <a class="row-target" href="#" aria-label="PROD-34 Password reset email"></a>
+                  <span class="chevron-slot"></span>
+                  <svg class="type-icon t-task" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-task" />
+                  </svg>
+                  <span class="lr-id">PROD-34</span>
+                  <span class="ttl">Password reset email</span>
+                </span>
+                <span class="cell-meta">Copy</span>
+                <span><span class="pill pill--neutral">Medium</span></span>
+                <span class="cell-person"
+                  ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+                >
+                <span class="cell-person"
+                  ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+                >
+                <span class="cell-meta end">3h</span>
+                <span class="cell-meta end">2</span>
+                <span><span class="pill pill--todo">To Do</span></span>
+              </div>
+            </div>
+          </div>
+          <div
+            class="menu"
+            role="menu"
+            aria-label="Folder actions for Later"
+            style="top: 72px; right: 8px"
+          >
+            <button class="menu-item is-active" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus" /></svg>New
+              folder inside
+            </button>
+            <button class="menu-item" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pencil" /></svg>Rename
+            </button>
+            <button class="menu-item" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-input" /></svg>Move
+              to…
+            </button>
+            <div class="menu-sep" role="separator"></div>
+            <button class="menu-item" role="menuitem" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-up" /></svg>Move up
+            </button>
+            <button class="menu-item" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-down" /></svg>Move
+              down
+            </button>
+            <div class="menu-sep" role="separator"></div>
+            <button class="menu-item is-danger" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>Delete…
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>The row.</strong> A folder row is the SAME treegrid row as a work item's: 40px, the
+      22px indent, the chevron. Its whole-row target is a <code>&lt;button&gt;</code> that expands
+      and collapses — never a link, and never the quick view, because a folder has none
+      (MOTIR-5315). Folders sit ABOVE the level's work items in their own order, and a column sort
+      reorders only the work items (MOTIR-5314). The seven work-item cells stay empty: a dash reads
+      as "unset", and a folder has no priority to be unset. <strong>The menu</strong> is the one
+      place folders differ from work items on purpose — work-item rows lost their menu in MOTIR-4258
+      because their quick view carries every door; a folder has no quick view, so its row is the
+      only place its actions can live. The actions button is always rendered, never hover-only, for
+      the same touch and keyboard reason the rail's chevron is. "Move up" is disabled on the first
+      folder of a level and "Move down" on the last. "Delete…" takes the ellipsis because it opens a
+      confirmation (panel 5).
+    </p>
+
+    <!-- ════════════ PANEL 3 — create + rename ════════════ -->
+    <div class="panel-label">
+      3 · Create and rename, inline on the row — "New folder inside" opens a name row after the
+      level's LAST folder (the service appends there); a sibling-name collision is refused inline
+    </div>
+    <div class="panel stack">
+      <div>
+        <p class="sub-cap">New folder inside "Later" — the input row</p>
+        <div class="tree-table" role="treegrid" aria-label="Work items">
+          <div role="rowgroup">
+            <div class="tt-grid tt-row" role="row" aria-level="1" aria-expanded="true">
+              <span class="cell-tree">
+                <button class="row-target" aria-label="Collapse folder Later"></button>
+                <button class="chevron is-open" aria-label="Collapse folder Later" tabindex="-1">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Later</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span
+              ><span></span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="2">
+              <span class="cell-tree" style="padding-left: 22px">
+                <span class="chevron-slot"></span>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">2025</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span
+              ><span></span>
+            </div>
+            <div class="tt-grid tt-row is-input" role="row" aria-level="2">
+              <span class="cell-tree grid-span" style="padding-left: 22px">
+                <span class="chevron-slot"></span>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="name-field">
+                  <input class="name-input" aria-label="Folder name" value="2026" />
+                  <span class="inline-msg">Press Enter to save, Esc to cancel.</span>
+                </span>
+              </span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="2">
+              <span class="cell-tree" style="padding-left: 22px">
+                <a
+                  class="row-target"
+                  href="#"
+                  aria-label="PROD-49 OAuth callback drops the state param"
+                ></a>
+                <span class="chevron-slot"></span>
+                <svg class="type-icon t-bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" />
+                </svg>
+                <span class="lr-id">PROD-49</span>
+                <span class="ttl">OAuth callback drops the state param</span>
+              </span>
+              <span class="cell-meta">Code</span>
+              <span><span class="pill pill--high">High</span></span>
+              <span class="cell-person"
+                ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+              >
+              <span class="cell-person"
+                ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+              >
+              <span class="cell-meta end">2h</span>
+              <span class="cell-meta end">3</span>
+              <span><span class="pill pill--progress">In Progress</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="sub-cap">Rename "Later" → "parked" beside a sibling "Parked" — refused inline</p>
+        <div class="tree-table" role="treegrid" aria-label="Work items">
+          <div role="rowgroup">
+            <div class="tt-grid tt-row is-input" role="row" aria-level="1">
+              <span class="cell-tree grid-span">
+                <span class="chevron-slot"></span>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="name-field">
+                  <input
+                    class="name-input is-invalid"
+                    aria-label="Folder name"
+                    aria-invalid="true"
+                    aria-describedby="rn-err"
+                    value="parked"
+                  />
+                  <span class="inline-msg is-error" id="rn-err" role="alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+                    A folder named “Parked” is already here.
+                  </span>
+                </span>
+              </span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="1">
+              <span class="cell-tree">
+                <button class="row-target" aria-label="Expand folder Parked"></button>
+                <button class="chevron" aria-label="Expand folder Parked" tabindex="-1">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Parked</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span
+              ><span></span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="1">
+              <span class="cell-tree">
+                <button class="row-target" aria-label="Expand folder Research"></button>
+                <button class="chevron" aria-label="Expand folder Research" tabindex="-1">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Research</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span
+              ><span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>Inline, not a dialog.</strong> A folder's only field is its name, so the name is
+      edited where it is read. The input takes the row's glyph and indent and spans the row; Enter
+      saves, Esc and blur-with-no-change cancel. Names are trimmed, 1–120 characters, and unique
+      among siblings ignoring case — "parked" collides with "Parked" (MOTIR-5313). The refusal keeps
+      the input open with the typed value, marks it <code>aria-invalid</code> and says why under it;
+      a race the unique index catches arrives as the same typed error and renders the same way. An
+      empty name is refused with "Enter a name." A new folder is created where the service puts it:
+      after the level's last folder and before its work items, so the input row appears exactly
+      where the saved row will stay.
+    </p>
+
+    <!-- ════════════ PANEL 4 — Move to… ════════════ -->
+    <div class="panel-label">
+      4 · Move to… — the folder picker for "2025": Project root plus the project's folders; the
+      folder itself and everything inside it disabled with the reason. Right: a refused move
+    </div>
+    <div class="panel pair">
+      <div>
+        <p class="sub-cap">Opened from "2025"'s menu (it lives in "Later")</p>
+        <div class="picker" role="dialog" aria-label="Move 2025 to…">
+          <div class="picker-head">Move “2025” to…</div>
+          <input class="picker-search" aria-label="Find a folder" placeholder="Find a folder" />
+          <div role="listbox" aria-label="Folders">
+            <button class="picker-opt" role="option">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list-tree" /></svg>
+              <span class="opt-body">Project root</span>
+            </button>
+            <button class="picker-opt" role="option" aria-selected="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+              <span class="opt-body">Later</span>
+              <span class="opt-tag">Current location</span>
+            </button>
+            <button class="picker-opt" role="option" disabled style="padding-left: 32px">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+              <span class="opt-body"
+                >2025<span class="opt-reason">Can’t move a folder into itself.</span></span
+              >
+            </button>
+            <button class="picker-opt" role="option" disabled style="padding-left: 54px">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+              <span class="opt-body">Q1<span class="opt-reason">It’s inside “2025”.</span></span>
+            </button>
+            <button class="picker-opt is-active" role="option">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+              <span class="opt-body">Research</span>
+            </button>
+            <button class="picker-opt" role="option" style="padding-left: 32px">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+              <span class="opt-body">Spikes</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="sub-cap">Refused — someone moved "Research" into "2025" a moment earlier</p>
+        <div class="picker" role="dialog" aria-label="Move 2025 to…">
+          <div class="picker-head">Move “2025” to…</div>
+          <div class="picker-refusal" role="alert">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+            A folder can’t move into one of its own folders.
+          </div>
+          <input class="picker-search" aria-label="Find a folder" placeholder="Find a folder" />
+          <div role="listbox" aria-label="Folders">
+            <button class="picker-opt" role="option">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list-tree" /></svg>
+              <span class="opt-body">Project root</span>
+            </button>
+            <button class="picker-opt" role="option" aria-selected="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+              <span class="opt-body">Later</span>
+              <span class="opt-tag">Current location</span>
+            </button>
+            <button class="picker-opt" role="option" disabled style="padding-left: 32px">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+              <span class="opt-body"
+                >Research<span class="opt-reason">It’s inside “2025”.</span></span
+              >
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>One picker, two modes.</strong> This is the component MOTIR-5315 builds once and
+      MOTIR-5316 reuses: a search field over the project's folder tree, where picking an option
+      commits — there is no second "Move" button, as there is none on any rail picker. In
+      <em>move a folder</em> mode it offers <strong>Project root</strong>, marks the current parent
+      "Current location" (picking it writes nothing), and disables the folder and every folder under
+      it with the reason in words, not only by greying. A cycle the picker could not know about —
+      the tree changed under it — comes back as <code>FolderCycleError</code> and is shown at the
+      top of the open picker with the list re-read; a <code>CrossProjectFolderError</code> ("That
+      folder belongs to another project.") renders in the same place. The picker is a popover
+      anchored to the row in the tree; inside the quick view's dialog it renders in flow (panel 6).
+      Reorder is "Move up" / "Move down" in the menu, not the picker: the tree has no drag
+      affordance anywhere today, and this adds none.
+    </p>
+
+    <!-- ════════════ PANEL 5 — delete confirmation ════════════ -->
+    <div class="panel-label">
+      5 · Delete confirmation — it names what moves up and where, and says no work item is deleted.
+      Right: an empty folder, with lighter copy
+    </div>
+    <div class="panel pair">
+      <div
+        class="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="del-a-t"
+        aria-describedby="del-a-d"
+      >
+        <h3 class="modal-title" id="del-a-t">Delete folder “Parked”?</h3>
+        <button class="modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
+        <p class="mdesc" id="del-a-d">
+          Only the folder is removed. Everything filed in it stays in the project.
+        </p>
+        <div class="move-line">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-input" /></svg>
+          <span>
+            <strong>2 folders and 3 work items</strong> will move to <strong>Project root</strong>.
+            No work items are deleted.
+          </span>
+        </div>
+        <div class="modal-footer">
+          <button class="btn">Cancel</button>
+          <button class="btn danger">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>Delete folder
+          </button>
+        </div>
+      </div>
+      <div
+        class="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="del-b-t"
+        aria-describedby="del-b-d"
+      >
+        <h3 class="modal-title" id="del-b-t">Delete folder “Spikes”?</h3>
+        <button class="modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
+        <p class="mdesc" id="del-b-d">“Spikes” is empty. Deleting it removes only the folder.</p>
+        <div class="modal-footer">
+          <button class="btn">Cancel</button>
+          <button class="btn danger">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>Delete folder
+          </button>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>The shipped delete dialog, told the opposite story.</strong> The work-item delete
+      (delete-confirm.mock.html) warns that descendants go with it. A folder delete moves its child
+      folders and filed work items to the deleted folder's own parent, in one transaction, and
+      removes nothing else (MOTIR-5313) — so the consequence line uses the <strong>mint</strong>
+      safe-outcome callout, not a warning list, and names the counts and the destination ("Project
+      root", or the parent's name). Counts are of DIRECT contents: a filed epic counts once, and its
+      stories travel with it. The danger button still says "Delete folder" — the folder itself is
+      gone. Default focus is Cancel; Esc and the close button cancel. After confirming, the folder's
+      row leaves the tree and its parent level is re-read so the moved contents appear in place.
+    </p>
+
+    <!-- ════════════ PANEL 6 — filing from the quick view ════════════ -->
+    <div class="panel-label">
+      6 · Filing from the quick view — the rail's Folder field: at rest · open (the same picker, in
+      flow, with the "removes it from" note) · set, with the tree row moved · a refused save
+    </div>
+    <div class="panel pair">
+      <div class="trio" style="grid-template-columns: 300px 300px">
+        <div>
+          <p class="sub-cap">At rest — No folder</p>
+          <div class="rail-solo">
+            <dl class="qv-rail">
+              <div class="rail-field">
+                <dt>
+                  Parent
+                  <button class="chev" aria-label="Edit Parent">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </dt>
+                <dd>
+                  <a class="rail-link" href="#"><span class="lr-id">PROD-12</span> Q3 launch</a>
+                </dd>
+              </div>
+              <div class="rail-field">
+                <dt>
+                  Folder
+                  <button class="chev" aria-label="Edit Folder">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </dt>
+                <dd>
+                  <svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  No folder
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div>
+          <p class="sub-cap">Open — PROD-31 has an epic parent</p>
+          <div class="rail-solo">
+            <dl class="qv-rail">
+              <div class="rail-field is-editing">
+                <dt>
+                  Folder
+                  <button class="chev" aria-label="Close Folder" aria-expanded="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </dt>
+                <dd>
+                  <button class="rc-trigger">
+                    No folder<svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-chevrons-up-down" />
+                    </svg>
+                  </button>
+                  <span class="rail-note">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                    Filing it removes it from PROD-12 Q3 launch.
+                  </span>
+                  <div class="picker is-inline" role="listbox" aria-label="Folders">
+                    <input
+                      class="picker-search"
+                      aria-label="Find a folder"
+                      placeholder="Find a folder"
+                    />
+                    <button class="picker-opt" role="option" aria-selected="true">
+                      <span class="opt-body">No folder</span>
+                      <svg class="opt-check" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-check" />
+                      </svg>
+                    </button>
+                    <button class="picker-opt" role="option">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                      <span class="opt-body">Later</span>
+                    </button>
+                    <button class="picker-opt is-active" role="option" style="padding-left: 32px">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                      <span class="opt-body">2025</span>
+                    </button>
+                    <button class="picker-opt" role="option">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                      <span class="opt-body">Research</span>
+                    </button>
+                  </div>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <div class="trio" style="grid-template-columns: 300px minmax(0, 1fr)">
+        <div>
+          <p class="sub-cap">Set — confirmed · then a refused save</p>
+          <div class="rail-solo">
+            <dl class="qv-rail">
+              <div class="rail-field">
+                <dt>Parent</dt>
+                <dd>None</dd>
+              </div>
+              <div class="rail-field">
+                <dt>
+                  Folder
+                  <span class="ok"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg
+                  ></span>
+                  <button class="chev" aria-label="Edit Folder">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </dt>
+                <dd>
+                  <svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  Later <span class="path-sep" aria-hidden="true">▸</span> 2025
+                </dd>
+              </div>
+              <div class="rail-field is-pending">
+                <dt>Folder — saving</dt>
+                <dd>
+                  <svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  Research
+                </dd>
+                <div class="rc-bar" role="status"><span class="rc-bar-fill"></span></div>
+              </div>
+              <div class="rail-field">
+                <dt>
+                  Folder
+                  <button class="chev" aria-label="Edit Folder">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </dt>
+                <dd>
+                  <svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  Later <span class="path-sep" aria-hidden="true">▸</span> 2025
+                </dd>
+                <p class="rc-err" role="alert">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+                  That folder belongs to another project, so this work item stayed where it was.
+                </p>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div>
+          <p class="sub-cap">
+            The tree behind the quick view — PROD-12 moved under Later ▸ 2025, stories with it
+          </p>
+          <div class="mini-tree" role="treegrid" aria-label="Work items">
+            <div class="mini-row" role="row" aria-level="1">
+              <span class="chevron is-open" aria-hidden="true"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg
+              ></span>
+              <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-folder" />
+              </svg>
+              <span class="folder-name">Later</span>
+            </div>
+            <div class="mini-row" role="row" aria-level="2" style="padding-left: 34px">
+              <span class="chevron is-open" aria-hidden="true"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg
+              ></span>
+              <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-folder" />
+              </svg>
+              <span class="folder-name">2025</span>
+            </div>
+            <div class="mini-row is-landed" role="row" aria-level="3" style="padding-left: 56px">
+              <span class="chevron is-open" aria-hidden="true"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg
+              ></span>
+              <svg class="type-icon t-epic" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-zap" />
+              </svg>
+              <span class="lr-id">PROD-12</span
+              ><span class="ttl">Q3 launch — Auth &amp; sign-in</span>
+            </div>
+            <div class="mini-row" role="row" aria-level="4" style="padding-left: 78px">
+              <span class="chevron-slot"></span>
+              <svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-book" />
+              </svg>
+              <span class="lr-id">PROD-23</span><span class="ttl">Email + password sign-in</span>
+            </div>
+            <div class="mini-row" role="row" aria-level="4" style="padding-left: 78px">
+              <span class="chevron-slot"></span>
+              <svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-book" />
+              </svg>
+              <span class="lr-id">PROD-31</span><span class="ttl">Google OAuth sign-in</span>
+            </div>
+            <div class="mini-row" role="row" aria-level="1">
+              <span class="chevron-slot"></span>
+              <svg class="type-icon t-task" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-task" />
+              </svg>
+              <span class="lr-id">PROD-34</span><span class="ttl">Password reset email</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>The door every other field already uses.</strong> Folder is one more editable rail row
+      (<code>QuickViewRailEdit</code>), directly below Parent: the same caption-line chevron, the
+      same in-flow menu inside the dialog, the same pending bar, confirmed check and refused revert
+      (quick-view.mock.html 7–9). Its value is the folder PATH, "Later ▸ 2025", or "No folder". The
+      menu is the panel-4 picker in <em>file a work item</em> mode: No folder plus every folder, the
+      current one checked, nothing disabled (MOTIR-5316). Because an item sits in a folder OR under
+      a work-item parent, never both, opening the field on an item that has a parent says so BEFORE
+      the save — "Filing it removes it from PROD-12 Q3 launch." — and after it Parent reads None.
+      Picking the current folder writes nothing. A refusal reverts the value and puts the reason on
+      the row. Behind the dialog the tree updates in place: the row leaves its old level and appears
+      under its folder when that level is loaded, children still beneath it (the lavender landing
+      tint here is board annotation only). The field keeps its optimistic value on success and is
+      not re-fetched.
+    </p>
+
+    <!-- ════════════ PANEL 7 — states ════════════ -->
+    <div class="panel-label">
+      7 · States — an empty folder expanded · a folder paging · a member without work_item:edit ·
+      dark parity
+    </div>
+    <div class="panel stack">
+      <div>
+        <p class="sub-cap">Empty folder, expanded — and a folder holding more than one page</p>
+        <div class="tree-table" role="treegrid" aria-label="Work items">
+          <div role="rowgroup">
+            <div class="tt-grid tt-row" role="row" aria-level="1" aria-expanded="true">
+              <span class="cell-tree">
+                <button class="row-target" aria-label="Collapse folder Spikes"></button>
+                <button class="chevron is-open" aria-label="Collapse folder Spikes" tabindex="-1">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Spikes</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span
+              ><span></span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="2">
+              <span class="cell-tree grid-span" style="padding-left: 46px">
+                <span class="empty-note">Nothing is filed here yet.</span>
+              </span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="1" aria-expanded="true">
+              <span class="cell-tree">
+                <button class="row-target" aria-label="Collapse folder Archive 2024"></button>
+                <button
+                  class="chevron is-open"
+                  aria-label="Collapse folder Archive 2024"
+                  tabindex="-1"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+                </button>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Archive 2024</span>
+              </span>
+              <span></span><span></span><span></span><span></span><span></span><span></span
+              ><span></span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="2">
+              <span class="cell-tree" style="padding-left: 22px">
+                <a
+                  class="row-target"
+                  href="#"
+                  aria-label="PROD-96 Rate-limit the sign-in endpoint"
+                ></a>
+                <span class="chevron-slot"></span>
+                <svg class="type-icon t-task" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-task" />
+                </svg>
+                <span class="lr-id">PROD-96</span>
+                <span class="ttl">Rate-limit the sign-in endpoint</span>
+              </span>
+              <span class="cell-meta">Code</span>
+              <span><span class="pill pill--neutral">Low</span></span>
+              <span class="cell-person"
+                ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+              >
+              <span class="cell-person"
+                ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+              >
+              <span class="cell-meta end">5h</span>
+              <span class="cell-meta end">3</span>
+              <span><span class="pill pill--todo">To Do</span></span>
+            </div>
+            <div class="tt-grid tt-row" role="row" aria-level="2">
+              <span class="cell-tree grid-span" style="padding-left: 46px">
+                <button class="loadmore-btn">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  >Load more children
+                </button>
+                <span class="loadmore-count">Showing 50 of 128</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <p class="sub-cap" style="margin-top: 20px">
+          A member without work_item:edit — no New folder, no menu, a read-only Folder field
+        </p>
+        <div class="pair" style="grid-template-columns: minmax(0, 1fr) 300px">
+          <div class="stage">
+            <div class="toolbar">
+              <button class="tb-btn" aria-label="Filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sliders" /></svg>Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list-tree" /></svg>Tree
+              </button>
+            </div>
+            <div class="mini-tree" role="treegrid" aria-label="Work items" style="margin-top: 12px">
+              <div class="mini-row" role="row" aria-level="1">
+                <span class="chevron" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg
+                ></span>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Later</span>
+              </div>
+              <div class="mini-row" role="row" aria-level="1">
+                <span class="chevron" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg
+                ></span>
+                <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span class="folder-name">Research</span>
+              </div>
+            </div>
+          </div>
+          <div class="rail-solo">
+            <dl class="qv-rail">
+              <div class="rail-field">
+                <dt>Folder</dt>
+                <dd>
+                  <svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-folder" />
+                  </svg>
+                  Later <span class="path-sep" aria-hidden="true">▸</span> 2025
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="sub-cap">Dark parity — the rows and the open menu on data-theme="dark"</p>
+        <div class="dark-stage" data-theme="dark">
+          <div class="menu-anchor">
+            <div class="tree-table" role="treegrid" aria-label="Work items">
+              <div role="rowgroup">
+                <div
+                  class="tt-grid tt-row is-active"
+                  role="row"
+                  aria-level="1"
+                  aria-expanded="true"
+                >
+                  <span class="cell-tree">
+                    <button class="row-target" aria-label="Collapse folder Later"></button>
+                    <button
+                      class="chevron is-open"
+                      aria-label="Collapse folder Later"
+                      tabindex="-1"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" />
+                      </svg>
+                    </button>
+                    <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" />
+                    </svg>
+                    <span class="folder-name">Later</span>
+                  </span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                  <span class="cell-actions">
+                    <button
+                      class="row-actions is-open"
+                      aria-label="Folder actions for Later"
+                      aria-expanded="true"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="tt-grid tt-row" role="row" aria-level="2">
+                  <span class="cell-tree" style="padding-left: 22px">
+                    <a
+                      class="row-target"
+                      href="#"
+                      aria-label="PROD-49 OAuth callback drops the state param"
+                    ></a>
+                    <span class="chevron-slot"></span>
+                    <svg class="type-icon t-bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" />
+                    </svg>
+                    <span class="lr-id">PROD-49</span>
+                    <span class="ttl">OAuth callback drops the state param</span>
+                  </span>
+                  <span class="cell-meta">Code</span>
+                  <span><span class="pill pill--high">High</span></span>
+                  <span class="cell-person"
+                    ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+                  >
+                  <span class="cell-person"
+                    ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+                  >
+                  <span class="cell-meta end">2h</span>
+                  <span class="cell-meta end">3</span>
+                  <span><span class="pill pill--progress">In Progress</span></span>
+                </div>
+                <div class="tt-grid tt-row" role="row" aria-level="1">
+                  <span class="cell-tree">
+                    <button class="row-target" aria-label="Expand folder Research"></button>
+                    <button class="chevron" aria-label="Expand folder Research" tabindex="-1">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chevron-right" />
+                      </svg>
+                    </button>
+                    <svg class="folder-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" />
+                    </svg>
+                    <span class="folder-name">Research</span>
+                  </span>
+                  <span></span><span></span><span></span><span></span><span></span><span></span
+                  ><span></span>
+                </div>
+                <div class="tt-grid tt-row" role="row" aria-level="1">
+                  <span class="cell-tree">
+                    <a class="row-target" href="#" aria-label="PROD-34 Password reset email"></a>
+                    <span class="chevron-slot"></span>
+                    <svg class="type-icon t-task" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-task" />
+                    </svg>
+                    <span class="lr-id">PROD-34</span>
+                    <span class="ttl">Password reset email</span>
+                  </span>
+                  <span class="cell-meta">Copy</span>
+                  <span><span class="pill pill--neutral">Medium</span></span>
+                  <span class="cell-person"
+                    ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+                  >
+                  <span class="cell-person"
+                    ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+                  >
+                  <span class="cell-meta end">3h</span>
+                  <span class="cell-meta end">2</span>
+                  <span><span class="pill pill--todo">To Do</span></span>
+                </div>
+              </div>
+            </div>
+            <div
+              class="menu"
+              role="menu"
+              aria-label="Folder actions for Later"
+              style="top: 36px; right: 8px"
+            >
+              <button class="menu-item is-active" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-plus" /></svg>New
+                folder inside
+              </button>
+              <button class="menu-item" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pencil" /></svg>Rename
+              </button>
+              <button class="menu-item" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder-input" /></svg>Move
+                to…
+              </button>
+              <div class="menu-sep" role="separator"></div>
+              <button class="menu-item" role="menuitem" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-up" /></svg>Move up
+              </button>
+              <button class="menu-item" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow-down" /></svg>Move
+                down
+              </button>
+              <div class="menu-sep" role="separator"></div>
+              <button class="menu-item is-danger" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trash" /></svg>Delete…
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>Empty.</strong> An expanded folder with nothing in it shows one quiet row at the
+      children's indent, so an empty folder never looks like a load that failed.
+      <strong>Paging.</strong> A folder's level pages exactly as a work item's children do — the
+      shipped "Load more children · Showing N of M" row at the end of the loaded rows (MOTIR-5314).
+      <strong>Read-only.</strong> Without <code>work_item:edit</code> the affordances are ABSENT,
+      not disabled — no "New folder", no actions button, no Folder chevron — the rail's existing
+      read-only rule (quick-view.mock.html panel 10); the service's own refusal is the backstop.
+      Folders are still shown and still expand. <strong>Dark.</strong> Every colour above is an
+      <code>--el-*</code> token, so the stage re-skins with nothing folder-specific to flip.
+    </p>
+  </body>
+</html>

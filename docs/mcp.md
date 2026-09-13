@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **59 tools**.
+`initialize` handshake and registers **61 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1041,6 +1041,45 @@ MCP-specific wiring.
 | `body` | string | yes      | Comment body (Markdown). Mention with `@[name](userId)`. |
 
 **Output** — `structuredContent`: the created `CommentDTO`.
+
+#### `edit_comment`
+
+Replace the Markdown body of a comment **the token owner wrote**, and mark it
+edited. It runs the same path as editing on the item page: an identical body is
+a no-op (no write, no "Edited" tag, no notification), and a mention the edit
+ADDS emails that member while mentions already present stay quiet.
+
+**Author only, on purpose.** On the item page a project admin can edit anyone's
+comment; through this tool nobody can. A token is gated on one permission per
+tool and no token can hold `comment:moderate`, so the grant cannot tell
+correcting your own note from rewriting a teammate's — the tool refuses the
+second with `COMMENT_FORBIDDEN` whatever the owner's role. Gated on
+`comment:add`.
+
+| Input       | Type   | Required | Notes                                                                                   |
+| ----------- | ------ | -------- | --------------------------------------------------------------------------------------- |
+| `commentId` | string | yes      | The comment id — from `add_comment`'s result or a `get_work_item_activity` comment row. |
+| `body`      | string | yes      | New comment body (Markdown). Mention with `@[name](userId)`.                            |
+
+**Output** — `structuredContent`: the edited `CommentDTO`, the same shape
+`add_comment` returns. An unknown id, or a comment on an item the token cannot
+see, is `COMMENT_NOT_FOUND`.
+
+#### `delete_comment`
+
+Permanently delete a comment **the token owner wrote**. Deleting a top-level
+comment deletes its replies with it, the item's history records a
+`comment_deleted` entry, and uploads only that thread embedded are unlinked. It
+cannot be undone. Author only, for the reason `edit_comment` gives; gated on
+`comment:add`.
+
+| Input       | Type   | Required | Notes           |
+| ----------- | ------ | -------- | --------------- |
+| `commentId` | string | yes      | The comment id. |
+
+**Output** — `structuredContent`: `{ commentId, workItemKey, parentCommentId,
+replyCount }` — `replyCount` is how many replies went with a deleted root (always
+`0` for a reply).
 
 #### `add_lesson`
 

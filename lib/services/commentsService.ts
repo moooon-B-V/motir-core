@@ -29,7 +29,7 @@ import {
   InvalidParentCommentError,
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
-import type { CommentDTO, CommentsPageDTO } from '@/lib/dto/comments';
+import type { CommentDTO, CommentsPageDTO, DeletedCommentDTO } from '@/lib/dto/comments';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -96,6 +96,27 @@ export interface ListCommentsOptions {
    * silently did nothing would be worse than not offering one at all.
    */
   limit?: number;
+}
+
+/** How a caller narrows the edit / delete doors. */
+export interface CommentWriteOptions {
+  /** Refuse every caller but the comment's author — see `editComment`. */
+  ownOnly?: boolean;
+}
+
+/**
+ * The edit-own / edit-all decision, in one place for both doors: the author
+ * always may; anyone else needs the moderation tier, unless the caller asked
+ * for the author alone.
+ */
+function mayWrite(
+  authorId: string,
+  gate: CommentGate,
+  ctx: ServiceContext,
+  options: CommentWriteOptions,
+): boolean {
+  if (authorId === ctx.userId) return true;
+  return !options.ownOnly && gate.caps.canModerate;
 }
 
 interface CommentGate {
@@ -353,11 +374,20 @@ export const commentsService = {
    * which returns unchanged without writing or notifying. Mentions re-parse
    * and diff in the same tx; newly-added mentions re-fire the
    * `work-item/comment.created` event carrying ONLY the new ids.
+   *
+   * `options.ownOnly` narrows the door to the AUTHOR alone (MOTIR-5295): the
+   * moderation tier is not consulted, so a non-author is refused even when
+   * their role could moderate. The MCP adapter passes it because a token's
+   * grant is checked against ONE key per tool and `comment:moderate` is not a
+   * key any token can hold — without it, a token granted only `comment:add`
+   * would inherit its owner's moderation reach. Checked on the row read INSIDE
+   * the transaction, so it cannot race the write.
    */
   async editComment(
     commentId: string,
     input: { bodyMd: string },
     ctx: ServiceContext,
+    options: CommentWriteOptions = {},
   ): Promise<CommentDTO> {
     const bodyMd = requireBody(input.bodyMd);
     const tokenIds = parseMentionIds(bodyMd);
@@ -376,7 +406,7 @@ export const commentsService = {
       async (tx) => {
         const current = await resolveComment(commentId, ctx, tx);
         const gate = await resolveGatedWorkItem(current.workItemId, ctx, tx);
-        if (current.authorId !== ctx.userId && !gate.caps.canModerate) {
+        if (!mayWrite(current.authorId, gate, ctx, options)) {
           throw new CommentForbiddenError('edit');
         }
 
@@ -448,12 +478,20 @@ export const commentsService = {
    * SAME transaction a `work_item_revision` row (changeKind
    * `comment_deleted`) records that a comment by X was deleted by Y, reply
    * count included — the surviving History trace Story 5.5 renders.
+   *
+   * Returns what was removed, so a caller that cannot see the thread (the MCP
+   * `delete_comment` adapter) can report it. `options.ownOnly` is the same
+   * author-only narrowing {@link editComment} documents.
    */
-  async deleteComment(commentId: string, ctx: ServiceContext): Promise<void> {
-    await withWorkspaceContext(ctx, async (tx) => {
+  async deleteComment(
+    commentId: string,
+    ctx: ServiceContext,
+    options: CommentWriteOptions = {},
+  ): Promise<DeletedCommentDTO> {
+    return withWorkspaceContext(ctx, async (tx) => {
       const current = await resolveComment(commentId, ctx, tx);
       const gate = await resolveGatedWorkItem(current.workItemId, ctx, tx);
-      if (current.authorId !== ctx.userId && !gate.caps.canModerate) {
+      if (!mayWrite(current.authorId, gate, ctx, options)) {
         throw new CommentForbiddenError('delete');
       }
 
@@ -495,6 +533,13 @@ export const commentsService = {
         ctx.userId,
         tx,
       );
+
+      return {
+        commentId: current.id,
+        workItemId: current.workItemId,
+        parentCommentId: current.parentCommentId,
+        replyCount,
+      };
     });
   },
 

@@ -733,6 +733,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
     descriptionFingerprint: '81d096a6d087',
   },
+  edit_comment: {
+    summary: 'Replace the body of a comment you wrote. Only its author can edit it here.',
+    descriptionFingerprint: '22242523200c',
+  },
+  delete_comment: {
+    summary:
+      'Permanently delete a comment you wrote, with its replies. Only its author can delete it here.',
+    descriptionFingerprint: 'e09c5b6edd67',
+  },
   add_lesson: {
     summary:
       'Record a lesson for this project, so later plans for it are given the lesson. This project only.',
