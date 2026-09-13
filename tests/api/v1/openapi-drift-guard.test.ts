@@ -590,6 +590,8 @@ describe('every operation’s REAL response validates against its declared schem
         agent: 'claude',
         model: 'claude-opus-5',
         idempotencyKey: 'drift-guard-run-1',
+        // A SCOPE, so the close-out prompt below has a run target (MOTIR-5357).
+        scopeKey: runCard,
         cards: [{ key: runCard, disposition: 'queued' }],
       }),
     );
@@ -604,6 +606,13 @@ describe('every operation’s REAL response validates against its declared schem
           { kind: 'card_claimed', workItemKey: runCard, disposition: 'running' },
         ],
       }),
+      { id: runId },
+    );
+
+    await drive(
+      'getDispatchRunCloseOutPrompt',
+      () => import('@/app/api/v1/dispatch-runs/[id]/close-out-prompt/route'),
+      send(`/api/v1/dispatch-runs/${runId}/close-out-prompt`, 'GET'),
       { id: runId },
     );
 

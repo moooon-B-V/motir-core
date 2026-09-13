@@ -26,6 +26,7 @@ import {
   dispatchRunAppendedSchema,
   dispatchRunCardSchema,
   dispatchRunCloseBodySchema,
+  dispatchRunCloseOutPromptSchema,
   dispatchRunOpenBodySchema,
   dispatchRunOpenedSchema,
   dispatchRunSchema,
@@ -802,6 +803,38 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // 422 for a malformed body.
     errorStatuses: [404, 409, 422],
   }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/dispatch-runs/{id}/close-out-prompt',
+    operationId: 'getDispatchRunCloseOutPrompt',
+    summary: 'Get the prompt that writes a run’s How to test onto its run target',
+    description:
+      'The CLOSE-OUT prompt for a run launched against a work item (a scoped run): the text ' +
+      'a CLI hands ONE agent after the run’s last card lands and BEFORE it marks the run’s ' +
+      'pull requests ready, so HOW TO TEST is written once onto the run target by an agent ' +
+      'that sees every card the run landed. ' +
+      'The target and the landed cards are read from the run’s own record — the caller names ' +
+      'only the run. A run with no scope (an unscoped batch, whose every card was its own ' +
+      'target) is refused with `NO_RUN_TARGET` rather than answered with a defaulted target. ' +
+      'A read: it writes nothing and moves no status.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunCloseOutPromptSchema },
+      description: 'The run target, the landed cards, and the prompt text.',
+    },
+    // 404 for an unknown or cross-workspace run; 422 for a run with no run target.
+    errorStatuses: [404, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -820,4 +853,5 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchRunCard: dispatchRunCardSchema,
   DispatchRunOpened: dispatchRunOpenedSchema,
   DispatchRunAppended: dispatchRunAppendedSchema,
+  DispatchRunCloseOutPrompt: dispatchRunCloseOutPromptSchema,
 };

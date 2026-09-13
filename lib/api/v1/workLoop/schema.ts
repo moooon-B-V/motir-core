@@ -9,6 +9,7 @@ import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
+import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
 // The v1 WORK-LOOP resources, declared once (Story 11.7 · Subtask 11.7.3 —
@@ -1871,3 +1872,31 @@ export const dispatchRunCloseBodySchema = z
   })
   .strict();
 export type V1DispatchRunCloseBody = z.infer<typeof dispatchRunCloseBodySchema>;
+
+/**
+ * A run's CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) — the text a scoped
+ * run hands one agent before marking its pull requests ready, so HOW TO TEST is
+ * written onto the run target.
+ */
+export const dispatchRunCloseOutPromptSchema = z.object({
+  runId: z.string(),
+  /** The run target — the item the run was launched against. */
+  targetKey: workItemKeySchema,
+  /** The full prompt text, ready to hand to a coding agent. */
+  prompt: z.string(),
+  /** The cards the run landed (integrated or implemented), in run order. */
+  landedKeys: z.array(workItemKeySchema),
+});
+export type V1DispatchRunCloseOutPrompt = z.infer<typeof dispatchRunCloseOutPromptSchema>;
+
+/** Map the close-out prompt to the wire — field by field, never a spread. */
+export function presentDispatchRunCloseOutPrompt(
+  dto: DispatchRunCloseOutPromptDto,
+): V1DispatchRunCloseOutPrompt {
+  return {
+    runId: dto.runId,
+    targetKey: dto.targetKey,
+    prompt: dto.prompt,
+    landedKeys: [...dto.landedKeys],
+  };
+}
