@@ -466,29 +466,19 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/approvals',
     icon: ShieldCheck,
     labelKey: 'nav.approvals',
-    // THE FIRST ENTRY TO DECLARE TWO KEYS (Task MOTIR-5278), on the decision of
-    // record in `design/projects/design-notes.md` § ⭐ Approvals §6 (MOTIR-5190):
-    // the room is SEEN by every project browser and CHANGED by an admin.
-    //
-    // VERIFIED (view): `approvalGateSettingsService.getSettings` — the room's READ —
-    // asserts `project:browse`. A member is entitled to know which gates their
-    // project raises, because those gates decide whether their own finished work
-    // waits for somebody.
-    //
-    // VERIFIED (write): `approvalGateSettingsService.updateSettings` asserts
-    // `workflow:manage` through `projectAccessService.assertPermission` (Story
-    // MOTIR-4925 · Subtask MOTIR-5170). The key is the shipped one for *may you
-    // configure how work moves through this project* — a status graph and an
-    // approval gate are the two things that decide when work may move, which is
+    // VERIFIED: `approvalGateSettingsService`'s `getSettings` / `updateSettings`
+    // both assert `workflow:manage` through `projectAccessService.assertPermission`
+    // (Story MOTIR-4925 · Subtask MOTIR-5170). The key is the shipped one for
+    // *may you configure how work moves through this project* — a status graph and
+    // an approval gate are the two things that decide when work may move, which is
     // also why this row sits directly after `workflow` rather than inside it. A
     // dedicated `gate:manage` is a reasonable later split and is NOT made here.
     //
-    // ⚠️ AND IT BRINGS THE AREA DOOR BACK FOR EVERY MEMBER. Every actor who reaches
-    // this shell holds `project:browse`, so a member's rail is exactly this one row
-    // and `hasVisibleSettingsArea` is true for them. §6 accepts that deliberately;
-    // the suites that pinned *a member is offered no settings area* carry an
-    // `INVERTED BY MOTIR-5278` note where they changed.
-    viewPermission: 'project:browse',
+    // ⚠️ MANAGE-ONLY, AND DECIDED (2026-09-13 · `design/projects/design-notes.md`
+    // § ⭐ Approvals §6 · MOTIR-5394). MOTIR-5278 gave this entry a `project:browse`
+    // VIEW key, which opened the room read-only to every browser and brought the
+    // settings door back for every member. That is reverted: there is no read-only
+    // view to show, so do not declare a view key here without a new decision.
     permission: 'workflow:manage',
   },
   {
