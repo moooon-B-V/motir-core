@@ -1,0 +1,38 @@
+# The Vitest FORCE-FULL path set — `docs/decisions/ci-affected-tests.md` §2.1.
+#
+# A pull request whose diff touches a path matching any glob below runs the WHOLE
+# Vitest suite, with the coverage gate, exactly as the merge queue does. Every
+# entry is an input every test depends on that no test's import graph contains;
+# the ADR's table gives the reason for each and must equal this list.
+#
+# It lives in ONE file because three things read it:
+#   - `ci.yml`'s `changes` job, with bash `[[ $f == $glob ]]`, where `*` also spans
+#     `/` — which can only over-match, the safe direction;
+#   - `scripts/ci/measure-affected-tests.mjs`, with picomatch (`dot: true`);
+#   - `tests/ci-changed-paths-gate.test.ts`, which executes the classifier against
+#     one path per glob and asserts this list equals the ADR's table.
+#
+# One glob per line. A line starting with `#` is a comment.
+package.json
+**/package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+tsconfig*.json
+vitest.config.ts
+vitest.collect.config.ts
+tests/helpers/parallelDb.ts
+tests/helpers/structuralGuardLane.ts
+tests/helpers/vitestShardSequencer.ts
+tests/helpers/vitestShardPlan.ts
+tests/setup/**
+tests/helpers/perWorkerDb.ts
+tests/helpers/actEnvironment.ts
+tests/helpers/inFlightProbe.ts
+tests/helpers/inFlightWork.ts
+tests/helpers/adminDb.ts
+prisma/**
+packages/**
+.github/workflows/ci.yml
+.github/actions/**
+.github/ci/**
+scripts/ci/measure-affected-tests.mjs
