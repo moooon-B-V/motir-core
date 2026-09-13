@@ -6466,7 +6466,7 @@ under the consequence line**. A kind that supplies none renders nothing, and ban
   the page, so a door for them would lead to a refusal, and their frame has none.
   There is no read-only room (Yue, 2026-09-13). The door lands at
   `/settings/project/approvals#merge-mode` (`design/projects/approvals.mock.html`
-  panel 9), in the same tab.
+  panel 8), in the same tab.
 - **The merge PORT is still MOTIR-4882's** and is drawn only as a labelled
   placeholder. This amendment draws no merge, no merge refusal and no
   `pull_request_merge` gate.

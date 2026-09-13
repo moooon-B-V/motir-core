@@ -72,8 +72,9 @@
       AMENDED 2026-09-13 (MOTIR-5176, story MOTIR-4880) — the MERGE-MODE row:
         (6) the room with BOTH cards, merge mode at `manual` (Ask before merging)
         (7) `auto` (Merge automatically) selected
-        (8) `review_on_fail` selected — RESERVED and UNIMPLEMENTED, said on the surface
-        (9) arrival by DEEP LINK (#merge-mode) with the project already selected
+        (8) arrival by DEEP LINK (#merge-mode) with the project already selected
+      TWO values (Yue, 2026-09-13): the reserved `review_on_fail` is RETIRED — only a
+      green pull request is ever a merge candidate, so "ask when checks fail" has no meaning.
       MANAGE-ONLY (Yue, 2026-09-13): there is NO read-only state. The room, the row and
       the deep link are guarded by workflow:manage; a member without it never lands here.
       The earlier line in panel 5 attributing this row to MOTIR-4882 is CORRECTED:
@@ -1755,9 +1756,6 @@
       .mi.auto {
         background: var(--el-tint-mint);
       }
-      .mi.onfail {
-        background: var(--el-tint-yellow);
-      }
       .mopt .mt {
         flex: 1;
         min-width: 0;
@@ -1803,16 +1801,6 @@
       }
       .mopt.ro .radio {
         opacity: 0.5;
-      }
-      .reserved {
-        display: inline-flex;
-        align-items: center;
-        font-size: 11.5px;
-        font-weight: 600;
-        color: var(--el-text-strong);
-        background: var(--el-tint-yellow);
-        border-radius: var(--radius-badge);
-        padding: var(--spacing-chip-y) var(--spacing-chip-x);
       }
       .notyet {
         display: flex;
@@ -2401,7 +2389,7 @@
         panels 1&ndash;4. <b>CORRECTED 2026-09-13 (MOTIR-5176):</b> this legend used to attribute
         the merge-mode row to MOTIR-4882. The surface is <b>MOTIR-4880&rsquo;s</b> &mdash; that
         story owns the setting, its control and its deep link; MOTIR-4882 ships the merge itself
-        &mdash; and the row is drawn in panels 6&ndash;9 below. The room is still justified by the
+        &mdash; and the row is drawn in panels 6&ndash;8 below. The room is still justified by the
         readers and writers above, not by the second card.
       </p>
     </div>
@@ -2410,9 +2398,10 @@
     <div class="panel-label">
       6 &middot; <b>The merge-mode row &mdash; <span class="mono">manual</span> selected</b>
       (MOTIR-5176, story MOTIR-4880). A second card in the room, BELOW the acceptance-video switch,
-      on the same axis: what the PRESENCE of a pull request means for this project. It is a
-      THREE-value choice, so it is the radio-card group and not a copy of its neighbour&rsquo;s
-      switch. Project-admin view.
+      on the same axis: what the PRESENCE of a pull request means for this project. It is a choice
+      between two described modes, so it is the radio-card group and not a copy of its
+      neighbour&rsquo;s switch &mdash; each option carries the sentence a switch cannot.
+      Project-admin view.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2469,8 +2458,8 @@
                     <span class="mt">
                       <span class="mlabel">Ask before merging</span>
                       <span class="mhint"
-                        >A person approves each pull request in Motir before it is merged. Nothing
-                        reaches your default branch without that yes.</span
+                        >When its checks pass, a person approves the pull request in Motir before it
+                        is merged. Nothing reaches your default branch without that yes.</span
                       >
                     </span>
                     <span class="radio"></span>
@@ -2482,23 +2471,9 @@
                     <span class="mt">
                       <span class="mlabel">Merge automatically</span>
                       <span class="mhint"
-                        >Motir merges the pull request without asking anyone. The record says this
-                        setting allowed it &mdash; not that a person approved it.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                  <label class="mopt" role="radio" aria-checked="false">
-                    <span class="mi onfail" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel"
-                        >Ask only when checks fail<span class="reserved">Not built yet</span></span
-                      >
-                      <span class="mhint"
-                        >Reserved for later. Until it is built, it behaves exactly like
-                        <b>Ask before merging</b>.</span
+                        >When its checks pass, Motir merges the pull request without asking anyone.
+                        The record says this setting allowed it &mdash; not that a person approved
+                        it.</span
                       >
                     </span>
                     <span class="radio"></span>
@@ -2512,26 +2487,25 @@
       <p class="legend">
         <b>Label / hint, per value &mdash; transcribe verbatim (MOTIR-5181):</b>
         <span class="mono">manual</span> &rarr; label &ldquo;Ask before merging&rdquo;, hint
-        &ldquo;A person approves each pull request in Motir before it is merged. Nothing reaches
-        your default branch without that yes.&rdquo; &middot; <span class="mono">auto</span> &rarr;
-        label &ldquo;Merge automatically&rdquo;, hint &ldquo;Motir merges the pull request without
-        asking anyone. The record says this setting allowed it &mdash; not that a person approved
-        it.&rdquo; &middot; <span class="mono">review_on_fail</span> &rarr; label &ldquo;Ask only
-        when checks fail&rdquo; + the <b>Not built yet</b> pill, hint &ldquo;Reserved for later.
-        Until it is built, it behaves exactly like <b>Ask before merging</b>.&rdquo;. The LABEL is
-        the bold line, the HINT the secondary line under it. No enum member and no column name is
-        ever shown. <b>The blue notice</b> is honest about today: nothing merges on this setting
-        until MOTIR-4882 ships, so the room says so rather than implying a behaviour; MOTIR-4882
-        removes the notice in the change that makes it false. <b>Primitives:</b> the shipped
-        <span class="mono">Card</span> (header / body / footer), the access-level radio cards&rsquo;
-        grammar from <span class="mono">ProjectMembersSettings</span> (<span class="mono"
-          >role="radiogroup"</span
-        >) &mdash; a tinted icon tile (<span class="mono">--el-tint-sky / -mint / -yellow</span>,
-        glyph <span class="mono">--el-text-strong</span>), label
-        <span class="mono">--el-text</span>, hint <span class="mono">--el-text-secondary</span>, the
-        selected card on <span class="mono">--el-accent</span> border + filled radio. The pill is
-        <span class="mono">Pill</span> on <span class="mono">--el-tint-yellow</span> with
-        <span class="mono">--el-text-strong</span> (finding #35).
+        &ldquo;When its checks pass, a person approves the pull request in Motir before it is
+        merged. Nothing reaches your default branch without that yes.&rdquo; &middot;
+        <span class="mono">auto</span> &rarr; label &ldquo;Merge automatically&rdquo;, hint
+        &ldquo;When its checks pass, Motir merges the pull request without asking anyone. The record
+        says this setting allowed it &mdash; not that a person approved it.&rdquo; . A pull request
+        whose checks fail is never offered for merging in either mode &mdash; it stays with the run
+        that is fixing it. The LABEL is the bold line, the HINT the secondary line under it. No enum
+        member and no column name is ever shown. <b>The blue notice</b> is honest about today:
+        nothing merges on this setting until MOTIR-4882 ships, so the room says so rather than
+        implying a behaviour; MOTIR-4882 removes the notice in the change that makes it false.
+        <b>Primitives:</b> the shipped <span class="mono">Card</span> (header / body / footer), the
+        access-level radio cards&rsquo; grammar from
+        <span class="mono">ProjectMembersSettings</span> (<span class="mono">role="radiogroup"</span
+        >) &mdash; a tinted icon tile (<span class="mono">--el-tint-sky / -mint</span>, glyph
+        <span class="mono">--el-text-strong</span>), label <span class="mono">--el-text</span>, hint
+        <span class="mono">--el-text-secondary</span>, the selected card on
+        <span class="mono">--el-accent</span> border + filled radio. The notice is
+        <span class="mono">--el-text-strong</span> on
+        <span class="mono">--el-tint-sky</span> (finding #35).
       </p>
     </div>
 
@@ -2575,8 +2549,8 @@
                     <span class="mt">
                       <span class="mlabel">Ask before merging</span>
                       <span class="mhint"
-                        >A person approves each pull request in Motir before it is merged. Nothing
-                        reaches your default branch without that yes.</span
+                        >When its checks pass, a person approves the pull request in Motir before it
+                        is merged. Nothing reaches your default branch without that yes.</span
                       >
                     </span>
                     <span class="radio"></span>
@@ -2588,23 +2562,9 @@
                     <span class="mt">
                       <span class="mlabel">Merge automatically</span>
                       <span class="mhint"
-                        >Motir merges the pull request without asking anyone. The record says this
-                        setting allowed it &mdash; not that a person approved it.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                  <label class="mopt" role="radio" aria-checked="false">
-                    <span class="mi onfail" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel"
-                        >Ask only when checks fail<span class="reserved">Not built yet</span></span
-                      >
-                      <span class="mhint"
-                        >Reserved for later. Until it is built, it behaves exactly like
-                        <b>Ask before merging</b>.</span
+                        >When its checks pass, Motir merges the pull request without asking anyone.
+                        The record says this setting allowed it &mdash; not that a person approved
+                        it.</span
                       >
                     </span>
                     <span class="radio"></span>
@@ -2624,102 +2584,9 @@
       </p>
     </div>
 
-    <!-- ════════════════ PANEL 8 — REVIEW_ON_FAIL, RESERVED ════════════════ -->
+    <!-- ════════════════ PANEL 8 — ARRIVAL BY DEEP LINK ════════════════ -->
     <div class="panel-label">
-      8 &middot;
-      <b
-        ><span class="mono">review_on_fail</span> selected &mdash; RESERVED and UNIMPLEMENTED, said
-        on the surface.</b
-      >
-      The value exists in the enum so a later build needs no Postgres enum change (&sect;7), and a
-      project can hold it. So the room must never let a reader believe they chose a behaviour that
-      does not exist.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page" style="max-width: 672px; margin: 0 auto; padding: 22px">
-          <span class="crumb">Settings &middot; motir &middot; Approvals</span>
-          <div class="room">
-            <div class="gcard" id="merge-mode">
-              <div class="gcard-head">
-                <span class="gtitle"
-                  ><svg viewBox="0 0 24 24"><use href="#i-git-merge" /></svg>Merging pull
-                  requests</span
-                >
-                <p class="gdesc">
-                  What happens when a pull request for this project&rsquo;s work is ready to merge.
-                  A project whose repositories Motir hosts starts at <b>Merge automatically</b>; a
-                  project holding any repository of your own starts at <b>Ask before merging</b>.
-                </p>
-              </div>
-              <div class="gcard-body" style="flex-direction: column; align-items: stretch">
-                <div class="notyet">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
-                  <span
-                    >Motir does not merge pull requests yet. Until it does, every pull request is
-                    merged on your git host by a person, whichever option is chosen here.</span
-                  >
-                </div>
-                <div class="mgroup" role="radiogroup" aria-label="Merging pull requests">
-                  <label class="mopt" role="radio" aria-checked="false">
-                    <span class="mi ask" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel">Ask before merging</span>
-                      <span class="mhint"
-                        >A person approves each pull request in Motir before it is merged. Nothing
-                        reaches your default branch without that yes.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                  <label class="mopt" role="radio" aria-checked="false">
-                    <span class="mi auto" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel">Merge automatically</span>
-                      <span class="mhint"
-                        >Motir merges the pull request without asking anyone. The record says this
-                        setting allowed it &mdash; not that a person approved it.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                  <label class="mopt sel" role="radio" aria-checked="true">
-                    <span class="mi onfail" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel"
-                        >Ask only when checks fail<span class="reserved">Not built yet</span></span
-                      >
-                      <span class="mhint"
-                        >Reserved for later. Until it is built, it behaves exactly like
-                        <b>Ask before merging</b>.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <p class="legend">
-        The <b>Not built yet</b> pill sits on the option in EVERY state, selected or not, so it is
-        read before anyone picks it, and the hint states the substitute behaviour in the same words
-        as the option it falls back to. Deliberately NOT disabled: a project that already holds the
-        value must be able to see it selected, and a disabled option that is also selected reads as
-        a broken control.
-      </p>
-    </div>
-
-    <!-- ════════════════ PANEL 9 — ARRIVAL BY DEEP LINK ════════════════ -->
-    <div class="panel-label">
-      9 &middot; <b>Arriving by deep link</b> &mdash; from &#8984;K (the room&rsquo;s registry
+      8 &middot; <b>Arriving by deep link</b> &mdash; from &#8984;K (the room&rsquo;s registry
       entry) or from the approval frame&rsquo;s settings door (<span class="mono"
         >design/work-items/approval-control.mock.html</span
       >
@@ -2783,8 +2650,8 @@
                     <span class="mt">
                       <span class="mlabel">Ask before merging</span>
                       <span class="mhint"
-                        >A person approves each pull request in Motir before it is merged. Nothing
-                        reaches your default branch without that yes.</span
+                        >When its checks pass, a person approves the pull request in Motir before it
+                        is merged. Nothing reaches your default branch without that yes.</span
                       >
                     </span>
                     <span class="radio"></span>
@@ -2796,23 +2663,9 @@
                     <span class="mt">
                       <span class="mlabel">Merge automatically</span>
                       <span class="mhint"
-                        >Motir merges the pull request without asking anyone. The record says this
-                        setting allowed it &mdash; not that a person approved it.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                  <label class="mopt" role="radio" aria-checked="false">
-                    <span class="mi onfail" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel"
-                        >Ask only when checks fail<span class="reserved">Not built yet</span></span
-                      >
-                      <span class="mhint"
-                        >Reserved for later. Until it is built, it behaves exactly like
-                        <b>Ask before merging</b>.</span
+                        >When its checks pass, Motir merges the pull request without asking anyone.
+                        The record says this setting allowed it &mdash; not that a person approved
+                        it.</span
                       >
                     </span>
                     <span class="radio"></span>
@@ -2840,9 +2693,9 @@
       <h3>&#9888;&#65039; Planning flags (surfaced, not silently absorbed)</h3>
       <ul>
         <li>
-          <b>MOTIR-5181 transcribes</b> panels 6&ndash;9: the three label/hint pairs verbatim in
-          <span class="mono">en</span> and <span class="mono">zh</span>, the Not-built-yet pill, the
-          not-yet notice and the <span class="mono">#merge-mode</span> anchor. It reads through
+          <b>MOTIR-5181 transcribes</b> panels 6&ndash;8: the two label/hint pairs verbatim in
+          <span class="mono">en</span> and <span class="mono">zh</span>, the not-yet notice and the
+          <span class="mono">#merge-mode</span> anchor. It reads through
           <span class="mono">getPrMergeMode</span> and writes through
           <span class="mono">setPrMergeMode</span>, both <span class="mono">workflow:manage</span>.
         </li>
@@ -2860,7 +2713,7 @@
           this setting, and owns the settings door&rsquo;s code in the approval frame.
         </li>
         <li>
-          <b>MOTIR-5183 walks</b> panels 6, 7 and 9: an admin reads each value&rsquo;s words,
+          <b>MOTIR-5183 walks</b> panels 6, 7 and 8: an admin reads each value&rsquo;s words,
           changes it, and arrives by deep link; a member without
           <span class="mono">workflow:manage</span> is refused the route.
         </li>
