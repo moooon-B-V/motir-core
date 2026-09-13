@@ -43,6 +43,19 @@ export type WorkItemCreateInput = Prisma.WorkItemUncheckedCreateInput;
  * alias; `Prisma.WorkItemUncheckedUpdateInput` itself is named only here.
  */
 export type WorkItemUpdateInput = Prisma.WorkItemUncheckedUpdateInput;
+
+/**
+ * How a lazy tree level treats FOLDERS (Story MOTIR-5308 · MOTIR-5314).
+ *
+ * OMITTED, a level reads exactly as it always has, and the roadmap and the run
+ * canvas omit it: where a filed item appears on THOSE surfaces is decided by the
+ * story that owns them, and a filed item is still the root it was for them.
+ *   * `excludeFiled` — the ROOT level leaves out items filed in a folder, because
+ *     the /items tree shows them inside their folder instead.
+ *   * `folder` — the level IS one folder's filed items.
+ * An explicit id set ignores it: a caller naming its rows has named them.
+ */
+export type TreeFolderLevel = { kind: 'excludeFiled' } | { kind: 'folder'; folderId: string };
 import {
   CrossProjectParentError,
   DepthLimitExceededError,
@@ -3512,6 +3525,7 @@ export const workItemRepository = {
     page: { take: number; offset: number; ids?: readonly string[] | undefined },
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
+    folderLevel?: TreeFolderLevel,
   ): Promise<WorkItemTreeRow[]> {
     const client = tx ?? dbRead;
     const orderCol = ISSUE_SORT_SQL[sort.column];
@@ -3574,7 +3588,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
-          AND ${parentPred}
+          AND ${treeLevelPredicate(parentPred, parentId, page.ids !== undefined, folderLevel)}
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
         LIMIT ${page.take + 1} OFFSET ${page.offset}`;
   },
@@ -3594,6 +3608,7 @@ export const workItemRepository = {
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
     ids?: readonly string[] | undefined,
+    folderLevel?: TreeFolderLevel,
   ): Promise<number> {
     const client = tx ?? dbRead;
     // The SAME level predicate `findProjectTreeLevel` builds, sprint arm included
@@ -3617,7 +3632,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
-          AND ${parentPred}`;
+          AND ${treeLevelPredicate(parentPred, parentId, ids !== undefined, folderLevel)}`;
     return Number(rows[0]?.count ?? 0);
   },
 
@@ -5496,6 +5511,25 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
  * `buildIssueFilterSql`. The Prisma-builder reads (`findColumnCards`, the lane
  * `groupBy`s) express the same predicate as `{ triagedAt: null }`.
  */
+/**
+ * A lazy tree level's node predicate with its FOLDER treatment applied — one
+ * function for `findProjectTreeLevel` and `countProjectTreeLevel`, so a level's
+ * rows and its "Showing N of M" total can never disagree about what the level is.
+ * Applied at the ROOT only (both root arms, sprint included): a work item's
+ * children are never filed, because the CHECK keeps `parentId` and `folderId`
+ * apart.
+ */
+function treeLevelPredicate(
+  parentPred: Prisma.Sql,
+  parentId: string | null,
+  hasIds: boolean,
+  folderLevel: TreeFolderLevel | undefined,
+): Prisma.Sql {
+  if (folderLevel === undefined || hasIds) return parentPred;
+  if (folderLevel.kind === 'folder') return Prisma.sql`w."folderId" = ${folderLevel.folderId}`;
+  return parentId === null ? Prisma.sql`${parentPred} AND w."folderId" IS NULL` : parentPred;
+}
+
 function notInTriageSql(alias: string): Prisma.Sql {
   return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
 }

@@ -964,6 +964,29 @@ export interface WorkItemTreeRowDto extends WorkItemListItemDto {
 }
 
 /**
+ * A FOLDER row in a lazy tree level (Story MOTIR-5308 · MOTIR-5314) — a named,
+ * nestable place that carries no workflow, so it has none of a work item's cells.
+ * `kind: 'folder'` is the discriminant: no work-item kind is called that.
+ *
+ * `parentId` is ALWAYS `null` and is present so the row answers the same
+ * placement question a work-item row does: a folder never sits under a work
+ * item. Its own container is `parentFolderId`.
+ */
+export interface FolderTreeRowDto {
+  kind: 'folder';
+  id: string;
+  parentId: null;
+  parentFolderId: string | null;
+  name: string;
+  position: string;
+  /** A child folder, or a filed work item that is neither archived nor in triage. */
+  hasChildren: boolean;
+}
+
+/** One row of a lazy tree level: a folder, or a work item. */
+export type ProjectTreeRowDto = FolderTreeRowDto | WorkItemTreeRowDto;
+
+/**
  * One page of a lazy tree level: the level's rows + `hasMore` (another page
  * exists — drives "Load more children") + `total` (the level's FULL child
  * count, regardless of paging). `hasMore` is the `take + 1` probe; `total` is a
@@ -972,7 +995,8 @@ export interface WorkItemTreeRowDto extends WorkItemListItemDto {
  * 128" affordance.
  */
 export interface TreeLevelDto {
-  rows: WorkItemTreeRowDto[];
+  /** Folders first (by position), then work items (by the active sort). */
+  rows: ProjectTreeRowDto[];
   hasMore: boolean;
   total: number;
 }

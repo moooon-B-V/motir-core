@@ -5,6 +5,7 @@ import {
   FolderNameTakenError,
   FolderNotFoundError,
 } from '@/lib/folders/errors';
+import type { FolderTreeRow } from '@/lib/mappers/folderMappers';
 
 // Folder repository — single operations on the `folder` table (Epic MOTIR-5307
 // · Story MOTIR-5308 · MOTIR-5313). The persistence leaf under `foldersService`,
@@ -136,6 +137,74 @@ export const folderRepository = {
       select: { position: true },
     });
     return row?.position ?? null;
+  },
+
+  /**
+   * One LAZY tree level's FOLDERS (Story MOTIR-5308 · MOTIR-5314) — the
+   * project's root folders, or one folder's child folders — by `position`, then
+   * `name`, then `id`, so the order is total and paging never skips or repeats.
+   * Folders ignore the tree's column sort: they are pinned above the level's
+   * work items, as in every file manager.
+   *
+   * `hasChildren` is TRUE for a child folder or for a filed work item that is
+   * neither archived nor in triage — the same exclusions the work-item level
+   * applies (`notInTriageSql` in `workItemRepository`), so an archived item
+   * alone never draws a chevron onto an empty folder.
+   *
+   * The explicit `workspace_id` + `project_id` gate is the tree reads' own
+   * (RLS is inert under the dev/CI superuser).
+   */
+  async findLevel(
+    projectId: string,
+    workspaceId: string,
+    parentFolderId: string | null,
+    page: { take: number; offset: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<FolderTreeRow[]> {
+    const parentPred =
+      parentFolderId === null
+        ? Prisma.sql`f."parent_folder_id" IS NULL`
+        : Prisma.sql`f."parent_folder_id" = ${parentFolderId}`;
+    return tx.$queryRaw<FolderTreeRow[]>`
+      SELECT f."id",
+             f."parent_folder_id" AS "parentFolderId",
+             f."name",
+             f."position",
+             (
+               EXISTS (SELECT 1 FROM "folder" c WHERE c."parent_folder_id" = f."id")
+               OR EXISTS (
+                 SELECT 1 FROM "work_item" w
+                  WHERE w."folderId" = f."id"
+                    AND w."archivedAt" IS NULL
+                    AND w."triagedAt" IS NULL
+               )
+             ) AS "hasChildren"
+        FROM "folder" f
+       WHERE f."project_id" = ${projectId}
+         AND f."workspace_id" = ${workspaceId}
+         AND ${parentPred}
+       ORDER BY f."position" ASC, f."name" ASC, f."id" ASC
+       LIMIT ${page.take} OFFSET ${page.offset}`;
+  },
+
+  /** The FULL folder count of one lazy tree level — the predicate `findLevel` reads. */
+  async countLevel(
+    projectId: string,
+    workspaceId: string,
+    parentFolderId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const parentPred =
+      parentFolderId === null
+        ? Prisma.sql`f."parent_folder_id" IS NULL`
+        : Prisma.sql`f."parent_folder_id" = ${parentFolderId}`;
+    const rows = await tx.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS "count"
+        FROM "folder" f
+       WHERE f."project_id" = ${projectId}
+         AND f."workspace_id" = ${workspaceId}
+         AND ${parentPred}`;
+    return Number(rows[0]?.count ?? 0);
   },
 
   /** A folder's direct child folders, in display order. */

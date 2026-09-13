@@ -57,6 +57,8 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { folderRepository } from '@/lib/repositories/folderRepository';
+import { toFolderTreeRowDto } from '@/lib/mappers/folderMappers';
+import type { TreeFolderLevel } from '@/lib/repositories/workItemRepository';
 import { CrossProjectFolderError, FolderNotFoundError } from '@/lib/folders/errors';
 import type { FileWorkItemInput, FileWorkItemResultDto } from '@/lib/dto/folders';
 import {
@@ -960,6 +962,68 @@ function buildTreeLevel(rows: WorkItemTreeRow[], take: number, total: number): T
   const hasMore = rows.length > take;
   const page = hasMore ? rows.slice(0, take) : rows;
   return { rows: page.map(toWorkItemTreeRowDto), hasMore, total };
+}
+
+/**
+ * One page of a level that can hold FOLDERS — the project root, or one folder
+ * (Story MOTIR-5308 · MOTIR-5314): the level's folders FIRST, by position, then
+ * its work items, by the active sort.
+ *
+ * ⚠️ ONE `take` / `offset` RUNS ACROSS BOTH, and the folder count is consumed
+ * before any work-item offset begins. Offset `o` of a level with `F` folders is
+ * folder `o` while `o < F`, and work item `o − F` after — so a page that
+ * straddles the boundary takes the last folders and the first work items, and
+ * walking the level page by page visits every row exactly once. `total` is
+ * `F` plus the work-item count under the SAME folder treatment as the read, and
+ * `hasMore` follows from it.
+ */
+async function readFolderLevel(
+  projectId: string,
+  workspaceId: string,
+  folderId: string | null,
+  params: { sort: IssueSort; take?: number; offset?: number },
+): Promise<TreeLevelDto> {
+  const { take, offset } = clampTreePage(params);
+  const folderLevel: TreeFolderLevel =
+    folderId === null ? { kind: 'excludeFiled' } : { kind: 'folder', folderId };
+  return withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const [folderTotal, itemTotal] = await Promise.all([
+      folderRepository.countLevel(projectId, workspaceId, folderId, tx),
+      workItemRepository.countProjectTreeLevel(
+        projectId,
+        workspaceId,
+        null,
+        null,
+        tx,
+        undefined,
+        folderLevel,
+      ),
+    ]);
+    const folderRows =
+      offset < folderTotal
+        ? await folderRepository.findLevel(projectId, workspaceId, folderId, { take, offset }, tx)
+        : [];
+    const remaining = take - folderRows.length;
+    const itemRows =
+      remaining > 0
+        ? await workItemRepository.findProjectTreeLevel(
+            projectId,
+            workspaceId,
+            null,
+            params.sort,
+            { take: remaining, offset: Math.max(0, offset - folderTotal) },
+            null,
+            tx,
+            folderLevel,
+          )
+        : [];
+    const rows = [
+      ...folderRows.map(toFolderTreeRowDto),
+      ...itemRows.slice(0, remaining).map(toWorkItemTreeRowDto),
+    ];
+    const total = folderTotal + itemTotal;
+    return { rows, hasMore: offset + rows.length < total, total };
+  });
 }
 
 /**
@@ -4247,22 +4311,9 @@ export const workItemsService = {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    const { take, offset } = clampTreePage(params);
-    const [rows, total] = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-      Promise.all([
-        workItemRepository.findProjectTreeLevel(
-          projectId,
-          project.workspaceId,
-          null,
-          params.sort,
-          { take, offset },
-          null,
-          tx,
-        ),
-        workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null, null, tx),
-      ]),
-    );
-    return buildTreeLevel(rows, take, total);
+    // The root holds the project's root FOLDERS, then its unfiled work items; an
+    // item filed in a folder is shown inside that folder instead (MOTIR-5314).
+    return readFolderLevel(projectId, project.workspaceId, null, params);
   },
 
   /**
@@ -4303,6 +4354,25 @@ export const workItemsService = {
       ]),
     );
     return buildTreeLevel(rows, take, total);
+  },
+
+  /**
+   * One FOLDER's level for the LAZY tree (Story MOTIR-5308 · MOTIR-5314) — its
+   * child folders, then the work items filed in it, paged exactly as a work
+   * item's children are. A missing or cross-workspace folder is
+   * `FolderNotFoundError` (never a leak), NOT an empty level.
+   */
+  async listFolderLevel(
+    folderId: string,
+    params: { sort: IssueSort; take?: number; offset?: number },
+    ctx: ServiceContext,
+  ): Promise<TreeLevelDto> {
+    const folder = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      folderRepository.findById(folderId, tx),
+    );
+    if (!folder || folder.workspaceId !== ctx.workspaceId) throw new FolderNotFoundError(folderId);
+    await projectAccessService.assertCanBrowse(folder.projectId, ctx);
+    return readFolderLevel(folder.projectId, folder.workspaceId, folder.id, params);
   },
 
   /**

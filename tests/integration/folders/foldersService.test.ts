@@ -520,18 +520,21 @@ describe('the gate', () => {
 
     // Folder ids that do not exist: a refusal that were NOT the gate would be
     // FolderNotFoundError.
-    const attempts = [
-      foldersService.createFolder({ projectId, parentFolderId: 'missing', name: 'X' }, ctx),
-      foldersService.renameFolder({ projectId, folderId: 'missing', name: 'X' }, ctx),
-      foldersService.moveFolder(
-        { projectId, folderId: 'missing', targetParentFolderId: null },
-        ctx,
-      ),
-      foldersService.deleteFolder({ projectId, folderId: 'missing' }, ctx),
-      foldersService.fileWorkItem(task, { folderId: 'missing' }, ctx),
+    // Started one at a time, so no refusal is left unobserved while an earlier
+    // one is being asserted.
+    const attempts: Array<() => Promise<unknown>> = [
+      () => foldersService.createFolder({ projectId, parentFolderId: 'missing', name: 'X' }, ctx),
+      () => foldersService.renameFolder({ projectId, folderId: 'missing', name: 'X' }, ctx),
+      () =>
+        foldersService.moveFolder(
+          { projectId, folderId: 'missing', targetParentFolderId: null },
+          ctx,
+        ),
+      () => foldersService.deleteFolder({ projectId, folderId: 'missing' }, ctx),
+      () => foldersService.fileWorkItem(task, { folderId: 'missing' }, ctx),
     ];
     for (const attempt of attempts) {
-      await expect(attempt).rejects.toBeInstanceOf(ProjectAccessDeniedError);
+      await expect(attempt()).rejects.toBeInstanceOf(ProjectAccessDeniedError);
     }
   });
 });
