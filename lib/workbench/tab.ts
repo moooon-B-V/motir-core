@@ -16,8 +16,8 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // To approve, else In progress, else To do, per reader and per day — so the bare
 // path cannot be any one tab's spelling: it would name a different view for
 // every reader, the very ambiguity the one-URL rule forbids. So the rule is kept
-// by making it total, and the bare path is an ENTRANCE, not a view. The resolver
-// that decides where it forwards is MOTIR-5221's.
+// by making it total, and the bare path is an ENTRANCE, not a view: it resolves
+// (`lib/workbench/landing.ts`, MOTIR-5221) and forwards to a tab's address.
 //
 // ⚠️ THE LABEL AND THE SLUG ARE DIFFERENT WORDS ON PURPOSE, on two of the five.
 // A slug names the SET and a label says what the tab is FOR: `finished` is
@@ -37,7 +37,9 @@ export type WorkbenchTab = 'todo' | 'in-progress' | 'finished' | 'watching' | 'a
  *
  * ⚠️ The order says NOTHING about which tab a bare `/workbench` shows. Nothing
  * reads the first member as a default: `BY_PARAM` is built order-independently,
- * and what a paramless request gets is decided in `parseWorkbenchTab` below.
+ * and what a paramless request gets is the landing cascade's decision
+ * (`lib/workbench/landing.ts`). The first three are that cascade's rungs, which
+ * is why the strip reads as an explanation of where the reader just landed.
  */
 export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
   'approvals',
@@ -65,19 +67,19 @@ const BY_PARAM = new Map<string, WorkbenchTab>(
 );
 
 /**
- * Narrow an untrusted `?tab=` value. Anything that is not a known slug —
- * absent, misspelled, hand-edited, a stale bookmark — LANDS rather than 404s,
- * because this is the page a reader sees first after signing in.
+ * Narrow an untrusted `?tab=` value to a tab — or to `null` when it names none.
  *
- * ⚠️ THE FALLBACK IS AN INTERIM, and it is To approve (MOTIR-5218). With every
- * tab addressable, a request naming no known tab is no longer "To do" by
- * definition, and the design leads with what is waiting on the reader. The
- * resolver card (MOTIR-5221) RETIRES this fallback: the parse becomes strict and
- * a request with no known tab runs the cascade instead of taking a fixed tab.
+ * ⚠️ STRICT, and the strictness is the whole trick (MOTIR-5221). This used to
+ * answer a tab for EVERYTHING — absent, empty, misspelled, an array — so the page
+ * could not tell *nobody asked* from *they asked for garbage*. Both must now land
+ * on the CASCADE (`lib/workbench/landing.ts`), so both come back `null` and the
+ * page branches once. The land-rather-than-404 promise is kept by the cascade
+ * rather than by a hardcoded tab, and there is no second fallback here to drift
+ * from it.
  */
-export function parseWorkbenchTab(raw: string | string[] | undefined): WorkbenchTab {
+export function parseWorkbenchTab(raw: string | string[] | undefined): WorkbenchTab | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return (value !== undefined && BY_PARAM.get(value)) || 'approvals';
+  return (value !== undefined && BY_PARAM.get(value)) || null;
 }
 
 /**

@@ -11,6 +11,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { HOME_FINISHED_WINDOW_DAYS } from '@/lib/services/homeService';
+import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
 // THE WORKBENCH, END TO END — AND THE ACCEPTANCE RECEIPT FOR IT
 // (Story MOTIR-4777 · MOTIR-4785).
@@ -297,7 +298,7 @@ test('the landing surface splits by LIFECYCLE — to do, in flight, just landed,
     // reads right and never an interval (CLAUDE.md § E2E). `signIn` settles on
     // it; this re-asserts the address, because the address is half the story.
     await signIn(page, OWNER, PASSWORD);
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
     await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
     await expect(page.getByTestId('workbench-page')).toContainText('What you are doing in Motir');
     await beat();
@@ -410,7 +411,7 @@ test('the landing surface splits by LIFECYCLE — to do, in flight, just landed,
     // into chat months ago, still opens their Watching tab.
     const direct = await page.goto('/home');
     expect(direct?.status()).toBe(200);
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
 
     await page.goto('/home?tab=watching');
     await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}\\?tab=watching$`));
@@ -452,7 +453,9 @@ test('a reader with nothing anywhere meets the all-empty page, not five zeroes',
     projectId: project.id,
   });
   await signIn(page, FRESH, PASSWORD);
-  await page.goto('/workbench?tab=todo');
+  // Nothing awaiting, nothing moving, nothing to start: the cascade lands on its
+  // TERMINAL rung anyway, so the first screen is never blank (MOTIR-5221).
+  await expect(page).toHaveURL(/\/workbench\?tab=todo$/);
 
   await expect(page.getByTestId('workbench-page')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Nothing to start' })).toBeVisible();

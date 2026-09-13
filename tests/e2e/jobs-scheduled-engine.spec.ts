@@ -40,6 +40,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { adminDb, resetDatabase, truncateJobTables } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // Every direct-DB call is `adminDb`, the owner client — post-condition
 // assertions and a TRUNCATE, and `tests/rls/test-singleton-statement-guard.test.ts`
@@ -93,7 +94,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   // helper keeps its contract by settling there and navigating on.
   await page.waitForURL('**/onboarding', { timeout: 30_000 });
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench', { timeout: 30_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
 }
 
 // ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh

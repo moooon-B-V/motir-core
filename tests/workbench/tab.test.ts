@@ -12,7 +12,7 @@ describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
 
   it('says nothing about the landing — the order and the address are separate decisions', () => {
     // To approve LEADS the strip, but a bare request is not answered from the
-    // array's first member: the fallback below names its tab explicitly.
+    // array's first member: the landing cascade decides it, from the counts.
     expect(WORKBENCH_TABS[0]).toBe('approvals');
     expect(WORKBENCH_TABS.map((tab) => workbenchTabHref(tab))).toEqual([
       '/workbench?tab=approvals',
@@ -33,21 +33,22 @@ describe('parseWorkbenchTab', () => {
     expect(parseWorkbenchTab('watching')).toBe('watching');
   });
 
-  it('LANDS rather than 404s on anything else — on To approve, as an INTERIM', () => {
-    // Every one of these can arrive from a hand-edited URL or a stale bookmark,
-    // and this is a LANDING page: the cost of being strict is that someone's
-    // first screen after signing in is an error. The fallback is To approve
-    // until MOTIR-5221 replaces it with the cascade.
-    expect(parseWorkbenchTab(undefined)).toBe('approvals');
-    expect(parseWorkbenchTab('')).toBe('approvals');
-    expect(parseWorkbenchTab('Watching')).toBe('approvals'); // case-sensitive by design
-    expect(parseWorkbenchTab('nonsense')).toBe('approvals');
-    expect(parseWorkbenchTab('to-approve')).toBe('approvals'); // the LABEL is not a slug
+  it('names NO tab for anything else — STRICT, so the page can run the cascade (MOTIR-5221)', () => {
+    // Every one of these can arrive from a hand-edited URL or a stale bookmark.
+    // The page still LANDS rather than 404s, but the landing is the cascade's
+    // (`lib/workbench/landing.ts`), so the parse must be able to say "none" —
+    // a lenient parse would hide exactly the case the resolver exists for.
+    expect(parseWorkbenchTab(undefined)).toBeNull();
+    expect(parseWorkbenchTab('')).toBeNull();
+    expect(parseWorkbenchTab('Watching')).toBeNull(); // case-sensitive by design
+    expect(parseWorkbenchTab('nonsense')).toBeNull();
+    expect(parseWorkbenchTab('to-approve')).toBeNull(); // the LABEL is not a slug
   });
 
   it('takes the first value when Next hands it a repeated param', () => {
     expect(parseWorkbenchTab(['watching', 'finished'])).toBe('watching');
-    expect(parseWorkbenchTab([])).toBe('approvals');
+    expect(parseWorkbenchTab([])).toBeNull();
+    expect(parseWorkbenchTab(['nonsense', 'todo'])).toBeNull();
   });
 });
 

@@ -12,6 +12,7 @@ import {
   readLegalHealth,
   setLegalManifest,
 } from './_helpers/legal-manifest';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // `/legal` IS GONE FROM THE APPLICATION HOST — AND THE JOURNEY DID NOT BREAK
 // (Story MOTIR-4101 · Subtask MOTIR-4105).
@@ -294,7 +295,7 @@ test('the legal documents have left this repository, and the journey that needed
 
     // ── THE TERMINAL ACT ────────────────────────────────────────────────────
     await agree.click();
-    await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
+    await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
     await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
     // ⚠️ READ THE RECORD BACK, not just the redirect. Being let through proves

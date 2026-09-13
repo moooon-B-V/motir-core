@@ -25,6 +25,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'multi-tenant-pass-123';
 const USER_A_EMAIL = 'e2e-tenant-a@example.com';
@@ -55,7 +56,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   // there and navigating on.
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 test('@smoke multi-tenant isolation: cross-tenant invite is 404 + forged workspace cookie is re-validated', async ({

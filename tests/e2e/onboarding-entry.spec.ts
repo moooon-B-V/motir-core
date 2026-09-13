@@ -21,7 +21,8 @@
 
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
-import { signUp, POST_AUTH_LANDING } from './_helpers/shell-session';
+import { signUp } from './_helpers/shell-session';
+import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
 test.describe('motir-core entry rework (7.22.1)', () => {
   test('root redirects to /sign-in — no marketing hero', async ({ page }) => {
@@ -91,7 +92,7 @@ test.describe('motir-core entry rework — the SIGNED-IN visitor (MOTIR-3367)', 
 
     await page.goto('/');
 
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
     await expect(page.getByTestId('workbench-page')).toBeVisible();
     // The form the reader used to land on is not what they get.
     await expect(page.getByRole('heading', { name: 'Welcome back!' })).toBeHidden();

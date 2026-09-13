@@ -186,8 +186,13 @@ test.describe('the Workbench journey', () => {
     // 1. SIGN IN — and LAND, without navigating. Half of what this spec is for:
     // if the landing breaks, nothing else about the story matters. The helper
     // settles on a rendered `/workbench` (MOTIR-2654 moved its target here).
+    //
+    // ⚠️ AND THE LANDING RESOLVES (MOTIR-5221): nothing in this fixture awaits the
+    // reader's decision and nothing of theirs is moving — every row sits at the
+    // workflow's initial status — so the cascade falls to its terminal rung and
+    // the address says so.
     await signIn(page, OWNER, TEST_PASSWORD);
-    await expect(page).toHaveURL(/\/workbench$/);
+    await expect(page).toHaveURL(/\/workbench\?tab=todo$/);
     await expect(page.getByTestId('workbench-page')).toBeVisible();
 
     // 1b. THE FIVE-TAB STRIP, as one landmark — the composition every later
@@ -195,10 +200,8 @@ test.describe('the Workbench journey', () => {
     for (const tab of ['approvals', 'in-progress', 'todo', 'finished', 'watching']) {
       await expect(page.getByTestId(`workbench-tab-${tab}`)).toBeVisible();
     }
-    // ⚠️ TO DO IS ASKED FOR BY ITS OWN ADDRESS (MOTIR-5218). The bare path names
-    // no tab any more — which tab a landing picks is the resolver's, asserted
-    // where it is built — so a walk about To do's contents opens To do.
-    await page.goto('/workbench?tab=todo');
+    // The landed tab is To do, marked current — the strip explaining where the
+    // reader just landed.
     await expect(page.getByTestId('workbench-tab-todo')).toHaveAttribute('aria-current', 'page');
 
     // 2. TO DO — all three relations present, from the ACTIVE project. Every
@@ -300,7 +303,9 @@ test.describe('the Workbench journey', () => {
     // to avoid — two addresses for one surface, and nothing saying which is real.
     const direct = await page.goto('/home');
     expect(direct?.status()).toBe(200);
-    await expect(page).toHaveURL(/\/workbench$/);
+    // …through the 308, and then the landing RESOLVES (MOTIR-5221): this fixture
+    // has nothing awaiting and nothing moving, so the terminal rung, To do.
+    await expect(page).toHaveURL(/\/workbench\?tab=todo$/);
     await expect(page.getByTestId('workbench-page')).toBeVisible();
 
     // …and the QUERY rides along, so a link to somebody's Watching tab survives
@@ -401,8 +406,9 @@ test.describe('the Workbench journey', () => {
     await signIn(page, FRESH, TEST_PASSWORD);
 
     // A sign-IN lands on the signed-in landing — the registration arm is
-    // registration-only (`lib/navigation/landing.ts`).
-    await expect(page).toHaveURL(/\/workbench$/);
+    // registration-only (`lib/navigation/landing.ts`). With nothing anywhere, the
+    // cascade lands on its terminal rung (MOTIR-5221).
+    await expect(page).toHaveURL(/\/workbench\?tab=todo$/);
     await expect(page.getByTestId('workbench-page')).toBeVisible();
 
     // No create-first door, because there is no reader for it: the state it
@@ -624,7 +630,9 @@ test.describe('the pager and the kind order', () => {
     await seedPaging();
     // The second seeded reader owns nothing, so every tab is empty for them.
     await signIn(page, PAGER_EMPTY, TEST_PASSWORD);
-    await page.goto('/workbench?tab=todo');
+    // No explicit address: the cascade's TERMINAL rung is what lands an empty
+    // reader here (MOTIR-5221), so this is also the "To do even when empty" walk.
+    await expect(page).toHaveURL(/\/workbench\?tab=todo$/);
 
     await expect(page.getByRole('heading', { name: 'Nothing to start' })).toBeVisible();
     // ⚠️ THE ABSENCE IS THE ASSERTION. "A pager on every tab", read literally,

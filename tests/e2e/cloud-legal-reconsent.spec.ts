@@ -3,6 +3,7 @@ import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { listLegalDocuments } from '@/lib/legal/documents';
 import { RECONSENT_DOCUMENT_SLUGS } from '@/lib/legal/consent';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // THE RE-CONSENT JOURNEY, END TO END (Story 8.4 · Subtask MOTIR-1137, covering
 // MOTIR-1135): a reader who is materially behind is HELD, agreeing RECORDS what
@@ -173,7 +174,7 @@ test('a reader behind the current version is held, records their agreement, and 
 
   // ── 3. Agreeing records the CURRENT versions and lets them through ───────
   await agree.click();
-  await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
   // ⚠️ SCOPED (MOTIR-5115) — the marker sits on a `<div>`, so there is no role to
   // ask for, and a settle target is exactly the locator the double-mount class
   // bites: it is read the instant a navigation lands, while React still has the

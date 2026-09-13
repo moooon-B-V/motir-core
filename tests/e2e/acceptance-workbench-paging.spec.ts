@@ -7,6 +7,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { db as prisma } from '@/lib/db';
+import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
 // THE ACCEPTANCE RECEIPT FOR THE PAGER AND THE KIND ORDER
 // (Story MOTIR-4850 · MOTIR-4855).
@@ -144,7 +145,7 @@ test('a person walks their own Workbench by page, and the top of the list is wha
     'Signing in lands on the Workbench, with a footer that says how much there is',
     async () => {
       await signIn(page, OWNER, PASSWORD);
-      await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+      await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
       await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
       // The walk pages To do, and To do has its own address (MOTIR-5218).
       await page.goto('/workbench?tab=todo');

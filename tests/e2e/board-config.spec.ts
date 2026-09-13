@@ -25,6 +25,7 @@ import { getBoard, columnByStatus } from './_helpers/board';
 import { createItem } from './_helpers/workflow';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const OWNER_EMAIL = 'e2e-board-config-owner@example.com';
 
@@ -323,7 +324,7 @@ test.describe('board-config @smoke', () => {
     // Sign-in lands on `/workbench` (MOTIR-2654). The landing is incidental here —
     // this waits only to know the session is bound before navigating to the
     // surface under test.
-    await page.waitForURL('**/workbench');
+    await page.waitForURL(isLandedWorkbenchUrl);
 
     // NOT `gotoBoardSettings` — that helper asserts the page's own heading, which
     // a refused actor never sees. The URL is the case under test.

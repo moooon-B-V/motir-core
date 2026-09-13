@@ -1,6 +1,7 @@
 import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
+import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
 /*
  * ACCEPTANCE — the moved public surfaces redirect off the application host
@@ -70,7 +71,7 @@ test('the moved public surfaces 308 off the application host', async ({
   // ── Step 7 — a signed-in journey is unaffected ────────────────────────────
   await chapter('signed-in surfaces do not redirect', async () => {
     await signUp(page, 'public-redirect-e2e@example.com');
-    await expect(page).toHaveURL(/\/workbench$/);
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
     await beat();
   });
 });
