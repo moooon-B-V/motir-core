@@ -68,6 +68,27 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 const RULE = '═'.repeat(60);
 
 /**
+ * WHEN a How-to-test record needs a CLICK-PATH (Story MOTIR-4906 · MOTIR-5334).
+ *
+ * ⚠️ THESE ARE THE RUNBOOK'S OWN WORDS, BYTE FOR BYTE — the scope sentence of
+ * `motir-meta` `prompts/run.md` § *The how-to-test rule*. A person running the
+ * runbook and a dispatched agent must agree on which cards owe a walk-through,
+ * so the trigger has one text in two homes, and a test pins this constant to it.
+ * Re-word it here and the runbook stops matching; re-word it there and the test
+ * says so.
+ */
+export const RENDERED_SURFACE_TRIGGER =
+  'creates or changes any rendered surface (a UI `type: code` subtask, or any subtask ' +
+  'adding/editing a page, component, route-rendered view, modal, or interactive control)';
+
+/**
+ * The tool the FINISHED order's step 4b names. A literal, because this module is
+ * a leaf that imports nothing from `lib/mcp/`; `tests/dispatch/promptTemplate.test.ts`
+ * asserts it equals the REGISTERED tool name, so a rename fails there.
+ */
+export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
+
+/**
  * Named slots the Epic-9 enrichment cards fill — the ONE extension point this
  * assembly exposes. Each is a list of already-rendered Markdown blocks appended
  * to the CONTEXT section in a fixed order; empty (the only value this repo ever
@@ -1249,6 +1270,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '       pull request) — once per repository if this item ships in more than',
     '       one. The link is the only association a pull request has; the key in',
     '       the branch and the title is a label Motir does not parse.',
+    ...howToTestStep(src),
     `    5. move ${src.key} to Implemented with the transition_status tool`,
     `       (key ${src.key}, status implemented)`,
     '',
@@ -1276,6 +1298,43 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '     which you might otherwise have committed a half-change.',
     ...cardIsWrongSteps(src, policy),
     ...foundADefect(src, policy),
+  ];
+}
+
+/**
+ * Step 4b of the FINISHED order — publish HOW TO TEST onto the work item (Story
+ * MOTIR-4906 · MOTIR-5334; `docs/decisions/approval-gates.md` §9).
+ *
+ * ⚠️ THE STEP IS UNCONDITIONAL ON A CARD THAT OPENS A PULL REQUEST; ONLY THE
+ * CLICK-PATH IS GATED. §9 makes How to test an authoring obligation on every
+ * card that produces a pull request, because "run it locally" and "what CI
+ * proved" apply to every change — and the story's criterion ties the trigger to
+ * the runbook's rule. The two are reconciled by gating the one part that only a
+ * visible change has, {@link RENDERED_SURFACE_TRIGGER}, rather than by picking one.
+ *
+ * ⚠️ BEFORE `implemented`, AND A REFUSAL DOES NOT BLOCK IT. The reviewer's
+ * evidence should exist when the card says it is ready for them; but a card stuck
+ * in progress over a missing note is worse than the honest *record missing* state
+ * the item page renders, naming this run.
+ *
+ * Rendered only where the outcome protocol renders — a MANUAL item opens no pull
+ * request and gets no protocol at all, so it gets no step.
+ */
+function howToTestStep(src: DispatchPromptSource): string[] {
+  return [
+    `    4b. publish HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool — once per`,
+    '        repository you linked a pull request in, for the commit you just pushed',
+    `        (key ${src.key}, that repository, commitSha = the pushed head). Give the`,
+    '        setup commands a reviewer runs after checking out the branch: install,',
+    '        migrate, seed, run. Give the precondition: the sign-in, role, or data',
+    '        the surface needs. Motir fills in the branch fetch itself — do not',
+    '        include it.',
+    `        If this change ${RENDERED_SURFACE_TRIGGER},`,
+    '        give the click-path, with a previewPath when there is one. Otherwise pass',
+    '        clickPathNotApplicable with the reason, e.g. "no rendered surface',
+    '        changed: a service and its tests".',
+    '        If the publish is refused, say so in your FINISHED report and still do',
+    '        step 5 — a refused publish does not prevent the transition.',
   ];
 }
 
