@@ -12,7 +12,10 @@ import 'server-only';
 
 import { mintJobToken } from './jobToken';
 import {
+  parseIndexAllowanceSummary,
   parseIndexAllowanceVerdict,
+  parseOrgTiers,
+  type IndexAllowanceSummary,
   type IndexAllowanceVerdict,
 } from '@/lib/ciFleet/indexAllowance';
 import {
@@ -413,6 +416,57 @@ export async function drawIndexAllowance(input: {
     });
     if (!res.ok) return null;
     return parseIndexAllowanceVerdict(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /v1/admin/index-allowance/summary — the per-tier index-allowance summary for
+ * one period, for the PLATFORM ADMIN's Monitoring section (MOTIR-4595; motir-ai
+ * MOTIR-5340). Internal accounting only — Motir does not charge for code indexing.
+ *
+ * ⚠️ TOTAL: `null` on every failure. The caller renders `null` as UNKNOWN, never as
+ * a table of zeros — a missing read drawn as "0 crossed" would tell an operator
+ * the gate holds when nobody asked.
+ */
+export async function fetchIndexAllowanceSummary(
+  window?: string,
+): Promise<IndexAllowanceSummary | null> {
+  try {
+    const { url, serviceToken } = config();
+    const query = window ? `?${new URLSearchParams({ window }).toString()}` : '';
+    const res = await aiFetch(`${url}/v1/admin/index-allowance/summary${query}`, {
+      method: 'GET',
+      headers: authHeaders(serviceToken),
+    });
+    if (!res.ok) return null;
+    return parseIndexAllowanceSummary(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /v1/admin/orgs/tiers — resolve a page of organisations to their motir-ai
+ * tier in one call (MOTIR-4595; motir-ai MOTIR-5340). At most 100 ids.
+ *
+ * ⚠️ TOTAL: `null` when the lookup failed, so a caller can tell "tier unknown"
+ * (could not ask) from "no tier" (motir-ai has never seen the org).
+ */
+export async function fetchOrgTiers(
+  coreOrganizationIds: string[],
+): Promise<Map<string, string | null> | null> {
+  if (coreOrganizationIds.length === 0) return new Map();
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/admin/orgs/tiers`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ coreOrganizationIds }),
+    });
+    if (!res.ok) return null;
+    return parseOrgTiers(await res.json());
   } catch {
     return null;
   }

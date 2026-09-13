@@ -7562,6 +7562,108 @@
         "colLastFired": "Last fired",
         "colExpected": "Expected",
         "never": "Never"
+      },
+      "indexAllowance": {
+        "title": "Index allowance · is the gate sized right?",
+        "subtitle": "This period, per tier. If a large share of a tier crossed, the gate is wrong — not the orgs.",
+        "internal": "Internal · never shown to customers",
+        "foot": "Crossing the allowance does not stop indexing on a paid tier — Motir absorbs the overrun and records the crossing, which is all this table counts. The Free tier has no soft gate: its one-time allowance is a hard stop.",
+        "thresholdProvisional": "The {pct}% threshold is provisional until MOTIR-4588 proposes one.",
+        "disabled": {
+          "title": "Meter disabled",
+          "body": "A self-hosted build has no fleet, so there is no index allowance and no figure to show. No zero is drawn, deliberately."
+        },
+        "unknown": {
+          "title": "Couldn’t read the allowance",
+          "body": "motir-ai did not answer. Every tier reads unknown — not zero — until it does."
+        },
+        "stat": {
+          "overThresholdValue": "{n} of {total}",
+          "overThreshold": "soft-gated tiers over the recalculate threshold",
+          "threshold": "recalculate threshold",
+          "thresholdProvisional": "recalculate threshold · provisional",
+          "freeExhausted": "Free orgs at their one-time limit"
+        },
+        "col": {
+          "tier": "Tier",
+          "orgs": "Orgs",
+          "crossed": "Crossed / at limit",
+          "rate": "Crossing rate",
+          "reading": "Reading",
+          "basis": "Internal cost basis (credits + index)"
+        },
+        "cadence": {
+          "one_time": "one-time · hard stop",
+          "monthly": "monthly"
+        },
+        "exhaustedCount": "{n} exhausted",
+        "crossedCount": "{n} crossed",
+        "rate": {
+          "noSoftGateAtLimit": "n/a — no soft gate · {pct} at limit",
+          "none": "—",
+          "noOrgs": "no orgs on this tier"
+        },
+        "reading": {
+          "holds": "Gate holds",
+          "recalc": "Recalculate — over {threshold}%",
+          "free": "No soft gate — hard stop",
+          "unconfigured": "Allowance not configured"
+        },
+        "basis": {
+          "unset": "set by staff",
+          "one_time": "{credits} + {index} one-time",
+          "monthly": "{credits} + {index} / mo"
+        }
+      },
+      "stopped": {
+        "title": "Stopped orgs",
+        "subtitle": "Indexing paused by a hard stop. Every one resumes on its own — nobody re-arms it.",
+        "total": "{count} stopped",
+        "foot": "Showing {from}–{to} of {total} · longest-stopped first · the catch-up refreshes only repos that moved",
+        "pagerLabel": "Stopped orgs pages",
+        "prev": "Prev",
+        "next": "Next",
+        "pageOf": "Page {page} of {pages}",
+        "filter": {
+          "label": "Stop reason",
+          "all": "All",
+          "noCredit": "No credit",
+          "freeUsed": "Free allowance used",
+          "margin": "Margin ceiling",
+          "marginInactive": "not active",
+          "marginInactiveHint": "Hard gate B is not active yet. An empty result would mean the gate is off, not that no org is near the ceiling."
+        },
+        "searchLabel": "Find an org",
+        "search": "Find an org…",
+        "empty": "No org is stopped.",
+        "emptyBody": "No dispatch has been refused by a hard stop — every organisation is indexing.",
+        "noMatch": "No stopped org matches this filter and search.",
+        "col": {
+          "org": "Org",
+          "tier": "Tier",
+          "reason": "Reason",
+          "stoppedFor": "Stopped for",
+          "graphBehind": "Graph behind",
+          "resumes": "Resumes"
+        },
+        "tierUnknown": "unknown",
+        "tierNone": "no tier yet",
+        "reason": {
+          "no_credit": "No credit",
+          "allowance_exhausted": "Free allowance used",
+          "other": "Stopped · {reason}"
+        },
+        "behind": "{n, plural, one {# commit} other {# commits}}",
+        "behindUnknown": "not counted yet",
+        "resumes": {
+          "upgrade": "on upgrade",
+          "topUp": "on top-up or renewal",
+          "gateLifts": "when the gate lifts"
+        },
+        "duration": {
+          "hours": "{n} h",
+          "days": "{n, plural, one {# day} other {# days}}"
+        }
       }
     },
     "orgs": {

@@ -90,3 +90,119 @@ export function parseIndexAllowanceVerdict(body: unknown): IndexAllowanceVerdict
 export function indexDrawKey(containerProvider: string, containerId: string): string {
   return `index-container:${containerProvider}:${containerId}`;
 }
+
+// ── THE PLATFORM ADMIN'S READS (MOTIR-4595 · motir-ai MOTIR-5340) ────────────────
+
+/** One tier's row of motir-ai's `GET /v1/admin/index-allowance/summary`. */
+export interface IndexAllowanceTierSummary {
+  tierKey: string;
+  tierName: string;
+  cadence: 'one_time' | 'monthly';
+  allotmentCredits: number;
+  orgs: number;
+  crossed: number | null;
+  exhausted: number | null;
+  grantedCreditsPerOrg: number | null;
+  configured: boolean;
+}
+
+export interface IndexAllowanceSummary {
+  window: string;
+  ratio: number | null;
+  untieredOrgs: number;
+  tiers: IndexAllowanceTierSummary[];
+}
+
+const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+const isIntOrNull = (v: unknown): v is number | null => v === null || isInt(v);
+
+/** Parse a summary body, or `null` when it is not one — never a partial summary. */
+export function parseIndexAllowanceSummary(body: unknown): IndexAllowanceSummary | null {
+  if (!body || typeof body !== 'object') return null;
+  const b = body as Record<string, unknown>;
+  if (typeof b['window'] !== 'string' || !Array.isArray(b['tiers'])) return null;
+  const tiers: IndexAllowanceTierSummary[] = [];
+  for (const raw of b['tiers'] as unknown[]) {
+    if (!raw || typeof raw !== 'object') return null;
+    const t = raw as Record<string, unknown>;
+    if (
+      typeof t['tierKey'] !== 'string' ||
+      typeof t['tierName'] !== 'string' ||
+      (t['cadence'] !== 'one_time' && t['cadence'] !== 'monthly') ||
+      !isInt(t['allotmentCredits']) ||
+      !isInt(t['orgs']) ||
+      !isIntOrNull(t['crossed']) ||
+      !isIntOrNull(t['exhausted']) ||
+      !isIntOrNull(t['grantedCreditsPerOrg']) ||
+      typeof t['configured'] !== 'boolean'
+    ) {
+      return null;
+    }
+    tiers.push({
+      tierKey: t['tierKey'],
+      tierName: t['tierName'],
+      cadence: t['cadence'],
+      allotmentCredits: t['allotmentCredits'],
+      orgs: t['orgs'],
+      crossed: t['crossed'],
+      exhausted: t['exhausted'],
+      grantedCreditsPerOrg: t['grantedCreditsPerOrg'],
+      configured: t['configured'],
+    });
+  }
+  const ratio = b['ratio'];
+  return {
+    window: b['window'],
+    ratio: typeof ratio === 'number' && Number.isFinite(ratio) ? ratio : null,
+    untieredOrgs: isInt(b['untieredOrgs']) ? b['untieredOrgs'] : 0,
+    tiers,
+  };
+}
+
+/** Parse `POST /v1/admin/orgs/tiers` into `coreOrganizationId → tierKey | null`, or
+ *  `null` when the body is not the answer. */
+export function parseOrgTiers(body: unknown): Map<string, string | null> | null {
+  if (!body || typeof body !== 'object') return null;
+  const orgs = (body as Record<string, unknown>)['orgs'];
+  if (!Array.isArray(orgs)) return null;
+  const out = new Map<string, string | null>();
+  for (const raw of orgs as unknown[]) {
+    if (!raw || typeof raw !== 'object') return null;
+    const o = raw as Record<string, unknown>;
+    if (typeof o['coreOrganizationId'] !== 'string') return null;
+    out.set(o['coreOrganizationId'], typeof o['tierKey'] === 'string' ? o['tierKey'] : null);
+  }
+  return out;
+}
+
+/** The share of a tier's organisations that crossed, above which the gate is read
+ *  as mis-sized. */
+export interface RecalcThreshold {
+  pct: number;
+  /** True while it is the design's default rather than a configured value. */
+  provisional: boolean;
+}
+
+/**
+ * The recalculate threshold (MOTIR-4595).
+ *
+ * ⚠️ PROVISIONAL BY DEFAULT, DELIBERATELY NOT UNSET. MOTIR-4588 measures and
+ * proposes the real value, and it needs production to do so. An unset threshold
+ * would draw the headline crossing rate against nothing, which is a state the design
+ * does not draw. So it defaults to the design's 25%, and the surface says the
+ * figure is provisional until `INDEX_ALLOWANCE_RECALC_THRESHOLD_PCT` is set
+ * (approved with the MOTIR-4595 split, 2026-09-13).
+ */
+export const DEFAULT_RECALC_THRESHOLD_PCT = 25;
+
+export function readRecalcThreshold(
+  raw: string | undefined = process.env['INDEX_ALLOWANCE_RECALC_THRESHOLD_PCT'],
+): RecalcThreshold {
+  if (raw === undefined || raw.trim() === '') {
+    return { pct: DEFAULT_RECALC_THRESHOLD_PCT, provisional: true };
+  }
+  const pct = Number(raw);
+  return Number.isFinite(pct) && pct > 0 && pct <= 100
+    ? { pct, provisional: false }
+    : { pct: DEFAULT_RECALC_THRESHOLD_PCT, provisional: true };
+}
