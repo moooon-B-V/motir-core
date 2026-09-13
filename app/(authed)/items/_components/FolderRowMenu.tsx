@@ -114,8 +114,15 @@ export function FolderRowMenu({ label, entries }: { label: string; entries: Fold
                   entry.onSelect();
                 }}
                 className={cn(
-                  'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-[13px] hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none disabled:cursor-default disabled:text-(--el-text-faint) disabled:hover:bg-transparent',
-                  entry.tone === 'danger' ? 'text-(--el-danger-on-surface)' : 'text-(--el-text)',
+                  'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-[13px] focus-visible:bg-(--el-surface) focus-visible:outline-none',
+                  // The disabled ink is chosen by the SAME expression the
+                  // element's `disabled` is computed from, which is the shape
+                  // the ink-contrast lint accepts as WCAG 1.4.3's exemption.
+                  entry.disabled
+                    ? 'cursor-default text-(--el-text-faint)'
+                    : entry.tone === 'danger'
+                      ? 'text-(--el-danger-on-surface) hover:bg-(--el-surface)'
+                      : 'text-(--el-text) hover:bg-(--el-surface)',
                 )}
               >
                 <entry.icon

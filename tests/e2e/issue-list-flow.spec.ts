@@ -191,13 +191,17 @@ test('@smoke a folder row renders in the Tree and expands onto the work item fil
 
   await page.goto('/items');
 
-  const folderRow = page.getByTestId(`folder-row-${later.id}`);
+  // Rooted at the live treegrid, not at `page`: a streamed or outgoing copy of
+  // the tree is excluded from the accessibility tree, so the role locator can
+  // only ever find the one that is on screen (MOTIR-5037).
+  const grid = page.getByRole('treegrid', { name: 'Work Items', exact: true });
+  const folderRow = grid.getByTestId(`folder-row-${later.id}`);
   await expect(folderRow).toBeVisible();
   await expect(folderRow).toHaveAttribute('aria-level', '1');
   await expect(folderRow).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByTestId(`issue-row-${loose.identifier}`)).toBeVisible();
+  await expect(grid.getByTestId(`issue-row-${loose.identifier}`)).toBeVisible();
   // A filed item is not a root: it is only reachable through its folder.
-  await expect(page.getByTestId(`issue-row-${filed.identifier}`)).toHaveCount(0);
+  await expect(grid.getByTestId(`issue-row-${filed.identifier}`)).toHaveCount(0);
 
   const levelRead = page.waitForResponse(
     (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/items',
@@ -205,7 +209,7 @@ test('@smoke a folder row renders in the Tree and expands onto the work item fil
   await page.getByRole('button', { name: 'Expand folder Later', exact: true }).click();
   expect((await levelRead).status()).toBe(200);
 
-  const filedRow = page.getByTestId(`issue-row-${filed.identifier}`);
+  const filedRow = grid.getByTestId(`issue-row-${filed.identifier}`);
   await expect(filedRow).toBeVisible();
   await expect(filedRow).toHaveAttribute('aria-level', '2');
   await expect(folderRow).toHaveAttribute('aria-expanded', 'true');
