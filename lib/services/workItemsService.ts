@@ -56,6 +56,11 @@ import { extractReferencedAttachmentIdsFromBodies } from '@/lib/blob/referencedU
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
+import { folderRepository } from '@/lib/repositories/folderRepository';
+import { toFolderTreeRowDto } from '@/lib/mappers/folderMappers';
+import type { TreeFolderLevel } from '@/lib/repositories/workItemRepository';
+import { CrossProjectFolderError, FolderNotFoundError } from '@/lib/folders/errors';
+import type { FileWorkItemInput, FileWorkItemResultDto } from '@/lib/dto/folders';
 import {
   QUICK_SEARCH_DEFAULT_LIMIT,
   QUICK_SEARCH_MAX_LIMIT,
@@ -957,6 +962,68 @@ function buildTreeLevel(rows: WorkItemTreeRow[], take: number, total: number): T
   const hasMore = rows.length > take;
   const page = hasMore ? rows.slice(0, take) : rows;
   return { rows: page.map(toWorkItemTreeRowDto), hasMore, total };
+}
+
+/**
+ * One page of a level that can hold FOLDERS — the project root, or one folder
+ * (Story MOTIR-5308 · MOTIR-5314): the level's folders FIRST, by position, then
+ * its work items, by the active sort.
+ *
+ * ⚠️ ONE `take` / `offset` RUNS ACROSS BOTH, and the folder count is consumed
+ * before any work-item offset begins. Offset `o` of a level with `F` folders is
+ * folder `o` while `o < F`, and work item `o − F` after — so a page that
+ * straddles the boundary takes the last folders and the first work items, and
+ * walking the level page by page visits every row exactly once. `total` is
+ * `F` plus the work-item count under the SAME folder treatment as the read, and
+ * `hasMore` follows from it.
+ */
+async function readFolderLevel(
+  projectId: string,
+  workspaceId: string,
+  folderId: string | null,
+  params: { sort: IssueSort; take?: number; offset?: number },
+): Promise<TreeLevelDto> {
+  const { take, offset } = clampTreePage(params);
+  const folderLevel: TreeFolderLevel =
+    folderId === null ? { kind: 'excludeFiled' } : { kind: 'folder', folderId };
+  return withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const [folderTotal, itemTotal] = await Promise.all([
+      folderRepository.countLevel(projectId, workspaceId, folderId, tx),
+      workItemRepository.countProjectTreeLevel(
+        projectId,
+        workspaceId,
+        null,
+        null,
+        tx,
+        undefined,
+        folderLevel,
+      ),
+    ]);
+    const folderRows =
+      offset < folderTotal
+        ? await folderRepository.findLevel(projectId, workspaceId, folderId, { take, offset }, tx)
+        : [];
+    const remaining = take - folderRows.length;
+    const itemRows =
+      remaining > 0
+        ? await workItemRepository.findProjectTreeLevel(
+            projectId,
+            workspaceId,
+            null,
+            params.sort,
+            { take: remaining, offset: Math.max(0, offset - folderTotal) },
+            null,
+            tx,
+            folderLevel,
+          )
+        : [];
+    const rows = [
+      ...folderRows.map(toFolderTreeRowDto),
+      ...itemRows.slice(0, remaining).map(toWorkItemTreeRowDto),
+    ];
+    const total = folderTotal + itemTotal;
+    return { rows, hasMore: offset + rows.length < total, total };
+  });
 }
 
 /**
@@ -3449,6 +3516,13 @@ export const workItemsService = {
       };
       const diff: Record<string, DiffCell> = {};
       if (parentChanged) diff.parentId = { from: current.parentId, to: targetParentId };
+      // The other half of the parent-XOR-folder rule (MOTIR-5313): an item given
+      // a work-item parent leaves its folder in the same write, or the
+      // `work_item_parent_xor_folder` CHECK would refuse it.
+      if (parentChanged && targetParentId !== null && current.folderId !== null) {
+        update.folderId = null;
+        diff.folderId = { from: current.folderId, to: null };
+      }
       if (newPosition !== current.position) {
         diff.position = { from: current.position, to: newPosition };
       }
@@ -3503,6 +3577,109 @@ export const workItemsService = {
       });
     }
     return dto;
+  },
+
+  /**
+   * File a work item into a folder, or take it out of one (Epic MOTIR-5307 ·
+   * Story MOTIR-5308 · MOTIR-5313). `foldersService.fileWorkItem` is the
+   * folder-domain door onto this.
+   *
+   * Filing sets `folderId` and clears `parentId` in ONE write, and appends the
+   * item after the folder's last filed item. The item's SUBTREE is untouched:
+   * its children keep their own `parentId`, so they travel with it.
+   *
+   * ⚠️ WHY IT LIVES HERE AND NOT IN THE FOLDER SERVICE. Filing an item that has
+   * a work-item parent is a re-parent to the root, so it owes exactly what
+   * `moveWorkItem` owes the parent it leaves — the container repository rollup
+   * and the `work-item/child-set.changed` event that re-derives that parent's
+   * status — and those helpers belong to this file.
+   *
+   * Taking an item OUT of its folder (`folderId: null`) returns it to the root.
+   * A SUBTASK cannot go there: its must-have-a-parent rule is satisfied by a
+   * folder (the epic's decision), and without one it has neither, so the kind
+   * rule refuses with the same typed error it raises everywhere else.
+   */
+  async fileWorkItem(
+    workItemId: string,
+    input: FileWorkItemInput,
+    ctx: ServiceContext,
+  ): Promise<FileWorkItemResultDto> {
+    const { result, previousParentId } = await withWorkspaceContext(ctx, async (tx) => {
+      const locked = await workItemRepository.lockById(workItemId, tx);
+      if (!locked) throw new WorkItemNotFoundError(workItemId);
+      const current = await workItemRepository.findById(workItemId, tx);
+      /* istanbul ignore next -- defensive: the row was locked in this transaction */
+      if (!current) throw new WorkItemNotFoundError(workItemId);
+      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
+
+      const target = input.folderId;
+      const unchanged = {
+        result: {
+          workItemId,
+          folderId: current.folderId,
+          parentId: current.parentId,
+          position: current.position,
+        },
+        previousParentId: null,
+      };
+
+      if (target === null) {
+        if (current.folderId === null) return unchanged;
+        // Filed items carry no work-item parent, so leaving the folder leaves
+        // the item a root — which a subtask may not be.
+        assertValidParent(null, current.kind);
+      } else {
+        const folder = await folderRepository.lockById(target, tx);
+        if (!folder) throw new FolderNotFoundError(target);
+        if (folder.projectId !== current.projectId) throw new CrossProjectFolderError();
+        if (current.folderId === target && current.parentId === null) return unchanged;
+      }
+
+      const position = keyForAppend(
+        await workItemRepository.findLastPositionAtFolderLevel(current.projectId, target, tx),
+      );
+      const diff: Record<string, DiffCell> = {
+        folderId: { from: current.folderId, to: target },
+        position: { from: current.position, to: position },
+      };
+      if (current.parentId !== null) diff.parentId = { from: current.parentId, to: null };
+
+      const row = await workItemRepository.update(
+        workItemId,
+        { folderId: target, parentId: null, position },
+        tx,
+      );
+      await workItemRevisionsService.recordRevision(
+        { workItemId, changedById: ctx.userId, changeKind: 'updated', diff },
+        tx,
+      );
+      if (current.parentId !== null) {
+        await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
+        await recomputeAncestorRepoSets(workItemId, ctx.workspaceId, tx);
+      }
+      return {
+        result: {
+          workItemId,
+          folderId: row.folderId,
+          parentId: row.parentId,
+          position: row.position,
+        },
+        previousParentId: current.parentId,
+      };
+    });
+
+    // The parent the item left lost a child, exactly as on a `moveWorkItem` to
+    // the root — so its status is re-derived by the same event.
+    if (previousParentId !== null) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [previousParentId],
+        workItemId,
+        reason: 'reparented',
+        occurredAt: new Date().toISOString(),
+      });
+    }
+    return result;
   },
 
   /**
@@ -4134,22 +4311,9 @@ export const workItemsService = {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    const { take, offset } = clampTreePage(params);
-    const [rows, total] = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-      Promise.all([
-        workItemRepository.findProjectTreeLevel(
-          projectId,
-          project.workspaceId,
-          null,
-          params.sort,
-          { take, offset },
-          null,
-          tx,
-        ),
-        workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null, null, tx),
-      ]),
-    );
-    return buildTreeLevel(rows, take, total);
+    // The root holds the project's root FOLDERS, then its unfiled work items; an
+    // item filed in a folder is shown inside that folder instead (MOTIR-5314).
+    return readFolderLevel(projectId, project.workspaceId, null, params);
   },
 
   /**
@@ -4190,6 +4354,25 @@ export const workItemsService = {
       ]),
     );
     return buildTreeLevel(rows, take, total);
+  },
+
+  /**
+   * One FOLDER's level for the LAZY tree (Story MOTIR-5308 · MOTIR-5314) — its
+   * child folders, then the work items filed in it, paged exactly as a work
+   * item's children are. A missing or cross-workspace folder is
+   * `FolderNotFoundError` (never a leak), NOT an empty level.
+   */
+  async listFolderLevel(
+    folderId: string,
+    params: { sort: IssueSort; take?: number; offset?: number },
+    ctx: ServiceContext,
+  ): Promise<TreeLevelDto> {
+    const folder = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      folderRepository.findById(folderId, tx),
+    );
+    if (!folder || folder.workspaceId !== ctx.workspaceId) throw new FolderNotFoundError(folderId);
+    await projectAccessService.assertCanBrowse(folder.projectId, ctx);
+    return readFolderLevel(folder.projectId, folder.workspaceId, folder.id, params);
   },
 
   /**

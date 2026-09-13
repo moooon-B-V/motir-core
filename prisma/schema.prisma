@@ -378,6 +378,9 @@ model User {
   // archive, and the previous ones remain as history until they expire.
   // Cascade, same semantics.
   dataExportRequests               DataExportRequest[]
+  // Folders this person created (Story MOTIR-5308 · MOTIR-5312). Restrict,
+  // matching `WorkItem.reporter`: the creator is durable attribution.
+  createdFolders                   Folder[]                  @relation("FolderCreator")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1210,6 +1213,8 @@ model Workspace {
   dispatchRuns                DispatchRun[]
   dispatchRunCards            DispatchRunCard[]
   dispatchRunEvents           DispatchRunEvent[]
+  /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
+  folders                     Folder[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -1638,6 +1643,9 @@ model Project {
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
   approvalGates    ApprovalGate[]
+  /// The project's folders (Story MOTIR-5308) — named, nestable places in its
+  /// tree that carry no workflow. Cascade.
+  folders          Folder[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -1986,6 +1994,14 @@ model WorkItem {
   workspaceId           String
   projectId             String
   parentId              String?
+  // The FOLDER this item is filed in (Epic MOTIR-5307 · MOTIR-5312), or NULL.
+  // A placement of its OWN, never a second meaning of `parentId`: a filed item
+  // keeps `parentId IS NULL`, so every walk over `parentId` (readiness, status
+  // derivation, the ready cascade, the roadmap root) reads it as the root it is.
+  // The CHECK `work_item_parent_xor_folder` refuses both at once, and the
+  // `trg_work_item_cotenancy_folder` trigger keeps the folder in this item's
+  // own project. See prisma/migrations/20260913090000_folder.
+  folderId              String?
   kind                  WorkItemKind
   key                   Int
   identifier            String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
@@ -2272,6 +2288,9 @@ model WorkItem {
   project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent               WorkItem?                 @relation("WorkItemParent", fields: [parentId], references: [id], onDelete: NoAction)
   children             WorkItem[]                @relation("WorkItemParent")
+  // NoAction, as `parent` is: a folder still holding filed items cannot be
+  // deleted; the service files them up first, in the same transaction.
+  folder               Folder?                   @relation("WorkItemFolder", fields: [folderId], references: [id], onDelete: NoAction)
   assignee             User?                     @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   reporter             User                      @relation("WorkItemReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   // Triage submitter (Subtask 6.11.4) — the real human who submitted a triage
@@ -2393,6 +2412,8 @@ model WorkItem {
   @@unique([projectId, key])
   @@unique([projectId, identifier])
   @@index([projectId, parentId, position])
+  // A folder's level of filed work items, in order — the twin of the index above.
+  @@index([projectId, folderId, position])
   @@index([projectId, status])
   @@index([projectId, assigneeId])
   @@index([workspaceId])
@@ -9454,4 +9475,46 @@ model PublicHostnameReservation {
   retiredAt DateTime @default(now()) @map("retired_at")
 
   @@map("public_hostname_reservation")
+}
+
+/// A FOLDER — a named, nestable place in a project's tree that carries no
+/// workflow (Epic MOTIR-5307 · Story MOTIR-5308 · MOTIR-5312).
+///
+/// It is its OWN record, not a work item: no key, no status, no dependency
+/// edges, no assignee, type, estimate or sprint. Nothing that reads work items
+/// reads this table, which is what keeps the board, backlog, ready list and
+/// reports unchanged by construction rather than by a list of exclusions.
+///
+/// A work item is filed into one through `WorkItem.folderId`, never through
+/// `parentId`. A folder's own parent is another folder or the project root;
+/// a folder never sits under a work item.
+///
+/// Sibling names are unique case-insensitively, at the root as inside a folder:
+/// the hand-written expression index `folder_sibling_name_key`, which Prisma
+/// cannot express (see the migration). Tenancy and a cycle backstop are
+/// triggers; RLS is the `work_item` policy pair.
+model Folder {
+  id             String   @id @default(cuid())
+  workspaceId    String   @map("workspace_id")
+  projectId      String   @map("project_id")
+  parentFolderId String?  @map("parent_folder_id")
+  name           String   @db.Text
+  // Fractional index among siblings (lib/workItems/positioning.ts).
+  position       String   @db.Text
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // NoAction, as `WorkItem.parent` is: a folder with child folders cannot be
+  // deleted until the service has moved them up.
+  parentFolder Folder?    @relation("FolderParent", fields: [parentFolderId], references: [id], onDelete: NoAction)
+  childFolders Folder[]   @relation("FolderParent")
+  createdBy    User       @relation("FolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  workItems    WorkItem[] @relation("WorkItemFolder")
+
+  @@index([projectId, parentFolderId, position])
+  @@index([workspaceId])
+  @@map("folder")
 }

@@ -180,9 +180,11 @@ DECLARE
   parent_kind text;
 BEGIN
   IF NEW."parentId" IS NULL THEN
-    -- A subtask is the only kind that may not be a root.
-    IF item_kind = 'subtask' THEN
-      RAISE EXCEPTION 'WI_SUBTASK_NEEDS_PARENT: a subtask must have a parent (story, task, or bug)'
+    -- A subtask is the only kind that may not be a root — unless it is filed in
+    -- a folder, which satisfies its must-have-a-parent rule (Epic MOTIR-5307,
+    -- migration 20260913090000_folder).
+    IF item_kind = 'subtask' AND NEW."folderId" IS NULL THEN
+      RAISE EXCEPTION 'WI_SUBTASK_NEEDS_PARENT: a subtask must have a parent (story, task, or bug) or be filed in a folder'
         USING ERRCODE = '23514';
     END IF;
     RETURN NEW;
@@ -350,6 +352,19 @@ CREATE TRIGGER trg_work_item_depth
   BEFORE INSERT OR UPDATE OF "parentId", "kind" ON "work_item"
   FOR EACH ROW EXECUTE FUNCTION enforce_work_item_depth_limit();
 
+-- `"folderId"` joined the binding in 20260913090000_folder: clearing a root
+-- subtask's folder without giving it a parent must still be refused.
 CREATE TRIGGER trg_work_item_kind
-  BEFORE INSERT OR UPDATE OF "parentId", "kind" ON "work_item"
+  BEFORE INSERT OR UPDATE OF "parentId", "kind", "folderId" ON "work_item"
   FOR EACH ROW EXECUTE FUNCTION enforce_work_item_kind_parent();
+
+-- 4. Folder TENANCY (Epic MOTIR-5307 · MOTIR-5312) ----------------------------
+--    A filed item's folder shares its workspace and project. SECURITY DEFINER
+--    for the same reason as the parent-tenancy check above; its name sorts
+--    directly after `trg_work_item_cotenancy`. Markers WI_FOLDER_CROSS_WORKSPACE
+--    / WI_FOLDER_CROSS_PROJECT. The body is the migration's
+--    (`enforce_work_item_folder_tenancy`, 20260913090000_folder), which also
+--    carries the `folder` table's own tenancy and cycle triggers.
+CREATE TRIGGER trg_work_item_cotenancy_folder
+  BEFORE INSERT OR UPDATE OF "folderId", "workspaceId", "projectId" ON "work_item"
+  FOR EACH ROW EXECUTE FUNCTION enforce_work_item_folder_tenancy();

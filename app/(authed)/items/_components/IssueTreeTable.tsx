@@ -24,7 +24,7 @@ import {
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
-import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
+import type { ProjectTreeRowDto, TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
@@ -56,7 +56,7 @@ type TreeNode =
 
 /** One lazily-loaded level: the accumulated rows + the level's full total. */
 interface LevelState {
-  rows: WorkItemTreeRowDto[];
+  rows: ProjectTreeRowDto[];
   total: number;
   hasMore: boolean;
   loading: boolean;
@@ -195,41 +195,46 @@ export function IssueTreeTable({
 
   // Build the nested TreeTable model from the loaded levels + the expanded set.
   const rows = useMemo<TreeTableRow<TreeNode>[]>(() => {
-    const buildLevel = (dtos: WorkItemTreeRowDto[], total: number): TreeTableRow<TreeNode>[] =>
-      dtos.map((dto, i) => {
-        const node: TreeTableRow<TreeNode> = {
-          id: dto.id,
-          data: { kind: 'issue', row: shape(dto) },
-          hasChildren: dto.hasChildren,
-          posinset: i + 1,
-          setsize: total,
-        };
-        if (dto.hasChildren && expanded.has(dto.id)) {
-          const lvl = levels[dto.id];
-          if (!lvl || (lvl.loading && lvl.rows.length === 0)) {
-            node.busy = true;
-            node.children = [{ id: `${dto.id}::loading`, data: { kind: 'loading' } }];
-          } else {
-            node.busy = lvl.loading;
-            const childRows = buildLevel(lvl.rows, lvl.total);
-            node.children = lvl.hasMore
-              ? [
-                  ...childRows,
-                  {
-                    id: `${dto.id}::loadmore`,
-                    data: {
-                      kind: 'loadmore',
-                      parentKey: dto.id,
-                      loaded: lvl.rows.length,
-                      total: lvl.total,
+    const buildLevel = (level: ProjectTreeRowDto[], total: number): TreeTableRow<TreeNode>[] =>
+      // A level now carries FOLDER rows ahead of its work items (MOTIR-5314).
+      // Drawing them — the row, its chevron, its menu — is MOTIR-5315, built to
+      // the folders design; until it lands this table renders a level's work items.
+      level
+        .filter((row): row is WorkItemTreeRowDto => row.kind !== 'folder')
+        .map((dto, i) => {
+          const node: TreeTableRow<TreeNode> = {
+            id: dto.id,
+            data: { kind: 'issue', row: shape(dto) },
+            hasChildren: dto.hasChildren,
+            posinset: i + 1,
+            setsize: total,
+          };
+          if (dto.hasChildren && expanded.has(dto.id)) {
+            const lvl = levels[dto.id];
+            if (!lvl || (lvl.loading && lvl.rows.length === 0)) {
+              node.busy = true;
+              node.children = [{ id: `${dto.id}::loading`, data: { kind: 'loading' } }];
+            } else {
+              node.busy = lvl.loading;
+              const childRows = buildLevel(lvl.rows, lvl.total);
+              node.children = lvl.hasMore
+                ? [
+                    ...childRows,
+                    {
+                      id: `${dto.id}::loadmore`,
+                      data: {
+                        kind: 'loadmore',
+                        parentKey: dto.id,
+                        loaded: lvl.rows.length,
+                        total: lvl.total,
+                      },
                     },
-                  },
-                ]
-              : childRows;
+                  ]
+                : childRows;
+            }
           }
-        }
-        return node;
-      });
+          return node;
+        });
 
     const root = levels[ROOTS] ?? { rows: [], total: 0, hasMore: false, loading: false };
     const rootRows = buildLevel(root.rows, root.total);
