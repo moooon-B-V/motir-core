@@ -37,6 +37,8 @@ import {
 import { CREATE_WORK_ITEM_TOOL_NAME, registerCreateWorkItem } from './tools/createWorkItem';
 import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/transitionStatus';
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
+import { EDIT_COMMENT_TOOL_NAME, registerEditComment } from './tools/editComment';
+import { DELETE_COMMENT_TOOL_NAME, registerDeleteComment } from './tools/deleteComment';
 import { ADD_LESSON_TOOL_NAME, registerAddLesson } from './tools/addLesson';
 import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchLessons';
 import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
@@ -130,6 +132,8 @@ export const MCP_TOOL_NAMES = [
   CREATE_WORK_ITEM_TOOL_NAME,
   TRANSITION_STATUS_TOOL_NAME,
   ADD_COMMENT_TOOL_NAME,
+  EDIT_COMMENT_TOOL_NAME,
+  DELETE_COMMENT_TOOL_NAME,
   ADD_LESSON_TOOL_NAME,
   SEARCH_LESSONS_TOOL_NAME,
   REINFORCE_LESSON_TOOL_NAME,
@@ -262,6 +266,9 @@ export function registerMcpTools(
   registerCreateWorkItem(target, resolveContext);
   registerTransitionStatus(target, resolveContext);
   registerAddComment(target, resolveContext);
+  // The author's correction doors for a comment (MOTIR-5295).
+  registerEditComment(target, resolveContext);
+  registerDeleteComment(target, resolveContext);
   registerAddLesson(target, resolveContext);
   registerSearchLessons(target, resolveContext);
   registerReinforceLesson(target, resolveContext);

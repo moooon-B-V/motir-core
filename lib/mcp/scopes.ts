@@ -241,6 +241,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // card named rather than picked.
   claim_work_item: 'work_items:write',
   add_comment: 'work_items:write',
+  // `edit_comment` / `delete_comment` (MOTIR-5295) — beside their add, in the
+  // same legacy bucket; the real gate is `comment:add` in `toolPermissions.ts`.
+  edit_comment: 'work_items:write',
+  delete_comment: 'work_items:write',
   // `add_lesson` (MOTIR-3361). This legacy table records the 7.7.16 vocabulary,
   // which has no lesson axis at all — the real gate is the PERMISSION
   // (`lesson:manage`, in `toolPermissions.ts`). Filed under `work_items:write`
