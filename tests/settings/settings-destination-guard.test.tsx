@@ -15,6 +15,7 @@ import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import {
   SettingsRefusalState,
   resolveSettingsRefusal,
+  settingsEntryKeys,
 } from '@/app/(authed)/settings/project/_guard';
 
 // Subtask MOTIR-2469 — HIDING IS PRESENTATION AND NEVER PROTECTION.
@@ -57,8 +58,12 @@ describe('every settings destination is guarded (MOTIR-2469)', () => {
 
   it.each(PAGES)('%s calls the shared destination guard', (_urlPath, file) => {
     const source = readFileSync(file, 'utf8');
+    // WIDENED BY MOTIR-5278 to admit a second name in the same import. A room with
+    // a distinct VIEW key reads its WRITE key off `settingsEntryKeys`, which
+    // `_guard` exports for exactly that (MOTIR-5193), so the approvals page imports
+    // both. The claim — the shared guard is imported from `_guard` — is unchanged.
     expect(source, `${file} does not import guardSettingsPage`).toMatch(
-      /import \{ guardSettingsPage \} from '\.{1,2}(\/\.\.)*\/_guard';/,
+      /import \{[^}]*\bguardSettingsPage\b[^}]*\} from '\.{1,2}(\/\.\.)*\/_guard';/,
     );
     // Called AND its refusal returned — importing it and ignoring the answer is
     // the shape that would pass a weaker assertion while shipping unguarded.
@@ -142,14 +147,27 @@ describe('the back action never lands on a second refusal', () => {
   // link would bounce a board-only actor straight into another refusal.
   it('an actor holding one non-Details domain is sent to a page they CAN open', () => {
     const held = toSettingsNavPermissions(['project:browse', 'board:configure']);
-    const [first] = visibleSettingsNav(held);
-    expect(first?.id).toBe('board');
-    expect(first?.href).not.toBe(PROJECT_SETTINGS_ROOT);
+    // AMENDED BY MOTIR-5278: the first room was `board`. `project:browse` now also
+    // opens Approvals, which sits BEFORE Boards in the `work` group — still a page
+    // this actor can open, which is the whole claim.
+    const rooms = visibleSettingsNav(held);
+    expect(rooms.map((e) => e.id)).toEqual(['approvals', 'board']);
+    expect(rooms[0]?.href).not.toBe(PROJECT_SETTINGS_ROOT);
+  });
+
+  // ⚠️ INVERTED BY MOTIR-5278 (`design/projects/design-notes.md` § ⭐ Approvals §6).
+  // A built-in MEMBER was this file's actor "holding NOTHING in the area". They
+  // hold Approvals now, so back has a room to land on — and the empty case is
+  // asserted over an actor who genuinely holds nothing.
+  it('a MEMBER holds exactly one room — Approvals — so back has somewhere to land', () => {
+    expect(visibleSettingsNav(BUILTIN_ROLE_PERMISSIONS.member).map((e) => e.id)).toEqual([
+      'approvals',
+    ]);
   });
 
   it('an actor holding NOTHING in the area has no in-area destination to be sent to', () => {
     // …which is why the guard falls back out of the area entirely for them.
-    expect(visibleSettingsNav(BUILTIN_ROLE_PERMISSIONS.member)).toEqual([]);
+    expect(visibleSettingsNav(toSettingsNavPermissions([]))).toEqual([]);
   });
 
   it('an admin is sent to Details, the shipped behaviour', () => {
@@ -174,9 +192,14 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
       `${role} on %s — the decision follows the entry's own key`,
       (_id, entry) => {
         const refusal = resolveSettingsRefusal(entry.id, held);
-        // The invariant, stated once: refused EXACTLY when the key is absent.
+        // The invariant, stated once: refused EXACTLY when the VIEW key is absent.
         // Not "usually", and never on a different key than the rail hid it on.
-        expect(refusal === null).toBe(held.has(entry.permission));
+        //
+        // AMENDED BY MOTIR-5278: this read `held.has(entry.permission)`, which WAS
+        // the view key for every entry until `approvals` declared its own
+        // (`project:browse`). It now reads the entry's view key off the registry,
+        // the same lookup the rail and the guard make.
+        expect(refusal === null).toBe(held.has(settingsEntryKeys(entry.id).view));
       },
     );
   }
@@ -187,9 +210,14 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
     }
   });
 
-  it('a MEMBER is refused everything, each with its OWN copy key', () => {
-    const keys = PROJECT_SETTINGS_NAV.map(
-      (entry) => resolveSettingsRefusal(entry.id, BUILTIN_ROLE_PERMISSIONS.member)!.descriptionKey,
+  // ⚠️ INVERTED BY MOTIR-5278 (§6 of the Approvals design). It read "a MEMBER is
+  // refused everything". Approvals now ADMITS them — read-only, which is the page's
+  // business and not the guard's — and every other room still refuses.
+  it('a MEMBER is refused everything but Approvals, each refusal with its OWN copy key', () => {
+    const member = BUILTIN_ROLE_PERMISSIONS.member;
+    expect(resolveSettingsRefusal('approvals', member)).toBeNull();
+    const keys = PROJECT_SETTINGS_NAV.filter((entry) => entry.id !== 'approvals').map(
+      (entry) => resolveSettingsRefusal(entry.id, member)!.descriptionKey,
     );
     expect(keys.every(Boolean)).toBe(true);
     expect(new Set(keys).size, 'two destinations share a copy key').toBe(keys.length);
@@ -200,12 +228,27 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
     // refusal. `Details` is gated now, so it cannot be the hard-wired answer.
     const held = toSettingsNavPermissions(['project:browse', 'board:configure']);
     const refusal = resolveSettingsRefusal('members', held)!;
-    expect(refusal.backHref).toBe('/settings/project/board');
+    // AMENDED BY MOTIR-5278: back was `/settings/project/board`. Approvals opens on
+    // `project:browse` and precedes Boards in rail order, so it is this role's first
+    // openable room now — and both remain rooms the role is admitted to.
+    expect(refusal.backHref).toBe('/settings/project/approvals');
+    expect(resolveSettingsRefusal('approvals', held)).toBeNull();
     expect(resolveSettingsRefusal('board', held)).toBeNull();
   });
 
-  it('the back action leaves the AREA when the actor holds nothing in it', () => {
+  // ⚠️ INVERTED BY MOTIR-5278 (§6 of the Approvals design, which names this as the
+  // better destination). A MEMBER was the actor holding nothing in the area, so
+  // their back action left it for `/dashboard`. They hold Approvals now, and back
+  // lands on it.
+  it('a MEMBER refused on Members is sent BACK to Approvals — a room they can open', () => {
     const refusal = resolveSettingsRefusal('members', BUILTIN_ROLE_PERMISSIONS.member)!;
+    expect(refusal.backHref).toBe('/settings/project/approvals');
+    expect(refusal.backLabelKey).toBe('nav.approvals');
+    expect(resolveSettingsRefusal('approvals', BUILTIN_ROLE_PERMISSIONS.member)).toBeNull();
+  });
+
+  it('the back action leaves the AREA when the actor holds nothing in it', () => {
+    const refusal = resolveSettingsRefusal('members', toSettingsNavPermissions([]))!;
     expect(refusal.backHref).toBe('/dashboard');
     expect(refusal.backLabelKey).toBeNull();
   });

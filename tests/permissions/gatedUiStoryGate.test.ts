@@ -76,9 +76,13 @@ const SERVICE_OF: Record<string, string> = {
   roles: 'lib/services/projectMembersService.ts',
   'code-access': 'lib/services/projectRepoAccessService.ts',
   workflow: 'lib/services/workflowsService.ts',
-  // MOTIR-4925 · MOTIR-5170. The room's writes are `updateSettings`, and its
-  // READ asserts the same key — both through `projectAccessService`, which is
-  // why the literal `'workflow:manage'` is greppable here with no alias row.
+  // MOTIR-4925 · MOTIR-5170. The room's writes are `updateSettings`, which asserts
+  // `workflow:manage` through `projectAccessService` — why the literal is
+  // greppable here with no alias row. ⚠️ Since MOTIR-5278 its READ asserts
+  // `project:browse` instead: the entry's VIEW key, which this three-way check
+  // does not read (it reads `permission`, the WRITE key). The view key's
+  // agreement with the destination read is the drift test's, in
+  // `tests/settings/projectSettingsNav.test.ts`.
   approvals: 'lib/services/approvalGateSettingsService.ts',
   board: 'lib/services/boardsService.ts',
   estimation: 'lib/services/estimationService.ts',

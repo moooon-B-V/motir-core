@@ -585,12 +585,25 @@ describe('SEAM — the rail keeps exactly the row the departures left', () => {
     // reveal-gated member left, so both counts render the same. That is the
     // property MOTIR-4843 was after — the tier stopped leaking into the
     // project's rail — and it is worth asserting rather than inferring.
-    renderRail({ permissions: MEMBER, workspaceTierRevealed: false });
+    //
+    // ⚠️ RE-FIXTURED BY MOTIR-5278 (`design/projects/design-notes.md` § ⭐ Approvals
+    // §6). This rendered a built-in MEMBER, who no longer reaches the floor: the
+    // Approvals room opens on `project:browse`, so every member holds a settings
+    // door and the section is `['Settings']` for them. The floor is still
+    // reachable — by an actor whose permission set resolved EMPTY — so that is the
+    // fixture now, and the claim about an absent (not blank) section is unchanged.
+    renderRail({ permissions: [], workspaceTierRevealed: false });
     expect(bottomSectionRowNames()).toEqual([]);
 
     cleanup();
-    renderRail({ permissions: MEMBER, workspaceTierRevealed: true });
+    renderRail({ permissions: [], workspaceTierRevealed: true });
     expect(bottomSectionRowNames()).toEqual([]);
+
+    // …and the MEMBER, stated positively rather than left to be inferred from the
+    // missing case: one row, the door Approvals gave them.
+    cleanup();
+    renderRail({ permissions: MEMBER, workspaceTierRevealed: false });
+    expect(bottomSectionRowNames()).toEqual(['Settings']);
   });
 
   it('the section is ONE row at most — nothing re-appeared beside it', () => {
@@ -607,7 +620,10 @@ describe('SEAM — the rail keeps exactly the row the departures left', () => {
   const SHAPES: Array<[string, () => void]> = [
     ['the default rail, with a project', () => renderRail({ workspaceTierRevealed: true })],
     ['the default rail, no project', () => renderRail({ project: null })],
-    ['a member’s rail (no settings door)', () => renderRail({ permissions: MEMBER })],
+    // Label AMENDED BY MOTIR-5278: it read "(no settings door)", which stopped
+    // being true when Approvals opened on `project:browse`.
+    ['a member’s rail (its one settings door)', () => renderRail({ permissions: MEMBER })],
+    ['an actor holding no keys (no settings door)', () => renderRail({ permissions: [] })],
     ['the drawer', () => renderRail({ variant: 'drawer' })],
     [
       'the project-settings AREA',

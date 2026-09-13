@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   seedPermissionGatedUi,
@@ -132,12 +132,19 @@ test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page 
   );
 });
 
-test('a MEMBER is offered no settings area — and the room is still shut', async ({ page }) => {
+// ⚠️ INVERTED BY MOTIR-5278, DELIBERATELY (`design/projects/design-notes.md`
+// § ⭐ Approvals §6, decided on MOTIR-5190). This was "a MEMBER is offered no
+// settings area — and the room is still shut". The Approvals room opens on
+// `project:browse`, so a member is offered ONE room, read-only, and the door comes
+// back with it. Every ADMINISTRATIVE room is still shut and still refuses on a
+// typed URL — that half is unchanged apart from where "back" now lands.
+test('a MEMBER is offered ONE settings room — Approvals, read-only — and every other room is still shut', async ({
+  page,
+}) => {
   await enterShellAs(page, seed.memberEmail);
 
-  // PANEL 1. The door is not there, and nothing marks the gap: no disabled row,
-  // no tooltip, no "ask an admin" line. The rows below simply close up.
-  await expect(settingsDoor(page)).toHaveCount(0);
+  // PANEL 1, re-drawn by §6. The door is back, because the area has a room behind it.
+  await expect(settingsDoor(page)).toHaveAttribute('href', '/settings/project');
   // ⚠️ BOTH ROWS LEFT THIS SECTION, so for a member it is EMPTY and `SidebarNav`
   // renders no section at all. `Job runs` went with MOTIR-4843/4847 — a
   // workspace-tier pane that had been a loose row in the PROJECT's rail, now a
@@ -153,13 +160,35 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // two would have hidden the browse-reachable half behind the admin-only one.
   await expect(rail(page).getByRole('link', { name: 'Codebase' })).toBeVisible();
 
-  // ⌘K offers no settings deep link either — the palette reads the same registry.
+  // ⌘K offers exactly the Approvals deep link — the palette reads the same registry.
   const palette = await openPalette(page);
+  await expect(palette.getByRole('option', { name: /Approvals/ })).toHaveCount(1);
   await expect(palette.getByRole('option', { name: /Members & access/ })).toHaveCount(0);
   await expect(palette.getByRole('option', { name: /^Details$/ })).toHaveCount(0);
   // …while the palette itself still works: its non-settings actions are there.
   await expect(palette.getByRole('option', { name: 'Go to Work Items' })).toBeVisible();
   await page.keyboard.press('Escape');
+
+  // PANEL 4 — THE ROOM A MEMBER MAY READ, as a real round trip rather than a
+  // rail-only check. The stored value is flipped OFF first (the column defaults
+  // on), so a page that rendered a default instead of reading the row cannot pass.
+  // `adminDb`, not the `db` singleton: under `motir_app` a singleton write is
+  // silently refused, and `tests/rls/test-singleton-statement-guard.test.ts`
+  // ratchets that population down.
+  await adminDb.project.update({
+    where: { id: seed.projectId },
+    data: { acceptanceVideoEnabled: false },
+  });
+  await page.goto('/settings/project/approvals');
+  await expect(page.getByRole('heading', { name: 'Approvals', level: 1 })).toBeVisible();
+  const gate = page.getByRole('switch', { name: 'Acceptance video approval' });
+  await expect(gate).toHaveAttribute('aria-checked', 'false');
+  await expect(gate, 'a member must not be offered a control the server refuses').toBeDisabled();
+  // Their rail holds Approvals and nothing administrative.
+  await expect(settingsRail(page).getByRole('link', { name: 'Approvals' })).toBeVisible();
+  for (const label of ['Details', 'Members & access', 'Workflow', 'Boards', 'Rules']) {
+    await expect(settingsRail(page).getByRole('link', { name: label }), label).toHaveCount(0);
+  }
 
   // PANEL 3 — THE HALF THAT MATTERS MOST. Hiding is presentation: the page is
   // still one typed URL away, and it must refuse rather than render a read-only
@@ -169,11 +198,15 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   await expect(
     page.getByRole('paragraph').filter({ hasText: /managed by project admins/i }),
   ).toBeVisible();
-  // The back action leaves the area entirely — this actor has no room in it.
-  await expect(page.getByRole('link', { name: 'Back to projects' })).toHaveAttribute(
+  // ⚠️ INVERTED BY MOTIR-5278: back used to leave the area for `/dashboard`
+  // ("Back to projects"), because this actor had no room in it. They have one now,
+  // and back lands on it. Scoped to `main`, because the settings rail carries a
+  // link of the same name.
+  await expect(page.getByRole('main').getByRole('link', { name: 'Approvals' })).toHaveAttribute(
     'href',
-    '/dashboard',
+    '/settings/project/approvals',
   );
+  await expect(page.getByRole('link', { name: 'Back to projects' })).toHaveCount(0);
   // …and no editable form leaked in behind the refusal.
   await expect(page.getByRole('button', { name: /add a member/i })).toHaveCount(0);
 
@@ -189,7 +222,20 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
 test('a VIEWER loses the destinations that refuse them, and keeps every read', async ({ page }) => {
   await enterShellAs(page, seed.viewerEmail);
 
-  await expect(settingsDoor(page)).toHaveCount(0);
+  // ⚠️ INVERTED BY MOTIR-5278 (§6 of the Approvals design): the door was absent.
+  // A viewer browses the project, so Approvals opens for them too — read-only, and
+  // the only room their rail holds.
+  await expect(settingsDoor(page)).toHaveAttribute('href', '/settings/project');
+  await page.goto('/settings/project/approvals');
+  await expect(
+    page.getByRole('switch', { name: 'Acceptance video approval' }),
+    'a viewer must not be offered a control the server refuses',
+  ).toBeDisabled();
+  await expect(settingsRail(page).getByRole('link', { name: 'Approvals' })).toBeVisible();
+  await expect(settingsRail(page).getByRole('link', { name: 'Boards' })).toHaveCount(0);
+  // Leave the settings AREA before the project-nav rows below: inside it the rail
+  // SWAPS to the settings nav, so they would fail for the wrong reason.
+  await page.goto('/dashboard');
 
   // PANEL 4. The three rows whose destinations refuse a viewer outright are gone.
   for (const gone of ['Plans', 'Triage', 'Code health']) {

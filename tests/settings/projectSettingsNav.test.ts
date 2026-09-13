@@ -213,9 +213,17 @@ describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)
   // `design/projects/design-notes.md` § *Amendment 2026-08-08*, which hides an
   // entry point whose destination the actor cannot use at all. Eleven of twelve
   // entries flipped; the twelfth (Automation) was already right.
-  it('a member sees NO section — every entry gates on an administrative key now', () => {
-    expect(visibleSettingsNav(MEMBER)).toEqual([]);
-    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES)).toEqual([]);
+  //
+  // ⚠️ AND INVERTED AGAIN BY MOTIR-5278, DELIBERATELY — `design/projects/design-notes.md`
+  // § ⭐ Approvals §6, decided on MOTIR-5190. It read "a member sees NO section".
+  // `approvals` now opens on `project:browse`, which every member holds, so a
+  // member's rail is exactly that one room: one they may READ and not change,
+  // because its gates decide whether their own finished work waits.
+  it('a member sees exactly ONE section — Approvals, the room they may read and not change', () => {
+    expect(visibleSettingsNav(MEMBER).map((e) => e.id)).toEqual(['approvals']);
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_ROUTES).map((e) => e.id)).toEqual([
+      'approvals',
+    ]);
   });
 
   it('a no-browse actor sees NOTHING — the whole area filters away (no nav leak)', () => {
@@ -267,8 +275,16 @@ describe('the Public page room (Story MOTIR-3875 · MOTIR-4243)', () => {
   it('is absent for a non-admin ON cloud too — the two axes COMPOSE, never substitute', () => {
     // The failure a single filter produces: a cloud build handing the room to
     // everyone because "it exists here".
-    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual([]);
-    expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual([]);
+    //
+    // ⚠️ INVERTED BY MOTIR-5278 (§6 of the Approvals design). These read
+    // `toEqual([])`, which proved public-page absent only because the whole rail
+    // was empty. A member's rail now holds Approvals, so the absence is asserted on
+    // the id the claim was always about, beside what the rail DOES hold.
+    for (const held of [MEMBER, VIEWER]) {
+      const ids = visibleSettingsNav(held, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id);
+      expect(ids).not.toContain('public-page');
+      expect(ids).toEqual(['approvals']);
+    }
   });
 
   it('DEFAULTS CLOSED — a caller that forgets the deployment fact drops the row', () => {
@@ -473,11 +489,15 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/workflowsService.ts',
     gate: 'assertProjectAdmin',
   },
-  // MOTIR-4925 · MOTIR-5170. The SAME key as `workflow`, and deliberately: a
+  // MOTIR-4925 · MOTIR-5170. The SAME write key as `workflow`, and deliberately: a
   // status graph and an approval gate are the two things that decide when work
   // may move. Unlike its neighbour this service names the gate plainly —
-  // `projectAccessService.assertPermission(projectId, ctx, 'workflow:manage')`
-  // on both `getSettings` and `updateSettings` — so the evidence is the literal.
+  // `projectAccessService.assertPermission(projectId, ctx, 'workflow:manage')` in
+  // `updateSettings` — so the evidence is the literal.
+  //
+  // ⚠️ THIS ROW IS THE WRITE KEY'S EVIDENCE ONLY (MOTIR-5278). The READ,
+  // `getSettings`, asserts `project:browse` now — that is the entry's VIEW key,
+  // and its evidence row is `VIEW_KEY_EVIDENCE.approvals` below.
   approvals: {
     permission: 'workflow:manage',
     source: 'lib/services/approvalGateSettingsService.ts',
@@ -594,14 +614,22 @@ describe('what each actor is offered (MOTIR-2468)', () => {
     ).toEqual(SETTINGS_NAV_GROUP_ORDER);
   });
 
-  it('a built-in MEMBER is offered NOTHING — so the area door goes with it', () => {
-    expect(visibleSettingsNav(MEMBER)).toEqual([]);
-    expect(hasVisibleSettingsArea(MEMBER)).toBe(false);
+  // ⚠️ BOTH INVERTED BY MOTIR-5278, DELIBERATELY (`design/projects/design-notes.md`
+  // § ⭐ Approvals §6, decided on MOTIR-5190). They read "a built-in MEMBER / VIEWER
+  // is offered NOTHING — so the area door goes with it". `approvals` opens on
+  // `project:browse`, so each is offered exactly that room, in the one `work`
+  // group, and the door comes back — Amendment 2026-08-08 hides the door only when
+  // EVERY entry filters away, and one no longer does.
+  it('a built-in MEMBER is offered exactly Approvals — so the area door comes BACK', () => {
+    expect(visibleSettingsNav(MEMBER).map((e) => e.id)).toEqual(['approvals']);
+    expect(groupSettingsNav(visibleSettingsNav(MEMBER)).map((g) => g.group)).toEqual(['work']);
+    expect(hasVisibleSettingsArea(MEMBER)).toBe(true);
   });
 
-  it('a built-in VIEWER is offered NOTHING either', () => {
-    expect(visibleSettingsNav(VIEWER)).toEqual([]);
-    expect(hasVisibleSettingsArea(VIEWER)).toBe(false);
+  it('a built-in VIEWER is offered exactly Approvals too', () => {
+    expect(visibleSettingsNav(VIEWER).map((e) => e.id)).toEqual(['approvals']);
+    expect(groupSettingsNav(visibleSettingsNav(VIEWER)).map((g) => g.group)).toEqual(['work']);
+    expect(hasVisibleSettingsArea(VIEWER)).toBe(true);
   });
 
   it('an actor with no keys at all is offered NOTHING', () => {
@@ -639,12 +667,21 @@ describe('what each actor is offered (MOTIR-2468)', () => {
     }
   });
 
-  it('`project:browse` alone opens NO door — the entry that used to make it do so is re-keyed', () => {
-    // Every actor who reaches the shell holds `project:browse`. While ANY entry
-    // gated on it, the area door could never disappear for anyone, and the
-    // story's headline was unreachable. This is that invariant, pinned.
+  // ⚠️ INVERTED BY MOTIR-5278, DELIBERATELY (§6 of the Approvals design). This read
+  // "`project:browse` alone opens NO door", pinned by MOTIR-2468 because while any
+  // entry gated on browse the door could never disappear for anyone. That is now
+  // the decided product: ONE room opens on browse, as a VIEW key, onto a room the
+  // actor may read and not change. What stays pinned is the half that still
+  // matters — no entry's WRITE key is browse, because a browse-gated CONTROL would
+  // be the defect MOTIR-2468 removed.
+  it('`project:browse` alone opens exactly Approvals — the only entry declaring it as a VIEW key', () => {
+    const browser = toSettingsNavPermissions(['project:browse']);
+    expect(visibleSettingsNav(browser).map((e) => e.id)).toEqual(['approvals']);
+    expect(hasVisibleSettingsArea(browser)).toBe(true);
     expect(PROJECT_SETTINGS_NAV.map((e) => e.permission)).not.toContain('project:browse');
-    expect(hasVisibleSettingsArea(toSettingsNavPermissions(['project:browse']))).toBe(false);
+    expect(
+      PROJECT_SETTINGS_NAV.filter((e) => e.viewPermission === 'project:browse').map((e) => e.id),
+    ).toEqual(['approvals']);
   });
 });
 
@@ -654,9 +691,10 @@ describe('what each actor is offered (MOTIR-2468)', () => {
 // An entry may now declare `viewPermission`: the key that opens its DOOR, apart
 // from `permission`, the key its CONTROLS require. The rail row, the area door
 // and the destination guard read the view key; the write key gates nothing on
-// arrival. No shipped entry declares one yet — the first is MOTIR-5278's — so
-// everything below is proven twice: over the real registry, where the change must
-// be invisible, and over a FIXTURE, where it must be visible.
+// arrival. Everything below is proven twice: over the real registry, where the
+// change must be invisible for every ONE-key entry, and over a FIXTURE, where it
+// must be visible. Since MOTIR-5278 the real registry carries its first declaring
+// entry, `approvals`, so the drift test bites on shipped code too.
 //
 // ⚠️ THE DRIFT TEST IS THE POINT OF THE CARD. The one-key model made the row and
 // the page structurally unable to disagree; two keys make it possible again, and
@@ -670,21 +708,37 @@ function existsOn(entry: SettingsNavEntry, available: { publicProjectsAvailable:
 }
 
 describe('the VIEW key defaults to the WRITE key — the no-regression proof (MOTIR-5193)', () => {
-  it('every shipped entry’s effective view key IS its permission', () => {
-    for (const entry of PROJECT_SETTINGS_NAV) {
+  // ⚠️ AMENDED BY MOTIR-5278. Both cases below held over EVERY shipped entry while
+  // none declared a view key. `approvals` now does (§6 of the Approvals design), so
+  // each is restated with that ONE exception named: for every other entry the
+  // second key must still change nothing, and for `approvals` the change IS the
+  // decision — so it is spelled out here rather than derived through the helper
+  // under test.
+  /** The one-key model, restated — with the single decided exception. */
+  const expectedViewKey = (entry: SettingsNavEntry): PermissionKey =>
+    entry.id === 'approvals' ? 'project:browse' : entry.permission;
+
+  it('every ONE-key entry’s effective view key IS its permission, and approvals is the exception', () => {
+    const oneKey = PROJECT_SETTINGS_NAV.filter((e) => e.id !== 'approvals');
+    expect(oneKey).toHaveLength(PROJECT_SETTINGS_NAV.length - 1);
+    for (const entry of oneKey) {
       expect(settingsEntryViewKey(entry), entry.id).toBe(entry.permission);
       expect(settingsEntryKeys(entry.id), entry.id).toEqual({
         view: entry.permission,
         write: entry.permission,
       });
     }
+    expect(settingsEntryKeys('approvals')).toEqual({
+      view: 'project:browse',
+      write: 'workflow:manage',
+    });
   });
 
-  it('the view-gated rail, door and refusal are IDENTICAL to the write-gated ones for every actor', () => {
+  it('the view-gated rail, door and refusal differ from the write-gated ones by EXACTLY Approvals', () => {
     // Every single-key actor in the catalog, plus every built-in role and nobody
-    // at all, on both builds. "Identical" is asserted against a filter written
-    // here on `permission` alone — the one-key model, restated — so a change in
-    // what any actor is offered anywhere fails this, not merely a change in count.
+    // at all, on both builds. The expectation is written here on `permission`
+    // alone plus the one named exception, so a change in what any actor is offered
+    // anywhere fails this, not merely a change in count.
     const actors = [
       ...PERMISSIONS.map((key) => toSettingsNavPermissions([key])),
       ADMIN,
@@ -694,14 +748,16 @@ describe('the VIEW key defaults to the WRITE key — the no-regression proof (MO
     ];
     for (const held of actors) {
       for (const available of [ON_CLOUD, SELF_HOSTED]) {
-        const writeGated = PROJECT_SETTINGS_NAV.filter(
-          (e) => existsOn(e, available) && held.has(e.permission),
+        const expected = PROJECT_SETTINGS_NAV.filter(
+          (e) => existsOn(e, available) && held.has(expectedViewKey(e)),
         );
-        expect(visibleSettingsNav(held, PROJECT_SETTINGS_NAV, available)).toEqual(writeGated);
-        expect(hasVisibleSettingsArea(held, available)).toBe(writeGated.length > 0);
+        expect(visibleSettingsNav(held, PROJECT_SETTINGS_NAV, available)).toEqual(expected);
+        expect(hasVisibleSettingsArea(held, available)).toBe(expected.length > 0);
       }
       for (const entry of PROJECT_SETTINGS_NAV) {
-        expect(resolveSettingsRefusal(entry.id, held) === null).toBe(held.has(entry.permission));
+        expect(resolveSettingsRefusal(entry.id, held) === null).toBe(
+          held.has(expectedViewKey(entry)),
+        );
       }
     }
   });
@@ -796,10 +852,14 @@ describe('a distinct VIEW key opens the door, and only the door (MOTIR-5193, ove
  * a rail row opening on a key the room's own read does not admit is a door onto
  * an error page.
  *
- * EMPTY today, and total over the declaring entries (asserted below), so the
- * first room to declare a view key cannot land without its row here.
+ * Total over the declaring entries (asserted below), so a room cannot declare a
+ * view key without its row here. MOTIR-5278 wrote the first one.
  */
-const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {};
+const VIEW_KEY_EVIDENCE: Record<string, { source: string; gate: string }> = {
+  // `getSettings` is the room's READ, and it asserts `project:browse` — the key the
+  // entry opens its door on. The WRITE key's evidence stays in `KEY_EVIDENCE`.
+  approvals: { source: 'lib/services/approvalGateSettingsService.ts', gate: 'getSettings' },
+};
 
 /** The repo-relative `page.tsx` a settings route renders from. */
 function pageFileFor(route: string): string {
@@ -884,12 +944,15 @@ describe('the VIEW key cannot drift from its destination (MOTIR-5193)', () => {
   const declaring = PROJECT_SETTINGS_NAV.filter((e) => e.viewPermission);
 
   it('pins how many shipped entries declare a view key — a MEASUREMENT, not a target', () => {
-    // Zero today. The drift test below is vacuous over zero entries, and a guard
-    // that silently walks an empty population passes for ever — so the count is
-    // pinned: the day a room declares a key, this line fails and is updated in
-    // the SAME change, which is the moment the drift test starts biting instead
-    // of passing trivially. (The fixture tests below are what prove it bites.)
-    expect(declaring.map((e) => e.id)).toEqual([]);
+    // The drift test below is vacuous over zero entries, and a guard that silently
+    // walks an empty population passes for ever — so the count is pinned, and
+    // updated in the SAME change as a declaration.
+    //
+    // ⚠️ UPDATED BY MOTIR-5278, exactly as this line asked. It was `[]`, over which
+    // the drift test passed trivially; `approvals` is the first REAL declaring
+    // entry, so from here the drift test rules on shipped code and not only on the
+    // fixture. (The fixture tests below are still what prove it CAN fire.)
+    expect(declaring.map((e) => e.id)).toEqual(['approvals']);
   });
 
   it('every declaring entry has an evidence row, and every evidence row a declaring entry', () => {
