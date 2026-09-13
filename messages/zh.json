@@ -479,6 +479,10 @@
       "label": "管理保存的筛选器",
       "description": "创建、编辑、共享和订阅项目保存的筛选器。"
     },
+    "saved_filter_manage_any": {
+      "label": "管理所有人保存的筛选器",
+      "description": "查看他人的私有筛选器，编辑或删除任何共享筛选器，并将共享筛选器转交给新的所有者。"
+    },
     "repository_manage": {
       "label": "管理代码仓库",
       "description": "添加、移除、迁移和接管项目的代码仓库。"

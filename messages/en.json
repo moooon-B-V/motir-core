@@ -479,6 +479,10 @@
       "label": "Manage saved filters",
       "description": "Create, edit, share and subscribe to the project’s saved filters."
     },
+    "saved_filter_manage_any": {
+      "label": "Manage anyone’s saved filters",
+      "description": "See other people’s private filters, edit or delete any shared filter, and hand a shared filter to a new owner."
+    },
     "repository_manage": {
       "label": "Manage repositories",
       "description": "Add, remove, move and take over the project’s repositories."

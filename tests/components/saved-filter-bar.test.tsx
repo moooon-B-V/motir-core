@@ -54,7 +54,7 @@ const ME = 'user-me';
 const OTHER = 'user-other';
 
 function viewer(partial: Partial<Viewer> = {}): Viewer {
-  return { userId: ME, canBrowse: true, canShare: true, isAdmin: false, ...partial };
+  return { userId: ME, canBrowse: true, canShare: true, canManageAny: false, ...partial };
 }
 
 const AST_A: FilterAst = {

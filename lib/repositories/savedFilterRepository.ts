@@ -19,15 +19,15 @@ function starsInclude(actorUserId: string) {
 
 /** Which slice of the project's filters a list read returns. The VISIBILITY
  * predicate is the same for every view: project-shared rows, plus the
- * actor's own, plus (for the admin tier) other users' private rows. */
+ * actor's own, plus (for `saved_filter:manage_any`) other users' private rows. */
 export type SavedFilterListView = 'all' | 'mine' | 'project' | 'starred';
 
 export interface SavedFilterListArgs {
   projectId: string;
   actorUserId: string;
-  /** Whether the actor sits in the saved-filter admin tier (sees private
-   * rows of others — the service computes this from the 6.4 inputs). */
-  actorIsAdmin: boolean;
+  /** Whether the actor holds `saved_filter:manage_any` (sees private rows of
+   * others — the service resolves it from the actor's permission set). */
+  actorCanManageAny: boolean;
   view: SavedFilterListView;
   /** Case-insensitive name substring (the directory/dropdown search). */
   q?: string;
@@ -36,7 +36,7 @@ export interface SavedFilterListArgs {
 }
 
 function listWhere(args: SavedFilterListArgs): Prisma.SavedFilterWhereInput {
-  const visibility: Prisma.SavedFilterWhereInput = args.actorIsAdmin
+  const visibility: Prisma.SavedFilterWhereInput = args.actorCanManageAny
     ? {}
     : { OR: [{ visibility: 'project' }, { ownerId: args.actorUserId }] };
   const view: Prisma.SavedFilterWhereInput =

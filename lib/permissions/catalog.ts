@@ -222,6 +222,13 @@ export const PERMISSIONS = [
   'estimation:manage',
   'report:view',
   'saved_filter:manage',
+  // MOTIR-5293 — the "ANYONE'S filters" tier: see other people's private
+  // filters, manage and reassign any project-shared one. Its own key rather than
+  // a widening of `saved_filter:manage`, which the built-in Member set holds —
+  // folding the two would let every member read every private filter. `_any`
+  // as in `attachment:delete_any`: the owner acts on their own row regardless,
+  // and this key is what reaches everybody else's.
+  'saved_filter:manage_any',
   'repository:manage',
   'repository:manage_access',
   // MOTIR-5260 — connecting, listing and disconnecting a third-party MONITOR
@@ -326,6 +333,7 @@ const PERMISSION_META: Record<
   'estimation:manage': { domain: 'estimation', enforcement: 'enforced' },
   'report:view': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2351
   'saved_filter:manage': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2352
+  'saved_filter:manage_any': { domain: 'report', enforcement: 'enforced' }, // MOTIR-5293
   'repository:manage': { domain: 'repository', enforcement: 'enforced' },
   'repository:manage_access': { domain: 'repository', enforcement: 'enforced' },
   'integration:manage': { domain: 'integration', enforcement: 'enforced' }, // MOTIR-5260

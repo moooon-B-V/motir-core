@@ -144,7 +144,7 @@ carries a decided policy, and no row says `new`.
 | `member` (2)         | `member:manage` · `project:manage_access`                                                               |
 | `project` (2)        | `project:administer` · `project:browse`                                                                 |
 | `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`                            |
-| `report` (2)         | `report:view` ᵖ · `saved_filter:manage` ᵖ                                                               |
+| `report` (3)         | `report:view` ᵖ · `saved_filter:manage` ᵖ · `saved_filter:manage_any`                                   |
 | `repository` (2)     | `repository:manage` · `repository:manage_access`                                                        |
 | `sprint` (1)         | `sprint:manage` ᵖ                                                                                       |
 | `watcher` (1)        | `watcher:manage`                                                                                        |
@@ -264,7 +264,7 @@ worse failure than a gap.
 
 **R15.** Project identity + settings; already covered by the shipped predicates.
 
-**R16.** Project-scoped saved queries. The WRITES (author / own / star / subscribe) ask `saved_filter:manage`; the READS (list / resolve / dependents) stay at `project:browse`, because running a saved query is reading the project's work items. The per-ROW rules in `lib/savedFilters/access.ts` — an owner manages their own filter, an admin any project-shared one — sit on top and are a different question from the project-level key.
+**R16.** Project-scoped saved queries. The WRITES (author / own / star / subscribe) ask `saved_filter:manage`; the READS (list / resolve / dependents) stay at `project:browse`, because running a saved query is reading the project's work items. The per-ROW rules in `lib/savedFilters/access.ts` sit on top and are a different question from the project-level key: an owner manages their own filter, and **`saved_filter:manage_any`** sees other people's private filters and manages and reassigns any project-shared one. That second half was a ROLE read (`isWorkspaceManager || projectRole === 'admin'`) until MOTIR-5293, so no custom role could hold it; the key sits in `ROLE_GATED_PERMISSIONS`, the built-in Admin set carries it and the workspace owner/admin rail resolves to it, which keeps every built-in actor's answer unchanged. Publishing at visibility `project` stays on the edit tier (`work_item:edit`) — a per-visibility rule on top of the write key, by the same design, not a second key for the write.
 
 **R17.** AI cadence + planner model settings. Splits out of project:administer.
 

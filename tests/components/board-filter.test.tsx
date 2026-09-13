@@ -75,7 +75,7 @@ const MEMBERS: WorkspaceMemberDTO[] = [
   { userId: 'u-alice', name: 'Alice Chen', email: 'alice@acme.test', role: 'owner' },
 ];
 
-const VIEWER: Viewer = { userId: 'u-alice', canBrowse: true, canShare: true, isAdmin: false };
+const VIEWER: Viewer = { userId: 'u-alice', canBrowse: true, canShare: true, canManageAny: false };
 
 function renderControls(opts: { boardId?: string; filter?: IssueFilter; withUi?: boolean } = {}) {
   const controls = (
