@@ -123,7 +123,10 @@ function nearestRank(sorted, q) {
 }
 
 const pinned = git('rev-parse', 'HEAD');
-const plan = await import('../../tests/helpers/vitestShardPlan.ts');
+// A variable, not a literal: `tsconfig.scripts.json` type-checks this file, and a
+// literal specifier would pull a `tests/` module into that project (TS6307).
+const SHARD_PLAN = '../../tests/helpers/vitestShardPlan.ts';
+const plan = await import(SHARD_PLAN);
 
 const ctx = await createVitest('test', { config: 'vitest.config.ts', watch: false, run: true });
 try {
