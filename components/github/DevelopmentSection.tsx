@@ -17,6 +17,9 @@ import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { awaitingRepoRows, type RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
+import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
+import { DevelopmentGateFrame, type DevelopmentGateRead } from './DevelopmentGateFrame';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
 // design/github Panels 3 + 4a: linked-PR rows — PR glyph + title +
@@ -324,6 +327,8 @@ export function DevelopmentSectionBody({
   rowAction,
   repoDelivery = [],
   deliveries = [],
+  howToTest = null,
+  mergeGate = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -378,6 +383,21 @@ export function DevelopmentSectionBody({
    * The union collapses to one source when MOTIR-3672 retires the title parse.
    */
   deliveries?: WorkItemDeliveryDto[];
+  /**
+   * The run's HOW TO TEST (Story MOTIR-4906 · MOTIR-5336, design §20) — rendered
+   * BELOW the rows, inside this same card, never as a section of its own. It is
+   * the approve-to-merge gate's evidence. Omitted by the read-only peek, whose
+   * contract keeps its rows only.
+   */
+  howToTest?: HowToTestDto | null;
+  /**
+   * The card's approve-to-merge gate read (`pull_request_approval`). When it is
+   * AWAITING, the rows plus How to test become the PORT of ONE
+   * `ApprovalGateControl` — Panel 12c. NO GATE ⇒ NO FRAME: null, or any other
+   * state, renders exactly the block. The kind is unregistered until
+   * MOTIR-4909, so no live tenant takes this arm yet.
+   */
+  mergeGate?: DevelopmentGateRead | null;
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
@@ -396,17 +416,24 @@ export function DevelopmentSectionBody({
   const awaiting = awaitingRepoRows(repoDelivery, rows);
   // The big EmptyState is for an item with NOTHING to show. An item that carries
   // repositories always has rows — the awaiting ones — so it never lands here.
-  if (rows.length === 0 && awaiting.length === 0) {
-    return (
+  const nothingLinked = rows.length === 0 && awaiting.length === 0;
+  const howToTestPart = howToTest ? (
+    <HowToTestBlock
+      howToTest={howToTest}
+      pullRequestRows={rows.map((row) => ({ id: row.pr.id, repo: row.repo, number: row.number }))}
+    />
+  ) : null;
+  const block = nothingLinked ? (
+    <>
       <EmptyState
         className="mt-2"
         icon={<GitPullRequestArrow className="h-12 w-12" aria-hidden />}
         title={t('development.emptyTitle')}
         description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
       />
-    );
-  }
-  return (
+      {howToTestPart}
+    </>
+  ) : (
     <>
       <ul className="list-none">
         {rows.map((row) => (
@@ -424,7 +451,10 @@ export function DevelopmentSectionBody({
           <AwaitingRepoRow key={d.repo} delivery={d} />
         ))}
       </ul>
-      <p className="mt-3 font-sans text-xs text-(--el-text-muted)">
+      {/* `--el-text-secondary`, NOT `--el-text-muted` (design §20 Decisions): the
+          caption also renders inside the approval frame's port, whose
+          `--el-surface` fill measures muted at 4.17:1 and fails AA. */}
+      <p className="mt-3 font-sans text-xs text-(--el-text-secondary)">
         {t.rich(
           manualLinkable ? 'development.autoLinkCaptionManual' : 'development.autoLinkCaption',
           {
@@ -433,8 +463,20 @@ export function DevelopmentSectionBody({
           },
         )}
       </p>
+      {howToTestPart}
     </>
   );
+  // NO GATE ⇒ NO FRAME (the `DesignResultSection` rule): only an AWAITING
+  // approve-to-merge gate wraps the block, and it wraps ALL of it — one frame for
+  // every pull request the run delivered, never one per row.
+  if (mergeGate && mergeGate.gate.state === 'awaiting') {
+    return (
+      <DevelopmentGateFrame read={mergeGate} subjectMeta={howToTest?.record?.run?.label ?? null}>
+        {block}
+      </DevelopmentGateFrame>
+    );
+  }
+  return block;
 }
 
 /** The PEEK host — SectionLabel header over the shared body (design Panel 3). */
