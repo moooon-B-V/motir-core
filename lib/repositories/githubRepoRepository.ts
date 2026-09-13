@@ -49,6 +49,23 @@ export interface DriftRecomputeCandidate {
   hostInstallationId: string;
 }
 
+/** One repository the index CATCH-UP sweep may re-ask about (MOTIR-5290) —
+ *  projected, not the whole model. */
+export interface IndexCatchUpCandidate {
+  id: string;
+  owner: string;
+  name: string;
+  provider: string;
+  workspaceId: string;
+  organizationId: string;
+  defaultBranch: string;
+  indexPausedReason: string;
+  indexedHeadSha: string | null;
+  defaultBranchHeadSha: string | null;
+  /** The id the HOST knows — what the index/refresh event carries. */
+  hostInstallationId: string;
+}
+
 export const githubRepoRepository = {
   /** The repos selected on an installation, stable-ordered for display. Runs
    *  inside a context transaction, so it takes `tx`. */
@@ -265,6 +282,80 @@ export const githubRepoRepository = {
           ? { indexedHeadSha: args.headSha, indexedAt: args.indexedAt ?? new Date() }
           : {}),
       },
+    });
+    return result.count;
+  },
+
+  /** Record that indexing is PAUSED for a repository by a hard stop of its
+   *  organisation's internal index allowance (MOTIR-4593), and release any claim —
+   *  a refused dispatch booted nothing, so no run is in flight for it. The
+   *  `indexedHeadSha` is untouched: the graph that exists is still the graph. */
+  async markIndexPaused(
+    repoRef: string,
+    args: { reason: string; at?: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name },
+      data: {
+        indexPausedReason: args.reason,
+        indexPausedAt: args.at ?? new Date(),
+        indexingRunId: null,
+      },
+    });
+    return result.count;
+  },
+
+  /**
+   * The repositories whose indexing is PAUSED by a hard stop of the internal index
+   * allowance (MOTIR-4593 records them) — the ONLY rows the catch-up sweep
+   * (MOTIR-5290) selects. A repository without a recorded pause is never re-asked
+   * about, so an organisation that was never stopped costs the sweep nothing.
+   *
+   * Oldest pause first, bounded per tick. Archived repositories are skipped: they
+   * accept no writes and are never re-indexed.
+   *
+   * ⚠️ A CROSS-TENANT SYSTEM READ — it takes `tx` for the reason
+   * {@link githubRepoRepository.listNeedingDriftRecompute} states: unbound, the
+   * policy returns zero rows and raises nothing. And every column is aliased,
+   * because `$queryRaw` applies no `@map`.
+   */
+  async listIndexPaused(
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<IndexCatchUpCandidate[]> {
+    return tx.$queryRaw<IndexCatchUpCandidate[]>`
+      SELECT
+        gr."id"                       AS "id",
+        gr."owner"                    AS "owner",
+        gr."name"                     AS "name",
+        gr."provider"                 AS "provider",
+        gr."workspace_id"             AS "workspaceId",
+        gr."organization_id"          AS "organizationId",
+        gr."default_branch"           AS "defaultBranch",
+        gr."index_paused_reason"      AS "indexPausedReason",
+        gr."indexed_head_sha"         AS "indexedHeadSha",
+        gr."default_branch_head_sha"  AS "defaultBranchHeadSha",
+        gi."installation_id"          AS "hostInstallationId"
+      FROM "github_repo" gr
+      JOIN "github_installation" gi ON gi."id" = gr."installation_id"
+      WHERE gr."index_paused_reason" IS NOT NULL
+        AND gr."archived" = false
+      ORDER BY gr."index_paused_at" ASC NULLS FIRST, gr."id" ASC
+      LIMIT ${limit}
+    `;
+  },
+
+  /** Lift a recorded pause — the allowance let a dispatch boot (MOTIR-4593). A
+   *  repository that was not paused is not written. */
+  async clearIndexPause(repoRef: string, tx: Prisma.TransactionClient): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name, indexPausedReason: { not: null } },
+      data: { indexPausedReason: null, indexPausedAt: null },
     });
     return result.count;
   },

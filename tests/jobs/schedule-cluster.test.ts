@@ -165,7 +165,10 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // clustered minutes rather than ask for a third. Derived by the grep above,
     // not incremented from what the branch said: the 3701/3702 merge is the
     // reason that distinction is written down.
-    expect(jobSchedules().length).toBe(22);
+    // 23 since `system.code-graph-index-catch-up` (MOTIR-5290), at `0,30 * * * *` —
+    // the third job on both clustered minutes, costing NO NEW WAKE. Derived by the
+    // grep above.
+    expect(jobSchedules().length).toBe(23);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

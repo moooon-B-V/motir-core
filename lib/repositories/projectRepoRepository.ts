@@ -90,6 +90,8 @@ interface JoinedRow {
   repoIndexedHeadSha: string | null;
   repoIndexedAt: Date | null;
   repoIndexingRunId: string | null;
+  repoIndexPausedReason: string | null;
+  repoIndexPausedAt: Date | null;
   repoCommitsBehind: number | null;
   repoCommitsBehindBaseSha: string | null;
   repoCommitsBehindHeadSha: string | null;
@@ -163,6 +165,8 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             indexedHeadSha: r.repoIndexedHeadSha,
             indexedAt: r.repoIndexedAt,
             indexingRunId: r.repoIndexingRunId,
+            indexPausedReason: r.repoIndexPausedReason,
+            indexPausedAt: r.repoIndexPausedAt,
             commitsBehind: r.repoCommitsBehind,
             commitsBehindBaseSha: r.repoCommitsBehindBaseSha,
             commitsBehindHeadSha: r.repoCommitsBehindHeadSha,
@@ -273,6 +277,8 @@ export const projectRepoRepository = {
         gr."indexed_head_sha"        AS "repoIndexedHeadSha",
         gr."indexed_at"              AS "repoIndexedAt",
         gr."indexing_run_id"         AS "repoIndexingRunId",
+        gr."index_paused_reason"     AS "repoIndexPausedReason",
+        gr."index_paused_at"         AS "repoIndexPausedAt",
         gr."commits_behind"          AS "repoCommitsBehind",
         gr."commits_behind_base_sha" AS "repoCommitsBehindBaseSha",
         gr."commits_behind_head_sha" AS "repoCommitsBehindHeadSha"
