@@ -118,10 +118,17 @@ function render(
 ): string {
   const out = ['HOSTED-AGENT METER REHEARSAL', ''];
   if (outcome.outcome !== 'settled') {
-    out.push(`  outcome: ${outcome.outcome} — ${'detail' in outcome ? outcome.detail : ''}`, '');
+    // Every non-settled outcome carries its `detail`, so the narrowing is the proof.
+    out.push(`  outcome: ${outcome.outcome} — ${outcome.detail}`, '');
     return out.join('\n');
   }
   const { usage } = outcome;
+  // A settled container is always priced: the seam refuses an unpriced machine
+  // class at boot ("the unpriced refusal happens BEFORE any spend",
+  // tests/ciFleet/hostedAgentMeterStoryGate.test.ts), so `UNPRICED` is only ever
+  // printed for a row this command could not have produced.
+  /* v8 ignore next */
+  const rateFrom = usage.rateEffectiveFrom ? usage.rateEffectiveFrom.toISOString() : 'UNPRICED';
   out.push(
     '  usage record',
     `    container        ${usage.provider}/${usage.handleId} (${usage.region})`,
@@ -134,7 +141,7 @@ function render(
     `    billable seconds ${usage.billableSeconds}`,
     `    usd per second   ${usage.usdPerSecond}`,
     `    cost usd         ${usage.costUsd}`,
-    `    rate from        ${usage.rateEffectiveFrom ? usage.rateEffectiveFrom.toISOString() : 'UNPRICED'}`,
+    `    rate from        ${rateFrom}`,
     '',
   );
   out.push(
