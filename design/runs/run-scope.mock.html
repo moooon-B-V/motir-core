@@ -1,0 +1,2855 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · A container's OWN runs (MOTIR-5402 · MOTIR-5363)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — A CONTAINER'S OWN RUN HISTORY: the DOOR on its
+      item page, and `/runs?scope=<KEY>`, the runs index narrowed to the runs that
+      work item was the SCOPE of.
+      Work item MOTIR-5402 (design). Gates MOTIR-5363 (the build).
+
+      WHY IT EXISTS. A story handed to an agent as one piece of work (`motir run
+      <story>`) is recorded against the story's CHILDREN — a scoped run's legs are
+      the members, and the story has no leg of its own. The item page's Run
+      section reads legs (`listRunsForWorkItemKey` → `listByWorkItem`), so on the
+      one page a person opens to ask "what happened to this story?" it says
+      "No runs yet". The read that answers correctly already ships
+      (`listRunsForProject` with `scopeWorkItemKey` → `listByScope`, indexed
+      `[scopeWorkItemId, startedAt]`, routed as `?scope=`) and no surface sends it.
+
+      IT EXTENDS `design/runs/` AND DOES NOT CREATE IT. The four <style> blocks and
+      the icon sprite are taken VERBATIM from runs-index.mock.html, whose first
+      three are themselves run-section.mock.html's (MOTIR-1795). A fifth block adds
+      only what these panels need and the head did not carry: the outlined
+      work-item pill (restated with `--radius-badge`, not `--radius-pill`) and the
+      scope block inside the section. Two icons are added to the sprite.
+
+      COMPOSES, DOES NOT REDRAW. The Run section is run-section.mock.html's card —
+      its header, its pill, its recent-runs list and its empty state, unchanged.
+      The page is runs-index.mock.html's header, its two headed sections, its
+      TableShell table and its wait/failure faces. The tones are the area's table.
+
+      WHAT IT SETTLES. The false empty state as it ships (panel 0) · the door in
+      all three cases a work item can be in (panels 1-3) · the narrowed index
+      (panel 4) · the ADDRESS CONTRACT, including how `?scope=` survives opening
+      and closing a run (panel 5) · every face of the narrowed page — empty, a key
+      that resolves to nothing, an archived scope, the wait and the failure
+      (panels 6-9) · and which runs `?scope=` can never address (panel 10).
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      /* Utility shims — the mock is static HTML, so the handful of Tailwind
+         utilities the shipped components emit are declared here against the SAME
+         tokens. Nothing invents a value. */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .items-start {
+        align-items: flex-start;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .max-w-md {
+        max-width: 28rem;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-serif {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .relative {
+        position: relative;
+      }
+      .w-6 {
+        width: 1.5rem;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-12 {
+        height: 3rem;
+      }
+      .w-12 {
+        width: 3rem;
+      }
+      .dsCard {
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .dsPillSuccess {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillWarning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .panelBody {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        gap: 28px;
+        align-items: start;
+      }
+      .rail {
+        width: 18rem;
+      }
+      .main {
+        min-width: 0;
+      }
+      /* padding + margin utilities used by the shipped markup */
+      .px-3\.5 {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-10 {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+      }
+      .p-0\.5 {
+        padding: 0.125rem;
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-1\.5 {
+        margin-top: 0.375rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-3 {
+        margin-top: 0.75rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .-mt-0\.5 {
+        margin-top: -0.125rem;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      /* the shipped arbitrary-value utilities, spelled out */
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .h-\[15px\] {
+        height: 15px;
+      }
+      .w-\[15px\] {
+        width: 15px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .shadow-\(--shadow-card\) {
+        box-shadow: var(--shadow-card);
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .rounded-\(--radius-card\) {
+        border-radius: var(--radius-card);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+      /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
+         its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
+         surface is a left-column section work item and has no rail, so a single
+         child would otherwise land in the 18rem track and render at a width the
+         product never uses. */
+      .panelBody {
+        display: block;
+      }
+      /* The left column's real width: the item page is a `1fr 18rem` grid with a
+         24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
+         section work item below is drawn at that width, which is what makes the
+         overflow panels (13–14) measurements rather than illustrations. */
+      .secCard,
+      .panelBody > .grid {
+        max-width: 800px;
+      }
+      .twoUp {
+        max-width: 100%;
+      }
+
+      /* ── Extra utility shims this asset needs, same tokens ─────────────── */
+      .w-full {
+        width: 100%;
+      }
+      .gap-3 {
+        gap: 12px;
+      }
+      .gap-0\.5 {
+        gap: 2px;
+      }
+      .mt-4 {
+        margin-top: 16px;
+      }
+      .mb-2 {
+        margin-bottom: 8px;
+      }
+      .ml-auto {
+        margin-left: auto;
+      }
+      .line-through {
+        text-decoration: line-through;
+      }
+      .overflow-x-auto {
+        overflow-x: auto;
+      }
+      .cursor-grab {
+        cursor: grab;
+      }
+      .select-none {
+        user-select: none;
+      }
+      .whitespace-pre {
+        white-space: pre;
+      }
+      .h-5 {
+        height: 20px;
+      }
+      .w-5 {
+        width: 20px;
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .py-2 {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .px-2 {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .text-\[12px\] {
+        font-size: 12px;
+      }
+      .text-\[12\.5px\] {
+        font-size: 12.5px;
+      }
+
+      /* ── The asset's OWN elements ─────────────────────────────────────── */
+      /* A section work item, `ContentSectionCard` markup-for-markup. */
+      .secCard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card, var(--color-background));
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .secBody {
+        padding: 8px var(--spacing-card-padding) 16px;
+      }
+      /* ONE to-do row. A grid so the checkbox, the body and the row actions
+         each get their own track — and so the body track can be `min-w-0`,
+         which is what lets a long command scroll inside itself instead of
+         widening the row. */
+      .todoRow {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: start;
+        gap: 10px;
+        padding: 9px 4px;
+        border-radius: var(--radius-control, 8px);
+      }
+      .todoRow + .todoRow {
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .todoRow.isHover {
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      /* The shipped `Checkbox` primitive's box. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border: 1px solid var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 6px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-card, var(--color-background));
+        color: transparent;
+        flex: none;
+      }
+      .cbox.isOn {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbox.isInert {
+        border-color: var(--el-border);
+        background: var(--el-muted, var(--color-muted));
+      }
+      /* The command value — mono, scrolling inside ITS OWN box. */
+      /* The INSTRUCTIONS disclosure. Collapsed by default so a list of ten rows
+         reads as ten lines whether or not any of them carries notes; the tell
+         is the chevron, which only renders on a row that HAS notes. */
+      .notesToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .notesToggle svg {
+        transition: transform 120ms;
+      }
+      .notesToggle.isOpen svg {
+        transform: rotate(90deg);
+      }
+      .notesBody {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 2px solid var(--el-border-strong, var(--el-border));
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .notesBody ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .notesBody code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 1px 4px;
+        border-radius: var(--radius-control, 4px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .notesBody a {
+        color: var(--el-link);
+      }
+      /* The MARKDOWN EDITOR, mirrored from `comments.mock.html`'s composer —
+         the shipped `MarkdownEditor` at `size="compact"`, whose button set is
+         bold · italic · strike · inline code · link · bulleted · numbered
+         (`components/ui/MarkdownEditor.tsx`). Not an approximation: the same
+         chrome the comment composer already renders on this page. */
+      .mdEditor {
+        margin-top: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .mdEditor.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .editorToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tbIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tbIcon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editorArea {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .editorArea ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fieldLabel {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .cmdBox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .cmdVal {
+        /* A `<pre>`, not a `<code>`: `white-space: pre` is only honoured if the
+           markup preserves the line, and a formatter will reflow the contents of
+           an inline element. This is also what the shipped `CodeBlock` renders
+           (`ScrollableRegion as="pre"`). */
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: pre;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.7;
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 6px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn, 8px);
+        background: var(--el-card, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        padding: 5px 10px;
+        line-height: 1.2;
+      }
+      .btnIcon {
+        padding: 5px;
+      }
+      .btnPrimary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btnDanger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .rowActions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        color: var(--el-text-secondary);
+      }
+      .execMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .execMark.isAgent {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .addRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 4px 2px;
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .inputBox {
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-card, var(--color-background));
+      }
+      .inputBox.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .dropGap {
+        height: 2px;
+        margin: 2px 4px;
+        border-radius: 2px;
+        background: var(--el-accent);
+      }
+      .ghostRow {
+        opacity: 0.5;
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 8px);
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        background: var(--el-page-bg, var(--color-background));
+      }
+      .colLabel {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .twoUp {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .foldRule {
+        position: relative;
+        border-top: 2px dashed var(--el-accent);
+        margin: 4px 0;
+      }
+      .foldRule span {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--el-page-bg, var(--color-background));
+        padding: 0 6px;
+        color: var(--el-accent-on-surface, var(--el-text-secondary));
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 8px);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .regionBox.isThis {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .narrow {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-card, var(--color-background));
+      }
+    </style>
+    <style>
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0 0 10px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .stage {
+        max-width: 720px;
+      }
+      .stageWide {
+        max-width: 980px;
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        padding: 10px 14px;
+        font-size: 12.5px;
+      }
+      .regionBox.is-new {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* ── the shipped section chrome (ContentSectionCard over Card) ───────── */
+      .secCard {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-card-padding);
+        padding-bottom: 0;
+      }
+      .secHead h2 {
+        margin: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-base);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .secSub {
+        font-size: var(--font-size-sm);
+        color: var(--el-text-secondary);
+      }
+      .secBody {
+        padding: var(--spacing-card-padding);
+      }
+      .secRight {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── the run-status pill: ONE vocabulary, tinted background + strong ink ── */
+      .runPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        line-height: 1rem;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .runPill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .t-queued {
+        background: var(--el-muted);
+      }
+      .t-queued .dot {
+        background: var(--el-status-todo);
+      }
+      .t-running {
+        background: var(--el-tint-sky);
+      }
+      .t-running .dot {
+        background: var(--el-status-in-progress);
+      }
+      .t-integrated {
+        background: var(--el-tint-mint);
+      }
+      .t-integrated .dot {
+        background: var(--el-status-done);
+      }
+      .t-implemented {
+        background: var(--el-tint-mint);
+      }
+      .t-implemented .dot {
+        background: var(--el-status-done);
+      }
+      .t-failed {
+        background: var(--el-tint-rose);
+      }
+      .t-failed .dot {
+        background: var(--el-danger);
+      }
+      .t-replanned {
+        background: var(--el-tint-lavender);
+      }
+      .t-replanned .dot {
+        background: var(--el-status-planning);
+      }
+      .t-skipped {
+        background: var(--el-muted);
+      }
+      .t-skipped .dot {
+        background: var(--el-text-tertiary);
+      }
+      .t-cancelled {
+        background: var(--el-muted);
+      }
+      .t-cancelled .dot {
+        background: var(--el-status-cancelled);
+      }
+      .t-timedout {
+        background: var(--el-tint-peach);
+      }
+      .t-timedout .dot {
+        background: var(--el-warning);
+      }
+      .t-offline {
+        background: var(--el-tint-peach);
+      }
+      .t-offline .dot {
+        background: var(--el-text-tertiary);
+      }
+
+      /* ── the live timeline ─────────────────────────────────────────────── */
+      .tl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        position: relative;
+      }
+      .tl::before {
+        content: '';
+        position: absolute;
+        left: 7px;
+        top: 10px;
+        bottom: 10px;
+        width: 1px;
+        background: var(--el-border);
+      }
+      .tlRow {
+        position: relative;
+        display: grid;
+        grid-template-columns: 16px 1fr auto;
+        align-items: baseline;
+        gap: 10px;
+        padding: 6px 0;
+      }
+      .tlDot {
+        width: 9px;
+        height: 9px;
+        margin-left: 3px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        position: relative;
+        top: 4px;
+      }
+      .tlRow.is-done .tlDot {
+        background: var(--el-status-done);
+      }
+      .tlRow.is-now .tlDot {
+        background: var(--el-status-in-progress);
+        box-shadow: 0 0 0 3px var(--el-tint-sky);
+      }
+      .tlRow.is-fail .tlDot {
+        background: var(--el-danger);
+      }
+      .tlRow.is-pending .tlDot {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+      }
+      .tlLabel {
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .tlRow.is-pending .tlLabel {
+        color: var(--el-text-secondary);
+      }
+      .tlDetail {
+        display: block;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+      .tlWhen {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+
+      .metaRow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .metaRow .k {
+        color: var(--el-text-tertiary);
+      }
+      .mono {
+        font-family: var(--font-mono, monospace);
+      }
+
+      /* the "one of N" line — the single most useful sentence on this work item */
+      .setLine {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: var(--font-size-sm);
+      }
+      .setLine a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .notice {
+        display: flex;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: var(--radius-control);
+        font-size: var(--font-size-sm);
+        color: var(--el-text-strong);
+        margin-bottom: 14px;
+      }
+      .notice.warn {
+        background: var(--el-warning-surface);
+      }
+      .notice.info {
+        background: var(--el-notice-info-bg);
+      }
+      .notice .body {
+        min-width: 0;
+      }
+      .notice .body strong {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .notice .body span {
+        color: var(--el-text-strong);
+      }
+
+      /* the recent-runs list */
+      .runList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .runList li {
+        display: grid;
+        grid-template-columns: 8.5rem 1fr auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: var(--font-size-sm);
+      }
+      .runList .when {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        white-space: nowrap;
+      }
+      .runList .who {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .runList .dur {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .listFoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 12px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .btnGhost {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-button-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        cursor: pointer;
+      }
+
+      /* the collapsed log console */
+      .console {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        margin-top: 14px;
+      }
+      .consoleHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-surface-soft);
+        border: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .consoleHead .chev {
+        transition: transform var(--transition-duration);
+      }
+      .consoleHead.is-open .chev {
+        transform: rotate(90deg);
+      }
+      .consoleHead .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .consoleBody {
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        line-height: 1.65;
+        padding: 10px 12px;
+        max-height: 190px;
+        overflow: auto;
+        border-top: 1px solid var(--el-border);
+      }
+      .consoleFoot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--el-surface-soft);
+        border-top: 1px solid var(--el-border);
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .emptyBox {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 26px 20px;
+        color: var(--el-text-secondary);
+      }
+      .emptyBox .glyph {
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-muted);
+        color: var(--el-icon-muted);
+        margin-bottom: 12px;
+      }
+      .emptyBox .glyph svg {
+        width: 20px;
+        height: 20px;
+      }
+      .emptyBox h3 {
+        margin: 0 0 4px;
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .emptyBox p {
+        margin: 0;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        max-width: 46ch;
+        line-height: 1.6;
+      }
+
+      .toneTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .toneTable th,
+      .toneTable td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: middle;
+      }
+      .toneTable th {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .toneTable td.mono {
+        color: var(--el-text-secondary);
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .caption {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+    </style>
+
+    <style>
+      /* ── Surfaces this area did not need until now ───────────────────────
+         The run SECTION is a panel inside a page somebody else owns, so the
+         first mock needed no page header, no table and no rail. These two are
+         PAGES. Everything below is composed from the same tokens as above —
+         no new colour, no raw radius, no fixed control height.               */
+
+      /* A page header, not a section work item: `/runs` and `/runs?run=&lt;id&gt;` own their
+         own top of page, where the section composed into one.                */
+      .pgHead {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .pgTitle {
+        font-family: var(--font-serif), Georgia, serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .pgSub {
+        font-size: 0.8125rem;
+        color: var(--el-text-secondary);
+        margin: 0.125rem 0 0;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .crumb svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* The shipped TableShell grammar, copied from
+         app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx:
+         a rounded, bordered, horizontally scrollable wrapper over a plain
+         table; secondary ink in the head, body ink in the cells.             */
+      .tblWrap {
+        overflow-x: auto;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .tbl thead {
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .tbl th {
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        white-space: nowrap;
+      }
+      .tbl td {
+        font-size: 0.875rem;
+        color: var(--el-text);
+        vertical-align: middle;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .tbl tbody tr + tr td {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .tbl tbody tr.is-link:hover td {
+        background: var(--el-surface-soft);
+      }
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .dim {
+        color: var(--el-text-secondary);
+      }
+
+      /* The current / past switch — the shipped `Segmented` primitive's shape. */
+      .seg {
+        display: inline-flex;
+        padding: 2px;
+        gap: 2px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      .seg button {
+        font: inherit;
+        font-size: 0.8125rem;
+        border: 0;
+        cursor: pointer;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .seg button[aria-current='true'] {
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* The sidebar rail, drawn only so the ACCESS PATH is visible rather than
+         described. Its rows are the shipped rail's shape, not a new one.      */
+      .rail {
+        width: 232px;
+        padding: var(--spacing-control-y);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+      }
+      .railRow {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .railRow svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .railRow.is-new {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .railRow.is-active {
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* A skeleton row, for the loading face. Not a state the run section
+         needed: it filled with the item page's ONE settle, and these pages
+         own their own wait.                                                  */
+      .skel {
+        height: 12px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+
+      /* ⚠️ THE STAGE IS WIDER HERE THAN IN run-section.mock.html, and that is a
+         property of the SUBJECT rather than a preference. That asset draws a
+         SECTION inside a page somebody else owns, so its 720px stage is the
+         real width of the thing it draws. These two are PAGES: a run's set is a
+         seven-column table and squeezing it into a section's width would be
+         drawing the wrong measurement. 980px is the area's own `.stageWide`,
+         reused rather than invented. */
+      .stage {
+        max-width: 980px;
+      }
+
+      /* Cells whose content is a single token — a command, a timestamp, a
+         duration — never wrap: a wrapped `motir run` reads as two words and a
+         wrapped `18m 04s` reads as two numbers. The flexible cells are the
+         scope and the leg summary, which are prose and should wrap. */
+      .tbl td.nw,
+      .tbl th.nw {
+        white-space: nowrap;
+      }
+    </style>
+    <style>
+      /* ── What these panels need that the copied head did not carry ───────
+         Composed from the same tokens as above — no new colour, no raw radius,
+         no fixed control height.                                               */
+
+      /* The WORK ITEM's own status, as an OUTLINED pill — the shape the run
+         modal gives a work item's status so it never reads as a run tone
+         (design-notes.md § A WORK ITEM'S STATUS IS NOT A RUN TONE). Restated
+         here with the chip tokens: a pill chip is `--radius-badge`. */
+      .wiPill {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.5rem;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        vertical-align: middle;
+      }
+
+      /* The SCOPE block inside the Run section: a sub-heading, one run row in
+         the section's own recent-runs grammar, and the door. Separated from a
+         leg's content by the section's own soft divider. */
+      .scopeBlock + .scopeBlock,
+      .runList + .scopeBlock,
+      .listFoot + .scopeBlock {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .subHead {
+        margin: 0 0 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .scopeLine {
+        margin: 0 0 8px;
+        font-size: 0.8125rem;
+        color: var(--el-text);
+      }
+      .door {
+        display: inline-block;
+        margin-top: 10px;
+        font-size: 0.8125rem;
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* The address contract table's first column reads as code. */
+      .tbl td.addr {
+        font-family: var(--font-mono), ui-monospace, monospace;
+        font-size: 0.8125rem;
+        white-space: nowrap;
+      }
+
+      /* The page header's scope line: the key is a link to the work item, the
+         label is secondary, and an archived scope carries the outlined pill. */
+      .pgSub a {
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-bot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2" />
+        <path d="M20 14h2" />
+        <path d="M15 13v2" />
+        <path d="M9 13v2" />
+      </symbol>
+      <symbol
+        id="i-chevron"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+        />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-cloud-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m2 2 20 20" />
+        <path d="M5.8 5.8A7 7 0 0 0 8 19h9a4 4 0 0 0 1.8-.4" />
+        <path d="M9.5 4.6A7 7 0 0 1 19 10a4 4 0 0 1 1.9 7.4" />
+      </symbol>
+      <symbol
+        id="i-git-pr"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M6 9v6" />
+        <circle cx="18" cy="18" r="3" />
+        <path d="M18 15V9a3 3 0 0 0-3-3h-2" />
+        <path d="m15 9-2-3 2-3" />
+      </symbol>
+    </svg>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-chevron-left"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m15 18-6-6 6-6" />
+      </symbol>
+      <symbol
+        id="i-search-x"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m13.5 8.5-5 5" />
+        <path d="m8.5 8.5 5 5" />
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </symbol>
+    </svg>
+
+    <div class="sheet">
+      <div class="sheetHead">
+        <h1>A container’s OWN runs — the door, and <span class="font-mono">/runs?scope=</span></h1>
+        <p>
+          MOTIR-5402 · gates MOTIR-5363. When a story is handed to an agent as one piece of work,
+          the run is recorded against the story’s <strong>children</strong>: a scoped run’s legs are
+          its members, and the story has no leg of its own. So the one page a person opens to ask
+          <em>what happened to this story?</em> answers <em>No runs yet</em>.
+        </p>
+        <p>
+          <strong>The answer already ships; only the surface is missing.</strong>
+          <span class="font-mono">dispatchRunService.listRunsForProject</span> takes a
+          <span class="font-mono">scopeWorkItemKey</span>, resolves it inside the project and reads
+          <span class="font-mono">dispatchRunRepository.listByScope</span> — indexed on
+          <span class="font-mono">[scopeWorkItemId, startedAt]</span> and routed as
+          <span class="font-mono">GET /api/projects/[key]/dispatch-runs?scope=</span>. Nothing in
+          the product sends it.
+        </p>
+        <p>
+          <strong>It composes, it does not invent.</strong> The section is
+          <span class="font-mono">run-section.mock.html</span>’s card, list and empty state. The
+          page is <span class="font-mono">runs-index.mock.html</span>’s header, its two sections,
+          its table and its wait / failure faces. No new tone, colour, radius or primitive.
+        </p>
+      </div>
+
+      <!-- ─────────────────────────────── 0 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">0</span>THE GAP, AS IT SHIPS — the story that was run says it never
+          was.
+        </h2>
+        <p class="panelNote">
+          <strong>Left:</strong> the Run section on story <span class="mono">MOTIR-1789</span>, as
+          it renders today. <strong>Right:</strong> the same moment on
+          <span class="mono">/runs</span>, where the run over that story is plainly there. Both are
+          correct readings of different questions: the section asks
+          <em>which runs had a leg on this work item?</em> (<span class="font-mono"
+            >listByWorkItem</span
+          >), and a container is never a leg of its own scoped run.
+        </p>
+        <div class="stage">
+          <div class="grid2">
+            <div class="secCard">
+              <div class="secHead">
+                <h2>Run</h2>
+                <span class="secSub">— what the agent did</span>
+              </div>
+              <div class="secBody">
+                <div class="emptyBox">
+                  <span class="glyph" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-bot" /></svg>
+                  </span>
+                  <h3>No runs yet</h3>
+                  <p>
+                    Nothing has been dispatched for this work item. When an agent works it, what it
+                    did shows up here.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="tblWrap">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Command</th>
+                      <th>Scope</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="is-link">
+                      <td class="mono nw">motir run</td>
+                      <td>MOTIR-1789 <span class="dim">Agent runs</span></td>
+                      <td>
+                        <span class="runPill t-running"
+                          ><span class="dot" aria-hidden="true"></span>Running</span
+                        >
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="caption">
+                The run exists, is live, and names <span class="mono">MOTIR-1789</span> as its
+                scope. The section on that work item’s page cannot see it. That false sentence is
+                the defect this asset removes.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 1 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">1</span>RUN AS A SCOPE, NEVER AS A LEG — the door, where the false
+          empty state was.
+        </h2>
+        <p class="panelNote">
+          The Run section on a container that has been a run’s scope.
+          <strong>It no longer says <em>No runs yet</em></strong
+          >: in its place is a <strong>scope block</strong> — a sub-heading, the
+          <strong>latest</strong> run over this work item’s children as ONE row in the section’s own
+          recent-runs grammar, and the door to all of them. The section header’s pill is that run’s
+          status, from the area’s tone table. There is no step timeline: steps belong to a LEG, and
+          this work item has none.
+        </p>
+        <p class="panelNote">
+          <strong>The read is the shipped one, at one row:</strong>
+          <span class="font-mono"
+            >listRunsForProject(projectKey, { take: 1, scopeWorkItemKey })</span
+          >
+          — made beside the section’s leg read in <span class="font-mono">lateReads</span>, and
+          <strong>only for a work item that has children</strong>, because the CLI records a scope
+          only when it claims a container (<span class="font-mono">commands/dispatch.ts</span>, the
+          <span class="font-mono">run_scope</span> path). The row carries the command, agent,
+          status, start and the leg counts, so the line and the pill need nothing more.
+          <strong>No count is shown</strong> — no count read exists, and a number here would be a
+          new read; the narrowed index is where the rest is.
+        </p>
+        <div class="stage" style="max-width: 720px">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-running"
+                  ><span class="dot" aria-hidden="true"></span>Running</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <div class="scopeBlock">
+                <p class="subHead">Run as a scope</p>
+                <p class="scopeLine">An agent is working this work item’s children as one run.</p>
+                <ul class="runList">
+                  <li>
+                    <span class="runPill t-running"
+                      ><span class="dot" aria-hidden="true"></span>Running</span
+                    >
+                    <span class="who">motir run · claude · opus-5 · 4 of 11 done · 1 skipped</span>
+                    <span class="dur">18m 04s</span>
+                    <span class="when">today, 14:02</span>
+                  </li>
+                </ul>
+                <a class="door" href="/runs?scope=MOTIR-1789">See every run of MOTIR-1789 →</a>
+              </div>
+            </div>
+          </div>
+          <p class="caption">
+            <strong>Static at page load, like the section’s history list.</strong> The section opens
+            no stream for a scoped run — watching one live is the run modal’s job, one click away
+            through the row or the door. When the latest scoped run is finished, the line reads
+            <em>An agent worked this work item’s children as one run.</em> and the pill takes that
+            run’s terminal tone.
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 2 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">2</span>BOTH — worked directly once, run as a scope later.
+        </h2>
+        <p class="panelNote">
+          A bug an agent worked as a leaf, later split into children and run as a scope over them.
+          <strong>The leg content comes first and is unchanged</strong> — this work item’s own run,
+          its pill in the header, its recent runs. The scope block follows under the section’s soft
+          divider. The order is the section’s own: what happened TO this work item, then what
+          happened to its children in its name.
+        </p>
+        <div class="stage" style="max-width: 720px">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+              <span class="secRight">
+                <span class="runPill t-implemented"
+                  ><span class="dot" aria-hidden="true"></span>Implemented</span
+                >
+              </span>
+            </div>
+            <div class="secBody">
+              <p class="panelNote" style="margin: 0 0 10px">Recent runs</p>
+              <ul class="runList">
+                <li>
+                  <span class="runPill t-implemented"
+                    ><span class="dot" aria-hidden="true"></span>Implemented</span
+                  >
+                  <span class="who">claude · claude-opus-5</span>
+                  <span class="dur">14m 20s</span>
+                  <span class="when">Tue, 10:12</span>
+                </li>
+              </ul>
+              <div class="scopeBlock">
+                <p class="subHead">Run as a scope</p>
+                <p class="scopeLine">An agent worked this work item’s children as one run.</p>
+                <ul class="runList">
+                  <li>
+                    <span class="runPill t-replanned"
+                      ><span class="dot" aria-hidden="true"></span>Re-planned</span
+                    >
+                    <span class="who"
+                      >motir run · claude · opus-5 · 2 of 3 implemented · 1 re-planned</span
+                    >
+                    <span class="dur">31m 02s</span>
+                    <span class="when">yesterday, 16:40</span>
+                  </li>
+                </ul>
+                <a class="door" href="/runs?scope=MOTIR-2210">See every run of MOTIR-2210 →</a>
+              </div>
+            </div>
+          </div>
+          <p class="caption">
+            The header pill stays the LEG’s, because the section’s existing contract reads the
+            current run off the leg history’s first row. The scope run carries its own pill on its
+            own row, so neither status is asked to stand for the other.
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 3 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">3</span>NEVER RUN, EITHER WAY — the shipped empty state, unchanged.
+        </h2>
+        <p class="panelNote">
+          The scoped read returns no row, so nothing is added and the section is exactly
+          <span class="font-mono">run-section.mock.html</span> panel 8. On a leaf the scoped read is
+          not made at all. <em>No runs yet</em> is now a true sentence wherever it appears.
+        </p>
+        <div class="stage" style="max-width: 720px">
+          <div class="secCard">
+            <div class="secHead">
+              <h2>Run</h2>
+              <span class="secSub">— what the agent did</span>
+            </div>
+            <div class="secBody">
+              <div class="emptyBox">
+                <span class="glyph" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><use href="#i-bot" /></svg>
+                </span>
+                <h3>No runs yet</h3>
+                <p>
+                  Nothing has been dispatched for this work item. When an agent works it, what it
+                  did shows up here.
+                </p>
+                <p style="margin-top: 12px">
+                  <span class="mono" style="font-size: 12px">motir run MOTIR-1789</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 4 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">4</span>THE NARROWED INDEX —
+          <span class="font-mono">/runs?scope=MOTIR-1789</span>.
+        </h2>
+        <p class="panelNote">
+          <strong>The same page, narrowed — not a second page.</strong> The header keeps its title;
+          the subtitle names the scope, with its key linking back to the work item, and a
+          <strong>back link to all runs</strong> sits above it in the page’s own
+          <span class="font-mono">.crumb</span> treatment. <strong>Both sections stay</strong> —
+          <em>what is happening now</em> and <em>what happened</em> are still the two questions —
+          and both are narrowed by the QUERY, never filtered on the page.
+        </p>
+        <p class="panelNote">
+          <strong>The Scope column is dropped.</strong> Under the narrowing every row names the same
+          scope, so the column would repeat the header six times and push the leg summary off a
+          laptop screen. The row is otherwise the index’s row, cell for cell.
+        </p>
+        <div class="stage">
+          <div class="pgHead">
+            <div>
+              <a class="crumb" href="/runs"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>All
+                runs</a
+              >
+              <h2 class="pgTitle" style="margin-top: 0.25rem">Runs</h2>
+              <p class="pgSub">
+                Runs of <a href="/items/MOTIR-1789">MOTIR-1789</a> · Agent runs — the shared run
+                record
+              </p>
+            </div>
+          </div>
+          <p class="caption" style="margin-top: 0.75rem; font-weight: 600; color: var(--el-text)">
+            Running now
+          </p>
+          <div class="tblWrap" style="margin-top: 0.375rem">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Agent</th>
+                  <th>Started</th>
+                  <th class="num">Elapsed</th>
+                  <th>Status</th>
+                  <th>Work items</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-link">
+                  <td class="mono nw">motir run</td>
+                  <td class="dim nw">claude · opus-5</td>
+                  <td class="dim nw">14:02</td>
+                  <td class="num dim nw">18m 04s</td>
+                  <td>
+                    <span class="runPill t-running"
+                      ><span class="dot" aria-hidden="true"></span>Running</span
+                    >
+                  </td>
+                  <td class="dim">4 of 11 done · 1 skipped</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="caption" style="margin-top: 1.25rem; font-weight: 600; color: var(--el-text)">
+            Past runs
+          </p>
+          <div class="tblWrap" style="margin-top: 0.375rem">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Agent</th>
+                  <th>Started</th>
+                  <th class="num">Duration</th>
+                  <th>Status</th>
+                  <th>Work items</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-link">
+                  <td class="mono nw">motir run</td>
+                  <td class="dim nw">claude · opus-5</td>
+                  <td class="dim nw">Yesterday 16:40</td>
+                  <td class="num dim nw">47m 12s</td>
+                  <td>
+                    <span class="runPill t-replanned"
+                      ><span class="dot" aria-hidden="true"></span>Re-planned</span
+                    >
+                  </td>
+                  <td class="dim">6 of 11 implemented · 1 re-planned · 4 not reached</td>
+                </tr>
+                <tr class="is-link">
+                  <td class="mono nw">motir run</td>
+                  <td class="dim nw">claude · opus-5</td>
+                  <td class="dim nw">3 days ago</td>
+                  <td class="num dim nw">9m 40s</td>
+                  <td>
+                    <span class="runPill t-cancelled"
+                      ><span class="dot" aria-hidden="true"></span>Cancelled</span
+                    >
+                  </td>
+                  <td class="dim">1 of 11 implemented · 10 not reached</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="caption">
+            Paging, the live poll and <em>Show more</em> are the index’s own (runs-index panel 6),
+            and every one of those fetches carries <span class="mono">scope=</span> — a poll that
+            dropped it would refill the narrowed page with the whole project’s runs.
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 5 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">5</span>THE ADDRESS CONTRACT — <span class="font-mono">scope</span>
+          survives opening and closing a run.
+        </h2>
+        <p class="panelNote">
+          <strong
+            >The parameter is <span class="font-mono">scope</span>, and it takes a work-item
+            KEY.</strong
+          >
+          It composes with the modal’s <span class="font-mono">run</span>: a run opened from the
+          narrowed list is <span class="font-mono">?scope=…&amp;run=…</span>, and closing it returns
+          to the narrowed list. Today the index writes
+          <span class="font-mono">/runs?run=&lt;id&gt;</span> and
+          <span class="font-mono">/runs</span> literally, which would drop the narrowing on the
+          first click — so the build keeps every other parameter when it adds or removes
+          <span class="font-mono">run</span>.
+        </p>
+        <p class="panelNote">
+          <strong
+            >Which navigation, by <span class="font-mono">CLAUDE.md</span>’s discriminator</strong
+          >
+          — does the target body need data the browser does not have? Entering or leaving a scope
+          changes both server reads the page makes, so it is a real navigation. Opening or closing a
+          run does not: the modal fetches its run client-side.
+        </p>
+        <div class="stage">
+          <div class="tblWrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>Action</th>
+                  <th>Address</th>
+                  <th>How</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Item page · Run section</td>
+                  <td>the door, or the scope row</td>
+                  <td class="addr">/runs?scope=MOTIR-1789</td>
+                  <td>a link — a route change; the server reads both sections narrowed</td>
+                </tr>
+                <tr>
+                  <td>Narrowed index</td>
+                  <td>open a run</td>
+                  <td class="addr">/runs?scope=MOTIR-1789&amp;run=run_7f2c</td>
+                  <td><span class="mono">shallowPush</span> — keeps a history entry</td>
+                </tr>
+                <tr>
+                  <td>Run modal</td>
+                  <td>close · <span class="mono">ESC</span> · Back</td>
+                  <td class="addr">/runs?scope=MOTIR-1789</td>
+                  <td><span class="mono">shallowPush</span> (Back pops the entry)</td>
+                </tr>
+                <tr>
+                  <td>Narrowed index</td>
+                  <td>All runs</td>
+                  <td class="addr">/runs</td>
+                  <td>a link — a different server read</td>
+                </tr>
+                <tr>
+                  <td>Narrowed index</td>
+                  <td>the scope’s key in the subtitle</td>
+                  <td class="addr">/items/MOTIR-1789</td>
+                  <td>a link — back to the work item</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="caption">
+            A key typed in lower case resolves — the service upper-cases it — and every link the
+            product writes uses the upper-case key. A <span class="mono">run</span> that is not a
+            run of that scope still opens: the modal reads the run by id and does not check it
+            against the list behind it.
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 6 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">6</span>NEVER RUN AS A SCOPE — an empty narrowing, and it is not an
+          error.
+        </h2>
+        <p class="panelNote">
+          Reached by a pasted or hand-typed address, since the door only appears once a scoped run
+          exists. The index’s own empty grammar (runs-index panel 3): muted glyph, one sentence of
+          fact, the command that changes it — and the one thing a reader here most likely wanted to
+          know, which is where the runs of its <em>children</em> are.
+        </p>
+        <div class="stage">
+          <div class="pgHead">
+            <div>
+              <a class="crumb" href="/runs"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>All
+                runs</a
+              >
+              <h2 class="pgTitle" style="margin-top: 0.25rem">Runs</h2>
+              <p class="pgSub">
+                Runs of <a href="/items/MOTIR-2044">MOTIR-2044</a> · Two-factor sign-in
+              </p>
+            </div>
+          </div>
+          <div class="emptyBox" style="margin-top: 1rem">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bot" /></svg>
+            <p style="margin: 0.5rem 0 0">MOTIR-2044 has not been run as a scope yet.</p>
+            <p style="margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--el-text-secondary)">
+              Run the whole work item with <span class="mono">motir run MOTIR-2044</span>. A run
+              that worked one of its children on its own shows on that child’s page.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 7 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">7</span>THE KEY RESOLVES TO NOTHING — a different fact from empty,
+          so a different face.
+        </h2>
+        <p class="panelNote">
+          The route answers <strong>404</strong> for a key that is not a work item in this project,
+          and it does so on purpose: <em>has no runs</em> and <em>is not yours</em> are opposite
+          facts. The page must not collapse them either.
+          <strong>Three faces, three glyphs:</strong> empty is the bot and a command (panel 6);
+          unresolvable is
+          <strong>search-x on the info ground, no command and no retry</strong> (here); a failed
+          read is the alert with <em>Try again</em> (panel 9). The copy cannot say which of
+          <em>deleted</em> and <em>not visible to you</em> it is, because the route deliberately
+          does not tell it.
+        </p>
+        <p class="panelNote">
+          <strong>A deleted scope lands here too, and its runs are not lost.</strong> Deleting a
+          work item sets its runs’ <span class="font-mono">scopeWorkItemId</span> to null (<span
+            class="font-mono"
+            >onDelete: SetNull</span
+          >), so they are no longer addressable by scope — and they stay on
+          <span class="font-mono">/runs</span> under their stored label, drawn as
+          <em>MOTIR-3412 (deleted)</em> in runs-index panel 4. The copy points there.
+        </p>
+        <div class="stage">
+          <div class="pgHead">
+            <div>
+              <a class="crumb" href="/runs"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>All
+                runs</a
+              >
+              <h2 class="pgTitle" style="margin-top: 0.25rem">Runs</h2>
+              <p class="pgSub">Runs of <span class="mono">MOTIR-9999</span></p>
+            </div>
+          </div>
+          <div class="notice info" style="margin-top: 1rem">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search-x" /></svg>
+            <div class="body">
+              <strong>No work item MOTIR-9999 in this project.</strong>
+              <span
+                >It may have been deleted, or you may not have access to it. Runs of a deleted work
+                item stay under <a href="/runs">All runs</a>, listed by their label.</span
+              >
+            </div>
+          </div>
+          <p class="caption">
+            The key in the subtitle is plain text, not a link: there is nothing for it to open.
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 8 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">8</span>AN ARCHIVED SCOPE — it resolves, and the page says so.
+        </h2>
+        <p class="panelNote">
+          <span class="font-mono">workItemRepository.findByIdentifier</span> carries no archive
+          filter, so an archived work item still resolves and its runs list normally. The subtitle
+          carries the work item’s own status as the <strong>outlined work-item pill</strong> — never
+          a run tone — so a reader arriving from an old link is not surprised by a work item they
+          cannot find on the board.
+        </p>
+        <div class="stage">
+          <div class="pgHead">
+            <div>
+              <a class="crumb" href="/runs"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>All
+                runs</a
+              >
+              <h2 class="pgTitle" style="margin-top: 0.25rem">Runs</h2>
+              <p class="pgSub">
+                Runs of <a href="/items/MOTIR-1511">MOTIR-1511</a> · Jira import, first pass
+                <span class="wiPill">Archived</span>
+              </p>
+            </div>
+          </div>
+          <p class="caption" style="margin-top: 0.75rem; font-weight: 600; color: var(--el-text)">
+            Running now
+          </p>
+          <div class="emptyBox" style="margin-top: 0.375rem">
+            <p style="margin: 0">Nothing is running.</p>
+          </div>
+          <p class="caption" style="margin-top: 1.25rem; font-weight: 600; color: var(--el-text)">
+            Past runs
+          </p>
+          <div class="tblWrap" style="margin-top: 0.375rem">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Agent</th>
+                  <th>Started</th>
+                  <th class="num">Duration</th>
+                  <th>Status</th>
+                  <th>Work items</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-link">
+                  <td class="mono nw">motir run</td>
+                  <td class="dim nw">claude · opus-5</td>
+                  <td class="dim nw">Aug 12</td>
+                  <td class="num dim nw">1h 04m</td>
+                  <td>
+                    <span class="runPill t-implemented"
+                      ><span class="dot" aria-hidden="true"></span>Succeeded</span
+                    >
+                  </td>
+                  <td class="dim">5 of 5 implemented</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 9 ─────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">9</span>THE WAIT, and THE FAILURE — the index’s own faces,
+          narrowed.
+        </h2>
+        <p class="panelNote">
+          runs-index panel 5, unchanged except for the column set: the skeleton keeps the NARROWED
+          table’s geometry (no Scope column), so nothing shifts when the rows arrive. The frame is
+          an in-page <span class="font-mono">&lt;Suspense&gt;</span>, never a
+          <span class="font-mono">loading.tsx</span>. <em>Try again</em> re-reads the same narrowed
+          address — a retry that dropped <span class="font-mono">scope</span> would answer a
+          question nobody asked.
+        </p>
+        <div class="stage">
+          <div class="grid2">
+            <div>
+              <p class="caption" style="margin-top: 0; font-weight: 600; color: var(--el-text)">
+                Loading
+              </p>
+              <div class="tblWrap">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Command</th>
+                      <th>Agent</th>
+                      <th>Started</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><div class="skel" style="width: 68px"></div></td>
+                      <td><div class="skel" style="width: 96px"></div></td>
+                      <td><div class="skel" style="width: 54px"></div></td>
+                      <td><div class="skel" style="width: 72px"></div></td>
+                    </tr>
+                    <tr>
+                      <td><div class="skel" style="width: 68px"></div></td>
+                      <td><div class="skel" style="width: 96px"></div></td>
+                      <td><div class="skel" style="width: 54px"></div></td>
+                      <td><div class="skel" style="width: 72px"></div></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <p class="caption" style="margin-top: 0; font-weight: 600; color: var(--el-text)">
+                The read failed
+              </p>
+              <div class="notice">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
+                <div>
+                  <p style="margin: 0; font-weight: 600">Could not load runs.</p>
+                  <p
+                    style="
+                      margin: 0.25rem 0 0;
+                      font-size: 0.8125rem;
+                      color: var(--el-text-secondary);
+                    "
+                  >
+                    The run history could not be read. Nothing about your runs has changed.
+                  </p>
+                  <button class="btnGhost" style="margin-top: 0.5rem">Try again</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────── 10 ────────────────────────────── -->
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">10</span>WHAT <span class="font-mono">?scope=</span> CAN NEVER
+          ADDRESS — and where those runs are instead.
+        </h2>
+        <p class="panelNote">
+          <span class="font-mono">?scope=</span> reads
+          <span class="font-mono">scopeWorkItemId</span>, and that column is set in exactly one
+          place: the scope path of <span class="font-mono">motir run</span>, when it claims a
+          CONTAINER (<span class="font-mono">dispatchRunService.ts</span> connects the scope from
+          the key the CLI sends). Every other run has none, so none of them can be narrowed to, and
+          none of them is missing — each is somewhere a reader can already go.
+        </p>
+        <div class="stage">
+          <div class="tblWrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>The run</th>
+                  <th>What the record holds</th>
+                  <th>Addressable by <span class="mono">?scope=</span></th>
+                  <th>Where it is</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono nw">motir run &lt;story | task | bug&gt;</td>
+                  <td>scope work item + label</td>
+                  <td><strong>yes</strong></td>
+                  <td>the container’s door · <span class="mono">/runs?scope=</span></td>
+                </tr>
+                <tr>
+                  <td class="mono nw">motir run sprint</td>
+                  <td>label only (<em>the active sprint</em>)</td>
+                  <td>no</td>
+                  <td><span class="mono">/runs</span>, Scope column</td>
+                </tr>
+                <tr>
+                  <td class="mono nw">motir next · run &lt;leaf&gt; · batch · auto</td>
+                  <td>no scope — legs only</td>
+                  <td>no</td>
+                  <td>each work item’s own Run section · <span class="mono">/runs</span></td>
+                </tr>
+                <tr>
+                  <td>a scope work item since deleted</td>
+                  <td>label kept, scope set to null</td>
+                  <td>no (panel 7)</td>
+                  <td><span class="mono">/runs</span>, as <em>(deleted)</em></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
