@@ -6,6 +6,7 @@
 // shares with the Development section's CI pill is visible in one place.
 
 import { liveRowsAtLatestSha, type PrCheckRunSlice } from '@/lib/github/prCiState';
+import { DEPLOYMENT_STATES } from '@/lib/git/types';
 import type { TestInstructionsDTO } from '@/lib/dto/testInstructions';
 import type {
   HowToTestCheckConclusion,
@@ -35,17 +36,6 @@ export interface HowToTestDeploymentInput {
   environmentUrl: string | null;
   occurredAt: Date;
 }
-
-const DEPLOYMENT_STATES: readonly Exclude<HowToTestDeploymentState, 'unknown'>[] = [
-  'queued',
-  'pending',
-  'in_progress',
-  'success',
-  'failure',
-  'error',
-  'inactive',
-  'canceled',
-];
 
 const CHECK_CONCLUSIONS: readonly Exclude<HowToTestCheckConclusion, 'unknown'>[] = [
   'success',

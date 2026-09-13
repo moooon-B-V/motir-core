@@ -46,7 +46,8 @@ function payload(
 const github = getGitProvider('github');
 
 describe('github.parseDeploymentStatusEvent', () => {
-  it.each(DEPLOYMENT_STATES)('normalizes the %s state', (state) => {
+  // GitHub's seven — `canceled` is GitLab's member of the shared union (MOTIR-5332).
+  it.each(DEPLOYMENT_STATES.filter((s) => s !== 'canceled'))('normalizes the %s state', (state) => {
     expect(github.parseDeploymentStatusEvent!(payload({ state }))).toEqual({
       providerRepoId: '555',
       providerDeploymentId: '4242',

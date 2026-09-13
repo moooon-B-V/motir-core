@@ -11,18 +11,14 @@
 // link-out, and the block draws none.
 
 import type { SetupCommandDTO } from '@/lib/dto/testInstructions';
+import type { DeploymentState } from '@/lib/git/types';
 
-/** A stored deployment state, or `unknown` for a value no member names (raw kept). */
-export type HowToTestDeploymentState =
-  | 'queued'
-  | 'pending'
-  | 'in_progress'
-  | 'success'
-  | 'failure'
-  | 'error'
-  | 'inactive'
-  | 'canceled'
-  | 'unknown';
+/**
+ * A stored deployment state, or `unknown` for a value no member names (raw kept).
+ * DERIVED from the seam's union, so a member added there (as GitLab's `canceled`
+ * was) reaches the read and the panel through the compiler, not by memory.
+ */
+export type HowToTestDeploymentState = DeploymentState | 'unknown';
 
 /** A check conclusion as the block renders it; `unknown` keeps the raw value. */
 export type HowToTestCheckConclusion = 'success' | 'failure' | 'pending' | 'neutral' | 'unknown';

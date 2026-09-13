@@ -179,7 +179,11 @@ export interface NormalizedPushEvent {
 
 /** The lifecycle of ONE deployment status a repository's host reported, normalized
  *  across providers (Story MOTIR-4906 · MOTIR-5329). A CLOSED union so every
- *  consumer's `switch` is total and a compiler proves a new member is handled. */
+ *  consumer's `switch` is total and a compiler proves a new member is handled.
+ *
+ *  `canceled` is GitLab's (MOTIR-5332): GitHub reports no such state, GitLab's
+ *  `deployment` hook does, and it is not a failure — so it is its own member
+ *  rather than folded into one. */
 export const DEPLOYMENT_STATES = [
   'queued',
   'pending',
@@ -188,6 +192,7 @@ export const DEPLOYMENT_STATES = [
   'failure',
   'error',
   'inactive',
+  'canceled',
 ] as const;
 export type DeploymentState = (typeof DEPLOYMENT_STATES)[number];
 
