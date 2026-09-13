@@ -126,6 +126,25 @@ Three things follow, and each is asserted in `tests/ci-merge-queue.test.ts`:
 rather than an omission: §2.1 is what turning it on costs, and the queue supplies the
 guarantee it was the wrong way to buy.
 
+### §3 AMENDMENT — 2026-09-13 (MOTIR-5322): the _Pull request_ row
+
+The table above is left as it was decided. **Its _Pull request_ row no longer describes the
+Vitest lane**, and [`ci-affected-tests.md`](./ci-affected-tests.md) is the decision that
+changes it:
+
+| Lane              | Vitest, as amended                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pull request**  | the files the diff reaches plus the tests that read the tree — or the full suite when a force-full path changed; no coverage gate on a subset run |
+| **`merge_group`** | unchanged: the full suite, the coverage gate and E2E                                                                                              |
+
+The row's warrant was _"A failure must be visible before queueing, or ejection becomes the
+normal feedback path."_ It is now accepted that a break the subset misses is found by
+ejection, for the measured reasons in `ci-affected-tests.md` §5: over the last 30 merged
+pull requests the typical one selects **20.9%** of the suite's files (**18.8%** of its
+cost), only **6 of 30** had to run all of it, and Vitest was **3 of 23** of the failed
+queue builds §6.1 counted. Everything else in this row — the rest of the gate, and
+`e2e-at-scale` staying off an unlabelled pull request — is unchanged.
+
 ## §4 — What it costs, stated before it is discovered
 
 **Per merged change, in runner-minutes** (sandbox/runner-image excluded from both sides —
