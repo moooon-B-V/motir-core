@@ -65,17 +65,22 @@ export const dispatchRunRepository = {
   },
 
   /**
-   * The id of the newest RUNNING run holding a leg for one work item, or null —
-   * the owing run a How-to-test record is attributed to (MOTIR-5331). Read
-   * server-side so an agent is never asked for an id it cannot know. Reads
-   * through the leg, like {@link listByWorkItem}.
+   * The id of the newest RUNNING run whose SCOPE TARGET is this work item, or
+   * that holds a leg for it, or null — the run a How-to-test record is
+   * attributed to (MOTIR-5331). HOW TO TEST is written onto the run target, so a
+   * scoped run's close-out publish on its story must resolve to that run even
+   * though the story is not one of its legs. Read server-side so an agent is
+   * never asked for an id it cannot know.
    */
   async findLatestRunningIdForWorkItem(
     workItemId: string,
     tx: Prisma.TransactionClient,
   ): Promise<string | null> {
     const row = await tx.dispatchRun.findFirst({
-      where: { status: 'running', cards: { some: { workItemId } } },
+      where: {
+        status: 'running',
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       select: { id: true },
     });

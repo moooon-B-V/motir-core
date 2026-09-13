@@ -469,11 +469,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   publish_test_instructions: {
     summary:
-      'Put HOW TO TEST onto a work item for one repository \u2014 the setup commands, the ' +
-      'precondition and the click-path a reviewer follows. Call it after pushing and linking the ' +
-      'pull request, before implemented, once per repository.',
+      'Put a RUN\u2019s HOW TO TEST onto its run target \u2014 once per run, before the run ' +
+      'finishes: one click-path for the run and a section per repository it pushed to (the ' +
+      'commit and the setup commands a reviewer runs).',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '8e1de699ecff',
+    descriptionFingerprint: 'd8c088f46443',
   },
   link_pull_request: {
     summary:

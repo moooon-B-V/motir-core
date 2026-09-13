@@ -380,8 +380,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // neither learns A's repositories nor writes a record onto A's card.
         publish_test_instructions: {
           key: item1,
-          repo: 'acme/web',
-          commitSha: 'a'.repeat(40),
+          repos: [{ repo: 'acme/web', commitSha: 'a'.repeat(40) }],
           clickPathNotApplicable: true,
           clickPathNotApplicableReason: 'rogue',
         },
@@ -875,8 +874,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // read-only-token loop asserts it is REFUSED at the scope gate.
         publish_test_instructions: {
           key: item1,
-          repo: 'acme/web',
-          commitSha: 'a'.repeat(40),
+          repos: [{ repo: 'acme/web', commitSha: 'a'.repeat(40) }],
           clickPathNotApplicable: true,
           clickPathNotApplicableReason: 'scoped',
         },

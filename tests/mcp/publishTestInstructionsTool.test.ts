@@ -76,13 +76,19 @@ async function scenario() {
 function args(key: string, over: Record<string, unknown> = {}) {
   return {
     key,
-    repo: 'web',
-    commitSha: SHA,
+    repos: [
+      {
+        repo: 'web',
+        commitSha: SHA,
+        setupCommands: [{ label: 'Install', command: 'pnpm install' }],
+      },
+    ],
     clickPathSteps: ['Open /items/ACME-7'],
-    setupCommands: [{ label: 'Install', command: 'pnpm install' }],
     ...over,
   } as Parameters<typeof runPublishTestInstructions>[0];
 }
+
+const repoEntry = (repo: string, commitSha = SHA) => ({ repo, commitSha });
 
 function errorText(res: CallToolResult): string {
   expect(res.isError).toBe(true);
@@ -95,30 +101,41 @@ async function storedRows() {
 }
 
 describe('runPublishTestInstructions — success', () => {
-  it('stores the record, resolving the repository by bare name or owner/name', async () => {
-    const { fx, card, web } = await scenario();
+  it('stores ONE record on a STORY with a section per repository, resolving by bare name or owner/name', async () => {
+    const { fx, web } = await scenario();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
+    const api = await connectRepo(fx, 'acme', 'api');
 
-    const byName = await runPublishTestInstructions(args(card.identifier), fx.ctx);
-    expect(byName.isError).toBeFalsy();
-    expect(byName.structuredContent).toMatchObject({
-      workItemKey: card.identifier,
-      repoId: web.id,
-      commitSha: SHA,
+    const first = await runPublishTestInstructions(
+      args(story.identifier, { repos: [repoEntry('web'), repoEntry('acme/api', 'e'.repeat(40))] }),
+      fx.ctx,
+    );
+    expect(first.isError).toBeFalsy();
+    expect(first.structuredContent).toMatchObject({
+      workItemKey: story.identifier,
+      repos: [
+        { repoId: web.id, commitSha: SHA },
+        { repoId: api.id, commitSha: 'e'.repeat(40) },
+      ],
       created: true,
       isCurrent: true,
       dispatchRunId: null,
     });
 
-    const byFull = await runPublishTestInstructions(
-      args(card.identifier, { repo: 'ACME/WEB' }),
+    // The same run (none) retrying with other spellings of the same repositories.
+    const retry = await runPublishTestInstructions(
+      args(story.identifier, {
+        repos: [repoEntry('ACME/WEB'), repoEntry('api', 'e'.repeat(40))],
+      }),
       fx.ctx,
     );
-    expect(byFull.structuredContent).toMatchObject({ created: false });
+    expect(retry.structuredContent).toMatchObject({ created: false });
     expect(await storedRows()).toHaveLength(1);
   });
 
-  it('attributes the record to the RUNNING dispatch run holding a leg for the item, and to none otherwise', async () => {
+  it('attributes the record to the RUNNING run whose SCOPE TARGET is the item, or that holds a leg for it — and to none otherwise', async () => {
     const { fx, card } = await scenario();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Scoped story' });
     const other = await createTestWorkItem(fx, { kind: 'task', title: 'Other card' });
 
     const finished = await adminDb.dispatchRun.create({
@@ -139,10 +156,23 @@ describe('runPublishTestInstructions — success', () => {
         cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
       },
     });
+    const scoped = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'run_scope',
+        status: 'running',
+        scopeWorkItemId: story.id,
+      },
+    });
 
-    const withRun = await runPublishTestInstructions(args(card.identifier), fx.ctx);
-    expect(withRun.structuredContent).toMatchObject({ dispatchRunId: running.id });
+    const withLeg = await runPublishTestInstructions(args(card.identifier), fx.ctx);
+    expect(withLeg.structuredContent).toMatchObject({ dispatchRunId: running.id });
     expect(finished.id).not.toBe(running.id);
+
+    // The story is not a leg of the scoped run — it is its TARGET.
+    const onTarget = await runPublishTestInstructions(args(story.identifier), fx.ctx);
+    expect(onTarget.structuredContent).toMatchObject({ dispatchRunId: scoped.id });
 
     // A running run for a DIFFERENT card does not claim this one.
     const withoutRun = await runPublishTestInstructions(args(other.identifier), fx.ctx);
@@ -200,7 +230,10 @@ describe('runPublishTestInstructions — every refusal carries its own code and 
     const { fx, card } = await scenario();
     await connectRepo(fx, 'acme', 'stray', false);
     const text = errorText(
-      await runPublishTestInstructions(args(card.identifier, { repo: 'stray' }), fx.ctx),
+      await runPublishTestInstructions(
+        args(card.identifier, { repos: [repoEntry('stray')] }),
+        fx.ctx,
+      ),
     );
     expect(text).toMatch(/^TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT: /);
     expect(text).toContain('acme/web');
@@ -214,7 +247,7 @@ describe('runPublishTestInstructions — every refusal carries its own code and 
     expect(text).toContain('acme/web');
     expect(text).toContain('other/web');
     const ok = await runPublishTestInstructions(
-      args(card.identifier, { repo: 'other/web' }),
+      args(card.identifier, { repos: [repoEntry('other/web')] }),
       fx.ctx,
     );
     expect(ok.isError).toBeFalsy();
@@ -260,8 +293,31 @@ describe('runPublishTestInstructions — every refusal carries its own code and 
   it('a malformed field', async () => {
     const { fx, card } = await scenario();
     const text = errorText(
-      await runPublishTestInstructions(args(card.identifier, { commitSha: 'main' }), fx.ctx),
+      await runPublishTestInstructions(
+        args(card.identifier, { repos: [repoEntry('web', 'main')] }),
+        fx.ctx,
+      ),
     );
-    expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "commitSha"/);
+    expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos\[0\]\.commitSha"/);
+  });
+
+  it('no repository sections', async () => {
+    const { fx, card } = await scenario();
+    const text = errorText(
+      await runPublishTestInstructions(args(card.identifier, { repos: [] }), fx.ctx),
+    );
+    expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos"/);
+  });
+
+  it('the same repository twice', async () => {
+    const { fx, card } = await scenario();
+    const text = errorText(
+      await runPublishTestInstructions(
+        args(card.identifier, { repos: [repoEntry('web'), repoEntry('acme/web')] }),
+        fx.ctx,
+      ),
+    );
+    expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos\[1\]\.repo"/);
+    expect(await storedRows()).toHaveLength(0);
   });
 });

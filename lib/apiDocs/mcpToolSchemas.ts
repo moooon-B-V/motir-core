@@ -1414,18 +1414,51 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+          'The RUN TARGET — the work item the run was launched against (e.g. "ACME-7"): the story for a story or scoped run, the card itself for a single-card run. Case-insensitive.',
       },
-      repo: {
-        type: 'string',
-        minLength: 1,
+      repos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            repo: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The repository — its name ("web") or "owner/name" ("acme/web"). It must be one of the work item’s project repositories, and appear once.',
+            },
+            commitSha: {
+              type: 'string',
+              minLength: 1,
+              description: 'The head commit the run pushed to this repository.',
+            },
+            setupCommands: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  label: {
+                    type: 'string',
+                    description: 'What the step is, e.g. "Install". At most 300 characters.',
+                  },
+                  command: {
+                    type: 'string',
+                    description:
+                      'The shell command, e.g. "pnpm install --frozen-lockfile". At most 500 characters.',
+                  },
+                },
+                required: ['label', 'command'],
+                additionalProperties: false,
+              },
+              description:
+                'What a reviewer runs AFTER checking out this repository’s branch — install, migrate, seed, run — in order, at most 12. Do NOT include the branch fetch: Motir composes it from the pull request itself.',
+            },
+          },
+          required: ['repo', 'commitSha'],
+          additionalProperties: false,
+        },
         description:
-          'The repository these instructions are for — its name ("web") or "owner/name" ("acme/web"). It must be one of the work item’s project repositories; call once per repository you opened a pull request in.',
-      },
-      commitSha: {
-        type: 'string',
-        minLength: 1,
-        description: 'The head commit you just pushed — the instructions are recorded against it.',
+          'One entry per repository the run pushed to, at most 8. The click-path below is ONE for the whole run.',
       },
       clickPathSteps: {
         type: 'array',
@@ -1436,7 +1469,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       clickPathNotApplicable: {
         type: 'boolean',
         description:
-          'Set true when the change touched no rendered surface, and say why in "clickPathNotApplicableReason".',
+          'Set true when the run touched no rendered surface, and say why in "clickPathNotApplicableReason".',
       },
       clickPathNotApplicableReason: {
         type: 'string',
@@ -1446,35 +1479,14 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       previewPath: {
         type: 'string',
         description:
-          'The path to open on the repository’s preview deployment, starting with "/" — e.g. "/items/ACME-7". A path, never a URL: Motir joins it onto the preview the host reported.',
-      },
-      setupCommands: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            label: {
-              type: 'string',
-              description: 'What the step is, e.g. "Install". At most 300 characters.',
-            },
-            command: {
-              type: 'string',
-              description:
-                'The shell command, e.g. "pnpm install --frozen-lockfile". At most 500 characters.',
-            },
-          },
-          required: ['label', 'command'],
-          additionalProperties: false,
-        },
-        description:
-          'What a reviewer runs AFTER checking out the branch — install, migrate, seed, run — in order, at most 12. Do NOT include the branch fetch: Motir composes it from the pull request itself.',
+          'The path to open on the preview deployment, starting with "/" — e.g. "/items/ACME-7". A path, never a URL: Motir joins it onto the preview the host reported.',
       },
       preconditionMd: {
         type: 'string',
         description: 'The sign-in, role or data the surface needs, as Markdown. At most 8 KiB.',
       },
     },
-    required: ['key', 'repo', 'commitSha'],
+    required: ['key', 'repos'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
