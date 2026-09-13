@@ -95,9 +95,12 @@ The blind spot has **two** shapes, and they need two different remedies.
 | `prisma/**`                                                                                                                                                                        | the generated client and the migrations every DB-backed test runs against                                                                                                      | `tests/components/DataExportCard.test.tsx` (`readFileSync('prisma/schema.prisma')`), `tests/integration/migrations/*.test.ts`     |
 | `packages/**`                                                                                                                                                                      | tests import `packages/*/dist`, which is git-ignored — a package's source is in no graph                                                                                       | `tests/api/public/contract-drift.test.ts`, `tests/api/v1/cli-transport-seams.test.ts` (imports `packages/cli/src/api`)            |
 | `.github/workflows/ci.yml`, `.github/actions/**`                                                                                                                                   | the lane's own definition                                                                                                                                                      | `tests/ciFleet/ciRunnerImage.test.ts` (reads `ci.yml`), `tests/ci-postgres-container.test.ts` (`.github/actions/postgres`)        |
+| `.github/ci/**`                                                                                                                                                                    | the force-full list itself — a change to it changes what every pull request runs                                                                                               | `tests/ci-changed-paths-gate.test.ts` (reads `.github/ci/full-suite-paths.txt`)                                                   |
+| `scripts/ci/measure-affected-tests.mjs`                                                                                                                                            | the selection itself — the script every pull request's legs run to choose their files                                                                                          | `tests/ci-changed-paths-gate.test.ts` (asserts the script reads the list file)                                                    |
 
-The list lives in one place, `FORCE_FULL_GLOBS` in `scripts/ci/measure-affected-tests.mjs`, and this
-table must equal it.
+The list lives in one file, `.github/ci/full-suite-paths.txt` — read by `ci.yml`'s `changes` job, by
+`scripts/ci/measure-affected-tests.mjs` and by `tests/ci-changed-paths-gate.test.ts`, which asserts that
+this table equals it (MOTIR-5325).
 
 ### §2.2 — Tests whose inputs are files, not imports: these run on every pull request
 
@@ -156,7 +159,7 @@ module under `lib/`, `app/` or `packages/` reached by some spec:
 **The instrument** is `scripts/ci/measure-affected-tests.mjs`:
 
 ```sh
-pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs
+pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --at f59db9679
 ```
 
 It builds every spec's graph **once, at the pinned sha**, with Vitest's own `getTestDependencies` and
