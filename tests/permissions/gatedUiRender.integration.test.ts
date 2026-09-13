@@ -125,15 +125,19 @@ describe('a seeded role renders exactly what it holds', () => {
     expect(shell.navRows).toEqual(PROJECT_NAV_ACCESS.map((e) => e.href));
   });
 
-  it('a project MEMBER gets NO settings area, and keeps every nav row but Code health', async () => {
+  // ⚠️ INVERTED BY MOTIR-5278, DELIBERATELY (`design/projects/design-notes.md`
+  // § ⭐ Approvals §6, decided on MOTIR-5190). It read "a project MEMBER gets NO
+  // settings area". The complaint the story was raised about was nine sections a
+  // member could change nothing in, and that stays fixed: the area now holds ONE
+  // room, which the member may READ because its gates decide whether their own
+  // work waits, and in which they can change nothing.
+  it('a project MEMBER gets a settings area of ONE room — Approvals — and keeps every nav row', async () => {
     const s = await seed('member-path');
     const shell = await renderFor(s.projectId, s.ctxs.member);
 
-    // The complaint the story was raised about: nine sections a member could
-    // change nothing in.
-    expect(shell.settingsEntries).toEqual([]);
-    expect(shell.settingsGroups).toEqual([]);
-    expect(shell.areaDoor).toBe(false);
+    expect(shell.settingsEntries).toEqual(['approvals']);
+    expect(shell.settingsGroups).toEqual(['work']);
+    expect(shell.areaDoor).toBe(true);
 
     // ⚠️ THE ONE ROW A MEMBER USED TO LOSE IS BACK (MOTIR-1768). This asserted
     // `not.toContain('/code-health')` — true of a destination that no longer
@@ -162,7 +166,10 @@ describe('a seeded role renders exactly what it holds', () => {
     const s = await seed('viewer-path');
     const shell = await renderFor(s.projectId, s.ctxs.viewer);
 
-    expect(shell.areaDoor).toBe(false);
+    // ⚠️ INVERTED BY MOTIR-5278 (§6 of the Approvals design): `areaDoor` was
+    // `false`. A viewer browses the project, so Approvals opens for them too.
+    expect(shell.areaDoor).toBe(true);
+    expect(shell.settingsEntries).toEqual(['approvals']);
     // Three became two for the reason above: `/code` is browse-reachable, so a
     // viewer is offered the room and meets Health's own admin-only state inside
     // it rather than being denied the door (MOTIR-1768).

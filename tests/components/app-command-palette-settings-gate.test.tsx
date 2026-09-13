@@ -96,9 +96,16 @@ describe('⌘K settings deep links follow the registry (MOTIR-2468)', () => {
     }
   });
 
-  it('a MEMBER is offered NO settings deep link', () => {
+  // ⚠️ INVERTED BY MOTIR-5278 (`design/projects/design-notes.md` § ⭐ Approvals §6).
+  // It read "a MEMBER is offered NO settings deep link". The palette reads the
+  // registry through the same view-gated filter as the rail, so a member is now
+  // offered exactly the one room that opens on `project:browse` — and still no
+  // administrative room.
+  it('a MEMBER is offered exactly ONE settings deep link — Approvals', () => {
     renderPalette([...BUILTIN_ROLE_PERMISSIONS.member]);
     const labels = offered();
+    expect(labels).toHaveLength(1);
+    expect(labels[0]).toContain('Approvals');
     for (const name of ['Details', 'Members & access', 'Boards', 'Rules', 'Roles & permissions']) {
       expect(
         labels.some((l) => l.includes(name)),
