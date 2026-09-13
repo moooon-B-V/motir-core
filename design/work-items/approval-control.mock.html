@@ -452,41 +452,6 @@
         border-radius: var(--radius-control);
         padding: 2px 6px;
       }
-      .arrive {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        background: var(--el-page-bg);
-        overflow: hidden;
-      }
-      .arriveUrl {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 12px;
-        color: var(--el-text-secondary);
-        background: var(--el-surface-soft);
-        border-bottom: 1px solid var(--el-border);
-        padding: 8px 14px;
-      }
-      .arriveBody {
-        padding: 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        font-size: 13px;
-        color: var(--el-text);
-      }
-      .arriveRow {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        border: 1px solid var(--el-accent);
-        box-shadow: 0 0 0 1px var(--el-accent);
-        border-radius: var(--radius-card);
-        padding: 10px 12px;
-      }
-      .arriveFoot {
-        font-size: 12.5px;
-        color: var(--el-text-secondary);
-      }
       .flagsBox {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -1407,6 +1372,8 @@
           kind supplies a <code class="key">settingsHref</code> and a label, and band 3 renders it
           in its LEFT column, under the consequence line, away from the verbs. A kind that supplies
           none renders nothing, and the band is byte-identical to state A.
+          <strong>The door is guarded like the room it opens</strong>: it renders only for a viewer
+          who holds <code class="key">workflow:manage</code> (bottom left).
         </p>
         <div class="grid2">
           <div class="frame">
@@ -1469,24 +1436,26 @@
               </span>
             </div>
           </div>
-          <div class="arrive">
-            <div class="arriveUrl">/settings/project/approvals#merge-mode</div>
-            <div class="arriveBody">
-              <strong
-                >Where the door lands — for someone who may READ the setting, not change it</strong
-              >
-              <div class="arriveRow">
-                <span
-                  ><strong>Ask before merging</strong><br /><span class="arriveFoot"
-                    >A person approves each pull request in Motir before it is merged.</span
-                  ></span
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Pull request · merge</span>
+                <span class="frameMeta"
+                  >seen by a viewer WITHOUT <span class="key">workflow:manage</span></span
                 >
-                <span class="arriveFoot">selected</span>
               </div>
-              <span class="arriveFoot"
-                >Only someone who can manage this project’s workflow can change this. You are seeing
-                what this project has chosen. — no control, and no 403.</span
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting Yue</span
               >
+            </div>
+            <div class="port">
+              <div class="portMock">
+                THE MERGE PORT<br />
+                <span class="portCite">owned by <strong>MOTIR-4882</strong></span>
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy">Waiting on Yue. The merge happens once they approve.</span>
             </div>
           </div>
           <div class="flagsBox">
@@ -1508,13 +1477,17 @@
                 review only and is not part of the component.
               </li>
               <li>
-                <strong>Shown to everyone who sees the frame</strong>, deciders or not: in state B a
-                reader who cannot decide may still want to know why they are asked. The room it
-                opens renders read-only for them (approvals.mock.html panel 9).
+                <strong
+                  >Rendered only for a viewer who holds
+                  <code class="key">workflow:manage</code></strong
+                >
+                — the key the Approvals room and its route are guarded by. A viewer without it
+                cannot land on the page, so a door for them would lead to a refusal; their frame
+                (bottom left) simply has none. There is no read-only room (Yue, 2026-09-13).
               </li>
               <li>
                 <strong>It opens in the same tab</strong>, at <code class="key">#merge-mode</code>
-                (approvals.mock.html panel 10). Coming back is the browser’s Back.
+                (approvals.mock.html panel 9). Coming back is the browser’s Back.
               </li>
             </ul>
           </div>
@@ -1523,15 +1496,15 @@
           <h3>⚠️ Planning flags (surfaced, not silently absorbed)</h3>
           <ul>
             <li>
-              <strong>MOTIR-4882 builds the door</strong> in
+              <strong>MOTIR-4882 builds the door</strong>, rendered only when the viewer holds
+              <code class="key">workflow:manage</code>, in
               <code class="key">ApprovalGateControl.tsx</code> as an optional kind-supplied
               <code class="key">settingsHref</code> + label when it registers the merge gate kind,
               and <strong>draws nothing in the merge PORT here</strong>.
             </li>
             <li>
               <strong>MOTIR-5181 owns the landing</strong>: the
-              <code class="key">#merge-mode</code> anchor and the read-only render the door arrives
-              at.
+              <code class="key">#merge-mode</code> anchor the door arrives at.
             </li>
             <li>
               <strong>MOTIR-4792's shipped frame needs no change until MOTIR-4882</strong>: a kind

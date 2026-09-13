@@ -73,8 +73,9 @@
         (6) the room with BOTH cards, merge mode at `manual` (Ask before merging)
         (7) `auto` (Merge automatically) selected
         (8) `review_on_fail` selected — RESERVED and UNIMPLEMENTED, said on the surface
-        (9) read-only — a member who may browse but not manage sees the value, no control
-        (10) arrival by DEEP LINK (#merge-mode) with the project already selected
+        (9) arrival by DEEP LINK (#merge-mode) with the project already selected
+      MANAGE-ONLY (Yue, 2026-09-13): there is NO read-only state. The room, the row and
+      the deep link are guarded by workflow:manage; a member without it never lands here.
       The earlier line in panel 5 attributing this row to MOTIR-4882 is CORRECTED:
       the surface is MOTIR-4880's; MOTIR-4882 ships the merge itself.
       Toggle dark mode to confirm token parity.
@@ -2400,7 +2401,7 @@
         panels 1&ndash;4. <b>CORRECTED 2026-09-13 (MOTIR-5176):</b> this legend used to attribute
         the merge-mode row to MOTIR-4882. The surface is <b>MOTIR-4880&rsquo;s</b> &mdash; that
         story owns the setting, its control and its deep link; MOTIR-4882 ships the merge itself
-        &mdash; and the row is drawn in panels 6&ndash;10 below. The room is still justified by the
+        &mdash; and the row is drawn in panels 6&ndash;9 below. The room is still justified by the
         readers and writers above, not by the second card.
       </p>
     </div>
@@ -2716,110 +2717,9 @@
       </p>
     </div>
 
-    <!-- ════════════════ PANEL 9 — READ-ONLY ════════════════ -->
+    <!-- ════════════════ PANEL 9 — ARRIVAL BY DEEP LINK ════════════════ -->
     <div class="panel-label">
-      9 &middot; <b>Read-only</b> &mdash; a member who may browse the project (<span class="mono"
-        >project:browse</span
-      >) but does not hold <span class="mono">workflow:manage</span>. The current value is fully
-      legible; the radios are inert; a footer line says why. Same room, same card, same copy &mdash;
-      the read is <span class="mono">projectPrMergeModeService.getPrMergeMode</span>, browse-gated
-      (MOTIR-5179).
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page" style="max-width: 672px; margin: 0 auto; padding: 22px">
-          <span class="crumb">Settings &middot; motir &middot; Approvals</span>
-          <div class="room">
-            <div class="gcard" id="merge-mode">
-              <div class="gcard-head">
-                <span class="gtitle"
-                  ><svg viewBox="0 0 24 24"><use href="#i-git-merge" /></svg>Merging pull
-                  requests</span
-                >
-                <p class="gdesc">
-                  What happens when a pull request for this project&rsquo;s work is ready to merge.
-                  A project whose repositories Motir hosts starts at <b>Merge automatically</b>; a
-                  project holding any repository of your own starts at <b>Ask before merging</b>.
-                </p>
-              </div>
-              <div class="gcard-body" style="flex-direction: column; align-items: stretch">
-                <div class="notyet">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
-                  <span
-                    >Motir does not merge pull requests yet. Until it does, every pull request is
-                    merged on your git host by a person, whichever option is chosen here.</span
-                  >
-                </div>
-                <div class="mgroup" role="radiogroup" aria-label="Merging pull requests">
-                  <label class="mopt sel ro" role="radio" aria-checked="true" aria-disabled="true">
-                    <span class="mi ask" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel">Ask before merging</span>
-                      <span class="mhint"
-                        >A person approves each pull request in Motir before it is merged. Nothing
-                        reaches your default branch without that yes.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                  <label class="mopt ro" role="radio" aria-checked="false" aria-disabled="true">
-                    <span class="mi auto" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel">Merge automatically</span>
-                      <span class="mhint"
-                        >Motir merges the pull request without asking anyone. The record says this
-                        setting allowed it &mdash; not that a person approved it.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                  <label class="mopt ro" role="radio" aria-checked="false" aria-disabled="true">
-                    <span class="mi onfail" aria-hidden="true"
-                      ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
-                    ></span>
-                    <span class="mt">
-                      <span class="mlabel"
-                        >Ask only when checks fail<span class="reserved">Not built yet</span></span
-                      >
-                      <span class="mhint"
-                        >Reserved for later. Until it is built, it behaves exactly like
-                        <b>Ask before merging</b>.</span
-                      >
-                    </span>
-                    <span class="radio"></span>
-                  </label>
-                </div>
-              </div>
-              <div class="gcard-foot">
-                <span class="gfoot-why"
-                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Only someone who can
-                  manage this project&rsquo;s workflow can change this. You are seeing what this
-                  project has chosen.</span
-                >
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <p class="legend">
-        The same footer grammar as panel 4. The radios take
-        <span class="mono">aria-disabled="true"</span> (not <span class="mono">disabled</span>), so
-        a screen reader still announces which option is chosen. <b>Reachable</b> once the
-        room&rsquo;s registry entry carries
-        <span class="mono">viewPermission: 'project:browse'</span>
-        (MOTIR-5193, and open PR #2843 for MOTIR-5278): without it a member is refused the route,
-        and this panel draws a state nothing can reach &mdash; which is exactly what
-        MOTIR-5181&rsquo;s read-only criterion must not ship on.
-      </p>
-    </div>
-
-    <!-- ════════════════ PANEL 10 — ARRIVAL BY DEEP LINK ════════════════ -->
-    <div class="panel-label">
-      10 &middot; <b>Arriving by deep link</b> &mdash; from &#8984;K (the room&rsquo;s registry
+      9 &middot; <b>Arriving by deep link</b> &mdash; from &#8984;K (the room&rsquo;s registry
       entry) or from the approval frame&rsquo;s settings door (<span class="mono"
         >design/work-items/approval-control.mock.html</span
       >
@@ -2929,7 +2829,10 @@
         The card scrolls into view and takes the ordinary
         <span class="mono">--focus-ring-color</span> ring &mdash; not a tint, not a flash &mdash;
         which clears on the next interaction. The project is the ACTIVE project the link was
-        followed from; a member who may only browse lands in panel 9&rsquo;s state, never on a 403.
+        followed from. <b>The link is guarded exactly as the room is</b> (<span class="mono"
+          >workflow:manage</span
+        >): &#8984;K does not list it, and the approval frame does not render the door, for anyone
+        without that key.
       </p>
     </div>
 
@@ -2937,25 +2840,29 @@
       <h3>&#9888;&#65039; Planning flags (surfaced, not silently absorbed)</h3>
       <ul>
         <li>
-          <b>MOTIR-5181 transcribes</b> panels 6&ndash;10: the three label/hint pairs verbatim in
+          <b>MOTIR-5181 transcribes</b> panels 6&ndash;9: the three label/hint pairs verbatim in
           <span class="mono">en</span> and <span class="mono">zh</span>, the Not-built-yet pill, the
-          not-yet notice, the read-only footer and the <span class="mono">#merge-mode</span> anchor.
-          It reads through <span class="mono">getPrMergeMode</span> (browse) and writes through
-          <span class="mono">setPrMergeMode</span> (<span class="mono">workflow:manage</span>).
+          not-yet notice and the <span class="mono">#merge-mode</span> anchor. It reads through
+          <span class="mono">getPrMergeMode</span> and writes through
+          <span class="mono">setPrMergeMode</span>, both <span class="mono">workflow:manage</span>.
         </li>
         <li>
-          <b>MOTIR-5181 must not ship panel 9 unreachable</b> &mdash; it depends on the room&rsquo;s
-          browse view key (MOTIR-5193 / open PR #2843, MOTIR-5278). If that has not landed when it
-          runs, it wires the edge rather than drawing a state nobody can reach.
+          <b>MANAGE-ONLY, and no read-only state (Yue, 2026-09-13).</b> The room&rsquo;s front end
+          is guarded by the permission, so a member who cannot manage the project never lands on the
+          page and a read-only render would draw a state nothing reaches.
+          <b>This contradicts</b> panel 4&rsquo;s read-only acceptance card and &sect;6 of
+          design-notes.md (MOTIR-5190), and open PR #2843 (MOTIR-5278), which opens the room to
+          <span class="mono">project:browse</span>; those are named here and not reworked by this
+          card.
         </li>
         <li>
           <b>MOTIR-4882 removes the not-yet notice</b> in the same change that makes Motir merge on
           this setting, and owns the settings door&rsquo;s code in the approval frame.
         </li>
         <li>
-          <b>MOTIR-5183 walks</b> panels 6, 7 and 9: an admin reads each value&rsquo;s words and
-          changes it; a browse-only colleague arrives by deep link and sees the state with no
-          control.
+          <b>MOTIR-5183 walks</b> panels 6, 7 and 9: an admin reads each value&rsquo;s words,
+          changes it, and arrives by deep link; a member without
+          <span class="mono">workflow:manage</span> is refused the route.
         </li>
         <li>
           <b

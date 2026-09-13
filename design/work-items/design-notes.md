@@ -6461,18 +6461,19 @@ under the consequence line**. A kind that supplies none renders nothing, and ban
 - **Placement, and the two rejected spots.** Not in the header, where it would
   read as part of WHAT is being decided. Not beside the verbs, where it would read
   as a third verb.
-- **Shown to everyone who sees the frame**, deciders or not (state `B`
-  included). It lands at `/settings/project/approvals#merge-mode`
-  (`design/projects/approvals.mock.html` panel 10), in the same tab. A reader who
-  may browse but not manage arrives at the read-only room (that asset's panel 9):
-  **they see the state, and meet no 403.**
+- **Rendered only for a viewer who holds `workflow:manage`**, the key the
+  Approvals room and its route are guarded by. A viewer without it cannot land on
+  the page, so a door for them would lead to a refusal, and their frame has none.
+  There is no read-only room (Yue, 2026-09-13). The door lands at
+  `/settings/project/approvals#merge-mode` (`design/projects/approvals.mock.html`
+  panel 9), in the same tab.
 - **The merge PORT is still MOTIR-4882's** and is drawn only as a labelled
   placeholder. This amendment draws no merge, no merge refusal and no
   `pull_request_merge` gate.
 
 **Planning flags.** **MOTIR-4882 builds the door** in `ApprovalGateControl.tsx`
 as an optional kind-supplied `settingsHref` + label when it registers the merge
-kind. **MOTIR-5181 owns the landing** (the anchor and the read-only render).
+kind. **MOTIR-5181 owns the landing** (the anchor).
 **MOTIR-4792's shipped frame needs no change** until then.
 
 ## ⭐ The ACCEPTANCE gate, in the ONE approve language (MOTIR-4942 — `acceptance-panel.mock.html`, panels G1–G5)

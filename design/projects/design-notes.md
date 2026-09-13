@@ -3522,7 +3522,7 @@ onWhat,offWhat,unavailableWhat,orgPlanNote,readOnlyNote,upgrade}` — replacing
 build, and drawing a second card this asset would be inventing is not how a room
 earns its place.~~ **CORRECTED 2026-09-13 (MOTIR-5176):** the attribution was
 stale. The surface is **MOTIR-4880's** (the setting, its control, its deep link);
-MOTIR-4882 ships the merge itself. The row is now drawn in panels 6–10, see §7. The room is justified by the readers and writers in §1. Also out
+MOTIR-4882 ships the merge itself. The row is now drawn in panels 6–9, see §7. The room is justified by the readers and writers in §1. Also out
 of scope: the entitlement's tier (it stays with the organisation), what a run
 records, the video's pacing, and the storage caps.
 
@@ -3687,7 +3687,7 @@ this file's _Source of truth_ carve-out gives the 2026-08-08 amendment: an
 amendment carrying a date, a reason and the card that owns it governs the code
 until that card ships.
 
-### 7. AMENDED 2026-09-13 — the MERGE-MODE row (MOTIR-5176, story MOTIR-4880; panels 6–10)
+### 7. AMENDED 2026-09-13 — the MERGE-MODE row (MOTIR-5176, story MOTIR-4880; panels 6–9)
 
 **The room's second card, `Merging pull requests`, sits BELOW the acceptance-video
 switch.** It is on the same axis: what the presence of a pull request means for
@@ -3699,9 +3699,16 @@ shipped access-level radio-card grammar** (`access-members.mock.html`,
 **Grounded in (read at design time):** ADR §7's value table and its
 provenance-default amendment; §7a (the audit says the SETTING authorised an
 `auto` merge, not a person); `projectPrMergeModeService` on
-`parent/MOTIR-4880-pr-merge-mode` (the read is `project:browse`, the write is
-`workflow:manage`); and §6 above (MOTIR-5190's read-only room), which merged
-**after** this card was authored and is honoured rather than re-opened.
+`parent/MOTIR-4880-pr-merge-mode` (the read and the write are both
+`workflow:manage`).
+
+> **⚠️ MANAGE-ONLY — there is NO read-only state (Yue, 2026-09-13, on this card's
+> design review).** The room's front end is guarded by the permission: a member
+> who cannot manage the project never lands on the page, so a read-only render
+> draws a state nothing can reach. The first cut drew one (a panel 9 following
+> §6 above), and it is withdrawn. **This contradicts §6 (MOTIR-5190) and panel
+> 4, and open PR #2843 (MOTIR-5278), which opens the room to `project:browse`.**
+> Those are named here and not reworked by this card.
 
 #### The copy — transcribe verbatim (MOTIR-5181)
 
@@ -3720,10 +3727,6 @@ provenance-default amendment; §7a (the audit says the SETTING authorised an
   every pull request is merged on your git host by a person, whichever option is
   chosen here._ It is honest about today: nothing reads the value until
   MOTIR-4882, which removes the notice in the change that makes it false.
-- **Read-only footer** (panel 9, the panel-4 grammar): _Only someone who can
-  manage this project's workflow can change this. You are seeing what this
-  project has chosen._ Radios take `aria-disabled="true"`, never `disabled`, so
-  the chosen value is still announced.
 - **No enum member or column name is ever shown.**
 
 #### Decisions, each with its reason
@@ -3738,8 +3741,10 @@ provenance-default amendment; §7a (the audit says the SETTING authorised an
   overwrite it.
 - **The deep link is `#merge-mode`** (the card's id, beside the shipped
   `#acceptance-video`). On arrival the card takes the ordinary
-  `--focus-ring-color` ring once. It is not a tint and not a flash (panel 10).
-- **Ink:** title `--el-text`, description / hint / footer
+  `--focus-ring-color` ring once. It is not a tint and not a flash (panel 9). The
+  link is guarded as the room is: ⌘K does not list it, and the approval frame
+  renders no door, for anyone without `workflow:manage`.
+- **Ink:** title `--el-text`, description / hint
   `--el-text-secondary` (never `--el-text-muted`), pill and notice
   `--el-text-strong` on their tints (finding #35). Shape: `--radius-card` on each
   option, `--radius-control` on the tile and the notice, `--radius-badge` on the
@@ -3747,21 +3752,23 @@ provenance-default amendment; §7a (the audit says the SETTING authorised an
 
 #### ⚠️ Planning flags (surfaced, not silently absorbed)
 
-- **MOTIR-5181 transcribes** panels 6–10 in `en` and `zh`, reads through
-  `getPrMergeMode` and writes through `setPrMergeMode`.
-- **MOTIR-5181 must not ship panel 9 unreachable.** The room's browse view key is
-  MOTIR-5193's (and open PR #2843 for MOTIR-5278). If it has not landed, MOTIR-5181
-  wires the edge rather than shipping a state nobody can reach.
+- **MOTIR-5181 transcribes** panels 6–9 in `en` and `zh`, reading through
+  `getPrMergeMode` and writing through `setPrMergeMode`, both `workflow:manage`.
+- **The room is manage-only.** A non-manager is refused the route, and nothing
+  here draws what they would see instead.
+- **Out of step with this decision:** §6 / panel 4 (MOTIR-5190) and open PR #2843
+  (MOTIR-5278) both open the room to `project:browse`.
 - **MOTIR-4882 removes the not-yet notice** and builds the approval frame's
   settings door (`design/work-items/design-notes.md`, the UNIVERSAL APPROVAL
   FRAME's 2026-09-13 amendment).
-- **MOTIR-5183 walks** panels 6, 7 and 9.
+- **MOTIR-5183 walks** panels 6, 7 and 9, and asserts a member without
+  `workflow:manage` is refused the route.
 
 #### GIVES / TAKES
 
 | work item                    | GIVES / TAKES                                                                                                                                          |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **MOTIR-5181** (the control) | **GIVES** the copy, the grammar, the five states, the anchor. **TAKES nothing** — its criteria already ask for all three values in the reader's words. |
+| **MOTIR-5181** (the control) | **GIVES** the copy, the grammar, the four states, the anchor. **TAKES nothing** — its criteria already ask for all three values in the reader's words. |
 | **MOTIR-4882** (the merge)   | **GIVES** the room its door lands in. **TAKES** the notice's removal.                                                                                  |
 | **MOTIR-5183** (E2E)         | **GIVES** the walk's surfaces. **TAKES nothing.**                                                                                                      |
 | **MOTIR-4942 / MOTIR-5190**  | **neither** — `done`; §5's stale attribution corrected on the record above.                                                                            |
