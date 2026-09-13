@@ -77,6 +77,10 @@ export function DesignResultSection({
   // response rather than from a refetch is the inline-edit half of the
   // page-state contract; the `router.refresh()` beside it is the server half.
   const [current, setCurrent] = useState<ApprovalGateDTO | null>(gate);
+  // What the decide response said about the pin (MOTIR-5265). The record band
+  // draws it until a server render delivers `subject`, which then wins — the
+  // same reconcile the status rail's optimistic value follows (MOTIR-5212).
+  const [decidedFilesKept, setDecidedFilesKept] = useState<boolean | null>(null);
 
   // ⚠️ WHICH BYTES THE PORT SHOWS IS DECIDED HERE, AND THE ANSWER IS NOT
   // ALWAYS `evidence` (MOTIR-5033; ADR §6c).
@@ -150,6 +154,7 @@ export function DesignResultSection({
     // from a write's own result cannot outlive a write that did not happen.
     if (!result.ok) return result.refusal;
     setCurrent(result.gate);
+    setDecidedFilesKept(result.filesKept);
     // THE RAIL, IN THE BROWSER (Bug MOTIR-5212) — before the refresh, because
     // the whole defect is that the refresh's apply is intermittently lost.
     //
@@ -212,7 +217,7 @@ export function DesignResultSection({
       // `design_evidence.pinned_at`, read off the decided row. Null while
       // awaiting or withdrawn, which renders no line at all rather than a
       // guess in either direction.
-      filesKept={subject ? subject.filesKept : null}
+      filesKept={subject ? subject.filesKept : decidedFilesKept}
       onDecide={onDecide}
     />
   );

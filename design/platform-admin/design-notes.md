@@ -872,3 +872,180 @@ and every one is disposed of:
    `search-line.mock.html` and `search-spend.mock.html` are **annotated as superseded** in place
    rather than redrawn: they remain a true record of shipped behaviour until MOTIR-4572 merges,
    and redrawing customer pixels is out of this card's scope.
+
+# AMENDMENT 2026-09-12 — INDEX & FLEET COST: Monitoring's allowance section, the org page's cost card, and their nothing-states
+
+**Story MOTIR-4335 · card MOTIR-4594 (built by MOTIR-4595).** Panels **13 · 14 · 14b** of
+`console.mock.html`, plus two rows in Panel 11's allocation table. An **amendment to this asset,
+not a new area** — it composes the shell Panels 2–12 already draw and introduces no primitive.
+
+> ⚠️ **Motir does NOT charge for code indexing.** Everything drawn here is **internal COGS** and
+> an **internal index allowance**. No label, tooltip, route name or copy string describes index
+> cost as charged, billed or priced — and no element here is reachable by a customer. This is a
+> constraint on the design, not a style note: the phrasing written down becomes the answer the
+> first time anyone greps for it (`docs/decisions/code-graph-index-fleet.md`, MOTIR-4541
+> § _How this is described_).
+
+## Where it lands — and why NOT on Usage & cost (decided by Yue, 2026-09-12)
+
+The card told this design to extend the **Usage & cost** page (Panels 4–5). That page is **not
+shipped**: it is Story MOTIR-727's, its rollup card MOTIR-732 is `blocked` (on MOTIR-589 and
+MOTIR-730), and the live rail (`app/(admin)/_components/AdminShell.tsx`) shows its row behind a
+`10.1` pill. Drawing the index views there would have made MOTIR-4595 — and so Story MOTIR-4335 —
+wait on unbuilt work outside the story. So both views land on **shipped** surfaces:
+
+| view                                                                                     | surface                                                 | panel                     |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------- |
+| **Index allowance** — per-tier crossing rate, cost basis, the three hard-stop lists      | `/admin/monitoring` (shipped, live rail row)            | **13**                    |
+| **Index & fleet cost** card — both pools, indexing state, fleet COGS by workload, tokens | `/admin/tenants/[orgId]` (shipped, Panel 11's page)     | **14**                    |
+| estate workload COGS lines + the platform-wide meta/tenant split                         | `pnpm ops:fleet-cost` now; a Usage & cost segment later | follow-up under MOTIR-727 |
+
+**Monitoring is the right home, not a compromise.** Its standing question is _"is the machinery
+running?"_ (Panel 8). Which orgs have had indexing stopped, for how long and how far behind their
+graph is, is exactly that question for the index fleet — and the crossing rate is its calibration
+twin: _is the gate sized right?_
+
+## Panel 13 — Monitoring · Index allowance
+
+- **Placement:** a new `Card` below the shipped _Scheduled jobs · overdue_ card, which is drawn
+  collapsed only to show position.
+- **The headline is the CROSSING RATE, per tier** — three `mini-stat`s (tiers over threshold · the
+  threshold · Free orgs at their limit) above a `.tbl` with one row per tier: orgs, crossed, the
+  rate as a `.usebar` + figure, a **Reading** `Pill`, and the internal cost basis.
+- **The operator's one-glance reading** is the card's own subtitle: _if a large share of a tier
+  crossed, the gate is wrong — not the orgs._ The Reading pill states it per row
+  (`Gate holds` / `Recalculate — over 25%`), so nobody has to compare a bar to a threshold by eye.
+- **The Free row has no crossing rate.** Its one-time allowance is a **hard stop**, so it has no soft
+  gate to cross; the rate cell reads `n/a — no soft gate · 11.1% at limit` and the Reading pill says
+  `No soft gate — hard stop`. Drawing a crossing-rate bar there would contradict the tier's own shape.
+- **Enterprise** reads `Allowance not configured` — set on the plan by staff.
+- **Internal cost basis** is `advertised credits + index allowance`, drawn as a sum with its cadence,
+  so it can never be read as the advertised figure (which stays `catalog.ts`'s `monthlyCredits`).
+- **ONE list of stopped orgs, the reason as a FILTER and a COLUMN** _(revised 2026-09-12, Yue: "Stopped · no credit and Stopped · Free allowance used are designed as 2 cards, I don't see how I can see a large list of orgs there")._ The first revision drew one card per reason, and it contradicted its own table: the Free row counts **212** exhausted orgs, and a card of rows cannot hold them. The stopped set is one collection, so it gets one layout:
+  - **Head:** `Stopped orgs` + a `pill-down` total (`219 stopped`).
+  - **Toolbar:** a `Segmented` reason filter, each option carrying its count — `All 219` · `No credit 7` · `Free allowance used 212` · `Margin ceiling · not active`. The last is **drawn disabled, never omitted**: hard gate B waits on MOTIR-4483 / MOTIR-4598 (MOTIR-5280), and a missing option would read as "no such stop". An org search sits beside it.
+  - **Table:** `Org` · `Tier` · `Reason` (`pill-down`) · `Stopped for` (sorted, longest first) · `Graph behind` · `Resumes` (`on top-up or renewal` / `on upgrade`). The two reasons stay distinguishable per row, which is the point the separate cards were trying to make.
+  - **Foot:** `Showing 1–25 of 219 · longest-stopped first` + the shipped `pager`, exactly Panel 4's at-scale grammar.
+  - The per-tier counts above (the Free row's `212 exhausted`, the no-credit total) are the list's filter counts. MOTIR-4595 links a count to the filtered list, so a count and its list can never disagree.
+- **The "nothing" states** (Panel 14b) gain two: `No org is stopped` (said in words, filter counts at 0) and `Margin ceiling · not active` (the disabled filter's meaning, moved from the retired reserved card).
+- **Every figure is illustrative.** The index:token ratio and the recalculate threshold are
+  MOTIR-4588's to measure and propose, and the card foot says so.
+
+## Panel 14 — Org page · Index & fleet cost
+
+- **Placement:** a new `Card` on the shipped org page, **above** MOTIR-733's reserved _Usage & cost
+  rollup_ region, which is redrawn unchanged beneath it to show that no cell was taken.
+- **BOTH POOLS, side by side and never conflated** — two `mini-stat`s, each with remaining (headline),
+  a `seatmeter`, `granted · consumed`, and a percentage:
+  - **Credit balance** — `Customer sees this` (`pill-active`). Drawn by the planner and the hosted
+    agent; carries the period's token spend.
+  - **Index allowance** — `Internal only` (`pill-neutral`). Drawn by indexing only; the note states
+    that it never touches the credit balance, under any condition.
+- **The org is drawn in state (b)** — `112%` of its allowance and still indexing — because it is the
+  state most likely to be misread as a fault. A `.note` says so: _the normal, absorbed case — not a
+  fault._ It also shows all four state pills as a key.
+- **Fleet COGS by workload** — a `.tbl` of `ci` / `index` / `agent` with containers, billable seconds
+  and internal COGS. The **index line counts failed containers** (`· 4 failed, counted`), and the
+  **agent line is ABSENT**, drawn as a sentence rather than as `0` / `$0.00`.
+- **Margin ceiling** appears only as `Not active · MOTIR-5280` beside the state.
+- **The platform-wide meta/tenant split is not on this card**; the org's own meta status is the
+  header's `isMeta` chip (Panel 11). The foot points to the readout and the later Usage & cost segment.
+
+## Panel 14b — the nothing-states
+
+Five `EmptyState`s (`.state`), each naming what it is, because an omission a reader has to notice is
+read as a zero:
+
+| state                                    | what it says                                                                              |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **No index activity this period**        | the index line is _absent_ — not a measured zero                                          |
+| **Meter disabled**                       | a self-hosted build has no fleet, so no figures — no zero is drawn                        |
+| **Never ran an AI job — indexed anyway** | billing and the one-time allowance were provisioned on the first index draw; a normal row |
+| **Allowance not configured**             | Enterprise: set on the plan by staff; until then no gate to cross                         |
+| **Couldn't read the pools**              | motir-ai did not answer; both pools read _unknown_ — never zero                           |
+
+**There is deliberately no "no AI plan" state.** On cloud every connected repository is indexed
+(MOTIR-4541, decision A, 2026-09-12), so that population no longer exists.
+
+## The three indexing states — drawn to be told apart, and (b) must not read as an error
+
+| state                                           | pill                        | token                                                                                       |
+| ----------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
+| **a** under allowance                           | `a · Under allowance`       | `--el-tint-mint` + `--el-text-strong`                                                       |
+| **b** over allowance, still indexing            | `b · Over — still indexing` | `--el-tint-sky` + `--el-text-strong` — the INFO family, deliberately **not** yellow or rose |
+| **c** stopped (no credit · Free allowance used) | `c · Stopped · …`           | `--el-tint-rose` + `--el-text-strong`                                                       |
+| gate B not active                               | `Not active · MOTIR-5280`   | `--el-surface` + `--el-text-secondary` (`pill-neutral`)                                     |
+| a tier whose gate looks mis-sized               | `Recalculate — over 25%`    | `--el-tint-yellow` + `--el-text-strong` — cautionary, never danger                          |
+
+## Primitives composed (no hand-rolling)
+
+The shipped rail (`Sidebar`, Monitoring / Tenants active), the `.adminbar`, the `.scope` breadcrumb,
+`Card` (+ `card-head` / `card-body` / `card-body flush` / `card-foot`), `card.reserved`, the `.tbl`
+table, `Pill` (`pill-active` / `pill-internal` / `pill-down` / `pill-warn` / `pill-neutral` /
+`pill-plan`), `mini-stat` / `stat-grid`, `.usebar` and `.seatmeter`, `.note`, and `EmptyState`
+(`.state` / `.states-grid`). **No new primitive and no new CSS class.** The only inline styles are
+layout and the `--el-text-secondary` ink.
+
+## Ink
+
+Secondary copy on a card body, a `card-foot`, a `mini-stat` or a `card.reserved` uses
+`--el-text-secondary` — never `--el-text-muted` (fails AA off the white page) and never
+`--el-text-faint`. The pool bars draw the consumed share in `--el-accent` (credit balance) and
+`--el-info` (index allowance), matching the tenancy/model bar hues already in this asset.
+
+## Allocation — two rows added to Panel 11's table
+
+| element                                                             | built by       | note                                            |
+| ------------------------------------------------------------------- | -------------- | ----------------------------------------------- |
+| **Index & fleet cost card** — pools, state, fleet COGS, token spend | **MOTIR-4595** | Panel 14; a new card, takes none of 733's cells |
+| **Margin ceiling** — each org's distance, and its hard-stop list    | **MOTIR-5280** | drawn not-yet-active until hard gate B lands    |
+
+Panel 13 is on Monitoring, not on this page, and is also MOTIR-4595's. MOTIR-733 keeps the
+by-workspace and by-model usage rollup; MOTIR-732 keeps the Usage & cost page.
+
+## Copy strings (en — the `admin` namespace MOTIR-4595 adds)
+
+| key                                              | string                                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `monitoring.indexAllowance.title`                | Index allowance · is the gate sized right?                                                                         |
+| `monitoring.indexAllowance.subtitle`             | This period, per tier. If a large share of a tier crossed, the gate is wrong — not the orgs.                       |
+| `monitoring.indexAllowance.internal`             | Internal · never shown to customers                                                                                |
+| `monitoring.indexAllowance.reading.holds`        | Gate holds                                                                                                         |
+| `monitoring.indexAllowance.reading.recalc`       | Recalculate — over {threshold}%                                                                                    |
+| `monitoring.indexAllowance.reading.free`         | No soft gate — hard stop                                                                                           |
+| `monitoring.indexAllowance.reading.unconfigured` | Allowance not configured                                                                                           |
+| `monitoring.indexAllowance.foot`                 | Crossing the allowance does not stop indexing on a paid tier — Motir absorbs the overrun and records the crossing. |
+| `monitoring.stopped.title`                       | Stopped orgs                                                                                                       |
+| `monitoring.stopped.subtitle`                    | Indexing paused by a hard stop. Every one resumes on its own — nobody re-arms it.                                  |
+| `monitoring.stopped.total`                       | {count} stopped                                                                                                    |
+| `monitoring.stopped.filter.all`                  | All                                                                                                                |
+| `monitoring.stopped.filter.noCredit`             | No credit                                                                                                          |
+| `monitoring.stopped.filter.freeUsed`             | Free allowance used                                                                                                |
+| `monitoring.stopped.filter.margin`               | Margin ceiling                                                                                                     |
+| `monitoring.stopped.filter.marginInactive`       | not active                                                                                                         |
+| `monitoring.stopped.filter.marginInactiveHint`   | Hard gate B is not active yet. An empty result would mean the gate is off, not that no org is near the ceiling.    |
+| `monitoring.stopped.search`                      | Find an org…                                                                                                       |
+| `monitoring.stopped.col.stoppedFor`              | Stopped for                                                                                                        |
+| `monitoring.stopped.col.graphBehind`             | Graph behind                                                                                                       |
+| `monitoring.stopped.col.resumes`                 | Resumes                                                                                                            |
+| `monitoring.stopped.resumes.topUp`               | on top-up or renewal                                                                                               |
+| `monitoring.stopped.resumes.upgrade`             | on upgrade                                                                                                         |
+| `monitoring.stopped.foot`                        | Showing {from}–{to} of {total} · longest-stopped first · the catch-up refreshes only repos that moved              |
+| `monitoring.stopped.empty`                       | No org is stopped.                                                                                                 |
+| `orgs.indexCost.title`                           | Index & fleet cost · this period                                                                                   |
+| `orgs.indexCost.creditBalance`                   | Credit balance                                                                                                     |
+| `orgs.indexCost.customerSees`                    | Customer sees this                                                                                                 |
+| `orgs.indexCost.indexAllowance`                  | Index allowance                                                                                                    |
+| `orgs.indexCost.internalOnly`                    | Internal only                                                                                                      |
+| `orgs.indexCost.state.b`                         | Over allowance — still indexing                                                                                    |
+| `orgs.indexCost.absorbedNote`                    | This is the normal, absorbed case — not a fault.                                                                   |
+| `orgs.indexCost.agentAbsent`                     | absent — no agent container ran this period (not a zero)                                                           |
+| `orgs.indexCost.foot`                            | The index line counts containers that FAILED. Internal COGS — nothing on this card is charged to the customer.     |
+
+## What this amendment does NOT draw
+
+- **The Usage & cost segment** (estate workload lines + the platform-wide meta/tenant split) — a
+  follow-up design under MOTIR-727, beside the page it belongs on.
+- **Any customer-facing surface.** `design/billing/ci-line.mock.html` is the customer's CI line and is
+  referenced only as the thing this must never resemble or feed.
+- **Hard gate B's live list or figures** — MOTIR-5280.

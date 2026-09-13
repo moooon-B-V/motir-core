@@ -70,7 +70,13 @@ async function requireContext() {
 }
 
 export type DecideGateActionResult =
-  | { ok: true; gate: ApprovalGateDTO }
+  | {
+      ok: true;
+      gate: ApprovalGateDTO;
+      /** Whether the approved version's files were pinned — see
+       *  `DecideGateResult.filesKept` (MOTIR-5265). */
+      filesKept: boolean | null;
+    }
   | { ok: false; refusal: GateRefusal };
 
 /** Record a decision on one approval gate, whatever its kind. */
@@ -84,7 +90,7 @@ export async function decideApprovalGateAction(input: {
   const { gateId, decision, identifier, noteMd } = input;
   const ctx = await requireContext();
   try {
-    const { gate } = await approvalGatesService.decide(
+    const { gate, filesKept } = await approvalGatesService.decide(
       // `ui` — a SERVER ACTION is a person pressing the control in Motir. It is
       // the audit's strongest claim (ADR §6a: *"a human click must be
       // distinguishable from a programmatic call"*), so it is stated at the one
@@ -104,7 +110,7 @@ export async function decideApprovalGateAction(input: {
     // it. A decision made on the ITEM page moves that same badge, so this is
     // correct for both callers rather than a branch for one of them.
     revalidatePath(AUTHED_LANDING_PATH);
-    return { ok: true, gate };
+    return { ok: true, gate, filesKept };
   } catch (err) {
     // The shared project gate's two refusals. A non-browser reads NOT_FOUND and
     // a browser without the kind's permission floor reads NOT_AUTHORISED, so
