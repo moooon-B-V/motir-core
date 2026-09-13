@@ -113,6 +113,31 @@ export function resolveDebounceKey(
 }
 
 /**
+ * How ONE arrival treats the job's debounce (MOTIR-5360).
+ *
+ * `immediate` — this arrival is due NOW, not one `period` from now. It still
+ * resolves the SAME key and still coalesces into the pending run that key holds,
+ * so it can pull a queued run forward but can never create a second one beside
+ * it. That is the whole difference from skipping the debounce outright, which
+ * would give the arrival its own row and let two runs for one key sit in the
+ * queue together.
+ *
+ * The option is the EMITTER's to set, per dispatch, and never the job's: the
+ * same job serves a trigger that should coalesce (a push, which arrives in
+ * bursts) and one that should not wait (a planning session starting on a stale
+ * graph, where a person is waiting behind it). The declared `period` stays the
+ * job's default and is what every emitter that says nothing gets.
+ */
+export interface DebounceArrival {
+  immediate?: boolean;
+  /**
+   * The pending run's current `run_at`, when this arrival coalesces into one.
+   * Omitted for a first arrival.
+   */
+  pendingRunAt?: Date | null;
+}
+
+/**
  * When a debounced run becomes due, given when its window was first opened.
  *
  * `now + period` is the quiet-period rule; `firstSeenAt + timeout` is the
@@ -122,12 +147,30 @@ export function resolveDebounceKey(
  *
  * `firstSeenAt` is `null` for the first arrival, where there is nothing to cap
  * against yet.
+ *
+ * Two more rules, both about a run that is ALREADY due (MOTIR-5360):
+ *
+ *  - An `immediate` arrival is due `now`, which is never later than the cap.
+ *  - ⚠️ A coalescing arrival NEVER moves an already-due run back into the
+ *    future. Once `run_at` has passed (the quiet period elapsed, the cap fired,
+ *    or an immediate arrival pulled it forward), the run is only waiting for a
+ *    worker to claim it. Pushing it forward again would let an ordinary push,
+ *    landing in that gap, re-defer the refresh a person is waiting for by a whole
+ *    `period`. The arrival still repoints the run at its event, so the run that
+ *    executes is the latest one either way. A run that is not yet due is moved
+ *    exactly as before.
  */
 export function debouncedRunAt(
   debounce: DebounceOption,
   now: Date,
   firstSeenAt: Date | null,
+  arrival: DebounceArrival = {},
 ): Date {
+  const pendingRunAt = arrival.pendingRunAt ?? null;
+  if (pendingRunAt !== null && pendingRunAt.getTime() <= now.getTime()) {
+    return pendingRunAt;
+  }
+  if (arrival.immediate) return now;
   const due = now.getTime() + parseSleepMs(debounce.period);
   if (debounce.timeout === undefined || firstSeenAt === null) return new Date(due);
   const cap = firstSeenAt.getTime() + parseSleepMs(debounce.timeout);
