@@ -976,6 +976,27 @@ export const projectRepository = {
   },
 
   /**
+   * Write the ESTABLISHMENT default and stamp it — SET-ONCE at the database level
+   * (MOTIR-5178). The NULL-guarded `updateMany` writes only a row whose
+   * `prMergeModeDecidedAt` is still null, so a value a person already decided is
+   * never overwritten, whatever the caller read. Returns the rows written: 1 when
+   * the default landed, 0 when something had already decided the value. Same
+   * shape as `markOnboardingRan`.
+   */
+  async seedPrMergeModeIfUndecided(
+    id: string,
+    mode: PrMergeMode,
+    decidedAt: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.project.updateMany({
+      where: { id, prMergeModeDecidedAt: null },
+      data: { prMergeMode: mode, prMergeModeDecidedAt: decidedAt },
+    });
+    return r.count;
+  },
+
+  /**
    * The CROSS-WORKSPACE scan behind the auto-plan cadence tick (MOTIR-916):
    * every non-archived project that opted into auto-planning, keyset-paginated
    * by id so the sweep is bounded per page (the `listDueByHour` precedent —
