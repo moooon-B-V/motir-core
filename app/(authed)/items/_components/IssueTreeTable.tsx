@@ -38,7 +38,12 @@ import {
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
-import type { FolderTreeRowDto, ProjectTreeRowDto, TreeLevelDto } from '@/lib/dto/workItems';
+import type {
+  FolderTreeRowDto,
+  ProjectTreeRowDto,
+  TreeLevelDto,
+  WorkItemTreeRowDto,
+} from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
@@ -58,7 +63,7 @@ import {
   type FolderWriteResult,
   type ListProjectFoldersResult,
 } from '../actions';
-import { useFolderCommands } from './FolderCommands';
+import { useFolderCommands, type WorkItemPlacement } from './FolderCommands';
 import { FolderDeleteDialog } from './FolderDeleteDialog';
 import { FolderNameField } from './FolderNameField';
 import { FolderPickerPanel, FolderPickerPopover } from './FolderPicker';
@@ -145,6 +150,24 @@ function markHasChildren(levels: Record<string, LevelState>, folderId: string, v
         ...lvl,
         rows: lvl.rows.map((r) =>
           r.kind === 'folder' && r.id === folderId ? { ...r, hasChildren: value } : r,
+        ),
+      };
+    }
+  }
+}
+
+/** Set `hasChildren` on a WORK-ITEM row wherever it is loaded (MOTIR-5353). */
+function markWorkItemHasChildren(
+  levels: Record<string, LevelState>,
+  workItemId: string,
+  value: boolean,
+) {
+  for (const [key, lvl] of Object.entries(levels)) {
+    if (lvl.rows.some((r) => r.kind !== 'folder' && r.id === workItemId)) {
+      levels[key] = {
+        ...lvl,
+        rows: lvl.rows.map((r) =>
+          r.kind !== 'folder' && r.id === workItemId ? { ...r, hasChildren: value } : r,
         ),
       };
     }
@@ -584,6 +607,65 @@ export function IssueTreeTable({
       return next;
     });
   }, []);
+
+  // ── A placement change made elsewhere on the page (MOTIR-5353) ─────────────
+  // The quick view reports where a work item now sits; the row leaves whichever
+  // loaded level holds it and joins its new level when that level is loaded. The
+  // row keeps its own id, so its loaded children level (keyed by that id) — and
+  // its expansion — travel with it. A destination that is not loaded gets
+  // nothing: the next expand reads the row from the server, and the tree never
+  // draws a row it did not hold.
+  const applyWorkItemPlacement = useCallback((placement: WorkItemPlacement) => {
+    const { workItemId, folderId, parentId } = placement;
+    const toLevelKey = folderId !== null ? folderKey(folderId) : (parentId ?? ROOTS);
+    setLevels((prev) => {
+      const fromLevelKey = Object.keys(prev).find((key) =>
+        prev[key]!.rows.some((r) => r.kind !== 'folder' && r.id === workItemId),
+      );
+      if (fromLevelKey === toLevelKey) return prev;
+      // Retire any read of either level still in flight: it was taken before the
+      // move. Only these two levels — an unrelated load elsewhere keeps its answer.
+      for (const key of [fromLevelKey, toLevelKey]) {
+        if (key !== undefined) levelSeq.current[key] = (levelSeq.current[key] ?? 0) + 1;
+      }
+      const next = { ...prev };
+      let moved: WorkItemTreeRowDto | undefined;
+      if (fromLevelKey !== undefined) {
+        const from = prev[fromLevelKey]!;
+        moved = from.rows.find(
+          (r): r is WorkItemTreeRowDto => r.kind !== 'folder' && r.id === workItemId,
+        );
+        const rows = from.rows.filter((r) => !(r.kind !== 'folder' && r.id === workItemId));
+        next[fromLevelKey] = { ...from, rows, total: Math.max(0, from.total - 1), loading: false };
+        // The old container is childless only when its WHOLE level was loaded and is now empty.
+        if (fromLevelKey !== ROOTS && rows.length === 0 && !from.hasMore) {
+          if (fromLevelKey.startsWith(FOLDER_PREFIX)) {
+            markHasChildren(next, fromLevelKey.slice(FOLDER_PREFIX.length), false);
+          } else {
+            markWorkItemHasChildren(next, fromLevelKey, false);
+          }
+        }
+      }
+      const to = next[toLevelKey];
+      if (to && moved) {
+        next[toLevelKey] = {
+          ...to,
+          rows: [...to.rows, { ...moved, parentId }],
+          total: to.total + 1,
+          loading: false,
+        };
+      }
+      if (folderId !== null) markHasChildren(next, folderId, true);
+      else if (parentId !== null) markWorkItemHasChildren(next, parentId, true);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!folderCommands) return;
+    folderCommands.registerPlacementHandler(applyWorkItemPlacement);
+    return () => folderCommands.registerPlacementHandler(null);
+  }, [folderCommands, applyWorkItemPlacement]);
 
   // A REORDER swaps the folder with its neighbour in place.
   const applyFolderReorder = useCallback(
