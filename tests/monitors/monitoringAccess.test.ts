@@ -34,7 +34,14 @@ describe('the monitoring room is gated on integration:manage', () => {
     expect(refusal).not.toBeNull();
     expect(refusal!.descriptionKey).toBe('noAccess.section.monitoring');
     // Back lands on a room the actor CAN open, not on a second refusal.
-    expect(refusal!.backHref).toBe('/settings/project/board');
+    //
+    // AMENDED BY MOTIR-5278: this was `/settings/project/board`. `approvals` now
+    // opens on `project:browse` (`design/projects/design-notes.md` § ⭐ Approvals
+    // §6), and it precedes Boards in the `work` group, so it is this role's first
+    // openable room. Both remain rooms the role is admitted to.
+    expect(refusal!.backHref).toBe('/settings/project/approvals');
+    expect(resolveSettingsRefusal('approvals', held)).toBeNull();
+    expect(resolveSettingsRefusal('board', held)).toBeNull();
   });
 
   it('a built-in MEMBER holds no integration:manage, so both checks refuse', () => {
