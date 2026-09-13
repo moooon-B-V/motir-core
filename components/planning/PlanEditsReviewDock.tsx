@@ -195,8 +195,6 @@ export const FIELD_KEYS: Record<string, string> = {
   // …and where it SHIPS (MOTIR-3868), the other half of the same pair.
   targetRepo: 'field_targetRepo',
   targetRepoRole: 'field_targetRepoRole',
-  // The derived status reset a re-scope writes (MOTIR-5359).
-  status: 'field_status',
 };
 
 function ProposalRow({ item }: { item: PlanReviewItemDto }) {

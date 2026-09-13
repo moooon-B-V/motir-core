@@ -71,11 +71,6 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
    *  of every ancestor; it is the wrong field to be silent about. */
   'targetRepo',
   'targetRepoRole',
-  /** The STATUS RESET an approved re-scope writes (Bug MOTIR-5359) — DERIVED, not
-   *  a patch key: a `modify` that rewrites the title, the description or where a
-   *  card ships sends an in-progress-category target back to To Do, and the
-   *  approver has to see that BEFORE pressing approve. */
-  'status',
 ] as const;
 
 export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];

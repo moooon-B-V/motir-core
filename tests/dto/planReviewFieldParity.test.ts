@@ -580,14 +580,7 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     const produced = new Set(
       Object.values(DISPOSITION).flatMap((d) => ('row' in d ? [d.row as string] : [])),
     );
-    // DERIVED rows are produced from the patch AND the target rather than from one
-    // patch key, and each is named here WITH the rule that produces it.
-    const DERIVED: Record<string, string> = {
-      // Bug MOTIR-5359 — `lib/plans/rescopeReset.ts`: a re-scope of an
-      // in-progress-category target resets its status.
-      status: 'patchRescopes(patch, target) && resetOwed(category)',
-    };
-    const unproducible = PLAN_ITEM_CHANGE_FIELDS.filter((f) => !produced.has(f) && !(f in DERIVED));
+    const unproducible = PLAN_ITEM_CHANGE_FIELDS.filter((f) => !produced.has(f));
     expect({ unproducible }).toEqual({ unproducible: [] });
   });
 

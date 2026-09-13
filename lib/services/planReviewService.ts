@@ -1,4 +1,3 @@
-import { patchRescopes, resetOwed } from '@/lib/plans/rescopeReset';
 import type { WorkItem } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -204,14 +203,6 @@ function buildChanges(
   patch: PlanItemPatch | null,
   target: WorkItem | undefined,
   nameParent: (id: string | null) => string | null,
-  /**
-   * The project's workflow, for the RE-SCOPE RESET row (Bug MOTIR-5359): the
-   * target's status category decides whether a reset is owed, and the initial
-   * status is where it lands. Omitted, and no status row is produced.
-   */
-  workflow?: {
-    statusByKey: ReadonlyMap<string, { label: string; category: string; isInitial: boolean }>;
-  },
 ): PlanItemChangeDto[] {
   if (!patch) return [];
   // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
@@ -379,22 +370,6 @@ function buildChanges(
       from: null,
       to: `${parts.join(' / ')} blocker${added + removed === 1 ? '' : 's'}`,
     });
-  }
-  // THE STATUS RESET a re-scope writes (Bug MOTIR-5359) — DERIVED from the patch
-  // and the target, not carried by the patch, and shown here because the approver
-  // must see that approving walks an in-progress card back to To Do. The same
-  // predicate `applyModify` asks (`lib/plans/rescopeReset.ts`), so the row and the
-  // write cannot disagree about which patches reset.
-  if (target && workflow && patchRescopes(patch, target)) {
-    const current = workflow.statusByKey.get(target.status);
-    const initial = [...workflow.statusByKey.entries()].find(([, s]) => s.isInitial);
-    if (resetOwed(current?.category) && initial && initial[0] !== target.status) {
-      changes.push({
-        field: 'status',
-        from: current?.label ?? target.status,
-        to: initial[1].label,
-      });
-    }
   }
   return changes;
 }
@@ -806,8 +781,7 @@ export const planReviewService = {
       // ONE computation of the diff, read twice: `changes` is the list row's
       // old→new overlay and `proposal.changedFields` is its key set. Computing
       // them separately is the drift this card exists to make impossible.
-      const changes =
-        item.op === 'modify' ? buildChanges(item.patch, target, nameParent, { statusByKey }) : [];
+      const changes = item.op === 'modify' ? buildChanges(item.patch, target, nameParent) : [];
 
       // THE PROPOSED STEPS, resolved for READING (MOTIR-4622 · AMENDMENT 14 D5,
       // D6; `design/ai-planning/design-notes.md` Part XV).

@@ -48,8 +48,6 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { workItemsService } from '@/lib/services/workItemsService';
-import { patchRescopes, resetOwed } from '@/lib/plans/rescopeReset';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -2024,8 +2022,6 @@ async function materialize(
   const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
   /** The re-parents this pass performed (MOTIR-3859) — see {@link ReparentMove}. */
   const reparented: ReparentMove[] = [];
-  /** The re-scope resets this pass wrote (Bug MOTIR-5359). */
-  const resets: RescopeReset[] = [];
 
   // modify + remove against existing targets (locked + re-read inside the tx).
   //
@@ -2053,7 +2049,6 @@ async function materialize(
         repoSets,
         planItemToWorkItem,
         plan.id,
-        resets,
       );
       if (moved) reparented.push(moved);
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
@@ -2096,7 +2091,7 @@ async function materialize(
     tx,
   );
 
-  return { touchedWorkItemIds, reparented, resets };
+  return { touchedWorkItemIds, reparented };
 }
 
 /** What one `materialize` pass did to the tree — the ids it touched (the
@@ -2104,8 +2099,6 @@ async function materialize(
 interface MaterializeResult {
   touchedWorkItemIds: string[];
   reparented: ReparentMove[];
-  /** The re-scope resets this pass wrote (Bug MOTIR-5359) — see {@link RescopeReset}. */
-  resets: RescopeReset[];
 }
 
 /**
@@ -2206,8 +2199,6 @@ async function applyModify(
   // already has its row and the map is complete by the time we are called.
   planItemToWorkItem: ReadonlyMap<string, string>,
   planId: string,
-  // Where a re-scope reset is recorded, for the post-commit event (MOTIR-5359).
-  resets: RescopeReset[],
 ): Promise<ReparentMove | null> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
@@ -2447,10 +2438,8 @@ async function applyModify(
   // workItemsService uses ({ added/removed: [{ toId, kind }] }) — so the activity
   // feed renders them through the already-registered `links` disposition
   // (lib/activity/renderers.ts) rather than a new, undispositioned key.
-  // ⚠️ A `modify` WIRES THE EDGE AND LEAVES THE STATUS ALONE FOR THE EDGE —
-  // deliberately (MOTIR-3050 AC 3). The status reset a RE-SCOPE owes is a
-  // different mover with a different trigger, and it is written below the
-  // revision (Bug MOTIR-5359). The `add` path above derives a materialized card's FIRST
+  // ⚠️ A `modify` WIRES THE EDGE AND LEAVES THE STATUS ALONE — deliberately
+  // (MOTIR-3050 AC 3). The `add` path above derives a materialized card's FIRST
   // status from its edges, and the obvious symmetry would be to move an existing
   // card to `blocked` when a `blockedByAdd` newly gates it. It is not symmetric,
   // for one reason: an `add` has no prior status to overwrite, and a `modify`
@@ -2504,66 +2493,6 @@ async function applyModify(
     tx,
   );
 
-  // THE RE-SCOPE RESET (Bug MOTIR-5359 — the requester's decision, 2026-09-13).
-  // A card already in the IN-PROGRESS category whose WORK this approve rewrote —
-  // its title, its description, or where it ships (`lib/plans/rescopeReset.ts`
-  // owns the list; type, estimate and points are excluded by decision) — goes
-  // back to the project's initial To Do status. Its old status claimed work that
-  // matches a body that no longer exists, and every reader of status (readiness,
-  // the board, the rollup, `motir run`'s selection) would keep believing it.
-  //
-  // It is NOT the edge rule above reversed: that one refuses to walk back a
-  // recorded fact to DISPLAY a dependency; this one walks it back because a
-  // person approved a change that made the fact untrue.
-  //
-  // Through the ONE status funnel, in this transaction, under `system` — an
-  // in-progress → To Do edge is not a legal interactive move in every workflow
-  // (`in_review` has none), and the approve must not fail on a rule written for
-  // a board drag. The transition's own revision records the move beside the
-  // modify's revision above; the `work-item/transitioned` event is sent after
-  // commit, like every event on this path.
-  if (
-    patchRescopes(
-      {
-        ...(diff.title ? { title: patch.title } : {}),
-        ...(diff.descriptionMd ? { descriptionMd: normalizedDescriptionMd } : {}),
-        // The repository axis counts when the applier actually MOVED the set, or
-        // when a row-level pin (role / row id, which writes no diff key) was given.
-        ...(diff.targetRepo || diff.targetRepos ? { targetRepos: [] } : {}),
-        ...(patch.targetRepoRole !== undefined ? { targetRepoRole: patch.targetRepoRole } : {}),
-        ...(patch.targetRepositoryRef !== undefined
-          ? { targetRepositoryRef: patch.targetRepositoryRef }
-          : {}),
-      },
-      { title: current.title, descriptionMd: current.descriptionMd },
-    )
-  ) {
-    const statuses = await workflowsService.listStatusesByProject(
-      current.projectId,
-      ctx.workspaceId,
-      tx,
-    );
-    const category = statuses.find((s) => s.key === current.status)?.category ?? null;
-    const initialKey = statuses.find((s) => s.isInitial)?.key ?? null;
-    if (resetOwed(category) && initialKey && initialKey !== current.status) {
-      const { transition } = await workItemsService.applyStatusTransition(
-        item.workItemId,
-        initialKey,
-        ctx,
-        tx,
-        { system: true },
-      );
-      if (transition) {
-        resets.push({
-          workItemId: item.workItemId,
-          fromStatusKey: transition.fromStatusKey,
-          toStatusKey: transition.toStatusKey,
-          revisionId: transition.revisionId,
-        });
-      }
-    }
-  }
-
   // Handed back rather than acted on here: BOTH of a move's consequences are
   // whole-pass facts. The repo-set recompute has to run once per container after
   // every op has landed (the rollup below), and the `child-set.changed` event has
@@ -2578,18 +2507,6 @@ async function applyModify(
  * the shape `moveWorkItem` emits `work-item/child-set.changed` from, because it
  * is the same edit through a different door.
  */
-/**
- * One status reset an approved RE-SCOPE wrote (Bug MOTIR-5359) — the transition
- * the post-commit `work-item/transitioned` event announces, exactly as
- * `updateStatus` would have for the same move.
- */
-interface RescopeReset {
-  workItemId: string;
-  fromStatusKey: string;
-  toStatusKey: string;
-  revisionId: string;
-}
-
 interface ReparentMove {
   workItemId: string;
   previousParentId: string | null;
@@ -4853,7 +4770,7 @@ export const plansService = {
       // reference a materialized card stores.
       const repoRefs = await resolveProposalRepoRefs(plan.projectId, ctx);
 
-      const { row, items, firstOnboarding, projectKey, touchedWorkItemIds, reparented, resets } =
+      const { row, items, firstOnboarding, projectKey, touchedWorkItemIds, reparented } =
         await withWorkspaceContext(
           { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
           async (tx) => {
@@ -4892,7 +4809,7 @@ export const plansService = {
             // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
             // under the lock, before a single row is materialized.
             assertRepoPinsUnmoved(snapshotPins, proposals, snapshotRepoSets);
-            const { touchedWorkItemIds, reparented, resets } = await materialize(
+            const { touchedWorkItemIds, reparented } = await materialize(
               proposals,
               fresh,
               ctx,
@@ -4975,7 +4892,6 @@ export const plansService = {
               projectKey: project?.identifier ?? null,
               touchedWorkItemIds,
               reparented,
-              resets,
             };
           },
           // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
@@ -4996,22 +4912,6 @@ export const plansService = {
         await sendEvent('work-item/embedding.requested', {
           workspaceId: ctx.workspaceId,
           workItemId,
-        });
-      }
-
-      // THE RE-SCOPE RESETS this approve wrote (Bug MOTIR-5359), announced exactly
-      // as `updateStatus` announces a move — so the watcher, the rollup and every
-      // other `work-item/transitioned` consumer sees the card leave its stale
-      // status. POST-COMMIT and best-effort, for the reasons the triggers around it
-      // give.
-      for (const reset of resets) {
-        await sendEvent('work-item/transitioned', {
-          workspaceId: ctx.workspaceId,
-          workItemId: reset.workItemId,
-          actorId: ctx.userId,
-          fromStatusKey: reset.fromStatusKey,
-          toStatusKey: reset.toStatusKey,
-          revisionId: reset.revisionId,
         });
       }
 
