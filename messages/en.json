@@ -371,6 +371,7 @@
       "estimation": "Estimation",
       "report": "Reports & filters",
       "repository": "Repositories",
+      "integration": "Integrations",
       "import": "Import",
       "ai": "AI planning"
     },
@@ -485,6 +486,10 @@
     "repository_manage_access": {
       "label": "Manage code access",
       "description": "Decide which team members may clone the project’s code."
+    },
+    "integration_manage": {
+      "label": "Manage integrations",
+      "description": "Connect and disconnect third-party services for this project — an error monitor, its stored credential, and which of its projects are bound."
     },
     "import_run": {
       "label": "Import work items",
@@ -1637,6 +1642,7 @@
       "aiPlanning": "AI planning",
       "rules": "Rules",
       "repositories": "Repositories",
+      "monitoring": "Monitoring",
       "approvals": "Approvals"
     },
     "roles": {
@@ -3577,7 +3583,8 @@
         "fields": "Custom fields are managed by project admins. Ask an admin if a field needs adding or changing.",
         "components": "Components are managed by project admins. Ask an admin if one needs adding or changing.",
         "ai-planning": "AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing.",
-        "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed."
+        "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
+        "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
       }
     },
     "organization": {
@@ -8012,6 +8019,127 @@
       "offWhat": "No acceptance video is accepted for this project, and no story is held.",
       "saved": "Saved",
       "saveError": "Couldn't save — try again."
+    }
+  },
+  "monitoring": {
+    "title": "Monitoring",
+    "description": "Connect the error monitor your services already report to, and Motir turns its issues into work items on this project's board.",
+    "loading": "Loading monitoring…",
+    "error": {
+      "title": "Couldn't load monitoring for this project",
+      "body": "Nothing has changed. Try again, and if it keeps happening, reload the page.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No error monitor connected",
+      "body": "Connect Sentry and the issues it records for the projects you choose arrive here as bug work items — in the container this project picks, with the issue's own culprit and a link back.",
+      "action": "Connect Sentry"
+    },
+    "grant": {
+      "provider": "Sentry",
+      "unknownOrg": "your Sentry organisation",
+      "checked": "checked {when}",
+      "recheck": "Re-check",
+      "reconnect": "Reconnect"
+    },
+    "health": {
+      "connected": "Connected",
+      "degraded": "Degraded"
+    },
+    "degraded": {
+      "says": "Sentry says:",
+      "consequence": "Motir cannot read this organisation's issues until somebody reconnects it — nothing new will reach the board in the meantime."
+    },
+    "section": {
+      "label": "Monitored projects",
+      "hint": "Issues from these Sentry projects become bug work items on this board.",
+      "hintDegraded": "Nothing new arrives from these while the connection is degraded.",
+      "add": "Add a monitored project"
+    },
+    "unbound": {
+      "title": "No Sentry projects monitored yet",
+      "body": "Sentry is connected to {org}. Choose which of its projects send issues to this board — nothing arrives until you do.",
+      "action": "Choose Sentry projects"
+    },
+    "row": {
+      "bound": "Bound {when}",
+      "disconnect": "Stop monitoring {slug}"
+    },
+    "confirm": {
+      "cancel": "Cancel",
+      "one": {
+        "title": "Stop monitoring {slug}?",
+        "body": "New issues from <b>{slug}</b> stop arriving on this board. <b>{others}</b> {count, plural, one {stays} other {stay}} monitored.",
+        "action": "Stop monitoring"
+      },
+      "last": {
+        "title": "Disconnect Sentry?",
+        "body": "<b>{slug}</b> is the last monitored project, so this also removes Motir's stored access to <b>{org}</b>. To monitor any of its projects again, you'll reconnect through Sentry.",
+        "action": "Disconnect Sentry"
+      }
+    },
+    "recheckFailed": "Couldn't re-check the connection. Try again in a moment.",
+    "disconnectFailed": "Couldn't stop monitoring that project. Nothing was changed — try again.",
+    "banner": {
+      "dismiss": "Dismiss",
+      "connected": {
+        "title": "Sentry is connected.",
+        "body": "Choose which of {org}'s projects send issues to this board."
+      },
+      "error": {
+        "title": "Couldn't connect Sentry.",
+        "body": "Nothing was saved — try connecting again.",
+        "bodyWithReason": "Sentry says: {reason} Nothing was saved — try connecting again."
+      },
+      "denied": {
+        "title": "Sentry wasn't connected.",
+        "body": "The request was declined in Sentry — nothing was saved."
+      },
+      "no_state": {
+        "title": "That install didn't start here.",
+        "body": "To connect Sentry to this project, use Connect Sentry below — nothing was saved."
+      },
+      "state_error": {
+        "title": "Couldn't connect Sentry.",
+        "body": "The request couldn't be verified, so nothing was saved. Try connecting again."
+      },
+      "forbidden": {
+        "title": "You can't manage integrations on this project.",
+        "body": "Ask a project admin to connect Sentry."
+      },
+      "no_project": {
+        "title": "Couldn't tell which project to connect.",
+        "body": "Open Monitoring from the project's settings and try again."
+      },
+      "not_configured": {
+        "title": "Sentry isn't set up on this Motir deployment yet.",
+        "body": "An administrator needs to add the Sentry integration's credentials."
+      }
+    },
+    "picker": {
+      "title": "Choose Sentry projects",
+      "subtitle": "From {org}. Issues from the projects you choose become bug work items on this board.",
+      "loading": "Loading {org}'s projects…",
+      "filter": "Filter projects",
+      "alreadyMonitored": "Already monitored",
+      "nowMonitored": "Now monitored",
+      "chosen": "Chosen",
+      "notChosen": "Not chosen",
+      "monitor": "{count, plural, =0 {Monitor projects} one {Monitor 1 project} other {Monitor # projects}}",
+      "partial": "{added} of {attempted} projects added. {failed, plural, one {{attempted, plural, one {It wasn't.} other {The other one wasn't.}}} other {The others weren't.}}",
+      "rowError": "Couldn't add — try again",
+      "done": "Done",
+      "retry": "Try again",
+      "cancel": "Cancel",
+      "reconnect": "Reconnect",
+      "noProjects": "{org} has no projects to monitor yet.",
+      "noMatch": "No projects match that filter.",
+      "loadFailed": "Couldn't load {org}'s projects. Close this and try again in a moment.",
+      "degraded": {
+        "title": "Couldn't load {org}'s projects.",
+        "says": "Sentry says: {reason}",
+        "body": "Motir needs a working connection to list them. Reconnect Sentry, then choose your projects."
+      }
     }
   }
 }

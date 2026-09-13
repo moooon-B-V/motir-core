@@ -2048,6 +2048,31 @@ export default defineConfig({
         // note above names. The arm's own branches are covered by
         // `tests/github/explicitPrLink.test.ts`.
         'lib/github/prReferenceQuery.ts',
+        // Story MOTIR-4928 · Subtask MOTIR-5263 — the monitor-connection surface
+        // (the store, the provider seam, connect/disconnect, the credential
+        // lifecycle). MEASURED on the parent branch before being pinned: every file
+        // at 100 on all four axes except `providers/sentry.ts` branches (98.5 — the
+        // implicit else of an arm `v8 ignore`d with its invariant test named).
+        //
+        // `lib/monitors/types.ts` is deliberately NOT here: it declares types only,
+        // so it compiles to nothing and a threshold on it would gate an empty map.
+        'lib/monitors/connectResult.ts',
+        'lib/monitors/connectState.ts',
+        'lib/monitors/errorResponse.ts',
+        'lib/monitors/errors.ts',
+        'lib/monitors/index.ts',
+        'lib/monitors/provider.ts',
+        'lib/monitors/registry.ts',
+        'lib/monitors/returnBanner.ts',
+        'lib/monitors/returnSurface.ts',
+        'lib/monitors/tokenCrypto.ts',
+        'lib/monitors/providers/fake.ts',
+        'lib/monitors/providers/sentry.ts',
+        'lib/services/monitorConnectionService.ts',
+        'lib/services/monitorCredentialService.ts',
+        'lib/repositories/monitorConnectionRepository.ts',
+        'lib/repositories/monitorInstallationRepository.ts',
+        'lib/mappers/monitorMappers.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -4074,6 +4099,55 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-4928 · Subtask MOTIR-5263 — pinned at the list's ordinary
+        // floor after measuring (see the `include` note above).
+        'lib/monitors/connectResult.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/connectState.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/errorResponse.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/index.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/provider.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/registry.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/returnBanner.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/returnSurface.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/tokenCrypto.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/providers/fake.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/monitors/providers/sentry.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/monitorConnectionService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/monitorCredentialService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/monitorConnectionRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/monitorInstallationRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/monitorMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
       },
     },
   },

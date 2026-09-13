@@ -320,6 +320,19 @@ export default defineConfig({
         // The identity/installation the seed binds are read back on this surface;
         // the App slug is what the settings pane the step hands off to renders.
         GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+        // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.
+        // ⚠️ THE FAKE IS SELECTED HERE OR NOWHERE. This server is spawned, so a
+        // `vi.mock` cannot reach it; `lib/monitors/index.ts` re-registers the fake
+        // provider under `sentry` when this switch is '1'. Without it every
+        // exchange would reach the real adapter and fail on missing credentials —
+        // a lane that could never reach a connected state. The slug and web base
+        // make the start route build an install URL at all (it answers
+        // `not_configured` without a slug); the base is a `.invalid` host the spec
+        // intercepts in the browser, so nothing ever leaves for sentry.io. The
+        // token key is the GitHub one above, which the monitor crypto falls back to.
+        MOTIR_MONITOR_FAKE_PROVIDER: '1',
+        SENTRY_APP_SLUG: 'motir-e2e',
+        SENTRY_WEB_BASE_URL: 'https://sentry-install.e2e.invalid',
         GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
         // The access step's "connect" is a REAL identity OAuth round-trip, not a
         // seeded row: the recorded journey's whole point is that a user with no

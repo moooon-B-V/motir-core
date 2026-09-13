@@ -1,4 +1,5 @@
 import {
+  Activity,
   Bot,
   Box,
   Columns3,
@@ -257,6 +258,23 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // lives" — retired by the 2026-08-08 amendment, which supersedes read-only
     // views of an administrative surface.)
     permission: 'repository:manage',
+  },
+  {
+    id: 'monitoring',
+    group: 'general',
+    href: '/settings/project/monitoring',
+    icon: Activity,
+    labelKey: 'nav.monitoring',
+    // Story MOTIR-4928 · MOTIR-5262 — the error-monitor room: a third party's
+    // CREDENTIAL plus the inventory of what it is bound to, with a destructive
+    // action per binding. That is the shape of `Repositories`, so it sits
+    // directly beneath it in `general` rather than in `automation`, which holds
+    // rooms that configure Motir's own behaviour (design/monitoring §6).
+    //
+    // VERIFIED: every `monitorConnectionService` method, and
+    // `monitorCredentialService.probeHealth` behind the room's Re-check, asserts
+    // `integration:manage` on the project.
+    permission: 'integration:manage',
   },
   {
     id: 'members',

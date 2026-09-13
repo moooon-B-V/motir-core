@@ -103,6 +103,11 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'estimation:manage',
   'repository:manage',
   'repository:manage_access',
+  // MOTIR-5260 — beside them, and granted to exactly the roles that already hold
+  // `repository:manage`: connecting a third-party credential is the same tier of
+  // act as attaching a repository, and this key is NEW, so no actor loses
+  // anything by its arriving here.
+  'integration:manage',
   'ai:configure',
   // MOTIR-2291 — the eight MEMBER-FACING keys, assigned by
   // `docs/decisions/member-facing-permissions.md`. Unlike the twelve above, these
