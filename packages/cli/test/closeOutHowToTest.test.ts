@@ -84,25 +84,17 @@ function summary(records: DispatchRecord[] = [record()]): AutoSummary {
   } as unknown as AutoSummary;
 }
 
+const BODY =
+  '## Precondition\n\nSign in as a member.\n\n## Locally\n\n```sh\npnpm i\n```\n\n## Click-path\n\n1. Open PROD-1\n2. Scroll to How to test';
+
 const RECORD: HowToTestRecord = {
   dispatchRunId: RUN_ID,
   createdAt: '2026-09-13T12:00:00.000Z',
-  preconditionMd: 'Sign in as a member.',
-  clickPathSteps: ['Open PROD-1', 'Scroll to How to test'],
-  clickPathNotApplicable: false,
-  clickPathNotApplicableReason: null,
+  bodyMd: BODY,
   previewPath: '/items/PROD-1',
   repos: [
-    {
-      repo: 'acme/web',
-      commitSha: 'a'.repeat(40),
-      setupCommands: [{ label: 'Install', command: 'pnpm i' }],
-    },
-    {
-      repo: 'acme/api',
-      commitSha: 'b'.repeat(40),
-      setupCommands: [{ label: 'Migrate', command: 'pnpm migrate' }],
-    },
+    { repo: 'acme/web', commitSha: 'a'.repeat(40) },
+    { repo: 'acme/api', commitSha: 'b'.repeat(40) },
   ],
 };
 
@@ -237,7 +229,7 @@ describe('runCloseOutHowToTest → closeOutRepos', () => {
 });
 
 describe('renderSessionPrBody — the `## How to test` section', () => {
-  it('renders THIS repository’s section of the record, the precondition and the click-path', () => {
+  it('renders the record’s rich-text body VERBATIM, then this repository’s branch fetch', () => {
     const body = renderSessionPrBody('r1', 'motir/run-web', [record()], [], {
       targetKey: 'PROD-1',
       record: RECORD,
@@ -245,28 +237,10 @@ describe('renderSessionPrBody — the `## How to test` section', () => {
     });
     expect(body).toContain('## How to test');
     expect(body).toContain('Written onto PROD-1 by the run.');
-    expect(body).toContain('**Precondition.** Sign in as a member.');
-    expect(body).toContain('git fetch origin motir/run-web && git checkout motir/run-web');
-    expect(body).toContain('pnpm i  # Install');
-    expect(body).not.toContain('pnpm migrate');
-    expect(body).toContain('**Click-path** (open `/items/PROD-1`)');
-    expect(body).toContain('1. Open PROD-1');
-    expect(body).toContain('2. Scroll to How to test');
-  });
-
-  it('renders the not-applicable reason instead of steps', () => {
-    const body = renderSessionPrBody('r1', 'motir/run-api', [record()], [], {
-      targetKey: 'PROD-1',
-      record: {
-        ...RECORD,
-        clickPathSteps: [],
-        clickPathNotApplicable: true,
-        clickPathNotApplicableReason: 'no rendered surface changed',
-      },
-      repoName: 'api',
-    });
-    expect(body).toContain('pnpm migrate  # Migrate');
-    expect(body).toContain('**Click-path.** Not applicable — no rendered surface changed');
+    expect(body).toContain(BODY);
+    expect(body.indexOf(BODY)).toBeLessThan(
+      body.indexOf('git fetch origin motir/run-web && git checkout motir/run-web'),
+    );
   });
 
   it('with no record, says so naming the run target', () => {

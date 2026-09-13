@@ -843,8 +843,8 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     summary: 'Get a run target’s current How to test',
     description:
       'The CURRENT How-to-test record on a work item — the one the newest run published onto ' +
-      'its run target: the precondition, ONE click-path (or why there is none), the preview ' +
-      'path, and a section per repository with its commit and setup commands. `record` is ' +
+      'its run target: its rich-text Markdown body (sections, commands in fenced code blocks), ' +
+      'the preview path, and a section per repository with its commit. `record` is ' +
       '`null` when no run has written one. A CLI renders it into the `## How to test` section ' +
       'of each session pull request body, so the body and the item page show one record. ' +
       'A read.',

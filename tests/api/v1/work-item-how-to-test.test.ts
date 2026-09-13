@@ -15,6 +15,7 @@ import { randomToken } from '../../helpers/random';
 // pull request body. Real Postgres, the shipped route.
 
 const BASE = 'http://localhost:3000/api/v1';
+const BODY = '## Precondition\n\nSign in.\n\n```sh\npnpm i\n```';
 
 async function getHowToTest(caller: V1ProjectCaller, key: string): Promise<Response> {
   const { GET } = await import('@/app/api/v1/work-items/[key]/how-to-test/route');
@@ -81,15 +82,8 @@ describe('GET /api/v1/work-items/{key}/how-to-test', () => {
     await testInstructionsService.publish(
       {
         workItemId: item.id,
-        clickPathSteps: ['Open the story'],
-        preconditionMd: 'Sign in.',
-        repos: [
-          {
-            repoId: repo.id,
-            commitSha: 'a'.repeat(40),
-            setupCommands: [{ label: 'Install', command: 'pnpm i' }],
-          },
-        ],
+        bodyMd: BODY,
+        repos: [{ repoId: repo.id, commitSha: 'a'.repeat(40) }],
       },
       fixture.ctx,
     );
@@ -98,15 +92,8 @@ describe('GET /api/v1/work-items/{key}/how-to-test', () => {
     expect(res.status).toBe(200);
     const body = currentTestInstructionsSchema.parse(await res.json());
     expect(body.record).toMatchObject({
-      preconditionMd: 'Sign in.',
-      clickPathSteps: ['Open the story'],
-      repos: [
-        {
-          repo: 'acme/web',
-          commitSha: 'a'.repeat(40),
-          setupCommands: [{ label: 'Install', command: 'pnpm i' }],
-        },
-      ],
+      bodyMd: BODY,
+      repos: [{ repo: 'acme/web', commitSha: 'a'.repeat(40) }],
     });
     expect(JSON.stringify(body)).not.toContain(repo.id);
   });

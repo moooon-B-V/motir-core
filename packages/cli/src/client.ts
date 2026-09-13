@@ -448,23 +448,16 @@ export function isReferenceAdvisory(a: DispatchAdvisory): a is DispatchReference
 }
 
 /**
- * A run target's current HOW TO TEST record (MOTIR-5358) — one per run: one
- * click-path, the precondition, and a section per repository (`repo` is
- * `owner/name`).
+ * A run target's current HOW TO TEST record (MOTIR-5358) — one per run: its
+ * rich-text body, and a section per repository (`repo` is `owner/name`).
  */
 export interface HowToTestRecord {
   dispatchRunId: string | null;
   createdAt: string;
-  preconditionMd: string | null;
-  clickPathSteps: string[];
-  clickPathNotApplicable: boolean;
-  clickPathNotApplicableReason: string | null;
+  /** The run's How to test as rich text (Markdown), exactly as the agent wrote it. */
+  bodyMd: string;
   previewPath: string | null;
-  repos: {
-    repo: string | null;
-    commitSha: string;
-    setupCommands: { label: string; command: string }[];
-  }[];
+  repos: { repo: string | null; commitSha: string }[];
 }
 
 /** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt

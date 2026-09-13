@@ -1904,7 +1904,7 @@ export function presentDispatchRunCloseOutPrompt(
 
 /**
  * A run target's CURRENT How-to-test record (Story MOTIR-4906 · MOTIR-5358) — one
- * per run: one click-path, the precondition, and a section per repository.
+ * per run: its rich-text body, and a section per repository.
  */
 export const currentTestInstructionsSchema = z.object({
   key: workItemKeySchema,
@@ -1914,17 +1914,14 @@ export const currentTestInstructionsSchema = z.object({
       /** The dispatch run that wrote it, when one did. */
       dispatchRunId: z.string().nullable(),
       createdAt: z.string(),
-      preconditionMd: z.string().nullable(),
-      clickPathSteps: z.array(z.string()),
-      clickPathNotApplicable: z.boolean(),
-      clickPathNotApplicableReason: z.string().nullable(),
+      /** The run's How to test as rich text (Markdown), exactly as the agent wrote it. */
+      bodyMd: z.string(),
       previewPath: z.string().nullable(),
       repos: z.array(
         z.object({
           /** `owner/name`, or null when the repository is no longer the project's. */
           repo: z.string().nullable(),
           commitSha: z.string(),
-          setupCommands: z.array(z.object({ label: z.string(), command: z.string() })),
         }),
       ),
     })
@@ -1943,18 +1940,11 @@ export function presentCurrentTestInstructions(
       ? {
           dispatchRunId: record.dispatchRunId,
           createdAt: record.createdAt,
-          preconditionMd: record.preconditionMd,
-          clickPathSteps: [...record.clickPathSteps],
-          clickPathNotApplicable: record.clickPathNotApplicable,
-          clickPathNotApplicableReason: record.clickPathNotApplicableReason,
+          bodyMd: record.bodyMd,
           previewPath: record.previewPath,
           repos: record.repos.map((section) => ({
             repo: section.repoName,
             commitSha: section.commitSha,
-            setupCommands: section.setupCommands.map((c) => ({
-              label: c.label,
-              command: c.command,
-            })),
           })),
         }
       : null,
