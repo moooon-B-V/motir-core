@@ -24,6 +24,7 @@ const resolvers: DisplayResolvers = {
   status: (key) => ({ type: 'status', key, label: `label:${key}` }),
   sprint: (id) => ({ type: 'sprint', sprintId: id, name: `sprint:${id}` }),
   issue: (id) => ({ type: 'issue', workItemId: id, identifier: `PROD-${id}` }),
+  folder: (id) => ({ type: 'text', text: `folder:${id}` }),
 };
 
 function parts(changeKind: string, diff: unknown) {

@@ -51,6 +51,7 @@ import {
   WorkItemKeyConflictError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
+import { CrossProjectFolderError } from '@/lib/folders/errors';
 
 // Work-item repository — single Prisma operations on the `work_item` table.
 // Writes require `tx` (compile-time guarantee they run in a transaction);
@@ -761,6 +762,44 @@ export const workItemRepository = {
    * Read-inside-a-transaction that gates a write → requires `tx` per CLAUDE.md
    * (mirrors userRepository.lockById).
    */
+  /**
+   * Every work item filed directly in one folder, in display order — what
+   * `foldersService.deleteFolder` moves up before it deletes the folder.
+   *
+   * UNFILTERED on purpose: an archived or triaged item filed there still holds
+   * the folder's foreign key, so a delete that skipped it would be refused by
+   * the database halfway through (Story MOTIR-5308 · MOTIR-5313).
+   */
+  async findFiledInFolder(
+    folderId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<WorkItem, 'id' | 'kind' | 'parentId' | 'position'>>> {
+    return tx.workItem.findMany({
+      where: { folderId },
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      select: { id: true, kind: true, parentId: true, position: true },
+    });
+  },
+
+  /**
+   * The last position among the work items at one FOLDER LEVEL — filed in
+   * `folderId`, or at the project root (no parent and no folder) when it is
+   * `null`. A filed or un-filed item is appended after it.
+   */
+  async findLastPositionAtFolderLevel(
+    projectId: string,
+    folderId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.workItem.findFirst({
+      where:
+        folderId === null ? { projectId, folderId: null, parentId: null } : { projectId, folderId },
+      orderBy: [{ position: 'desc' }, { id: 'desc' }],
+      select: { position: true },
+    });
+    return row?.position ?? null;
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "work_item" WHERE "id" = ${id} FOR UPDATE
@@ -5694,6 +5733,14 @@ function translateWriteError(err: unknown, ctx?: { id?: string }): never {
     ) {
       throw new CrossProjectParentError(message);
     }
+    // A filed item's folder in another tenant (MOTIR-5312's trigger) — the same
+    // typed error `workItemsService.fileWorkItem` raises for it ahead of the write.
+    if (
+      message.includes('WI_FOLDER_CROSS_WORKSPACE') ||
+      message.includes('WI_FOLDER_CROSS_PROJECT')
+    ) {
+      throw new CrossProjectFolderError(message);
+    }
     if (message.includes('WI_ILLEGAL_PARENT_TYPE') || message.includes('WI_SUBTASK_NEEDS_PARENT')) {
       throw new IllegalParentTypeError(message);
     }
@@ -5722,7 +5769,9 @@ function isTriggerMarker(message: string): boolean {
     message.includes('WI_ILLEGAL_PARENT_TYPE') ||
     message.includes('WI_SUBTASK_NEEDS_PARENT') ||
     message.includes('WI_DEPTH_LIMIT_EXCEEDED') ||
-    message.includes('WI_PARENT_CYCLE')
+    message.includes('WI_PARENT_CYCLE') ||
+    message.includes('WI_FOLDER_CROSS_WORKSPACE') ||
+    message.includes('WI_FOLDER_CROSS_PROJECT')
   );
 }
 

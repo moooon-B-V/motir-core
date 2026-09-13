@@ -56,6 +56,9 @@ import { extractReferencedAttachmentIdsFromBodies } from '@/lib/blob/referencedU
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
+import { folderRepository } from '@/lib/repositories/folderRepository';
+import { CrossProjectFolderError, FolderNotFoundError } from '@/lib/folders/errors';
+import type { FileWorkItemInput, FileWorkItemResultDto } from '@/lib/dto/folders';
 import {
   QUICK_SEARCH_DEFAULT_LIMIT,
   QUICK_SEARCH_MAX_LIMIT,
@@ -3449,6 +3452,13 @@ export const workItemsService = {
       };
       const diff: Record<string, DiffCell> = {};
       if (parentChanged) diff.parentId = { from: current.parentId, to: targetParentId };
+      // The other half of the parent-XOR-folder rule (MOTIR-5313): an item given
+      // a work-item parent leaves its folder in the same write, or the
+      // `work_item_parent_xor_folder` CHECK would refuse it.
+      if (parentChanged && targetParentId !== null && current.folderId !== null) {
+        update.folderId = null;
+        diff.folderId = { from: current.folderId, to: null };
+      }
       if (newPosition !== current.position) {
         diff.position = { from: current.position, to: newPosition };
       }
@@ -3503,6 +3513,109 @@ export const workItemsService = {
       });
     }
     return dto;
+  },
+
+  /**
+   * File a work item into a folder, or take it out of one (Epic MOTIR-5307 ·
+   * Story MOTIR-5308 · MOTIR-5313). `foldersService.fileWorkItem` is the
+   * folder-domain door onto this.
+   *
+   * Filing sets `folderId` and clears `parentId` in ONE write, and appends the
+   * item after the folder's last filed item. The item's SUBTREE is untouched:
+   * its children keep their own `parentId`, so they travel with it.
+   *
+   * ⚠️ WHY IT LIVES HERE AND NOT IN THE FOLDER SERVICE. Filing an item that has
+   * a work-item parent is a re-parent to the root, so it owes exactly what
+   * `moveWorkItem` owes the parent it leaves — the container repository rollup
+   * and the `work-item/child-set.changed` event that re-derives that parent's
+   * status — and those helpers belong to this file.
+   *
+   * Taking an item OUT of its folder (`folderId: null`) returns it to the root.
+   * A SUBTASK cannot go there: its must-have-a-parent rule is satisfied by a
+   * folder (the epic's decision), and without one it has neither, so the kind
+   * rule refuses with the same typed error it raises everywhere else.
+   */
+  async fileWorkItem(
+    workItemId: string,
+    input: FileWorkItemInput,
+    ctx: ServiceContext,
+  ): Promise<FileWorkItemResultDto> {
+    const { result, previousParentId } = await withWorkspaceContext(ctx, async (tx) => {
+      const locked = await workItemRepository.lockById(workItemId, tx);
+      if (!locked) throw new WorkItemNotFoundError(workItemId);
+      const current = await workItemRepository.findById(workItemId, tx);
+      /* istanbul ignore next -- defensive: the row was locked in this transaction */
+      if (!current) throw new WorkItemNotFoundError(workItemId);
+      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
+
+      const target = input.folderId;
+      const unchanged = {
+        result: {
+          workItemId,
+          folderId: current.folderId,
+          parentId: current.parentId,
+          position: current.position,
+        },
+        previousParentId: null,
+      };
+
+      if (target === null) {
+        if (current.folderId === null) return unchanged;
+        // Filed items carry no work-item parent, so leaving the folder leaves
+        // the item a root — which a subtask may not be.
+        assertValidParent(null, current.kind);
+      } else {
+        const folder = await folderRepository.lockById(target, tx);
+        if (!folder) throw new FolderNotFoundError(target);
+        if (folder.projectId !== current.projectId) throw new CrossProjectFolderError();
+        if (current.folderId === target && current.parentId === null) return unchanged;
+      }
+
+      const position = keyForAppend(
+        await workItemRepository.findLastPositionAtFolderLevel(current.projectId, target, tx),
+      );
+      const diff: Record<string, DiffCell> = {
+        folderId: { from: current.folderId, to: target },
+        position: { from: current.position, to: position },
+      };
+      if (current.parentId !== null) diff.parentId = { from: current.parentId, to: null };
+
+      const row = await workItemRepository.update(
+        workItemId,
+        { folderId: target, parentId: null, position },
+        tx,
+      );
+      await workItemRevisionsService.recordRevision(
+        { workItemId, changedById: ctx.userId, changeKind: 'updated', diff },
+        tx,
+      );
+      if (current.parentId !== null) {
+        await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
+        await recomputeAncestorRepoSets(workItemId, ctx.workspaceId, tx);
+      }
+      return {
+        result: {
+          workItemId,
+          folderId: row.folderId,
+          parentId: row.parentId,
+          position: row.position,
+        },
+        previousParentId: current.parentId,
+      };
+    });
+
+    // The parent the item left lost a child, exactly as on a `moveWorkItem` to
+    // the root — so its status is re-derived by the same event.
+    if (previousParentId !== null) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [previousParentId],
+        workItemId,
+        reason: 'reparented',
+        occurredAt: new Date().toISOString(),
+      });
+    }
+    return result;
   },
 
   /**
