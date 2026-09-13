@@ -118,7 +118,8 @@ const INDEX_LOOP_MAX_POLL_INTERVAL_MS = 15_000;
  * or the reaper reaches the container. Against the `fly` / `iad` rate row the
  * fleet runs on (`packages/orchestrator/src/rates.ts`):
  *
- *   60 s × $0.000031636049/s = $0.00189816 unobserved per container per interval
+ *   60 s × $0.000031636049/s = $0.00189816294 (under $0.002) unobserved per
+ *   container per interval
  *
  * — on a Fly account with neither a spending cap nor a billing alert
  * (`ci-runner-fleet.md` §9). A container story-shaped at hours is still polled
