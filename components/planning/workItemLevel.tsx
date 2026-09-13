@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import {
   PlanningOriginCluster,
   ORIGIN_H,
@@ -229,6 +230,41 @@ export interface BuildWorkItemLevelOptions {
   departingIds?: ReadonlySet<string>;
 }
 
+/**
+ * The GHOST ANCHOR node standing in for an off-level blocker (MOTIR-1331) — the
+ * one node shape every canvas drawing the off-level treatment mints.
+ *
+ * EXPORTED (bug MOTIR-5387) because the plan-review merge mints anchors too, for
+ * a PROPOSAL's own off-level blockers, and a second hand-built copy of this
+ * object is how the review canvas and the roadmap came to disagree one field at
+ * a time (MOTIR-4951, MOTIR-4952, MOTIR-5006, MOTIR-5272). The CONTENT stays the
+ * caller's, because only the caller knows whether the blocker has a key to show.
+ *
+ * `label` is `null` when nothing names the blocker: the search text degrades to
+ * the bare id and there is no crumb — the builder's own anonymous case.
+ */
+export function ghostAnchorNode(
+  id: string,
+  label: { searchText: string; crumbLabel: string } | null,
+  content: ReactNode,
+): ProjectCanvasNode {
+  return {
+    id,
+    parentId: null,
+    drillable: false,
+    searchText: label?.searchText ?? id,
+    crumbLabel: label?.crumbLabel,
+    // The off-level blocker is a REAL work item with a valid identifier
+    // (MOTIR-1586) — make its ghost anchor VIEWABLE so "blocked by something
+    // elsewhere" is peekable, exactly like any other work-item node: selecting
+    // it shows the View button, and View opens the shared `WorkItemQuickView`
+    // (which resolves the anchor id → its identifier via `registerItems`). A
+    // bare click only SELECTS — no click-to-open, consistent with every card.
+    viewable: true,
+    content,
+  };
+}
+
 export function buildWorkItemLevel(
   wi: RoadmapLevelData,
   opts: BuildWorkItemLevelOptions = {},
@@ -433,28 +469,20 @@ export function buildWorkItemLevel(
     deps.push({ from: e.blockerId, to: e.blockedId, variant: 'cross' });
     if (!anchorAdded.has(e.blockerId)) {
       anchorAdded.add(e.blockerId);
-      anchorNodes.push({
-        id: e.blockerId,
-        parentId: null,
-        drillable: false,
-        searchText: stub ? `${stub.identifier} ${stub.title}` : e.blockerId,
-        crumbLabel: stub?.identifier,
-        // The off-level blocker is a REAL work item with a valid identifier
-        // (MOTIR-1586) — make its ghost anchor VIEWABLE so "blocked by something
-        // elsewhere" is peekable, exactly like any other work-item node: selecting
-        // it shows the View button, and View opens the shared `WorkItemQuickView`
-        // (which resolves the anchor id → its identifier via `registerItems`). A
-        // bare click only SELECTS — no click-to-open, consistent with every card.
-        viewable: true,
-        content: (
+      anchorNodes.push(
+        ghostAnchorNode(
+          e.blockerId,
+          stub
+            ? { searchText: `${stub.identifier} ${stub.title}`, crumbLabel: stub.identifier }
+            : null,
           <GhostAnchor
             identifier={stub?.identifier ?? '—'}
             title={stub?.title}
             parentTitle={stub?.parentTitle ?? null}
             outOfSprint={scope === 'sprint'}
-          />
+          />,
         ),
-      });
+      );
     }
   }
 

@@ -392,6 +392,15 @@ export function PlanReviewCanvas({
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
+      // An off-level blocker's ANCHOR is viewable (bug MOTIR-5387), and the peek
+      // is keyed by `MOTIR-<n>` while the canvas hands `onView` a cuid. No level
+      // read carries a blocker a PROPOSAL names, so its key is learned from the
+      // review model's stub — or View asks for a key no work item has.
+      for (const item of items) {
+        for (const stub of item.blockerStubs) {
+          if (stub.identifier) identifierByIdRef.current.set(stub.nodeId, stub.identifier);
+        }
+      }
       // THE GROUPED NODE'S LEVEL — synthetic, so it never asks the API for the
       // children of an id no work item has. This canvas keeps no level cache, so
       // the door RE-READS the root rather than reading one back: the MOTIR-4426

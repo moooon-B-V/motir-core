@@ -10,6 +10,7 @@ import { arrivalLevel } from '@/components/planning/PlanReviewCanvas';
 import type { PlanCanvasLevel } from '@/components/planning/planLevel';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
+import type { ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 
 // Component tests for the plan-detail op treatments (Subtask 7.4.5 / MOTIR-847)
 // under happy-dom. The DTO assembly is covered by the real-DB
@@ -33,6 +34,7 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],
+    blockerStubs: [],
     identifier: null,
     title: 'A proposed item',
     kind: 'task',
@@ -453,8 +455,9 @@ describe('mergePlanLevel', () => {
 
     expect(level.deps).toEqual([
       { from: 'wi_a', to: 'wi_b', variant: 'firm' },
-      // `off_level` has no node here, so its edge is dropped — the same rule the
-      // committed roadmap applies to an off-level blocker.
+      // `off_level` has no node here and no stub to name it by, so its edge is
+      // dropped. A blocker that CAN be named takes the off-level treatment
+      // instead (bug MOTIR-5387).
       { from: 'wi_a', to: 'p1', variant: 'pending' },
     ]);
   });
@@ -978,10 +981,11 @@ describe('mergePlanLevel — a RE-PARENTED card’s committed edges', () => {
     expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'firm' }]);
   });
 
-  it('does NOT draw one whose other end stays off the level', () => {
-    // The both-ends-present rule the proposed loop already applies. A card moved
-    // in alone keeps a blocker that is still somewhere else, and this level is
-    // not the place to draw it.
+  it('draws NOTHING for an off-level blocker the review model could not NAME', () => {
+    // A card moved in alone keeps a blocker that is still somewhere else. With a
+    // stub, that blocker takes the off-level treatment (bug MOTIR-5387, below);
+    // WITHOUT one — archived, deleted, out of reach — there is nothing to put on
+    // an anchor, so nothing is drawn rather than a `—` standing in for it.
     const level = mergePlanLevel(
       committed(['wi_existing']),
       [
@@ -1395,5 +1399,304 @@ describe('buildWorkItemLevel — a card the plan MOVES OFF this level', () => {
 
     expect(built.nodes.map((n) => n.id)).toEqual(['wi_stays', 'wi_leaving']);
     expect(built.deps).toEqual([{ from: 'wi_leaving', to: 'wi_stays', variant: 'pending' }]);
+  });
+});
+
+// ── bug MOTIR-5387 — a PROPOSAL blocked by a card OFF this level ─────────────
+//
+// The roadmap draws an off-level blocker with three effects — a `cross` arrow, a
+// viewable ghost anchor naming the blocker, and the dependent's "blocked
+// elsewhere" chip — and `buildWorkItemLevel` is where they come from. A
+// proposal's OWN edges never reached that branch: `mergePlanLevel` dropped every
+// one whose blocker was not on the level, so a plan adding a cross-container
+// dependency drew nothing until it was approved, which is the moment the warning
+// stops being able to change the decision.
+describe('mergePlanLevel — a proposal blocked by a card OFF this level (bug MOTIR-5387)', () => {
+  /** Story `wi-s`'s level as the roadmap read returns it BEFORE approve. */
+  function storyLevel(over: Partial<RoadmapLevelData> = {}): RoadmapLevelData {
+    return {
+      items: [
+        {
+          id: 'wi-a',
+          parentId: 'wi-s',
+          identifier: 'MOTIR-1',
+          title: 'A committed child',
+          kind: 'subtask',
+          status: 'todo',
+          hasChildren: false,
+        },
+      ],
+      edges: [],
+      offLevelBlockers: [],
+      ...over,
+    };
+  }
+
+  /** The committed read's stub for `wi-x`, the blocker under another story. */
+  const ROADMAP_STUB = {
+    id: 'wi-x',
+    identifier: 'MOTIR-9',
+    title: 'The blocker under another story',
+    parentTitle: null,
+    isDone: false,
+  };
+
+  /** The review model's stub for the same blocker. */
+  const OFF_STUB = {
+    nodeId: 'wi-x',
+    identifier: 'MOTIR-9',
+    title: 'The blocker under another story',
+    isDone: false,
+    parentNodeId: 'wi-other',
+  };
+
+  function added(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
+    return item({
+      planItemId: 'pi_1',
+      nodeId: 'pi_1',
+      op: 'add',
+      title: 'The new card',
+      parentNodeId: 'wi-s',
+      blockedByNodeIds: ['wi-x'],
+      blockerStubs: [OFF_STUB],
+      ...over,
+    });
+  }
+
+  /** Does this node's rendered content carry the "blocked elsewhere" chip? */
+  function flagged(node: ProjectCanvasNode | undefined): boolean {
+    renderWithIntl(<>{node?.content}</>);
+    const hit = screen.queryByTestId('cross-blocked-flag') !== null;
+    cleanup();
+    return hit;
+  }
+
+  /** The text of the ONE anchor the level draws for `id`. */
+  function anchorText(level: PlanCanvasLevel, id: string): string {
+    const anchors = level.nodes.filter((n) => n.id === id);
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]!.viewable).toBe(true);
+    const { container } = renderWithIntl(<>{anchors[0]!.content}</>);
+    const text = container.textContent ?? '';
+    cleanup();
+    return text;
+  }
+
+  it('draws the SAME three effects before approve that the roadmap draws after it', () => {
+    // AFTER approve: the add is a committed child, and the edge + stub come off
+    // the roadmap read. This half passed on the unfixed code — it is the target.
+    const after = buildWorkItemLevel(
+      storyLevel({
+        items: [
+          ...storyLevel().items,
+          {
+            id: 'wi-new',
+            parentId: 'wi-s',
+            identifier: 'MOTIR-10',
+            title: 'The new card',
+            kind: 'subtask',
+            status: 'todo',
+            hasChildren: false,
+          },
+        ],
+        edges: [{ blockedId: 'wi-new', blockerId: 'wi-x' }],
+        offLevelBlockers: [ROADMAP_STUB],
+      }),
+    );
+    expect(after.deps).toEqual([{ from: 'wi-x', to: 'wi-new', variant: 'cross' }]);
+    expect(anchorText(after, 'wi-x')).toContain('MOTIR-9');
+    expect(flagged(after.nodes.find((n) => n.id === 'wi-new'))).toBe(true);
+
+    // BEFORE approve: the same card, the same dependency, on the same level. On
+    // the unfixed code `deps` came back EMPTY here.
+    const before = mergePlanLevel(buildWorkItemLevel(storyLevel()), [added()], 'wi-s');
+    expect(before.deps).toEqual([{ from: 'wi-x', to: 'pi_1', variant: 'cross' }]);
+    const text = anchorText(before, 'wi-x');
+    expect(text).toContain('MOTIR-9');
+    expect(text).toContain('The blocker under another story');
+    expect(flagged(before.nodes.find((n) => n.id === 'pi_1'))).toBe(true);
+  });
+
+  it('draws them for a MODIFY whose `patch.blockedByAdd` names an off-level card — on the re-skinned node', () => {
+    // `blockedByNodeIds` is where the review model resolves `patch.blockedByAdd`
+    // to (MOTIR-3366), so the modify carries the edge exactly as an add does.
+    const before = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [added({ planItemId: 'pi_mod', nodeId: 'wi-a', op: 'modify', identifier: 'MOTIR-1' })],
+      'wi-s',
+    );
+
+    expect(before.deps).toEqual([{ from: 'wi-x', to: 'wi-a', variant: 'cross' }]);
+    expect(anchorText(before, 'wi-x')).toContain('MOTIR-9');
+    renderWithIntl(<>{before.nodes.find((n) => n.id === 'wi-a')?.content}</>);
+    expect(screen.getByTestId('plan-item-node').getAttribute('data-op')).toBe('modify');
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+  });
+
+  it('draws them for a card the plan RE-PARENTS here whose committed blocker stays elsewhere', () => {
+    const before = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [
+        added({
+          planItemId: 'pi_moved',
+          nodeId: 'wi-moved',
+          op: 'modify',
+          identifier: 'MOTIR-5',
+          blockedByNodeIds: [],
+          committedBlockedBy: [{ nodeId: 'wi-x', isDone: true }],
+        }),
+      ],
+      'wi-s',
+    );
+
+    // `cross` whatever the blocker's status — the roadmap's off-level variant.
+    expect(before.deps).toEqual([{ from: 'wi-x', to: 'wi-moved', variant: 'cross' }]);
+    expect(flagged(before.nodes.find((n) => n.id === 'wi-moved'))).toBe(true);
+  });
+
+  it('names a blocker that is itself a PROPOSAL by the proposed word, never by a key', () => {
+    const before = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [
+        added({
+          blockedByNodeIds: ['pi_elsewhere'],
+          blockerStubs: [
+            {
+              nodeId: 'pi_elsewhere',
+              identifier: null,
+              title: 'A card the plan adds elsewhere',
+              isDone: false,
+              parentNodeId: 'wi-other',
+            },
+          ],
+        }),
+      ],
+      'wi-s',
+    );
+
+    expect(before.deps).toEqual([{ from: 'pi_elsewhere', to: 'pi_1', variant: 'cross' }]);
+    const text = anchorText(before, 'pi_elsewhere');
+    expect(text).toContain('New');
+    expect(text).toContain('A card the plan adds elsewhere');
+    expect(text).not.toMatch(/MOTIR-/);
+  });
+
+  it('leaves a blocker ON the level as it was — a plain `pending` arrow, no chip, no anchor', () => {
+    const before = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [
+        added({
+          blockedByNodeIds: ['wi-a'],
+          blockerStubs: [
+            {
+              nodeId: 'wi-a',
+              identifier: 'MOTIR-1',
+              title: 'A committed child',
+              isDone: false,
+              parentNodeId: 'wi-s',
+            },
+          ],
+        }),
+      ],
+      'wi-s',
+    );
+
+    expect(before.deps).toEqual([{ from: 'wi-a', to: 'pi_1', variant: 'pending' }]);
+    expect(before.nodes.map((n) => n.id)).toEqual(['wi-a', 'pi_1']);
+    expect(flagged(before.nodes.find((n) => n.id === 'pi_1'))).toBe(false);
+  });
+
+  it('draws no chip about a blocker the plan MOVES ONTO this level (MOTIR-4952, for a proposal)', () => {
+    const relocating = item({
+      planItemId: 'pi_reloc',
+      nodeId: 'wi-x',
+      op: 'modify',
+      identifier: 'MOTIR-9',
+      title: 'The blocker under another story',
+      parentNodeId: 'wi-s',
+    });
+    const before = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [relocating, added({ blockerStubs: [{ ...OFF_STUB, parentNodeId: 'wi-s' }] })],
+      'wi-s',
+    );
+
+    expect(before.deps).toEqual([{ from: 'wi-x', to: 'pi_1', variant: 'pending' }]);
+    expect(before.nodes.map((n) => n.id)).toEqual(['wi-a', 'wi-x', 'pi_1']);
+    expect(flagged(before.nodes.find((n) => n.id === 'pi_1'))).toBe(false);
+  });
+
+  it('treats a blocker the capped read DROPPED from this level as a member, not as elsewhere (MOTIR-5043)', () => {
+    const before = mergePlanLevel(
+      buildWorkItemLevel(storyLevel()),
+      [
+        added({
+          blockedByNodeIds: ['wi-capped'],
+          blockerStubs: [
+            {
+              nodeId: 'wi-capped',
+              identifier: 'MOTIR-300',
+              title: 'A sibling past the cap',
+              isDone: false,
+              parentNodeId: 'wi-s',
+            },
+          ],
+        }),
+      ],
+      'wi-s',
+    );
+
+    expect(before.deps).toEqual([{ from: 'wi-capped', to: 'pi_1', variant: 'pending' }]);
+    expect(before.nodes.some((n) => n.id === 'wi-capped')).toBe(false);
+    expect(flagged(before.nodes.find((n) => n.id === 'pi_1'))).toBe(false);
+  });
+
+  it('mints ONE anchor per blocker — shared with a committed sibling the builder already anchored', () => {
+    const level = storyLevel({
+      edges: [{ blockedId: 'wi-a', blockerId: 'wi-x' }],
+      offLevelBlockers: [ROADMAP_STUB],
+    });
+    const before = mergePlanLevel(
+      buildWorkItemLevel(level),
+      [added(), added({ planItemId: 'pi_2', nodeId: 'pi_2', title: 'A second new card' })],
+      'wi-s',
+    );
+
+    expect(before.nodes.filter((n) => n.id === 'wi-x')).toHaveLength(1);
+    expect(before.deps).toEqual([
+      { from: 'wi-x', to: 'wi-a', variant: 'cross' },
+      { from: 'wi-x', to: 'pi_1', variant: 'cross' },
+      { from: 'wi-x', to: 'pi_2', variant: 'cross' },
+    ]);
+    expect(flagged(before.nodes.find((n) => n.id === 'pi_1'))).toBe(true);
+    expect(flagged(before.nodes.find((n) => n.id === 'pi_2'))).toBe(true);
+  });
+
+  it('keeps the chip on a committed card a MODIFY re-skins — and drops it when the plan deletes that edge', () => {
+    const level = storyLevel({
+      edges: [{ blockedId: 'wi-a', blockerId: 'wi-x' }],
+      offLevelBlockers: [ROADMAP_STUB],
+    });
+    const amend = (over: Partial<PlanReviewItemDto> = {}) =>
+      item({
+        planItemId: 'pi_mod',
+        nodeId: 'wi-a',
+        op: 'modify',
+        identifier: 'MOTIR-1',
+        title: 'A committed child',
+        parentNodeId: 'wi-s',
+        ...over,
+      });
+
+    const kept = mergePlanLevel(buildWorkItemLevel(level), [amend()], 'wi-s');
+    expect(flagged(kept.nodes.find((n) => n.id === 'wi-a'))).toBe(true);
+
+    const deleted = mergePlanLevel(
+      buildWorkItemLevel(level),
+      [amend({ blockedByRemovedNodeIds: ['wi-x'] })],
+      'wi-s',
+    );
+    expect(deleted.deps).toEqual([]);
+    expect(flagged(deleted.nodes.find((n) => n.id === 'wi-a'))).toBe(false);
   });
 });
