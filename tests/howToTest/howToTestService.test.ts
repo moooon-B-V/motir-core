@@ -643,7 +643,10 @@ describe('howToTestService.getForWorkItem', () => {
 
   it('issues the SAME number of reads for a 1-repository and a 3-repository record', async () => {
     const fx = await makeWorkItemFixture();
-    const repos = await Promise.all(['web', 'api', 'docs'].map((n) => connectRepo(fx, n)));
+    // SEQUENTIAL, not `Promise.all`: every `connectRepo` upserts the SAME installation
+    // row, and three concurrent upserts race on its unique `installationId` (P2002).
+    const repos = [];
+    for (const name of ['web', 'api', 'docs']) repos.push(await connectRepo(fx, name));
     const one = await createTestWorkItem(fx, { kind: 'story', title: 'One' });
     const three = await createTestWorkItem(fx, { kind: 'story', title: 'Three' });
     await linkedPr(fx, one.id, repos[0]!.id, 'feat/one', [
