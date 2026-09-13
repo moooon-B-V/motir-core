@@ -78,6 +78,11 @@
         H · refused — someone decided it first; the port is still readable.
         X · PORT FAILED — the subject cannot be shown, so there are NO verbs.
         U · UNIVERSAL — the same frame, a different port (MOTIR-4882's).
+      AMENDED 2026-09-13 (MOTIR-5176, story MOTIR-4880):
+        S · THE SETTINGS DOOR — a KIND-SUPPLIED affordance in the verbs band: drawn
+             present for the pull-request-merge kind, ABSENT for a kind that supplies
+             none, and the read-only arrival it leads to. Its code is MOTIR-4882's; the
+             room it opens is design/projects/approvals.mock.html panels 6–10.
     -->
     <style>
       /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
@@ -422,6 +427,49 @@
         align-items: center;
         gap: 8px;
       }
+      /* the SETTINGS DOOR (MOTIR-5176) — kind-supplied, in band 3's left column, UNDER
+         the consequence line; never a verb, never beside the verbs */
+      .footLeft {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+      .door {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 550;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .door:hover {
+        text-decoration: underline;
+      }
+      .doorCall {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      .flagsBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 14px 18px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text);
+      }
+      .flagsBox h3 {
+        font-size: 13px;
+        margin: 0 0 6px;
+      }
+      .flagsBox ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
       .verbs {
         display: flex;
         align-items: center;
@@ -1308,6 +1356,161 @@
               second control.
             </p>
           </div>
+        </div>
+      </section>
+
+      <!-- S · THE SETTINGS DOOR -->
+      <section class="panel">
+        <div class="panelLabel">
+          S · The settings door — a way OUT of being asked, supplied by the kind (MOTIR-5176)
+        </div>
+        <p class="panelNote">
+          <code class="key">approval-gates.md</code> §7 asks for a deep link from the approval
+          surface to the switch that stops asking: someone who defaulted to
+          <strong>Ask before merging</strong> and cannot read a diff must be able to find it
+          <em>while they are stuck</em>. It is <strong>not a fourth band and not a verb</strong>: a
+          kind supplies a <code class="key">settingsHref</code> and a label, and band 3 renders it
+          in its LEFT column, under the consequence line, away from the verbs. A kind that supplies
+          none renders nothing, and the band is byte-identical to state A.
+          <strong>The door is guarded like the room it opens</strong>: it renders only for a viewer
+          who holds <code class="key">workflow:manage</code> (bottom left).
+        </p>
+        <div class="grid2">
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Pull request · merge</span>
+                <span class="frameMeta">
+                  <span class="key">motir-core#2845</span> · branch
+                  <span class="key">parent/MOTIR-4880-pr-merge-mode</span> →
+                  <span class="key">main</span>
+                </span>
+              </div>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="port">
+              <div class="portMock">
+                THE MERGE PORT<br />
+                <span class="portCite"
+                  >contents, refusals and the merge itself owned by <strong>MOTIR-4882</strong>; not
+                  drawn here</span
+                >
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footLeft">
+                <span class="footWhy">Approving lets Motir merge this pull request.</span>
+                <a class="door doorCall" href="#">Change how this project merges pull requests →</a>
+              </span>
+              <span class="verbs">
+                <button class="btn btn-secondary" type="button">Request changes</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </span>
+            </div>
+          </div>
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Design result</span>
+                <span class="frameMeta">a kind that supplies NO door</span>
+              </div>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="port">
+              <div class="portMock">
+                THE DESIGN PORT — as state A<br />
+                <span class="portCite"
+                  >no settings door: nothing about a design is a project setting</span
+                >
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy">Approving finishes this card — there is no pull request.</span>
+              <span class="verbs">
+                <button class="btn btn-secondary" type="button">Request changes</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </span>
+            </div>
+          </div>
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Pull request · merge</span>
+                <span class="frameMeta"
+                  >seen by a viewer WITHOUT <span class="key">workflow:manage</span></span
+                >
+              </div>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting Yue</span
+              >
+            </div>
+            <div class="port">
+              <div class="portMock">
+                THE MERGE PORT<br />
+                <span class="portCite">owned by <strong>MOTIR-4882</strong></span>
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy">Waiting on Yue. The merge happens once they approve.</span>
+            </div>
+          </div>
+          <div class="flagsBox">
+            <h3>Legend — the constraints this was drawn under</h3>
+            <ul>
+              <li>
+                <strong
+                  >The copy reads as “change how this project is merged”, never “skip this
+                  decision”.</strong
+                >
+                It names the PROJECT and the SETTING, not the pull request in front of you, and it
+                is a link (<code class="key">--el-link</code>), not a button: pressing it decides
+                nothing and the gate stays awaiting.
+              </li>
+              <li>
+                <strong>Placement:</strong> band 3, left column, under the consequence line. Never
+                in the header (it would read as part of WHAT is being decided) and never beside the
+                verbs (it would read as a third verb). The dashed outline marks the element for
+                review only and is not part of the component.
+              </li>
+              <li>
+                <strong
+                  >Rendered only for a viewer who holds
+                  <code class="key">workflow:manage</code></strong
+                >
+                — the key the Approvals room and its route are guarded by. A viewer without it
+                cannot land on the page, so a door for them would lead to a refusal; their frame
+                (bottom left) simply has none. There is no read-only room (Yue, 2026-09-13).
+              </li>
+              <li>
+                <strong>It opens in the same tab</strong>, at <code class="key">#merge-mode</code>
+                (approvals.mock.html panel 8). Coming back is the browser’s Back.
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="flagsBox">
+          <h3>⚠️ Planning flags (surfaced, not silently absorbed)</h3>
+          <ul>
+            <li>
+              <strong>MOTIR-4882 builds the door</strong>, rendered only when the viewer holds
+              <code class="key">workflow:manage</code>, in
+              <code class="key">ApprovalGateControl.tsx</code> as an optional kind-supplied
+              <code class="key">settingsHref</code> + label when it registers the merge gate kind,
+              and <strong>draws nothing in the merge PORT here</strong>.
+            </li>
+            <li>
+              <strong>MOTIR-5181 owns the landing</strong>: the
+              <code class="key">#merge-mode</code> anchor the door arrives at.
+            </li>
+            <li>
+              <strong>MOTIR-4792's shipped frame needs no change until MOTIR-4882</strong>: a kind
+              that supplies no door renders byte-identically.
+            </li>
+          </ul>
         </div>
       </section>
     </main>
