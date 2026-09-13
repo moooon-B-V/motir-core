@@ -114,16 +114,53 @@ export interface SettingsNavEntry {
   /** i18n key under the `settings` namespace (e.g. `nav.details`). */
   labelKey: string;
   /**
-   * The catalog permission this entry's DESTINATION requires — READ OFF that
-   * destination's own server gate, never inferred from the entry's name. A rail
-   * row that hides on a key the page does not check is a new bug wearing the
-   * shape of a fix, and it fails in the worst direction: it hides a room the
-   * actor could have used. Every pairing's evidence is in the table above.
+   * The WRITE key — the catalog permission this room's CONTROLS require, READ OFF
+   * the destination's own server gate, never inferred from the entry's name. A
+   * rail row that hides on a key the page does not check is a new bug wearing the
+   * shape of a fix, and it fails in the worst direction: it hides a room the actor
+   * could have used. Every pairing's evidence is in the table above.
+   *
+   * It is ALSO the VIEW key whenever {@link viewPermission} is absent — which is
+   * every entry that does not say otherwise — so for such an entry this one key
+   * still gates the rail row, the area door and the destination exactly as it did
+   * before a second key existed.
    *
    * REQUIRED, so a settings page added later cannot ship an ungated door — the
    * omission is a compile error, not a silently-visible entry.
    */
   permission: PermissionKey;
+  /**
+   * The VIEW key — may this actor ENTER the room and READ it — for a room where
+   * that is a different question from whether they may CHANGE it (Task
+   * MOTIR-5193). Absent, the view key IS {@link permission};
+   * {@link settingsEntryViewKey} is the one place that default is applied, and
+   * every consumer reads through it.
+   *
+   * ⚠️ A THIRD QUESTION, NOT A LOOSER PERMISSION. With {@link cloudOnly} beside
+   * it, an entry answers three things: `cloudOnly` — *does this room exist on
+   * this deployment*; `viewPermission` — *may this actor stand in it*;
+   * `permission` — *may they change anything once there*. The rail row, the area
+   * door and the destination guard gate on the VIEW key. The write key gates
+   * nothing on arrival; it is what the page reads, through the registry, to
+   * decide which controls to render.
+   *
+   * ⚠️ AND IT RE-OPENS THE DRIFT THE ONE-KEY MODEL WAS BUILT TO PREVENT. With one
+   * key, the row that hides a page and the page that refuses an actor could not
+   * disagree. With two, the view key must still be the key the destination's READ
+   * asserts, and the page must still take its write key from here rather than
+   * re-typing it. Care is what stops working once there are two keys to align, so
+   * `tests/settings/projectSettingsNav.test.ts` holds both as a test, proven to
+   * fire on a fixture that drifts on purpose — declare one only with its evidence
+   * row there.
+   *
+   * ⚠️ DECLARING ONE CHANGES A DERIVED POPULATION. {@link hasVisibleSettingsArea}
+   * is a `some()` over the view-gated rows, and every actor who reaches the
+   * settings shell holds `project:browse` — so a browse-visible room brings the
+   * area door back for every member of every project, and falsifies every suite
+   * that pins *a member is offered no settings area*. That is a product decision
+   * with its own card, never a field set in passing.
+   */
+  viewPermission?: PermissionKey;
   /**
    * Active ONLY on an exact pathname match. Set for Details, whose href
    * (`/settings/project`) is a prefix of every sub-route — without this it would
@@ -563,9 +600,24 @@ export function isSettingsEntryActive(entry: SettingsNavEntry, pathname: string)
 }
 
 /**
- * The entries visible to an actor holding `held`. Placeholders and real entries
- * alike gate on their declared `permission`, so an actor holding no
- * administrative key sees NOTHING — the whole area filters away, no nav leak.
+ * The key that opens an entry's DOOR — its {@link SettingsNavEntry.viewPermission}
+ * when it declares one, else its {@link SettingsNavEntry.permission} (Task
+ * MOTIR-5193).
+ *
+ * The ONE place that default is applied. The rail row, the area door and the
+ * destination guard (`_guard.tsx`) all read the view key through here, so they
+ * cannot disagree about what opens a room — the property the one-key model had
+ * structurally, kept by routing every reader through one function.
+ */
+export function settingsEntryViewKey(entry: SettingsNavEntry): PermissionKey {
+  return entry.viewPermission ?? entry.permission;
+}
+
+/**
+ * The entries visible to an actor holding `held`. Every entry gates on its VIEW
+ * key ({@link settingsEntryViewKey}) — which is its `permission` unless it
+ * declares a distinct `viewPermission` — so an actor holding no key that opens a
+ * room sees NOTHING: the whole area filters away, no nav leak.
  *
  * ⚠️ HIDING IS PRESENTATION, NEVER ENFORCEMENT. A row this drops is still
  * reachable by URL; what refuses it is the destination's own guard (MOTIR-2469)
@@ -582,7 +634,7 @@ export function visibleSettingsNav(
   available: SettingsNavAvailability = NO_CLOUD_CAPABILITIES,
 ): SettingsNavEntry[] {
   return entries.filter(
-    (entry) => isEntryAvailable(entry, available) && held.has(entry.permission),
+    (entry) => isEntryAvailable(entry, available) && held.has(settingsEntryViewKey(entry)),
   );
 }
 
@@ -595,14 +647,19 @@ export function visibleSettingsNav(
  * door onto a corridor. Expressed here, beside the filter it quantifies over, so
  * the door and the rows can never disagree about what the area contains — which
  * is why it takes the SAME `available` argument (MOTIR-4243) rather than
- * quantifying over a rail the caller is not going to render.
+ * quantifying over a rail the caller is not going to render, and reads the SAME
+ * view key ({@link settingsEntryViewKey}) the rows gate on (MOTIR-5193).
+ *
+ * `entries` defaults to the registry; it is injectable for the same reason
+ * {@link visibleSettingsNav}'s is — so the predicate is assertable over a fixture.
  */
 export function hasVisibleSettingsArea(
   held: SettingsNavPermissions,
   available: SettingsNavAvailability = NO_CLOUD_CAPABILITIES,
+  entries: SettingsNavEntry[] = PROJECT_SETTINGS_NAV,
 ): boolean {
-  return PROJECT_SETTINGS_NAV.some(
-    (entry) => isEntryAvailable(entry, available) && held.has(entry.permission),
+  return entries.some(
+    (entry) => isEntryAvailable(entry, available) && held.has(settingsEntryViewKey(entry)),
   );
 }
 

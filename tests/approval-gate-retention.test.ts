@@ -490,6 +490,8 @@ describe('a publish RACING an approval cannot strand the approved bytes (ADR §6
       // The decide won the gate row: v1 was still current when it pinned, so its
       // bytes MUST have survived the republish that followed.
       expect(decided.value.gate.state).toBe('approved');
+      // And the response SAYS so, which is what the record band draws (MOTIR-5265).
+      expect(decided.value.filesKept).toBe(true);
       expect(v1Row.pinnedAt).not.toBeNull();
       expect(v1Dto!.assets[0]!.url).not.toBeNull();
     } else {
@@ -509,6 +511,65 @@ describe('a publish RACING an approval cannot strand the approved bytes (ADR §6
     if (approvedGate.state === 'approved') {
       expect(v1Dto!.assets[0]!.url).not.toBeNull();
     }
+  });
+});
+
+describe('the decide response says whether THIS version’s files were kept (MOTIR-5265)', () => {
+  // The record band's `Files kept` line reads this so it need not wait for a
+  // server render. It is the pin this transaction wrote, compared against the
+  // gate's own subject — never `state === 'approved'`.
+
+  it('an approval of the current version reports its files kept, matching the row', async () => {
+    const v1 = await publish('v1');
+    const result = await approvalGatesService.decide(
+      { gateId: (await gateFor(v1.id)).id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+    expect(result.filesKept).toBe(true);
+    const row = await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } });
+    expect(row.pinnedAt).not.toBeNull();
+  });
+
+  it('a request for changes reports null — it pins nothing, so the question does not apply', async () => {
+    const v1 = await publish('v1');
+    const result = await approvalGatesService.decide(
+      { gateId: (await gateFor(v1.id)).id, decision: 'request_changes', source: 'ui' },
+      fx.ctx,
+    );
+    expect(result.filesKept).toBeNull();
+  });
+
+  it('an approval whose pin lands on a DIFFERENT row reports false — the decision stands, its bytes were not kept', async () => {
+    // The state a publish racing the approval leaves: the gate asks about one
+    // version while another is current, so the pin lands on bytes nobody was
+    // asked about. Produced directly, because the scheduler decides whether the
+    // genuine race above takes this arm.
+    const v1 = await publish('v1');
+    const gate = await gateFor(v1.id);
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: { subjectId: 'design-evidence-no-longer-current' },
+    });
+
+    const result = await approvalGatesService.decide(
+      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+    expect(result.gate.state).toBe('approved');
+    expect(result.filesKept).toBe(false);
+  });
+
+  it('a kind whose subject is not a design result reports null, even though the pin still runs', async () => {
+    const v1 = await publish('v1');
+    const prGate = await gateOfKind('pull_request_approval', 'github-pull-request-1');
+    const result = await approvalGatesService.decide(
+      { gateId: prGate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+    expect(result.filesKept).toBeNull();
+    // §6c's kind-free pin is unchanged by this field.
+    const row = await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } });
+    expect(row.pinnedAt).not.toBeNull();
   });
 });
 

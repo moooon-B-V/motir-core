@@ -40,7 +40,10 @@
       themselves behind this design and an edge would deadlock the pair.
 
       ── THE STATE SET IS THE CHECKLIST ──
-      `connecting` · `connected` · `degraded` · (none). `degraded` is the value
+      `connected` · `connected, nothing monitored` · `degraded` · (none) — REVISED by
+      MOTIR-5288, which removed an unreachable `connecting` row state and added the
+      post-connect state, the picker, the disconnect confirmation and loading /
+      error (panels 1b, 6–9). `degraded` is the value
       this whole epic exists to make visible: MOTIR-4918 measured a signal that
       stopped reaching anyone while every component reported success, and a
       credential that has quietly expired reproduces that shape one level up. It
@@ -1136,6 +1139,238 @@
         font-weight: 600;
         white-space: nowrap;
       }
+
+      /* ═══ ADDED BY THE REVISION (MOTIR-5288) — the states AFTER connect ═══ */
+      /* Button, danger variant (packages/design-system/src/components/ui/Button.tsx) */
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      /* Checkbox (packages/design-system/src/components/ui/Checkbox.tsx): a 16px box on
+         the control radius, border-strong when off, the accent fill when on. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        display: inline-grid;
+        place-items: center;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border-strong);
+        background: transparent;
+        color: transparent;
+      }
+      .cbox.on {
+        border-color: var(--el-accent);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbox.locked {
+        opacity: 0.5;
+      }
+      .cbox svg {
+        width: 12px;
+        height: 12px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      /* The OVERLAY a modal is drawn on — the shipped Modal's scrim token. */
+      .overlay {
+        border-radius: var(--radius-card);
+        background: var(--el-overlay-scrim);
+        padding: 40px 28px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .overlay .modal {
+        background: var(--el-page-bg);
+        width: 100%;
+      }
+      .modal-sub {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-subtitle);
+      }
+      .modal-body {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .modal-body b {
+        color: var(--el-text);
+      }
+      .modal-foot.end {
+        justify-content: flex-end;
+      }
+      .modal-x {
+        align-self: flex-end;
+        margin-bottom: -12px;
+        color: var(--el-icon-muted);
+      }
+      /* The picker's filter — the shipped Input's height, radius and inset. */
+      .filter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text-helper);
+      }
+      .filter svg {
+        color: var(--el-icon-muted);
+      }
+      .picker {
+        display: flex;
+        flex-direction: column;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 4px;
+      }
+      .picker .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .picker .opt .slug {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 600;
+      }
+      .picker .opt .tag {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .picker .opt.locked .slug {
+        color: var(--el-text-secondary);
+      }
+      .picker .opt .err {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-danger-surface-text);
+        white-space: nowrap;
+      }
+      .picker .opt .err svg {
+        color: var(--el-danger);
+      }
+      /* Connected, NOTHING monitored — the room's one next step, in a Card. */
+      .unbound {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      .unbound .glyph {
+        width: 38px;
+        height: 38px;
+        flex: none;
+        display: grid;
+        place-items: center;
+        border-radius: var(--radius-pill);
+        background: var(--el-surface-soft);
+        color: var(--el-icon-muted);
+      }
+      .unbound .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .unbound h5 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .unbound p {
+        margin: 3px 0 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* The page's OWN loading and error renders — never a loading.tsx. */
+      .state-card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 40px 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+      }
+      .state-card .row {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .state-card h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .state-card p {
+        margin: 0;
+        max-width: 52ch;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .state-card .mark {
+        color: var(--el-danger);
+      }
+
+      /* The return-status banners (panel 10) — success and failure fills from
+         the palette, never a border colour or style. */
+      .banner.ok {
+        background: var(--el-success-surface);
+        color: var(--el-text-strong);
+      }
+      .banner.ok svg {
+        color: var(--el-success);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner.bad {
+        background: var(--el-danger-surface);
+        color: var(--el-danger-surface-text);
+      }
+      .banner.bad svg {
+        color: var(--el-danger);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
     </style>
   </head>
   <body>
@@ -1223,10 +1458,6 @@
           <path d="M12 9v4" />
           <path d="M12 17h.01" />
         </symbol>
-        <!-- lucide `loader-circle` — EXTRACTED from the installed `lucide-react@1.16.0` -->
-        <symbol id="i-loader-circle" viewBox="0 0 24 24">
-          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-        </symbol>
         <!-- lucide `refresh-cw` — EXTRACTED from the installed `lucide-react@1.16.0` -->
         <symbol id="i-refresh-cw" viewBox="0 0 24 24">
           <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
@@ -1246,12 +1477,6 @@
         <symbol id="i-plus" viewBox="0 0 24 24">
           <path d="M5 12h14" />
           <path d="M12 5v14" />
-        </symbol>
-        <!-- lucide `external-link` — EXTRACTED from the installed `lucide-react@1.16.0` -->
-        <symbol id="i-external-link" viewBox="0 0 24 24">
-          <path d="M15 3h6v6" />
-          <path d="M10 14 21 3" />
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
         </symbol>
         <!-- lucide `ellipsis` — EXTRACTED from the installed `lucide-react@1.16.0` -->
         <symbol id="i-ellipsis" viewBox="0 0 24 24">
@@ -1290,6 +1515,26 @@
             d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
           />
           <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <!-- lucide `search` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <!-- lucide `x` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-x" viewBox="0 0 24 24">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </symbol>
+        <!-- lucide `check` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="M20 6 9 17l-5-5" />
+        </symbol>
+        <!-- lucide `info` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-info" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
         </symbol>
       </defs>
     </svg>
@@ -1409,6 +1654,134 @@
       </div>
 
       <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 1b — (REVISION) connected, NOTHING monitored yet: the screen after Sentry
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 1b &middot; <b>Connected, nothing monitored yet</b> &mdash; the first screen after
+        returning from Sentry
+      </div>
+      <p class="panel-note">
+        <b>Every person lands here.</b> The callback stores the authorisation and binds no project
+        (MOTIR-5260), because the person has not yet seen the list they are choosing from. So the
+        grant reads <code class="k">Connected</code> and the section says, in one line, that
+        <b>nothing arrives until a project is chosen</b> &mdash; a connected monitor with an empty
+        board is otherwise indistinguishable from a quiet week, which is the failure this epic
+        exists to end. The action is <b>primary</b> here because it is the only next step; once a
+        row exists it becomes the secondary <i>Add a monitored project</i> of panels 2&ndash;4. Both
+        open the same picker (panel 6).
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="grant-card">
+              <div class="grant-top">
+                <span class="grant-mark"
+                  ><svg class="i lg"><use href="#i-activity" /></svg
+                ></span>
+                <span class="grant-who">
+                  <span class="org">
+                    Sentry
+                    <span class="health ok">
+                      <svg class="i sm"><use href="#i-circle-check-big" /></svg>
+                      Connected
+                    </span>
+                  </span>
+                  <span class="meta">
+                    <span class="mono">acme-inc</span> &middot;
+                    <svg class="i sm"><use href="#i-clock" /></svg>
+                    checked 4 minutes ago
+                  </span>
+                </span>
+                <span class="grant-actions">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                    Re-check
+                  </button>
+                </span>
+              </div>
+            </div>
+            <div class="section">
+              <div class="seclabel">Monitored projects</div>
+              <div class="unbound">
+                <span class="glyph"
+                  ><svg class="i"><use href="#i-bug" /></svg
+                ></span>
+                <span class="grow">
+                  <h5>No Sentry projects monitored yet</h5>
+                  <p>
+                    Sentry is connected to acme-inc. Choose which of its projects send issues to
+                    this board &mdash; nothing arrives until you do.
+                  </p>
+                </span>
+                <button class="btn btn-primary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-plus" /></svg>
+                  Choose Sentry projects
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
            PANEL 2 — `connected`, ONE monitored project
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
@@ -1522,13 +1895,9 @@
                   ></span>
                   <span class="body">
                     <span class="nm"><span class="slug">acme-web</span></span>
-                    <span class="sub">Bound 3 days ago &middot; 41 issues seen</span>
+                    <span class="sub">Bound 3 days ago</span>
                   </span>
                   <span class="aside">
-                    <button class="btn btn-ghost btn-sm" type="button">
-                      <svg class="i sm"><use href="#i-external-link" /></svg>
-                      Open in Sentry
-                    </button>
                     <button class="icon-btn" type="button" aria-label="Disconnect this project">
                       <svg class="i"><use href="#i-trash-2" /></svg>
                     </button>
@@ -1547,18 +1916,19 @@
       </div>
 
       <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 3 — `connected` + `connecting`, SEVERAL monitored projects
+           PANEL 3 — `connected`, SEVERAL monitored projects
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 3 &middot; <b>Several monitored projects, one still arriving</b> &mdash; the list at
-        real-product scale
+        Panel 3 &middot; <b>Several monitored projects</b> &mdash; the list at real-product scale
       </div>
       <p class="panel-note">
         Drawn at the scale a real team reaches: a web app, a worker and a payments service are three
         Sentry projects on one Motir project, which is the argument for a row list rather than a
-        field. The fourth row is <code class="k">connecting</code> &mdash;
-        <b>the return leg is in flight, so the row EXISTS and is not yet usable</b>. It carries no
-        actions at all, because every one of them would be a promise the server has not made yet.
+        field. <b>(REVISION, MOTIR-5288:</b> a fourth row drawn here as
+        <code class="k">connecting</code> is REMOVED. Under the flow MOTIR-5260 shipped, binding a
+        project is one database write with no pending phase, and the only in-flight leg &mdash; the
+        authorisation &mdash; happens on Sentry&rsquo;s own page and returns to panel 1b. A row
+        state no data can produce would be built with nothing behind it.<b>)</b>
       </p>
       <div class="panel">
         <div class="settings">
@@ -1660,13 +2030,9 @@
                   ></span>
                   <span class="body">
                     <span class="nm"><span class="slug">acme-web</span></span>
-                    <span class="sub">Bound 3 days ago &middot; 41 issues seen</span>
+                    <span class="sub">Bound 3 days ago</span>
                   </span>
                   <span class="aside">
-                    <button class="btn btn-ghost btn-sm" type="button">
-                      <svg class="i sm"><use href="#i-external-link" /></svg>
-                      Open in Sentry
-                    </button>
                     <button class="icon-btn" type="button" aria-label="Disconnect this project">
                       <svg class="i"><use href="#i-trash-2" /></svg>
                     </button>
@@ -1678,13 +2044,9 @@
                   ></span>
                   <span class="body">
                     <span class="nm"><span class="slug">acme-worker</span></span>
-                    <span class="sub">Bound 3 days ago &middot; 12 issues seen</span>
+                    <span class="sub">Bound 3 days ago</span>
                   </span>
                   <span class="aside">
-                    <button class="btn btn-ghost btn-sm" type="button">
-                      <svg class="i sm"><use href="#i-external-link" /></svg>
-                      Open in Sentry
-                    </button>
                     <button class="icon-btn" type="button" aria-label="Disconnect this project">
                       <svg class="i"><use href="#i-trash-2" /></svg>
                     </button>
@@ -1696,31 +2058,12 @@
                   ></span>
                   <span class="body">
                     <span class="nm"><span class="slug">acme-payments</span></span>
-                    <span class="sub">Bound yesterday &middot; 2 issues seen</span>
+                    <span class="sub">Bound yesterday</span>
                   </span>
                   <span class="aside">
-                    <button class="btn btn-ghost btn-sm" type="button">
-                      <svg class="i sm"><use href="#i-external-link" /></svg>
-                      Open in Sentry
-                    </button>
                     <button class="icon-btn" type="button" aria-label="Disconnect this project">
                       <svg class="i"><use href="#i-trash-2" /></svg>
                     </button>
-                  </span>
-                </div>
-                <div class="conn-row is-pending">
-                  <span class="glyph"
-                    ><svg class="i lg"><use href="#i-bug" /></svg
-                  ></span>
-                  <span class="body">
-                    <span class="nm"
-                      ><span class="slug">acme-mobile</span
-                      ><span class="health pending">
-                        <svg class="i sm"><use href="#i-loader-circle" /></svg>
-                        Connecting
-                      </span></span
-                    >
-                    <span class="sub">Waiting for Sentry to confirm the install</span>
                   </span>
                 </div>
               </div>
@@ -1864,13 +2207,9 @@
                   ></span>
                   <span class="body">
                     <span class="nm"><span class="slug">acme-web</span></span>
-                    <span class="sub">Bound 3 days ago &middot; last issue 6 hours ago</span>
+                    <span class="sub">Bound 3 days ago</span>
                   </span>
                   <span class="aside">
-                    <button class="btn btn-ghost btn-sm" type="button">
-                      <svg class="i sm"><use href="#i-external-link" /></svg>
-                      Open in Sentry
-                    </button>
                     <button class="icon-btn" type="button" aria-label="Disconnect this project">
                       <svg class="i"><use href="#i-trash-2" /></svg>
                     </button>
@@ -1882,13 +2221,9 @@
                   ></span>
                   <span class="body">
                     <span class="nm"><span class="slug">acme-worker</span></span>
-                    <span class="sub">Bound 3 days ago &middot; last issue yesterday</span>
+                    <span class="sub">Bound 3 days ago</span>
                   </span>
                   <span class="aside">
-                    <button class="btn btn-ghost btn-sm" type="button">
-                      <svg class="i sm"><use href="#i-external-link" /></svg>
-                      Open in Sentry
-                    </button>
                     <button class="icon-btn" type="button" aria-label="Disconnect this project">
                       <svg class="i"><use href="#i-trash-2" /></svg>
                     </button>
@@ -1995,13 +2330,6 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>connecting</td>
-                  <td>
-                    The return leg is in flight. The row exists, is visibly not usable, and carries
-                    no action &mdash; each would be a promise the server has not made.
-                  </td>
-                </tr>
-                <tr>
                   <td>connected</td>
                   <td>
                     The organisation and the bound projects, with when the credential was last
@@ -2015,6 +2343,14 @@
                     <b>Re-check</b> and <b>Reconnect</b>. Never a border style.
                   </td>
                 </tr>
+                <tr>
+                  <td>connected, nothing monitored</td>
+                  <td>
+                    The grant reads Connected; the section says nothing arrives until a project is
+                    chosen, with <b>Choose Sentry projects</b> as the primary action (panel 1b).
+                  </td>
+                </tr>
+
                 <tr>
                   <td>(none)</td>
                   <td>
@@ -2034,6 +2370,499 @@
         member who cannot manage the credential does not see the door at all, which is how every
         other row in this rail behaves.
       </p>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 6 — (REVISION) the PROJECT PICKER behind "Add a monitored project"
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 6 &middot; <b>The project picker</b> &mdash; choosing, a project already monitored,
+        and a partial result
+      </div>
+      <p class="panel-note">
+        The picker is a <b>Modal</b> over the room, fed by the grant organisation&rsquo;s projects
+        with each one flagged <code class="k">bound</code> (MOTIR-5260&rsquo;s available-projects
+        read). <b>A project already monitored is shown checked and locked</b>, labelled so, rather
+        than hidden &mdash; hiding it would make a person wonder whether it was ever connected.
+        Several can be chosen at once, and the primary action counts them. Binding is one write per
+        project, so <b>a partial result is a real outcome and is drawn</b> (right): the ones that
+        succeeded lock in place, the one that failed keeps its box ticked with the reason inline,
+        and <i>Try again</i> retries only that one. A project somebody else added in the same moment
+        comes back from the server as <i>already monitored</i> &mdash; that is the state the person
+        wanted, so it reads as success, never as an error. <b>Filter projects</b> is there because
+        an organisation&rsquo;s project list is not short at real scale.
+      </p>
+      <div class="panel">
+        <div class="overlay">
+          <div style="flex: 1 1 26rem; max-width: 34rem">
+            <div class="modal">
+              <span class="modal-x"
+                ><svg class="i"><use href="#i-x" /></svg
+              ></span>
+              <div class="modal-head">
+                <h4>Choose Sentry projects</h4>
+                <p class="modal-sub">
+                  From acme-inc. Issues from the projects you choose become bug work items on this
+                  board.
+                </p>
+              </div>
+              <div class="filter">
+                <svg class="i"><use href="#i-search" /></svg>
+                Filter projects
+              </div>
+              <div class="picker">
+                <div class="opt locked">
+                  <span class="cbox on locked"
+                    ><svg><use href="#i-check" /></svg
+                  ></span>
+                  <span class="slug">acme-web</span>
+                  <span class="helper xs">Web</span>
+                  <span class="tag">Already monitored</span>
+                </div>
+                <div class="opt">
+                  <span class="cbox on"
+                    ><svg><use href="#i-check" /></svg
+                  ></span>
+                  <span class="slug">acme-worker</span>
+                  <span class="helper xs">Worker</span>
+                </div>
+                <div class="opt">
+                  <span class="cbox on"
+                    ><svg><use href="#i-check" /></svg
+                  ></span>
+                  <span class="slug">acme-payments</span>
+                  <span class="helper xs">Payments</span>
+                </div>
+                <div class="opt">
+                  <span class="cbox"></span>
+                  <span class="slug">acme-mobile</span>
+                  <span class="helper xs">Mobile</span>
+                </div>
+                <div class="opt">
+                  <span class="cbox"></span>
+                  <span class="slug">marketing-site</span>
+                  <span class="helper xs">Marketing site</span>
+                </div>
+              </div>
+              <div class="modal-foot end">
+                <button class="btn btn-ghost" type="button">Cancel</button>
+                <button class="btn btn-primary" type="button">Monitor 2 projects</button>
+              </div>
+            </div>
+          </div>
+          <div style="flex: 1 1 26rem; max-width: 34rem">
+            <div class="modal">
+              <span class="modal-x"
+                ><svg class="i"><use href="#i-x" /></svg
+              ></span>
+              <div class="modal-head">
+                <h4>Choose Sentry projects</h4>
+                <p class="modal-sub">1 of 2 projects added. The other one wasn&rsquo;t.</p>
+              </div>
+              <div class="picker">
+                <div class="opt locked">
+                  <span class="cbox on locked"
+                    ><svg><use href="#i-check" /></svg
+                  ></span>
+                  <span class="slug">acme-web</span>
+                  <span class="helper xs">Web</span>
+                  <span class="tag">Already monitored</span>
+                </div>
+                <div class="opt locked">
+                  <span class="cbox on locked"
+                    ><svg><use href="#i-check" /></svg
+                  ></span>
+                  <span class="slug">acme-worker</span>
+                  <span class="helper xs">Worker</span>
+                  <span class="tag">Now monitored</span>
+                </div>
+                <div class="opt">
+                  <span class="cbox on"
+                    ><svg><use href="#i-check" /></svg
+                  ></span>
+                  <span class="slug">acme-payments</span>
+                  <span class="helper xs">Payments</span>
+                  <span class="err"
+                    ><svg class="i sm"><use href="#i-circle-alert" /></svg>Couldn&rsquo;t add
+                    &mdash; try again</span
+                  >
+                </div>
+              </div>
+              <div class="modal-foot end">
+                <button class="btn btn-ghost" type="button">Done</button>
+                <button class="btn btn-primary" type="button">Try again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 7 — (REVISION) the picker when the grant is DEGRADED
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 7 &middot; <b>The picker on a degraded connection</b> &mdash; it cannot list, and says
+        why
+      </div>
+      <p class="panel-note">
+        Listing an organisation&rsquo;s projects is the one read on this surface that
+        <b>calls the provider</b> (MOTIR-5260), so on a revoked credential it cannot answer. The
+        picker does not show an empty list &mdash; an empty list would claim the organisation has no
+        projects &mdash; it shows <b>Sentry&rsquo;s own reason</b>, the same sentence panel
+        4&rsquo;s banner carries (MOTIR-5261&rsquo;s stored verdict), and offers the one action that
+        fixes it.
+      </p>
+      <div class="panel">
+        <div class="overlay">
+          <div style="flex: 1 1 26rem; max-width: 34rem">
+            <div class="modal">
+              <span class="modal-x"
+                ><svg class="i"><use href="#i-x" /></svg
+              ></span>
+              <div class="modal-head">
+                <h4>Choose Sentry projects</h4>
+              </div>
+              <div class="banner warn">
+                <svg class="i"><use href="#i-triangle-alert" /></svg>
+                <span
+                  ><b>Couldn&rsquo;t load acme-inc&rsquo;s projects.</b> Sentry says: The
+                  authorization has been revoked.</span
+                >
+              </div>
+              <p class="modal-body">
+                Motir needs a working connection to list them. Reconnect Sentry, then choose your
+                projects.
+              </p>
+              <div class="modal-foot end">
+                <button class="btn btn-ghost" type="button">Cancel</button>
+                <button class="btn btn-primary" type="button">
+                  <svg class="i sm"><use href="#i-plus" /></svg>
+                  Reconnect
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 8 — (REVISION) the DISCONNECT confirmation, in its two cases
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 8 &middot; <b>Disconnect, confirmed</b> &mdash; one of several, and the last one
+      </div>
+      <p class="panel-note">
+        The trash action on a row opens this.
+        <b>It says two different things because disconnect does two different things</b>
+        (MOTIR-5260): removing one of several monitored projects stops that project&rsquo;s issues
+        and nothing else; removing the <b>last</b> one also removes the stored credential, because a
+        grant nothing is bound to is a secret nobody can reach and nothing will ever rotate. The
+        room already knows which case it is before the click &mdash; it is whether the row is the
+        only one &mdash; so the warning is said up front, not reported afterwards. The heading names
+        the thing being removed and the danger button repeats the verb, so it never reads as a
+        generic &ldquo;OK&rdquo;.
+      </p>
+      <div class="panel">
+        <div class="overlay">
+          <div style="flex: 1 1 22rem; max-width: 28rem">
+            <div class="modal">
+              <div class="modal-head">
+                <h4>Stop monitoring acme-worker?</h4>
+              </div>
+              <p class="modal-body">
+                New issues from <b>acme-worker</b> stop arriving on this board.
+                <b>acme-web</b> stays monitored.
+              </p>
+              <div class="modal-foot end">
+                <button class="btn btn-ghost" type="button">Cancel</button>
+                <button class="btn btn-danger" type="button">Stop monitoring</button>
+              </div>
+            </div>
+          </div>
+          <div style="flex: 1 1 22rem; max-width: 28rem">
+            <div class="modal">
+              <div class="modal-head">
+                <h4>Disconnect Sentry?</h4>
+              </div>
+              <p class="modal-body">
+                <b>acme-web</b> is the last monitored project, so this also removes Motir&rsquo;s
+                stored access to <b>acme-inc</b>. To monitor any of its projects again, you&rsquo;ll
+                reconnect through Sentry.
+              </p>
+              <div class="modal-foot end">
+                <button class="btn btn-ghost" type="button">Cancel</button>
+                <button class="btn btn-danger" type="button">
+                  <svg class="i sm"><use href="#i-trash-2" /></svg>
+                  Disconnect Sentry
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 9 — (REVISION) the page's OWN loading and error states
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 9 &middot; <b>Loading and error</b> &mdash; drawn inside the room, never as a
+        route-level skeleton
+      </div>
+      <p class="panel-note">
+        <code class="k">CLAUDE.md</code> forbids a <code class="k">loading.tsx</code> above a route
+        that decides existence, and this one decides whether a project has any connection at all
+        &mdash; a skeleton that resolved into the empty state would draw a list shape for a room
+        with nothing in it. So both states are <b>the room&rsquo;s own render</b>: the rail and the
+        heading stay put, and only the content area changes. Loading is the shipped
+        <b>Spinner</b> with one line; the error keeps its claim small and true &mdash;
+        <i>nothing has changed</i> &mdash; because a failed read has disconnected nothing, and a
+        person seeing an error here needs to know that first.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="state-card">
+              <span class="row"><span class="spin"></span>Loading monitoring&hellip;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="state-card">
+              <span class="mark"
+                ><svg class="i lg"><use href="#i-circle-alert" /></svg
+              ></span>
+              <h4>Couldn&rsquo;t load monitoring for this project</h4>
+              <p>Nothing has changed. Try again, and if it keeps happening, reload the page.</p>
+              <button class="btn btn-secondary btn-sm" type="button">
+                <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 10 — (REVISION) the RETURN STATUSES the room lands with
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 10 &middot; <b>Coming back from Sentry</b> &mdash; the banner the room shows for each
+        outcome
+      </div>
+      <p class="panel-note">
+        The connect routes land on this room carrying one of <b>eight outcomes</b> (MOTIR-5260), and
+        every one is a thing a person did, so every one gets a sentence rather than a silent reload.
+        Three are drawn; <code class="k">design-notes.md</code> &sect;11 carries the copy for all
+        eight. The banner sits <b>above the grant</b>, dismissible, and never replaces the room
+        under it. <b>The failure banner quotes Sentry&rsquo;s own words</b>, and that string must be
+        handed to the page <b>by the server</b> &mdash; never read from the address bar, where a
+        crafted link could make a &ldquo;Sentry says&rdquo; line say anything.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-activity" /></svg>
+                Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sparkles" /></svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-bot" /></svg>
+                Rules
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Monitoring</h3>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project&rsquo;s board.
+              </p>
+            </div>
+            <div class="banner-stack">
+              <div class="banner ok">
+                <svg class="i"><use href="#i-circle-check-big" /></svg>
+                <span
+                  ><b>Sentry is connected.</b> Choose which of acme-inc&rsquo;s projects send issues
+                  to this board.</span
+                >
+              </div>
+              <div class="banner bad">
+                <svg class="i"><use href="#i-circle-alert" /></svg>
+                <span
+                  ><b>Couldn&rsquo;t connect Sentry.</b> Sentry says: The authorization code has
+                  expired. Nothing was saved &mdash; try connecting again.</span
+                >
+              </div>
+              <div class="banner info">
+                <svg class="i"><use href="#i-info" /></svg>
+                <span
+                  ><b>That install didn&rsquo;t start here.</b> To connect Sentry to this project,
+                  use <b>Connect Sentry</b> below &mdash; nothing was saved.</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </body>
 </html>
