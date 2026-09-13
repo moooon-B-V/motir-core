@@ -248,6 +248,8 @@ export const FIELD_KEY: Record<string, string> = {
   // missing here simply vanishes from the changed node's summary.
   targetRepo: 'repo',
   targetRepoRole: 'repoRole',
+  // The derived status reset a re-scope writes (MOTIR-5359).
+  status: 'status',
 };
 
 /** The fields a `modify` proposal changes, as those copy keys — the compact "what

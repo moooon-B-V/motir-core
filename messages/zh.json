@@ -221,6 +221,7 @@
     "field_parent": "父级",
     "field_targetRepo": "目标仓库",
     "field_targetRepoRole": "仓库角色",
+    "field_status": "状态",
     "moreChanges": "还有 {n} 项",
     "staleBadge": "已过期",
     "staleSummary": "{n} 个工作项可能已过期",
@@ -338,6 +339,7 @@
     "field_parent": "父级",
     "field_targetRepo": "目标仓库",
     "field_targetRepoRole": "仓库角色",
+    "field_status": "状态",
     "noChanges": "无字段变更",
     "approveCta": "批准 — 添加 {n} 个工作项",
     "declineCta": "放弃",
@@ -6435,7 +6437,8 @@
           "links": "依赖关系",
           "parent": "父级",
           "repo": "目标仓库",
-          "repoRole": "仓库角色"
+          "repoRole": "仓库角色",
+          "status": "状态"
         },
         "remove": "移除",
         "willRemove": "确认后移除"
