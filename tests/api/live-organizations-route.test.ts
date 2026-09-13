@@ -9,7 +9,11 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { POST } from '@/app/api/internal/ai/live-organizations/route';
 import { POST as POST_LIVE_PROJECTS } from '@/app/api/internal/ai/live-projects/route';
-import { truncateAuthTables, truncateCodeGraphOffboarding } from '../helpers/db';
+import {
+  truncateAuthTables,
+  truncateCodeGraphOffboarding,
+  truncateRateLimitCounters,
+} from '../helpers/db';
 
 // THE LIVE-ORGANISATION READ SEAM (MOTIR-4647 · MOTIR-4642) — real Postgres, the
 // real route, no DB mocks.
@@ -48,6 +52,10 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateCodeGraphOffboarding();
+  // The `ai:internal` limiter counts per presented service token, and the live-projects and
+  // live-organizations suites present the same one — so without this the sibling on the same leg spends the
+  // budget and this suite reads 429s (MOTIR-5359's merge-queue ejection; `truncateRateLimitCounters`).
+  await truncateRateLimitCounters();
 });
 afterEach(() => vi.restoreAllMocks());
 

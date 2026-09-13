@@ -549,6 +549,17 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     blockedByRemove: { row: 'links' },
   };
 
+  /**
+   * The rows NO patch key produces, each with the reason — the approve DERIVES
+   * them from a patch plus the live target. Kept as a named map rather than a
+   * relaxed assertion, so a vocabulary member only escapes the ratchet below by
+   * stating what produces it.
+   */
+  const DERIVED_ROWS: Partial<Record<PlanItemChangeField, string>> = {
+    status:
+      'MOTIR-5359 — a re-scoping patch (title / description / repository) on an in-progress-category target resets its status on approve',
+  };
+
   it('declares the patch key set exactly — the constant cannot drift from the interface', () => {
     // The COMPILE-TIME half lives in `lib/dto/plans.ts`
     // (`_planItemPatchKeysAreExhaustive`). This is the runtime half, and it is not
@@ -577,9 +588,10 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     // dead copy every catalog and all three label maps are nonetheless forced to
     // carry — the mirror-image drift, and the one a totality-over-the-vocabulary
     // test reads as healthy.
-    const produced = new Set(
-      Object.values(DISPOSITION).flatMap((d) => ('row' in d ? [d.row as string] : [])),
-    );
+    const produced = new Set([
+      ...Object.values(DISPOSITION).flatMap((d) => ('row' in d ? [d.row as string] : [])),
+      ...Object.keys(DERIVED_ROWS),
+    ]);
     const unproducible = PLAN_ITEM_CHANGE_FIELDS.filter((f) => !produced.has(f));
     expect({ unproducible }).toEqual({ unproducible: [] });
   });

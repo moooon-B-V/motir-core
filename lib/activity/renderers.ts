@@ -360,6 +360,13 @@ const REGISTRY: Record<string, RegistryEntry> = {
   backlogRank: suppressed,
   key: suppressed,
   identifier: suppressed,
+  // The RE-SCOPE RESET's reason (bug MOTIR-5359) — `{ planId, reason, arm }` on the
+  // one revision an approved `modify` writes when it walks an in-progress card
+  // back to To Do. Suppressed, not rendered: the `status` cell beside it already
+  // reads "changed status Implemented → To Do" in the History, and this key is
+  // the provenance behind that line (which plan, which arm) for a reader of the
+  // trail, not a second visible change.
+  statusReset: suppressed,
   // -- plain scalar fields -------------------------------------------------
   title: textField(),
   kind: textField(),
