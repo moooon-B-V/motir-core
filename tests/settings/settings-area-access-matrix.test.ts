@@ -9,7 +9,6 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   PROJECT_SETTINGS_NAV,
   hasVisibleSettingsArea,
-  settingsEntryViewKey,
   visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
 import type { ProjectAccessLevel } from '@/generated/prisma/client';
@@ -249,13 +248,13 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
           const visibleIds = new Set(visible.map((e) => e.id));
 
           // Drift-proof: assert PER entry that visibility === whether the actor
-          // really holds that entry's declared VIEW key, over the REAL seeded role.
+          // really holds that entry's declared key, over the REAL seeded role.
           // A new entry is covered the moment it lands, with no matrix edit.
-          //
-          // AMENDED BY MOTIR-5278: this read `held.has(entry.permission)`, which was
-          // the view key for every entry until `approvals` declared `project:browse`.
           for (const entry of PROJECT_SETTINGS_NAV) {
-            expect(visibleIds.has(entry.id)).toBe(held.has(settingsEntryViewKey(entry)));
+            // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
+            // MOTIR-5394); MOTIR-5278's browse view is reverted.
+            // MOTIR-5278 had read the entry's VIEW key here.
+            expect(visibleIds.has(entry.id)).toBe(held.has(entry.permission));
           }
         });
 
@@ -272,16 +271,12 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
           // the split is administer-vs-not: an actor holding `project:administer`
           // (a project admin, or the workspace owner/admin always-pass tier) sees
           // the whole rail; everyone else sees NOTHING.
-          //
-          // ⚠️ AND IT MOVED AGAIN, DELIBERATELY (MOTIR-5278 · `design/projects/design-notes.md`
-          // § ⭐ Approvals §6). "Everyone else sees NOTHING" became three arms:
-          // an administrator sees the whole rail, a browser who is not one sees
-          // exactly Approvals (read-only), and an actor who cannot browse the
-          // project still sees nothing — the no-nav-leak invariant is untouched.
+          // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
+          // MOTIR-5394); MOTIR-5278's browse view is reverted.
+          // MOTIR-5278 had added a third arm between these two: a non-admin browser
+          // sees exactly Approvals.
           if (held.has('project:administer')) {
             expect(visible).toEqual(PROJECT_SETTINGS_NAV);
-          } else if (held.has('project:browse')) {
-            expect(visible.map((e) => e.id)).toEqual(['approvals']);
           } else {
             expect(visible).toEqual([]);
           }

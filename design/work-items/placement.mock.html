@@ -1,0 +1,2780 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · A filed work item's placement — page Folder field, breadcrumb, Folder filter
+      (MOTIR-5374)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for WHERE A FILED WORK ITEM SITS outside the /items
+      tree — story MOTIR-5309, design card MOTIR-5374.
+
+      It COMPOSES three shipped surfaces and redraws none:
+        • the work item page's core-fields rail — CoreFieldsPanel.tsx's FieldCard
+          (app/(authed)/items/[key]/_components/FieldCard.tsx), drawn with the card
+          grammar provenance.mock.html already mirrors;
+        • the page header's eyebrow — app/(authed)/items/[key]/page.tsx and
+          ParentBreadcrumb.tsx, inside the shipped bounded min-w-0 flex-1 cell;
+        • the advanced filter builder — FilterConditionBuilder.tsx, as
+          filter-builder.mock.html draws it, on /items and in an automation
+          rule's conditions (AutomationRuleEditor.tsx).
+      It REUSES, unredrawn, the quick view's folder control and picker:
+      QuickViewFolderField.tsx over FolderPicker.tsx (folders.mock.html panel 6).
+
+      Behaviour is GROUNDED in the workflow-spec cards, never invented:
+        MOTIR-5313 (filing clears the parent; setting a parent clears the folder),
+        MOTIR-5375 (the EFFECTIVE folder, and `via` its root ancestor),
+        MOTIR-5381 (the breadcrumb follows a move), MOTIR-5377 (the page's Folder
+        field and its write), MOTIR-5376 (the Folder filter grammar), MOTIR-5378
+        (the builder's Folder row). See design-notes.md § Placement for the spec,
+        the decisions and the copy.
+
+      Panels: (1) the access paths · (2) the rail's Folder field at rest ·
+      (3) the Folder field open, saving, refused and read-only · (4) the
+      breadcrumb · (5) the builder's Folder condition row, on both mounts ·
+      (6) dark parity. Toggle dark mode to confirm token parity board-wide.
+    -->
+    <style>
+      /* ── Tier 0 — copied from packages/design-system/theme.css (light) ───── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-btn-x-sm: 12px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Tier 3 — the --el-* layer components consume. Emitted on :root AND
+         on every [data-theme] element, so the nested dark stage in panel 7
+         RE-COMPUTES it against its own Tier-0 values (a var() resolves where it
+         is declared, so a :root-only Tier-3 block would paint that stage light). */
+      :root,
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --focus-ring-color: var(--color-primary);
+      }
+
+      /* ── Board chrome (the review page — NOT part of the design) ─────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1232px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 90ch;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1232px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 40px auto 10px;
+        max-width: 1232px;
+      }
+      .panel-note {
+        margin: 12px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 110ch;
+      }
+      .panel-note strong {
+        color: var(--el-text-strong);
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-strong);
+      }
+      .sub-cap {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+        align-items: start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .trio {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+      /* A drawn annotation ring on the element a panel is ABOUT — board chrome. */
+      .is-callout {
+        box-shadow:
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--focus-ring-color);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .tb-btn svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary svg {
+        color: var(--el-accent-text);
+      }
+
+      /* ── The tree-grid — the shipped TreeTable + issueColumns set ────────── */
+      .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .folder-glyph {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .folder-name {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .picker {
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .picker.is-inline {
+        width: 100%;
+        box-shadow: none;
+        margin-top: 4px;
+      }
+      .picker-head {
+        padding: 8px 10px 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .picker-search {
+        display: block;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .picker-opt {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        text-align: left;
+        cursor: pointer;
+      }
+      .picker-opt svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-secondary);
+      }
+      .picker-opt.is-active {
+        background: var(--el-surface);
+      }
+      .picker-opt:disabled {
+        color: var(--el-text-faint);
+        cursor: default;
+      }
+      .opt-body {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+        flex: 1;
+      }
+      .opt-reason {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .opt-tag {
+        margin-left: auto;
+        flex: none;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .opt-check {
+        margin-left: auto;
+        flex: none;
+        color: var(--el-accent);
+      }
+      .picker-refusal {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin: 2px 4px 6px;
+        padding: 8px 10px;
+        border: 1px solid var(--el-danger);
+        border-radius: var(--radius-control);
+        background: var(--el-tint-rose);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .picker-refusal svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+
+      .vg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .rail-link {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .path-sep {
+        color: var(--el-text-secondary);
+      }
+      .rail-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 6px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .rail-note svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-secondary);
+      }
+      .rc-bar {
+        height: 2px;
+        margin-top: 6px;
+        border-radius: 9999px;
+        background: var(--el-border-soft);
+        overflow: hidden;
+      }
+      .rc-bar-fill {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .rc-err {
+        display: flex;
+        align-items: flex-start;
+        gap: 5px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .rc-err svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+      .dark-stage {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+      /* ── The rail column (the detail page's right rail) ─────────────────── */
+      .rail {
+        width: 300px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px; /* the rail's gap-3 between FieldCards */
+      }
+
+      /* ── FieldCard — CoreFieldsPanel.tsx's card VERBATIM ──────────────────── */
+      .fcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 10px 14px;
+      }
+      .fcard.is-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
+      }
+      .fcard .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .fcard .flabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .fcard .chev {
+        margin-top: -2px;
+        padding: 2px;
+        border: none;
+        background: transparent;
+        border-radius: 4px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+      }
+      .fcard .chev:hover {
+        color: var(--el-text);
+      }
+      .fcard .chev svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.12s ease;
+      }
+      .fcard.is-editing .chev svg {
+        transform: rotate(180deg);
+      }
+      .fcard .fvalue {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .fvalue .vrow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .fvalue .vtext {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .fvalue .glyph {
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        flex: none;
+      }
+      .fvalue .glyph svg {
+        width: 16px;
+        height: 16px;
+      }
+      .muted-italic {
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
+      .completed-mark {
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+
+      /* ghosted neighbour value (placement panel only — not a design element) */
+      .ghost-bar {
+        height: 20px;
+        margin-top: 6px;
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+      }
+      .ghost-bar.short {
+        width: 60%;
+      }
+      .adv {
+        position: relative;
+        z-index: 10;
+        width: 680px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .adv-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .adv-body {
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      /* Combinator — a sentence with the Segmented control inline (3.3.5) */
+      .adv-match {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        padding-bottom: 2px;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* Condition row — field · operator · value · remove */
+      .cond {
+        display: grid;
+        grid-template-columns: 158px 168px minmax(0, 1fr) 26px;
+        gap: 8px;
+        align-items: center;
+      }
+      /* Combobox trigger (the shipped trigger: h-control, radius-input) */
+      .cb {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        width: 100%;
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .cb .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cb .glyph {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .cb .caret {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .cb.is-open {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .cb .ph {
+        color: var(--el-text-muted);
+      }
+      /* Value editors — Input (44px), DatePicker trigger, the days stepper */
+      .vin {
+        height: var(--height-input);
+        width: 100%;
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .vin::placeholder {
+        color: var(--el-text-muted);
+      }
+      .vin:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .vin.num {
+        width: 110px;
+        font-variant-numeric: tabular-nums;
+      }
+      .vwrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .vwrap .joiner {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .vdays {
+        width: 84px;
+      }
+      /* DatePicker trigger (2.4.11 — h-input, calendar glyph + value) */
+      .dp {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        min-width: 0;
+        white-space: nowrap;
+      }
+      .dp .glyph {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      /* The MultiSelectPicker box — 5.4.6 verbatim (min-h input, chips wrap) */
+      .msp-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-height: var(--height-input);
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        cursor: text;
+      }
+      .msp-box.is-focused {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .msp-input {
+        flex: 1 1 50px;
+        min-width: 50px;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        outline: none;
+        padding: 2px 0;
+      }
+      .msp-input::placeholder {
+        color: var(--el-text-muted);
+      }
+      /* Chips — Pill chrome; neutral by default, tinted when the value
+         carries a tint (labels; the finding-#35 hue-in-background rule) */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .chip .cg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .chip .cx {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        margin-right: -4px;
+        border: 0;
+        background: none;
+        border-radius: var(--radius-badge);
+        color: var(--el-text-muted);
+        cursor: pointer;
+        padding: 0;
+      }
+      .chip .cx:hover {
+        color: var(--el-text);
+        background: var(--el-muted);
+      }
+      .chip .cx svg {
+        width: 10px;
+        height: 10px;
+      }
+      .chip.tinted {
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .chip.tinted .cx {
+        color: var(--el-text-strong);
+        opacity: 0.65;
+      }
+      .chip.tinted .cx:hover {
+        opacity: 1;
+        background: rgba(15, 15, 15, 0.08);
+      }
+      .chip .avatar {
+        width: 16px;
+        height: 16px;
+        font-size: 8px;
+        margin-left: -4px;
+      }
+      .chip .dot {
+        width: 8px;
+        height: 8px;
+      }
+      .chip .arch {
+        font-style: italic;
+        color: var(--el-text-secondary);
+        font-weight: 400;
+      }
+      /* Stale unknown-value chip — warning glyph + strong text on peach tint */
+      .chip.stale {
+        background: var(--el-tint-peach);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .chip.stale .cg {
+        color: var(--el-warning);
+      }
+      /* Row remove × — square icon button */
+      .x-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .x-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .x-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* Pending (incomplete) row — muted + the explicit not-applied line */
+      .cond.pending .cb,
+      .cond.pending .msp-box,
+      .cond.pending .vin,
+      .cond.pending .dp {
+        border-style: dashed;
+        color: var(--el-text-muted);
+      }
+      .cond-note {
+        grid-column: 1 / -1;
+        margin: -4px 0 0;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--el-text-muted);
+      }
+      /* Stale-referent notice under a row (role="status") */
+      .stale-note {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: -2px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .stale-note .wi {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-warning);
+      }
+      /* Footer — Add condition · live-apply count */
+      .adv-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--el-border);
+      }
+      .add-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .add-btn:hover {
+        text-decoration: underline;
+      }
+      .add-btn .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .add-btn[disabled] {
+        color: var(--el-text-faint);
+        cursor: default;
+        text-decoration: none;
+      }
+      .foot-hint {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .fmenu {
+        width: 260px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .fmenu .msearch {
+        position: relative;
+        margin: 2px 2px 4px;
+      }
+      .fmenu .msearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .fmenu .msearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .fmenu .msearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .fmenu .mgroup {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 6px 8px 2px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover,
+      .opt.is-active {
+        background: var(--el-surface);
+      }
+      .opt[aria-selected='true'] {
+        background: var(--el-surface);
+      }
+      .opt .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .check {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-accent);
+        opacity: 0;
+      }
+      .opt[aria-selected='true'] .check {
+        opacity: 1;
+      }
+      .opt .glyph {
+        width: 22px;
+        height: 16px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        color: var(--el-text-muted);
+      }
+      .opt .glyph svg {
+        width: 14px;
+        height: 14px;
+      }
+      .opt .sec {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin: -12px 0 16px;
+      }
+      .sum-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .sum-chip strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .sum-chip.any {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .count-line {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ════ Placement additions (MOTIR-5374) ═══════════════════════════════ */
+      /* The builder rules above consume these; the folders token head does not
+         declare them. Values are filter-builder.mock.html's own. */
+      :root {
+        --height-input: 44px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-input-x: 12px;
+      }
+      :root,
+      [data-theme] {
+        --el-muted: var(--color-muted);
+        --el-text-muted: var(--color-muted-foreground);
+      }
+
+      /* A visually-hidden label (the breadcrumb's "Folder:" prefix). */
+      .vh {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* ── The rail's Folder field (FieldCard) — additions only ───────────── */
+      .fvalue .fsub {
+        margin: 4px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .fvalue .item-link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .fvalue .item-link .lr-id,
+      .fvalue .fsub .lr-id {
+        font-size: 12px;
+      }
+      .fcard .chev[aria-disabled='true'] {
+        color: var(--el-text-faint);
+        cursor: default;
+      }
+      .fvalue .rail-note {
+        margin-top: 2px;
+      }
+
+      /* ── Toast (components/ui/Toast) — the page rail's refusal ──────────── */
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        max-width: 320px;
+        margin-top: 14px;
+        padding: 13px 15px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+      }
+      .toast svg {
+        width: 17px;
+        height: 17px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+      .toast .tt {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+
+      /* ── The eyebrow — app/(authed)/items/[key]/page.tsx + ParentBreadcrumb ── */
+      .eyebrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 12px;
+        row-gap: 8px;
+      }
+      .eyebrow .eb-type {
+        width: 20px;
+        height: 20px;
+        flex: none;
+      }
+      .eb-id {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .eb-cell {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        align-items: center;
+        column-gap: 12px;
+      }
+      .eb-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .crumb {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 6px;
+        row-gap: 4px;
+      }
+      .crumb-dot {
+        color: var(--el-text-secondary);
+      }
+      .crumb-item {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-muted);
+        text-decoration: none;
+      }
+      .crumb-item svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .crumb-folder {
+        display: flex;
+        min-width: 0;
+        max-width: 100%;
+        align-items: center;
+        gap: 4px;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .crumb-folder svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .seg-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .stage.is-narrow {
+        width: 520px;
+        max-width: 100%;
+      }
+
+      /* ── Panel 1 — the doors ────────────────────────────────────────────── */
+      .door {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .door h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .door-path {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .door-path svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .door-path strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* ── Panel 5 — the builder, additions only ──────────────────────────── */
+      .fb-grid {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }
+      .fb-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .adv-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .adv-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .adv-clear svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .cond-hint {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: -2px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .cond-hint svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .slot-none {
+        min-height: var(--height-control);
+      }
+      .chip .fg {
+        color: var(--el-text-secondary);
+      }
+      .fmenu-note {
+        margin: 4px 2px 2px;
+        padding: 6px 8px 4px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .fmenu-empty {
+        margin: 0;
+        padding: 10px 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .applied {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 16px 16px 4px;
+      }
+      .applied .summary {
+        margin: 0 0 10px;
+      }
+      .auto-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .auto-card h4 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>
+          A filed work item's placement — its page's Folder field, its breadcrumb, and the Folder
+          filter
+        </h1>
+        <p>
+          Design card MOTIR-5374 for story MOTIR-5309. Composes the shipped page rail (FieldCard),
+          the page eyebrow (ParentBreadcrumb) and the advanced filter builder; reuses the quick
+          view's folder control and picker. Behaviour from MOTIR-5313 · 5375 · 5376 · 5377 · 5378 ·
+          5381. Built from the design-system tokens only.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs — each group's geometry copied from the installed lucide-react __iconNode -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-folder-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 10v6" />
+          <path d="M9 13h6" />
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-folder-input"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"
+          />
+          <path d="M2 13h10" />
+          <path d="m9 16 3-3-3-3" />
+        </g>
+        <g
+          id="i-ellipsis"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-circle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-chevrons-up-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-list-tree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 5h13" />
+          <path d="M13 12h8" />
+          <path d="M13 19h8" />
+          <path d="M3 10a2 2 0 0 0 2 2h3" />
+          <path d="M3 5v12a2 2 0 0 0 2 2h3" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </g>
+        <!-- work-item KIND glyphs, as tree-scale.mock.html draws them -->
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-funnel-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M13.354 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l1.218-1.348"
+          />
+          <path d="M16 6h6" />
+          <path d="M19 3v6" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-triangle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-tag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-component"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z"
+          />
+          <path
+            d="M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z"
+          />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 1 — the access paths ════════════ -->
+    <div class="panel-label">
+      1 · The access paths — all shipped, none added. The page opens from a /items row's quick view;
+      the builder opens from the /items toolbar's [Advanced] and from an automation rule's
+      conditions
+    </div>
+    <div class="panel trio">
+      <div class="stage door">
+        <h3>The work item page</h3>
+        <p class="door-path">
+          <strong>Work Items</strong>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          a row opens the quick view
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          its title opens the page
+        </p>
+        <div class="eyebrow">
+          <svg class="type-icon t-story eb-type" viewBox="0 0 24 24" aria-hidden="true">
+            <use href="#i-book" />
+          </svg>
+          <span class="eb-id">PROD-23</span>
+          <div class="eb-cell">
+            <nav class="crumb" aria-label="Folder and parent work items">
+              <span class="crumb-dot" aria-hidden="true">·</span>
+              <span class="crumb-folder">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                <span class="vh">Folder:</span><span class="seg-text">Parked ▸ 2025</span>
+              </span>
+            </nav>
+          </div>
+        </div>
+      </div>
+      <div class="stage door">
+        <h3>The /items builder</h3>
+        <p class="door-path">
+          <strong>Work Items</strong>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          the toolbar
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          <strong>Advanced</strong>
+        </p>
+        <div class="toolbar">
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn is-callout">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-funnel-plus" /></svg>Advanced
+          </button>
+        </div>
+      </div>
+      <div class="stage door">
+        <h3>An automation rule's conditions</h3>
+        <p class="door-path">
+          <strong>Settings</strong>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          Project
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          Automation
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          a rule
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          <strong>Conditions</strong>
+        </p>
+        <p class="door-path">
+          The same builder, mounted in the rule editor, gains the same Folder row (panel 5).
+        </p>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>No new door.</strong> Every surface on this board already ships and is already reached
+      one way. The page's rail and eyebrow change content, not placement; the builder gains one row
+      on both of its mounts (<code>git grep -l FilterConditionBuilder</code> finds exactly
+      <code>IssueAdvancedFilter.tsx</code> and <code>AutomationRuleEditor.tsx</code>).
+    </p>
+
+    <!-- ════════════ PANEL 2 — the Folder field at rest ════════════ -->
+    <div class="panel-label">
+      2 · The rail's Folder field at rest — a FieldCard directly below Parent: filed directly · in a
+      folder through its root ancestor · not filed (dashed ring = the new card, board annotation)
+    </div>
+    <div class="panel trio">
+      <div>
+        <p class="sub-cap">Filed directly — PROD-12 Old import, an epic in Parked ▸ 2025</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Reporter</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Parent</span>
+              <button class="chev" aria-label="Edit Parent">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="fvalue"><span class="muted-italic">None</span></div>
+          </div>
+          <div class="fcard is-new">
+            <div class="head">
+              <span class="flabel">Folder</span>
+              <button class="chev" aria-label="Edit Folder">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <div class="vrow">
+                <span class="glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg
+                ></span>
+                <span class="vtext">Parked <span class="path-sep">▸</span> 2025</span>
+              </div>
+            </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Labels</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="sub-cap">Through its root — PROD-23 Map legacy fields, a story under PROD-12</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Reporter</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Parent</span>
+              <button class="chev" aria-label="Edit Parent">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <a class="item-link" href="#"
+                ><span class="lr-id">PROD-12</span><span class="vtext">Old import</span></a
+              >
+            </div>
+          </div>
+          <div class="fcard is-new">
+            <div class="head">
+              <span class="flabel">Folder</span>
+              <button class="chev" aria-label="Edit Folder">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <div class="vrow">
+                <span class="glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg
+                ></span>
+                <span class="vtext">Parked <span class="path-sep">▸</span> 2025</span>
+              </div>
+              <p class="fsub">Through <span class="lr-id">PROD-12</span> Old import</p>
+            </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Labels</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="sub-cap">Not filed — PROD-31 Pricing page, under PROD-40 Q3 launch</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Reporter</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Parent</span>
+              <button class="chev" aria-label="Edit Parent">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <a class="item-link" href="#"
+                ><span class="lr-id">PROD-40</span><span class="vtext">Q3 launch</span></a
+              >
+            </div>
+          </div>
+          <div class="fcard is-new">
+            <div class="head">
+              <span class="flabel">Folder</span>
+              <button class="chev" aria-label="Edit Folder">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+              </button>
+            </div>
+            <div class="fvalue"><span class="muted-italic">No folder</span></div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Labels</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>One fact about placement, two cards.</strong> Folder sits directly below Parent, as it
+      does in the quick view (folders.mock.html panel 6), and reads in step with it: a filed item's
+      Parent is <em>None</em>; an item under a work item reads <em>No folder</em> — unless its ROOT
+      is filed. <strong>The inherited reading (decided).</strong> A story under a filed epic IS in
+      that folder — the tree draws it there and the Folder filter matches it there (MOTIR-5376) — so
+      the field shows the path, and a second line says how:
+      <em>Through PROD-12 Old import</em> (<code>placementFolder.via</code>, MOTIR-5375). It is not
+      <em>No folder</em>, which would contradict the tree, and it is not read-only: filing the story
+      is legal, and the open field says what it costs (panel 3). The value takes
+      <code>muted()</code>'s italic <code>--el-text-secondary</code> only for the two empty words,
+      exactly as Parent's <em>None</em> already does.
+    </p>
+
+    <!-- ════════════ PANEL 3 — open · saving · refused · read-only ════════════ -->
+    <div class="panel-label">
+      3 · The Folder field open (the quick view's control, in flow) · saving · refused (both cards
+      revert, the page's error Toast) · a member without work_item:edit
+    </div>
+    <div class="panel stack">
+      <div class="pair">
+        <div>
+          <p class="sub-cap">Open — PROD-23 is inside Parked ▸ 2025 through its epic parent</p>
+          <div class="rail">
+            <div class="fcard">
+              <div class="head">
+                <span class="flabel">Parent</span>
+                <button class="chev" aria-label="Edit Parent">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue">
+                <a class="item-link" href="#"
+                  ><span class="lr-id">PROD-12</span><span class="vtext">Old import</span></a
+                >
+              </div>
+            </div>
+            <div class="fcard is-editing is-new">
+              <div class="head">
+                <span class="flabel">Folder</span>
+                <button class="chev" aria-label="Close Folder" aria-expanded="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue">
+                <span class="rail-note">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                  Filing it removes it from PROD-12 Old import.
+                </span>
+                <div class="picker is-inline" role="listbox" aria-label="Folders">
+                  <div class="picker-head">Folder</div>
+                  <input
+                    class="picker-search"
+                    aria-label="Find a folder"
+                    placeholder="Find a folder"
+                  />
+                  <button class="picker-opt" role="option" aria-selected="true">
+                    <span class="opt-body">No folder</span>
+                    <svg class="opt-check" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-check" />
+                    </svg>
+                  </button>
+                  <button class="picker-opt is-active" role="option">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                    <span class="opt-body">Parked</span>
+                  </button>
+                  <button class="picker-opt" role="option" style="padding-left: 32px">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                    <span class="opt-body">2025</span>
+                  </button>
+                  <button class="picker-opt" role="option">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                    <span class="opt-body">Later</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="sub-cap">Saving — Parked picked: both cards take the new values at once</p>
+          <div class="rail">
+            <div class="fcard">
+              <div class="head">
+                <span class="flabel">Parent</span>
+                <button class="chev" aria-label="Edit Parent" aria-disabled="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue"><span class="muted-italic">None</span></div>
+            </div>
+            <div class="fcard is-new">
+              <div class="head">
+                <span class="flabel">Folder</span>
+                <button class="chev" aria-label="Edit Folder" aria-disabled="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue">
+                <div class="vrow">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="vtext">Parked</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pair">
+        <div>
+          <p class="sub-cap">Refused — both cards revert; the reason is the page's error Toast</p>
+          <div class="rail">
+            <div class="fcard">
+              <div class="head">
+                <span class="flabel">Parent</span>
+                <button class="chev" aria-label="Edit Parent">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue">
+                <a class="item-link" href="#"
+                  ><span class="lr-id">PROD-12</span><span class="vtext">Old import</span></a
+                >
+              </div>
+            </div>
+            <div class="fcard is-new">
+              <div class="head">
+                <span class="flabel">Folder</span>
+                <button class="chev" aria-label="Edit Folder">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue">
+                <div class="vrow">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="vtext">Parked <span class="path-sep">▸</span> 2025</span>
+                </div>
+                <p class="fsub">Through <span class="lr-id">PROD-12</span> Old import</p>
+              </div>
+            </div>
+          </div>
+          <div class="toast" role="alert">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+            <span class="tt"
+              >That folder belongs to another project, so this work item stayed where it was.</span
+            >
+          </div>
+        </div>
+        <div>
+          <p class="sub-cap">Read-only — a member without work_item:edit: values, no chevrons</p>
+          <div class="rail">
+            <div class="fcard">
+              <div class="head"><span class="flabel">Parent</span></div>
+              <div class="fvalue">
+                <a class="item-link" href="#"
+                  ><span class="lr-id">PROD-12</span><span class="vtext">Old import</span></a
+                >
+              </div>
+            </div>
+            <div class="fcard is-new">
+              <div class="head"><span class="flabel">Folder</span></div>
+              <div class="fvalue">
+                <div class="vrow">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="vtext">Parked <span class="path-sep">▸</span> 2025</span>
+                </div>
+                <p class="fsub">Through <span class="lr-id">PROD-12</span> Old import</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>The control is the quick view's, unforked.</strong> Opening the card renders
+      <code>QuickViewFolderControl</code> in flow: the <em>removes it from</em> note whenever the
+      item has a work-item parent, then <code>FolderPickerPanel</code> in <code>file</code> mode.
+      The checked option is the item's OWN folder — <em>No folder</em> for an item placed through
+      its root — so picking it writes nothing, and picking <em>2025</em> files the story directly
+      (out of its epic, into the same folder). <strong>Saving</strong> is the rail's shipped
+      grammar: the values change at once (Parent to <em>None</em>), and every rail control is
+      disabled until the write answers (<code>disabled={isPending || readOnly}</code>).
+      <strong>Refused</strong> is also the PAGE's grammar, not the quick view's: both cards revert
+      and the reason arrives as the error <code>Toast</code> the rail already raises for every
+      failed save (<code>toast({ variant: 'error' })</code>) — the quick view's on-row reason is its
+      own dialog's grammar. After a success the card closes on its new value; the page draws no
+      confirmed check.
+    </p>
+
+    <!-- ════════════ PANEL 4 — the breadcrumb ════════════ -->
+    <div class="panel-label">
+      4 · The breadcrumb — folder segments lead the ancestor chain: filed directly · inside a folder
+      through its root · unfiled (unchanged) · a long path inside the shipped bounded cell
+    </div>
+    <div class="panel stack">
+      <div>
+        <p class="sub-cap">
+          Filed directly — PROD-12 Old import (a filed root now HAS a breadcrumb)
+        </p>
+        <div class="stage">
+          <div class="eyebrow">
+            <svg class="type-icon t-epic eb-type" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-zap" />
+            </svg>
+            <span class="eb-id">PROD-12</span>
+            <div class="eb-cell">
+              <nav class="crumb" aria-label="Folder and parent work items">
+                <span class="crumb-dot" aria-hidden="true">·</span>
+                <span class="crumb-folder is-callout">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                  <span class="vh">Folder:</span><span class="seg-text">Parked ▸ 2025</span>
+                </span>
+              </nav>
+            </div>
+            <div class="eb-right">
+              <button class="tb-btn">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pencil" /></svg>Edit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="sub-cap">Through its root — PROD-23 Map legacy fields: the path, then its epic</p>
+        <div class="stage">
+          <div class="eyebrow">
+            <svg class="type-icon t-story eb-type" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-book" />
+            </svg>
+            <span class="eb-id">PROD-23</span>
+            <div class="eb-cell">
+              <nav class="crumb" aria-label="Folder and parent work items">
+                <span class="crumb-dot" aria-hidden="true">·</span>
+                <span class="crumb-folder">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                  <span class="vh">Folder:</span><span class="seg-text">Parked ▸ 2025</span>
+                </span>
+                <span class="crumb-dot" aria-hidden="true">·</span>
+                <a class="crumb-item" href="#">
+                  <svg class="type-icon t-epic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-zap" />
+                  </svg>
+                  <span class="seg-text">Epic: Old import</span>
+                </a>
+              </nav>
+            </div>
+            <div class="eb-right">
+              <button class="tb-btn">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pencil" /></svg>Edit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pair">
+        <div>
+          <p class="sub-cap">Unfiled — PROD-31 Pricing page: exactly today's breadcrumb</p>
+          <div class="stage">
+            <div class="eyebrow">
+              <svg class="type-icon t-story eb-type" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-book" />
+              </svg>
+              <span class="eb-id">PROD-31</span>
+              <div class="eb-cell">
+                <nav class="crumb" aria-label="Parent work items">
+                  <span class="crumb-dot" aria-hidden="true">·</span>
+                  <a class="crumb-item" href="#">
+                    <svg class="type-icon t-epic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-zap" />
+                    </svg>
+                    <span class="seg-text">Epic: Q3 launch</span>
+                  </a>
+                </nav>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="sub-cap">A long path — segments wrap, and one longer than the cell truncates</p>
+          <div class="stage is-narrow">
+            <div class="eyebrow">
+              <svg class="type-icon t-task eb-type" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-task" />
+              </svg>
+              <span class="eb-id">PROD-77</span>
+              <div class="eb-cell">
+                <nav class="crumb" aria-label="Folder and parent work items">
+                  <span class="crumb-dot" aria-hidden="true">·</span>
+                  <span
+                    class="crumb-folder"
+                    title="Customer imports ▸ 2024 ▸ Legacy CRM ▸ Accounts to re-map before the cut-over"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                    <span class="vh">Folder:</span
+                    ><span class="seg-text"
+                      >Customer imports ▸ 2024 ▸ Legacy CRM ▸ Accounts to re-map before the
+                      cut-over</span
+                    >
+                  </span>
+                  <span class="crumb-dot" aria-hidden="true">·</span>
+                  <a class="crumb-item" href="#">
+                    <svg class="type-icon t-epic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-zap" />
+                    </svg>
+                    <span class="seg-text">Epic: Old import</span>
+                  </a>
+                  <span class="crumb-dot" aria-hidden="true">·</span>
+                  <a class="crumb-item" href="#">
+                    <svg class="type-icon t-story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-book" />
+                    </svg>
+                    <span class="seg-text">Story: Map legacy fields</span>
+                  </a>
+                </nav>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>The folder path is ONE segment, and it leads.</strong> It follows the identifier with
+      the shipped <code>·</code> separator, before the ancestor chain; inside it the folders join
+      with <code>▸</code>, the separator the Folder field and the picker already use, so a path
+      reads the same everywhere. <strong>Text, not a link (decided).</strong> Nothing in the product
+      takes a reader to a folder: <code>app/(authed)/items/page.tsx</code> reads no folder parameter
+      (<code>git grep -n "searchParams.*folder" origin/main -- 'app/(authed)/items/'</code> returns
+      nothing), so a link would need a destination this story does not build. A work-item segment
+      keeps its link, its type glyph and its hover; the folder segment has the folder glyph,
+      <code>--el-text-secondary</code> ink and no hover, so the two never read as the same kind of
+      thing. A visually-hidden <em>Folder:</em> prefix names it for assistive tech, and the landmark
+      is labelled <em>Folder and parent work items</em> whenever a folder segment is present.
+      <strong>Long paths</strong> stay inside the shipped <code>min-w-0 flex-1</code> cell: segments
+      wrap onto a second line, and a single segment wider than the cell truncates with the full path
+      in its <code>title</code>. <strong>A filed ROOT gets a breadcrumb</strong> for the first time
+      (today a root renders none), holding only its folder.
+    </p>
+
+    <!-- ════════════ PANEL 5 — the builder's Folder row ════════════ -->
+    <div class="panel-label">
+      5 · The builder's Folder condition row — its place in the field menu, the values by path, the
+      included-folders hint, is empty, a deleted folder, no folders, a truncated list, the applied
+      chip, and the automation rule's copy of the builder
+    </div>
+    <div class="panel fb-grid">
+      <div class="fb-col">
+        <p class="sub-cap">The field menu — Folder joins Other, after Component</p>
+        <div class="fmenu" role="listbox" aria-label="Field">
+          <div class="msearch">
+            <svg class="si" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search" /></svg>
+            <input placeholder="Search fields…" aria-label="Search fields…" />
+          </div>
+          <div class="mgroup">Fields</div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph" aria-hidden="true"></span><span class="lbl">Status</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph" aria-hidden="true"></span><span class="lbl">Assignee</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <div class="mgroup">Other</div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-tag" /></svg></span
+            ><span class="lbl">Label</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-component" /></svg></span
+            ><span class="lbl">Component</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt is-active" role="option" aria-selected="true">
+            <span class="glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg></span
+            ><span class="lbl">Folder</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+        </div>
+
+        <p class="sub-cap">The value listbox — every folder by its path (a truncated project)</p>
+        <div class="fmenu" role="listbox" aria-label="Folder values">
+          <div class="msearch">
+            <svg class="si" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search" /></svg>
+            <input placeholder="Find a folder" aria-label="Find a folder" />
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg></span
+            ><span class="lbl">Parked</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="true">
+            <span class="glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg></span
+            ><span class="lbl">Parked ▸ 2025</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="true">
+            <span class="glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg></span
+            ><span class="lbl">Later</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <div class="opt" role="option" aria-selected="false">
+            <span class="glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg></span
+            ><span class="lbl">Research</span
+            ><svg class="check" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+          </div>
+          <p class="fmenu-note">Showing the first 1000 folders.</p>
+        </div>
+
+        <p class="sub-cap">A project with no folders</p>
+        <div class="fmenu" role="listbox" aria-label="Folder values">
+          <div class="msearch">
+            <svg class="si" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search" /></svg>
+            <input placeholder="Find a folder" aria-label="Find a folder" />
+          </div>
+          <p class="fmenu-empty">This project has no folders yet.</p>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div>
+          <p class="sub-cap">The builder — every state a Folder row can be in</p>
+          <div class="adv" role="dialog" aria-label="Advanced filter">
+            <div class="adv-head">
+              <span class="adv-title">Advanced filter</span>
+              <button class="adv-clear">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x" /></svg>Clear all
+              </button>
+            </div>
+            <div class="adv-body">
+              <div class="adv-match">
+                <span>Match</span>
+                <div class="seg" role="group" aria-label="Combinator">
+                  <button aria-pressed="true">all</button>
+                  <button aria-pressed="false">any</button>
+                </div>
+                <span>of the following conditions:</span>
+              </div>
+
+              <div class="cond" role="group" aria-label="Condition 1">
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg></span
+                  ><span class="lbl">Folder</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="lbl">is any of</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <div class="msp-box">
+                  <span class="chip"
+                    ><svg class="cg fg" viewBox="0 0 24 24"><use href="#i-folder" /></svg>Parked ▸
+                    2025<button class="cx" aria-label="Remove Parked ▸ 2025">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <span class="chip"
+                    ><svg class="cg fg" viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                    >Later<button class="cx" aria-label="Remove Later">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <input class="msp-input" placeholder="Add…" aria-label="Folder values" />
+                </div>
+                <button class="x-btn" aria-label="Remove condition 1">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+                <p class="cond-hint">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                  Folders inside a chosen folder are included.
+                </p>
+              </div>
+
+              <div class="cond" role="group" aria-label="Condition 2">
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg></span
+                  ><span class="lbl">Folder</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="lbl">is none of</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <div class="msp-box">
+                  <span class="chip"
+                    ><svg class="cg fg" viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                    >Parked<button class="cx" aria-label="Remove Parked">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <input class="msp-input" placeholder="Add…" aria-label="Folder values" />
+                </div>
+                <button class="x-btn" aria-label="Remove condition 2">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+                <p class="cond-hint">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                  Folders inside a chosen folder are included.
+                </p>
+              </div>
+
+              <div class="cond" role="group" aria-label="Condition 3">
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg></span
+                  ><span class="lbl">Folder</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="lbl">is empty</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <span class="slot-none" aria-hidden="true"></span>
+                <button class="x-btn" aria-label="Remove condition 3">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+              </div>
+
+              <div class="cond" role="group" aria-label="Condition 4 (stale)">
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-folder" /></svg></span
+                  ><span class="lbl">Folder</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <button class="cb" aria-haspopup="listbox">
+                  <span class="lbl">is any of</span
+                  ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                </button>
+                <div class="msp-box">
+                  <span class="chip stale"
+                    ><svg class="cg" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg
+                    >Unknown value<button class="cx" aria-label="Remove unknown value">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                  ></span>
+                  <input class="msp-input" placeholder="Add…" aria-label="Folder values" />
+                </div>
+                <button class="x-btn" aria-label="Remove condition 4">
+                  <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                </button>
+                <p class="stale-note" role="status">
+                  <svg class="wi" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>
+                  This value no longer exists in the project — this condition matches nothing.
+                </p>
+              </div>
+            </div>
+            <div class="adv-foot">
+              <button class="add-btn">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Add condition
+              </button>
+              <span class="foot-hint">4 of 20 conditions · applied live</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p class="sub-cap">Applied — the summary chip names each folder by its path</p>
+          <div class="applied">
+            <div class="summary" aria-label="Active conditions">
+              <span class="sum-chip"><strong>Folder</strong> is none of Parked</span>
+              <span class="sum-chip"><strong>Folder</strong> is any of Parked ▸ 2025, Later</span>
+              <span class="sum-chip"><strong>Status</strong> is any of In Progress</span>
+            </div>
+            <p class="count-line" role="status">2 work items match</p>
+          </div>
+        </div>
+
+        <div>
+          <p class="sub-cap">The second mount — an automation rule's conditions, same row</p>
+          <div class="auto-card">
+            <h4>Conditions</h4>
+            <div class="cond" role="group" aria-label="Condition 1">
+              <button class="cb" aria-haspopup="listbox">
+                <span class="glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg></span
+                ><span class="lbl">Folder</span
+                ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+              </button>
+              <button class="cb" aria-haspopup="listbox">
+                <span class="lbl">is none of</span
+                ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+              </button>
+              <div class="msp-box">
+                <span class="chip"
+                  ><svg class="cg fg" viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                  >Parked<button class="cx" aria-label="Remove Parked">
+                    <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                ></span>
+                <input class="msp-input" placeholder="Add…" aria-label="Folder values" />
+              </div>
+              <button class="x-btn" aria-label="Remove condition 1">
+                <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+              </button>
+              <p class="cond-hint">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                Folders inside a chosen folder are included.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>One more row in the registry's grammar, no new primitive.</strong> Folder is the last
+      entry of the field menu's <em>Other</em> group, after Component — its registry position
+      (<code>FILTER_FIELDS</code>, registry order is menu order). Its value editor is the shipped
+      <code>MultiSelectPicker</code>: every option and every chip is labelled by the folder's PATH
+      with the folder glyph, because two teams can both have a <em>2025</em>. Under a list operator
+      one line says what the predicate does: <em>Folders inside a chosen folder are included.</em>
+      <em>is empty</em> / <em>is not empty</em> collapse the value slot, as every nullable field's
+      do. A deleted folder is the shipped <em>Unknown value</em> chip and notice, matching nothing.
+      The listbox reads the project's folders bounded at <code>FOLDER_PICKER_MAX</code> (1000) and
+      says so when it stops; a project with no folders gets one quiet line. The applied chip reads
+      <strong>Folder</strong> + the operator + the paths. The automation rule editor mounts the same
+      <code>FilterConditionBuilder</code>, so its conditions gain the identical row.
+    </p>
+
+    <!-- ════════════ PANEL 6 — dark parity ════════════ -->
+    <div class="panel-label">6 · Dark parity — panels 2–5 on data-theme="dark"</div>
+    <div class="panel">
+      <div class="dark-stage" data-theme="dark">
+        <div class="pair">
+          <div class="rail">
+            <div class="fcard">
+              <div class="head">
+                <span class="flabel">Parent</span>
+                <button class="chev" aria-label="Edit Parent">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue">
+                <a class="item-link" href="#"
+                  ><span class="lr-id">PROD-12</span><span class="vtext">Old import</span></a
+                >
+              </div>
+            </div>
+            <div class="fcard">
+              <div class="head">
+                <span class="flabel">Folder</span>
+                <button class="chev" aria-label="Edit Folder">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue">
+                <div class="vrow">
+                  <span class="glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="vtext">Parked <span class="path-sep">▸</span> 2025</span>
+                </div>
+                <p class="fsub">Through <span class="lr-id">PROD-12</span> Old import</p>
+              </div>
+            </div>
+            <div class="fcard">
+              <div class="head">
+                <span class="flabel">Folder</span>
+                <button class="chev" aria-label="Edit Folder">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                </button>
+              </div>
+              <div class="fvalue"><span class="muted-italic">No folder</span></div>
+            </div>
+            <div class="toast" role="alert">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+              <span class="tt"
+                >That folder belongs to another project, so this work item stayed where it
+                was.</span
+              >
+            </div>
+          </div>
+          <div class="stack">
+            <div class="eyebrow">
+              <svg class="type-icon t-story eb-type" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-book" />
+              </svg>
+              <span class="eb-id">PROD-23</span>
+              <div class="eb-cell">
+                <nav class="crumb" aria-label="Folder and parent work items">
+                  <span class="crumb-dot" aria-hidden="true">·</span>
+                  <span class="crumb-folder">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-folder" /></svg>
+                    <span class="vh">Folder:</span><span class="seg-text">Parked ▸ 2025</span>
+                  </span>
+                  <span class="crumb-dot" aria-hidden="true">·</span>
+                  <a class="crumb-item" href="#">
+                    <svg class="type-icon t-epic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-zap" />
+                    </svg>
+                    <span class="seg-text">Epic: Old import</span>
+                  </a>
+                </nav>
+              </div>
+            </div>
+            <div class="adv" role="dialog" aria-label="Advanced filter">
+              <div class="adv-body">
+                <div class="cond" role="group" aria-label="Condition 1">
+                  <button class="cb" aria-haspopup="listbox">
+                    <span class="glyph" aria-hidden="true"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg></span
+                    ><span class="lbl">Folder</span
+                    ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                  <button class="cb" aria-haspopup="listbox">
+                    <span class="lbl">is none of</span
+                    ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                  <div class="msp-box">
+                    <span class="chip"
+                      ><svg class="cg fg" viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                      >Parked<button class="cx" aria-label="Remove Parked">
+                        <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                    ></span>
+                    <input class="msp-input" placeholder="Add…" aria-label="Folder values" />
+                  </div>
+                  <button class="x-btn" aria-label="Remove condition 1">
+                    <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                  </button>
+                  <p class="cond-hint">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                    Folders inside a chosen folder are included.
+                  </p>
+                </div>
+                <div class="cond" role="group" aria-label="Condition 2 (stale)">
+                  <button class="cb" aria-haspopup="listbox">
+                    <span class="glyph" aria-hidden="true"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-folder" /></svg></span
+                    ><span class="lbl">Folder</span
+                    ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                  <button class="cb" aria-haspopup="listbox">
+                    <span class="lbl">is any of</span
+                    ><svg class="caret" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+                  </button>
+                  <div class="msp-box">
+                    <span class="chip stale"
+                      ><svg class="cg" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg
+                      >Unknown value<button class="cx" aria-label="Remove unknown value">
+                        <svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button
+                    ></span>
+                    <input class="msp-input" placeholder="Add…" aria-label="Folder values" />
+                  </div>
+                  <button class="x-btn" aria-label="Remove condition 2">
+                    <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+                  </button>
+                  <p class="stale-note" role="status">
+                    <svg class="wi" viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>
+                    This value no longer exists in the project — this condition matches nothing.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="summary" aria-label="Active conditions">
+              <span class="sum-chip"><strong>Folder</strong> is none of Parked</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel panel-note">
+      <strong>Dark.</strong> Every colour on this board is an <code>--el-*</code> token, and the
+      Tier-3 layer is re-computed on every <code>[data-theme]</code> element, so this stage paints
+      dark with nothing placement-specific to flip.
+    </p>
+  </body>
+</html>
