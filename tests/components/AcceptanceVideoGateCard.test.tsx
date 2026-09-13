@@ -5,32 +5,22 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AcceptanceVideoGateCard } from '@/app/(authed)/settings/project/approvals/_components/AcceptanceVideoGateCard';
 
-// Task MOTIR-5278 — the switch is never OFFERED to an actor the server refuses.
+// The acceptance-video switch, rendered for the only actor who reaches it.
 //
-// The Approvals room opens on `project:browse` now (`design/projects/design-notes.md`
-// § ⭐ Approvals §6), so this card renders for members the PATCH refuses. Before
-// `canManage`, such a member would click, watch the switch flip optimistically,
-// and then watch it snap back on a 403 — a control that lies for a moment and
-// then apologises. The page reads `canManage` off the registry's WRITE key; this
-// suite pins what the card does with each value.
+// ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
+// MOTIR-5394); MOTIR-5278's browse view is reverted. MOTIR-5278 added this file
+// with `canManage` cases: a DISABLED switch for a member the PATCH refuses. The
+// room admits only `workflow:manage` again, so every actor who renders this card
+// may change it. The prop, its disabled branch and those cases are gone. What
+// stays is what the card owes that actor: a live switch showing the STORED state,
+// and a click that really sends the PATCH.
 //
-// Out of scope, and deliberately unasserted: the read-only FOOTER that explains
-// why, and `Unavailable` — both are MOTIR-5171's.
+// Out of scope, and deliberately unasserted: `Unavailable`, which is MOTIR-5171's.
 
-function renderCard({
-  canManage,
-  initialEnabled,
-}: {
-  canManage: boolean;
-  initialEnabled: boolean;
-}) {
+function renderCard(initialEnabled: boolean) {
   return renderWithIntl(
     <ToastProvider>
-      <AcceptanceVideoGateCard
-        projectKey="MOTIR"
-        initialEnabled={initialEnabled}
-        canManage={canManage}
-      />
+      <AcceptanceVideoGateCard projectKey="MOTIR" initialEnabled={initialEnabled} />
     </ToastProvider>,
   );
 }
@@ -43,37 +33,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('AcceptanceVideoGateCard — `canManage` (MOTIR-5278)', () => {
-  it('an actor holding the WRITE key is offered a LIVE switch showing the stored state', () => {
-    renderCard({ canManage: true, initialEnabled: true });
+describe('AcceptanceVideoGateCard — the switch a manager is offered', () => {
+  it('is LIVE and shows the stored state when it is on', () => {
+    renderCard(true);
     expect(gateSwitch().disabled).toBe(false);
     expect(gateSwitch().getAttribute('aria-checked')).toBe('true');
   });
 
-  it('an actor WITHOUT it sees the stored state on a DISABLED switch', () => {
-    renderCard({ canManage: false, initialEnabled: false });
-    expect(gateSwitch().disabled).toBe(true);
+  it('shows the stored state when it is off, on the state line as well as the switch', () => {
+    renderCard(false);
+    expect(gateSwitch().disabled).toBe(false);
     expect(gateSwitch().getAttribute('aria-checked')).toBe('false');
-    // The state line still tells them what their project asks — reading it is
-    // the point of letting them in.
     expect(screen.getByText('Off')).toBeTruthy();
   });
 
-  it('a click on the disabled switch sends NOTHING and changes nothing — no optimistic flip to revert', async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
-    renderCard({ canManage: false, initialEnabled: true });
-
-    fireEvent.click(gateSwitch());
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(gateSwitch().getAttribute('aria-checked')).toBe('true');
-  });
-
-  it('CONTROL: the same click with the write key DOES send the PATCH', async () => {
+  it('a click sends the PATCH and reconciles from its response', async () => {
     const fetchSpy = vi.fn(async () => Response.json({ acceptanceVideoEnabled: false }));
     vi.stubGlobal('fetch', fetchSpy);
-    renderCard({ canManage: true, initialEnabled: true });
+    renderCard(true);
 
     fireEvent.click(gateSwitch());
 
