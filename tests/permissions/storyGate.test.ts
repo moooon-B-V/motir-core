@@ -275,6 +275,38 @@ describe('guard 1 — nothing derives an administrative answer for itself', () =
     }
   });
 
+  it("the ACCESS SERVICE answers no ROLE question on a caller's behalf (MOTIR-5292)", () => {
+    // `projectAccessService.ts` is an allowed derivation because it RESOLVES the
+    // model — which also made it the one place a role check could be laundered
+    // past every pattern above. `isWorkspaceManagerFor` was exactly that: a method
+    // whose whole body was `return isWorkspaceManager(inputs.workspaceRole)`,
+    // asked by `approvalGatesService` as the approval escape hatch, so the gate
+    // decided on a ROLE while the guard saw only a call into the allowed file.
+    // A caller that needs such an answer needs a permission key instead.
+    const ROLE_VERDICT = /\breturn\s+(?:await\s+)?(?:isWorkspaceManager|isOwnerRole)\s*\(/;
+    const code = stripComments(
+      readFileSync(join(ROOT, 'lib/services/projectAccessService.ts'), 'utf8'),
+    );
+    expect(
+      ROLE_VERDICT.test(code),
+      'projectAccessService returns a bare role predicate as its answer — that is a role gate ' +
+        'handed to its caller. Give the operation a catalog key and ask hasPermission instead.',
+    ).toBe(false);
+
+    // Positive control: the deleted method's own shape is caught…
+    const laundered = `
+      async isWorkspaceManagerFor(projectId, ctx, tx) {
+        const inputs = await resolveInputs(projectId, ctx, tx);
+        return isWorkspaceManager(inputs.workspaceRole);
+      },
+    `;
+    expect(ROLE_VERDICT.test(stripComments(laundered))).toBe(true);
+    // …and the resolution's own branch on the role, which is the MODEL, is not.
+    expect(ROLE_VERDICT.test('if (isWorkspaceManager(workspaceRole)) return projects;')).toBe(
+      false,
+    );
+  });
+
   it('THE GUARD CAN ACTUALLY FAIL — a synthetic derivation is caught, and prose is not', () => {
     // Positive control: the real shape, in code.
     const offending = `

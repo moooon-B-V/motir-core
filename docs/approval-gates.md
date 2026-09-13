@@ -75,10 +75,13 @@ These are two different questions and Motir answers them differently on purpose.
 - **Who is asked** — the work item's **assignee**, or its **reporter** when there
   is no assignee. Exactly one person. A question put to two people is a decision
   neither of them owns.
-- **Who may answer** — the **assignee, the reporter, or an admin**. Three people
-  can press a button that was shown to one.
+- **Who may answer** — the person who was asked (the assignee, or the reporter
+  when there is no assignee), **or anyone holding the _Decide any approval_
+  permission** (`approval:decide_any`). Workspace owners and admins and project
+  Admins hold it by default, and a project can grant it to a custom role — a QA
+  lead, say — without granting anything else.
 
-Widening the second costs the first nothing: a reporter or an admin who decides
+Widening the second costs the first nothing: a permission-holder who decides
 from the work-item page never has the gate appear in their own queue. It exists
 so that a gate whose one recipient is on leave, has left, or was never the right
 person is not a permanent stop.
