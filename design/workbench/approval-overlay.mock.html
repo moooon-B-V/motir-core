@@ -11,10 +11,10 @@
       MOTIR-5225 (the row door), which carry it in blocked_by.
 
       WHAT THIS ASSET OWNS: the CONTAINER an approval renders in at full bleed —
-      its exit row, its address, the fill form band 2 takes inside it, the three
-      arms that mount no frame (a kind this build cannot render, a subject that
-      is gone, an address that names nothing this reader may see), its loading
-      state, narrow, and the To-approve row once its disclosure is gone.
+      its exit row, its address, the fill form the frame takes inside it, the
+      three arms that mount no frame (a kind this build cannot render, a subject
+      that is gone, an address that names nothing this reader may see), its
+      loading state, narrow, and the To-approve row once its disclosure is gone.
 
       WHAT IT COMPOSES RATHER THAN DRAWS, and none of it is re-decided here:
 
@@ -27,16 +27,19 @@
           chrome removed exactly as PlanningWorkspaceOverlay removes it. Its
           scrim and panel classes are the ones cn() merged at render.
         · THE EXIT ROW — PlanningWorkspaceHost's own Close control and Esc chip,
-          class for class.
+          class for class, followed by the work item's key and title.
         · THE TAB — design/workbench/approvals-row.mock.html Panel 1, verbatim
           but for the two edits this amendment makes to the row (the chevron
-          removed, the whole-row control made a link).
+          removed, the whole-row control made a link). Panel 9 only.
 
-      TWO EDITS TO THE DUMPED FRAME, and they are the design decision rather than
-      drift: the frame container takes the component's own EXPANDED recipe minus
-      its fixed dialog wrapper (flex column, page ground), and the port box keeps
-      its floor, lifts its ceiling and drops Expand. That is the fill form, and
-      design-notes § 21 records why and who builds the input that selects it.
+      THE FILL FORM — three edits to the dumped frame, and they are the design
+      decision rather than drift. THE OVERLAY IS THE CONTAINER, so the frame
+      loses its own card chrome (radius and border) and runs edge to edge under
+      the exit row; the port box takes the component's own EXPANDED recipe
+      (floor and ceiling dropped); and Expand is not offered. design-notes § 21
+      records why and who builds the input that selects it. Band 1 is left
+      byte-identical, so the kind label appears once, where the item page's
+      frame puts it.
 
       THE DRAWING DEVICE: a real Modal panel is position:fixed at 100dvh, so each
       viewport box below is a transformed containing block and the panel carries
@@ -3921,15 +3924,18 @@
         overflow: hidden;
         background: var(--el-page-bg);
       }
-      .vp,
-      .vp-host {
+      .vp {
         position: relative;
         transform: translateZ(0);
         overflow: hidden;
       }
+      .pinned {
+        position: relative;
+        width: 1136px;
+        margin: 0 auto;
+      }
       .pin {
         position: absolute;
-        z-index: 60;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -3941,29 +3947,6 @@
         font-family: var(--font-mono);
         font-size: 11px;
         font-weight: 700;
-        box-shadow: var(--shadow-card);
-      }
-      .cut-edge {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        z-index: 60;
-        border-left: 2px dashed var(--el-accent);
-        pointer-events: none;
-      }
-      .cut-edge span {
-        position: absolute;
-        top: 8px;
-        left: 8px;
-        width: 260px;
-        padding: 4px 8px;
-        border-radius: var(--radius-control);
-        background: var(--el-page-bg);
-        color: var(--el-text);
-        font-family: var(--font-mono);
-        font-size: 10.5px;
-        line-height: 1.45;
-        box-shadow: var(--shadow-card);
       }
       .halo-row {
         position: relative;
@@ -3977,9 +3960,9 @@
         pointer-events: none;
       }
 
-      /* ── MOTIR-5222: utilities neither block above carries, because neither
-         source file used them. Emitted by the project's own Tailwind build for
-         exactly the classes below, so the markup is the markup that ships. ── */
+      /* ── MOTIR-5222: utilities neither block above carries as a lone rule,
+         emitted by the project's own Tailwind build for exactly the classes
+         below, so the markup is the markup that ships. ── */
 
       .fixed {
         position: fixed;
@@ -3995,9 +3978,6 @@
       }
       .z-50 {
         z-index: 50;
-      }
-      .mx-auto {
-        margin-inline: auto;
       }
       .ml-1 {
         margin-left: calc(var(--spacing) * 1);
@@ -4028,9 +4008,6 @@
       }
       .w-screen {
         width: 100vw;
-      }
-      .max-w-\[72rem\] {
-        max-width: 72rem;
       }
       .max-w-none {
         max-width: none;
@@ -4131,16 +4108,6 @@
           }
         }
       }
-      .md\:px-6 {
-        @media (width >= 48rem) {
-          padding-inline: calc(var(--spacing) * 6);
-        }
-      }
-      .md\:py-6 {
-        @media (width >= 48rem) {
-          padding-block: calc(var(--spacing) * 6);
-        }
-      }
     </style>
   </head>
   <body>
@@ -4151,669 +4118,193 @@
         looked at, and § 20 put it inside a 44px list row under a pager, behind a 34rem ceiling.
         This asset gives it the screen: a full-screen overlay over the page you are on, addressed by
         the URL, closed by Back — the pattern the planning workspace and the run modal already ship
-        — and it supersedes § 20’s in-list disclosure with a dated amendment.
+        — and it supersedes § 20’s in-list disclosure with a dated amendment. The overlay IS the
+        container: the frame’s bands run edge to edge under the exit row.
       </p>
-      <p><strong>Read Panel 2 first.</strong> Everything else is a state of that screen.</p>
+      <p><strong>Read Panel 1 first.</strong> Everything else is a state of that screen.</p>
     </div>
 
     <p class="panel-label">
-      Panel 1 — the overlay OVER the To-approve tab: the tab stays mounted, dimmed and inert under
-      the scrim (drawn as a CUTAWAY)
+      Panel 1 — the ANATOMY at full bleed: the exit row, then the frame’s three bands edge to edge,
+      and ONE vertical scroll owner (band 2)
     </p>
     <div class="panel">
-      <div class="frame vp-host">
-        <div class="frame-bar">
-          <span
-            >viewport 1200 · rail 240 · content 896px · the To-approve tab, AFTER this
-            amendment</span
-          >
-        </div>
-        <div class="shell">
-          <div class="rail rail--ghost">
-            <span>the rail &mdash; drawn in <code>workbench.mock.html</code></span>
+      <div class="pinned">
+        <div class="vp-wrap" style="width: 1136px">
+          <div class="frame-bar">
+            <span
+              >viewport 1136 × 720 · Modal size="full" · rounded-none border-0 p-0 · hideClose</span
+            >
           </div>
-          <div class="content">
-            <div class="flex flex-col gap-5">
-              <header class="flex flex-wrap items-end justify-between gap-4">
-                <div class="flex flex-col gap-1">
-                  <h1 class="font-serif text-2xl font-semibold text-(--el-text)">Workbench</h1>
-                  <p class="text-sm text-(--el-text-muted)">
-                    What you are doing in Motir, and what you have just done.
-                  </p>
-                </div>
-              </header>
-              <div class="flex flex-col gap-3">
-                <nav
-                  aria-label="Workbench views"
-                  class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5 max-w-full overflow-x-auto"
+          <div class="vp" style="height: 720px">
+            <div
+              data-state="open"
+              data-surface="overlay"
+              class="fixed inset-0 z-40 bg-(--el-overlay-scrim)"
+              style="pointer-events: auto"
+              aria-hidden="true"
+            ></div>
+            <div
+              role="dialog"
+              id="approval-overlay-1"
+              aria-labelledby="approval-overlay-title-1"
+              data-state="open"
+              class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-(--el-page-bg) shadow-(--shadow-modal) border-(--el-border) focus:outline-none overflow-hidden h-dvh max-h-dvh w-screen max-w-none flex flex-col rounded-none border-0 p-0"
+              data-surface="modal"
+              style="
+                inset: 0;
+                transform: none;
+                translate: none;
+                width: 100%;
+                height: 100%;
+                max-height: 100%;
+              "
+              tabindex="-1"
+              style="pointer-events: auto"
+            >
+              <h2 id="approval-overlay-title-1" class="sr-only">Design result for MOTIR-5147</h2>
+              <div
+                class="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2"
+              >
+                <button
+                  type="button"
+                  class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
                 >
-                  <a
-                    href="/workbench"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text) shrink-0"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-circle h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" /></svg></span
-                    >To do<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >7</span
-                    ></a
-                  ><a
-                    href="/workbench?tab=in-progress"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text) shrink-0"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-circle-dot h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <circle cx="12" cy="12" r="1" /></svg></span
-                    >In progress<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >3</span
-                    ></a
-                  ><a
-                    href="/workbench?tab=finished"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text) shrink-0"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-circle-check h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="m9 12 2 2 4-4" /></svg></span
-                    >Recently finished<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >4</span
-                    ></a
-                  ><a
-                    href="/workbench?tab=watching"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text) shrink-0"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-star h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
-                        /></svg></span
-                    >Watching<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >2</span
-                    ></a
-                  ><a
-                    href="/workbench?tab=approvals"
-                    aria-current="page"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) shrink-0"
-                    ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-inbox h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                        <path
-                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        /></svg></span
-                    >To approve<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >4</span
-                    ></a
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-x h-4 w-4 shrink-0"
+                    aria-hidden="true"
                   >
-                </nav>
-                <div
-                  data-tilt=""
-                  data-surface="card"
-                  class="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
-                >
-                  <div role="table" aria-label="To approve" class="w-full text-sm">
-                    <div role="rowgroup">
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path></svg
+                  >Close<kbd
+                    class="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)"
+                    >Esc</kbd
+                  ></button
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-5147</span
+                  ><span class="truncate text-sm text-(--el-text)"
+                    >Design — the To-approve tab’s ROW</span
+                  ></span
+                ><a
+                  href="/items/MOTIR-5147"
+                  class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                  >Open work item<svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up-right h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 7h10v10"></path>
+                    <path d="M7 17 17 7"></path></svg
+                ></a>
+              </div>
+              <div class="flex min-h-0 flex-1 flex-col">
+                <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div
+                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                  >
+                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                    ><span class="text-xs text-(--el-text-secondary)"
+                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
+                      in</span
+                    ><span class="ml-auto"
+                      ><span
+                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
+                        >Awaiting you</span
+                      ></span
+                    >
+                  </div>
+                  <div
+                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                    tabindex="0"
+                    role="group"
+                    aria-label="The subject being decided"
+                  >
+                    <div class="flex flex-col gap-2">
                       <div
-                        role="row"
-                        class="grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-4 pl-4"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px;
-                          height: 40px;
-                        "
+                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                       >
-                        <div role="columnheader" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
-                            >Waiting on</span
-                          >
-                        </div>
-                        <div role="columnheader" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
-                            >Work item</span
-                          >
-                        </div>
-                        <div role="columnheader" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
-                            >Waited</span
-                          >
-                        </div>
-                        <div role="columnheader" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
-                          ></span>
-                        </div>
+                        <span class="text-xs text-(--el-text-secondary)"
+                          >The subject, rendered — the PORT's contents are the kind's</span
+                        >
                       </div>
-                    </div>
-                    <div role="rowgroup">
-                      <div
-                        role="row"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-4 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-5147"
-                            aria-haspopup="dialog"
-                            aria-label="Review this decision"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                          ></a>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                            />
-                            <path d="m15 5 4 4" /></svg
-                          ><span class="shrink-0 text-sm font-medium text-(--el-text)"
-                            >Design result</span
-                          ><span class="truncate text-xs text-(--el-text-secondary)"
-                            >3 files · 9840d00ea1b2</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-5147"
-                            class="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-5147</span
-                            ><span class="truncate text-sm text-(--el-text)"
-                              >Design — the To-approve tab’s ROW</span
-                            ></a
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-xs text-(--el-text-secondary)"
-                            title="Asked 2026-09-07 09:12"
-                            >4 days</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center justify-end">
-                          <button
-                            type="button"
-                            class="relative z-10 inline-flex items-center justify-center gap-1.5 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-transparent text-(--el-text) border border-(--el-button-secondary-border) hover:bg-(--el-surface) h-[26px] px-2.5 text-xs"
-                          >
-                            Review
-                          </button>
-                        </div>
-                      </div>
-                      <div
-                        role="row"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-4 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-5147"
-                            aria-haspopup="dialog"
-                            aria-label="Review this decision"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                          ></a>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                            />
-                            <path d="m15 5 4 4" /></svg
-                          ><span class="shrink-0 text-sm font-medium text-(--el-text)"
-                            >Design result</span
-                          ><span class="truncate text-xs text-(--el-text-secondary)"
-                            >2 files · 1c5125eec</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-4942"
-                            class="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-4942</span
-                            ><span class="truncate text-sm text-(--el-text)"
-                              >Design — the acceptance-video gate</span
-                            ></a
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-xs text-(--el-text-secondary)"
-                            title="Asked 2026-09-07 09:12"
-                            >2 days</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center justify-end">
-                          <button
-                            type="button"
-                            class="relative z-10 inline-flex items-center justify-center gap-1.5 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-transparent text-(--el-text) border border-(--el-button-secondary-border) hover:bg-(--el-surface) h-[26px] px-2.5 text-xs"
-                          >
-                            Review
-                          </button>
-                        </div>
-                      </div>
-                      <div
-                        role="row"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-4 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-5147"
-                            aria-haspopup="dialog"
-                            aria-label="Review this decision"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                          ></a>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                            />
-                            <path d="m15 5 4 4" /></svg
-                          ><span class="shrink-0 text-sm font-medium text-(--el-text)"
-                            >Design result</span
-                          ><span class="truncate text-xs text-(--el-text-secondary)"
-                            >5 files · 7c3ae250b</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-5008"
-                            class="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-5008</span
-                            ><span class="truncate text-sm text-(--el-text)"
-                              >Derive the Development rows from PullRequestRow</span
-                            ></a
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-xs text-(--el-text-secondary)"
-                            title="Asked 2026-09-07 09:12"
-                            >19 hours</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center justify-end">
-                          <button
-                            type="button"
-                            class="relative z-10 inline-flex items-center justify-center gap-1.5 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-transparent text-(--el-text) border border-(--el-button-secondary-border) hover:bg-(--el-surface) h-[26px] px-2.5 text-xs"
-                          >
-                            Review
-                          </button>
-                        </div>
-                      </div>
-                      <div
-                        role="row"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-4 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-5147"
-                            aria-haspopup="dialog"
-                            aria-label="Review this decision"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                          ></a>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                            />
-                            <path d="m15 5 4 4" /></svg
-                          ><span class="shrink-0 text-sm font-medium text-(--el-text)"
-                            >Design result</span
-                          ><span class="truncate text-xs text-(--el-text-secondary)"
-                            >1 file · 03a758db3</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center gap-2">
-                          <a
-                            href="/items/MOTIR-4779"
-                            class="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-4779</span
-                            ><span class="truncate text-sm text-(--el-text)"
-                              >Design — the Workbench tab strip</span
-                            ></a
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="truncate text-xs text-(--el-text-secondary)"
-                            title="Asked 2026-09-07 09:12"
-                            >6 hours</span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center justify-end">
-                          <button
-                            type="button"
-                            class="relative z-10 inline-flex items-center justify-center gap-1.5 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-transparent text-(--el-text) border border-(--el-button-secondary-border) hover:bg-(--el-surface) h-[26px] px-2.5 text-xs"
-                          >
-                            Review
-                          </button>
-                        </div>
-                      </div>
+                      <p class="text-xs text-(--el-text-secondary)">
+                        design/workbench/approvals-row.mock.html · 3 files
+                      </p>
                     </div>
                   </div>
                   <div
-                    class="flex flex-wrap items-center justify-between gap-3 border-t border-(--el-border) bg-(--el-surface-soft) px-3.5 py-2.5"
+                    class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
                   >
-                    <span class="text-[13px] text-(--el-text-secondary)">
-                      Showing
-                      <strong class="font-semibold text-(--el-text)">1&ndash;4</strong>
-                      of <strong class="font-semibold text-(--el-text)">4</strong>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div
-          data-state="open"
-          data-surface="overlay"
-          class="fixed inset-0 z-40 bg-(--el-overlay-scrim)"
-          style="pointer-events: auto"
-          aria-hidden="true"
-        ></div>
-        <div
-          role="dialog"
-          id="approval-overlay-1"
-          aria-labelledby="approval-overlay-title-1"
-          data-state="open"
-          class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-(--el-page-bg) shadow-(--shadow-modal) border-(--el-border) focus:outline-none overflow-hidden h-dvh max-h-dvh w-screen max-w-none flex flex-col rounded-none border-0 p-0"
-          data-surface="modal"
-          style="
-            top: 0;
-            left: 46%;
-            right: 0;
-            bottom: 0;
-            transform: none;
-            translate: none;
-            width: auto;
-            height: auto;
-            max-height: none;
-          "
-          tabindex="-1"
-          style="pointer-events: auto"
-        >
-          <h2 id="approval-overlay-title-1" class="sr-only">Design result for MOTIR-5147</h2>
-          <div
-            class="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2"
-          >
-            <button
-              type="button"
-              class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-x h-4 w-4 shrink-0"
-                aria-hidden="true"
-              >
-                <path d="M18 6 6 18"></path>
-                <path d="m6 6 12 12"></path></svg
-              >Close<kbd
-                class="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)"
-                >Esc</kbd
-              ></button
-            ><span class="flex min-w-0 items-center gap-2"
-              ><svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                aria-hidden="true"
-              >
-                <path
-                  d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                ></path>
-                <path d="m15 5 4 4"></path></svg
-              ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
-              ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)">MOTIR-5147</span
-              ><span class="truncate text-sm text-(--el-text)"
-                >Design — the To-approve tab’s ROW</span
-              ></span
-            ><a
-              href="/items/MOTIR-5147"
-              class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-              >Open work item<svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-arrow-up-right h-4 w-4 shrink-0"
-                aria-hidden="true"
-              >
-                <path d="M7 7h10v10"></path>
-                <path d="M7 17 17 7"></path></svg
-            ></a>
-          </div>
-          <div
-            class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-          >
-            <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
-              <div
-                class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
-              >
-                <div
-                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
-                >
-                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                  ><span class="text-xs text-(--el-text-secondary)"
-                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
-                  ><span class="ml-auto"
-                    ><span
-                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
-                      >Awaiting you</span
-                    ></span
-                  >
-                </div>
-                <div
-                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                  tabindex="0"
-                  role="group"
-                  aria-label="The subject being decided"
-                >
-                  <div class="flex flex-col gap-2">
-                    <div
-                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                    >
-                      <span class="text-xs text-(--el-text-secondary)"
-                        >The design result, rendered — the PORT's contents are the kind's</span
+                    <span class="text-[13px] text-(--el-text-secondary)"
+                      >Approving moves MOTIR-5147 to Done.</span
+                    ><span class="ml-auto flex flex-wrap gap-2"
+                      ><button
+                        type="button"
+                        data-variant="secondary"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
                       >
-                    </div>
-                    <p class="text-xs text-(--el-text-secondary)">
-                      design/workbench/approvals-row.mock.html · 3 files
-                    </p>
+                        <span>Request changes</span></button
+                      ><button
+                        type="button"
+                        data-variant="primary"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                      >
+                        <span>Approve</span>
+                      </button></span
+                    >
                   </div>
-                </div>
-                <div
-                  class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
-                >
-                  <span class="text-[13px] text-(--el-text-secondary)"
-                    >Approving moves MOTIR-5147 to Done.</span
-                  ><span class="ml-auto flex flex-wrap gap-2"
-                    ><button
-                      type="button"
-                      data-variant="secondary"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                    >
-                      <span>Request changes</span></button
-                    ><button
-                      type="button"
-                      data-variant="primary"
-                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                    >
-                      <span>Approve</span>
-                    </button></span
-                  >
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <span class="cut-edge" style="left: 46%" aria-hidden="true"
-          ><span
-            >CUTAWAY — the dialog’s REAL edge is the viewport’s: 0px inset, 0px radius, 0px
-            border</span
-          ></span
-        >
+        <span class="pin" style="top: 43px; left: -32px" aria-hidden="true">1</span
+        ><span class="pin" style="top: 94px; left: -32px" aria-hidden="true">2</span
+        ><span class="pin" style="top: 400px; left: -32px" aria-hidden="true">3</span
+        ><span class="pin" style="top: 709px; left: -32px" aria-hidden="true">4</span>
       </div>
     </div>
     <p class="note">
-      <strong>The page is never left.</strong> <code>Modal size="full"</code> portals a scrim
-      (<code>--el-overlay-scrim</code>, <code>z-40</code>) and the panel (<code>z-50</code>) over
-      <code>/workbench?tab=approvals</code>; the tab, its filters, its page and its scroll are still
-      mounted underneath, so closing needs no reload and restores nothing because nothing was lost.
-      <strong>The shipped dialog covers the viewport exactly</strong>, which would hide the very
-      thing this panel exists to show — so the panel is cut away at 46% and its real edge is marked.
-      The inset is a drawing device; the spec is 0. The rows behind it are the row AFTER this
-      amendment (Panel 10): no chevron.
+      <strong>1 · the exit row</strong> — <code>PlanningWorkspaceHost</code>’s own
+      <em>Close</em> with the <kbd>Esc</kbd> chip, top-LEFT (<code>hideClose</code> suppresses the
+      dialog’s corner ✕), then the work item’s key and title, then <em>Open work item</em>: the ONE
+      way out that leaves the tab. <strong>2 · band 1</strong>, <strong>3 · band 2</strong>,
+      <strong>4 · band 3</strong> — <code>ApprovalGateControl</code>, composed and not redrawn,
+      <strong>edge to edge directly under the exit row</strong>.
+      <strong>The overlay IS the container, so there is no card inside it</strong>: no gutter, no
+      centred column, no border or radius on the frame.
+      <strong>“Design result” appears ONCE</strong>, in band 1, exactly as the frame renders it on
+      the item page. <strong>Band 2 is the only thing that scrolls</strong>: it takes the frame’s
+      own expanded recipe, floor and ceiling dropped, so the verbs sit at the bottom of the screen
+      whatever the subject’s height. Behind the dialog the tab stays mounted and is restored exactly
+      on close — the panel does not draw it, because at full size nothing of it is visible.
     </p>
     <p class="panel-label">
-      Panel 2 — the ANATOMY at full bleed: one exit row, the shipped frame in its FILL form, and ONE
-      vertical scroll owner (band 2)
+      Panel 2 — band 2 at VIEWPORT height with a subject TALLER than the screen (2a) · and a SHORT
+      screen (2b): the port scrolls or shrinks, the verbs never leave
     </p>
     <div class="panel">
       <div class="vp-wrap" style="width: 1136px">
         <div class="frame-bar">
-          <span
-            >viewport 1136 × 720 · Modal size="full" · rounded-none border-0 p-0 · hideClose</span
-          >
+          <span>2a · viewport 1136 × 720 · a subject of six 32rem frames (≈ 3100px)</span>
         </div>
         <div class="vp" style="height: 720px">
           <div
@@ -4847,7 +4338,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -4869,24 +4360,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -4912,106 +4385,107 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
+                      >Awaiting you</span
+                    ></span
                   >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
-                        >Awaiting you</span
-                      ></span
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="The subject being decided"
+                >
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 1 / 6</span
                       >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
                     </div>
-                  </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
-                  >
-                    <span class="text-[13px] text-(--el-text-secondary)"
-                      >Approving moves MOTIR-5147 to Done.</span
-                    ><span class="ml-auto flex flex-wrap gap-2"
-                      ><button
-                        type="button"
-                        data-variant="secondary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Request changes</span></button
-                      ><button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Approve</span>
-                      </button></span
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 2 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 3 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 4 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 5 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 6 / 6</span
+                      >
+                    </div>
+                    <p class="text-xs text-(--el-text-secondary)">
+                      design/workbench/approvals-row.mock.html · 3 files
+                    </p>
                   </div>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
+                >
+                  <span class="text-[13px] text-(--el-text-secondary)"
+                    >Approving moves MOTIR-5147 to Done.</span
+                  ><span class="ml-auto flex flex-wrap gap-2"
+                    ><button
+                      type="button"
+                      data-variant="secondary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>Request changes</span></button
+                    ><button
+                      type="button"
+                      data-variant="primary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>Approve</span>
+                    </button></span
+                  >
                 </div>
               </div>
             </div>
           </div>
-          <span class="pin" style="top: 52px; left: 30px" aria-hidden="true">1</span
-          ><span class="pin" style="top: 52px; left: 176px" aria-hidden="true">2</span
-          ><span class="pin" style="top: 52px; left: 1040px" aria-hidden="true">3</span
-          ><span class="pin" style="top: 90px; left: 1111px" aria-hidden="true">4</span
-          ><span class="pin" style="top: 370px; left: 1111px" aria-hidden="true">5</span
-          ><span class="pin" style="top: 655px; left: 1111px" aria-hidden="true">6</span>
         </div>
       </div>
-    </div>
-    <p class="note">
-      <strong>1 · Close</strong> — the exit row is <code>PlanningWorkspaceHost</code>’s own, copied
-      class for class: <em>Close</em> with the <kbd>Esc</kbd> chip, top-LEFT.
-      <code>hideClose</code> suppresses the dialog’s corner ✕, because two Closes in one dialog is a
-      question nobody should be asked. <strong>2 · the crumb</strong> — the kind’s glyph and label,
-      the work-item key and title: what you are deciding, before the frame says it again.
-      <strong>3 · Open work item</strong> — the ONE way out that leaves the tab, a real link to
-      <code>/items/MOTIR-5147</code>, deliberately quiet. <strong>4 · band 1</strong>,
-      <strong>5 · band 2</strong>, <strong>6 · band 3</strong> — <code>ApprovalGateControl</code>,
-      composed and not redrawn. <strong>Band 2 is the only thing that scrolls</strong>: the dialog
-      is a flex column, the body is <code>min-h-0 flex-1</code>, the frame is
-      <code>min-h-0 flex-1</code>, and the port takes the frame's own EXPANDED recipe — floor and
-      ceiling both dropped, the viewport is the box — so the verbs are pinned to the bottom of the
-      screen whatever the subject’s height. Pins sit in the gutters: 1–3 under the exit row, 4–6
-      beside the frame.
-    </p>
-    <p class="panel-label">
-      Panel 3 — band 2 at VIEWPORT height with a subject TALLER than the screen: the port scrolls,
-      the verbs never leave
-    </p>
-    <div class="panel">
+      <div style="height: 20px"></div>
       <div class="vp-wrap" style="width: 1136px">
         <div class="frame-bar">
-          <span>3a · viewport 1136 × 720 · a subject of six 32rem frames (≈ 3100px)</span>
+          <span>2b · viewport 1136 × 360 — a short screen: the port shrinks, the verbs stay</span>
         </div>
-        <div class="vp" style="height: 720px">
+        <div class="vp" style="height: 360px">
           <div
             data-state="open"
             data-surface="overlay"
@@ -5043,7 +4517,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -5065,24 +4539,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -5108,120 +4564,119 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
+                      >Awaiting you</span
+                    ></span
                   >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
-                        >Awaiting you</span
-                      ></span
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="The subject being decided"
+                >
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 1 / 6</span
                       >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 1 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 2 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 3 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 4 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 5 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 6 /
-                          6</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
                     </div>
-                  </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
-                  >
-                    <span class="text-[13px] text-(--el-text-secondary)"
-                      >Approving moves MOTIR-5147 to Done.</span
-                    ><span class="ml-auto flex flex-wrap gap-2"
-                      ><button
-                        type="button"
-                        data-variant="secondary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Request changes</span></button
-                      ><button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Approve</span>
-                      </button></span
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 2 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 3 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 4 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 5 / 6</span
+                      >
+                    </div>
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's · 6 / 6</span
+                      >
+                    </div>
+                    <p class="text-xs text-(--el-text-secondary)">
+                      design/workbench/approvals-row.mock.html · 3 files
+                    </p>
                   </div>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
+                >
+                  <span class="text-[13px] text-(--el-text-secondary)"
+                    >Approving moves MOTIR-5147 to Done.</span
+                  ><span class="ml-auto flex flex-wrap gap-2"
+                    ><button
+                      type="button"
+                      data-variant="secondary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>Request changes</span></button
+                    ><button
+                      type="button"
+                      data-variant="primary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>Approve</span>
+                    </button></span
+                  >
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div style="height: 20px"></div>
+    </div>
+    <p class="note">
+      <strong>2a</strong> — the subject is ~3100px and the viewport 720:
+      <strong>the port scrolls inside itself and band 3 stays on screen</strong>.
+      <strong>No Expand control</strong>: the overlay IS the expanded form, and an Expand inside it
+      would open a 90vw dialog over a 100vw one. <strong>2b</strong> — the floor is dropped with the
+      ceiling, exactly as the frame’s own expanded form drops both: the port gives up height and
+      band 3 never moves, so there is only ever ONE scroll owner and the verbs cannot be scrolled
+      away from.
+    </p>
+    <p class="panel-label">
+      Panel 3 — SEE but not DECIDE: the frame’s state B, full size — the port live, the verbs
+      absent, the waiting-on name
+    </p>
+    <div class="panel">
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar">
-          <span>3b · viewport 1136 × 360 — a short screen: the port shrinks, the verbs stay</span>
-        </div>
-        <div class="vp" style="height: 360px">
+        <div class="frame-bar"><span>viewport 1136 × 620 · canDecide: false</span></div>
+        <div class="vp" style="height: 620px">
           <div
             data-state="open"
             data-surface="overlay"
@@ -5253,7 +4708,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -5275,24 +4730,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -5318,108 +4755,44 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
+                      >Awaiting</span
+                    ></span
                   >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
-                        >Awaiting you</span
-                      ></span
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="The subject being decided"
+                >
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's</span
                       >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 1 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 2 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 3 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 4 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 5 /
-                          6</span
-                        >
-                      </div>
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's · 6 /
-                          6</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
                     </div>
+                    <p class="text-xs text-(--el-text-secondary)">
+                      design/workbench/approvals-row.mock.html · 3 files
+                    </p>
                   </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
-                  >
-                    <span class="text-[13px] text-(--el-text-secondary)"
-                      >Approving moves MOTIR-5147 to Done.</span
-                    ><span class="ml-auto flex flex-wrap gap-2"
-                      ><button
-                        type="button"
-                        data-variant="secondary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Request changes</span></button
-                      ><button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Approve</span>
-                      </button></span
-                    >
-                  </div>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
+                >
+                  <span class="text-[13px] text-(--el-text-secondary)">Waiting on Mara S..</span>
                 </div>
               </div>
             </div>
@@ -5428,24 +4801,20 @@
       </div>
     </div>
     <p class="note">
-      The subject here is ~3100px tall and the viewport 720.
-      <strong>The port scrolls inside itself and band 3 stays on screen</strong> — the defect the
-      frame’s ceiling existed to prevent, now prevented by the viewport instead of by 34rem.
-      <strong>No Expand control</strong>: the overlay IS the expanded form, and an Expand inside it
-      would open a 90vw dialog over a 100vw one — a smaller screen reached by pressing a
-      bigger-looking button. <strong>3b — a short screen.</strong> The floor is dropped with the
-      ceiling, exactly as the frame's own expanded form drops both: the port gives up height and
-      band 3 never moves, so there is only ever ONE scroll owner and the verbs cannot be scrolled
-      away from.
+      What is withheld is the DECISION, never the look: a reader who may see a gate but not press it
+      gets the same screen, with band 3 naming who it waits on (<code>routedToLabel</code>) and no
+      verb — absent, not disabled.
     </p>
     <p class="panel-label">
-      Panel 4 — SEE but not DECIDE: the frame’s state B, full size — the port live, the verbs
-      absent, the waiting-on name
+      Panel 4 — a kind this build CANNOT render (4a) · and a subject that no longer resolves (4b):
+      the frame is NOT mounted, because there is nothing to decide after
     </p>
     <div class="panel">
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar"><span>viewport 1136 × 620 · canDecide: false</span></div>
-        <div class="vp" style="height: 620px">
+        <div class="frame-bar">
+          <span>4a · kind = pull_request_merge (in UNREGISTERED_GATE_KINDS)</span>
+        </div>
+        <div class="vp" style="height: 500px">
           <div
             data-state="open"
             data-surface="overlay"
@@ -5477,7 +4846,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -5499,24 +4868,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -5542,50 +4893,63 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex flex-1 items-center justify-center p-(--spacing-card-padding)">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
+                  data-tilt=""
+                  data-surface="card"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
-                  >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
-                        >Awaiting</span
-                      ></span
+                  <div>
+                    <div
+                      class="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
                     >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle-dashed h-12 w-12"
+                        aria-hidden="true"
                       >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
+                        <path d="M10.1 2.182a10 10 0 0 1 3.8 0"></path>
+                        <path d="M13.9 21.818a10 10 0 0 1-3.8 0"></path>
+                        <path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"></path>
+                        <path d="M2.182 13.9a10 10 0 0 1 0-3.8"></path>
+                        <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"></path>
+                        <path d="M21.818 10.1a10 10 0 0 1 0 3.8"></path>
+                        <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"></path>
+                        <path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"></path>
+                      </svg>
                     </div>
-                  </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
-                  >
-                    <span class="text-[13px] text-(--el-text-secondary)">Waiting on Mara S..</span>
+                    <h2 class="font-serif text-xl text-(--el-text)">
+                      Motir cannot show this kind yet
+                    </h2>
+                    <p
+                      class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
+                    >
+                      This is a Pull-request merge approval. It will open here once Motir can show
+                      that kind — nothing you did caused this.
+                    </p>
+                    <div class="mt-(--spacing-md)">
+                      <span class="flex flex-wrap items-center justify-center gap-3"
+                        ><span
+                          class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-archived-pill-bg) text-(--el-archived-pill-text) border-transparent"
+                          >Not built yet</span
+                        ><button
+                          type="button"
+                          data-variant="secondary"
+                          class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                        >
+                          <span>Open work item</span>
+                        </button></span
+                      >
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5593,21 +4957,9 @@
           </div>
         </div>
       </div>
-    </div>
-    <p class="note">
-      What is withheld is the DECISION, never the look: a reader who may see a gate but not press it
-      gets the same screen, with band 3 naming who it waits on (<code>routedToLabel</code>) and no
-      verb — absent, not disabled.
-    </p>
-    <p class="panel-label">
-      Panel 5 — a kind this build CANNOT render (5a) · and a subject that no longer resolves (5b):
-      the frame is NOT mounted, because there is nothing to decide after
-    </p>
-    <div class="panel">
+      <div style="height: 20px"></div>
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar">
-          <span>5a · kind = pull_request_merge (in UNREGISTERED_GATE_KINDS)</span>
-        </div>
+        <div class="frame-bar"><span>4b · kind = design_result, subject null</span></div>
         <div class="vp" style="height: 500px">
           <div
             data-state="open"
@@ -5640,7 +4992,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -5662,24 +5014,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -5705,66 +5039,55 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
-                <div class="flex flex-1 items-center justify-center">
-                  <div
-                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
-                    data-tilt=""
-                    data-surface="card"
-                  >
-                    <div>
-                      <div
-                        class="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex flex-1 items-center justify-center p-(--spacing-card-padding)">
+                <div
+                  class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
+                  data-tilt=""
+                  data-surface="card"
+                >
+                  <div>
+                    <div
+                      class="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-file-xcorner lucide-file-x-corner h-12 w-12"
+                        aria-hidden="true"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-circle-dashed h-12 w-12"
-                          aria-hidden="true"
-                        >
-                          <path d="M10.1 2.182a10 10 0 0 1 3.8 0"></path>
-                          <path d="M13.9 21.818a10 10 0 0 1-3.8 0"></path>
-                          <path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"></path>
-                          <path d="M2.182 13.9a10 10 0 0 1 0-3.8"></path>
-                          <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"></path>
-                          <path d="M21.818 10.1a10 10 0 0 1 0 3.8"></path>
-                          <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"></path>
-                          <path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"></path>
-                        </svg>
-                      </div>
-                      <h2 class="font-serif text-xl text-(--el-text)">
-                        Motir cannot show this kind yet
-                      </h2>
-                      <p
-                        class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
+                        <path
+                          d="M11 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v5"
+                        ></path>
+                        <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                        <path d="m15 17 5 5"></path>
+                        <path d="m20 17-5 5"></path>
+                      </svg>
+                    </div>
+                    <h2 class="font-serif text-xl text-(--el-text)">
+                      The design this asked about is gone
+                    </h2>
+                    <p
+                      class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
+                    >
+                      The design was removed after this approval was asked for, so there is nothing
+                      here to approve. Open the work item to see what it holds now.
+                    </p>
+                    <div class="mt-(--spacing-md)">
+                      <button
+                        type="button"
+                        data-variant="secondary"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
                       >
-                        This is a Pull-request merge approval. It will open here once Motir can show
-                        that kind — nothing you did caused this.
-                      </p>
-                      <div class="mt-(--spacing-md)">
-                        <span class="flex flex-wrap items-center justify-center gap-3"
-                          ><span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-archived-pill-bg) text-(--el-archived-pill-text) border-transparent"
-                            >Not built yet</span
-                          ><button
-                            type="button"
-                            data-variant="secondary"
-                            class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                          >
-                            <span>Open work item</span>
-                          </button></span
-                        >
-                      </div>
+                        <span>Open work item</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -5773,10 +5096,26 @@
           </div>
         </div>
       </div>
-      <div style="height: 20px"></div>
+    </div>
+    <p class="note">
+      <strong>The overlay is TOTAL over <code>ApprovalGateKind</code>.</strong> A kind in
+      <code>UNREGISTERED_GATE_KINDS</code> opens and says so in words — the kind named,
+      <em>Not built yet</em>, and the one useful next act — rather than an empty port or a crash.
+      <strong>The frame is not mounted in either arm</strong>: band 3 sits below the port, and a
+      port with nothing in it would put live verbs under nothing.
+      <strong>4a and 4b look alike and are opposite</strong>, exactly as § 20’s Panel 7 holds for
+      the row: the first is a feature that has not shipped, the second is a gate worth withdrawing.
+    </p>
+    <p class="panel-label">
+      Panel 5 — the address names a gate that does not exist, or one this reader may not see (5a) ·
+      and the read in flight (5b)
+    </p>
+    <div class="panel">
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar"><span>5b · kind = design_result, subject null</span></div>
-        <div class="vp" style="height: 500px">
+        <div class="frame-bar">
+          <span>5a · ?approval=MOTIR-9999&approvalKind=design_result — 404 from the read</span>
+        </div>
+        <div class="vp" style="height: 460px">
           <div
             data-state="open"
             data-surface="overlay"
@@ -5808,7 +5147,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -5828,104 +5167,54 @@
                 >Close<kbd
                   class="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)"
                   >Esc</kbd
-                ></button
-              ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
                 >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
-                ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                  >MOTIR-5147</span
-                ><span class="truncate text-sm text-(--el-text)"
-                  >Design — the To-approve tab’s ROW</span
-                ></span
-              ><a
-                href="/items/MOTIR-5147"
-                class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                >Open work item<svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-arrow-up-right h-4 w-4 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M7 7h10v10"></path>
-                  <path d="M7 17 17 7"></path></svg
-              ></a>
+              </button>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
-                <div class="flex flex-1 items-center justify-center">
-                  <div
-                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
-                    data-tilt=""
-                    data-surface="card"
-                  >
-                    <div>
-                      <div
-                        class="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex flex-1 items-center justify-center p-(--spacing-card-padding)">
+                <div
+                  class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
+                  data-tilt=""
+                  data-surface="card"
+                >
+                  <div>
+                    <div
+                      class="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-lock h-12 w-12"
+                        aria-hidden="true"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-file-xcorner lucide-file-x-corner h-12 w-12"
-                          aria-hidden="true"
-                        >
-                          <path
-                            d="M11 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v5"
-                          ></path>
-                          <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
-                          <path d="m15 17 5 5"></path>
-                          <path d="m20 17-5 5"></path>
-                        </svg>
-                      </div>
-                      <h2 class="font-serif text-xl text-(--el-text)">
-                        The design this asked about is gone
-                      </h2>
-                      <p
-                        class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
+                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                    </div>
+                    <h2 class="font-serif text-xl text-(--el-text)">
+                      This approval is not available
+                    </h2>
+                    <p
+                      class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
+                    >
+                      It may no longer exist, or you may not have access to it. The page behind this
+                      is unchanged.
+                    </p>
+                    <div class="mt-(--spacing-md)">
+                      <button
+                        type="button"
+                        data-variant="primary"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
                       >
-                        The design was removed after this approval was asked for, so there is
-                        nothing here to approve. Open the work item to see what it holds now.
-                      </p>
-                      <div class="mt-(--spacing-md)">
-                        <button
-                          type="button"
-                          data-variant="secondary"
-                          class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                        >
-                          <span>Open work item</span>
-                        </button>
-                      </div>
+                        <span>Close</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -5934,25 +5223,9 @@
           </div>
         </div>
       </div>
-    </div>
-    <p class="note">
-      <strong>The overlay is TOTAL over <code>ApprovalGateKind</code>.</strong> A kind in
-      <code>UNREGISTERED_GATE_KINDS</code> opens and says so in words — the kind named,
-      <em>Not built yet</em>, and the one useful next act — rather than an empty port or a crash.
-      <strong>The frame is not mounted in either arm</strong>: band 3 sits below the port, and a
-      port with nothing in it would put live verbs under nothing.
-      <strong>5a and 5b look alike and are opposite</strong>, exactly as § 20’s Panel 7 holds for
-      the row: the first is a feature that has not shipped, the second is a gate worth withdrawing.
-    </p>
-    <p class="panel-label">
-      Panel 6 — the address names a gate that does not exist, or one this reader may not see (6a) ·
-      and the read in flight (6b)
-    </p>
-    <div class="panel">
+      <div style="height: 20px"></div>
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar">
-          <span>6a · ?approval=MOTIR-9999&approvalKind=design_result — 404 from the read</span>
-        </div>
+        <div class="frame-bar"><span>5b · the read has not answered yet</span></div>
         <div class="vp" style="height: 460px">
           <div
             data-state="open"
@@ -5985,7 +5258,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -6008,67 +5281,56 @@
                 >
               </button>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
-                <div class="flex flex-1 items-center justify-center">
-                  <div
-                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
-                    data-tilt=""
-                    data-surface="card"
-                  >
-                    <div>
-                      <div
-                        class="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-lock h-12 w-12"
-                          aria-hidden="true"
-                        >
-                          <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg>
-                      </div>
-                      <h2 class="font-serif text-xl text-(--el-text)">
-                        This approval is not available
-                      </h2>
-                      <p
-                        class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
-                      >
-                        It may no longer exist, or you may not have access to it. The page behind
-                        this is unchanged.
-                      </p>
-                      <div class="mt-(--spacing-md)">
-                        <button
-                          type="button"
-                          data-variant="primary"
-                          class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                        >
-                          <span>Close</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div
+                aria-busy="true"
+                aria-label="Loading the approval"
+                class="flex min-h-0 flex-1 flex-col"
+              >
+                <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                  <span
+                    class="h-4 w-28 animate-pulse rounded-(--radius-control) bg-(--el-muted)"
+                  ></span
+                  ><span
+                    class="h-3 w-48 animate-pulse rounded-(--radius-control) bg-(--el-muted)"
+                  ></span
+                  ><span
+                    class="ml-auto h-5 w-24 animate-pulse rounded-(--radius-badge) bg-(--el-muted)"
+                  ></span>
+                </div>
+                <div class="flex min-h-0 flex-1 px-4 py-4">
+                  <span class="flex-1 animate-pulse rounded-(--radius-card) bg-(--el-muted)"></span>
+                </div>
+                <div class="flex items-center gap-3 border-t border-(--el-border-soft) px-4 py-3">
+                  <span
+                    class="h-3 w-56 animate-pulse rounded-(--radius-control) bg-(--el-muted)"
+                  ></span>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div style="height: 20px"></div>
+    </div>
+    <p class="note">
+      <strong>ONE answer for "does not exist" and "not yours to see"</strong>, because the read
+      returns one 404 for both and a second message would leak which it was. The exit row carries
+      <strong>no work item</strong> in either: the key in the address is the reader’s own text, and
+      echoing it back beside a refusal reads as a confirmation.
+      <strong>The page behind does not 404</strong> — there is no route to fail — and
+      <em>Close</em> is the only action. While the read is in flight the frame’s three bands are
+      drawn as skeleton blocks at their real proportions, edge to edge, so an answer that arrives
+      does not reflow the screen.
+    </p>
+    <p class="panel-label">
+      Panel 6 — a decision REFUSED in place: somebody else decided between the render and the press
+    </p>
+    <div class="panel">
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar"><span>6b · the read has not answered yet</span></div>
-        <div class="vp" style="height: 460px">
+        <div class="frame-bar">
+          <span>viewport 1136 × 720 · onDecide → APPROVAL_GATE_ALREADY_DECIDED</span>
+        </div>
+        <div class="vp" style="height: 720px">
           <div
             data-state="open"
             data-surface="overlay"
@@ -6100,117 +5362,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-x h-4 w-4 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M18 6 6 18"></path>
-                  <path d="m6 6 12 12"></path></svg
-                >Close<kbd
-                  class="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)"
-                  >Esc</kbd
-                >
-              </button>
-            </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
-                <div
-                  aria-busy="true"
-                  aria-label="Loading the approval"
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
-                >
-                  <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
-                    <span
-                      class="h-4 w-28 animate-pulse rounded-(--radius-control) bg-(--el-muted)"
-                    ></span
-                    ><span
-                      class="h-3 w-48 animate-pulse rounded-(--radius-control) bg-(--el-muted)"
-                    ></span
-                    ><span
-                      class="ml-auto h-5 w-24 animate-pulse rounded-(--radius-badge) bg-(--el-muted)"
-                    ></span>
-                  </div>
-                  <div class="flex min-h-0 flex-1 px-4 py-4">
-                    <span
-                      class="flex-1 animate-pulse rounded-(--radius-card) bg-(--el-muted)"
-                    ></span>
-                  </div>
-                  <div class="flex items-center gap-3 border-t border-(--el-border-soft) px-4 py-3">
-                    <span
-                      class="h-3 w-56 animate-pulse rounded-(--radius-control) bg-(--el-muted)"
-                    ></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <p class="note">
-      <strong>ONE answer for "does not exist" and "not yours to see"</strong>, because the read
-      returns one 404 for both and a second message would leak which it was. The exit row carries
-      <strong>no crumb</strong> in either: the key in the address is the reader’s own text, and
-      echoing it back beside a refusal reads as a confirmation.
-      <strong>The page behind does not 404</strong> — there is no route to fail — and
-      <em>Close</em> is the only action. While the read is in flight the frame’s three bands are
-      drawn as a skeleton at their real proportions, so an answer that arrives does not reflow the
-      screen.
-    </p>
-    <p class="panel-label">
-      Panel 7 — a decision REFUSED in place: somebody else decided between the render and the press
-    </p>
-    <div class="panel">
-      <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar">
-          <span>viewport 1136 × 720 · onDecide → APPROVAL_GATE_ALREADY_DECIDED</span>
-        </div>
-        <div class="vp" style="height: 720px">
-          <div
-            data-state="open"
-            data-surface="overlay"
-            class="fixed inset-0 z-40 bg-(--el-overlay-scrim)"
-            style="pointer-events: auto"
-            aria-hidden="true"
-          ></div>
-          <div
-            role="dialog"
-            id="approval-overlay-10"
-            aria-labelledby="approval-overlay-title-10"
-            data-state="open"
-            class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-(--el-page-bg) shadow-(--shadow-modal) border-(--el-border) focus:outline-none overflow-hidden h-dvh max-h-dvh w-screen max-w-none flex flex-col rounded-none border-0 p-0"
-            data-surface="modal"
-            style="
-              inset: 0;
-              transform: none;
-              translate: none;
-              width: 100%;
-              height: 100%;
-              max-height: 100%;
-            "
-            tabindex="-1"
-            style="pointer-events: auto"
-          >
-            <h2 id="approval-overlay-title-10" class="sr-only">Design result for MOTIR-5147</h2>
-            <div
-              class="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2"
-            >
-              <button
-                type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -6232,24 +5384,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -6275,97 +5409,90 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
+                      >Awaiting you</span
+                    ></span
                   >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
-                        >Awaiting you</span
-                      ></span
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="The subject being decided"
+                >
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's</span
                       >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
                     </div>
-                  </div>
-                  <div
-                    role="alert"
-                    class="flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-triangle-alert mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
-                      ></path>
-                      <path d="M12 9v4"></path>
-                      <path d="M12 17h.01"></path>
-                    </svg>
-                    <p class="text-[13px] leading-snug text-(--el-text-strong)">
-                      <b>Priya N. decided this a moment ago.</b>
-                      <span class="text-(--el-text-secondary)"
-                        >Your decision was not recorded. Reload to see theirs.</span
-                      >
+                    <p class="text-xs text-(--el-text-secondary)">
+                      design/workbench/approvals-row.mock.html · 3 files
                     </p>
                   </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
+                </div>
+                <div
+                  role="alert"
+                  class="flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-triangle-alert mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"
+                    aria-hidden="true"
                   >
-                    <span class="text-[13px] text-(--el-text-secondary)"
-                      >Approving moves MOTIR-5147 to Done.</span
-                    ><span class="ml-auto flex flex-wrap gap-2"
-                      ><button
-                        type="button"
-                        data-variant="secondary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Request changes</span></button
-                      ><button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>Approve</span>
-                      </button></span
+                    <path
+                      d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                    ></path>
+                    <path d="M12 9v4"></path>
+                    <path d="M12 17h.01"></path>
+                  </svg>
+                  <p class="text-[13px] leading-snug text-(--el-text-strong)">
+                    <b>Priya N. decided this a moment ago.</b>
+                    <span class="text-(--el-text-secondary)"
+                      >Your decision was not recorded. Reload to see theirs.</span
                     >
-                  </div>
+                  </p>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
+                >
+                  <span class="text-[13px] text-(--el-text-secondary)"
+                    >Approving moves MOTIR-5147 to Done.</span
+                  ><span class="ml-auto flex flex-wrap gap-2"
+                    ><button
+                      type="button"
+                      data-variant="secondary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>Request changes</span></button
+                    ><button
+                      type="button"
+                      data-variant="primary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>Approve</span>
+                    </button></span
+                  >
                 </div>
               </div>
             </div>
@@ -6379,13 +5506,165 @@
       message — the subject stays on screen, which is the point of the refusal being in place.
     </p>
     <p class="panel-label">
-      Panel 8 — NARROW (< md), in zh: the exit row keeps Close and the key, the body loses its
-      gutter, the verbs wrap under the port
+      Panel 7 — NARROW (< md), in zh: the exit row keeps Close and the key, the bands run edge to
+      edge, the verbs wrap under the port
     </p>
     <div class="panel">
       <div class="vp-wrap" style="width: 390px">
         <div class="frame-bar"><span>390 × 760 · zh</span></div>
         <div class="vp" style="height: 760px">
+          <div
+            data-state="open"
+            data-surface="overlay"
+            class="fixed inset-0 z-40 bg-(--el-overlay-scrim)"
+            style="pointer-events: auto"
+            aria-hidden="true"
+          ></div>
+          <div
+            role="dialog"
+            id="approval-overlay-10"
+            aria-labelledby="approval-overlay-title-10"
+            data-state="open"
+            class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-(--el-page-bg) shadow-(--shadow-modal) border-(--el-border) focus:outline-none overflow-hidden h-dvh max-h-dvh w-screen max-w-none flex flex-col rounded-none border-0 p-0"
+            data-surface="modal"
+            style="
+              inset: 0;
+              transform: none;
+              translate: none;
+              width: 100%;
+              height: 100%;
+              max-height: 100%;
+            "
+            tabindex="-1"
+            style="pointer-events: auto"
+          >
+            <h2 id="approval-overlay-title-10" class="sr-only">MOTIR-5147 的设计成果</h2>
+            <div
+              class="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2"
+            >
+              <button
+                type="button"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-x h-4 w-4 shrink-0"
+                  aria-hidden="true"
+                >
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path></svg
+                >关闭</button
+              ><span class="flex min-w-0 items-center gap-2"
+                ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                  >MOTIR-5147</span
+                ></span
+              ><a
+                href="/items/MOTIR-5147"
+                class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                aria-label="打开工作项"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-arrow-up-right h-4 w-4 shrink-0"
+                  aria-hidden="true"
+                >
+                  <path d="M7 7h10v10"></path>
+                  <path d="M7 17 17 7"></path></svg
+              ></a>
+            </div>
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                >
+                  <span class="text-sm font-semibold text-(--el-text)">设计成果</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >版本 9840d00e · 待批准标签页的行：一行可能处于的每种状态</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
+                      >等待你处理</span
+                    ></span
+                  >
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="待定的内容"
+                >
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                    >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >主体的渲染内容——端口中的内容属于该类型</span
+                      >
+                    </div>
+                    <p class="text-xs text-(--el-text-secondary)">
+                      design/workbench/approvals-row.mock.html · 3 files
+                    </p>
+                  </div>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
+                >
+                  <span class="text-[13px] text-(--el-text-secondary)"
+                    >批准后 MOTIR-5147 将移至“已完成”。</span
+                  ><span class="ml-auto flex flex-wrap gap-2"
+                    ><button
+                      type="button"
+                      data-variant="secondary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>要求修改</span></button
+                    ><button
+                      type="button"
+                      data-variant="primary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                    >
+                      <span>批准</span>
+                    </button></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      Below <code>md</code> the <kbd>Esc</kbd> chip is hidden (there is no key to press on a phone),
+      the item title leaves the exit row and <em>Open work item</em> becomes its icon with the label
+      kept as its accessible name. The frame is already edge to edge at every width, so narrow
+      changes nothing about the bands: band 2 still owns the scroll and band 3 still sits at the
+      bottom of the screen, wrapping its verbs as the frame already does.
+    </p>
+    <p class="panel-label">
+      Panel 8 — every value of ApprovalGateState inside the overlay: awaiting (Panel 1) · approved
+      (8a) · changes_requested (8b) · superseded (8c)
+    </p>
+    <div class="panel">
+      <div class="vp-wrap" style="width: 1136px">
+        <div class="frame-bar">
+          <span>8a · approved — what the overlay shows the moment Approve lands</span>
+        </div>
+        <div class="vp" style="height: 520px">
           <div
             data-state="open"
             data-surface="overlay"
@@ -6411,13 +5690,13 @@
             tabindex="-1"
             style="pointer-events: auto"
           >
-            <h2 id="approval-overlay-title-11" class="sr-only">MOTIR-5147 的设计成果</h2>
+            <h2 id="approval-overlay-title-11" class="sr-only">Design result for MOTIR-5147</h2>
             <div
               class="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2"
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -6434,34 +5713,20 @@
                 >
                   <path d="M18 6 6 18"></path>
                   <path d="m6 6 12 12"></path></svg
-                >关闭</button
+                >Close<kbd
+                  class="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)"
+                  >Esc</kbd
+                ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">设计成果</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
+                ><span class="truncate text-sm text-(--el-text)"
+                  >Design — the To-approve tab’s ROW</span
                 ></span
               ><a
                 href="/items/MOTIR-5147"
                 class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                aria-label="打开工作项"
-                ><svg
+                >Open work item<svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="24"
                   height="24"
@@ -6478,87 +5743,59 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3">
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
+                      >Approved</span
+                    ></span
                   >
-                    <span class="text-sm font-semibold text-(--el-text)">设计成果</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >版本 9840d00e · 待批准标签页的行：一行可能处于的每种状态</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent"
-                        >等待你处理</span
-                      ></span
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="The subject being decided"
+                >
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="待定的内容"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's</span
                       >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >设计成果的渲染内容——端口中的内容属于该类型</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
                     </div>
+                    <p class="text-xs text-(--el-text-secondary)">
+                      design/workbench/approvals-row.mock.html · 3 files
+                    </p>
                   </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3"
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
+                >
+                  <span class="font-medium text-(--el-text)">Mara S.</span
+                  ><span>13/09/2026, 16:02:00</span
+                  ><span class="font-mono text-(--el-text-identifier)">version 9840d00e</span
+                  ><span
+                    class="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-2 py-0.5 font-semibold text-(--el-text-strong)"
+                    >Files kept</span
                   >
-                    <span class="text-[13px] text-(--el-text-secondary)"
-                      >批准后 MOTIR-5147 将移至“已完成”。</span
-                    ><span class="ml-auto flex flex-wrap gap-2"
-                      ><button
-                        type="button"
-                        data-variant="secondary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>要求修改</span></button
-                      ><button
-                        type="button"
-                        data-variant="primary"
-                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                      >
-                        <span>批准</span>
-                      </button></span
-                    >
-                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <p class="note">
-      Below <code>md</code> the body padding drops to <code>px-3 py-3</code>, the
-      <kbd>Esc</kbd> chip is hidden (there is no key to press on a phone), the item title leaves the
-      crumb and <em>Open work item</em> becomes its icon with the label kept as its accessible name.
-      Band 2 still owns the scroll and band 3 still sits at the bottom of the screen, wrapping its
-      verbs as the frame already does.
-    </p>
-    <p class="panel-label">
-      Panel 9 — every value of ApprovalGateState inside the overlay: awaiting (Panel 2) · approved
-      (9a) · changes_requested (9b) · superseded (9c)
-    </p>
-    <div class="panel">
+      <div style="height: 20px"></div>
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar">
-          <span>9a · approved — what the overlay shows the moment Approve lands</span>
-        </div>
+        <div class="frame-bar"><span>8b · changes_requested</span></div>
         <div class="vp" style="height: 520px">
           <div
             data-state="open"
@@ -6591,7 +5828,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -6613,24 +5850,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -6656,57 +5875,47 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
-                  >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
-                        >Approved</span
-                      ></span
-                    >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
-                  >
-                    <span class="font-medium text-(--el-text)">Mara S.</span
-                    ><span>13/09/2026, 16:02:00</span
-                    ><span class="font-mono text-(--el-text-identifier)">version 9840d00e</span
+                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
+                  ><span class="ml-auto"
                     ><span
-                      class="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-2 py-0.5 font-semibold text-(--el-text-strong)"
-                      >Files kept</span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
+                      >Changes requested</span
+                    ></span
+                  >
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="The subject being decided"
+                >
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
                     >
+                      <span class="text-xs text-(--el-text-secondary)"
+                        >The subject, rendered — the PORT's contents are the kind's</span
+                      >
+                    </div>
+                    <p class="text-xs text-(--el-text-secondary)">
+                      design/workbench/approvals-row.mock.html · 3 files
+                    </p>
                   </div>
+                </div>
+                <div
+                  class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
+                >
+                  <span class="font-medium text-(--el-text)">Mara S.</span
+                  ><span>13/09/2026, 16:02:00</span
+                  ><span class="font-mono text-(--el-text-identifier)">version 9840d00e</span
+                  ><span>the agent will publish a new version</span>
                 </div>
               </div>
             </div>
@@ -6715,7 +5924,9 @@
       </div>
       <div style="height: 20px"></div>
       <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar"><span>9b · changes_requested</span></div>
+        <div class="frame-bar">
+          <span>8c · superseded — the port is dead by the frame’s decision</span>
+        </div>
         <div class="vp" style="height: 520px">
           <div
             data-state="open"
@@ -6748,7 +5959,7 @@
             >
               <button
                 type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -6770,24 +5981,6 @@
                   >Esc</kbd
                 ></button
               ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
                 ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
                   >MOTIR-5147</span
                 ><span class="truncate text-sm text-(--el-text)"
@@ -6813,206 +6006,43 @@
                   <path d="M7 17 17 7"></path></svg
               ></a>
             </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
+              <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                >
+                  <span class="text-sm font-semibold text-(--el-text)">Design result</span
+                  ><span class="text-xs text-(--el-text-secondary)"
+                    >version 9840d00e · The To-approve tab’s ROW: every state a row can be in</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-archived-pill-bg) text-(--el-archived-pill-text) border-transparent"
+                      >Withdrawn</span
+                    ></span
+                  >
+                </div>
+                <div
+                  class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
+                  tabindex="0"
+                  role="group"
+                  aria-label="The subject being decided"
                 >
                   <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
+                    class="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center"
                   >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
-                        >Changes requested</span
-                      ></span
-                    >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div class="flex flex-col gap-2">
-                      <div
-                        class="flex h-[32rem] items-center justify-center rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)"
-                      >
-                        <span class="text-xs text-(--el-text-secondary)"
-                          >The design result, rendered — the PORT's contents are the kind's</span
-                        >
-                      </div>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        design/workbench/approvals-row.mock.html · 3 files
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
-                  >
-                    <span class="font-medium text-(--el-text)">Mara S.</span
-                    ><span>13/09/2026, 16:02:00</span
-                    ><span class="font-mono text-(--el-text-identifier)">version 9840d00e</span
-                    ><span>the agent will publish a new version</span>
+                    <p class="text-[13px] text-(--el-text-secondary)">
+                      A newer design was published, so this question was withdrawn.
+                    </p>
+                    <p class="text-xs text-(--el-text-secondary)">
+                      Nobody decided it. The current version is above.
+                    </p>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div style="height: 20px"></div>
-      <div class="vp-wrap" style="width: 1136px">
-        <div class="frame-bar">
-          <span>9c · superseded — the port is dead by the frame’s decision</span>
-        </div>
-        <div class="vp" style="height: 520px">
-          <div
-            data-state="open"
-            data-surface="overlay"
-            class="fixed inset-0 z-40 bg-(--el-overlay-scrim)"
-            style="pointer-events: auto"
-            aria-hidden="true"
-          ></div>
-          <div
-            role="dialog"
-            id="approval-overlay-14"
-            aria-labelledby="approval-overlay-title-14"
-            data-state="open"
-            class="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-(--el-page-bg) shadow-(--shadow-modal) border-(--el-border) focus:outline-none overflow-hidden h-dvh max-h-dvh w-screen max-w-none flex flex-col rounded-none border-0 p-0"
-            data-surface="modal"
-            style="
-              inset: 0;
-              transform: none;
-              translate: none;
-              width: 100%;
-              height: 100%;
-              max-height: 100%;
-            "
-            tabindex="-1"
-            style="pointer-events: auto"
-          >
-            <h2 id="approval-overlay-title-14" class="sr-only">Design result for MOTIR-5147</h2>
-            <div
-              class="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2"
-            >
-              <button
-                type="button"
-                class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-x h-4 w-4 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M18 6 6 18"></path>
-                  <path d="m6 6 12 12"></path></svg
-                >Close<kbd
-                  class="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)"
-                  >Esc</kbd
-                ></button
-              ><span class="flex min-w-0 items-center gap-2"
-                ><svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-pencil h-4 w-4 shrink-0 text-(--el-type-design)"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                  ></path>
-                  <path d="m15 5 4 4"></path></svg
-                ><span class="shrink-0 text-sm font-semibold text-(--el-text)">Design result</span
-                ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                  >MOTIR-5147</span
-                ><span class="truncate text-sm text-(--el-text)"
-                  >Design — the To-approve tab’s ROW</span
-                ></span
-              ><a
-                href="/items/MOTIR-5147"
-                class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                >Open work item<svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="lucide lucide-arrow-up-right h-4 w-4 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M7 7h10v10"></path>
-                  <path d="M7 17 17 7"></path></svg
-              ></a>
-            </div>
-            <div
-              class="flex min-h-0 flex-1 flex-col bg-(--el-surface-soft) px-3 py-3 md:px-6 md:py-6"
-            >
-              <div class="mx-auto flex min-h-0 w-full max-w-[72rem] flex-1 flex-col">
                 <div
-                  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)"
+                  class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
                 >
-                  <div
-                    class="flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3"
-                  >
-                    <span class="text-sm font-semibold text-(--el-text)">Design result</span
-                    ><span class="text-xs text-(--el-text-secondary)"
-                      >version 9840d00e · The To-approve tab’s ROW: every state a row can be
-                      in</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-archived-pill-bg) text-(--el-archived-pill-text) border-transparent"
-                        >Withdrawn</span
-                      ></span
-                    >
-                  </div>
-                  <div
-                    class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
-                    tabindex="0"
-                    role="group"
-                    aria-label="The subject being decided"
-                  >
-                    <div
-                      class="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center"
-                    >
-                      <p class="text-[13px] text-(--el-text-secondary)">
-                        A newer design was published, so this question was withdrawn.
-                      </p>
-                      <p class="text-xs text-(--el-text-secondary)">
-                        Nobody decided it. The current version is above.
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
-                  >
-                    <span>No decision · no one to attribute</span
-                    ><span>withdrawn 13/09/2026, 16:02:00</span>
-                  </div>
+                  <span>No decision · no one to attribute</span
+                  ><span>withdrawn 13/09/2026, 16:02:00</span>
                 </div>
               </div>
             </div>
@@ -7029,7 +6059,7 @@
       changes where a gate is decided, never what deciding does.
     </p>
     <p class="panel-label">
-      Panel 10 — the ACCESS PATH: the To-approve row once its disclosure is gone — the whole row and
+      Panel 9 — the ACCESS PATH: the To-approve row once its disclosure is gone — the whole row and
       its Review button open the overlay
     </p>
     <div class="panel">
@@ -7509,7 +6539,7 @@
       <strong>The <em>Review</em> button survives</strong> as the labelled door a keyboard and a
       screen reader find. The work-item cell stays the one link that visibly leaves, above the row
       on <code>z-10</code>. A settled, not-built or subject-gone row opens the overlay too — Panels
-      9, 5a and 5b — so every row has one door and it always leads somewhere.
+      8, 4a and 4b — so every row has one door and it always leads somewhere.
     </p>
   </body>
 </html>

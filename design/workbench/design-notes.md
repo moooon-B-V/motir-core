@@ -13,11 +13,11 @@ and that section no longer carries them. It is the layout source of truth for
 **MOTIR-4852** (the reads) and **MOTIR-4853** (the page), which carry it in
 `blocked_by`.
 
-| Surface                               | Asset                                          | Notes                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The `/workbench` landing page**     | **`workbench.mock.html`** (HTML mockup)        | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow · **the pager, in five states**. Exports to `workbench.png`.                                                                                                   |
-| **The `To approve` tab's ROW** (§ 20) | **`approvals-row.mock.html`** (HTML mockup)    | The row and every state it can be in. **Its disclosure is superseded by the overlay below** (§ 20's dated amendment). Exports to `approvals-row.png`.                                                                                                                                                                        |
-| **The approval OVERLAY** (§ 21)       | **`approval-overlay.mock.html`** (HTML mockup) | An approval decided full screen over the tab: over the tab (cutaway) · anatomy · a taller-than-the-screen subject · see-but-not-decide · unregistered kind / subject gone · not available / loading · refused in place · narrow in `zh` · every `ApprovalGateState` · the row's new door. Exports to `approval-overlay.png`. |
+| Surface                               | Asset                                          | Notes                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The `/workbench` landing page**     | **`workbench.mock.html`** (HTML mockup)        | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow · **the pager, in five states**. Exports to `workbench.png`.                                                                                                                                        |
+| **The `To approve` tab's ROW** (§ 20) | **`approvals-row.mock.html`** (HTML mockup)    | The row and every state it can be in. **Its disclosure is superseded by the overlay below** (§ 20's dated amendment). Exports to `approvals-row.png`.                                                                                                                                                                                                             |
+| **The approval OVERLAY** (§ 21)       | **`approval-overlay.mock.html`** (HTML mockup) | An approval decided full screen over the tab, the frame edge to edge under the exit row: anatomy · a taller-than-the-screen subject and a short screen · see-but-not-decide · unregistered kind / subject gone · not available / loading · refused in place · narrow in `zh` · every `ApprovalGateState` · the row's new door. Exports to `approval-overlay.png`. |
 
 **Panels:** A the door · 1 To do · 2 In progress · 3 Recently finished ·
 4 Watching, grouped · 5 the all-empty page · 6 every tab's empty state ·
@@ -901,7 +901,7 @@ the layout source of truth for **MOTIR-4794** (the tab), which carries it in
 > - **SUPERSEDED: _The ROW is a DISCLOSURE_ below** — its third candidate, _Open
 >   in place_, and Panel 3's drawing of it. The row's whole-row control and its
 >   _Review_ button now write the overlay's address instead of expanding the row,
->   and the chevron is removed (§ 21 Panel 10).
+>   and the chevron is removed (§ 21 Panel 9).
 > - **Why.** This section weighed three candidates and picked the best of them. It
 >   did not weigh a fourth: keep the reader on the tab and give the thing being
 >   judged the screen. The frame's own standard is that you decide after you look,
@@ -917,10 +917,10 @@ the layout source of truth for **MOTIR-4794** (the tab), which carries it in
 > - **UNTOUCHED: _THE POST-DECISION BEHAVIOUR — SETTLED_.** A decided row keeps its
 >   position, swaps its Decide cell for a state pill, the strip count decrements
 >   immediately, and the row leaves on the NEXT load. Deciding inside the overlay
->   produces exactly that underneath it (§ 21 Panel 9).
+>   produces exactly that underneath it (§ 21 Panel 8).
 > - **UNTOUCHED: every row state and its treatment** (Panels 4–8), the column set,
 >   narrow and the token map — with one consequence: Panel 7's two no-subject rows
->   now open the overlay too, which draws them (§ 21 Panel 5), instead of offering
+>   now open the overlay too, which draws them (§ 21 Panel 4), instead of offering
 >   nothing to open.
 > - **FORWARD-ONLY.** [MOTIR-4794](motir:cmtqhxiy5001hhvph7yp96e54) and
 >   [MOTIR-5147](motir:cmtwycrzk002ahxtxe5j0w2q7) are `done` and are not
@@ -1150,16 +1150,21 @@ page you are on**. It is the layout source of truth for **MOTIR-5224** (the over
 host) and **MOTIR-5225** (the row door), which carry it in `blocked_by`, and the
 container **MOTIR-5382** draws its approve-to-merge port into.
 
-| Surface                  | Asset                                          | Notes                                                                                                                                                                                                                                                                                                               |
-| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The approval OVERLAY** | **`approval-overlay.mock.html`** (HTML mockup) | Over the tab (cutaway) · anatomy · a subject taller than the screen, and a screen shorter than the frame · see but not decide · unregistered kind / subject gone · not available / loading · refused in place · narrow in `zh` · every `ApprovalGateState` · the row's new door. Exports to `approval-overlay.png`. |
+**REVISED 2026-09-13 on review (PR #2864):** the cutaway panel is gone (a full-size
+dialog hides the tab entirely, so drawing it behind the scrim faked a view nobody
+gets); **the overlay IS the container**, so the frame's bands run edge to edge under
+the exit row with no gutter, no centred column and no card chrome; and **"Design
+result" appears once**, in band 1. Panels renumbered accordingly.
 
-**Panels:** 1 over the To-approve tab (cutaway) · 2 the anatomy · 3a a subject
-taller than the screen · 3b a screen shorter than the frame · 4 see but not decide ·
-5a a kind this build cannot render · 5b a subject that no longer resolves · 6a the
-address names nothing this reader may see · 6b loading · 7 refused in place ·
-8 narrow (`< md`), in `zh` · 9a approved · 9b changes requested · 9c superseded ·
-10 the ACCESS PATH — the row once its disclosure is gone.
+| Surface                  | Asset                                          | Notes                                                                                                                                                                                                                                                                     |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The approval OVERLAY** | **`approval-overlay.mock.html`** (HTML mockup) | Anatomy · a subject taller than the screen, and a short screen · see but not decide · unregistered kind / subject gone · not available / loading · refused in place · narrow in `zh` · every `ApprovalGateState` · the row's new door. Exports to `approval-overlay.png`. |
+
+**Panels:** 1 the anatomy · 2a a subject taller than the screen · 2b a short screen ·
+3 see but not decide · 4a a kind this build cannot render · 4b a subject that no
+longer resolves · 5a the address names nothing this reader may see · 5b loading ·
+6 refused in place · 7 narrow (`< md`), in `zh` · 8a approved · 8b changes requested ·
+8c superseded · 9 the ACCESS PATH — the row once its disclosure is gone.
 
 ### Why an overlay, and why THIS overlay
 
@@ -1174,15 +1179,22 @@ this asset follows it rather than choosing again: **the open state IS the addres
 and is held nowhere else**, it is the shipped `Modal` rather than a hand-rolled
 layer, and every close goes through one function.
 
+**The page underneath is never left.** `Modal size="full"` portals its scrim and
+panel over the Workbench; the To-approve tab — its filters, its page, its scroll and
+its client islands — stays mounted behind the dialog and is **restored exactly on
+close**, because nothing was unmounted. The asset does not draw that tab behind the
+scrim: at full size, with no inset, none of it is visible, and a drawing that showed
+it would be drawing a view nobody gets.
+
 ### What this COMPOSES, and who owns each piece
 
 **This asset draws the CONTAINER and nothing inside the frame.** The mock is built
 from emitted markup, not redrawn: every frame is `ApprovalGateControl`'s own HTML,
 rendered through the repo's vitest + RTL setup inside the shipped `Modal` and dumped
-from `document.body`, one dump per state; the exit row is `PlanningWorkspaceHost`'s
-Close control class for class; the tab behind Panel 1 is `approvals-row.mock.html`'s
-Panel 1 with the row edits in Panel 10. The mock's header comment carries the
-provenance and the two edits made to the dumped frame (below).
+from `document.body`, one dump per state; the exit row's Close control is
+`PlanningWorkspaceHost`'s class for class; Panel 9's tab is `approvals-row.mock.html`'s
+Panel 1 with the two row edits this section makes. The mock's header comment carries
+the provenance and the fill-form edits (below).
 
 | piece                                                                               | owner                                                                                              |
 | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -1191,7 +1203,7 @@ provenance and the two edits made to the dumped frame (below).
 | band 2's CONTENTS                                                                   | the gate KIND's — a design result's port, and later MOTIR-5382's Development block                 |
 | the settings door in band 3 (MOTIR-5176, panel `S`)                                 | the frame asset — it renders here wherever the frame renders it                                    |
 | the exit row, the address, the fill form, the three frameless arms, loading, narrow | **this section**                                                                                   |
-| the row's door                                                                      | **this section**, Panel 10 — built by MOTIR-5225                                                   |
+| the row's door                                                                      | **this section**, Panel 9 — built by MOTIR-5225                                                    |
 
 ### THE ADDRESS — settled here, once, because three cards read it
 
@@ -1205,17 +1217,17 @@ or `lib/` reads `approval` or `approvalKind` from a query.
 | parameter          | carries                                                                                                                                                                                                                                    | values                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
 | **`approval`**     | **the presence switch AND the work item's identifier.** Its presence is what opens the overlay — one `has('approval')`, the way `?peek=<key>` and `?run=<id>` each own one word                                                            | `MOTIR-<n>`                    |
-| **`approvalKind`** | **the gate kind.** Required. An absent value, or one that is not a member of `ApprovalGateKind`, opens the overlay on Panel 6a — never a guessed kind, because a work item can carry more than one gate and a guess can open the wrong one | a member of `ApprovalGateKind` |
+| **`approvalKind`** | **the gate kind.** Required. An absent value, or one that is not a member of `ApprovalGateKind`, opens the overlay on Panel 5a — never a guessed kind, because a work item can carry more than one gate and a guess can open the wrong one | a member of `ApprovalGateKind` |
 
 **A gate is addressed by (work-item identifier, gate kind), not by a gate id —
 because `approvalGatesService.getForWorkItem({ workItemId, kind })` is the only gate
 read that ships.** `lib/services/approvalGatesService.ts` has `getForWorkItem`,
 `getAwaitingForWorkItem`, `listAwaitingMe`, `countAwaitingMe` and `decide`, and the
 repository underneath reads `findLatestByWorkItem(workItemId, kind)`; there is no
-read by id. The pair also means an address survives a republish: a superseded
-gate is replaced by a newer `awaiting` one on the same (item, kind), and the same
-link opens the current question — the frame's own §6c pin keeps the decision
-honest about which bytes it was.
+read by id. The pair also means an address survives a republish: a superseded gate
+is replaced by a newer `awaiting` one on the same (item, kind), and the same link
+opens the current question — the frame's own §6c pin keeps the decision honest about
+which bytes it was.
 
 - **Close strips exactly these two** and leaves every other parameter byte-identical,
   so _back to exactly where you were_ is true of a filtered, paged tab and not only
@@ -1246,84 +1258,106 @@ question nobody should be asked, and the product already taught this one.
 **All four land on ONE `requestClose()`**, which strips the two parameters with
 `shallowPush` — so a later guard has one seam to intercept, as MOTIR-4731's
 close-with-pending guard does on the planning overlay. **This overlay has nothing to
-guard today**: a half-made decision is not state — the confirm band is one press
-from nothing, and a refusal is already recorded server-side. **`Esc` while the
-confirm band is open closes the overlay**, like any other `Esc`: the band is inline,
-not a dialog, and there is no second key handler to arbitrate. **Focus returns to the
-element that opened it** — the row, or its _Review_ button — recorded when the address
-changed, because a door that writes a URL is not Radix's `Trigger`.
+guard today**: a half-made decision is not state — the confirm band is one press from
+nothing, and a refusal is already recorded server-side. **`Esc` while the confirm band
+is open closes the overlay**, like any other `Esc`: the band is inline, not a dialog,
+and there is no second key handler to arbitrate. **Focus returns to the element that
+opened it** — the row, or its _Review_ button — recorded when the address changed,
+because a door that writes a URL is not Radix's `Trigger`.
 
-**The crumb** names the kind (its glyph and label), the work item's key and title:
-what is being decided, before band 1 says it again. **_Open work item_** is the one
-way out that LEAVES the tab — a real link to `/items/<key>`, deliberately quiet,
-right-aligned. **In Panel 6a the row carries no crumb at all**: the key in the address
-is the reader's own text, and echoing it beside a refusal reads as a confirmation.
+**The exit row names the WORK ITEM, not the kind**: _Close_ and its chip, then the
+item's key (mono) and title, then **_Open work item_** — the one way out that LEAVES
+the tab, a real link to `/items/<key>`, deliberately quiet, right-aligned. **In Panel
+5a the row carries no work item at all**: the key in the address is the reader's own
+text, and echoing it beside a refusal reads as a confirmation.
 
-### BAND 2 — what the overlay changes about the frame, element by element
+### "Design result" appears ONCE
 
-**The frame is composed; ONE thing about it changes, and it is a measurement rather
-than a redesign: band 2 gets the viewport.** Stated per element, because the frame's
-port mechanics are its design and not a detail:
+**The kind's label lives in band 1 and nowhere else on screen.** An earlier revision
+also put the kind's glyph and label in the exit row, so the reader met _Design result_
+twice in 100px. The row now carries the work item; band 1 keeps _Design result ·
+version … · state pill_ **byte-identical to the frame on the item page**, which is the
+point of composing it. The dialog's accessible name keeps the kind —
+`approvalOverlay.dialogTitle`, _{kind} for {key}_, as the sr-only title — because a
+screen reader lands in the dialog before it reaches band 1.
 
-| element                                   | in a row (§ 20)                                  | in the overlay                                                                                                                                                                    |
-| ----------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT_FLOOR` (`min-h-[12.25rem]`)         | kept                                             | **DROPPED** — exactly as the frame's own expanded form drops it: the viewport is the box, so a floor could only push band 3 off a short screen (Panel 3b)                         |
-| `PORT_CEILING` (`max-h-[34rem]`)          | kept                                             | **LIFTED** — the port is `flex-1`; the remaining viewport is its ceiling                                                                                                          |
-| the in-frame **Expand** affordance        | offered in state `A`                             | **NOT OFFERED** — the overlay IS the expanded form; an Expand inside it would open a 90vw dialog over a 100vw one                                                                 |
-| the frame container                       | `overflow-hidden rounded-(--radius-card) border` | the component's own **expanded recipe minus its fixed dialog wrapper**: `flex min-h-0 flex-1 flex-col overflow-hidden … bg-(--el-page-bg)`                                        |
-| the port box                              | `relative min-h max-h overflow-y-auto`           | `relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4` — the component's expanded arm VERBATIM, which is the `min-h-0 flex-1 overflow-y-auto` recipe `Modal.Body` owns |
-| every state, verb, band, confirm, refusal | the frame's                                      | **the frame's, unchanged**                                                                                                                                                        |
+**Checked against the real port, not the stand-in:** `DesignResultPanel`
+(`app/(authed)/items/[key]/_components/DesignResultPanel.tsx` on `origin/main`) renders
+no kind heading of its own — its parts are titled _Design note_, _Design mock —
+{path}_ and _Screenshot_ (`designResult.note` / `.frameTitle` / `.screenshots`). The
+label's other home on the item page is the SECTION CARD around the frame
+(`LateSections` → `ContentSectionCard title={designResult.title}`), which is why the
+item page shows it twice and **the overlay, which has no section card, shows it once**.
+No third occurrence arises, so nothing in the port needs de-duplicating.
 
-**ONE vertical scroll owner, always band 2.** The dialog is a flex column; the body,
-the centred column, the frame and the port are each `min-h-0 flex-1`, so the port
-takes whatever height is left after the exit row, band 1 and band 3 — and band 3 sits at
-the bottom of the screen whatever the subject's height and whatever the screen's.
-**Why the floor goes too, and not only the ceiling:** in a row the frame's height comes
-from its content, so a floor is what stops a short subject collapsing. In the overlay
-the height comes from the VIEWPORT, so a floor can only do one thing — on a short
-screen, push band 3 below the panel, where `overflow-hidden` clips it. The frame's own
-`expanded` arm reached the same conclusion and says so in its comment (_"expanded, the
-viewport is the ceiling"_); the fill form is that arm, without the fixed wrapper it
-draws for itself.
+### THE FILL FORM — the overlay IS the container
 
-**Measured** in Chromium against the mock (the panel's own viewport box, 1× scale):
+**The frame is composed; what changes is its BOX, never its contents.** Stated per
+element, because the frame's port mechanics are its design and not a detail:
 
-| viewport              | exit row | band 1 | port (client / scroll) | band 3 (top–bottom) | what scrolls                        |
-| --------------------- | -------- | ------ | ---------------------- | ------------------- | ----------------------------------- |
-| 1136 × 720 (Panel 2)  | 51       | 50     | 512 / 568              | 638 – 695           | the port                            |
-| 1136 × 720, tall (3a) | 51       | 50     | 512 / 3168             | 638 – 695           | the port; band 3 does not move      |
-| 1136 × 360, tall (3b) | 51       | 50     | 152 / 3168             | 278 – 335           | the port; band 3 still on screen    |
-| 388 × 760, `zh` (8)   | 49       | 118    | 483 / 568              | 663 – 747           | the port; band 1 and the verbs wrap |
+| element                                             | in a row (§ 20)                                  | in the overlay                                                                                                                                 |
+| --------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| the frame's card chrome                             | `overflow-hidden rounded-(--radius-card) border` | **REMOVED** — `flex min-h-0 flex-1 flex-col overflow-hidden`: no radius, no border; the bands run edge to edge on the dialog's `--el-page-bg`  |
+| a gutter / centred column around the frame          | —                                                | **NONE** — the frame sits directly under the exit row; the dialog body is `flex min-h-0 flex-1 flex-col` and nothing else                      |
+| `PORT_FLOOR` (`min-h-[12.25rem]`)                   | kept                                             | **DROPPED** — exactly as the frame's own expanded form drops it: the viewport is the box, so a floor could only push band 3 off a short screen |
+| `PORT_CEILING` (`max-h-[34rem]`)                    | kept                                             | **LIFTED** — the port is `flex-1`; the remaining viewport is its ceiling                                                                       |
+| the in-frame **Expand** affordance                  | offered in state `A`                             | **NOT OFFERED** — the overlay IS the expanded form; an Expand inside it would open a 90vw dialog over a 100vw one                              |
+| the port box                                        | `relative min-h max-h overflow-y-auto`           | `relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4` — the component's expanded arm verbatim (`Modal.Body`'s recipe)              |
+| band 1, band 3, every state, verb, confirm, refusal | the frame's                                      | **the frame's, byte-identical**                                                                                                                |
+
+**ONE vertical scroll owner, always band 2.** The dialog is a flex column: the exit
+row, then the frame at `min-h-0 flex-1`, then inside it band 1, the port at
+`min-h-0 flex-1`, and band 3 — so band 3 sits on the bottom edge of the screen
+whatever the subject's height and whatever the screen's. **Why the floor goes too:**
+in a row the frame's height comes from its content, so a floor stops a short subject
+collapsing; in the overlay the height comes from the VIEWPORT, so a floor could only
+push band 3 below the panel, where `overflow-hidden` clips it. The frame's own
+`expanded` arm reached the same conclusion (_"expanded, the viewport is the ceiling"_);
+the fill form is that arm without its fixed wrapper and without its card.
+
+**Measured** in Chromium against the mock (each panel's own viewport box, 1× scale):
+
+| viewport                | exit row | band 1 | port (client / scroll) | band 3 (top–bottom) | what scrolls                        |
+| ----------------------- | -------- | ------ | ---------------------- | ------------------- | ----------------------------------- |
+| 1136 × 720 (Panel 1)    | 51       | 50     | 562 / 568              | 663 – 720           | the port                            |
+| 1136 × 720, tall (2a)   | 51       | 50     | 562 / 3168             | 663 – 720           | the port; band 3 does not move      |
+| 1136 × 360, tall (2b)   | 51       | 50     | 202 / 3168             | 303 – 360           | the port; band 3 still on the edge  |
+| 1136 × 620, state B (3) | 51       | 50     | 475 / 568              | 576 – 620           | the port                            |
+| 388 × 760, `zh` (7)     | 49       | 102    | 525 / 568              | 676 – 760           | the port; band 1 and the verbs wrap |
+
+Against the previous revision's 1136 × 720 the port gains **50px** (512 → 562): the
+48px of body gutter and the frame's 2px of border are band 2's now.
 
 ### The three arms that mount NO frame — and loading
 
-**The overlay is TOTAL over `ApprovalGateKind`.** Three answers have nothing to
-decide after, and for each the frame is **not mounted**: band 3 sits below the port,
-and a port with nothing in it would put live verbs under nothing. Each is the shipped
-`EmptyState` primitive, centred in the body, with the exit row above it.
+**The overlay is TOTAL over `ApprovalGateKind`.** Three answers have nothing to decide
+after, and for each the frame is **not mounted**: band 3 sits below the port, and a
+port with nothing in it would put live verbs under nothing. Each is the shipped
+`EmptyState` primitive, centred in the body with `--spacing-card-padding` around it,
+under the exit row.
 
 | arm                                      | when                                                                                                                      | what it says, and its one action                                                                           |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **5a · a kind this build cannot render** | `approvalKind` is in `UNREGISTERED_GATE_KINDS`                                                                            | `CircleDashed` · _Motir cannot show this kind yet_ · names the kind · _Not built yet_ · **Open work item** |
-| **5b · the subject no longer resolves**  | a registered kind whose handler's `resolveSubject` answers null                                                           | `FileX2` · _The design this asked about is gone_ · **Open work item**                                      |
-| **6a · nothing this reader may see**     | the read answers 404 — no such item, another workspace, not browsable, no gate of that kind, or an invalid `approvalKind` | `Lock` · _This approval is not available_ · **Close** (primary) — no crumb                                 |
+| **4a · a kind this build cannot render** | `approvalKind` is in `UNREGISTERED_GATE_KINDS`                                                                            | `CircleDashed` · _Motir cannot show this kind yet_ · names the kind · _Not built yet_ · **Open work item** |
+| **4b · the subject no longer resolves**  | a registered kind whose handler's `resolveSubject` answers null                                                           | `FileX2` · _The design this asked about is gone_ · **Open work item**                                      |
+| **5a · nothing this reader may see**     | the read answers 404 — no such item, another workspace, not browsable, no gate of that kind, or an invalid `approvalKind` | `Lock` · _This approval is not available_ · **Close** (primary) — no work item in the exit row             |
 
-**5a and 5b look alike and are opposite** — § 20's Panel 7 distinction, carried up a
+**4a and 4b look alike and are opposite** — § 20's Panel 7 distinction, carried up a
 level: the first is a feature that has not shipped, the second is a gate worth
-withdrawing. **6a is ONE answer for "does not exist" and "not yours to see"**, because
+withdrawing. **5a is ONE answer for "does not exist" and "not yours to see"**, because
 the read returns one 404 for both (MOTIR-5223's no-existence-leak contract) and a
 second message would say which. **The page behind it never 404s** — there is no route
 to fail.
 
-**6b · loading**: the read has not answered. The exit row shows Close alone, and the
-body draws the frame's three bands as muted blocks at their real proportions
-(`--el-muted`, `animate-pulse`, `aria-busy` with _Loading the approval_), so an answer
-that arrives does not reflow the screen.
+**5b · loading**: the read has not answered. The exit row shows Close alone, and the
+body draws the frame's three bands as muted blocks at their real proportions, edge to
+edge like the frame they stand in for (`--el-muted`, `animate-pulse`, `aria-busy` with
+_Loading the approval_), so an answer that arrives does not reflow the screen.
 
 ### After a decision — § 20's rule, unchanged, reached from a different surface
 
 **Deciding does not close the overlay.** The frame re-renders with the decided record
-the write returned (Panels 9a–9c) — the reader sees what they did on the screen they
+the write returned (Panels 8a–8c) — the reader sees what they did on the screen they
 did it on. Underneath, **in the same reconcile and with no reload**: the row settles in
 place with its state pill and no verb, and the strip count is one lower. Closing then
 reveals exactly that. **What reaches each surface** (CLAUDE.md § _Page state after a
@@ -1334,49 +1368,51 @@ mutation_):
   decide action's own revalidation as MOTIR-5118 measured is needed;
 - **the row underneath** — `ApprovalsList` is a CLIENT island whose row holds its
   decided gate in its own state (case 3): a decision made OUTSIDE that island needs an
-  explicit signal the island watches. See the planning flag below.
+  explicit signal the island watches. See planning flag 2.
 
 ### Narrow (`< md`)
 
-Panel 8, drawn in `zh`. The body's gutter drops to `px-3 py-3`; the `Esc` chip is
-hidden (there is no key to press on a phone); the item TITLE leaves the crumb, which
-keeps the glyph, the kind and the key; **_Open work item_ becomes its icon**, with the
-label kept as its accessible name. Band 2 still owns the scroll, band 1 wraps its meta
-line under the kind, and band 3 wraps its sentence above the verbs — the frame already
-does both.
+Panel 7, drawn in `zh`. The frame is already edge to edge at every width, so narrow
+changes only the exit row: the `Esc` chip is hidden (there is no key to press on a
+phone), the item TITLE leaves the row, which keeps _Close_ and the key, and **_Open work
+item_ becomes its icon**, with the label kept as its accessible name. Band 2 still owns
+the scroll, band 1 wraps its meta line under the kind, and band 3 wraps its sentence
+above the verbs — the frame already does both.
 
 ### Token map — the overlay's own elements
 
-| Element                  | Colour                                                                             | Shape                                                   |
-| ------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| scrim                    | `--el-overlay-scrim`                                                               | —                                                       |
-| dialog panel             | `--el-page-bg`, no border                                                          | `rounded-none` — full size overrides `--radius-modal`   |
-| exit row                 | `--el-surface`, bottom `--el-border-soft`                                          | `px-4 py-2`                                             |
-| Close · Open work item   | `--el-text-secondary`; hover `--el-text` on `--el-surface-soft`                    | `--radius-control` · `--spacing-control-x/y`            |
-| `Esc` chip               | `--el-text-secondary`, border `--el-border`                                        | `--radius-kbd` · `--spacing-kbd-x/y`                    |
-| crumb glyph              | `--el-type-design`; unregistered `--el-text-faint`, `aria-hidden`                  | `h-4 w-4`                                               |
-| crumb kind · key · title | `--el-text` · `--el-text-secondary` (mono; 6.24:1 on `--el-surface`) · `--el-text` | `text-sm` · `text-xs` · `text-sm`                       |
-| body                     | `--el-surface-soft`                                                                | `px-6 py-6` (`md`) · `px-3 py-3`                        |
-| frame, fill form         | `--el-page-bg`, border `--el-border`                                               | `--radius-card`                                         |
-| frameless arms           | `EmptyState`: `--el-icon-muted` · `--el-text` · `--el-text-subtitle`               | `Card`                                                  |
-| _Not built yet_          | `Pill tone="archived"`                                                             | `--radius-badge`                                        |
-| skeleton blocks          | `--el-muted`                                                                       | `--radius-control` · `--radius-badge` · `--radius-card` |
+| Element                | Colour                                                                  | Shape                                                   |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| scrim                  | `--el-overlay-scrim`                                                    | —                                                       |
+| dialog panel           | `--el-page-bg`, no border — **the ground the frame's bands sit on**     | `rounded-none` — full size overrides `--radius-modal`   |
+| exit row               | `--el-surface`, bottom `--el-border-soft`                               | `px-4 py-2`                                             |
+| Close · Open work item | `--el-text-secondary`; hover `--el-text` on `--el-surface-soft`         | `--radius-control` · `--spacing-control-x/y`            |
+| `Esc` chip             | `--el-text-secondary`, border `--el-border`                             | `--radius-kbd` · `--spacing-kbd-x/y`                    |
+| exit-row key · title   | `--el-text-secondary` (mono; 6.24:1 on `--el-surface`) · `--el-text`    | `text-xs` · `text-sm`                                   |
+| frame, fill form       | none of its own — no border, no radius, no fill; bands keep their rules | edge to edge                                            |
+| frameless arms         | `EmptyState`: `--el-icon-muted` · `--el-text` · `--el-text-subtitle`    | `Card`, inset by `--spacing-card-padding`               |
+| _Not built yet_        | `Pill tone="archived"`                                                  | `--radius-badge`                                        |
+| skeleton blocks        | `--el-muted`                                                            | `--radius-control` · `--radius-badge` · `--radius-card` |
 
-No raw hex and no raw shape utilities in the asset. The board's own chrome (the
-viewport boxes, the numbered pins, the cutaway edge) is review chrome and carries
+**Removed in this revision:** the body's `--el-surface-soft` ground and its
+`px-3 py-3` / `md:px-6 md:py-6` gutter, the `max-w-[72rem]` column, the frame's
+`--radius-card` + `--el-border`, and the exit row's kind glyph (`--el-type-design`) and
+label. No raw hex and no raw shape utilities in the asset. The board's own chrome (the
+viewport boxes and the numbered pins in Panel 1's margin) is review chrome with
 `--el-text` / `--el-text-secondary` inks only.
 
 ### Copy — `en` and `zh`
 
 Named here because no component ships them yet; MOTIR-5224 owns the catalog entry.
-**Reused, not re-keyed:** `common.close`; `workbench.approvals.kind.*`,
-`.notRenderable`, `.subjectGone`, `.notBuiltYet`; every `approvalGate.*` string the
-frame already renders.
+**Reused, not re-keyed:** `common.close`; `workbench.approvals.kind.*` (in the dialog's
+accessible name and in arm 4a), `.notRenderable`, `.subjectGone`, `.notBuiltYet`; every
+`approvalGate.*` string the frame already renders — including band 1's
+`approvalGate.designResult.kindLabel`, the one visible _Design result_.
 
 | key                                  | en                                                                                                                                          | zh                                                                             |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `approvalOverlay.escKey`             | Esc                                                                                                                                         | Esc                                                                            |
-| `approvalOverlay.dialogTitle`        | {kind} for {key}                                                                                                                            | {key} 的{kind}                                                                 |
+| `approvalOverlay.dialogTitle`        | {kind} for {key} — **sr-only**, the dialog's accessible name; never rendered visibly                                                        | {key} 的{kind}                                                                 |
 | `approvalOverlay.openWorkItem`       | Open work item                                                                                                                              | 打开工作项                                                                     |
 | `approvalOverlay.loading`            | Loading the approval                                                                                                                        | 正在加载审批                                                                   |
 | `approvalOverlay.notAvailable.title` | This approval is not available                                                                                                              | 此审批不可用                                                                   |
@@ -1384,19 +1420,19 @@ frame already renders.
 | `approvalOverlay.notRenderable.body` | This is a {kind} approval. It will open here once Motir can show that kind — nothing you did caused this.                                   | 这是一项{kind}审批。Motir 支持展示此类型后，它会在这里打开——这不是你造成的。   |
 | `approvalOverlay.subjectGone.body`   | The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now. | 此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。 |
 
-### The ACCESS PATH — the row's new door (Panel 10)
+### The ACCESS PATH — the row's new door (Panel 9)
 
 - **The chevron is removed.** It promised the row would grow, and it no longer does.
 - **The whole row is the door**: a real `<a href="/items/<key>" aria-haspopup="dialog">`
   over the row, whose **plain primary click** writes the overlay address with
   `shallowPush` and whose **modified or middle click** opens the card in a new tab —
-  exactly `usePeekRowClick`'s contract for `?peek=`, so the two cannot collide: the
-  row writes `approval`, never `peek`.
+  exactly `usePeekRowClick`'s contract for `?peek=`, so the two cannot collide: the row
+  writes `approval`, never `peek`.
 - **The _Review_ button survives** as the labelled door a keyboard and a screen reader
   find, and opens the same address.
 - **The work-item cell stays** the one link that visibly leaves, above the row on `z-10`.
 - **Every row has the door**, including a settled, not-built or subject-gone row: they
-  open Panels 9, 5a and 5b. The Decide cell keeps § 20's treatment per state.
+  open Panels 8, 4a and 4b. The Decide cell keeps § 20's treatment per state.
 
 ### What this asset does NOT decide
 
@@ -1408,6 +1444,8 @@ frame already renders.
   composes this overlay and writes this address.
 - **The pending-decision indicator** — [MOTIR-4908](motir:cmtt4ogn7000fhutx7zrhizuo).
 - **The approve-to-merge port** — MOTIR-5382, which draws INTO this container.
+- **The item page's own double label** (section card title + band 1) — outside this
+  surface; recorded above, not changed.
 - **The `zh` catalogue** — the strings above are drafts for MOTIR-5224's entry.
 
 ### GIVES / TAKES — every card this asset names
@@ -1415,35 +1453,37 @@ frame already renders.
 Swept over MOTIR-5214's whole subtree (5222–5227, 5382–5385) and every other key in
 this section and the mock's prose, on the ELEMENT, STRUCTURE and PREMISE axes.
 
-| card                                                                  | GIVES                                                                                                                                                                       | TAKES                                                                                                                                                                                                          |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MOTIR-5214** (the story)                                            | The design half of its criteria: the address, the one close, band 2 at viewport height, totality over the kind enum, the one-answer not-available arm, narrow, `en` + `zh`. | **PREMISE:** _"composes `ApprovalGateControl` unmodified"_ holds for every state, verb, band and decide path, and needs ONE presentational layout input to select the fill form — planning flag 1.             |
-| **MOTIR-5223** (the read)                                             | A drawn consumer for each distinct answer it produces: gate + subject, no subject (5b), unregistered kind (5a), 404 (6a).                                                   | Nothing. Its query names are its own and need not match `approval` / `approvalKind`.                                                                                                                           |
-| **MOTIR-5224** (the host)                                             | The anatomy, the exit row, the two parameter names, `hideClose`, the one `requestClose()`, the fill form, the three frameless arms, loading, narrow and the copy.           | **PREMISE:** the fill form is a layout input on the frame (planning flag 1). Nothing else.                                                                                                                     |
-| **MOTIR-5225** (the row door)                                         | The row once its disclosure is gone (Panel 10), and the post-decision reconcile it must carry into its island.                                                              | **ELEMENT:** the disclosure, the chevron and the in-list frame — already its scope to delete. **STRUCTURE:** Panel 7's no-subject rows now open the overlay rather than offering nothing. **PREMISE:** flag 2. |
-| **MOTIR-5226** (the vitest gate)                                      | The seams to assert: ONE close, the three frameless arms read from `UNREGISTERED_GATE_KINDS`, the fill form's scroll container.                                             | Nothing.                                                                                                                                                                                                       |
-| **MOTIR-5227** (the acceptance E2E)                                   | The walk, in `en` and `zh`, and where each assertion lands: the port, the decided record, the settled row, the count.                                                       | Nothing.                                                                                                                                                                                                       |
-| **MOTIR-5382 / 5383 / 5384 / 5385** (approve-to-merge in the overlay) | The container and the port at viewport height; the settings door stays in band 3.                                                                                           | Nothing — MOTIR-5382 draws INTO this container rather than redrawing it.                                                                                                                                       |
-| **MOTIR-5215** (the item page's door)                                 | The overlay it composes and the address it writes.                                                                                                                          | Nothing.                                                                                                                                                                                                       |
-| **MOTIR-4794** (the Approvals tab) · `done`                           | Nothing.                                                                                                                                                                    | **ELEMENT:** the disclosure and the chevron. **Not amended**: a `done` card is immutable history, and it shipped correct against the design current at the time. The supersession is § 20's dated amendment.   |
-| **MOTIR-5147** (the row's design) · `done`                            | Nothing.                                                                                                                                                                    | **STRUCTURE:** _Open in place_. Superseded forward by § 20's amendment; its post-decision rule and every row state are untouched.                                                                              |
-| **MOTIR-4789 / 4792 / 5032 / 5033** (the frame)                       | A fourth mount context, and the answer to MOTIR-5032's recorded want — _a reader in `B` who wants the whole viewport_ — without an Expand in state `B`.                     | **PREMISE:** Expand is not offered in the fill form. Nothing in the frame's own asset or states changes.                                                                                                       |
-| **MOTIR-4778 / 4786 / 5192 / 5292** (the gate, its authority)         | Nothing.                                                                                                                                                                    | Nothing — `canDecide` is still the read's answer.                                                                                                                                                              |
-| **MOTIR-4726 / 4729 / 4731 / 3893 / 3895** (the precedents)           | Nothing — cited for the pattern and its reasoning.                                                                                                                          | Nothing.                                                                                                                                                                                                       |
-| **MOTIR-5176** (the settings door)                                    | Nothing.                                                                                                                                                                    | Nothing — its door renders in band 3 wherever the frame does.                                                                                                                                                  |
-| **MOTIR-5118 / MOTIR-5160**                                           | Nothing — cited for the page-state contract a decision must meet.                                                                                                           | Nothing.                                                                                                                                                                                                       |
-| **MOTIR-4908 / MOTIR-5299 / MOTIR-5300**                              | Nothing — boundaries this asset does not cross.                                                                                                                             | Nothing (flag 3 names the one open question).                                                                                                                                                                  |
+| card                                                                  | GIVES                                                                                                                                                                                                          | TAKES                                                                                                                                                                                                               |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5214** (the story)                                            | The design half of its criteria: the address, the one close, band 2 at viewport height, totality over the kind enum, the one-answer not-available arm, narrow, `en` + `zh`.                                    | **PREMISE:** _"composes `ApprovalGateControl` unmodified"_ holds for every state, verb, band and decide path, and needs ONE presentational layout input to select the fill form — planning flag 1.                  |
+| **MOTIR-5223** (the read)                                             | A drawn consumer for each distinct answer it produces: gate + subject, no subject (4b), unregistered kind (4a), 404 (5a).                                                                                      | Nothing. Its query names are its own and need not match `approval` / `approvalKind`.                                                                                                                                |
+| **MOTIR-5224** (the host)                                             | The anatomy, the exit row (Close + key + title + Open work item), the two parameter names, `hideClose`, the one `requestClose()`, the chrome-less fill form, the frameless arms, loading, narrow and the copy. | **PREMISE:** the fill form is a layout input on the frame (planning flag 1). Nothing else.                                                                                                                          |
+| **MOTIR-5225** (the row door)                                         | The row once its disclosure is gone (Panel 9), and the post-decision reconcile it must carry into its island.                                                                                                  | **ELEMENT:** the disclosure, the chevron and the in-list frame — already its scope to delete. **STRUCTURE:** § 20 Panel 7's no-subject rows now open the overlay rather than offering nothing. **PREMISE:** flag 2. |
+| **MOTIR-5226** (the vitest gate)                                      | The seams to assert: ONE close, the frameless arms read from `UNREGISTERED_GATE_KINDS`, the fill form's scroll container, and _Design result_ rendered once.                                                   | Nothing.                                                                                                                                                                                                            |
+| **MOTIR-5227** (the acceptance E2E)                                   | The walk, in `en` and `zh`, and where each assertion lands: the port, the decided record, the settled row, the count.                                                                                          | Nothing.                                                                                                                                                                                                            |
+| **MOTIR-5382 / 5383 / 5384 / 5385** (approve-to-merge in the overlay) | The container — edge to edge, band 2 at viewport height — and the settings door staying in band 3.                                                                                                             | Nothing — MOTIR-5382 draws INTO this container rather than redrawing it.                                                                                                                                            |
+| **MOTIR-5215** (the item page's door)                                 | The overlay it composes and the address it writes.                                                                                                                                                             | Nothing.                                                                                                                                                                                                            |
+| **MOTIR-4794** (the Approvals tab) · `done`                           | Nothing.                                                                                                                                                                                                       | **ELEMENT:** the disclosure and the chevron. **Not amended**: a `done` card is immutable history, and it shipped correct against the design current at the time. The supersession is § 20's dated amendment.        |
+| **MOTIR-5147** (the row's design) · `done`                            | Nothing.                                                                                                                                                                                                       | **STRUCTURE:** _Open in place_. Superseded forward by § 20's amendment; its post-decision rule and every row state are untouched.                                                                                   |
+| **MOTIR-4789 / 4792 / 5032 / 5033** (the frame)                       | A fourth mount context, and the answer to MOTIR-5032's recorded want — _a reader in `B` who wants the whole viewport_ — without an Expand in state `B`.                                                        | **PREMISE:** in the fill form the frame drops its card chrome and does not offer Expand. Its bands, states and its own asset are unchanged.                                                                         |
+| **MOTIR-4778 / 4786 / 5192 / 5292** (the gate, its authority)         | Nothing.                                                                                                                                                                                                       | Nothing — `canDecide` is still the read's answer.                                                                                                                                                                   |
+| **MOTIR-4726 / 4729 / 4731 / 3893 / 3895** (the precedents)           | Nothing — cited for the pattern and its reasoning.                                                                                                                                                             | Nothing.                                                                                                                                                                                                            |
+| **MOTIR-5176** (the settings door)                                    | Nothing.                                                                                                                                                                                                       | Nothing — its door renders in band 3 wherever the frame does.                                                                                                                                                       |
+| **MOTIR-5118 / MOTIR-5160**                                           | Nothing — cited for the page-state contract a decision must meet.                                                                                                                                              | Nothing.                                                                                                                                                                                                            |
+| **MOTIR-4908 / MOTIR-5299 / MOTIR-5300**                              | Nothing — boundaries this asset does not cross.                                                                                                                                                                | Nothing (flag 3 names the one open question).                                                                                                                                                                       |
 
 ### ⚠️ Planning flags — surfaced by this pass
 
 1. **The fill form needs ONE presentational input on `ApprovalGateControl`.** The frame
-   has no prop that lifts its ceiling: the only viewport-sized form it ships is its
-   `expanded` state, which is internal and wraps the frame in its own fixed dialog. The
-   overlay needs that recipe **without** the wrapper and **without** Expand — a layout
-   input such as `layout: 'inline' | 'fill'`, adding no state, verb, band or decide path,
-   so `tests/approval-gate-one-language.test.ts` is unaffected. **MOTIR-5224** should
-   name the input in its criteria, and **MOTIR-5214**'s _"composed unmodified"_ should
-   read as _no new state, verb, band or decide path_.
+   has no prop that gives it the viewport: its only viewport-sized form is its internal
+   `expanded` state, which wraps the frame in its own fixed dialog and keeps its card.
+   The overlay needs that port recipe **without** the wrapper, **without** Expand and
+   **without the frame's own container chrome** (no `--radius-card`, no border — the
+   overlay is the container) — a layout input such as `layout: 'inline' | 'fill'`,
+   adding no state, verb, band or decide path, so
+   `tests/approval-gate-one-language.test.ts` is unaffected. **MOTIR-5224** should name
+   the input and both halves of what `fill` means in its criteria, and **MOTIR-5214**'s
+   _"composed unmodified"_ should read as _no new state, verb, band or decide path_.
 2. **A decision made in the overlay must reach the row's CLIENT island.** Today
    `ApprovalsList`'s row settles because its OWN `onDecide` sets its own gate state.
    Decided from the overlay, that island is not the caller, so `router.refresh()` alone
