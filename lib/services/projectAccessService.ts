@@ -293,8 +293,8 @@ export const projectAccessService = {
    * gates (the getCommentCapabilities pattern): `canBrowse` (the 404 gate;
    * browsing is all that creating/starring PRIVATE filters needs — filters
    * are a read-layer construct, viewers included), `canShare` (role ≥ member
-   * — may publish at visibility `project`), `isAdmin` (project admin or
-   * workspace owner/admin — sees every row, manages the shared ones). The
+   * — may publish at visibility `project`), `canManageAny` (holds
+   * `saved_filter:manage_any` — sees every row, manages the shared ones). The
    * per-row predicates live in lib/savedFilters/access.ts. Throws only
    * ProjectNotFoundError (cross-workspace project ids stay hidden).
    */
@@ -658,51 +658,6 @@ export const projectAccessService = {
     if (hasPermission(inputs, key)) return;
     if (key === 'project:administer') throw new NotProjectAdminError(projectId);
     throw new PermissionDeniedError(projectId, key);
-  },
-
-  /**
-   * Is the actor a WORKSPACE MANAGER (owner / admin) for this project's
-   * workspace — the "always-pass" rail of `resolvePermissions`, exposed as a
-   * QUESTION so a caller never has to resolve a membership and branch on the
-   * role itself.
-   *
-   * ⚠️ IT EXISTS SO THE DERIVATION STAYS IN ONE FILE, and that is the whole
-   * reason rather than a convenience. `tests/permissions/storyGate.test.ts`
-   * (guard 1) and `memberFacingGate.integration.test.ts` both refuse an
-   * `isWorkspaceManager(...)` gate anywhere but the policy owners: a service
-   * that reads its own membership row and tests the role is *"a policy the model
-   * does not know about — invisible in the grid, un-grantable to a custom role,
-   * and un-auditable by the guard."* Asking here inherits `resolveInputs` whole,
-   * including the token's project binding and the cross-tenant 404.
-   *
-   * ⚠️ IT IS NOT A PERMISSION, AND IT IS NOT A SUBSTITUTE FOR ONE. A permission
-   * answers *may this actor do X on this project?* and is the right instrument
-   * almost everywhere. This answers the narrower *is this actor a manager of the
-   * whole workspace?*, which is only ever correct as ONE ARM of a rule whose
-   * other arms are not permissions either — a RELATIONSHIP to a specific row.
-   * Its one caller is the approval-gate authority rule
-   * (`approvalGatesService.resolveGateAuthority`, read by the decide door and by
-   * the render read), which ADR `approval-gates.md` §2's 2026-09-11 amendment
-   * settles as **the assignee, or the reporter when there is no assignee, or an
-   * admin** on top of the kind's permission floor
-   * (`docs/decisions/permission-inventory.md` R64). That amendment narrowed the
-   * relationship arms onto §2's routing rule and left THIS arm untouched — it is
-   * now the only escape hatch when the routed recipient is unavailable, which is
-   * precisely the job a role-derived override should be doing.
-   * Reach for `assertPermission` first; reach for this only when the rule you are
-   * expressing genuinely is not a permission.
-   *
-   * Throws `ProjectNotFoundError` for a project that is missing or in another
-   * workspace, exactly like every other method here — the no-existence-leak
-   * posture, inherited rather than re-implemented.
-   */
-  async isWorkspaceManagerFor(
-    projectId: string,
-    ctx: AccessActorContext,
-    tx?: Prisma.TransactionClient,
-  ): Promise<boolean> {
-    const inputs = await resolveInputs(projectId, ctx, tx);
-    return isWorkspaceManager(inputs.workspaceRole);
   },
 
   /**
