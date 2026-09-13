@@ -13,13 +13,23 @@ and that section no longer carries them. It is the layout source of truth for
 **MOTIR-4852** (the reads) and **MOTIR-4853** (the page), which carry it in
 `blocked_by`.
 
+**AMENDED by MOTIR-5216** (Story
+[MOTIR-5213](motir:cmtxm4uzd00ebhztxrhk7nfo3), 2026-09-13): **the strip is
+RE-ORDERED** so To approve leads, and **the landing CASCADES** — the bare
+`/workbench` resolves to the first of To approve · In progress · To do with
+anything in it. Every tab becomes addressable and the bare path stops being one
+of their addresses. § _21 · AMENDED by MOTIR-5216_ is the record; the sections
+it changes carry a pointer to it. It is the layout source of truth for
+**MOTIR-5217** (the order), **MOTIR-5218** (the addresses) and **MOTIR-5221**
+(the resolver), which carry it in `blocked_by`.
+
 | Surface                               | Asset                                          | Notes                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **The `/workbench` landing page**     | **`workbench.mock.html`** (HTML mockup)        | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow · **the pager, in five states**. Exports to `workbench.png`.                                                                                                                                        |
 | **The `To approve` tab's ROW** (§ 20) | **`approvals-row.mock.html`** (HTML mockup)    | The row and every state it can be in. **Its disclosure is superseded by the overlay below** (§ 20's dated amendment). Exports to `approvals-row.png`.                                                                                                                                                                                                             |
-| **The approval OVERLAY** (§ 21)       | **`approval-overlay.mock.html`** (HTML mockup) | An approval decided full screen over the tab, the frame edge to edge under the exit row: anatomy · a taller-than-the-screen subject and a short screen · see-but-not-decide · unregistered kind / subject gone · not available / loading · refused in place · narrow in `zh` · every `ApprovalGateState` · the row's new door. Exports to `approval-overlay.png`. |
+| **The approval OVERLAY** (§ 22)       | **`approval-overlay.mock.html`** (HTML mockup) | An approval decided full screen over the tab, the frame edge to edge under the exit row: anatomy · a taller-than-the-screen subject and a short screen · see-but-not-decide · unregistered kind / subject gone · not available / loading · refused in place · narrow in `zh` · every `ApprovalGateState` · the row's new door. Exports to `approval-overlay.png`. |
 
-**Panels:** A the door · 1 To do · 2 In progress · 3 Recently finished ·
+**Panels:** A the door · **B the landing cascade** · 1 To do · 2 In progress · 3 Recently finished ·
 4 Watching, grouped · 5 the all-empty page · 6 every tab's empty state ·
 7 narrow (`< md`) · **8 a paged tab, and the kind order** · **9 a single-page
 tab** · **10 an empty tab, with no pager** · **11 Watching over an offset page
@@ -104,13 +114,17 @@ each tab an `<a>` at `--height-control`, `--radius-control`,
 `--el-tabnav-active`; an inactive one `--el-text-secondary` with an
 `--el-text-faint` glyph.
 
-| tab                   | glyph (lucide) | href                         |
-| --------------------- | -------------- | ---------------------------- |
-| **To do**             | `Circle`       | `/workbench`                 |
-| **In progress**       | `CircleDot`    | `/workbench?tab=in-progress` |
-| **Recently finished** | `CircleCheck`  | `/workbench?tab=finished`    |
-| **Watching**          | `Star`         | `/workbench?tab=watching`    |
-| **To approve**        | `Inbox`        | `/workbench?tab=approvals`   |
+**RE-DRAWN by MOTIR-5216** — the order and the addresses below are the amended
+ones; § _21_ carries the reasoning.
+
+| tab                   | glyph (lucide) | href                                                  |
+| --------------------- | -------------- | ----------------------------------------------------- |
+| **To approve**        | `Inbox`        | `/workbench?tab=approvals`                            |
+| **In progress**       | `CircleDot`    | `/workbench?tab=in-progress`                          |
+| **To do**             | `Circle`       | **`/workbench?tab=todo`**                             |
+| **Recently finished** | `CircleCheck`  | `/workbench?tab=finished`                             |
+| **Watching**          | `Star`         | `/workbench?tab=watching`                             |
+| _the bare path_       | —              | **`/workbench` — a RESOLVER: forwards, names no tab** |
 
 **⚠️ THE LABEL IS AN ACTION AND THE SLUG IS A SET, and the mismatch is
 deliberate.** The tab says **To approve** because that is what it asks of the
@@ -123,10 +137,12 @@ transliteration.
 
 - **The selection is a URL, not component state** — `aria-current="page"` on the
   active one. A reload stays on the tab and the tab is linkable; that is also
-  why the link form was chosen over the client `Segmented`. **To do is the
+  why the link form was chosen over the client `Segmented`. ~~**To do is the
   DEFAULT and is therefore spelled as the ABSENCE of the param**, so a link to
   the Workbench and a link to To do are the same link (the shipped
-  `lib/workbench/tab.ts` rule, carried).
+  `lib/workbench/tab.ts` rule, carried).~~ **REPLACED by MOTIR-5216:** there is
+  no default tab. The one-canonical-URL-per-tab rule is kept by making it TOTAL
+  — every tab carries a `?tab=`, and `/workbench` resolves (§ _21_).
 - **Counts** ride each tab as the shipped board count badge
   (`--el-count-bg` / `--el-count-text`, `--radius-badge`,
   `h-[18px] min-w-[20px] text-[11px] font-semibold`).
@@ -167,6 +183,12 @@ narrow band's answer.
   lines each — the tallest possible chrome on the shortest possible viewport.
 - **Scrolling** keeps every tab reachable at full label, is the mobile
   convention, and the browser scrolls the active tab into view on load.
+
+**MOTIR-5216 re-ordered the tabs and this verdict is UNCHANGED** — the same five
+labels at the same type scale are still **662px** of track against a **386px**
+content box, and an order cannot move either number. What does change: under the
+cascade the landed-on tab is always one of the FIRST THREE, so the common case
+needs little or no scroll to show it (§ _21_).
 
 Implementation: `max-w-full overflow-x-auto` on the `<nav>` and `shrink-0` on
 each tab. Both are ordinary Tailwind utilities; the mock declares them in its own
@@ -332,8 +354,9 @@ the strip, because they are the same predicate — a reader is never handed two
 numbers to reconcile. Panel 8 draws both in one frame for exactly that reason.
 
 **The page rides the URL beside `?tab=`, and page 1 is the ABSENCE of the
-param** — the same rule that makes To do the absence of `?tab=`, so a link to a
-tab and a link to its first page are one link.
+param** — ~~the same rule that makes To do the absence of `?tab=`~~ (MOTIR-5216
+retired that half: every tab now carries `?tab=`; the page-1 half stands), so a
+link to a tab and a link to its first page are one link.
 
 ### The copy — `en` and `zh`, named here because the control ships neither
 
@@ -395,19 +418,23 @@ conjures an approval, so those three offer no button rather than inventing one.
 The tab strip stays above every empty state; it is their header, which is why
 none carries a card header of its own.
 
+**MOTIR-5216 changes NONE of the five** — and the In-progress action's target is
+now spelled `/workbench?tab=todo`, because To do has an address of its own. See
+§ _21_ for why no To-approve door was added.
+
 ---
 
 ## Copy (en)
 
-| element               | copy                                                                           |
-| --------------------- | ------------------------------------------------------------------------------ |
-| rail row              | **Workbench**                                                                  |
-| page `h1`             | **Workbench**                                                                  |
-| subtitle              | **"What you are doing in {project}, and what you have just done."**            |
-| window caption        | "Finished in the last 7 days. Older work stays on the item, and on the board." |
-| tab labels            | To do · In progress · Recently finished · Watching · **To approve**            |
-| Watching group labels | In progress · To do                                                            |
-| **pager**             | § _The pager_ → _The copy_ above has the five strings, with their `zh` values  |
+| element               | copy                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| rail row              | **Workbench**                                                                          |
+| page `h1`             | **Workbench**                                                                          |
+| subtitle              | **"What you are doing in {project}, and what you have just done."**                    |
+| window caption        | "Finished in the last 7 days. Older work stays on the item, and on the board."         |
+| tab labels            | **To approve** · In progress · To do · Recently finished · Watching (MOTIR-5216 order) |
+| Watching group labels | In progress · To do                                                                    |
+| **pager**             | § _The pager_ → _The copy_ above has the five strings, with their `zh` values          |
 
 **⚠️ THE SUBTITLE DOES NOT SURVIVE, and the card asked whether it should.** The
 shipped line is _"Everything in {project} that is waiting on you."_ It is false
@@ -445,6 +472,10 @@ the **ACTIVE PROJECT** — `getActiveProject()`, the same resolver `/items`,
    is the single owner of "where a reader lands", with a guard that keeps route
    literals retired — so the move is ONE constant plus a 308, not a sweep.
    `?next=` still wins and the `draftId → /onboarding` branch is untouched.
+
+**Both doors still name `/workbench`, and after MOTIR-5216 both reach a
+RESOLVER** rather than a fixed tab — Panel B draws where it forwards. Neither
+door moves.
 
 **The old address still lands.** `/home` **308**s to `/workbench` with its query
 string intact, so a bookmark, a pasted link and every `?tab=` URL a reader has
@@ -894,14 +925,14 @@ the layout source of truth for **MOTIR-4794** (the tab), which carries it in
 
 > **⚠️ AMENDED 2026-09-13 by MOTIR-5222** (Story
 > [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u)) — **the row no longer DISCLOSES;
-> it OPENS THE APPROVAL FULL SCREEN, over the tab.** The overlay is § 21
+> it OPENS THE APPROVAL FULL SCREEN, over the tab.** The overlay is § 22
 > (`approval-overlay.mock.html`). What this amendment changes, and what it leaves
 > exactly as it was:
 >
 > - **SUPERSEDED: _The ROW is a DISCLOSURE_ below** — its third candidate, _Open
 >   in place_, and Panel 3's drawing of it. The row's whole-row control and its
 >   _Review_ button now write the overlay's address instead of expanding the row,
->   and the chevron is removed (§ 21 Panel 9).
+>   and the chevron is removed (§ 22 Panel 9).
 > - **Why.** This section weighed three candidates and picked the best of them. It
 >   did not weigh a fourth: keep the reader on the tab and give the thing being
 >   judged the screen. The frame's own standard is that you decide after you look,
@@ -917,10 +948,10 @@ the layout source of truth for **MOTIR-4794** (the tab), which carries it in
 > - **UNTOUCHED: _THE POST-DECISION BEHAVIOUR — SETTLED_.** A decided row keeps its
 >   position, swaps its Decide cell for a state pill, the strip count decrements
 >   immediately, and the row leaves on the NEXT load. Deciding inside the overlay
->   produces exactly that underneath it (§ 21 Panel 8).
+>   produces exactly that underneath it (§ 22 Panel 8).
 > - **UNTOUCHED: every row state and its treatment** (Panels 4–8), the column set,
 >   narrow and the token map — with one consequence: Panel 7's two no-subject rows
->   now open the overlay too, which draws them (§ 21 Panel 4), instead of offering
+>   now open the overlay too, which draws them (§ 22 Panel 4), instead of offering
 >   nothing to open.
 > - **FORWARD-ONLY.** [MOTIR-4794](motir:cmtqhxiy5001hhvph7yp96e54) and
 >   [MOTIR-5147](motir:cmtwycrzk002ahxtxe5j0w2q7) are `done` and are not
@@ -986,7 +1017,7 @@ the same DTO, read one interaction later.
 ### The ROW is a DISCLOSURE — the question this card existed to answer
 
 > **⚠️ SUPERSEDED 2026-09-13 by MOTIR-5222** — the row opens the approval full
-> screen (§ 21). Kept verbatim as the record of the decision it replaces; the
+> screen (§ 22). Kept verbatim as the record of the decision it replaces; the
 > reasoning for the change is the dated amendment at the head of § 20.
 
 **The row opens, and the shipped frame renders inside the list.** One row open at
@@ -1142,7 +1173,153 @@ excluded — those keys stand in for a reader's list.
 
 ---
 
-## 21 · The approval OVERLAY — MOTIR-5222
+## 21 · AMENDED by MOTIR-5216 — the strip RE-ORDERED, and the landing CASCADES
+
+**AMENDED 2026-09-13 by MOTIR-5216** (Story
+[MOTIR-5213](motir:cmtxm4uzd00ebhztxrhk7nfo3)). Two things change about this
+surface and nothing else: **which tab a reader lands on, and in what order the
+tabs sit.** No tab's content, row, column, pager, empty state or count treatment
+changes. The asset is revised in place — `workbench.mock.html` re-drawn and
+`workbench.png` re-exported — because the strip is ONE composition and a second
+drawing of it would be a second answer.
+
+### The strip ORDER
+
+**To approve · In progress · To do · Recently finished · Watching**, each tab's
+glyph travelling with it (`Inbox` · `CircleDot` · `Circle` · `CircleCheck` ·
+`Star`). § _The tab strip_'s table is re-drawn in that order. Every panel that
+draws the strip draws it in this order — panels 1–5, 7, 8 and the new panel B in
+`workbench.mock.html`, **and** the eight in situ strips in
+`approvals-row.mock.html`, whose rows (§ 20) are untouched: the strip there is
+composed from this asset, and leaving it in the old order would put two answers
+to one composition in the same folder.
+
+**The strip order and the cascade order are deliberately the SAME order** — the
+first three tabs are the three rungs, left to right. So the strip reads as an
+explanation of where the reader just landed, rather than as a menu to search.
+
+### THE LANDING CASCADE — a RESOLUTION, not a default (Panel B)
+
+> **`/workbench` with no `?tab=` resolves to: To approve** if its count is
+> non-zero → **else In progress** if its count is non-zero → **else To do.**
+
+Four properties, stated once so MOTIR-5217, MOTIR-5218 and MOTIR-5221 do not each
+decide them:
+
+1. **Three tabs only.** Recently finished and Watching are NEVER landed on.
+2. **To do is TERMINAL** — landed on even when its own count is 0. The cascade
+   always resolves; there is no fourth outcome and no blank page.
+3. **An explicit `?tab=` ALWAYS wins.** `?tab=approvals` renders To approve at 0,
+   with its empty state, because the reader asked. An unknown, misspelled or
+   hand-edited value is not an explicit choice: it falls into the cascade rather
+   than 404-ing (the shipped land-rather-than-404 rule, re-pointed).
+4. **The only input is the five counts the strip already reads**
+   (`HomeTabCountsDto`). The cascade asks no new question of the data.
+
+**How the bare path forwards — a redirect, or rendering in place — is
+MOTIR-5221's to implement.** The asset owes the RULE and draws the bare path as
+an entrance whose address bar ends on the resolved `?tab=`; it does not pick the
+mechanism.
+
+### EVERY TAB IS ADDRESSABLE, and `/workbench` is not one of the addresses
+
+| tab               | its one address                                        |
+| ----------------- | ------------------------------------------------------ |
+| To approve        | `/workbench?tab=approvals`                             |
+| In progress       | `/workbench?tab=in-progress`                           |
+| To do             | **`/workbench?tab=todo`** (new)                        |
+| Recently finished | `/workbench?tab=finished`                              |
+| Watching          | `/workbench?tab=watching`                              |
+| _the bare path_   | `/workbench` — **resolves and forwards; names no tab** |
+
+**This REPLACES the paramless-default convention; it does not bend it.** The
+shipped rule is _one canonical URL per tab_, implemented by spelling the default
+tab as the absence of `?tab=`. That implementation assumed the default was fixed.
+Under a cascade the paramless address names a different tab for different
+readers on different days — one spelling naming many views, which is the
+ambiguity the rule exists to forbid, arriving from the other direction. So the
+rule is kept by making it TOTAL: every tab carries its own `?tab=`, no tab has two
+spellings, and the special case is gone. `?page=` is unaffected — page 1 is
+still the absence of that param.
+
+### Panel 5 is now the cascade's TERMINAL — the verdict
+
+Panel 5 drew the all-empty page as a rare state a new reader found by looking.
+After this change it is **exactly what a brand-new member is landed on,
+immediately after sign-in, on the To do tab**: every count is 0, rungs 1 and 2
+fall through, and rung 3 is terminal.
+
+**Verdict: To do's shipped empty state STANDS as the landing.** It is the one
+empty state of the five that carries a way forward (_Find something to start_ →
+`/ready`), which is the best thing a first screen with nothing on it can offer.
+The count suppression stands too: five `0`s on a first screen are still five
+numbers to discard.
+
+**The panel is REDRAWN, and that is a correction to the drawing, not a change to
+the state.** It drew _"Nothing is waiting on you"_ under a `CircleCheck` glyph — a
+pre-split empty that no tab renders, and the very phrase MOTIR-2758 was filed
+against. It now draws what `EmptyTab` renders for To do on `origin/main`: the
+`Circle` glyph, _Nothing to start_, the shipped body and the `/ready` action. In
+the same pass the body lines of Panel 6's To do, In progress, Recently finished
+and To approve empty states were brought into agreement with the shipped
+`workbench.empty.*` catalog they had drifted from. Titles, glyphs and actions
+were already correct; no state gains or loses anything.
+
+### The five EMPTY STATES are UNCHANGED — and the To-approve door is DROPPED
+
+An earlier cut of this work drew **a door from the To-approve empty state to To
+do**, because landing on _"Nothing is waiting on your approval"_ with nowhere to
+go is a dead end. **The cascade removes that dead end at the root, so the door is
+not drawn.** A reader now reaches an empty To approve only by asking for it, and
+§ _Empty states_' decision — three of the five carry no action, _"because nothing
+a reader can press conjures an approval"_ — stands untouched. Verified on
+`origin/main`: `EmptyTab` gives To do a `/ready` link and In progress a To-do
+link, and the other three nothing. Named here so the next reader does not read
+the absence as an oversight.
+
+### Narrow (`< md`) — unchanged
+
+§ _Narrow: the strip SCROLLS_ measured a **386px** content box against **662px**
+of track. A re-order moves neither number, so the scroll verdict stands. The one
+thing that changes: the landed-on tab is always among the first three, so the
+browser rarely has to scroll it into view.
+
+### COMPOSITION boundary — what this amendment does not redraw
+
+- **Panel A owns the ACCESS PATH.** The rail row and `AUTHED_LANDING_PATH` still
+  name `/workbench`; they now reach a resolver rather than a fixed tab. Composed,
+  not redrawn.
+- **§ 20 owns the To-approve ROWS** (`approvals-row.mock.html`). Its strip is
+  re-ordered; its rows, disclosure and states are not touched, and neither is the
+  disclosure-vs-overlay question, which is MOTIR-5214's own amendment.
+- **`design/work-items/approval-control.mock.html` owns the FRAME.** Not this
+  area's; not touched.
+- **Every tab's CONTENT** — columns, the `< md` row collapse, the Watching bands,
+  the Finished column and caption, the pager and its five states — composed
+  unchanged.
+
+### GIVES / TAKES — every card this amendment names
+
+Scope as § _The MOTIR-4851 revision's own sweep_ sets it: every `MOTIR-<n>` this
+section and the mock's new annotation prose name, plus MOTIR-5213's whole subtree.
+
+| card                                  | GIVES                                                                                                                                                      | TAKES                                                                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5217** (the order)            | The ORDER and the per-tab glyph assignment — nothing else. It changes no address and no landing.                                                           | Nothing.                                                                                                    |
+| **MOTIR-5218** (the addresses)        | The six-row address table: all five `?tab=` spellings including `todo`, and the statement that `/workbench` is no longer a tab address.                    | Nothing.                                                                                                    |
+| **MOTIR-5221** (the resolver)         | The cascade's ORDER, its THREE-tab scope, its TERMINAL, the explicit-`?tab=`-wins rule and unknown-value-falls-in — the rule, stated once.                 | **The mechanism is its own** — redirect or render in place. The asset draws where the reader ends, not how. |
+| **MOTIR-5219** (the vitest gate)      | The invariants a percentage cannot see: one address per tab, none for the bare path, and a cascade total over every count combination.                     | Nothing.                                                                                                    |
+| **MOTIR-5220** (the E2E + video)      | The walk: land on To approve, then In progress, then To do; ask for an empty tab by address. Panel B's five frames are its five beats.                     | Nothing.                                                                                                    |
+| **MOTIR-5213** (the story)            | Its acceptance criteria, drawn.                                                                                                                            | Nothing.                                                                                                    |
+| **MOTIR-4879 / MOTIR-4794** (the tab) | Nothing new. The To-approve COUNT the cascade's first rung reads is theirs, as shipped.                                                                    | **Nothing from § 20's row decision** — the rows, the disclosure and every state are composed as drawn.      |
+| **MOTIR-5214** (decide full screen)   | Nothing. What a row does when pressed is its own; this amendment is correct whether a row opens in place or full screen.                                   | Nothing.                                                                                                    |
+| **MOTIR-4777 / MOTIR-4851** (`done`)  | Nothing. The strip, empty states and pager they drew are composed; the paramless-default convention they carried is REPLACED going forward, not re-opened. | Nothing.                                                                                                    |
+| **MOTIR-2758**                        | Nothing — cited for the phrase Panel 5's old drawing repeated.                                                                                             | Nothing.                                                                                                    |
+| **MOTIR-4908 / MOTIR-5238**           | Nothing — boundaries this amendment does not cross (the pending indicator; the live strip).                                                                | Nothing.                                                                                                    |
+
+---
+
+## 22 · The approval OVERLAY — MOTIR-5222
 
 **AMENDED by MOTIR-5222** (Story [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u))
 with the surface § 20's row now opens: **an approval decided full screen, over the

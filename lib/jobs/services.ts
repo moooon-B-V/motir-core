@@ -1,4 +1,5 @@
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
+import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -105,6 +106,9 @@ export const jobServices = {
   // log-body retention window, and the reap that closes a run nothing is
   // holding. One service because they share a cadence and a tenancy shape.
   dispatchRunSweep: dispatchRunSweepService,
+  // The open-delivery reconcile (MOTIR-5390): re-reads open, delivering pull
+  // requests from GitHub and replays a close whose webhook delivery was lost.
+  pullRequestReconcile: pullRequestReconcileService,
 };
 
 export type JobServices = typeof jobServices;
