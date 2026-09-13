@@ -583,6 +583,10 @@ export const githubWebhookService = {
           await ciAllowanceService.chargeForMeteredRun({
             organizationId: result.organizationId,
             periodStart: result.periodStart,
+            // ⚠️ LOAD-BEARING since MOTIR-5283: the meter now RECORDS a meta
+            // org's run, so this flag is the only thing standing between those
+            // minutes and a charge (`code-graph-index-fleet.md` §20).
+            isMeta: result.isMeta,
           });
         } catch (err) {
           console.error('[githubWebhookService] CI-overage charge failed; delivery acked', {

@@ -4,6 +4,7 @@ import { plansService } from '@/lib/services/plansService';
 import { planReviewService } from '@/lib/services/planReviewService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -2245,5 +2246,204 @@ describe('planReviewService — the committed edges a proposal BRINGS', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     expect(review.items[0]!.committedBlockedBy).toEqual([]);
+  });
+});
+
+// ── THE NAMING STUBS (bug MOTIR-5387) ───────────────────────────────────────
+//
+// The edge carriers name a blocker by node id, which is all a within-level arrow
+// needs. A blocker on ANOTHER level is drawn with the roadmap's off-level
+// treatment — a ghost anchor NAMING it — and before approve nothing on the review
+// model could name it, so the canvas drew no edge, no anchor and no flag. The
+// stub is what an anchor needs, and `parentNodeId` is where the blocker will SIT,
+// which is how the canvas tells "off this level" from "a member it did not read".
+describe('planReviewService — the blockers a proposal names, NAMED', () => {
+  it('names a COMMITTED blocker under another story — key, title, doneness and parent', async () => {
+    const fx = await makeWorkItemFixture();
+    const here = await seedChild(fx, 'story', 'The story the card lands in');
+    const there = await seedChild(fx, 'story', 'Another story');
+    const blocker = await seedChild(fx, 'task', 'The blocker elsewhere', there.id);
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Cross-story' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          parentRef: here.id,
+          blockedByRefs: [blocker.id],
+          proposedFields: { title: 'The new card' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.blockerStubs).toEqual([
+      {
+        nodeId: blocker.id,
+        identifier: blocker.identifier,
+        title: 'The blocker elsewhere',
+        isDone: true,
+        parentNodeId: there.id,
+      },
+    ]);
+  });
+
+  it('names a blocker that is itself a PROPOSAL — no key, its proposed title, the parent the plan gives it', async () => {
+    const fx = await makeWorkItemFixture();
+    const here = await seedChild(fx, 'story', 'Here');
+    const there = await seedChild(fx, 'story', 'There');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Two new cards' }, fx.ctx);
+    const afterFirst = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: there.id, proposedFields: { title: 'A card the plan adds there' } }],
+      fx.ctx,
+    );
+    const firstId = afterFirst.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          parentRef: here.id,
+          blockedByRefs: [`planItem:${firstId}`],
+          proposedFields: { title: 'A card it blocks here' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const blocked = review.items.find((i) => i.planItemId !== firstId)!;
+    expect(blocked.blockerStubs).toEqual([
+      {
+        nodeId: firstId,
+        identifier: null,
+        title: 'A card the plan adds there',
+        isDone: false,
+        parentNodeId: there.id,
+      },
+    ]);
+  });
+
+  it('names the blocker a MODIFY adds through `patch.blockedByAdd`', async () => {
+    const fx = await makeWorkItemFixture();
+    const here = await seedChild(fx, 'story', 'Here');
+    const there = await seedChild(fx, 'story', 'There');
+    const target = await seedChild(fx, 'task', 'The card being amended', here.id);
+    const blocker = await seedChild(fx, 'task', 'Its new blocker', there.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Add an edge' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { blockedByAdd: [blocker.id] } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.blockerStubs).toEqual([
+      {
+        nodeId: blocker.id,
+        identifier: blocker.identifier,
+        title: 'Its new blocker',
+        isDone: false,
+        parentNodeId: there.id,
+      },
+    ]);
+  });
+
+  it('names a COMMITTED edge’s blocker at the level the plan MOVES it to', async () => {
+    // MOTIR-4951's fixture: both cards re-parented onto the epic, one blocked by
+    // the other. The blocker's stub reports its DESTINATION, or the canvas would
+    // call a card the plan puts beside the dependent "blocked elsewhere".
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'Approval gates');
+    const design = await seedChild(fx, 'task', 'Design the acceptance-video gate');
+    const build = await seedChild(fx, 'task', 'The per-project switch');
+    await workItemsService.linkWorkItems(
+      { fromId: build.id, toId: design.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Adopt the pair' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: design.id, patch: { parentRef: epic.id } },
+        { op: 'modify', workItemId: build.id, patch: { parentRef: epic.id } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const blocked = review.items.find((i) => i.nodeId === build.id)!;
+    expect(blocked.blockerStubs).toEqual([
+      {
+        nodeId: design.id,
+        identifier: design.identifier,
+        title: 'Design the acceptance-video gate',
+        isDone: false,
+        parentNodeId: epic.id,
+      },
+    ]);
+  });
+
+  it('adds NO read — the stubs ride the batched row read, however many blockers the plan names', async () => {
+    const fx = await makeWorkItemFixture();
+    const here = await seedChild(fx, 'story', 'Here');
+    const there = await seedChild(fx, 'story', 'There');
+    const blockers = [
+      await seedChild(fx, 'task', 'B1', there.id),
+      await seedChild(fx, 'task', 'B2', there.id),
+      await seedChild(fx, 'task', 'B3', there.id),
+    ];
+    const planBlockedBy = async (refs: string[][]) => {
+      const plan = await plansService.createPlan(fx.projectId, { title: 'Blocked' }, fx.ctx);
+      await plansService.addProposals(
+        plan.id,
+        refs.map((blockedByRefs, n) => ({
+          op: 'add' as const,
+          parentRef: here.id,
+          blockedByRefs,
+          proposedFields: { title: `Card ${n}` },
+        })),
+        fx.ctx,
+      );
+      await plansService.markPlanned(plan.id, fx.ctx);
+      return plan.id;
+    };
+    const unblocked = await planBlockedBy([[]]);
+    const threeBlocked = await planBlockedBy(blockers.map((b) => [b.id]));
+
+    // Pass-through counters, never mocks: the reads still hit the real database.
+    const rowReads = vi.spyOn(workItemRepository, 'findByIdsInWorkspace');
+    const edgeReads = vi.spyOn(workItemLinkRepository, 'findBlockerEdgesForItems');
+
+    await planReviewService.getPlanReview(unblocked, fx.ctx);
+    const rowsForNone = rowReads.mock.calls.length;
+    const edgesForNone = edgeReads.mock.calls.length;
+    // The counters must be able to go RED.
+    expect(rowsForNone).toBeGreaterThanOrEqual(1);
+    rowReads.mockClear();
+    edgeReads.mockClear();
+
+    const review = await planReviewService.getPlanReview(threeBlocked, fx.ctx);
+    expect(rowReads.mock.calls.length).toBe(rowsForNone);
+    expect(edgeReads.mock.calls.length).toBe(edgesForNone);
+    rowReads.mockRestore();
+    edgeReads.mockRestore();
+
+    expect(review.items.flatMap((i) => i.blockerStubs.map((s) => s.title)).sort()).toEqual([
+      'B1',
+      'B2',
+      'B3',
+    ]);
   });
 });

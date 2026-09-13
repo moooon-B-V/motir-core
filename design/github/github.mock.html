@@ -114,6 +114,16 @@
       reachable through `See every repository in {org}`, explicitly as
       navigation rather than as a provenance footer for rows the page drew.
 
+      ══ AMENDMENT — MOTIR-5327 (Story MOTIR-4906), 2026-09-13 ══
+      THE DEVELOPMENT BLOCK IS THE ONE GATE, approve to merge the pull requests.
+        (12a–12o) the item page's Development card holds the pull-request rows
+            (derived, §19) AND the run's HOW TO TEST — rich text (bodyMd) whose
+            every fenced code block has a click-to-copy control, plus what Motir
+            derives per repository (preview · branch fetch · checks). With an
+            awaiting gate the block IS ApprovalGateControl's frame (12c), one
+            frame and one Approve and merge for all the run target's pull
+            requests. States 12d–12m, narrow 12n (the fixed row MOTIR-5351
+            builds to), dark 12o. No overlay, no full-screen view.
       Toggle data-theme="dark" on <html> to confirm token parity. Full spec,
       copy strings, and per-element --el-* roles in design-notes.md.
     -->
@@ -2259,6 +2269,686 @@
         color: var(--el-text);
         font-weight: 600;
       }
+
+      /* ══ THE DEVELOPMENT BLOCK — pull-request rows + the run's HOW TO TEST, ONE section card,
+         ONE gate (MOTIR-5327, 2026-09-13) ═══════════════════════════════════════════════════
+         The rows above are unchanged and still DERIVED (§19). Everything below is NEW, so it is
+         not derived from a component yet — each rule carries the class string MOTIR-5336 builds
+         it from, directly above it, so the component and this asset are a string diff from the
+         first commit. Inks: --el-text / --el-text-secondary / --el-text-identifier only, because
+         the block renders on --el-card (the section card) AND on --el-surface (the frame's port),
+         and --el-text-muted fails AA on the second. ───────────────────────────────────────── */
+
+      /* class="font-mono" */
+      .dvb-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+      }
+
+      /* the How to test PART of the block — below the rows, inside the same card
+         class="mt-4 flex flex-col gap-3 border-t border-(--el-border-soft) pt-4" */
+      .dvb-htt {
+        margin-top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 16px;
+        min-width: 0;
+      }
+      /* the part's head: a SUB-heading of the Development card, never a section header
+         class="flex flex-wrap items-baseline gap-x-2 gap-y-1" */
+      .dvb-htt-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 8px;
+      }
+      /* class="text-[13px] font-semibold text-(--el-text)" — an <h4> */
+      .dvb-htt-title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* class="text-xs text-(--el-text-secondary)" */
+      .dvb-htt-by {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* class="font-medium text-(--el-text)" */
+      .dvb-htt-by b {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      /* the rows' caption, re-inked: the shipped caption is --el-text-muted, which fails AA on the
+         port's --el-surface (4.17:1). class="mt-3 font-sans text-xs text-(--el-text-secondary)" */
+      .dvb-caption {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* STALE / RECORD MISSING — a callout at the head of the part
+         class="flex items-start gap-2.5 rounded-(--radius-card) px-3 py-2.5 text-[13px] leading-normal" */
+      .dvb-callout {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      /* class="mt-0.5 h-4 w-4 shrink-0" */
+      .dvb-callout svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+      }
+      /* stale — class="bg-(--el-warning-surface) text-(--el-text-strong)" (tint + strong ink, #35) */
+      .dvb-callout-stale {
+        background: var(--el-warning-surface);
+        color: var(--el-text-strong);
+      }
+      /* record missing — class="bg-(--el-callout-bg) text-(--el-callout-text)"; lavender, NOT a pill,
+         so it can never be read as a repository's "No preview reported" */
+      .dvb-callout-missing {
+        background: var(--el-callout-bg);
+        color: var(--el-callout-text);
+      }
+      /* class="font-semibold" */
+      .dvb-callout b {
+        font-weight: 600;
+      }
+      /* class="font-mono text-xs" */
+      .dvb-sha {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12px;
+      }
+
+      /* THE BODY — the agent's `bodyMd`, through the ONE render stack (MarkdownView → renderMarkdown).
+         The component renders <MarkdownView className="…"> (which adds `wmde-markdown motir-prose`); the
+         board carries only `dvb-md`, restating the prose rules it needs, with the block scaling
+         the agent's `##` sections down to sub-headings of the card.
+         class="motir-prose text-[13px] [&_h2]:text-[12.5px] [&_h2]:font-semibold …" */
+      .dvb-md {
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .dvb-md > * + * {
+        margin-top: 0.6em;
+      }
+      /* an agent-written section heading — class="[&_h2]:text-[12.5px] [&_h2]:font-semibold
+         [&_h2]:uppercase [&_h2]:tracking-[0.04em] [&_h2]:text-(--el-text-secondary) [&_h2]:mt-4" */
+      .dvb-md h2 {
+        margin: 16px 0 0;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      /* class="[&_h2:first-child]:mt-0" */
+      .dvb-md h2:first-child {
+        margin-top: 0;
+      }
+      .dvb-md p {
+        margin-bottom: 0;
+      }
+      /* .motir-prose ol / ul — shipped */
+      .dvb-md ol,
+      .dvb-md ul {
+        margin-bottom: 0;
+        padding-left: 1.5rem;
+      }
+      .dvb-md ol {
+        list-style: decimal;
+      }
+      .dvb-md ul {
+        list-style: disc;
+      }
+      .dvb-md li + li {
+        margin-top: 2px;
+      }
+      /* .motir-prose strong — shipped */
+      .dvb-md strong {
+        font-weight: 600;
+      }
+      /* .motir-prose code — shipped, re-inked for the port: class="bg-(--el-code-bg) text-(--el-code-text)" */
+      .dvb-md code {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.85em;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: 0.1em 0.35em;
+        border-radius: var(--radius-control);
+      }
+
+      /* THE CODE BLOCK — every fenced block, via a `pre` override in renderMarkdown's components
+         (opt-in `copyableCode`, so no other Markdown surface changes). A bar ABOVE the code holds
+         the language and the copy control, so the control never sits on top of a command that
+         scrolls sideways.
+         class="my-2 overflow-hidden rounded-(--radius-input) border border-(--el-border) bg-(--el-surface)" */
+      .dvb-code {
+        margin: 8px 0 0;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        min-width: 0;
+      }
+      /* the port is --el-surface too, so inside it the block lifts to --el-card
+         class="[[data-port]_&]:bg-(--el-card)" */
+      .dvb-in-port .dvb-code {
+        background: var(--el-card);
+      }
+      /* class="flex min-h-7 items-center justify-between gap-2 border-b border-(--el-border-soft)
+                bg-(--el-surface-soft) pl-(--spacing-control-x) pr-1" */
+      .dvb-code-bar {
+        display: flex;
+        min-height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 0 4px 0 var(--spacing-control-x);
+      }
+      /* the fence's language AS WRITTEN — class="font-mono text-[11px] text-(--el-text-secondary)" */
+      .dvb-code-lang {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      /* class="m-0 overflow-x-auto whitespace-pre px-(--spacing-input-x) py-(--spacing-input-y)
+                font-mono text-xs leading-relaxed text-(--el-code-text)" */
+      .dvb-code pre {
+        margin: 0;
+        overflow-x: auto;
+        white-space: pre;
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12px;
+        line-height: 1.65;
+        color: var(--el-code-text);
+      }
+      /* the COPY control — Button variant=ghost size=sm, icon + label
+         class="inline-flex h-6 items-center gap-1 rounded-(--radius-control) px-(--spacing-control-x)
+                text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted) hover:text-(--el-text)
+                focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)" */
+      .dvb-copy {
+        display: inline-flex;
+        height: 24px;
+        align-items: center;
+        gap: 4px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        padding: 0 var(--spacing-control-x);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .dvb-copy:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      /* MOCK-ONLY: a board cannot hover, so the hover is drawn as a class */
+      .dvb-copy.is-hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      /* COPIED, for 2s — class="bg-(--el-tint-mint) text-(--el-text-strong)" (aria-live="polite") */
+      .dvb-copy.is-copied {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      /* class="h-3.5 w-3.5" */
+      .dvb-copy svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* WHAT MOTIR DERIVES, per repository — beside the body, never written by the agent
+         class="flex flex-col gap-2" */
+      .dvb-repos {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      /* class="min-w-0 rounded-(--radius-control) border border-(--el-border) bg-(--el-card)
+                px-(--spacing-control-x) py-(--spacing-control-y)" */
+      .dvb-repo {
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      /* two or more repositories only — headed by the SAME string its pull-request row's meta line
+         carries. class="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 pb-1" */
+      .dvb-repo-head {
+        display: flex;
+        min-height: 28px;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+        padding-bottom: 4px;
+      }
+      /* class="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" */
+      .dvb-repo-head > svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      /* class="font-sans text-xs font-medium text-(--el-text-identifier)" */
+      .dvb-repo-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-identifier);
+      }
+      /* class="ml-auto" */
+      .dvb-repo-end {
+        margin-left: auto;
+      }
+      /* ONE fact — In the preview · Locally · What CI proved
+         class="border-t border-(--el-border-soft) py-1.5 first:border-t-0" */
+      .dvb-fact {
+        border-top: 1px solid var(--el-border-soft);
+        padding: 6px 0;
+      }
+      .dvb-fact-first {
+        border-top: 0;
+      }
+      /* class="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1" */
+      .dvb-fact-line {
+        display: flex;
+        min-height: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+      }
+      /* class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-(--el-text)" */
+      .dvb-fact-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* class="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" */
+      .dvb-fact-label svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      /* class="ml-auto inline-flex flex-wrap items-center justify-end gap-1.5 text-xs text-(--el-text-secondary)" */
+      .dvb-fact-val {
+        margin-left: auto;
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* class="mt-1 pl-5 text-[12.5px] leading-normal text-(--el-text-secondary)" */
+      .dvb-fact-body {
+        margin: 4px 0 0;
+        padding-left: 20px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      /* the fact's own code block sits under its label — class="ml-5" */
+      .dvb-fact .dvb-code {
+        margin: 4px 0 0 20px;
+      }
+      /* the preview URL — the APP, in a new tab; never the diff
+         class="mt-1 ml-5 flex min-w-0 items-center gap-1 text-[12.5px] text-(--el-link) underline" */
+      .dvb-url {
+        margin: 4px 0 0 20px;
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 4px;
+        font-size: 12.5px;
+        color: var(--el-link);
+        text-decoration: underline;
+      }
+      /* class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" */
+      .dvb-url-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* class="h-3.5 w-3.5 shrink-0" */
+      .dvb-url svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      /* check rows — class="mt-1 ml-5 flex flex-col gap-1" */
+      .dvb-checks {
+        margin: 4px 0 0 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      /* class="flex min-w-0 items-center gap-2" */
+      .dvb-check {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      /* class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs
+                text-(--el-text-identifier)" */
+      .dvb-check-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+
+      /* EARLIER RUNS — a real <button aria-expanded="false">, collapsed by default
+         class="flex w-full items-center gap-1.5 rounded-(--radius-control) px-1 py-1 text-left
+                text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted)" */
+      .dvb-disclose {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        padding: 4px;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: left;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .dvb-disclose:hover {
+        background: var(--el-muted);
+      }
+      /* class="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" */
+      .dvb-disclose svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+
+      /* THE CHILD POINTER — one line in place of How to test
+         class="mt-4 flex flex-wrap items-center gap-2 border-t border-(--el-border-soft) pt-3
+                text-[13px] text-(--el-text-secondary)" */
+      .dvb-pointer {
+        margin-top: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 12px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      /* class="h-4 w-4 shrink-0 text-(--el-icon-muted)" */
+      .dvb-pointer > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      /* the target, BY KEY — class="font-mono text-(--el-link) underline" */
+      .dvb-keylink {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12.5px;
+        color: var(--el-link);
+        text-decoration: underline;
+      }
+
+      /* ── THE NARROW ROW — drawn for MOTIR-5351 to build to (Panel 12n) ───────────────────────
+         NOT a change to the derived `.pr-row` above: this is the row that bug's component change
+         produces, drawn so the fix and the asset land together per §19. Below a 30rem container the
+         row WRAPS: glyph · title · link-out stay on line 1, the pill group drops to line 2 under the
+         title. The title then keeps the whole first line instead of one or two characters.
+         class="@container … @max-[30rem]:flex-wrap @max-[30rem]:gap-y-1" */
+      .pr-row.dvb-row-narrow {
+        flex-wrap: wrap;
+        row-gap: 2px;
+      }
+      /* class="@max-[30rem]:order-last @max-[30rem]:basis-full @max-[30rem]:flex-wrap
+                @max-[30rem]:pl-[27px] @max-[30rem]:pb-1" */
+      .pr-row.dvb-row-narrow .pr-states {
+        order: 3;
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        padding-left: 27px;
+        padding-bottom: 4px;
+      }
+      /* class="@max-[30rem]:order-2" */
+      .pr-row.dvb-row-narrow .ext {
+        order: 2;
+      }
+
+      /* ── AwaitingRepoRow, for Panel 12l — DERIVED from `AwaitingRepoRow` in
+         components/github/DevelopmentSection.tsx exactly as §19 derives `.pr-row`. It is the SAME row
+         grammar with three differences, each quoted from the component. ── */
+      /* class="… border border-dashed border-(--el-border) bg-(--el-surface-soft) …" */
+      .pr-row.dvb-awaiting {
+        border-style: dashed;
+        background: var(--el-surface-soft);
+      }
+      /* class="truncate font-sans text-[13.5px] font-medium text-(--el-text-secondary)" */
+      .pr-row .dvb-awaiting-title {
+        color: var(--el-text-secondary);
+      }
+      /* class="w-6 shrink-0" aria-hidden — keeps the pill column aligned with the link-out rows */
+      .dvb-ext-spacer {
+        width: 24px;
+        flex: none;
+      }
+
+      /* ── THE FRAME, composed — `ApprovalGateControl`'s three bands exactly as
+         design/work-items/approval-control.mock.html draws them (.frame/.frameHead/.port/
+         .frameFoot), re-declared under `af-` names so they cannot collide with this board's
+         own `.pill`. Nothing here is a new band. ─────────────────────────────────────────────── */
+      .af-frame {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .af-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .af-what {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .af-kind {
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .af-meta {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .af-port {
+        position: relative;
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+        min-height: 196px;
+        max-height: 34rem;
+        overflow: auto;
+        padding: 14px;
+      }
+      /* PortBox's Expand row — IN FLOW, sticky at the top of the port, as the shipped
+         component renders it (class="pointer-events-none sticky top-0 z-10 flex justify-end") */
+      .af-expand-bar {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 4px;
+      }
+      .af-expand {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .af-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+      }
+      .af-why {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+      }
+      .af-verbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .af-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .af-btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .af-btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .af-pill-await {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        flex: none;
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .af-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+      }
+      /* board layout: two columns of 590px panels in the 1240px board; the wrapper carries the width
+         so a long panel label wraps instead of widening its column */
+      .dvb-col {
+        width: 590px;
+      }
+      .dvb-col-wide {
+        width: 1220px;
+      }
+      .dvb-col-narrow {
+        width: 400px;
+      }
+      .dvb-col .panel,
+      .dvb-col-wide .panel,
+      .dvb-col-narrow .panel {
+        width: 100%;
+      }
+      .dvb-grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding: var(--spacing-card-padding);
+      }
+      .dvb-grid2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: var(--spacing-card-padding);
+      }
+      .dvb-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: var(--spacing-card-padding);
+      }
+      .dvb-stack > .dvb-htt:first-child {
+        margin-top: 0;
+        border-top: 0;
+        padding-top: 0;
+      }
+      /* a nested dark board re-inherits no ink from <body>, so it states its own */
+      .panel[data-appearance-scope] {
+        color: var(--el-text);
+      }
+      .dvb-cap {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
     </style>
   </head>
   <body>
@@ -2894,6 +3584,210 @@
             d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
           />
           <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <!-- lucide `copy` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/copy.mjs), not hand-typed.
+             The fenced code block's click-to-copy control, at rest and hovered. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </symbol>
+
+        <!-- lucide `check` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/check.mjs), not hand-typed.
+             The copy control's COPIED state. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-check-plain"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </symbol>
+
+        <!-- lucide `circle-slash` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/circle-slash.mjs), not hand-typed.
+             The preview state inactive. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-circle-slash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="9" x2="15" y1="15" y2="9" />
+        </symbol>
+
+        <!-- lucide `ban` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/ban.mjs), not hand-typed.
+             The preview state canceled. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-ban"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M4.929 4.929 19.07 19.071" />
+        </symbol>
+
+        <!-- lucide `circle-dashed` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/circle-dashed.mjs), not hand-typed.
+             Nothing reported (no deployment, no checks); the same CircleDashed AwaitingRepoRow imports. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-circle-dashed"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.1 2.182a10 10 0 0 1 3.8 0" />
+          <path d="M13.9 21.818a10 10 0 0 1-3.8 0" />
+          <path d="M17.609 3.721a10 10 0 0 1 2.69 2.7" />
+          <path d="M2.182 13.9a10 10 0 0 1 0-3.8" />
+          <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69" />
+          <path d="M21.818 10.1a10 10 0 0 1 0 3.8" />
+          <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69" />
+          <path d="M6.391 20.279a10 10 0 0 1-2.69-2.7" />
+        </symbol>
+
+        <!-- lucide `circle-minus` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/circle-minus.mjs), not hand-typed.
+             A neutral check conclusion, and a repository with no section in the record. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-circle-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12h8" />
+        </symbol>
+
+        <!-- lucide `globe` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/globe.mjs), not hand-typed.
+             The In the preview fact. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-globe"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+          <path d="M2 12h20" />
+        </symbol>
+
+        <!-- lucide `terminal` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/terminal.mjs), not hand-typed.
+             The Locally fact (the branch fetch). (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-terminal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 19h8" />
+          <path d="m4 17 6-6-6-6" />
+        </symbol>
+
+        <!-- lucide `list-checks` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/list-checks.mjs), not hand-typed.
+             The What CI proved fact. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-list-checks"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M13 5h8" />
+          <path d="M13 12h8" />
+          <path d="M13 19h8" />
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+        </symbol>
+
+        <!-- lucide `history` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/history.mjs), not hand-typed.
+             STALE: the record was written for an earlier commit. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-history"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l4 2" />
+        </symbol>
+
+        <!-- lucide `file-question-mark` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/file-question-mark.mjs), not hand-typed.
+             RECORD MISSING: no run has written how to test this item. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-file-question"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path d="M12 17h.01" />
+          <path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3" />
+        </symbol>
+
+        <!-- lucide `corner-left-up` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/corner-left-up.mjs), not hand-typed.
+             The CHILD POINTER: tested as part of the run target. (MOTIR-5327) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-corner-left-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M14 9 9 4 4 9" />
+          <path d="M20 20h-7a4 4 0 0 1-4-4V4" />
         </symbol>
       </defs>
     </svg>
@@ -4520,6 +5414,2920 @@
           No search field and no empty organisation list: there is nothing to search. The one
           available next action stays inside the picker and returns with both the organisation
           connection and this project's link established.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         AMENDMENT — MOTIR-5327 (Story MOTIR-4906), 2026-09-13.
+         THE DEVELOPMENT BLOCK IS THE ONE GATE — approve to merge the pull requests.
+         Its content is the pull-request rows PLUS the run's HOW TO TEST, in ONE section
+         card; when the gate is awaiting, the block IS the universal approval frame
+         (ApprovalGateControl), exactly as DesignResultSection is for a design decision.
+         The rows stay DERIVED (§19). No overlay and no full-screen view is drawn —
+         that is MOTIR-5214 / MOTIR-5215's, for every gate. Spec: design-notes.md §20.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="review-head">
+      <p>
+        <b
+          >AMENDED — MOTIR-5327 (Story MOTIR-4906), 2026-09-13: the Development block is the ONE
+          approve-to-merge gate.</b
+        >
+        Panels 12a&ndash;12o draw the item page&rsquo;s Development card holding the pull-request
+        rows <b>and</b> the run&rsquo;s <b>How to test</b> — rich text with click-to-copy commands,
+        plus what Motir derives per repository — in one card. With an awaiting gate the block IS
+        <span class="mono">ApprovalGateControl</span>&rsquo;s frame: the block is band 2, and band 3
+        is MOTIR-4909&rsquo;s <b>Approve and merge</b>. How to test is that gate&rsquo;s evidence:
+        no section, no verb, no approval of its own.
+      </p>
+    </div>
+    <div class="panel-board">
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12a · the <b>Development block</b> before the gate can be raised — ONE section card:
+          the pull-request row, then the run&rsquo;s <b>How to test</b> in the same card. Single
+          repository, so <b>no repository sub-heading</b>
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-31</div>
+            <div class="detail-title">Rate-limit the public API</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Written by <b>Dispatch run #512</b> · 12 Sep 2026, 17:48</span
+                  >
+                </div>
+                <div class="dvb-md">
+                  <h2>Precondition</h2>
+                  <p>
+                    The seed creates <strong>ada@acme.test</strong>, a workspace admin, and an API
+                    key for her.
+                  </p>
+                  <h2>Set up</h2>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                    >
+                  </div>
+                  <h2>Click-path</h2>
+                  <ol>
+                    <li>Sign in as <strong>ada@acme.test</strong>.</li>
+                    <li>Open <strong>Settings → API keys</strong> and copy the seeded key.</li>
+                    <li>
+                      Send 61 requests with it — the 61st answers <code>429</code> with a
+                      <code>Retry-After</code> header.
+                    </li>
+                  </ol>
+                </div>
+                <div class="dvb-repos">
+                  <div class="dvb-repo" role="group">
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                          ></span
+                        >
+                      </div>
+                      <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                        ><span class="dvb-url-text"
+                          >https://pr-131.motir-core.preview.moooon.dev/settings/api-keys</span
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-31-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-31-rate-limit&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">typecheck</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">vitest (shard 1/4)</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button class="dvb-disclose" type="button" aria-expanded="false">
+                  <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (1)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <b>This is today&rsquo;s state for every card</b>, because the approve-and-merge gate is
+          not registered until MOTIR-4909. The block renders exactly as the port content will, so
+          nothing moves when the gate arrives. The row is the derived
+          <span class="mono">.pr-row</span>, unchanged (§19). <b>Written by</b> names the run; the
+          body is the agent&rsquo;s <span class="mono">bodyMd</span>; the bordered sub-block beneath
+          it is what Motir derives — the preview, the branch fetch, the checks.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12b · two repositories — two rows, ONE How to test. Each repository sub-block is
+          headed by the <b>same string its row&rsquo;s meta line carries</b>, so the two read
+          together
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-12</div>
+            <div class="detail-title">Throttle the public API end to end</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                  >
+                </div>
+                <div class="dvb-md">
+                  <h2>Precondition</h2>
+                  <p>
+                    Run <strong>both</strong> repositories. The gateway reads
+                    <code>CORE_URL=http://localhost:3000</code> from its <code>.env.example</code>,
+                    and the seed creates <strong>ada@acme.test</strong>, a workspace admin.
+                  </p>
+                  <h2>Set up</h2>
+                  <p>In each repository:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                    >
+                  </div>
+                  <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                    >
+                  </div>
+                  <h2>Click-path</h2>
+                  <ol>
+                    <li>
+                      Sign in as <strong>ada@acme.test</strong> and open
+                      <strong>Settings → API keys</strong>.
+                    </li>
+                    <li>
+                      Run the second command above with that key — the 61st request answers
+                      <code>429</code>.
+                    </li>
+                    <li>
+                      Open <strong>Settings → Usage</strong> and see the throttled requests counted.
+                    </li>
+                  </ol>
+                </div>
+                <div class="dvb-repos">
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-core · #131</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                          ></span
+                        >
+                      </div>
+                      <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                        ><span class="dvb-url-text"
+                          >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">typecheck</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">vitest (shard 1/4)</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway · #57">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-gateway · #57</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-peach"
+                            ><svg aria-hidden="true"><use href="#i-dots" /></svg>Deploying</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        The preview deployment for this head is deploying. Its link appears here
+                        when it succeeds.
+                      </p>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;acme-12-throttle-v1&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>2 of 3 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">e2e (chromium)</span
+                          ><span class="pill pill-peach"
+                            ><svg aria-hidden="true"><use href="#i-dots" /></svg>Running</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button class="dvb-disclose" type="button" aria-expanded="false">
+                  <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The agent writes the body once for the whole run; the repository sub-blocks are
+          Motir&rsquo;s, one per repository in the record, in the record&rsquo;s order.
+          <b>The only links to the diff are the rows&rsquo; own link-outs.</b> The preview URL opens
+          the running app, not the pull request.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12c · the Development block WITH the awaiting <b>approve-and-merge</b> gate — it IS
+          the universal frame, exactly as Design result is.
+          <b>ONE frame, ONE Approve and merge</b> for both pull requests
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-12</div>
+            <div class="detail-title">Throttle the public API end to end</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="af-frame">
+                <div class="af-head">
+                  <div class="af-what">
+                    <span class="af-kind">Pull requests</span
+                    ><span class="af-meta">2 pull requests · delivered by Parent run #318</span>
+                  </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Rate-limit the public API per key</div>
+                      <div class="pr-meta">moooon/motir-core · #131</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Throttle burst traffic on /v1</div>
+                      <div class="pr-meta">moooon/motir-gateway · #57</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                  <p class="dvb-caption">
+                    Link with + Link pull request here, or with
+                    <span class="dvb-mono">link_pull_request</span> over the MCP.
+                  </p>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                      >
+                    </div>
+                    <div class="dvb-md">
+                      <h2>Precondition</h2>
+                      <p>
+                        Run <strong>both</strong> repositories. The gateway reads
+                        <code>CORE_URL=http://localhost:3000</code> from its
+                        <code>.env.example</code>, and the seed creates
+                        <strong>ada@acme.test</strong>, a workspace admin.
+                      </p>
+                      <h2>Set up</h2>
+                      <p>In each repository:</p>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">bash</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                        >
+                      </div>
+                      <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">bash</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                        >
+                      </div>
+                      <h2>Click-path</h2>
+                      <ol>
+                        <li>
+                          Sign in as <strong>ada@acme.test</strong> and open
+                          <strong>Settings → API keys</strong>.
+                        </li>
+                        <li>
+                          Run the second command above with that key — the 61st request answers
+                          <code>429</code>.
+                        </li>
+                        <li>
+                          Open <strong>Settings → Usage</strong> and see the throttled requests
+                          counted.
+                        </li>
+                      </ol>
+                    </div>
+                    <div class="dvb-repos">
+                      <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                        <div class="dvb-repo-head">
+                          <svg aria-hidden="true"><use href="#i-repo" /></svg
+                          ><span class="dvb-repo-name">moooon/motir-core · #131</span>
+                        </div>
+                        <div class="dvb-fact dvb-fact-first">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the
+                              preview</span
+                            ><span class="dvb-fact-val"
+                              ><span>preview</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                              ></span
+                            >
+                          </div>
+                          <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                            ><span class="dvb-url-text"
+                              >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                            ><svg aria-hidden="true"><use href="#i-external" /></svg
+                          ></a>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                            >
+                          </div>
+                          <div class="dvb-code">
+                            <div class="dvb-code-bar">
+                              <span class="dvb-code-lang">shell</span
+                              ><button class="dvb-copy" type="button" aria-label="Copy code">
+                                <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                              </button>
+                            </div>
+                            <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                            >
+                          </div>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                              proved</span
+                            ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                          </div>
+                          <div class="dvb-checks">
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">build</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">lint</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">typecheck</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">vitest (shard 1/4)</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway · #57">
+                        <div class="dvb-repo-head">
+                          <svg aria-hidden="true"><use href="#i-repo" /></svg
+                          ><span class="dvb-repo-name">moooon/motir-gateway · #57</span>
+                        </div>
+                        <div class="dvb-fact dvb-fact-first">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the
+                              preview</span
+                            ><span class="dvb-fact-val"
+                              ><span>preview</span
+                              ><span class="pill pill-peach"
+                                ><svg aria-hidden="true"><use href="#i-dots" /></svg>Deploying</span
+                              ></span
+                            >
+                          </div>
+                          <p class="dvb-fact-body">
+                            The preview deployment for this head is deploying. Its link appears here
+                            when it succeeds.
+                          </p>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                            >
+                          </div>
+                          <div class="dvb-code">
+                            <div class="dvb-code-bar">
+                              <span class="dvb-code-lang">shell</span
+                              ><button class="dvb-copy" type="button" aria-label="Copy code">
+                                <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                              </button>
+                            </div>
+                            <pre>
+git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;acme-12-throttle-v1&#x27;</pre
+                            >
+                          </div>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                              proved</span
+                            ><span class="dvb-fact-val"><span>2 of 3 checks passed</span></span>
+                          </div>
+                          <div class="dvb-checks">
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">build</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">lint</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">e2e (chromium)</span
+                              ><span class="pill pill-peach"
+                                ><svg aria-hidden="true"><use href="#i-dots" /></svg>Running</span
+                              >
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <button class="dvb-disclose" type="button" aria-expanded="false">
+                      <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+                    </button>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Approving merges both pull requests and moves <b>ACME-12</b> to Approved.</span
+                  >
+                  <span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button class="af-btn af-btn-primary" type="button">
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Band 1 and band 3 are <span class="mono">ApprovalGateControl</span>&rsquo;s, composed
+          exactly as <span class="mono">design/work-items/approval-control.mock.html</span> draws
+          them; their words — <i>Pull requests</i>, the consequence line, <b>Approve and merge</b> —
+          are MOTIR-4909&rsquo;s, drawn as that story&rsquo;s.
+          <b>Band 2, the port, is Panel 12b&rsquo;s block, unchanged</b>: the rows and How to test,
+          composed, not redrawn. Nothing inside How to test carries a verb. The port keeps the
+          shipped floor, its <span class="mono">34rem</span> ceiling and its own scroll, so a long
+          block never pushes the verbs off screen.
+          <b>No overlay and no full-screen view is drawn</b>: that is MOTIR-5214 /
+          MOTIR-5215&rsquo;s, for every gate. The section card and its <i>Link pull request</i> door
+          stay, as the Design result card stays around its frame.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12d · the body is <b>RICH TEXT</b> — three sections, two commands; every fenced code
+          block carries a <b>click-to-copy</b> control; a long command scrolls
+          <b>inside its own block</b>
+        </div>
+        <div class="panel">
+          <div class="dvb-stack">
+            <div class="dvb-htt" role="group" aria-label="How to test">
+              <div class="dvb-htt-head">
+                <h4 class="dvb-htt-title">How to test</h4>
+                <span class="dvb-htt-by"
+                  >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                >
+              </div>
+              <div class="dvb-md">
+                <h2>Precondition</h2>
+                <p>
+                  Run <strong>both</strong> repositories. The gateway reads
+                  <code>CORE_URL=http://localhost:3000</code> from its <code>.env.example</code>,
+                  and the seed creates <strong>ada@acme.test</strong>, a workspace admin.
+                </p>
+                <h2>Set up</h2>
+                <p>In each repository:</p>
+                <div class="dvb-code">
+                  <div class="dvb-code-bar">
+                    <span class="dvb-code-lang">bash</span
+                    ><button class="dvb-copy" type="button" aria-label="Copy code">
+                      <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                    </button>
+                  </div>
+                  <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                  >
+                </div>
+                <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                <div class="dvb-code">
+                  <div class="dvb-code-bar">
+                    <span class="dvb-code-lang">bash</span
+                    ><button class="dvb-copy" type="button" aria-label="Copy code">
+                      <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                    </button>
+                  </div>
+                  <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                  >
+                </div>
+                <h2>Click-path</h2>
+                <ol>
+                  <li>
+                    Sign in as <strong>ada@acme.test</strong> and open
+                    <strong>Settings → API keys</strong>.
+                  </li>
+                  <li>
+                    Run the second command above with that key — the 61st request answers
+                    <code>429</code>.
+                  </li>
+                  <li>
+                    Open <strong>Settings → Usage</strong> and see the throttled requests counted.
+                  </li>
+                </ol>
+              </div>
+            </div>
+            <div class="dvb-cap">the copy control</div>
+            <div style="display: flex; gap: 14px; flex-wrap: wrap">
+              <div style="flex: 1; min-width: 200px">
+                <div class="dvb-cap" style="margin-bottom: 4px">at rest</div>
+                <div class="dvb-code">
+                  <div class="dvb-code-bar">
+                    <span class="dvb-code-lang">bash</span
+                    ><button class="dvb-copy" type="button" aria-label="Copy code">
+                      <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                    </button>
+                  </div>
+                  <pre>pnpm db:seed</pre>
+                </div>
+              </div>
+              <div style="flex: 1; min-width: 200px">
+                <div class="dvb-cap" style="margin-bottom: 4px">hovered</div>
+                <div class="dvb-code">
+                  <div class="dvb-code-bar">
+                    <span class="dvb-code-lang">bash</span
+                    ><button class="dvb-copy is-hover" type="button" aria-label="Copy code">
+                      <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                    </button>
+                  </div>
+                  <pre>pnpm db:seed</pre>
+                </div>
+              </div>
+              <div style="flex: 1; min-width: 200px">
+                <div class="dvb-cap" style="margin-bottom: 4px">copied — 2s, then back</div>
+                <div class="dvb-code">
+                  <div class="dvb-code-bar">
+                    <span class="dvb-code-lang">bash</span
+                    ><button class="dvb-copy is-copied" type="button" aria-live="polite">
+                      <svg aria-hidden="true"><use href="#i-check-plain" /></svg>Copied
+                    </button>
+                  </div>
+                  <pre>pnpm db:seed</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The body renders through the shipped <span class="mono">MarkdownView</span> →
+          <span class="mono">renderMarkdown</span> stack — no second pipeline.
+          <b>Headings are sections</b>, scaled down to card sub-headings by the block&rsquo;s
+          className. <b>Every fenced block</b> gets a bar with its language as written and a
+          <b>Copy</b> button above the code — never overlaid, because the second command scrolls
+          sideways and an overlaid button would cover it. Copy copies the block&rsquo;s text
+          exactly; the copied state lasts 2 seconds and is announced (<span class="mono"
+            >aria-live="polite"</span
+          >). Inline <span class="mono">code</span> gets no control.
+        </p>
+      </div>
+      <div class="dvb-col-wide">
+        <div class="panel-label">
+          Panel 12e · <b>In the preview</b>, every state —
+          <span class="mono"
+            >queued · pending · in_progress · success · failure · error · inactive · canceled</span
+          >, and <b>no deployment reported</b>
+        </div>
+        <div class="panel">
+          <div class="dvb-grid3">
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">success</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                      ></span
+                    >
+                  </div>
+                  <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                    ><span class="dvb-url-text"
+                      >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">queued</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-clock" /></svg>Queued</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    The preview deployment for this head is queued. Its link appears here when it
+                    succeeds.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">pending</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-clock" /></svg>Pending</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    The preview deployment for this head is pending. Its link appears here when it
+                    succeeds.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">in_progress</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-dots" /></svg>Deploying</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    The preview deployment for this head is deploying. Its link appears here when it
+                    succeeds.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">failure</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-rose"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg>Deploy failed</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    The preview deployment for this head did not succeed, so there is no preview to
+                    open. Test it locally, or wait for the next push.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">error</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-rose"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg>Deploy errored</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    The preview deployment for this head did not succeed, so there is no preview to
+                    open. Test it locally, or wait for the next push.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">inactive</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-neutral"
+                        ><svg aria-hidden="true"><use href="#i-circle-slash" /></svg>Inactive</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    The preview deployment for this head is no longer active — a newer deployment
+                    replaced it.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">canceled</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span>preview</span
+                      ><span class="pill pill-neutral"
+                        ><svg aria-hidden="true"><use href="#i-ban" /></svg>Canceled</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    The preview deployment for this head was canceled before it finished.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">no deployment reported</div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact dvb-fact-first">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                    ><span class="dvb-fact-val"
+                      ><span class="pill pill-neutral"
+                        ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>No preview
+                        reported</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    This repository&#x27;s CI reported no deployment for this head. Motir does not
+                    create previews.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Only <span class="mono">success</span> links, and it links to the <b>app</b>. Every other
+          state says why there is no link. <b>No deployment reported</b> is a neutral pill inside
+          one repository&rsquo;s preview fact, and its sentence says Motir does not create previews
+          — a Motir-hosted preview is MOTIR-4527 and nothing here anticipates it.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12f · a body with <b>no click-path section</b>, and a code block in a language the
+          highlighter does not know
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-40</div>
+            <div class="detail-title">Backfill work-item kinds</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Written by <b>Dispatch run #540</b> · 13 Sep 2026, 09:40</span
+                  >
+                </div>
+                <div class="dvb-md">
+                  <h2>Precondition</h2>
+                  <p>
+                    None — this run changes a migration and its backfill only; there is nothing to
+                    click.
+                  </p>
+                  <h2>Verify</h2>
+                  <p>Run the backfill against a copy of the seed and read the count it prints:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">nushell</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>open seed.json | get items | where kind == &quot;bug&quot; | length</pre>
+                  </div>
+                  <p>It should print the same number before and after.</p>
+                </div>
+                <div class="dvb-repos">
+                  <div class="dvb-repo" role="group">
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span class="pill pill-neutral"
+                            ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>No preview
+                            reported</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        This repository&#x27;s CI reported no deployment for this head. Motir does
+                        not create previews.
+                      </p>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-40-backfill&#x27; &amp;&amp; git checkout &#x27;acme-40-backfill&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>2 of 2 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">dependabot</span
+                          ><span class="pill pill-neutral"
+                            ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg
+                            >Neutral</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <b>The block imposes no sections.</b> Whether there is a click-path is the agent&rsquo;s
+          to write, so a body without one renders what it has and nothing says <i>missing</i>. An
+          unknown fence language (<span class="mono">nushell</span>) is printed as written, in one
+          ink, and still copies. <span class="mono">neutral</span> checks are listed and not
+          counted.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12g · <b>stale</b> — a push landed after the run wrote its record. The instructions
+          stay visible; the callout names the repository and both commits; that sub-block carries
+          <b>Stale</b>
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-12</div>
+            <div class="detail-title">Throttle the public API end to end</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                  >
+                </div>
+                <div class="dvb-callout dvb-callout-stale" role="status">
+                  <svg aria-hidden="true"><use href="#i-history" /></svg
+                  ><span
+                    ><b
+                      >Written for <span class="dvb-sha">3f2a91c</span> — moooon/motir-core is now
+                      at <span class="dvb-sha">8b04e7d</span>.</b
+                    >
+                    The instructions below may be out of date. The preview and CI follow the new
+                    head.</span
+                  >
+                </div>
+                <div class="dvb-md">
+                  <h2>Precondition</h2>
+                  <p>
+                    Run <strong>both</strong> repositories. The gateway reads
+                    <code>CORE_URL=http://localhost:3000</code> from its <code>.env.example</code>,
+                    and the seed creates <strong>ada@acme.test</strong>, a workspace admin.
+                  </p>
+                  <h2>Set up</h2>
+                  <p>In each repository:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                    >
+                  </div>
+                  <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                    >
+                  </div>
+                  <h2>Click-path</h2>
+                  <ol>
+                    <li>
+                      Sign in as <strong>ada@acme.test</strong> and open
+                      <strong>Settings → API keys</strong>.
+                    </li>
+                    <li>
+                      Run the second command above with that key — the 61st request answers
+                      <code>429</code>.
+                    </li>
+                    <li>
+                      Open <strong>Settings → Usage</strong> and see the throttled requests counted.
+                    </li>
+                  </ol>
+                </div>
+                <div class="dvb-repos">
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-core · #131</span
+                      ><span class="dvb-repo-end"
+                        ><span class="pill pill-peach"
+                          ><svg aria-hidden="true"><use href="#i-history" /></svg>Stale</span
+                        ></span
+                      >
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                          ></span
+                        >
+                      </div>
+                      <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                        ><span class="dvb-url-text"
+                          >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">typecheck</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">vitest (shard 1/4)</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway · #57">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-gateway · #57</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-peach"
+                            ><svg aria-hidden="true"><use href="#i-dots" /></svg>Deploying</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        The preview deployment for this head is deploying. Its link appears here
+                        when it succeeds.
+                      </p>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;acme-12-throttle-v1&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>2 of 3 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">e2e (chromium)</span
+                          ><span class="pill pill-peach"
+                            ><svg aria-hidden="true"><use href="#i-dots" /></svg>Running</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button class="dvb-disclose" type="button" aria-expanded="false">
+                  <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Written instructions are usually still right one push later, so they are not hidden. Only
+          what the agent wrote can go stale: the preview, the fetch and the checks follow the new
+          head.
+        </p>
+      </div>
+      <div class="dvb-col-wide">
+        <div class="panel-label">
+          Panel 12h · <b>What CI proved</b> — passed, failing, running, none. It always agrees with
+          the row&rsquo;s CI pill, because both read the same head
+        </div>
+        <div class="panel">
+          <div class="dvb-grid2">
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">passed</div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                      proved</span
+                    ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                  </div>
+                  <div class="dvb-checks">
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">build</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">lint</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">typecheck</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">vitest (shard 1/4)</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">failing</div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-rose"
+                    ><svg aria-hidden="true"><use href="#i-x" /></svg>Checks failing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                      proved</span
+                    ><span class="dvb-fact-val"><span>3 of 4 checks passed</span></span>
+                  </div>
+                  <div class="dvb-checks">
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">build</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">lint</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">typecheck</span
+                      ><span class="pill pill-rose"
+                        ><svg aria-hidden="true"><use href="#i-x" /></svg>Failed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">vitest (shard 1/4)</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">running</div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                      proved</span
+                    ><span class="dvb-fact-val"><span>2 of 3 checks passed</span></span>
+                  </div>
+                  <div class="dvb-checks">
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">build</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">lint</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                      >
+                    </div>
+                    <div class="dvb-check">
+                      <span class="dvb-check-name">e2e (chromium)</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-dots" /></svg>Running</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="dvb-cap" style="margin-bottom: 4px">none</div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="dvb-repo" role="group">
+                <div class="dvb-fact">
+                  <div class="dvb-fact-line">
+                    <span class="dvb-fact-label"
+                      ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                      proved</span
+                    ><span class="dvb-fact-val"
+                      ><span class="pill pill-neutral"
+                        ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>No checks
+                        reported</span
+                      ></span
+                    >
+                  </div>
+                  <p class="dvb-fact-body">
+                    No checks have reported for this head yet, so CI has proven nothing here.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The row above each fact is the derived row, drawn to show the agreement:
+          <i>Checks failing</i> on the row, <i>3 of 4 checks passed</i> with the failing check named
+          in the block. <b>None</b> is a row with no CI pill and a block that says CI has proven
+          nothing — never an empty list.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12i · <b>record missing</b> — <i>no run has written how to test this item</i>,
+          naming the run that owed it. Visibly NOT <i>No preview reported</i>
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-12</div>
+            <div class="detail-title">Throttle the public API end to end</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Latest run <b>Parent run #318</b> · finished 13 Sep 2026, 14:05</span
+                  >
+                </div>
+                <div class="dvb-callout dvb-callout-missing" role="status">
+                  <svg aria-hidden="true"><use href="#i-file-question" /></svg
+                  ><span
+                    ><b>No run has written how to test this item.</b> Owed by Parent run #318
+                    (finished 13 Sep 2026, 14:05). The pull requests above still carry their own
+                    status.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          A missing deliverable is a <b>lavender callout at the head of the part</b>, with its own
+          glyph; <i>No preview reported</i> is a neutral pill inside one repository&rsquo;s preview
+          fact (Panel 12e). The two have different remedies — ask the run to write it, versus the
+          repository&rsquo;s CI not deploying — so they never share a treatment. With no record
+          there are no repository sub-blocks: the rows above still carry their own PR and CI status.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12j · <b>earlier runs</b> — a collapsed disclosure at the foot of the part
+        </div>
+        <div class="panel">
+          <div class="dvb-stack">
+            <div class="dvb-htt" role="group" aria-label="How to test">
+              <div class="dvb-htt-head">
+                <h4 class="dvb-htt-title">How to test</h4>
+                <span class="dvb-htt-by"
+                  >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                >
+              </div>
+              <div class="dvb-md"><p>…the current run&rsquo;s body…</p></div>
+              <button class="dvb-disclose" type="button" aria-expanded="false">
+                <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          A real <span class="mono">&lt;button aria-expanded="false"&gt;</span>, collapsed by
+          default. The current record is the decision&rsquo;s evidence; earlier runs are history.
+          Opened, each row reads that record by id.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12k · a repository with a pull request but <b>no section in the record</b>
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-12</div>
+            <div class="detail-title">Throttle the public API end to end</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                  >
+                </div>
+                <div class="dvb-md">
+                  <h2>Precondition</h2>
+                  <p>
+                    Run <strong>both</strong> repositories. The gateway reads
+                    <code>CORE_URL=http://localhost:3000</code> from its <code>.env.example</code>,
+                    and the seed creates <strong>ada@acme.test</strong>, a workspace admin.
+                  </p>
+                  <h2>Set up</h2>
+                  <p>In each repository:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                    >
+                  </div>
+                  <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                    >
+                  </div>
+                  <h2>Click-path</h2>
+                  <ol>
+                    <li>
+                      Sign in as <strong>ada@acme.test</strong> and open
+                      <strong>Settings → API keys</strong>.
+                    </li>
+                    <li>
+                      Run the second command above with that key — the 61st request answers
+                      <code>429</code>.
+                    </li>
+                    <li>
+                      Open <strong>Settings → Usage</strong> and see the throttled requests counted.
+                    </li>
+                  </ol>
+                </div>
+                <div class="dvb-repos">
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-core · #131</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                          ></span
+                        >
+                      </div>
+                      <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                        ><span class="dvb-url-text"
+                          >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">typecheck</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">vitest (shard 1/4)</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway · #57">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-gateway · #57</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg>Not in this
+                          run&amp;rsquo;s record</span
+                        ><span class="dvb-fact-val"
+                          ><span class="pill pill-neutral"
+                            ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg>No
+                            section</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        Parent run #318 wrote no section for this repository, so its pull request is
+                        not covered by the instructions above. Its row still carries its PR and CI
+                        status.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <button class="dvb-disclose" type="button" aria-expanded="false">
+                  <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Every row gets a sub-block, so a repository the run forgot is SAID, not silently absent.
+          Derived by comparing the rows&rsquo; repositories with
+          <span class="mono">repos[].repoName</span> — no new field.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12l · <span class="mono">AwaitingRepoRow</span> — the record has a section for a
+          repository with <b>no pull request yet</b>
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-12</div>
+            <div class="detail-title">Throttle the public API end to end</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row dvb-awaiting">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-circle-dashed" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title dvb-awaiting-title">No pull request yet</div>
+                  <div class="pr-meta">moooon/motir-gateway</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-neutral"
+                    ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>Awaiting</span
+                  ></span
+                >
+                <span class="dvb-ext-spacer" aria-hidden="true"></span>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                  >
+                </div>
+                <div class="dvb-md">
+                  <h2>Precondition</h2>
+                  <p>
+                    Run <strong>both</strong> repositories. The gateway reads
+                    <code>CORE_URL=http://localhost:3000</code> from its <code>.env.example</code>,
+                    and the seed creates <strong>ada@acme.test</strong>, a workspace admin.
+                  </p>
+                  <h2>Set up</h2>
+                  <p>In each repository:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                    >
+                  </div>
+                  <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                    >
+                  </div>
+                  <h2>Click-path</h2>
+                  <ol>
+                    <li>
+                      Sign in as <strong>ada@acme.test</strong> and open
+                      <strong>Settings → API keys</strong>.
+                    </li>
+                    <li>
+                      Run the second command above with that key — the 61st request answers
+                      <code>429</code>.
+                    </li>
+                    <li>
+                      Open <strong>Settings → Usage</strong> and see the throttled requests counted.
+                    </li>
+                  </ol>
+                </div>
+                <div class="dvb-repos">
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-core · #131</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                          ></span
+                        >
+                      </div>
+                      <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                        ><span class="dvb-url-text"
+                          >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                      </div>
+                      <div class="dvb-checks">
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">build</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">lint</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">typecheck</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                        <div class="dvb-check">
+                          <span class="dvb-check-name">vitest (shard 1/4)</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-gateway</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span class="pill pill-neutral"
+                            ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>No preview
+                            reported</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        This repository&#x27;s CI reported no deployment for this head. Motir does
+                        not create previews.
+                      </p>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        ><span class="dvb-fact-val"
+                          ><span class="pill pill-neutral"
+                            ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>No branch
+                            to fetch</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        No pull request carries this repository&rsquo;s branch yet, so there is
+                        nothing to fetch.
+                      </p>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                          proved</span
+                        ><span class="dvb-fact-val"
+                          ><span class="pill pill-neutral"
+                            ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>No checks
+                            reported</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        No checks have reported for this head yet, so CI has proven nothing here.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <button class="dvb-disclose" type="button" aria-expanded="false">
+                  <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The dashed row is the shipped <span class="mono">AwaitingRepoRow</span>, derived. Its
+          sub-block is headed by the repository alone — the row&rsquo;s meta line has no
+          <span class="mono">#n</span> either — and reads
+          <span class="mono">fetchCommand: null</span>,
+          <span class="mono">no_deployment_reported</span> and
+          <span class="mono">no_checks_reported</span>.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12m · a <b>child</b> of a container run — its own rows, and ONE line in place of How
+          to test
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-14</div>
+            <div class="detail-title">Gateway: 429 with Retry-After</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-pointer">
+                <svg aria-hidden="true"><use href="#i-corner-left-up" /></svg
+                ><span>Tested as part of</span><a class="dvb-keylink" href="#">ACME-12</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The child&rsquo;s pull request is covered by the target&rsquo;s record, so the child
+          carries none of its own and no gate.
+          <b>The key links to the run target&rsquo;s item page</b>, where the block is. A child with
+          no rows shows the shipped empty state and the same line.
+        </p>
+      </div>
+      <div class="dvb-col-narrow">
+        <div class="panel-label">
+          Panel 12n · <b>narrow (~400px)</b> — the <b>fixed row</b> MOTIR-5351 builds to: pills wrap
+          under the title
+        </div>
+        <div class="panel">
+          <div class="card" style="margin: 12px">
+            <div class="card-head">
+              <div><h3>Development</h3></div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row dvb-row-narrow">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Rate-limit the public API per key</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row dvb-row-narrow">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+              <div class="dvb-htt" role="group" aria-label="How to test">
+                <div class="dvb-htt-head">
+                  <h4 class="dvb-htt-title">How to test</h4>
+                  <span class="dvb-htt-by"
+                    >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                  >
+                </div>
+                <div class="dvb-md">
+                  <h2>Precondition</h2>
+                  <p>
+                    Run <strong>both</strong> repositories. The gateway reads
+                    <code>CORE_URL=http://localhost:3000</code> from its <code>.env.example</code>,
+                    and the seed creates <strong>ada@acme.test</strong>, a workspace admin.
+                  </p>
+                  <h2>Set up</h2>
+                  <p>In each repository:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                    >
+                  </div>
+                  <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">bash</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                    >
+                  </div>
+                  <h2>Click-path</h2>
+                  <ol>
+                    <li>
+                      Sign in as <strong>ada@acme.test</strong> and open
+                      <strong>Settings → API keys</strong>.
+                    </li>
+                    <li>
+                      Run the second command above with that key — the 61st request answers
+                      <code>429</code>.
+                    </li>
+                    <li>
+                      Open <strong>Settings → Usage</strong> and see the throttled requests counted.
+                    </li>
+                  </ol>
+                </div>
+                <div class="dvb-repos">
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-core · #131</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                          ></span
+                        >
+                      </div>
+                      <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                        ><span class="dvb-url-text"
+                          >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway · #57">
+                    <div class="dvb-repo-head">
+                      <svg aria-hidden="true"><use href="#i-repo" /></svg
+                      ><span class="dvb-repo-name">moooon/motir-gateway · #57</span>
+                    </div>
+                    <div class="dvb-fact dvb-fact-first">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the preview</span
+                        ><span class="dvb-fact-val"
+                          ><span>preview</span
+                          ><span class="pill pill-peach"
+                            ><svg aria-hidden="true"><use href="#i-dots" /></svg>Deploying</span
+                          ></span
+                        >
+                      </div>
+                      <p class="dvb-fact-body">
+                        The preview deployment for this head is deploying. Its link appears here
+                        when it succeeds.
+                      </p>
+                    </div>
+                    <div class="dvb-fact">
+                      <div class="dvb-fact-line">
+                        <span class="dvb-fact-label"
+                          ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                        >
+                      </div>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">shell</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;acme-12-throttle-v1&#x27;</pre
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button class="dvb-disclose" type="button" aria-expanded="false">
+                  <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <b>The row: </b>below a 30rem container the pill group drops to line 2, so the title keeps
+          the whole first line instead of one or two characters. The desktop row is unchanged.
+          <b>The block:</b> facts wrap their pill under the label; code blocks scroll inside
+          themselves; the copy control stays in the bar.
+        </p>
+      </div>
+      <div class="dvb-col">
+        <div class="panel-label">
+          Panel 12o · <b>dark</b> — Panel 12c&rsquo;s frame in
+          <span class="mono">data-theme="dark"</span>
+        </div>
+        <div class="panel" data-theme="dark" data-appearance-scope>
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-12</div>
+            <div class="detail-title">Throttle the public API end to end</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="af-frame">
+                <div class="af-head">
+                  <div class="af-what">
+                    <span class="af-kind">Pull requests</span
+                    ><span class="af-meta">2 pull requests · delivered by Parent run #318</span>
+                  </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Rate-limit the public API per key</div>
+                      <div class="pr-meta">moooon/motir-core · #131</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Throttle burst traffic on /v1</div>
+                      <div class="pr-meta">moooon/motir-gateway · #57</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                  <p class="dvb-caption">
+                    Link with + Link pull request here, or with
+                    <span class="dvb-mono">link_pull_request</span> over the MCP.
+                  </p>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Parent run #318</b> · 13 Sep 2026, 14:05</span
+                      >
+                    </div>
+                    <div class="dvb-md">
+                      <h2>Precondition</h2>
+                      <p>
+                        Run <strong>both</strong> repositories. The gateway reads
+                        <code>CORE_URL=http://localhost:3000</code> from its
+                        <code>.env.example</code>, and the seed creates
+                        <strong>ada@acme.test</strong>, a workspace admin.
+                      </p>
+                      <h2>Set up</h2>
+                      <p>In each repository:</p>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">bash</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                        >
+                      </div>
+                      <p>Then, from <code>motir-gateway</code>, drive the limit:</p>
+                      <div class="dvb-code">
+                        <div class="dvb-code-bar">
+                          <span class="dvb-code-lang">bash</span
+                          ><button class="dvb-copy" type="button" aria-label="Copy code">
+                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                          </button>
+                        </div>
+                        <pre>
+pnpm --filter @motir/gateway run load -- --key &quot;$ACME_API_KEY&quot; --target http://localhost:4000/v1/items --requests 61 --expect-status 429 --report-retry-after</pre
+                        >
+                      </div>
+                      <h2>Click-path</h2>
+                      <ol>
+                        <li>
+                          Sign in as <strong>ada@acme.test</strong> and open
+                          <strong>Settings → API keys</strong>.
+                        </li>
+                        <li>
+                          Run the second command above with that key — the 61st request answers
+                          <code>429</code>.
+                        </li>
+                        <li>
+                          Open <strong>Settings → Usage</strong> and see the throttled requests
+                          counted.
+                        </li>
+                      </ol>
+                    </div>
+                    <div class="dvb-repos">
+                      <div class="dvb-repo" role="group" aria-label="moooon/motir-core · #131">
+                        <div class="dvb-repo-head">
+                          <svg aria-hidden="true"><use href="#i-repo" /></svg
+                          ><span class="dvb-repo-name">moooon/motir-core · #131</span>
+                        </div>
+                        <div class="dvb-fact dvb-fact-first">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the
+                              preview</span
+                            ><span class="dvb-fact-val"
+                              ><span>preview</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Ready</span
+                              ></span
+                            >
+                          </div>
+                          <a class="dvb-url" href="#" target="_blank" rel="noopener noreferrer"
+                            ><span class="dvb-url-text"
+                              >https://pr-131.motir-core.preview.moooon.dev/settings/usage</span
+                            ><svg aria-hidden="true"><use href="#i-external" /></svg
+                          ></a>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                            >
+                          </div>
+                          <div class="dvb-code">
+                            <div class="dvb-code-bar">
+                              <span class="dvb-code-lang">shell</span
+                              ><button class="dvb-copy" type="button" aria-label="Copy code">
+                                <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                              </button>
+                            </div>
+                            <pre>
+git fetch origin &#x27;acme-12-rate-limit&#x27; &amp;&amp; git checkout &#x27;acme-12-rate-limit&#x27;</pre
+                            >
+                          </div>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                              proved</span
+                            ><span class="dvb-fact-val"><span>4 of 4 checks passed</span></span>
+                          </div>
+                          <div class="dvb-checks">
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">build</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">lint</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">typecheck</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">vitest (shard 1/4)</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="dvb-repo" role="group" aria-label="moooon/motir-gateway · #57">
+                        <div class="dvb-repo-head">
+                          <svg aria-hidden="true"><use href="#i-repo" /></svg
+                          ><span class="dvb-repo-name">moooon/motir-gateway · #57</span>
+                        </div>
+                        <div class="dvb-fact dvb-fact-first">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-globe" /></svg>In the
+                              preview</span
+                            ><span class="dvb-fact-val"
+                              ><span>preview</span
+                              ><span class="pill pill-peach"
+                                ><svg aria-hidden="true"><use href="#i-dots" /></svg>Deploying</span
+                              ></span
+                            >
+                          </div>
+                          <p class="dvb-fact-body">
+                            The preview deployment for this head is deploying. Its link appears here
+                            when it succeeds.
+                          </p>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-terminal" /></svg>Locally</span
+                            >
+                          </div>
+                          <div class="dvb-code">
+                            <div class="dvb-code-bar">
+                              <span class="dvb-code-lang">shell</span
+                              ><button class="dvb-copy" type="button" aria-label="Copy code">
+                                <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                              </button>
+                            </div>
+                            <pre>
+git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;acme-12-throttle-v1&#x27;</pre
+                            >
+                          </div>
+                        </div>
+                        <div class="dvb-fact">
+                          <div class="dvb-fact-line">
+                            <span class="dvb-fact-label"
+                              ><svg aria-hidden="true"><use href="#i-list-checks" /></svg>What CI
+                              proved</span
+                            ><span class="dvb-fact-val"><span>2 of 3 checks passed</span></span>
+                          </div>
+                          <div class="dvb-checks">
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">build</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">lint</span
+                              ><span class="pill pill-mint"
+                                ><svg aria-hidden="true"><use href="#i-check" /></svg>Passed</span
+                              >
+                            </div>
+                            <div class="dvb-check">
+                              <span class="dvb-check-name">e2e (chromium)</span
+                              ><span class="pill pill-peach"
+                                ><svg aria-hidden="true"><use href="#i-dots" /></svg>Running</span
+                              >
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <button class="dvb-disclose" type="button" aria-expanded="false">
+                      <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>Earlier runs (2)
+                    </button>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Approving merges both pull requests and moves <b>ACME-12</b> to Approved.</span
+                  >
+                  <span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button class="af-btn af-btn-primary" type="button">
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Tier 3 recomputes under <span class="mono">data-appearance-scope</span>; every ink is the
+          same token as in light. The whole board is also exported as
+          <span class="mono">github.dark.png</span>.
         </p>
       </div>
     </div>

@@ -29,6 +29,7 @@ import type {
 import type { PlanRevision } from '@/generated/prisma/client';
 import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type {
+  PlanBlockerStubDto,
   PlanCommittedBlockerDto,
   PlanHistoryEventDto,
   PlanItemChangeDto,
@@ -496,12 +497,6 @@ export const planReviewService = {
     const reparentIds = plan.items
       .map((i) => (i.op === 'modify' ? (i.patch?.parentRef ?? null) : null))
       .filter((ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX));
-    const lookupIds = Array.from(new Set([...targetIds, ...committedParentIds, ...reparentIds]));
-    const targets = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.findByIdsInWorkspace(lookupIds, ctx.workspaceId, tx),
-    );
-    const targetById = new Map(targets.map((t) => [t.id, t]));
-
     // …AND the COMMITTED `blocked_by` EDGES of every target (bug MOTIR-4951).
     //
     // The canvas builds a level from the roadmap read of that level's CURRENT
@@ -516,7 +511,7 @@ export const planReviewService = {
     // side. Approving made the arrows appear, which is the tell.
     //
     // ONE query for the whole plan, on the same "never an N+1" rule the target
-    // read above states. `findBlockerEdgesForItems` already carries the blocker's
+    // read below states. `findBlockerEdgesForItems` already carries the blocker's
     // STATUS, which is the other half of what the level builder needs: a
     // committed edge is drawn `firm` or `pending` by whether its blocker is
     // `done` (`buildWorkItemLevel`), and the level builder cannot look that up —
@@ -531,6 +526,27 @@ export const planReviewService = {
       list.push({ nodeId: row.blockerId, isDone: row.blockerStatus === 'done' });
       committedBlockersByItemId.set(row.fromId, list);
     }
+
+    // …AND every BLOCKER the plan names (bug MOTIR-5387) — a proposal's own
+    // (`blockedByRefs`, `patch.blockedByAdd`) and the ones its target already
+    // carries — so the canvas can NAME one that sits on another level. The
+    // roadmap draws such a blocker as a ghost anchor naming it; the edge carriers
+    // name ids only, so before approve there was nothing to put on the anchor and
+    // the canvas drew no edge at all. They join the SAME batched row read as the
+    // targets, which is why the edge read above now runs first: one more id list,
+    // not one more query. A `planItem:` ref is a proposal, named from the review
+    // model itself once it is built.
+    const blockerIds = [
+      ...committedEdgeRows.map((r) => r.blockerId),
+      ...plan.items.flatMap((i) => [...i.blockedByRefs, ...(i.patch?.blockedByAdd ?? [])]),
+    ].filter((ref) => !ref.startsWith(TEMP_REF_PREFIX));
+    const lookupIds = Array.from(
+      new Set([...targetIds, ...committedParentIds, ...reparentIds, ...blockerIds]),
+    );
+    const targets = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace(lookupIds, ctx.workspaceId, tx),
+    );
+    const targetById = new Map(targets.map((t) => [t.id, t]));
 
     // …AND the LIVE PARENT of every proposal that names a TARGET instead of a
     // parent (bug MOTIR-3191).
@@ -875,6 +891,9 @@ export const planReviewService = {
         blockedByNodeIds: blockedByNodeIdsOf(item),
         blockedByRemovedNodeIds: blockedByRemovedNodeIdsOf(item),
         committedBlockedBy: committedBlockedByOf(item),
+        // Filled once every item is built — the naming-stub pass below (bug
+        // MOTIR-5387) names a blocker that is itself a proposal by this model.
+        blockerStubs: [],
         // The target's key, for EVERY op that has a target (MOTIR-3160). An
         // un-materialized `add` still reports null — it has no key and inventing
         // one would be the surface asserting a work item that does not exist —
@@ -1047,6 +1066,50 @@ export const planReviewService = {
         },
       };
     });
+
+    // ── THE NAMING STUBS (bug MOTIR-5387) ──────────────────────────────────────
+    //
+    // A SECOND PASS, because a blocker that is itself a PROPOSAL is named by what
+    // this model says about it — the title it asks for, and the level it lands on
+    // (`parentNodeIdOf`, so a blocker the plan re-parents reports its
+    // DESTINATION). Both exist only once every item is built. A committed blocker
+    // the plan says nothing about is named off its row from the batched read.
+    //
+    // `parentNodeId` is what lets the canvas tell a blocker OFF the level from a
+    // member of it that the capped level read did not carry (MOTIR-5043). An
+    // archived row gets no stub, and neither does a proposal whose target is gone:
+    // the canvas draws nothing it cannot name, and `stale` reports those.
+    const itemByNodeId = new Map(items.map((i) => [i.nodeId, i]));
+    const blockerStubOf = (nodeId: string): PlanBlockerStubDto | null => {
+      const proposal = itemByNodeId.get(nodeId);
+      if (proposal && !proposal.targetMissing) {
+        return {
+          nodeId,
+          identifier: proposal.identifier,
+          title: proposal.title,
+          isDone: proposal.status === 'done',
+          parentNodeId: proposal.parentNodeId,
+        };
+      }
+      const row = targetById.get(nodeId);
+      if (!row || row.archivedAt) return null;
+      return {
+        nodeId,
+        identifier: row.identifier,
+        title: row.title,
+        isDone: row.status === 'done',
+        parentNodeId: row.parentId,
+      };
+    };
+    for (const item of items) {
+      const blockerNodeIds = new Set([
+        ...item.blockedByNodeIds,
+        ...item.committedBlockedBy.map((b) => b.nodeId),
+      ]);
+      item.blockerStubs = [...blockerNodeIds]
+        .map(blockerStubOf)
+        .filter((stub): stub is PlanBlockerStubDto => stub !== null);
+    }
 
     const decidedByName = plan.decidedById
       ? ((await userRepository.findById(plan.decidedById))?.name ?? null)

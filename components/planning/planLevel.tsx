@@ -1,4 +1,10 @@
-import { PlanItemNode, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
+import {
+  PlanItemNode,
+  ProposedBlockerAnchor,
+  type PlanItemOutcome,
+} from '@/components/planning/PlanItemNode';
+import { GhostAnchor } from '@/components/planning/WorkItemNode';
+import { ghostAnchorNode } from '@/components/planning/workItemLevel';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import { proposedParentNodeIds } from '@/lib/planning/planShape';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -136,46 +142,42 @@ export function mergePlanLevel(
   // cards the plan moves, in BOTH directions, and each direction is now answered
   // at the source rather than patched a field at a time.
 
-  // The committed children, in the order the read gave them, with a `modify` /
-  // `remove` re-skinned in place.
-  const nodes: ProjectCanvasNode[] = committed.nodes.map((node) => {
-    const drillable = node.drillable || gainsChildren.has(node.id);
-    const proposal = pending.get(node.id);
-    if (!proposal) return drillable === node.drillable ? node : { ...node, drillable };
-    pending.delete(node.id);
-    return { ...node, drillable, content: <PlanItemNode item={proposal} outcome={outcome} /> };
-  });
-
-  // Whatever is left is proposed and has no committed node yet: every `add`, plus
-  // a `modify` / `remove` whose target is not at this level (a drifted plan).
+  // ⚠️ A PROPOSAL BLOCKED BY A CARD OFF THIS LEVEL FLIES THE BAD-PLAN FLAG (bug
+  // MOTIR-5387) — the fifth fact in this family, and the one the legend names.
+  // `buildWorkItemLevel` draws an off-level blocker with three effects: a `cross`
+  // arrow, a viewable GHOST ANCHOR naming the blocker, and the dependent's
+  // "blocked elsewhere" chip. A COMMITTED edge reaches that branch; a proposal's
+  // own edges never did, because both carrier loops below kept an edge only when
+  // BOTH ends sat on this level and dropped the rest. So a plan adding a
+  // cross-container dependency drew nothing, and approving it was the first time
+  // the reviewer saw the flag the legend calls *"the blocker sits elsewhere in the
+  // plan (a bad plan)"* — on the roadmap, with no decision left for it to inform.
   //
-  // ⚠️ `viewable` is what SURFACES the View button — `ProjectRoadmapCanvas`
-  // renders the pill only for a node carrying the flag. MOTIR-3084 built the
-  // proposal peek (`ProposalQuickView`) and wired `onView` for every op, but the
-  // node it opens from was pushed without the flag, so the door existed and
-  // nothing opened it: selecting a proposed card offered no affordance at all.
-  // A committed node gets the same flag from `buildWorkItemLevel`; this is the
-  // proposed half of the same contract, and it holds for every op — an `add`
-  // peeks its proposal, a `modify` / `remove` peeks the live target it names.
-  for (const item of atLevel) {
-    if (!pending.has(item.nodeId)) continue;
-    nodes.push({
-      id: item.nodeId,
-      parentId: item.parentNodeId,
-      searchText: `${item.identifier ?? ''} ${item.title}`.trim(),
-      crumbLabel: item.identifier ?? item.title,
-      drillable: item.hasChildren,
-      viewable: true,
-      content: <PlanItemNode item={item} outcome={outcome} />,
-    });
+  // The disposition is the one this family is decided by: draw the level the
+  // reviewer gets AFTER approve. Materialized, the same edge comes back from the
+  // roadmap read and takes the off-level branch, so it takes the same treatment
+  // here, in the same language — the anchor is minted by the same
+  // `ghostAnchorNode` and the chip is the same `CrossBlockedFlag`. The review
+  // model supplies what an anchor needs (`blockerStubs`), because the two edge
+  // carriers name ids only.
+  //
+  // ── WHAT "ON THE LEVEL" MEANS, and why it is not "has a node here" ─────────
+  // `committed` already holds the anchors `buildWorkItemLevel` minted, and each
+  // carries its blocker's own work-item id — the trap MOTIR-4952's builder
+  // comment names from the other side. Answering from node ids alone drew a
+  // `pending` arrow from a ghost anchor into a proposal, as if the blocker sat
+  // beside it. An anchor is exactly the blocker end of a committed `cross` dep,
+  // so those ids are subtracted; every proposal at this level is added, because
+  // each one gets a node below.
+  const anchorIds = new Set<string>();
+  for (const dep of committed.deps) {
+    if (dep.variant === 'cross') anchorIds.add(dep.from);
   }
+  const onLevel = new Set<string>([
+    ...committed.nodes.map((n) => n.id).filter((id) => !anchorIds.has(id)),
+    ...atLevel.map((i) => i.nodeId),
+  ]);
 
-  // The committed edges are kept verbatim EXCEPT the ones the plan DELETES; a
-  // proposal's own `blocked_by` edges are added when BOTH ends are at this level.
-  // Proposed edges are `pending` (not yet firm) — the canvas upgrades one to
-  // `cross` when the ends sit under different parents, which is its own bad-plan
-  // signal and not this module's business.
-  const nodeIds = new Set(nodes.map((n) => n.id));
   // ⚠️ AN EDGE THE PLAN DELETES IS DROPPED, NOT DRAWN (bug MOTIR-4092, whose
   // first fix drew it, reversed by bug MOTIR-4098).
   //
@@ -204,11 +206,73 @@ export function mergePlanLevel(
   );
   const seen = new Set(deps.map((d) => `${d.from} ${d.to}`));
 
+  // Who already wears the chip: every dependent of a committed `cross` edge the
+  // plan keeps. Read AFTER the removal filter, so a plan deleting that edge takes
+  // the chip with it — and read at all because a `modify` RE-SKINS its committed
+  // node below, replacing the `WorkItemNode` whose content the chip was baked
+  // into. Without this the card a plan amends lost its flag for exactly as long
+  // as the plan was pending.
+  const crossBlocked = new Set(deps.filter((d) => d.variant === 'cross').map((d) => d.to));
+  const anchors: ProjectCanvasNode[] = [];
+
+  /**
+   * A blocker of `item` that is NOT on this level — the roadmap's off-level
+   * branch, stated against a proposal. `variant` is the arrow the edge takes if
+   * the blocker turns out to be a MEMBER of the level the read did not carry.
+   */
+  const drawOffLevel = (
+    item: PlanReviewItemDto,
+    blockerId: string,
+    variant: ProjectCanvasDep['variant'],
+  ) => {
+    // NO STUB ⇒ NOTHING TO NAME. The review model names every blocker it can
+    // reach, so a missing one is archived, deleted or outside the workspace. An
+    // anchor reading `—` would be a claim about a card this surface cannot show.
+    const stub = item.blockerStubs.find((s) => s.nodeId === blockerId);
+    if (!stub) return;
+    const key = `${blockerId} ${item.nodeId}`;
+    // A MEMBER THE CAPPED READ DROPPED IS NOT OFF THE LEVEL — bug MOTIR-5043's
+    // exclusion, with its disposition: the arrow is pushed with no node behind
+    // it, `computeLevel` drops it, and the level's truncation tile is what says
+    // rows are missing. NOT AT THE ROOT, where a parentless blocker is far more
+    // often a row the roadmap GROUPED off the road — and `buildWorkItemLevel`
+    // sends a grouped row down the off-level path.
+    if (parentId !== null && stub.parentNodeId === parentId) {
+      if (seen.has(key)) return;
+      seen.add(key);
+      deps.push({ from: blockerId, to: item.nodeId, variant });
+      return;
+    }
+    crossBlocked.add(item.nodeId);
+    if (!seen.has(key)) {
+      seen.add(key);
+      deps.push({ from: blockerId, to: item.nodeId, variant: 'cross' });
+    }
+    // ONE anchor per blocker on the level, whoever else it blocks — including a
+    // committed sibling whose anchor the builder already minted.
+    if (anchorIds.has(blockerId)) return;
+    anchorIds.add(blockerId);
+    anchors.push(
+      ghostAnchorNode(
+        blockerId,
+        {
+          searchText: `${stub.identifier ?? ''} ${stub.title}`.trim(),
+          crumbLabel: stub.identifier ?? stub.title,
+        },
+        stub.identifier !== null ? (
+          <GhostAnchor identifier={stub.identifier} title={stub.title} />
+        ) : (
+          <ProposedBlockerAnchor title={stub.title} />
+        ),
+      ),
+    );
+  };
+
   // ⚠️ A CARD THE PLAN RE-PARENTS ONTO THIS LEVEL BRINGS ITS OWN COMMITTED EDGES
   // (bug MOTIR-4951) — and `committed` cannot supply them, because `committed` is
   // the level's CURRENT children and the moving card is precisely the one that is
   // not among them yet. It is the same COMMITTED-only trap the `drillable`
-  // comment forty lines up names for a different field, from the same cause, in
+  // comment above names for a different field, from the same cause, in
   // this function: the level's committed read is the wrong basis for ANYTHING
   // about a card the plan is moving.
   //
@@ -223,27 +287,32 @@ export function mergePlanLevel(
   // not re-draw it `pending` (`seen` is what holds that), and AFTER the removal
   // filter, so `removedPairs` still subtracts one of these: widening the
   // committed set must not resurrect an edge the plan deletes (bugs MOTIR-4092 /
-  // MOTIR-4098). Both ends must be on the level, the same rule the proposed loop
-  // below applies — an edge to a blocker that stays elsewhere is not drawn.
+  // MOTIR-4098). A blocker that stays elsewhere takes the off-level path above,
+  // as a proposed edge's does (bug MOTIR-5387) — it used to be dropped.
   for (const item of atLevel) {
     for (const blocker of item.committedBlockedBy) {
       if (blocker.nodeId === item.nodeId) continue;
-      if (!nodeIds.has(blocker.nodeId) || !nodeIds.has(item.nodeId)) continue;
       const key = `${blocker.nodeId} ${item.nodeId}`;
-      if (seen.has(key) || removedPairs.has(key)) continue;
+      if (removedPairs.has(key)) continue;
+      const variant = blocker.isDone ? 'firm' : 'pending';
+      if (!onLevel.has(blocker.nodeId)) {
+        drawOffLevel(item, blocker.nodeId, variant);
+        continue;
+      }
+      if (seen.has(key)) continue;
       seen.add(key);
-      deps.push({
-        from: blocker.nodeId,
-        to: item.nodeId,
-        variant: blocker.isDone ? 'firm' : 'pending',
-      });
+      deps.push({ from: blocker.nodeId, to: item.nodeId, variant });
     }
   }
 
+  // A proposal's OWN edges — `pending`, because approving is what creates them.
   for (const item of atLevel) {
     for (const blockerId of item.blockedByNodeIds) {
       if (blockerId === item.nodeId) continue;
-      if (!nodeIds.has(blockerId) || !nodeIds.has(item.nodeId)) continue;
+      if (!onLevel.has(blockerId)) {
+        drawOffLevel(item, blockerId, 'pending');
+        continue;
+      }
       const key = `${blockerId} ${item.nodeId}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -251,5 +320,47 @@ export function mergePlanLevel(
     }
   }
 
-  return { nodes, deps };
+  // The committed children, in the order the read gave them, with a `modify` /
+  // `remove` re-skinned in place.
+  const nodes: ProjectCanvasNode[] = committed.nodes.map((node) => {
+    const drillable = node.drillable || gainsChildren.has(node.id);
+    const proposal = pending.get(node.id);
+    if (!proposal) return drillable === node.drillable ? node : { ...node, drillable };
+    pending.delete(node.id);
+    return {
+      ...node,
+      drillable,
+      content: (
+        <PlanItemNode item={proposal} outcome={outcome} crossBlocked={crossBlocked.has(node.id)} />
+      ),
+    };
+  });
+
+  // Whatever is left is proposed and has no committed node yet: every `add`, plus
+  // a `modify` / `remove` whose target is not at this level (a drifted plan).
+  //
+  // ⚠️ `viewable` is what SURFACES the View button — `ProjectRoadmapCanvas`
+  // renders the pill only for a node carrying the flag. MOTIR-3084 built the
+  // proposal peek (`ProposalQuickView`) and wired `onView` for every op, but the
+  // node it opens from was pushed without the flag, so the door existed and
+  // nothing opened it: selecting a proposed card offered no affordance at all.
+  // A committed node gets the same flag from `buildWorkItemLevel`; this is the
+  // proposed half of the same contract, and it holds for every op — an `add`
+  // peeks its proposal, a `modify` / `remove` peeks the live target it names.
+  for (const item of atLevel) {
+    if (!pending.has(item.nodeId)) continue;
+    nodes.push({
+      id: item.nodeId,
+      parentId: item.parentNodeId,
+      searchText: `${item.identifier ?? ''} ${item.title}`.trim(),
+      crumbLabel: item.identifier ?? item.title,
+      drillable: item.hasChildren,
+      viewable: true,
+      content: (
+        <PlanItemNode item={item} outcome={outcome} crossBlocked={crossBlocked.has(item.nodeId)} />
+      ),
+    });
+  }
+
+  return { nodes: [...nodes, ...anchors], deps };
 }

@@ -1,0 +1,107 @@
+# Re-attempt a red or cancelled push-to-`main` CI run — at most once, visibly
+# (MOTIR-4607).
+#
+# `deploy` lives only in the push-to-`main` run of `ci.yml`, so a push run that
+# goes red or is cancelled deploys nothing — and until this lane nothing
+# re-attempted it. The pipeline recovered only because somebody else merged
+# afterwards, which is a property of merge traffic, not of the pipeline, and is
+# exactly the property a launch train or a quiet Friday removes.
+#
+# ⚠️ WHAT THIS LANE IS NOT. It does not touch the merge queue, and it does not
+# replace `deploy-freshness.yml`: that lane covers a deploy that went GREEN while
+# production is still behind, which a retry cannot see. This lane covers the
+# opposite half — a run that visibly ended without deploying and that nothing
+# followed up.
+#
+# ⚠️ WHY IT CANNOT LOOP. GitHub's `workflow_run` documentation says "The
+# `requested` activity type does not occur when a workflow is re-run", which
+# leaves `completed` firing on a re-run: a lane that re-runs on `completed` is
+# re-triggered by its own re-run. The bound is the RUN's `run_attempt`, which
+# GitHub increments and nobody else writes — attempt 1 may be re-run, attempt 2
+# never is (`scripts/mainCiRetry.mjs`, `decideRetry`). The job-level `if:` below
+# says the same thing a second time, so an attempt-2 event does not even start a
+# runner. And this lane triggers on `CI` only, never on itself.
+#
+# ⚠️ WHY IT NEVER RE-RUNS AN OLD RUN. A re-run keeps "the same `GITHUB_SHA` …
+# of the original event", and `deploy` builds `GITHUB_SHA` with no freshness
+# check. Re-running a red run after a newer merge has deployed would release the
+# OLDER commit over the newer one. So a run whose commit is no longer `main`'s
+# head is skipped as superseded — the newer push run already carries it.
+#
+# ⚠️ AND THE FAILED-TWICE SIGNAL IS AN ISSUE, NOT A RED CHECK. A red check on
+# `main` is nobody's by construction — that is the whole defect. When the
+# re-attempt fails too, the script opens (or comments on) an issue labelled
+# `main-ci-failed-twice`, titled by commit and ASSIGNED to whoever merged it, so
+# the notification lands on a person with a reason to open it. This lane's own
+# run also goes red, as a second, weaker channel.
+#
+# The logic lives in `scripts/mainCiRetry.mjs` (unit-tested, and the runner is
+# driven against a fake GitHub API, in `tests/scripts/retry-main-ci.test.ts`,
+# which also asserts this file's wiring) — the same thin-caller arrangement as
+# `deploy-freshness.yml`.
+#
+# ⚠️ `workflow_run` "will only trigger a workflow run if the workflow file exists
+# on the default branch", so this lane's first real execution is after it
+# merges. The tests are what stand in for a run until then.
+
+name: CI on main — retry once
+
+# Safe interpolation: the run id and conclusion are GitHub-generated values, not
+# user-controlled text. `display_title` (the commit message) is deliberately NOT
+# used here.
+run-name: Retry CI run ${{ github.event.workflow_run.id }} (attempt ${{ github.event.workflow_run.run_attempt }}, ${{ github.event.workflow_run.conclusion }})
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# One retry per CI run, never cancelled: a cancelled retry lane is a re-run that
+# nobody follows to its verdict.
+concurrency:
+  group: main-ci-retry-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  retry:
+    name: Re-attempt a red push-to-main CI run once
+    # The same bound the script enforces, stated where it costs no runner: only a
+    # FIRST attempt of a PUSH run that did not go green is considered at all.
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.run_attempt == 1 &&
+      github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.conclusion != 'neutral'
+    runs-on: ubuntu-latest
+    # NO run on record — this lane cannot run before it is on `main`. Its cost is
+    # a checkout, one dependency-free node script, and a poll of the re-run. The
+    # poll's own deadline is 75 minutes (`DEADLINE_MINUTES`): a push run's gate
+    # plus release measured a median ~34 and worst 45.2 minutes (`ci.yml`'s
+    # header), and a re-run can wait behind one pending run in its concurrency
+    # group. The ceiling sits above that deadline so the script, not the runner,
+    # reports a re-run that never finished.
+    timeout-minutes: 90
+    permissions:
+      # Read the run and `main`; re-run the run.
+      actions: write
+      contents: read
+      # The failed-twice signal.
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      # No install step: the script is dependency-free, like
+      # `scripts/assert-deploy-freshness.mjs`.
+      - name: Re-attempt once, and follow it to its verdict
+        # The run id arrives as an ENV var rather than being interpolated into
+        # the script body — same discipline the rest of the lanes use.
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/retry-main-ci.mjs
