@@ -87,6 +87,23 @@ export interface DecideGateResult {
   gate: ApprovalGateDTO;
   /** What the decision DID — the status it wrote, or why it wrote none. */
   effect: GateEffect;
+  /**
+   * Whether the version this gate was ABOUT had its files pinned by this
+   * decision (Bug MOTIR-5265) — the record band's `Files kept` line, returned so
+   * a surface can draw it from the response instead of waiting for a server
+   * render that MOTIR-5118 measured being intermittently lost.
+   *
+   * ⚠️ READ OFF THE PIN THIS TRANSACTION WROTE, NEVER DERIVED FROM
+   * `state === 'approved'` — the same rule `DesignGateSubjectDTO.filesKept`
+   * states. `pinCurrentForWorkItem` pins the CURRENT row, and a republish that
+   * took the current row while this decision waited for its lock means the pin
+   * landed on bytes nobody was asked about. So it is `true` only when the pinned
+   * row IS the gate's subject; the decision stands either way.
+   *
+   * `null` when the question does not apply: a `request_changes` pins nothing,
+   * and a kind with no design result never had files to keep.
+   */
+  filesKept: boolean | null;
 }
 
 /**
@@ -753,8 +770,11 @@ export const approvalGatesService = {
       // and the publish path retires an `awaiting` gate BEFORE it locks
       // `design_evidence`, so the two paths take the same two locks in the same
       // ORDER and a race resolves by waiting rather than by deadlocking.
+      let filesKept: boolean | null = null;
       if (input.decision === 'approve') {
-        await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
+        const pinnedId = await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
+        // Only a kind whose subject IS a design result has files to keep.
+        filesKept = locked.kind === 'design_result' ? pinnedId === locked.subjectId : null;
       }
 
       // 5 · THE KIND'S EFFECT, dispatched through the registry — in the SAME
@@ -831,7 +851,7 @@ export const approvalGatesService = {
         tx,
       );
 
-      return { gate: toApprovalGateDto(decided), effect };
+      return { gate: toApprovalGateDto(decided), effect, filesKept };
     });
   },
 };

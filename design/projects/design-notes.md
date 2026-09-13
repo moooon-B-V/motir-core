@@ -3684,3 +3684,188 @@ design that outranks the code, in the ordinary direction** — the same standing
 this file's _Source of truth_ carve-out gives the 2026-08-08 amendment: an
 amendment carrying a date, a reason and the card that owns it governs the code
 until that card ships.
+
+---
+
+# Bugs — where a project's filed bugs land (Story MOTIR-4927 · Subtask MOTIR-4933 output)
+
+**A new project-settings ROOM, `Project settings → Work → Bugs`, holding the one
+setting that decides where Motir creates the bugs it files for this project.**
+The asset is `bug-destination.mock.html` + `bug-destination.png`. Layout source of
+truth for **MOTIR-4938** (the picker, its route, both catalogues), and the surface
+**MOTIR-4940**'s E2E walks.
+
+## Files
+
+| HTML source (truth)         | PNG export            |
+| --------------------------- | --------------------- |
+| `bug-destination.mock.html` | `bug-destination.png` |
+
+## 1. What it COMPOSES, and what it decides
+
+**It composes shipped surfaces and re-specifies none of them.**
+
+| Composed                                                         | What it owns, and this asset does not                                                                                                                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings-area.mock.html` (this file, Story 6.5)                 | The area chrome: the rail, its groups, the pane, the eyebrow → serif title → description head.                                                                                  |
+| `design/monitoring/monitoring-room.mock.html`                    | The nearest room of the SAME epic. Its token, board-chrome, primitive and room-shell CSS is spliced in **verbatim** by line range, so the two assets of this tier cannot drift. |
+| `components.mock.html` · the delete-with-reassign dialog         | The `choice-card` grammar — radio, title, description, an optional slot.                                                                                                        |
+| `components/issues/ParentPicker.tsx` over the shipped `Combobox` | A searchable picker whose rows are kind glyph · title · key.                                                                                                                    |
+
+**Rendered, not recalled.** Before drawing, the shipped area was rendered LIVE — a
+signed-in account on a local `next dev`, capturing **Details** and **Estimation**.
+Three things came from those renders rather than from reading source: the rail's
+exact rows and group headings; the page head's serif title over a secondary line;
+and the **settings card with an explicit `Cancel` / `Save changes` footer, Save
+disabled until something is dirty** — Estimation's shipped behaviour, and the reason
+this room saves explicitly rather than on pick. (The same render showed that the
+rail differs per BUILD: `Public page` and `Public address` are absent off-cloud, and
+`Approvals` is newer than that branch's base. The board draws the cloud rail at
+`origin/main`.)
+
+**What this asset DECIDES** is four things:
+
+1. **Three named choices, and the third is a choice.** `Project root` has its own
+   title and its own sentence. It is never an empty select, a cleared field or a
+   `None` row: the stored value is a null pointer, null MEANS the root (MOTIR-4934),
+   and an unset-looking control would tell every team that chose it their project is
+   misconfigured.
+2. **The first choice NAMES its container and links to it** — kind glyph, key,
+   title, `Open`. A destination a person cannot open is one they cannot check.
+3. **A container that has gone is STATED, not hidden** (panel 4).
+4. **The room lives in `Work`**, gated on `project:administer` (§3, §4).
+
+## 2. The panels
+
+| Panel | State                          | What it draws                                                                           |
+| ----- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| **0** | default (`configured`, seeded) | The seeded `RENDE-1 · Bugs` container selected and named; Save disabled.                |
+| **1** | choosing another container     | The picker OPEN and filtered, rows grouped **Tasks / Stories / Epics**; the card dirty. |
+| **2** | root chosen, saving            | `Project root` selected; both actions disabled; the primary carries the spinner.        |
+| **3** | saved (`root_selected`)        | Clean card with `Project root` selected, plus the success toast.                        |
+| **4** | `container_archived`           | The warning banner; the stored choice struck through with an `Archived` pill.           |
+| **5** | the ACCESS PATH                | The rail with `Work ▸ Bugs` active, the group argument, and the reason → state table.   |
+
+**The picker's population is a CONTRACT, not an illustration.** It lists only work
+items that can legally parent a `bug` — `epic`, `story`, `task`, per the kind-parent
+matrix (`lib/issues/parentRules.ts`, enforced by the `work_item` kind trigger) — and
+only from this project. Grouping by kind is what keeps a project with hundreds of
+containers scannable; the Combobox's `group` field already renders the headers.
+
+## 3. WHERE it lives — decided from readers and writers
+
+Following the approvals section's rule (_decide by who reads and writes the value,
+never by what it resembles_), traced on `origin/main` plus the MOTIR-4927 branch:
+
+|             |                                                                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reader**  | `bugDestinationService.resolve` — the ONE seam. Its callers: `aiWorkItemsService.fileBug` (the `@planner-bug-home` marker path) today, and MOTIR-4929's monitor ingestion next. |
+| **Writers** | `insertProjectWithSeedsInTx` (the seed, MOTIR-4935), the backfill migration (MOTIR-4936), and this room (MOTIR-4938).                                                           |
+
+What those add up to is **where in this project's tree a kind of work item is
+created** — the axis `Fields` and `Components` already occupy in `Work`, which shape
+what a work item carries. So the row sits **last in `Work`, directly under
+`Components`**, with the lucide `Bug` mark.
+
+**Rejected candidates, and why each fails:**
+
+- **`General ▸ Monitoring`** — the monitoring room holds a third party's CREDENTIAL,
+  which is why it sits in General, and its own notes §7 name the bug-container
+  picker as MOTIR-4927's and out of scope. The monitor is also one filer of several;
+  a destination filed under it would read as monitor-only.
+- **`Automation`** — holds rooms that configure how Motir BEHAVES (the planner's
+  cadence, the rule engine). This value is a place in the tree, not a behaviour.
+- **A card inside `Details`** — Details is the project's identity (name, key, logo,
+  archive). A filing destination is not identity.
+
+## 4. The permission — `project:administer`, and why not a new key
+
+There is no `bug:*` key in `lib/permissions/catalog.ts`, and a design card has no
+warrant to add one (the approvals section's own reasoning). Of the keys that exist:
+
+- **`project:administer` — chosen.** Its registry evidence is _"the project-level
+  administration that belongs to no domain"_, and a filing destination belongs to
+  none of the existing domains.
+- **`work_item:triage` — rejected.** Deciding where incoming bugs go sounds like
+  triage, but the key's own catalogue copy is scoped to the QUEUE — _"Accept,
+  decline, promote or snooze an item in the triage queue"_ — and widening a shipped
+  key's meaning is a decision about that key, not about this room.
+- **`workflow:manage` — rejected.** It governs how work MOVES (the status graph),
+  not where it is created.
+
+A dedicated key is a reasonable later split and is **not decided here**. The door is
+therefore admin-only, the same as every row in the rail today; there is no read-only
+panel because no reader without the key reaches the room.
+
+## 5. Copy strings catalog (use verbatim in MOTIR-4938; i18n under `settings`)
+
+| Surface                             | `en`                                                                                                                                                                        | `zh`                                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Rail entry (`settings.nav.bugs`)    | `Bugs`                                                                                                                                                                      | `缺陷`                                                                                                     |
+| Page title                          | `Bugs`                                                                                                                                                                      | `缺陷`                                                                                                     |
+| Page description                    | `Where Motir files the bugs it creates on its own for this project — issues arriving from a connected monitor, for one. A bug a person files keeps the parent they choose.` | `Motir 为此项目自动创建缺陷时的存放位置——例如来自已连接监控服务的问题。由人工提交的缺陷保留其选定的父项。` |
+| Card title                          | `Bug destination`                                                                                                                                                           | `缺陷去向`                                                                                                 |
+| Card description                    | `New bugs are created under this container. Changing it does not move bugs that are already filed.`                                                                         | `新缺陷将创建在此容器下。更改设置不会移动已提交的缺陷。`                                                   |
+| Choice 1 title · desc               | `This project's bug container` · `Created with the project. Rename it or move it and it stays the destination.`                                                             | `本项目的缺陷容器` · `随项目一同创建。重命名或移动后，它仍是缺陷去向。`                                    |
+| Container link                      | `Open`                                                                                                                                                                      | `打开`                                                                                                     |
+| Choice 2 title · desc               | `Another container` · `Any epic, story or task in this project.`                                                                                                            | `其他容器` · `本项目中的任意史诗、故事或任务。`                                                            |
+| Picker placeholder · search · empty | `Choose a container…` · `Search epics, stories and tasks…` · `No container matches.`                                                                                        | `选择容器…` · `搜索史诗、故事和任务…` · `没有匹配的容器。`                                                 |
+| Picker group headers                | `Tasks` · `Stories` · `Epics`                                                                                                                                               | `任务` · `故事` · `史诗`                                                                                   |
+| Choice 3 title · desc               | `Project root` · `Bugs are filed at the top of the project with no parent — nothing sits between a new bug and the backlog.`                                                | `项目根级` · `缺陷直接提交到项目顶层，不设父项——新缺陷与待办列表之间没有任何中间层。`                      |
+| Footer                              | `Cancel` · `Save changes` · `Saving…`                                                                                                                                       | `取消` · `保存更改` · `正在保存…`                                                                          |
+| Toast                               | `Bug destination saved` · `New bugs will be filed at the project root.` (root) · `New bugs will be filed under {key} · {title}.` (container)                                | `缺陷去向已保存` · `新缺陷将提交到项目根级。` · `新缺陷将提交到 {key} · {title} 下。`                      |
+| Archived banner                     | `{key} · {title} was archived. New bugs are being filed at the project root until you choose a destination again.`                                                          | `{key} · {title} 已归档。在你重新选择去向之前，新缺陷将提交到项目根级。`                                   |
+| Archived pill                       | `Archived`                                                                                                                                                                  | `已归档`                                                                                                   |
+
+**Reason → what the room renders** (the resolver's `BugDestinationReason`):
+`configured` → the naming choice · `root_selected` → `Project root`, selected ·
+`container_archived` → the banner + the struck-through stored choice ·
+`legacy_title_home` → **never rendered**: the backfill migration gives every project
+a pointer before this room ships, so the transitional branch cannot reach it.
+
+## 6. Findings this design pass surfaced — each one is a card, not a paragraph
+
+1. **A DELETED container cannot draw panel 4 — filed as MOTIR-5294.** MOTIR-4934's
+   `ON DELETE SET NULL` turns a deleted container into a null pointer, and null
+   already means `Project root`, so the room cannot tell a deleted container from a
+   deliberate choice: the column no longer holds the difference. The story's
+   _"records why"_ and MOTIR-4938's _"archived **or deleted**"_ both read on it, so
+   MOTIR-4938 is now `blocked_by` MOTIR-5294, which owes the decision (accept and
+   amend the criteria, or record the lost value). No dangling name is ever shown
+   either way; until it is decided, panel 4 is drawn for an ARCHIVE only.
+2. **The planner's in-tenant `log_bug` does not consult the destination yet — a
+   gap in MOTIR-4937, being closed there.** `aiWorkItemsService.filePlannerBug`
+   places a bug by the `parentKey` the planning tool supplies and files at the
+   root when it supplies none. The story names _the MCP's `log_bug`_ as one of the
+   resolver's three consumers, so this is that card's unmet criterion, recorded on
+   it with the fix: a supplied parent is kept, a parentless planner bug resolves
+   the destination. The page description above already holds under that fix — a
+   parentless planner bug is one Motir creates _on its own_, and a bug that names
+   a parent keeps it.
+3. **The seed's container description already names this room** — _"Project
+   settings → Bugs is where that choice lives"_ is the body MOTIR-4935 writes into
+   every seeded container (its `DEFAULT_BUG_CONTAINER_DESCRIPTION_MD` constant, not
+   yet on `main` while that card's pull request is open). This asset ratifies that
+   name; if the room is ever renamed, that string moves with it.
+
+## 7. Scope boundary — what this asset must NOT be read as specifying
+
+- **No list of filed bugs**, and no count of what has landed in the destination.
+- **No bulk "move existing bugs" action.** Changing the destination affects the
+  next bug only — the card description says so.
+- **No monitor connection surface** — that is `design/monitoring/`'s.
+- **No route.** The room's page does not exist yet; MOTIR-4938 creates it and owns
+  its address, so this asset names none and needs no `design-asset-addresses`
+  exemption.
+
+## 8. Tokens & a11y
+
+Colour is `--el-*` only; shape through the element-semantic tokens
+(`--radius-card/-input/-control/-badge`, `--height-input/-btn-md`,
+`--spacing-control-*/-input-x`, `--shadow-card/-elevated`). Description ink is
+`--el-text-secondary`, never `--el-text-muted` (the shipped `choice-card` used muted;
+raised here so it clears AA on every surface the card lands on). Keys use
+`--el-text-identifier`, the Combobox's own identifier ink. The three choices are a
+`radiogroup` of `radio`s with `aria-checked`; the picker is the shipped WAI-ARIA
+combobox + `listbox`; the archived state conveys itself with text and an icon, not
+colour alone.
