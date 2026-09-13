@@ -1,5 +1,6 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { getGitProvider } from '@/lib/git';
 import {
   fetchCodeScanningAnalyses,
@@ -23,9 +24,13 @@ import type { GitProviderId } from '@/lib/git/types';
 //
 // Tenancy: the caller is a job token, and the WORKSPACE is the token's own
 // (`ctx.workspaceId`, signed by core). The repo lookup runs under
-// `withWorkspaceContext` (the RLS gate) AND filters on the installation's
-// workspace, so a job for workspace A can only ever resolve repos connected in
-// workspace A — no cross-tenant credential leakage.
+// `withWorkspaceContext` (the RLS gate) AND filters on the ORGANISATION that
+// workspace belongs to, resolved off the workspace row — a repository is
+// connected once, to the organisation (Story MOTIR-4669), so a job for any of
+// its workspaces resolves it, and a job for another organisation never does.
+// Filtering on the workspace instead returned null in every workspace but the
+// installing one, and null here DEGRADES rather than raising, so the audit
+// silently lost its token (MOTIR-5188).
 //
 // NEVER a gate (§10.3): a not-connected repo, an unconfigured App, a mint
 // failure, or an unavailable API all return null, so motir-ai's detection
@@ -47,8 +52,13 @@ async function resolveRepoToken(
 
   const connected = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    (tx) =>
-      githubRepoRepository.findConnectedByWorkspaceAndName(ctx.workspaceId, gh.owner, gh.name, tx),
+    async (tx) =>
+      githubRepoRepository.findConnectedByOrganizationAndName(
+        await resolveOrganizationId(ctx.workspaceId, tx),
+        gh.owner,
+        gh.name,
+        tx,
+      ),
   );
   if (!connected) return null;
 

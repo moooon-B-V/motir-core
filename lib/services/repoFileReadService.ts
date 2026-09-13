@@ -1,5 +1,6 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { getGitProvider } from '@/lib/git';
 import { UnknownGitProviderError } from '@/lib/git/registry';
 import type { GitProviderId, RepoFileReadResult } from '@/lib/git/types';
@@ -30,10 +31,16 @@ import type { GitProviderId, RepoFileReadResult } from '@/lib/git/types';
 // ── Tenancy ─────────────────────────────────────────────────────────────────
 // The caller is a job token and the WORKSPACE is the token's own, signed by
 // core. The repo lookup runs under `withWorkspaceContext` (the RLS gate) and
-// filters on that workspace, so a job for workspace A can only ever resolve a
-// repo connected in workspace A. A `repoRef` naming somebody else's repository
-// is indistinguishable from one naming nothing — `repo_not_connected` either
-// way, no existence leak.
+// filters on the ORGANISATION that workspace belongs to, resolved off the
+// workspace row: a repository is connected once, to the organisation (Story
+// MOTIR-4669), so a job for any of its workspaces reads it, and a job for
+// another organisation never does. A `repoRef` naming somebody else's
+// repository is indistinguishable from one naming nothing —
+// `repo_not_connected` either way, no existence leak.
+//
+// ⚠️ It filtered on the WORKSPACE until MOTIR-5188, which made
+// `repo_not_connected` a FALSE reason in every workspace but the installing
+// one — the exact wrong belief the paragraph above exists to prevent.
 
 export interface RepoFileReadContext {
   userId: string;
@@ -95,9 +102,9 @@ export const repoFileReadService = {
 
     const connected = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) =>
-        githubRepoRepository.findConnectedByWorkspaceAndName(
-          ctx.workspaceId,
+      async (tx) =>
+        githubRepoRepository.findConnectedByOrganizationAndName(
+          await resolveOrganizationId(ctx.workspaceId, tx),
           coords.owner,
           coords.name,
           tx,

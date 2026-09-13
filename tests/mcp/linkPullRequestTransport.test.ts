@@ -188,6 +188,12 @@ describe('block 6 — the tool is REGISTERED on the shipped server', () => {
     // first, and the column drop the second.
     expect(tool!.description).not.toMatch(/cannot point at two/);
     expect(tool!.description).not.toMatch(/MOVES/);
+    // The TENANCY half (MOTIR-5188): the repository resolves across the
+    // organisation, so "cross-workspace" is no longer the refusal it names —
+    // a sibling workspace of the same organisation is ADMITTED.
+    expect(tool!.description, 'the repository tier is the organisation').toMatch(/ORGANISATION/);
+    expect(tool!.description, 'what is still refused').toMatch(/another organisation/);
+    expect(tool!.description).not.toMatch(/cross-workspace repository/);
     await client.close();
   });
 });

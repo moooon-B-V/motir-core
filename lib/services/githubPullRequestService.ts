@@ -275,12 +275,16 @@ export const githubPullRequestService = {
    *    them would re-open a merged pull request.
    *
    * ── Tenancy ───────────────────────────────────────────────────────────────
-   * The repository is resolved from the REPO ROW's own `workspace_id`
-   * (MOTIR-1931), never through its installation — under Motir's shared
-   * provisioning installation the installation names no workspace, so the older
-   * join would have made this permanently not-found for every repository Motir
-   * created. An unknown or cross-workspace repository and an unknown item both
-   * raise their typed not-found, so neither leaks existence.
+   * The repository is resolved from the REPO ROW, never through its installation
+   * (MOTIR-1931) — under Motir's shared provisioning installation the
+   * installation names no workspace, so that join would have made this
+   * permanently not-found for every repository Motir created. And it is resolved
+   * at the ORGANISATION tier (MOTIR-5188): a repository is connected once, to the
+   * organisation (Story MOTIR-4669), so any of its workspaces may link a pull
+   * request on it — the same widening MOTIR-5152 gave `linkPullRequest`. The
+   * ITEM stays workspace-scoped. An unknown repository, another organisation's
+   * repository and an unknown item all raise their typed not-found, so none leaks
+   * existence.
    *
    * ⚠️ THE ASSOCIATION IS A SET: a call naming a different work item ADDS a
    * second delivery rather than moving the first, and there is no move to report
@@ -316,8 +320,13 @@ export const githubPullRequestService = {
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(input.workItemId);
 
-      const repo = await githubRepoRepository.findConnectedByWorkspaceAndName(
-        ctx.workspaceId,
+      // The ORGANISATION's repository, resolved off the workspace ROW — never
+      // request input. Asking the workspace raised `GithubRepoNotFoundError` in
+      // every workspace but the installing one, shutting the only door an agent
+      // has for linking a pull request (MOTIR-5188).
+      const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+      const repo = await githubRepoRepository.findConnectedByOrganizationAndName(
+        organizationId,
         input.owner,
         input.name,
         tx,
@@ -533,8 +542,11 @@ export const githubPullRequestService = {
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(input.workItemId);
 
-      const repo = await githubRepoRepository.findConnectedByWorkspaceAndName(
-        ctx.workspaceId,
+      // The organisation tier, travelling WITH the link arm above: a link a
+      // sibling workspace can make and cannot retract is the worse trap.
+      const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+      const repo = await githubRepoRepository.findConnectedByOrganizationAndName(
+        organizationId,
         input.owner,
         input.name,
         tx,

@@ -478,7 +478,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned again for MOTIR-3757, and the SUMMARY changed with it: the description said
     // the link a work item carries is SINGULAR and MOVES, which stopped being true when the
     // column it described was dropped.
-    descriptionFingerprint: '97a9ab212c18',
+    // Re-pinned for MOTIR-5188: the description said a "cross-workspace repository" is
+    // refused, which stopped being true when the repository read moved to the ORGANISATION.
+    // The summary names no tier, so it stands.
+    descriptionFingerprint: '120f83a21d3e',
   },
   unlink_pull_request: {
     summary:
