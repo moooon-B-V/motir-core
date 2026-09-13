@@ -136,6 +136,8 @@ function openMoreFields(): void {
 // `RepositorySetField`'s `None`; the unset custom fields render the panel's own
 // empty value once per supported field type.
 const EMPTY: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   identifier: 'PROD-7',
   title: 'Email + password sign-in',
   projectIdentifier: 'PROD',

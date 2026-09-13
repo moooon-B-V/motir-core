@@ -81,6 +81,8 @@ const STATUSES = [
 ];
 
 const DATA: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   id: 'cmqvitem00000000000000p7',
   identifier: 'PROD-7',
   title: 'Email + password sign-in',

@@ -788,6 +788,19 @@ export default defineConfig({
         // …and the SEAM the payload widening landed in. `workItemsService.ts`
         // (the other half) is already included + gated above.
         'lib/mappers/quickViewMappers.ts',
+        // Story MOTIR-5308 · MOTIR-5317 — the folder surface this story ADDED.
+        // Measured on the story branch with the folder suites before pinning (the
+        // before/after figures are in the story PR body), then gated below.
+        'lib/repositories/folderRepository.ts',
+        'lib/services/foldersService.ts',
+        'lib/mappers/folderMappers.ts',
+        'lib/folders/errors.ts',
+        'app/**/items/_components/FolderCommands.tsx',
+        'app/**/items/_components/FolderDeleteDialog.tsx',
+        'app/**/items/_components/FolderNameField.tsx',
+        'app/**/items/_components/FolderPicker.tsx',
+        'app/**/items/_components/FolderRowMenu.tsx',
+        'app/**/items/_components/QuickViewFolderField.tsx',
         'app/**/items/[key]/_components/ChildPanel.tsx',
         'app/**/items/[key]/_components/ChildList.tsx',
         'lib/mcp/registry.ts',
@@ -3806,6 +3819,35 @@ export default defineConfig({
           lines: 90,
         },
         'app/**/items/_components/IssueQuickViewPanel.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-5308 · MOTIR-5317 — the folder surface, pinned at the floor.
+        'lib/repositories/folderRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/foldersService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/folderMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/folders/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/**/items/_components/FolderCommands.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/items/_components/FolderDeleteDialog.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/_components/FolderNameField.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/items/_components/FolderPicker.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/items/_components/FolderRowMenu.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/items/_components/QuickViewFolderField.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,

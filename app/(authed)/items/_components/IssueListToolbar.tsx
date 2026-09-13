@@ -16,6 +16,8 @@ import { IssueAdvancedFilter } from './IssueAdvancedFilter';
 import { SavedFilterDropdown } from './SavedFilterDropdown';
 import { IssueViewSwitcher } from './IssueViewSwitcher';
 import { NewIssueButton } from './NewIssueButton';
+import { NewFolderButton } from './FolderCommands';
+import { isFilterActive } from '@/lib/issues/issueListFilter';
 
 // The /items toolbar (Subtask 2.5.3; view switcher 2.5.8; filter bar 2.5.4;
 // advanced builder 6.1.4), per design/work-items/tree.png + list.mock.html +
@@ -131,6 +133,10 @@ export async function IssueListToolbar({
         ast={ast}
       />
       <IssueViewSwitcher view={view} sort={sort} filter={filter} />
+      {/* "New folder" (MOTIR-5344, folders design panel 1) — the unfiltered Tree
+          only: the List never shows folders, and a filtered Tree is the static
+          context-preserving read with no folder levels to create into. */}
+      {view === 'tree' && !isFilterActive(filter) && ast === null ? <NewFolderButton /> : null}
       <NewIssueButton />
     </div>
   );

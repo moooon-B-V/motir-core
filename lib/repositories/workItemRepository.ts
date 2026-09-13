@@ -43,6 +43,19 @@ export type WorkItemCreateInput = Prisma.WorkItemUncheckedCreateInput;
  * alias; `Prisma.WorkItemUncheckedUpdateInput` itself is named only here.
  */
 export type WorkItemUpdateInput = Prisma.WorkItemUncheckedUpdateInput;
+
+/**
+ * How a lazy tree level treats FOLDERS (Story MOTIR-5308 · MOTIR-5314).
+ *
+ * OMITTED, a level reads exactly as it always has, and the roadmap and the run
+ * canvas omit it: where a filed item appears on THOSE surfaces is decided by the
+ * story that owns them, and a filed item is still the root it was for them.
+ *   * `excludeFiled` — the ROOT level leaves out items filed in a folder, because
+ *     the /items tree shows them inside their folder instead.
+ *   * `folder` — the level IS one folder's filed items.
+ * An explicit id set ignores it: a caller naming its rows has named them.
+ */
+export type TreeFolderLevel = { kind: 'excludeFiled' } | { kind: 'folder'; folderId: string };
 import {
   CrossProjectParentError,
   DepthLimitExceededError,
@@ -51,6 +64,7 @@ import {
   WorkItemKeyConflictError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
+import { CrossProjectFolderError } from '@/lib/folders/errors';
 
 // Work-item repository — single Prisma operations on the `work_item` table.
 // Writes require `tx` (compile-time guarantee they run in a transaction);
@@ -761,6 +775,53 @@ export const workItemRepository = {
    * Read-inside-a-transaction that gates a write → requires `tx` per CLAUDE.md
    * (mirrors userRepository.lockById).
    */
+  /**
+   * Every work item filed directly in one folder, in display order — what
+   * `foldersService.deleteFolder` moves up before it deletes the folder.
+   *
+   * UNFILTERED on purpose: an archived or triaged item filed there still holds
+   * the folder's foreign key, so a delete that skipped it would be refused by
+   * the database halfway through (Story MOTIR-5308 · MOTIR-5313).
+   */
+  async findFiledInFolder(
+    folderId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<WorkItem, 'id' | 'kind' | 'parentId' | 'position'>>> {
+    return tx.workItem.findMany({
+      where: { folderId },
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      select: { id: true, kind: true, parentId: true, position: true },
+    });
+  },
+
+  /**
+   * How many work items are filed DIRECTLY in a folder — exactly the set
+   * `findFiledInFolder` returns (no archive or triage filter), so a delete
+   * confirmation counts what `foldersService.deleteFolder` will move.
+   */
+  async countFiledInFolder(folderId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workItem.count({ where: { folderId } });
+  },
+
+  /**
+   * The last position among the work items at one FOLDER LEVEL — filed in
+   * `folderId`, or at the project root (no parent and no folder) when it is
+   * `null`. A filed or un-filed item is appended after it.
+   */
+  async findLastPositionAtFolderLevel(
+    projectId: string,
+    folderId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.workItem.findFirst({
+      where:
+        folderId === null ? { projectId, folderId: null, parentId: null } : { projectId, folderId },
+      orderBy: [{ position: 'desc' }, { id: 'desc' }],
+      select: { position: true },
+    });
+    return row?.position ?? null;
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "work_item" WHERE "id" = ${id} FOR UPDATE
@@ -3473,6 +3534,7 @@ export const workItemRepository = {
     page: { take: number; offset: number; ids?: readonly string[] | undefined },
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
+    folderLevel?: TreeFolderLevel,
   ): Promise<WorkItemTreeRow[]> {
     const client = tx ?? dbRead;
     const orderCol = ISSUE_SORT_SQL[sort.column];
@@ -3535,7 +3597,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
-          AND ${parentPred}
+          AND ${treeLevelPredicate(parentPred, parentId, page.ids !== undefined, folderLevel)}
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
         LIMIT ${page.take + 1} OFFSET ${page.offset}`;
   },
@@ -3555,6 +3617,7 @@ export const workItemRepository = {
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
     ids?: readonly string[] | undefined,
+    folderLevel?: TreeFolderLevel,
   ): Promise<number> {
     const client = tx ?? dbRead;
     // The SAME level predicate `findProjectTreeLevel` builds, sprint arm included
@@ -3578,7 +3641,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
-          AND ${parentPred}`;
+          AND ${treeLevelPredicate(parentPred, parentId, ids !== undefined, folderLevel)}`;
     return Number(rows[0]?.count ?? 0);
   },
 
@@ -5457,6 +5520,25 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
  * `buildIssueFilterSql`. The Prisma-builder reads (`findColumnCards`, the lane
  * `groupBy`s) express the same predicate as `{ triagedAt: null }`.
  */
+/**
+ * A lazy tree level's node predicate with its FOLDER treatment applied — one
+ * function for `findProjectTreeLevel` and `countProjectTreeLevel`, so a level's
+ * rows and its "Showing N of M" total can never disagree about what the level is.
+ * Applied at the ROOT only (both root arms, sprint included): a work item's
+ * children are never filed, because the CHECK keeps `parentId` and `folderId`
+ * apart.
+ */
+function treeLevelPredicate(
+  parentPred: Prisma.Sql,
+  parentId: string | null,
+  hasIds: boolean,
+  folderLevel: TreeFolderLevel | undefined,
+): Prisma.Sql {
+  if (folderLevel === undefined || hasIds) return parentPred;
+  if (folderLevel.kind === 'folder') return Prisma.sql`w."folderId" = ${folderLevel.folderId}`;
+  return parentId === null ? Prisma.sql`${parentPred} AND w."folderId" IS NULL` : parentPred;
+}
+
 function notInTriageSql(alias: string): Prisma.Sql {
   return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
 }
@@ -5694,6 +5776,14 @@ function translateWriteError(err: unknown, ctx?: { id?: string }): never {
     ) {
       throw new CrossProjectParentError(message);
     }
+    // A filed item's folder in another tenant (MOTIR-5312's trigger) — the same
+    // typed error `workItemsService.fileWorkItem` raises for it ahead of the write.
+    if (
+      message.includes('WI_FOLDER_CROSS_WORKSPACE') ||
+      message.includes('WI_FOLDER_CROSS_PROJECT')
+    ) {
+      throw new CrossProjectFolderError(message);
+    }
     if (message.includes('WI_ILLEGAL_PARENT_TYPE') || message.includes('WI_SUBTASK_NEEDS_PARENT')) {
       throw new IllegalParentTypeError(message);
     }
@@ -5722,7 +5812,9 @@ function isTriggerMarker(message: string): boolean {
     message.includes('WI_ILLEGAL_PARENT_TYPE') ||
     message.includes('WI_SUBTASK_NEEDS_PARENT') ||
     message.includes('WI_DEPTH_LIMIT_EXCEEDED') ||
-    message.includes('WI_PARENT_CYCLE')
+    message.includes('WI_PARENT_CYCLE') ||
+    message.includes('WI_FOLDER_CROSS_WORKSPACE') ||
+    message.includes('WI_FOLDER_CROSS_PROJECT')
   );
 }
 
