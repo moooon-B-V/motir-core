@@ -12,10 +12,11 @@
 // DECISION 3's ANONYMISE group says, of a comment or a work item inside a
 // workspace other people share: *"the name is removed, the row stays."* The
 // schema makes that a statement about the `user` row rather than about the
-// comment. Four foreign keys onto `user` are NOT NULL and `onDelete: Restrict`:
+// comment. Five foreign keys onto `user` are NOT NULL and `onDelete: Restrict`:
 //
 //   `work_item.reporter_id` · `comment.author_id` ·
-//   `work_item_link.created_by_id` · `work_item_revision.changed_by_id`
+//   `work_item_link.created_by_id` · `work_item_revision.changed_by_id` ·
+//   `folder.created_by_id` (MOTIR-5312)
 //
 // So a `DELETE FROM "user"` is REFUSED by Postgres for anybody who ever
 // reported an item or wrote a comment — which is exactly the population the
