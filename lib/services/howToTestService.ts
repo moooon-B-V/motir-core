@@ -147,10 +147,7 @@ export const howToTestService = {
           id: record.id,
           run: runOf(current.dispatchRunId, current.dispatchRun),
           createdAt: record.createdAt,
-          preconditionMd: record.preconditionMd,
-          clickPathSteps: record.clickPathNotApplicable ? [] : record.clickPathSteps,
-          clickPathNotApplicable: record.clickPathNotApplicable,
-          clickPathNotApplicableReason: record.clickPathNotApplicableReason,
+          bodyMd: record.bodyMd,
           previewPath: record.previewPath,
         },
         repos: bound.map(({ section, pr }) =>

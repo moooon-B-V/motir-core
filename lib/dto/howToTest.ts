@@ -2,7 +2,7 @@
 //
 // HOW TO TEST is per RUN, on the RUN TARGET (`docs/decisions/approval-gates.md`
 // §9's 2026-09-13 amendment). The read answers for ONE item: its current run's
-// record — one click-path, one precondition — and, per repository section, that
+// record — its rich-text body — and, per repository section, that
 // repository's pull request, preview and checks. Every path is either filled or
 // carries WHY it is unavailable, so a reviewer can tell "there is no preview"
 // from "nobody wrote one". The PINNED shape is the design's Fields-read table
@@ -11,7 +11,6 @@
 // ⚠️ NO URL TO THE DIFF. The Development row's own `LinkedPullRequestDto.url` is
 // the diff link-out, and the block draws none.
 
-import type { SetupCommandDTO } from '@/lib/dto/testInstructions';
 import type { DeploymentState } from '@/lib/git/types';
 
 /**
@@ -50,16 +49,6 @@ export type HowToTestPreviewDto =
     }
   | { status: 'no_deployment_reported' };
 
-export type HowToTestLocalDto =
-  | {
-      status: 'available';
-      /** `git fetch origin <headRef> && git checkout <headRef>`, the ref shell-quoted. */
-      fetchCommand: string;
-      setupCommands: SetupCommandDTO[];
-    }
-  /** The run published a section for this repository, but no pull request carries its branch. */
-  | { status: 'no_pull_request' };
-
 export type HowToTestCiDto =
   | { status: 'available'; checks: HowToTestCheckDto[] }
   | { status: 'no_checks_reported' };
@@ -84,7 +73,12 @@ export interface HowToTestRepoDto {
   pullRequest: HowToTestPullRequestRefDto | null;
   /** True when a head is known and the section was written for a different commit. */
   stale: boolean;
-  local: HowToTestLocalDto;
+  /**
+   * `git fetch origin <headRef> && git checkout <headRef>`, the ref shell-quoted and
+   * composed from the pull request — never the agent's — or null when no pull
+   * request is bound. The block renders it as a copyable code block.
+   */
+  fetchCommand: string | null;
   preview: HowToTestPreviewDto;
   ci: HowToTestCiDto;
 }
@@ -100,10 +94,8 @@ export interface HowToTestRecordDto {
   id: string;
   run: HowToTestRunDto | null;
   createdAt: string;
-  preconditionMd: string | null;
-  clickPathSteps: string[];
-  clickPathNotApplicable: boolean;
-  clickPathNotApplicableReason: string | null;
+  /** The agent's rich-text How to test, as written. */
+  bodyMd: string;
   previewPath: string | null;
 }
 

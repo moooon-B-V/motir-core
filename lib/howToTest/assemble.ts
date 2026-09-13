@@ -176,7 +176,7 @@ export function assembleHowToTestRepo(
       commitSha: section.commitSha,
       pullRequest: null,
       stale: false,
-      local: { status: 'no_pull_request' },
+      fetchCommand: null,
       // Without a branch there is neither a head to match a preview on nor checks.
       preview: { status: 'no_deployment_reported' },
       ci: { status: 'no_checks_reported' },
@@ -210,11 +210,7 @@ export function assembleHowToTestRepo(
     },
     // A section written against an ABBREVIATED sha of the head is not stale.
     stale: headSha !== null && !headSha.startsWith(section.commitSha),
-    local: {
-      status: 'available',
-      fetchCommand: fetchCommandFor(pr.headRef),
-      setupCommands: section.setupCommands,
-    },
+    fetchCommand: fetchCommandFor(pr.headRef),
     preview: previewFor(pickDeployment(candidates), previewPath),
     ci: checks.length > 0 ? { status: 'available', checks } : { status: 'no_checks_reported' },
   };

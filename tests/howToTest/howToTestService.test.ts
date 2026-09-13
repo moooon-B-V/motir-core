@@ -58,7 +58,6 @@ function section(over: Partial<TestInstructionsRepoDTO> = {}): TestInstructionsR
   return {
     repoId: 'repo-1',
     commitSha: HEAD,
-    setupCommands: [{ label: 'Install', command: 'pnpm install' }],
     ...over,
   };
 }
@@ -120,11 +119,7 @@ describe('assembleHowToTestRepo — the pure arms', () => {
         merged: false,
       },
       stale: false,
-      local: {
-        status: 'available',
-        fetchCommand: 'git fetch origin feat/MOTIR-7-change && git checkout feat/MOTIR-7-change',
-        setupCommands: [{ label: 'Install', command: 'pnpm install' }],
-      },
+      fetchCommand: 'git fetch origin feat/MOTIR-7-change && git checkout feat/MOTIR-7-change',
       preview: {
         status: 'available',
         url: 'https://acme-preview.vercel.app/items/ACME-1',
@@ -205,7 +200,7 @@ describe('assembleHowToTestRepo — the pure arms', () => {
     expect(dto).toMatchObject({
       pullRequest: null,
       stale: false,
-      local: { status: 'no_pull_request' },
+      fetchCommand: null,
       preview: { status: 'no_deployment_reported' },
       ci: { status: 'no_checks_reported' },
     });
@@ -374,7 +369,7 @@ async function linkedPr(
   return row;
 }
 
-const SETUP = [{ label: 'Run', command: 'pnpm dev' }];
+const BODY = '## Precondition\n\nSign in.\n\n## Locally\n\n```sh\npnpm dev\n```';
 
 describe('howToTestService.getForWorkItem', () => {
   it('an item with no record, no ancestor record and no run is record_missing with nobody owed', async () => {
@@ -412,11 +407,10 @@ describe('howToTestService.getForWorkItem', () => {
     await testInstructionsService.publish(
       {
         workItemId: story.id,
-        clickPathSteps: ['Open the story', 'Scroll to How to test'],
+        bodyMd: BODY,
         previewPath: '/items/ACME-1',
-        preconditionMd: 'Sign in.',
         repos: [
-          { repoId: web.id, commitSha: HEAD, setupCommands: SETUP },
+          { repoId: web.id, commitSha: HEAD },
           { repoId: api.id, commitSha: OLD },
         ],
       },
@@ -441,8 +435,7 @@ describe('howToTestService.getForWorkItem', () => {
     expect(dto.state).toBe('record');
     expect(dto.record).toMatchObject({
       run: null,
-      preconditionMd: 'Sign in.',
-      clickPathSteps: ['Open the story', 'Scroll to How to test'],
+      bodyMd: BODY,
       previewPath: '/items/ACME-1',
     });
     expect(dto.repos.map((r) => r.repoId)).toEqual([web.id, api.id]);
@@ -451,18 +444,14 @@ describe('howToTestService.getForWorkItem', () => {
       repoName: 'acme/web',
       pullRequest: { id: storyWeb.id, headRef: 'parent/story-web', headSha: HEAD },
       stale: false,
-      local: {
-        status: 'available',
-        fetchCommand: 'git fetch origin parent/story-web && git checkout parent/story-web',
-        setupCommands: SETUP,
-      },
+      fetchCommand: 'git fetch origin parent/story-web && git checkout parent/story-web',
       preview: { status: 'available', url: 'https://web-preview.example/items/ACME-1' },
       ci: { status: 'available' },
     });
     expect(apiSection).toMatchObject({
       repoName: 'acme/api',
       pullRequest: { id: childApi.id, headRef: 'subtask/child-api', headSha: null },
-      local: { status: 'available', setupCommands: [] },
+      fetchCommand: 'git fetch origin subtask/child-api && git checkout subtask/child-api',
       preview: { status: 'no_deployment_reported' },
       ci: { status: 'no_checks_reported' },
     });
@@ -475,19 +464,16 @@ describe('howToTestService.getForWorkItem', () => {
     await testInstructionsService.publish(
       {
         workItemId: card.id,
-        clickPathNotApplicable: true,
-        clickPathNotApplicableReason: 'a service only',
+        bodyMd: 'A service only — no rendered surface.',
         repos: [{ repoId: web.id, commitSha: HEAD }],
       },
       fx.ctx,
     );
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
     expect(dto.record).toMatchObject({
-      clickPathSteps: [],
-      clickPathNotApplicable: true,
-      clickPathNotApplicableReason: 'a service only',
+      bodyMd: 'A service only — no rendered surface.',
     });
-    expect(dto.repos[0]).toMatchObject({ pullRequest: null, local: { status: 'no_pull_request' } });
+    expect(dto.repos[0]).toMatchObject({ pullRequest: null, fetchCommand: null });
   });
 
   it('a CHILD with no record of its own answers tested_via_ancestor, naming the nearest ancestor that has one', async () => {
@@ -502,7 +488,7 @@ describe('howToTestService.getForWorkItem', () => {
     const web = await connectRepo(fx, 'web');
     const publish = (workItemId: string) =>
       testInstructionsService.publish(
-        { workItemId, clickPathSteps: ['Open'], repos: [{ repoId: web.id, commitSha: HEAD }] },
+        { workItemId, bodyMd: '## Open', repos: [{ repoId: web.id, commitSha: HEAD }] },
         fx.ctx,
       );
     await publish(story.id);
@@ -568,7 +554,7 @@ describe('howToTestService.getForWorkItem', () => {
       await testInstructionsService.publish(
         {
           workItemId: card.id,
-          clickPathSteps: [`Run ${n}`],
+          bodyMd: `## Run ${n}`,
           repos: [{ repoId: web.id, commitSha: HEAD }],
           attributeToRunningDispatch: true,
         },
@@ -578,7 +564,7 @@ describe('howToTestService.getForWorkItem', () => {
     }
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
     expect(dto.record?.run).toEqual({ runId: runs[2], label: 'motir run · 2026-09-12 08:00 UTC' });
-    expect(dto.record?.clickPathSteps).toEqual(['Run 3']);
+    expect(dto.record?.bodyMd).toBe('## Run 3');
     expect(dto.history.map((h) => h.run?.runId)).toEqual([runs[1], runs[0]]);
   });
 
@@ -660,7 +646,7 @@ describe('howToTestService.getForWorkItem', () => {
     await testInstructionsService.publish(
       {
         workItemId: one.id,
-        clickPathSteps: ['Go'],
+        bodyMd: '## Go',
         repos: [{ repoId: repos[0]!.id, commitSha: HEAD }],
       },
       fx.ctx,
@@ -668,7 +654,7 @@ describe('howToTestService.getForWorkItem', () => {
     await testInstructionsService.publish(
       {
         workItemId: three.id,
-        clickPathSteps: ['Go'],
+        bodyMd: '## Go',
         repos: repos.map((r) => ({ repoId: r.id, commitSha: HEAD })),
       },
       fx.ctx,
