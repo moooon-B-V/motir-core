@@ -296,6 +296,15 @@ const REMOVAL_SPLIT_ENFORCED: PermissionKey[] = ['work_item:archive'];
  */
 const INTEGRATION_ENFORCED: PermissionKey[] = ['integration:manage'];
 
+/**
+ * MOTIR-5293's saved-filter "anyone's" key — its own list on the same terms as
+ * the lists above: this key was wired by none of the stories they record. It
+ * arrives `enforced` because the gate moves in the same change —
+ * `savedFilterCapabilities` stops reading the ROLE and reads this key, so there
+ * was never a moment where the catalog advertised it and nothing consulted it.
+ */
+const SAVED_FILTER_ANY_ENFORCED: PermissionKey[] = ['saved_filter:manage_any'];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -367,6 +376,10 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => INTEGRATION_ENFORCED.includes(k)).sort()).toEqual(
       [...INTEGRATION_ENFORCED].sort(),
     );
+    // …and MOTIR-5293's saved-filter manage-any key, on the same terms again.
+    expect(
+      ENFORCED_PERMISSIONS.filter((k) => SAVED_FILTER_ANY_ENFORCED.includes(k)).sort(),
+    ).toEqual([...SAVED_FILTER_ANY_ENFORCED].sort());
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
@@ -374,7 +387,8 @@ describe('enforcement — the seam that lets naming and wiring land separately',
         PLAN_DECISION_ENFORCED.length +
         LESSON_LIBRARY_ENFORCED.length +
         REMOVAL_SPLIT_ENFORCED.length +
-        INTEGRATION_ENFORCED.length,
+        INTEGRATION_ENFORCED.length +
+        SAVED_FILTER_ANY_ENFORCED.length,
     );
   });
 

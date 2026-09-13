@@ -1,6 +1,6 @@
 import type { SavedFilterVisibility } from '@/generated/prisma/client';
 import { canBrowse, canEdit, type ProjectAccessInputs } from '@/lib/projects/access';
-import { isWorkspaceManager } from '@/lib/projects/roles';
+import { hasPermission } from '@/lib/permissions/resolve';
 
 // The saved-filter permission POLICY (Story 6.2 · Subtask 6.2.1) — pure
 // decision functions composed FROM the shipped 6.4 project policy rather
@@ -21,14 +21,22 @@ import { isWorkspaceManager } from '@/lib/projects/roles';
 //     project's shared namespace is a write, so the gate IS the shipped 6.4
 //     edit tier (`canEdit` — viewers and non-members are read-only).
 //   * SEE — visibility `project` → everyone who can browse; `private` → the
-//     owner + the admin tier (Jira: "a private filter is visible to the
+//     owner + the manage-any tier (Jira: "a private filter is visible to the
 //     owner + Jira admins"). Not-visible reads as not-found (finding #44).
 //   * MANAGE (update / delete) — the owner always manages their own; the
-//     admin tier manages any PROJECT-SHARED filter (the mirror's "admins can
-//     change owner / delete any shared filter", project-sized). An admin
-//     does NOT manage another user's private filter — they can see it, not
-//     rewrite it.
-//   * CHANGE OWNER — admin tier only, on project-shared filters.
+//     manage-any tier manages any PROJECT-SHARED filter (the mirror's "admins
+//     can change owner / delete any shared filter", project-sized). It does
+//     NOT manage another user's private filter — it can see it, not rewrite it.
+//   * CHANGE OWNER — the manage-any tier only, on project-shared filters.
+//
+// ⚠️ THE MANAGE-ANY TIER IS A PERMISSION, NOT A ROLE (MOTIR-5293). It was a
+// role read — workspace owner/admin, or the literal project role `admin` — so
+// no custom role could ever be granted it and a team that wanted a reporting
+// lead to curate the shared filters had to make them a project Admin. It now
+// reads `saved_filter:manage_any`, which the built-in Admin set carries and the
+// workspace owner/admin rail resolves to, so every built-in actor gets exactly
+// the answer the role read gave. The OWNERSHIP half (`isOwner`) is a fact about
+// the ROW and stays one — that is the part that genuinely belongs here.
 
 /** The actor's project-level tier for this domain — resolved once per
  * request (projectAccessService.getSavedFilterCapabilities). */
@@ -36,18 +44,20 @@ export interface SavedFilterProjectCapabilities {
   canBrowse: boolean;
   /** Role ≥ member — may publish at visibility `project`. */
   canShare: boolean;
-  /** Project admin or workspace owner/admin — sees every row, manages the
-   * shared ones. */
-  isAdmin: boolean;
+  /** Holds `saved_filter:manage_any` — sees every row, manages and reassigns
+   * the shared ones. */
+  canManageAny: boolean;
 }
 
 /** The pure half of getSavedFilterCapabilities — exported so the service
  * can compute the tier from already-resolved inputs and the matrix tests
  * can drive it directly. */
 export function savedFilterCapabilities(i: ProjectAccessInputs): SavedFilterProjectCapabilities {
-  const admin =
-    isWorkspaceManager(i.workspaceRole) || (i.workspaceRole != null && i.projectRole === 'admin');
-  return { canBrowse: canBrowse(i), canShare: canEdit(i), isAdmin: admin };
+  return {
+    canBrowse: canBrowse(i),
+    canShare: canEdit(i),
+    canManageAny: hasPermission(i, 'saved_filter:manage_any'),
+  };
 }
 
 /** Per-row facts the row-level predicates decide over. */
@@ -73,7 +83,7 @@ export function canSeeSavedFilter(
 ): boolean {
   if (!caps.canBrowse) return false;
   if (row.visibility === 'project') return true;
-  return row.isOwner || caps.isAdmin;
+  return row.isOwner || caps.canManageAny;
 }
 
 /** Whether the actor may UPDATE (rename / edit details / overwrite criteria /
@@ -84,14 +94,14 @@ export function canManageSavedFilter(
 ): boolean {
   if (!canSeeSavedFilter(caps, row)) return false;
   if (row.isOwner) return true;
-  return row.visibility === 'project' && caps.isAdmin;
+  return row.visibility === 'project' && caps.canManageAny;
 }
 
-/** Whether the actor may CHANGE THE OWNER — admin tier only, on shared
+/** Whether the actor may CHANGE THE OWNER — the manage-any tier only, on shared
  * filters (the mirror's admin power; an owner hands off by sharing first). */
 export function canChangeSavedFilterOwner(
   caps: SavedFilterProjectCapabilities,
   row: SavedFilterRowFacts,
 ): boolean {
-  return row.visibility === 'project' && caps.isAdmin;
+  return row.visibility === 'project' && caps.canManageAny;
 }

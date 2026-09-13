@@ -49,7 +49,7 @@ const ME = 'user-me';
 const OTHER = 'user-other';
 
 function viewer(partial: Partial<Viewer> = {}): Viewer {
-  return { userId: ME, canBrowse: true, canShare: true, isAdmin: false, ...partial };
+  return { userId: ME, canBrowse: true, canShare: true, canManageAny: false, ...partial };
 }
 
 function row(
@@ -99,14 +99,17 @@ describe('rowCapabilities — the pure matrix the UI gates on', () => {
 
   it('a non-owner non-admin can do neither', () => {
     expect(
-      rowCapabilities(viewer({ isAdmin: false }), row({ owner: { id: OTHER, name: 'Other' } })),
+      rowCapabilities(
+        viewer({ canManageAny: false }),
+        row({ owner: { id: OTHER, name: 'Other' } }),
+      ),
     ).toEqual({ canManage: false, canChangeOwner: false });
   });
 
   it('an admin manages + changes owner of a project-shared filter they do not own', () => {
     expect(
       rowCapabilities(
-        viewer({ isAdmin: true }),
+        viewer({ canManageAny: true }),
         row({ visibility: 'project', owner: { id: OTHER, name: 'Other' } }),
       ),
     ).toEqual({ canManage: true, canChangeOwner: true });
@@ -138,7 +141,9 @@ describe('FiltersDirectory — rendering + gating', () => {
       ],
       total: 2,
     });
-    renderDirectory(<FiltersDirectory projectKey="PROD" viewer={viewer({ isAdmin: false })} />);
+    renderDirectory(
+      <FiltersDirectory projectKey="PROD" viewer={viewer({ canManageAny: false })} />,
+    );
 
     await screen.findByText('Mine');
     // Subscriptions (6.2.5) are a read-layer action available to ANYONE who can

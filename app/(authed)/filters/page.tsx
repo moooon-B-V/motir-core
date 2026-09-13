@@ -17,7 +17,7 @@ import { FiltersDirectory } from './_components/FiltersDirectory';
 // Server Component: resolves the active project, gates on the 6.4 browse
 // capability (a non-browsable active project renders the no-access state, not
 // the table), and resolves the actor's saved-filter tier ONCE
-// (getSavedFilterCapabilities — canShare / isAdmin), handing it to the client
+// (getSavedFilterCapabilities — canShare / canManageAny), handing it to the client
 // table as the `viewer` so every per-row action is gated by the same 6.2.1
 // matrix the API re-checks. The table itself owns the data (server-searched +
 // cursor-paged through the 6.2.1 list API — finding #57's bounded reads).
@@ -74,7 +74,7 @@ export default async function FiltersPage() {
           userId: ctx.userId,
           canBrowse: caps.canBrowse,
           canShare: caps.canShare,
-          isAdmin: caps.isAdmin,
+          canManageAny: caps.canManageAny,
         }}
       />
     </div>

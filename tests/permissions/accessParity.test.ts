@@ -17,6 +17,7 @@ import {
 import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import {
   BUILTIN_ROLE_PERMISSIONS,
+  CUSTOM_ROLE_TIER,
   IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
   ROLE_GATED_PERMISSIONS,
 } from '@/lib/permissions/builtinRoles';
@@ -2575,6 +2576,150 @@ describe('the eight member-facing keys resolve to exactly the actors the decisio
           `${key} diverges from project:administer on { ${row.accessLevel}, ws=${row.workspaceRole}, proj=${row.projectRole} }`,
         ).toBe(true);
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// THE SAVED-FILTER MANAGE-ANY TIER (MOTIR-5293).
+//
+// `lib/savedFilters/access.ts` answered "may this actor see other people's
+// private filters, and manage and reassign the shared ones?" with a ROLE read:
+//
+//   isWorkspaceManager(workspaceRole) || (workspaceRole != null && projectRole === 'admin')
+//
+// which is why no custom role could hold it. It now reads
+// `saved_filter:manage_any`, and the claim is that no built-in actor's answer
+// moves. So, as for the tables above: all 64 inputs, and expectations that are
+// that role read evaluated over them and written down as LITERALS — not computed
+// from `resolvePermissions`, which would only prove the new code agrees with
+// itself.
+//
+// ⚠️ Read the access-level column. The role read ignored it, so a project
+// `admin` held the tier on `private` and `limited` as much as on `open` — and the
+// key does too, only because `levelGrants` names nothing but the three edit-ish
+// keys. A branch there naming this key would turn rows in the `private` block red.
+//
+// [accessLevel, workspaceRole, projectRole, holds saved_filter:manage_any]
+const SAVED_FILTER_ANY_TABLE: readonly [
+  ProjectAccessLevel,
+  MemberRole | null,
+  MemberRole | null,
+  boolean,
+][] = [
+  ['public', 'owner', 'admin', true],
+  ['public', 'owner', 'member', true],
+  ['public', 'owner', 'viewer', true],
+  ['public', 'owner', null, true],
+  ['public', 'admin', 'admin', true],
+  ['public', 'admin', 'member', true],
+  ['public', 'admin', 'viewer', true],
+  ['public', 'admin', null, true],
+  ['public', 'member', 'admin', true],
+  ['public', 'member', 'member', false],
+  ['public', 'member', 'viewer', false],
+  ['public', 'member', null, false],
+  ['public', null, 'admin', false],
+  ['public', null, 'member', false],
+  ['public', null, 'viewer', false],
+  ['public', null, null, false],
+  ['open', 'owner', 'admin', true],
+  ['open', 'owner', 'member', true],
+  ['open', 'owner', 'viewer', true],
+  ['open', 'owner', null, true],
+  ['open', 'admin', 'admin', true],
+  ['open', 'admin', 'member', true],
+  ['open', 'admin', 'viewer', true],
+  ['open', 'admin', null, true],
+  ['open', 'member', 'admin', true],
+  ['open', 'member', 'member', false],
+  ['open', 'member', 'viewer', false],
+  ['open', 'member', null, false],
+  ['open', null, 'admin', false],
+  ['open', null, 'member', false],
+  ['open', null, 'viewer', false],
+  ['open', null, null, false],
+  ['limited', 'owner', 'admin', true],
+  ['limited', 'owner', 'member', true],
+  ['limited', 'owner', 'viewer', true],
+  ['limited', 'owner', null, true],
+  ['limited', 'admin', 'admin', true],
+  ['limited', 'admin', 'member', true],
+  ['limited', 'admin', 'viewer', true],
+  ['limited', 'admin', null, true],
+  ['limited', 'member', 'admin', true],
+  ['limited', 'member', 'member', false],
+  ['limited', 'member', 'viewer', false],
+  ['limited', 'member', null, false],
+  ['limited', null, 'admin', false],
+  ['limited', null, 'member', false],
+  ['limited', null, 'viewer', false],
+  ['limited', null, null, false],
+  ['private', 'owner', 'admin', true],
+  ['private', 'owner', 'member', true],
+  ['private', 'owner', 'viewer', true],
+  ['private', 'owner', null, true],
+  ['private', 'admin', 'admin', true],
+  ['private', 'admin', 'member', true],
+  ['private', 'admin', 'viewer', true],
+  ['private', 'admin', null, true],
+  ['private', 'member', 'admin', true],
+  ['private', 'member', 'member', false],
+  ['private', 'member', 'viewer', false],
+  ['private', 'member', null, false],
+  ['private', null, 'admin', false],
+  ['private', null, 'member', false],
+  ['private', null, 'viewer', false],
+  ['private', null, null, false],
+];
+
+describe('saved_filter:manage_any resolves to exactly the actors the role read did (MOTIR-5293)', () => {
+  it('covers every combination exactly once', () => {
+    expect(SAVED_FILTER_ANY_TABLE).toHaveLength(64);
+    expect(new Set(SAVED_FILTER_ANY_TABLE.map(([l, w, p]) => `${l}|${w}|${p}`)).size).toBe(64);
+  });
+
+  it.each(SAVED_FILTER_ANY_TABLE)(
+    'accessLevel=%s workspaceRole=%s projectRole=%s → %s',
+    (accessLevel, workspaceRole, projectRole, expected) => {
+      expect(
+        hasPermission({ accessLevel, workspaceRole, projectRole }, 'saved_filter:manage_any'),
+      ).toBe(expected);
+    },
+  );
+
+  it('is held by the built-in admin set and by NO other built-in role or the implicit grant', () => {
+    // The half a truth table can hide: a paste into `member` would move sixteen
+    // cells at once, and saying it directly is what makes the cause legible.
+    expect(ROLE_GATED_PERMISSIONS).toContain('saved_filter:manage_any');
+    expect(BUILTIN_ROLE_PERMISSIONS.admin.has('saved_filter:manage_any')).toBe(true);
+    expect(BUILTIN_ROLE_PERMISSIONS.member.has('saved_filter:manage_any')).toBe(false);
+    expect(BUILTIN_ROLE_PERMISSIONS.viewer.has('saved_filter:manage_any')).toBe(false);
+    expect(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has('saved_filter:manage_any')).toBe(false);
+  });
+
+  it('a CUSTOM role holds it exactly when it lists it, on every access level', () => {
+    // The whole point of the card: before it, no permission you could put on a
+    // role changed this answer. `saved_filter:manage` alone — which Member holds —
+    // must NOT confer it, or every member would read every private filter.
+    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
+      const as = (customRolePermissions: string[]) =>
+        hasPermission(
+          {
+            accessLevel,
+            workspaceRole: 'member',
+            projectRole: CUSTOM_ROLE_TIER,
+            customRolePermissions,
+          },
+          'saved_filter:manage_any',
+        );
+      expect(
+        as(['project:browse', 'saved_filter:manage', 'saved_filter:manage_any']),
+        `with the key / ${accessLevel}`,
+      ).toBe(true);
+      expect(as(['project:browse', 'saved_filter:manage']), `without it / ${accessLevel}`).toBe(
+        false,
+      );
     }
   });
 });
