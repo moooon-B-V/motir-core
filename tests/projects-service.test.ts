@@ -93,6 +93,7 @@ describe('createProject — happy path', () => {
       'image',
       'name',
       'onboardingRanAt',
+      'prMergeMode',
       'slug',
     ]);
     // No mark on a fresh project — the null that means "render nothing".

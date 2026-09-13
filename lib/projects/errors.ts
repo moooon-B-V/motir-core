@@ -176,6 +176,19 @@ export class InvalidStatusAutomationSettingsError extends Error {
   }
 }
 
+/**
+ * A merge-mode write carrying a value outside `PrMergeMode` (MOTIR-5179). The
+ * three members are a closed vocabulary; a typo must not become a project's merge
+ * policy. → 422.
+ */
+export class InvalidPrMergeModeError extends Error {
+  readonly code = 'INVALID_PR_MERGE_MODE' as const;
+  constructor(readonly value: unknown) {
+    super(`"${String(value)}" is not a merge mode (auto, manual or review_on_fail).`);
+    this.name = 'InvalidPrMergeModeError';
+  }
+}
+
 export class ProjectNotFoundError extends Error {
   readonly code = 'PROJECT_NOT_FOUND' as const;
   constructor(projectId: string) {

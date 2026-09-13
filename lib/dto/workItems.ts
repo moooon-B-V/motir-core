@@ -1482,9 +1482,11 @@ interface WorkItemProseCriterionShapeAdvisoryBaseDto extends WorkItemProseShapeA
 
 /**
  * Gate 14's ORDERING axis, mechanized (MOTIR-2175). A card's boundary ends at
- * *PR opened* (`subtask_pr_merge_mode` is `manual`), so a criterion whose truth
- * requires the merge belongs to a different card and the remedy is to CUT the
- * card at that line.
+ * *PR opened* (a project's `Project.prMergeMode` is `manual` unless it chose
+ * `auto`), so a criterion whose truth requires the merge belongs to a different
+ * card and the remedy is to CUT the card at that line. The premise holds until
+ * something actually merges on that setting's say-so — Story MOTIR-4882, the
+ * merge gate, is what changes it.
  *
  * ⚠️ Never a gate, for a reason specific to this check: a release *cut* card is
  * DEFINED by needing the merge (see `isOrderingCheckExempt`, which suppresses
