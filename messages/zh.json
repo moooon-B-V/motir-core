@@ -8009,5 +8009,10 @@
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
     }
+  },
+  "folders": {
+    "expandAria": "展开文件夹“{name}”",
+    "collapseAria": "收起文件夹“{name}”",
+    "emptyFolder": "这里还没有归档任何内容。"
   }
 }

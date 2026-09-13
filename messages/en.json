@@ -8013,5 +8013,10 @@
       "saved": "Saved",
       "saveError": "Couldn't save — try again."
     }
+  },
+  "folders": {
+    "expandAria": "Expand folder {name}",
+    "collapseAria": "Collapse folder {name}",
+    "emptyFolder": "Nothing is filed here yet."
   }
 }

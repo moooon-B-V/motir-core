@@ -19,6 +19,7 @@ import {
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkItemLinkError } from '@/lib/workItems/linkErrors';
+import { FolderNotFoundError } from '@/lib/folders/errors';
 import type {
   CreateWorkItemLinkInput,
   WorkItemKindDto,
@@ -278,6 +279,34 @@ export async function listChildIssuesAction(
   } catch (err) {
     if (err instanceof WorkItemNotFoundError) {
       return { ok: false, error: 'That issue no longer exists.' };
+    }
+    throw err;
+  }
+}
+
+/**
+ * One FOLDER's level for the lazy tree (Story MOTIR-5308 · MOTIR-5315) — its
+ * child folders, then the work items filed in it, paged like a work item's
+ * children. The service gates on browsing the folder's project; a folder that
+ * vanished (deleted in another tab) is a benign error, never a leak.
+ */
+export async function listFolderLevelAction(
+  input: ListTreeLevelInput & { folderId: string },
+): Promise<TreeLevelResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'No active project.' };
+  try {
+    const level = await workItemsService.listFolderLevel(
+      input.folderId,
+      { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, level };
+  } catch (err) {
+    if (err instanceof FolderNotFoundError) {
+      return { ok: false, error: 'That folder no longer exists.' };
     }
     throw err;
   }

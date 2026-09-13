@@ -20,6 +20,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 
@@ -167,6 +168,49 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
   );
   await expect(page).toHaveURL(new RegExp(`[?&]peek=${bug.identifier}`));
   expect(new URL(page.url()).pathname).toBe('/items');
+});
+
+// ───────────────────────────── folder rows (MOTIR-5315) ──────────────────────
+
+// The instrument that opens the folders surface for every later folder card's CI
+// (Story MOTIR-5308): a folder row renders at the root ahead of the work items,
+// and expanding it lazy-loads the work item filed in it. The expand is a Server
+// Action round-trip, so the spec waits on that response before asserting the
+// expanded row — never on the optimistic chevron alone.
+test('@smoke a folder row renders in the Tree and expands onto the work item filed in it', async ({
+  page,
+}) => {
+  const seed = await seedProject(page, 'e2e-issue-list-folder@example.com', 'FLD');
+  const loose = await mk(seed, 'task', 'Loose task');
+  const filed = await mk(seed, 'task', 'Filed task');
+  const later = await foldersService.createFolder(
+    { projectId: seed.projectId, parentFolderId: null, name: 'Later' },
+    seed.ctx,
+  );
+  await foldersService.fileWorkItem(filed.id, { folderId: later.id }, seed.ctx);
+
+  await page.goto('/items');
+
+  const folderRow = page.getByTestId(`folder-row-${later.id}`);
+  await expect(folderRow).toBeVisible();
+  await expect(folderRow).toHaveAttribute('aria-level', '1');
+  await expect(folderRow).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId(`issue-row-${loose.identifier}`)).toBeVisible();
+  // A filed item is not a root: it is only reachable through its folder.
+  await expect(page.getByTestId(`issue-row-${filed.identifier}`)).toHaveCount(0);
+
+  const levelRead = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/items',
+  );
+  await page.getByRole('button', { name: 'Expand folder Later', exact: true }).click();
+  expect((await levelRead).status()).toBe(200);
+
+  const filedRow = page.getByTestId(`issue-row-${filed.identifier}`);
+  await expect(filedRow).toBeVisible();
+  await expect(filedRow).toHaveAttribute('aria-level', '2');
+  await expect(folderRow).toHaveAttribute('aria-expanded', 'true');
+  // Expanding a folder opens nothing.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 // ─────────────────────────── quick-view peek (8.8.2) ───────────────────────────

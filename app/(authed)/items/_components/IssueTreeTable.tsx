@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Folder as FolderIcon, Loader2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
 import type { Locale } from '@/lib/i18n/locales';
@@ -24,14 +24,14 @@ import {
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
-import type { ProjectTreeRowDto, TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
+import type { FolderTreeRowDto, ProjectTreeRowDto, TreeLevelDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { usePeekRowClick } from './IssueQuickView';
 import { makeRowShaper, type IssueRowData } from './issueRows';
-import { listChildIssuesAction, listRootIssuesAction } from '../actions';
+import { listChildIssuesAction, listFolderLevelAction, listRootIssuesAction } from '../actions';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 
 // The /items TREE table (Subtask 2.5.3, made LAZY + SORTABLE in 2.5.14 for
@@ -47,11 +47,23 @@ import { useCreateIssue } from '../../_components/CreateIssueProvider';
 /** Sentinel level key for the project roots (never a real work-item id). */
 const ROOTS = '__roots__';
 
-/** A node the TreeTable renders: a real issue, or a synthetic status row — the
- *  lazy "loading…" placeholder, or the "Load more children" affordance. */
+/**
+ * A FOLDER's row id and level key (Story MOTIR-5308 · MOTIR-5315). Folders and
+ * work items live in different tables, so their ids never collide in practice —
+ * the prefix makes that a property of the key rather than of the id generator,
+ * and lets `fetchLevel` tell a folder's level from a work item's children.
+ */
+const FOLDER_PREFIX = 'folder:';
+const folderKey = (folderId: string) => `${FOLDER_PREFIX}${folderId}`;
+
+/** A node the TreeTable renders: a real issue, a folder, or a synthetic status
+ *  row — the lazy "loading…" placeholder, the "Load more children" affordance,
+ *  or an expanded folder's "nothing filed here" row. */
 type TreeNode =
   | { kind: 'issue'; row: IssueRowData }
+  | { kind: 'folder'; folder: FolderTreeRowDto; expanded: boolean }
   | { kind: 'loading' }
+  | { kind: 'emptyFolder' }
   | { kind: 'loadmore'; parentKey: string; loaded: number; total: number };
 
 /** One lazily-loaded level: the accumulated rows + the level's full total. */
@@ -71,6 +83,13 @@ export interface IssueTreeTableProps {
   /** Carried to the client so lazily-fetched levels shape identically to the roots. */
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
+  /**
+   * Whether the viewer holds `work_item:edit` on the project. Nothing on the
+   * folder ROWS needs it — a read-only member sees and expands folders exactly
+   * like an editor — but every folder ACTION (create, rename, move, delete) is
+   * gated on it, and those read it from here.
+   */
+  canEdit?: boolean;
 }
 
 export function IssueTreeTable({
@@ -105,9 +124,22 @@ export function IssueTreeTable({
     },
   }));
 
-  // Fetch one level (a parent's children, or more roots) and store / append it.
+  // ⚠️ THE ONE PLACE LEVEL STATE CHANGES. Every level — the roots, a work item's
+  // children, a folder's contents — lives in `levels`, keyed by its container,
+  // and each level carries a sequence number: a fetch applies its result only if
+  // no later fetch (or in-place update) for the SAME level started after it, so
+  // an overlapping load-more, refetch or folder action can never be clobbered by
+  // an older response (CLAUDE.md § Page state after a mutation, case 3). The
+  // folder action cards update a level through this state and bump the same
+  // sequence; they add no second copy of it.
+  const levelSeq = useRef<Record<string, number>>({});
+
+  // Fetch one level (a parent's children, a folder's contents, or more roots)
+  // and store / append it.
   const fetchLevel = useCallback(
     (parentId: string, offset: number, append: boolean) => {
+      const seq = (levelSeq.current[parentId] ?? 0) + 1;
+      levelSeq.current[parentId] = seq;
       setLevels((prev) => ({
         ...prev,
         [parentId]: {
@@ -121,7 +153,14 @@ export function IssueTreeTable({
         const result =
           parentId === ROOTS
             ? await listRootIssuesAction({ sortParam, offset })
-            : await listChildIssuesAction({ parentId, sortParam, offset });
+            : parentId.startsWith(FOLDER_PREFIX)
+              ? await listFolderLevelAction({
+                  folderId: parentId.slice(FOLDER_PREFIX.length),
+                  sortParam,
+                  offset,
+                })
+              : await listChildIssuesAction({ parentId, sortParam, offset });
+        if (levelSeq.current[parentId] !== seq) return; // a newer read of this level won
         setLevels((prev) => {
           const existing = prev[parentId];
           if (!result.ok) {
@@ -176,12 +215,26 @@ export function IssueTreeTable({
     [expanded, levels, fetchLevel],
   );
 
-  // "Load more children" (or more roots) — append the next page.
-  const onRowActivate = useCallback(
-    (_id: string, data: TreeNode) => {
-      if (data.kind === 'loadmore') fetchLevel(data.parentKey, data.loaded, true);
+  // A folder row's whole-row target (and Enter on the row) toggles it — a folder
+  // has no quick view, so expanding is the only thing its row does.
+  const toggleFolder = useCallback(
+    (key: string) => {
+      const next = new Set(expanded);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      onExpandedChange(next);
     },
-    [fetchLevel],
+    [expanded, onExpandedChange],
+  );
+
+  // "Load more children" (or more roots) — append the next page. A folder row
+  // (activated by Enter; a click lands on its own target) toggles.
+  const onRowActivate = useCallback(
+    (id: string, data: TreeNode) => {
+      if (data.kind === 'loadmore') fetchLevel(data.parentKey, data.loaded, true);
+      else if (data.kind === 'folder') toggleFolder(id);
+    },
+    [fetchLevel, toggleFolder],
   );
 
   const onSort = useCallback(
@@ -195,46 +248,61 @@ export function IssueTreeTable({
 
   // Build the nested TreeTable model from the loaded levels + the expanded set.
   const rows = useMemo<TreeTableRow<TreeNode>[]>(() => {
+    // An expanded container's children: a loading row until its first page
+    // lands, then its rows (+ "Load more children" past the page). An expanded
+    // FOLDER with nothing in it gets one quiet row instead of none, so an empty
+    // folder reads as empty rather than broken (the design's panel 7).
+    const expandInto = (node: TreeTableRow<TreeNode>, key: string, isFolder: boolean) => {
+      const lvl = levels[key];
+      if (!lvl || (lvl.loading && lvl.rows.length === 0)) {
+        node.busy = true;
+        node.children = [{ id: `${key}::loading`, data: { kind: 'loading' } }];
+        return;
+      }
+      node.busy = lvl.loading;
+      if (isFolder && lvl.rows.length === 0 && !lvl.hasMore) {
+        node.children = [{ id: `${key}::empty`, data: { kind: 'emptyFolder' } }];
+        return;
+      }
+      const childRows = buildLevel(lvl.rows, lvl.total);
+      node.children = lvl.hasMore
+        ? [
+            ...childRows,
+            {
+              id: `${key}::loadmore`,
+              data: { kind: 'loadmore', parentKey: key, loaded: lvl.rows.length, total: lvl.total },
+            },
+          ]
+        : childRows;
+    };
+
+    // A level is its FOLDERS, then its work items (MOTIR-5314's read order).
     const buildLevel = (level: ProjectTreeRowDto[], total: number): TreeTableRow<TreeNode>[] =>
-      // A level now carries FOLDER rows ahead of its work items (MOTIR-5314).
-      // Drawing them — the row, its chevron, its menu — is MOTIR-5315, built to
-      // the folders design; until it lands this table renders a level's work items.
-      level
-        .filter((row): row is WorkItemTreeRowDto => row.kind !== 'folder')
-        .map((dto, i) => {
+      level.map((dto, i) => {
+        if (dto.kind === 'folder') {
+          const key = folderKey(dto.id);
+          const isExpanded = expanded.has(key);
           const node: TreeTableRow<TreeNode> = {
-            id: dto.id,
-            data: { kind: 'issue', row: shape(dto) },
-            hasChildren: dto.hasChildren,
+            id: key,
+            data: { kind: 'folder', folder: dto, expanded: isExpanded },
+            // Always expandable: an empty folder opens onto its empty row.
+            hasChildren: true,
             posinset: i + 1,
             setsize: total,
           };
-          if (dto.hasChildren && expanded.has(dto.id)) {
-            const lvl = levels[dto.id];
-            if (!lvl || (lvl.loading && lvl.rows.length === 0)) {
-              node.busy = true;
-              node.children = [{ id: `${dto.id}::loading`, data: { kind: 'loading' } }];
-            } else {
-              node.busy = lvl.loading;
-              const childRows = buildLevel(lvl.rows, lvl.total);
-              node.children = lvl.hasMore
-                ? [
-                    ...childRows,
-                    {
-                      id: `${dto.id}::loadmore`,
-                      data: {
-                        kind: 'loadmore',
-                        parentKey: dto.id,
-                        loaded: lvl.rows.length,
-                        total: lvl.total,
-                      },
-                    },
-                  ]
-                : childRows;
-            }
-          }
+          if (isExpanded) expandInto(node, key, true);
           return node;
-        });
+        }
+        const node: TreeTableRow<TreeNode> = {
+          id: dto.id,
+          data: { kind: 'issue', row: shape(dto) },
+          hasChildren: dto.hasChildren,
+          posinset: i + 1,
+          setsize: total,
+        };
+        if (dto.hasChildren && expanded.has(dto.id)) expandInto(node, dto.id, false);
+        return node;
+      });
 
     const root = levels[ROOTS] ?? { rows: [], total: 0, hasMore: false, loading: false };
     const rootRows = buildLevel(root.rows, root.total);
@@ -296,7 +364,44 @@ export function IssueTreeTable({
           ),
           cell: (node: TreeNode) => {
             if (node.kind === 'issue') return col.cell(node.row);
-            if (!isTree) return null; // synthetic rows render only in the tree column
+            // Folder and synthetic rows render only in the tree column — a folder
+            // has no status, type or assignee, so its other cells stay EMPTY.
+            if (!isTree) return null;
+            if (node.kind === 'folder') {
+              const { name } = node.folder;
+              return (
+                <>
+                  {/* The whole-row target. A folder row's click expands and
+                      collapses; it never opens anything. The chevron raises
+                      itself above it, as it does above a work item's link. */}
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={
+                      node.expanded
+                        ? t('folders.collapseAria', { name })
+                        : t('folders.expandAria', { name })
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFolder(folderKey(node.folder.id));
+                    }}
+                    className="absolute inset-0 z-0 cursor-pointer focus:outline-none"
+                  />
+                  <FolderIcon className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+                  <span className="ml-2 min-w-0 truncate font-semibold text-(--el-text)">
+                    {name}
+                  </span>
+                </>
+              );
+            }
+            if (node.kind === 'emptyFolder') {
+              return (
+                <span className="text-[13px] text-(--el-text-secondary)">
+                  {t('folders.emptyFolder')}
+                </span>
+              );
+            }
             if (node.kind === 'loading') {
               return (
                 <span className="flex items-center gap-2 text-(--el-text-secondary)">
@@ -317,7 +422,7 @@ export function IssueTreeTable({
           },
         };
       }),
-    [sort, onSort, t],
+    [sort, onSort, t, toggleFolder],
   );
 
   return (
@@ -338,7 +443,11 @@ export function IssueTreeTable({
           if (node.kind === 'issue') onPeekClick(e, node.row.identifier);
         }}
         getRowTestId={(node) =>
-          node.kind === 'issue' ? `issue-row-${node.row.identifier}` : undefined
+          node.kind === 'issue'
+            ? `issue-row-${node.row.identifier}`
+            : node.kind === 'folder'
+              ? `folder-row-${node.folder.id}`
+              : undefined
         }
       />
     </IssueInlineEditProvider>

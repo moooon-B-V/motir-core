@@ -196,6 +196,7 @@ export async function IssueTreeSection({
       filter={filter}
       workflow={workflow}
       members={members}
+      canEdit={caps.canEdit}
     />,
   );
 }
