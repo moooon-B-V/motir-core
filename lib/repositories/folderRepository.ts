@@ -243,6 +243,27 @@ export const folderRepository = {
        LIMIT ${page.limit + 1}`;
   },
 
+  /**
+   * The NAMES of `folderId` and every folder above it, ROOT FIRST — the path the
+   * quick view shows a filed work item under ("Later ▸ 2025") (MOTIR-5352). One
+   * recursive read, bounded like the cycle backstop.
+   */
+  async findPathNames(folderId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ name: string }>>`
+      WITH RECURSIVE chain AS (
+        SELECT f."id", f."parent_folder_id", f."name", 0 AS depth
+          FROM "folder" f
+         WHERE f."id" = ${folderId}
+        UNION ALL
+        SELECT f."id", f."parent_folder_id", f."name", c.depth + 1
+          FROM "folder" f
+          JOIN chain c ON f."id" = c."parent_folder_id"
+         WHERE c.depth < 1000
+      )
+      SELECT "name" FROM chain ORDER BY depth DESC`;
+    return rows.map((r) => r.name);
+  },
+
   /** How many folders sit directly inside `folderId` — the set `deleteFolder` moves. */
   async countChildFolders(folderId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.folder.count({ where: { parentFolderId: folderId } });

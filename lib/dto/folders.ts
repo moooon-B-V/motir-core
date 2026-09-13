@@ -76,6 +76,11 @@ export interface FileWorkItemResultDto {
   /** Always `null` once filed: a work item is under a work item OR in a folder. */
   parentId: string | null;
   position: string;
+  /**
+   * The row's `updatedAt` after the write, ISO-8601 (MOTIR-5352) — the
+   * concurrency token the quick view's next edit must submit.
+   */
+  updatedAt: string;
 }
 
 /**

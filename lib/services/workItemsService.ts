@@ -3619,6 +3619,7 @@ export const workItemsService = {
           folderId: current.folderId,
           parentId: current.parentId,
           position: current.position,
+          updatedAt: current.updatedAt.toISOString(),
         },
         previousParentId: null,
       };
@@ -3663,6 +3664,7 @@ export const workItemsService = {
           folderId: row.folderId,
           parentId: row.parentId,
           position: row.position,
+          updatedAt: row.updatedAt.toISOString(),
         },
         previousParentId: current.parentId,
       };
@@ -5182,6 +5184,7 @@ export const workItemsService = {
       // which is the read that can guarantee the join — the same place
       // `repoDelivery` already lives, and for the same reason.
       item: toWorkItemDto(item, itemRepositories),
+      folderId: item.folderId,
       ancestors,
       parent: ancestors.at(-1) ?? null,
       children: childRows.map(toWorkItemSummaryDto),
@@ -5317,6 +5320,15 @@ export const workItemsService = {
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
     // above has already asserted `canBrowse`, so this only widens to edit.
     const { canEdit } = await projectAccessService.getCapabilities(projectId, ctx);
+    // The filed item's folder PATH (MOTIR-5352) — one bounded chain read, and
+    // none at all for an unfiled item: this payload is fetched on every row click.
+    const folderId = detail.folderId;
+    const folderPath =
+      folderId === null
+        ? []
+        : await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+            folderRepository.findPathNames(folderId, tx),
+          );
     return toQuickViewData(
       detail,
       members,
@@ -5331,6 +5343,7 @@ export const workItemsService = {
       estimationConfig,
       repoDelivery,
       deliveryView.deliveries,
+      folderPath,
     );
   },
 

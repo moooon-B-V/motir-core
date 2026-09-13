@@ -32,6 +32,8 @@ vi.mock('next/navigation', () => ({
 import { IssueQuickViewController } from '@/app/(authed)/items/_components/IssueQuickViewController';
 
 const DATA: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   identifier: 'PROD-7',
   title: 'Email + password sign-in',
   projectIdentifier: 'PROD',

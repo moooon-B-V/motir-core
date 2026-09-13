@@ -68,6 +68,8 @@ const OPEN_PR: LinkedPullRequestDto = {
 };
 
 const DATA: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   identifier: 'MOTIR-2903',
   title: 'Planning bug: every readiness signal read green',
   projectIdentifier: 'MOTIR',

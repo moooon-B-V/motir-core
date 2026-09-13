@@ -34,6 +34,8 @@ import { IssueQuickViewController } from '@/app/(authed)/items/_components/Issue
 import { Modal } from '@/components/ui/Modal';
 
 const DATA: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   id: 'cmqvitem00000000000000p7',
   identifier: 'PROD-7',
   title: 'Email + password sign-in',

@@ -38,6 +38,8 @@ afterEach(() => {
 });
 
 const DATA: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   identifier: 'PROD-7',
   title: 'Email + password sign-in',
   projectIdentifier: 'PROD',

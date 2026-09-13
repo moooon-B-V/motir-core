@@ -428,6 +428,12 @@ export interface WorkItemLineageDto {
 
 export interface IssueDetailDto {
   item: WorkItemDto;
+  /**
+   * The folder the item is filed in, or `null` (Story MOTIR-5308 · MOTIR-5352).
+   * Read off the SAME row the detail read loads — it rides the aggregate rather
+   * than `WorkItemDto`, whose wire shape `/api/v1` and the MCP publish.
+   */
+  folderId: string | null;
   ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];
