@@ -17,6 +17,8 @@ import {
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { patchRescopes, resetsOnRescope } from '@/lib/plans/rescopeReset';
+import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 
 import type {
   PlanItemDto,
@@ -203,6 +205,7 @@ function buildChanges(
   patch: PlanItemPatch | null,
   target: WorkItem | undefined,
   nameParent: (id: string | null) => string | null,
+  statusByKey: ReadonlyMap<string, WorkflowStatusDto>,
 ): PlanItemChangeDto[] {
   if (!patch) return [];
   // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
@@ -370,6 +373,23 @@ function buildChanges(
       from: null,
       to: `${parts.join(' / ')} blocker${added + removed === 1 ? '' : 's'}`,
     });
+  }
+  // THE RE-SCOPE RESET (bug MOTIR-5359) — the one row no patch key produces,
+  // because the approve DERIVES it: a patch that re-scopes a card in the
+  // `in_progress` category walks it back to the initial status, and the reviewer
+  // sees that here BEFORE pressing approve. `patchRescopes` / `resetsOnRescope`
+  // are the approve's own predicates (`plansService.applyModify`), so this row
+  // appears exactly when the approve will write the reset.
+  if (target && patchRescopes(patch, target)) {
+    const from = statusByKey.get(target.status);
+    const initial = [...statusByKey.values()].find((s) => s.isInitial);
+    if (from && initial && initial.key !== from.key && resetsOnRescope(from.category)) {
+      changes.push({
+        field: 'status',
+        from: from.label,
+        to: `${initial.label} (re-scoped while ${from.label})`,
+      });
+    }
   }
   return changes;
 }
@@ -781,7 +801,8 @@ export const planReviewService = {
       // ONE computation of the diff, read twice: `changes` is the list row's
       // old→new overlay and `proposal.changedFields` is its key set. Computing
       // them separately is the drift this card exists to make impossible.
-      const changes = item.op === 'modify' ? buildChanges(item.patch, target, nameParent) : [];
+      const changes =
+        item.op === 'modify' ? buildChanges(item.patch, target, nameParent, statusByKey) : [];
 
       // THE PROPOSED STEPS, resolved for READING (MOTIR-4622 · AMENDMENT 14 D5,
       // D6; `design/ai-planning/design-notes.md` Part XV).
