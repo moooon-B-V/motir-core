@@ -10,11 +10,13 @@ import {
   testInstructionsService,
   translateTestInstructionsConflict,
   type PublishTestInstructionsInput,
+  type PublishTestInstructionsRepoInput,
 } from '@/lib/services/testInstructionsService';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
 import {
   TEST_INSTRUCTIONS_MAX_COMMAND_CHARS,
   TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES,
+  TEST_INSTRUCTIONS_MAX_REPOS,
   TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS,
   TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS,
   TEST_INSTRUCTIONS_MAX_STEP_CHARS,
@@ -39,12 +41,15 @@ import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
 import { randomToken } from '../helpers/random';
 
-// testInstructionsService (Story MOTIR-4906 · Subtask MOTIR-5328) against a REAL
-// Postgres. The cases are chosen so a plausible broken implementation fails:
+// testInstructionsService (Story MOTIR-4906 · Subtask MOTIR-5328 — HOW TO TEST
+// per RUN on the run target) against a REAL Postgres. The cases are chosen so a
+// plausible broken implementation fails:
 //
-//   - the concurrency case races the pair's FIRST publish, where there is no
+//   - the concurrency case races the target's FIRST publish, where there is no
 //     current row to lock — a `design_evidence`-style lock on the current row
 //     lets both inserts through and one dies on the partial unique index;
+//   - the two-repository case asserts ONE record with TWO sections, so a
+//     per-repository key (the superseded shape) fails it;
 //   - the idempotency case asserts the ROW COUNT, not only the returned id;
 //   - the permission case uses a CUSTOM role that can browse but not edit, so a
 //     browse-only gate would pass it and fail the test.
@@ -103,81 +108,142 @@ function input(
 ): PublishTestInstructionsInput {
   return {
     workItemId,
+    clickPathSteps: ['Open /items/ACME-7', 'Scroll to How to test'],
+    previewPath: '/items/ACME-7',
+    preconditionMd: 'Sign in as a project **member**.',
+    repos: [section(repoId)],
+    ...over,
+  };
+}
+
+function section(
+  repoId: string,
+  over: Partial<PublishTestInstructionsRepoInput> = {},
+): PublishTestInstructionsRepoInput {
+  return {
     repoId,
     commitSha: SHA_A,
-    clickPathSteps: ['Open /items/ACME-7', 'Scroll to Development'],
-    previewPath: '/items/ACME-7',
     setupCommands: [
       { label: 'Install', command: 'pnpm install --frozen-lockfile' },
       { label: 'Run', command: 'pnpm dev' },
     ],
-    preconditionMd: 'Sign in as a project **member**.',
     ...over,
   };
+}
+
+async function runningRunFor(fx: WorkItemFixture, workItemId: string): Promise<string> {
+  const run = await adminDb.dispatchRun.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      command: 'run',
+      status: 'running',
+      cards: { create: { workspaceId: fx.workspaceId, workItemId, position: 0 } },
+    },
+  });
+  return run.id;
+}
+
+async function finish(runId: string): Promise<void> {
+  await adminDb.dispatchRun.update({ where: { id: runId }, data: { status: 'succeeded' } });
 }
 
 async function rowsFor(workItemId: string) {
   return adminDb.testInstructions.findMany({
     where: { workItemId },
+    include: { repos: { orderBy: { position: 'asc' } } },
     orderBy: { createdAt: 'asc' },
   });
 }
 
 describe('testInstructionsService.publish', () => {
-  it('writes a current row, and a new commit keeps exactly one current with the old one as history', async () => {
+  it('writes ONE record for a two-repository run — one current row, two sections in order', async () => {
     const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'A card' });
-    const repoId = await connectRepo(fx, 'web');
-
-    const first = await testInstructionsService.publish(input(card.id, repoId), fx.ctx);
-    expect(first.created).toBe(true);
-    expect(first.record).toMatchObject({
-      workItemId: card.id,
-      repoId,
-      commitSha: SHA_A,
-      clickPathSteps: ['Open /items/ACME-7', 'Scroll to Development'],
-      clickPathNotApplicable: false,
-      previewPath: '/items/ACME-7',
-      publishedById: fx.ctx.userId,
-      isCurrent: true,
-    });
-
-    const second = await testInstructionsService.publish(
-      input(card.id, repoId, { commitSha: SHA_B, clickPathSteps: ['Open the board'] }),
-      fx.ctx,
-    );
-    expect(second.created).toBe(true);
-
-    const rows = await rowsFor(card.id);
-    expect(rows).toHaveLength(2);
-    expect(rows.filter((r) => r.isCurrent).map((r) => r.commitSha)).toEqual([SHA_B]);
-    expect(rows.find((r) => r.commitSha === SHA_A)?.isCurrent).toBe(false);
-  });
-
-  it('keeps ONE current record PER REPOSITORY — a second repository does not supersede the first', async () => {
-    const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Two repos' });
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'A story run' });
     const web = await connectRepo(fx, 'web');
     const api = await connectRepo(fx, 'api');
 
-    await testInstructionsService.publish(input(card.id, web), fx.ctx);
-    await testInstructionsService.publish(input(card.id, api), fx.ctx);
+    const { record, created } = await testInstructionsService.publish(
+      input(story.id, web, {
+        repos: [section(web), section(api, { commitSha: SHA_B, setupCommands: [] })],
+      }),
+      fx.ctx,
+    );
+    expect(created).toBe(true);
+    expect(record).toMatchObject({
+      workItemId: story.id,
+      clickPathSteps: ['Open /items/ACME-7', 'Scroll to How to test'],
+      clickPathNotApplicable: false,
+      previewPath: '/items/ACME-7',
+      publishedById: fx.ctx.userId,
+      dispatchRunId: null,
+      isCurrent: true,
+    });
+    expect(record.repos).toEqual([
+      {
+        repoId: web,
+        commitSha: SHA_A,
+        setupCommands: [
+          { label: 'Install', command: 'pnpm install --frozen-lockfile' },
+          { label: 'Run', command: 'pnpm dev' },
+        ],
+      },
+      { repoId: api, commitSha: SHA_B, setupCommands: [] },
+    ]);
 
-    const current = await testInstructionsService.listCurrentForWorkItem(card.id, fx.ctx);
-    expect(current.map((r) => r.repoId).sort()).toEqual([web, api].sort());
+    const rows = await rowsFor(story.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.repos.map((r) => r.repoId)).toEqual([web, api]);
   });
 
-  it('is idempotent on (item, repo, commit): identical content twice stores ONE row', async () => {
+  it('a LATER RUN supersedes: exactly one current record, and the earlier run stays as history', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Two runs' });
+    const repoId = await connectRepo(fx, 'web');
+
+    const run1 = await runningRunFor(fx, card.id);
+    const first = await testInstructionsService.publish(
+      input(card.id, repoId, { attributeToRunningDispatch: true }),
+      fx.ctx,
+    );
+    expect(first.record.dispatchRunId).toBe(run1);
+    await finish(run1);
+
+    const run2 = await runningRunFor(fx, card.id);
+    // Identical content — but a DIFFERENT run, so it is a new version, not a retry.
+    const second = await testInstructionsService.publish(
+      input(card.id, repoId, { attributeToRunningDispatch: true }),
+      fx.ctx,
+    );
+    expect(second.created).toBe(true);
+    expect(second.record.dispatchRunId).toBe(run2);
+
+    const rows = await rowsFor(card.id);
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((r) => r.isCurrent).map((r) => r.dispatchRunId)).toEqual([run2]);
+
+    const history = await withWorkspaceContext(fx.ctx, (tx) =>
+      testInstructionsRepository.listHistoryForWorkItem(card.id, tx),
+    );
+    expect(history.map((r) => r.dispatchRunId)).toEqual([run2, run1]);
+  });
+
+  it('is idempotent PER RUN: identical content twice from the same run stores ONE row', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'Retry' });
     const repoId = await connectRepo(fx, 'web');
+    await runningRunFor(fx, card.id);
 
-    const a = await testInstructionsService.publish(input(card.id, repoId), fx.ctx);
+    const a = await testInstructionsService.publish(
+      input(card.id, repoId, { attributeToRunningDispatch: true }),
+      fx.ctx,
+    );
     // Whitespace and case differences normalise to the same content.
     const b = await testInstructionsService.publish(
       input(card.id, repoId, {
-        commitSha: SHA_A.toUpperCase(),
-        clickPathSteps: ['  Open /items/ACME-7 ', 'Scroll to Development'],
+        attributeToRunningDispatch: true,
+        clickPathSteps: ['  Open /items/ACME-7 ', 'Scroll to How to test'],
+        repos: [section(repoId, { commitSha: SHA_A.toUpperCase() })],
       }),
       fx.ctx,
     );
@@ -187,14 +253,14 @@ describe('testInstructionsService.publish', () => {
     expect(await rowsFor(card.id)).toHaveLength(1);
   });
 
-  it('different content for the SAME commit becomes the new current row', async () => {
+  it('different content from the SAME run becomes the new current record', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'Amend' });
     const repoId = await connectRepo(fx, 'web');
 
     await testInstructionsService.publish(input(card.id, repoId), fx.ctx);
     const amended = await testInstructionsService.publish(
-      input(card.id, repoId, { clickPathSteps: ['A corrected first step'] }),
+      input(card.id, repoId, { repos: [section(repoId, { commitSha: SHA_B })] }),
       fx.ctx,
     );
 
@@ -202,23 +268,6 @@ describe('testInstructionsService.publish', () => {
     const rows = await rowsFor(card.id);
     expect(rows).toHaveLength(2);
     expect(rows.filter((r) => r.isCurrent).map((r) => r.id)).toEqual([amended.record.id]);
-  });
-
-  it('a stale retry of an OLDER commit does not take the current slot back', async () => {
-    const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Late retry' });
-    const repoId = await connectRepo(fx, 'web');
-
-    await testInstructionsService.publish(input(card.id, repoId), fx.ctx);
-    const newer = await testInstructionsService.publish(
-      input(card.id, repoId, { commitSha: SHA_B }),
-      fx.ctx,
-    );
-    const retry = await testInstructionsService.publish(input(card.id, repoId), fx.ctx);
-
-    expect(retry.created).toBe(false);
-    const current = await testInstructionsService.listCurrentForWorkItem(card.id, fx.ctx);
-    expect(current.map((r) => r.id)).toEqual([newer.record.id]);
   });
 
   it('stores a not-applicable click-path with its reason', async () => {
@@ -242,6 +291,24 @@ describe('testInstructionsService.publish', () => {
     );
   });
 
+  it('resolves a section named by `name` or `owner/name`', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'By name' });
+    const web = await connectRepo(fx, 'web');
+    const api = await connectRepo(fx, 'api');
+
+    const { record } = await testInstructionsService.publish(
+      input(card.id, web, {
+        repos: [
+          { repoRef: 'WEB', commitSha: SHA_A },
+          { repoRef: 'moooon/api', commitSha: SHA_B },
+        ],
+      }),
+      fx.ctx,
+    );
+    expect(record.repos.map((r) => r.repoId)).toEqual([web, api]);
+  });
+
   it('refuses a repository that is not one of the project repositories, naming the valid set', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'Wrong repo' });
@@ -256,6 +323,22 @@ describe('testInstructionsService.publish', () => {
       'TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT',
     );
     expect((err as TestInstructionsRepoNotInProjectError).validRepos).toEqual(['moooon/web']);
+    expect(await rowsFor(card.id)).toHaveLength(0);
+  });
+
+  it('refuses the same repository named twice — by id and by name', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Duplicate' });
+    const web = await connectRepo(fx, 'web');
+
+    const err = await testInstructionsService
+      .publish(
+        input(card.id, web, { repos: [section(web), { repoRef: 'web', commitSha: SHA_B }] }),
+        fx.ctx,
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TestInstructionsInvalidFieldError);
+    expect((err as TestInstructionsInvalidFieldError).field).toBe('repos[1].repo');
     expect(await rowsFor(card.id)).toHaveLength(0);
   });
 
@@ -302,8 +385,8 @@ describe('testInstructionsService.publish', () => {
 
     // The control: the same actor CAN read, so the refusal below is about edit.
     await expect(
-      testInstructionsService.listCurrentForWorkItem(card.id, viewerCtx),
-    ).resolves.toEqual([]);
+      testInstructionsService.getCurrentForWorkItem(card.id, viewerCtx),
+    ).resolves.toBeNull();
 
     const err = await testInstructionsService
       .publish(input(card.id, repoId), viewerCtx)
@@ -313,13 +396,17 @@ describe('testInstructionsService.publish', () => {
     expect(await rowsFor(card.id)).toHaveLength(0);
   });
 
-  it('two concurrent FIRST publishes for one pair both resolve, and exactly one row ends current', async () => {
+  it('two concurrent FIRST publishes for one target both resolve, and exactly one record ends current with all its sections', async () => {
     const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Race' });
-    const repoId = await connectRepo(fx, 'web');
+    const card = await createTestWorkItem(fx, { kind: 'story', title: 'Race' });
+    const web = await connectRepo(fx, 'web');
+    const api = await connectRepo(fx, 'api');
 
-    const left = input(card.id, repoId, { clickPathSteps: ['Left step'] });
-    const right = input(card.id, repoId, { clickPathSteps: ['Right step'] });
+    const left = input(card.id, web, {
+      clickPathSteps: ['Left step'],
+      repos: [section(web), section(api)],
+    });
+    const right = input(card.id, web, { clickPathSteps: ['Right step'] });
 
     // Separate pooled connections — each publish opens its own transaction.
     const results = await Promise.all([
@@ -330,13 +417,22 @@ describe('testInstructionsService.publish', () => {
 
     const current = (await rowsFor(card.id)).filter((r) => r.isCurrent);
     expect(current).toHaveLength(1);
-    expect([['Left step'], ['Right step']]).toContainEqual(current[0]!.clickPathSteps);
+    const winner = current[0]!;
+    if (JSON.stringify(winner.clickPathSteps) === JSON.stringify(['Left step'])) {
+      expect(winner.repos.map((r) => r.repoId)).toEqual([web, api]);
+    } else {
+      expect(winner.clickPathSteps).toEqual(['Right step']);
+      expect(winner.repos.map((r) => r.repoId)).toEqual([web]);
+    }
   });
 });
 
 describe('normalizeTestInstructionsContent — every cap is a typed refusal naming the field', () => {
   const base = input('wi', 'repo');
   const long = (n: number) => 'x'.repeat(n);
+  const withSection = (over: Partial<PublishTestInstructionsRepoInput>) => ({
+    repos: [section('repo', over)],
+  });
 
   const cases: Array<[string, Partial<PublishTestInstructionsInput>, string]> = [
     [
@@ -350,24 +446,37 @@ describe('normalizeTestInstructionsContent — every cap is a typed refusal nami
       'clickPathSteps[0]',
     ],
     [
-      'too many setup commands',
+      'too many repository sections',
       {
+        repos: Array.from({ length: TEST_INSTRUCTIONS_MAX_REPOS + 1 }, (_, i) =>
+          section(`repo-${i}`),
+        ),
+      },
+      'repos',
+    ],
+    [
+      'too many setup commands',
+      withSection({
         setupCommands: Array.from({ length: TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS + 1 }, () => ({
           label: 'l',
           command: 'c',
         })),
-      },
-      'setupCommands',
+      }),
+      'repos[0].setupCommands',
     ],
     [
       'a label too long',
-      { setupCommands: [{ label: long(TEST_INSTRUCTIONS_MAX_STEP_CHARS + 1), command: 'c' }] },
-      'setupCommands[0].label',
+      withSection({
+        setupCommands: [{ label: long(TEST_INSTRUCTIONS_MAX_STEP_CHARS + 1), command: 'c' }],
+      }),
+      'repos[0].setupCommands[0].label',
     ],
     [
       'a command too long',
-      { setupCommands: [{ label: 'l', command: long(TEST_INSTRUCTIONS_MAX_COMMAND_CHARS + 1) }] },
-      'setupCommands[0].command',
+      withSection({
+        setupCommands: [{ label: 'l', command: long(TEST_INSTRUCTIONS_MAX_COMMAND_CHARS + 1) }],
+      }),
+      'repos[0].setupCommands[0].command',
     ],
     [
       'a precondition over 8 KiB',
@@ -418,10 +527,14 @@ describe('normalizeTestInstructionsContent — every cap is a typed refusal nami
         clickPathSteps: Array.from({ length: TEST_INSTRUCTIONS_MAX_STEPS }, () =>
           long(TEST_INSTRUCTIONS_MAX_STEP_CHARS),
         ),
-        setupCommands: Array.from({ length: TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS }, () => ({
-          label: long(TEST_INSTRUCTIONS_MAX_STEP_CHARS),
-          command: long(TEST_INSTRUCTIONS_MAX_COMMAND_CHARS),
-        })),
+        repos: Array.from({ length: TEST_INSTRUCTIONS_MAX_REPOS }, (_, i) =>
+          section(`repo-${i}`, {
+            setupCommands: Array.from({ length: TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS }, () => ({
+              label: long(TEST_INSTRUCTIONS_MAX_STEP_CHARS),
+              command: long(TEST_INSTRUCTIONS_MAX_COMMAND_CHARS),
+            })),
+          }),
+        ),
         preconditionMd: long(TEST_INSTRUCTIONS_MAX_PRECONDITION_BYTES),
         previewPath: `/${long(TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS - 1)}`,
       }),
@@ -448,19 +561,29 @@ describe('normalizeTestInstructionsContent — every cap is a typed refusal nami
   });
 
   it.each([
-    ['a non-hex commit sha', { commitSha: 'not-a-sha' }, 'commitSha'],
+    ['no repository sections', { repos: [] }, 'repos'],
+    ['a non-hex commit sha', withSection({ commitSha: 'not-a-sha' }), 'repos[0].commitSha'],
     ['an empty step', { clickPathSteps: ['ok', '   '] }, 'clickPathSteps[1]'],
     [
       'a setup command with no label',
-      { setupCommands: [{ label: '', command: 'x' }] },
-      'setupCommands[0]',
+      withSection({ setupCommands: [{ label: '', command: 'x' }] }),
+      'repos[0].setupCommands[0]',
+    ],
+    ['a section naming no repository', { repos: [{ commitSha: SHA_A }] }, 'repos[0].repo'],
+    [
+      'a section naming a repository twice over',
+      { repos: [{ repoId: 'r', repoRef: 'web', commitSha: SHA_A }] },
+      'repos[0].repo',
     ],
     ['a preview URL instead of a path', { previewPath: 'https://evil.example/' }, 'previewPath'],
     ['a protocol-relative preview path', { previewPath: '//evil.example/x' }, 'previewPath'],
   ] as const)('refuses %s', (_label, over, field) => {
     let err: unknown;
     try {
-      normalizeTestInstructionsContent({ ...base, ...over });
+      normalizeTestInstructionsContent({
+        ...base,
+        ...(over as Partial<PublishTestInstructionsInput>),
+      });
     } catch (e) {
       err = e;
     }
@@ -484,7 +607,26 @@ describe('translateTestInstructionsConflict', () => {
 });
 
 describe('testInstructionsRepository.listCurrentByWorkItems', () => {
-  it('returns every current row for a batch of items in ONE query', async () => {
+  function countingTx(tx: Prisma.TransactionClient, onCall: () => void): Prisma.TransactionClient {
+    return new Proxy(tx, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop !== 'testInstructions') return value;
+        return new Proxy(value as object, {
+          get(delegate, method, r) {
+            const fn = Reflect.get(delegate, method, r);
+            if (typeof fn !== 'function') return fn;
+            return (...args: unknown[]) => {
+              onCall();
+              return (fn as (...a: unknown[]) => unknown).apply(delegate, args);
+            };
+          },
+        });
+      },
+    }) as Prisma.TransactionClient;
+  }
+
+  it('returns every current record WITH its sections for a batch, in one repository call independent of batch size', async () => {
     const fx = await makeWorkItemFixture();
     const web = await connectRepo(fx, 'web');
     const api = await connectRepo(fx, 'api');
@@ -492,41 +634,37 @@ describe('testInstructionsRepository.listCurrentByWorkItems', () => {
       [1, 2, 3].map((n) => createTestWorkItem(fx, { kind: 'task', title: `Card ${n}` })),
     );
     for (const card of cards) {
-      await testInstructionsService.publish(input(card.id, web), fx.ctx);
-      await testInstructionsService.publish(input(card.id, api), fx.ctx);
+      await testInstructionsService.publish(
+        input(card.id, web, { repos: [section(web), section(api)] }),
+        fx.ctx,
+      );
       // A superseded version per card, which the batch must NOT return.
-      await testInstructionsService.publish(input(card.id, web, { commitSha: SHA_B }), fx.ctx);
+      await testInstructionsService.publish(
+        input(card.id, web, { repos: [section(web, { commitSha: SHA_B })] }),
+        fx.ctx,
+      );
     }
 
-    const rows = await withWorkspaceContext(fx.ctx, async (tx) => {
-      let calls = 0;
-      const counted = new Proxy(tx, {
-        get(target, prop, receiver) {
-          const value = Reflect.get(target, prop, receiver);
-          if (prop !== 'testInstructions') return value;
-          return new Proxy(value as object, {
-            get(delegate, method, r) {
-              const fn = Reflect.get(delegate, method, r);
-              if (typeof fn !== 'function') return fn;
-              return (...args: unknown[]) => {
-                calls += 1;
-                return (fn as (...a: unknown[]) => unknown).apply(delegate, args);
-              };
-            },
-          });
-        },
-      }) as Prisma.TransactionClient;
-      const out = await testInstructionsRepository.listCurrentByWorkItems(
-        cards.map((c) => c.id),
-        counted,
-      );
-      expect(calls).toBe(1);
-      return out;
-    });
+    const queryCount = async (ids: string[]) =>
+      withWorkspaceContext(fx.ctx, async (tx) => {
+        let calls = 0;
+        const out = await testInstructionsRepository.listCurrentByWorkItems(
+          ids,
+          countingTx(tx, () => (calls += 1)),
+        );
+        return { calls, out };
+      });
 
-    expect(rows).toHaveLength(6);
-    expect(rows.every((r) => r.isCurrent)).toBe(true);
-    expect(new Set(rows.map((r) => `${r.workItemId}:${r.repoId}`)).size).toBe(6);
+    const one = await queryCount([cards[0]!.id]);
+    const three = await queryCount(cards.map((c) => c.id));
+    expect(one.calls).toBe(1);
+    expect(three.calls).toBe(one.calls);
+
+    expect(three.out).toHaveLength(3);
+    expect(three.out.every((r) => r.isCurrent)).toBe(true);
+    expect(three.out.every((r) => r.repos.length === 1 && r.repos[0]!.commitSha === SHA_B)).toBe(
+      true,
+    );
   });
 
   it('short-circuits an empty batch without a round trip', async () => {
@@ -539,41 +677,42 @@ describe('testInstructionsRepository.listCurrentByWorkItems', () => {
 });
 
 describe('toTestInstructionsDto', () => {
-  it('drops malformed JSON entries rather than handing a component a non-string', () => {
+  it('drops malformed JSON entries rather than handing a component a non-string, and orders sections by position', () => {
     const now = new Date('2026-09-13T00:00:00Z');
+    const repo = (repoId: string, position: number, setupCommands: unknown) => ({
+      id: `s-${repoId}`,
+      workspaceId: 'ws',
+      projectId: 'p',
+      testInstructionsId: 'id',
+      repoId,
+      commitSha: SHA_A,
+      setupCommands: setupCommands as PrismaNs.JsonValue,
+      position,
+    });
     const row = {
       id: 'id',
       workspaceId: 'ws',
       projectId: 'p',
       workItemId: 'wi',
-      repoId: 'r',
-      commitSha: SHA_A,
       clickPathSteps: ['ok', 7, null] as unknown as PrismaNs.JsonValue,
       clickPathNotApplicable: false,
       clickPathNotApplicableReason: null,
       previewPath: null,
-      setupCommands: [
-        { label: 'Install', command: 'pnpm i' },
-        { label: 'broken' },
-        'nope',
-      ] as unknown as PrismaNs.JsonValue,
       preconditionMd: null,
       dispatchRunId: null,
       publishedById: null,
       isCurrent: true,
       createdAt: now,
+      repos: [
+        repo('second', 1, null),
+        repo('first', 0, [{ label: 'Install', command: 'pnpm i' }, { label: 'broken' }, 'nope']),
+      ],
     };
     const dto = toTestInstructionsDto(row);
     expect(dto.clickPathSteps).toEqual(['ok']);
-    expect(dto.setupCommands).toEqual([{ label: 'Install', command: 'pnpm i' }]);
+    expect(dto.repos.map((r) => r.repoId)).toEqual(['first', 'second']);
+    expect(dto.repos[0]!.setupCommands).toEqual([{ label: 'Install', command: 'pnpm i' }]);
+    expect(dto.repos[1]!.setupCommands).toEqual([]);
     expect(dto.createdAt).toBe(now.toISOString());
-
-    expect(
-      toTestInstructionsDto({
-        ...row,
-        clickPathSteps: 'not-an-array' as unknown as PrismaNs.JsonValue,
-        setupCommands: null as unknown as PrismaNs.JsonValue,
-      }),
-    ).toMatchObject({ clickPathSteps: [], setupCommands: [] });
   });
 });

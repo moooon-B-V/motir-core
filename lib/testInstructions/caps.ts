@@ -12,7 +12,10 @@
 /** Most click-path steps one record carries. */
 export const TEST_INSTRUCTIONS_MAX_STEPS = 30;
 
-/** Most setup commands (install / migrate / seed / run …) one record carries. */
+/** Most repository sections one run's record carries. */
+export const TEST_INSTRUCTIONS_MAX_REPOS = 8;
+
+/** Most setup commands (install / migrate / seed / run …) one repository section carries. */
 export const TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS = 12;
 
 /** Longest single click-path step, and longest setup-command LABEL, in characters. */

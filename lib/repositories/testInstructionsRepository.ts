@@ -1,86 +1,89 @@
-import type { Prisma, TestInstructions } from '@/generated/prisma/client';
+import type { Prisma, TestInstructions, TestInstructionsRepo } from '@/generated/prisma/client';
 
 // Single-op data access for the `test_instructions` table — the HOW TO TEST
-// record (Story MOTIR-4906 · Subtask MOTIR-5328). Writes require `tx` (the
-// 4-layer rule), and so do the reads: every caller is inside
+// record, one per RUN on the run target (Story MOTIR-4906 · Subtask MOTIR-5328;
+// `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment). Writes require
+// `tx` (the 4-layer rule), and so do the reads: every caller is inside
 // withWorkspaceContext, which binds the `app.workspace_id` GUC the table's pure
 // active-workspace RLS policy reads (the `design_evidence` shape).
 //
-// ⚠️ The card sketched one `insertCurrent` that "clears the previous current row,
-// then inserts". That is TWO operations, so it is two methods here —
-// {@link markNotCurrentByPair} and {@link create} — composed by the service
-// under the lock it takes. A repository method that did both would own an
-// ordering the single-op rule reserves for the service.
+// Reads include the record's repository sections in the SAME query (a Prisma
+// `include` is one round trip per relation level, independent of row count).
 
 /** The create payload, named here so callers above never spell the Prisma type. */
 export type TestInstructionsCreateInput = Prisma.TestInstructionsUncheckedCreateInput;
 
+/** A record row with its repository sections, as every read here returns it. */
+export type TestInstructionsWithRepos = TestInstructions & { repos: TestInstructionsRepo[] };
+
+const WITH_REPOS = { repos: { orderBy: { position: 'asc' } } } as const;
+
 export const testInstructionsRepository = {
-  async create(
+  async insert(
     data: TestInstructionsCreateInput,
     tx: Prisma.TransactionClient,
-  ): Promise<TestInstructions> {
-    return tx.testInstructions.create({ data });
+  ): Promise<{ id: string }> {
+    return tx.testInstructions.create({ data, select: { id: true } });
   },
 
   /**
-   * Clear the one-current slot for a (work item, repository) pair — the first
-   * half of a new version. The caller holds the item's row lock, so nothing can
-   * take the slot between this and the insert. Returns the affected count.
+   * Clear the one-current slot for a run target — the first half of a new
+   * version. The caller holds the item's row lock, so nothing can take the slot
+   * between this and the insert. Returns the affected count.
    */
-  async markNotCurrentByPair(
-    workItemId: string,
-    repoId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<number> {
+  async clearCurrent(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.testInstructions.updateMany({
-      where: { workItemId, repoId, isCurrent: true },
+      where: { workItemId, isCurrent: true },
       data: { isCurrent: false },
     });
     return result.count;
   },
 
-  /**
-   * The NEWEST record written for one commit of one pair, current or not — the
-   * idempotency read. A retried publish of identical content finds its own
-   * earlier row here and writes nothing.
-   */
-  async findLatestByCommit(
-    workItemId: string,
-    repoId: string,
-    commitSha: string,
+  /** One record by id, with its sections. */
+  async findById(
+    id: string,
     tx: Prisma.TransactionClient,
-  ): Promise<TestInstructions | null> {
+  ): Promise<TestInstructionsWithRepos | null> {
+    return tx.testInstructions.findUnique({ where: { id }, include: WITH_REPOS });
+  },
+
+  /** The CURRENT record for one run target, with its sections — the idempotency read. */
+  async findCurrentForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<TestInstructionsWithRepos | null> {
     return tx.testInstructions.findFirst({
-      where: { workItemId, repoId, commitSha },
-      orderBy: { createdAt: 'desc' },
-    });
-  },
-
-  /** Every CURRENT record for one work item — one per repository. */
-  async listCurrentByWorkItem(
-    workItemId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<TestInstructions[]> {
-    return tx.testInstructions.findMany({
       where: { workItemId, isCurrent: true },
-      orderBy: { createdAt: 'asc' },
+      include: WITH_REPOS,
     });
   },
 
   /**
-   * Every CURRENT record for a BATCH of work items, in ONE query — the read
-   * behind a page that renders several cards' blocks (MOTIR-5333). An empty
-   * batch short-circuits without a round trip.
+   * Every CURRENT record for a BATCH of run targets, with sections, in a
+   * batch-size-independent number of queries — the read behind a page that
+   * renders several items' blocks (MOTIR-5333). An empty batch short-circuits.
    */
   async listCurrentByWorkItems(
     workItemIds: readonly string[],
     tx: Prisma.TransactionClient,
-  ): Promise<TestInstructions[]> {
+  ): Promise<TestInstructionsWithRepos[]> {
     if (workItemIds.length === 0) return [];
     return tx.testInstructions.findMany({
       where: { workItemId: { in: [...workItemIds] }, isCurrent: true },
+      include: WITH_REPOS,
       orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /** Every record ever written for one run target, newest first — the earlier runs. */
+  async listHistoryForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<TestInstructionsWithRepos[]> {
+    return tx.testInstructions.findMany({
+      where: { workItemId },
+      include: WITH_REPOS,
+      orderBy: { createdAt: 'desc' },
     });
   },
 };

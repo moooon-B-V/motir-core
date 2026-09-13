@@ -1,6 +1,10 @@
 // Wire DTOs for the HOW TO TEST record (Story MOTIR-4906 · Subtask MOTIR-5328).
 // The service maps rows to these via lib/mappers/testInstructionsMappers.ts just
 // before returning. Dates are ISO strings, matching the other evidence DTOs.
+//
+// The record is per RUN on the run target (`docs/decisions/approval-gates.md` §9's
+// 2026-09-13 amendment): one click-path for the run, and one section per
+// repository the run touched.
 
 /** One setup step a reviewer runs after checking out the branch. */
 export interface SetupCommandDTO {
@@ -10,23 +14,30 @@ export interface SetupCommandDTO {
   command: string;
 }
 
-/** One stored version of a work item's HOW TO TEST for one repository. */
+/** One repository's section of a run's HOW TO TEST. */
+export interface TestInstructionsRepoDTO {
+  /** The `GithubRepo` id the section is keyed on. */
+  repoId: string;
+  /** The head commit this repository's section was written for. */
+  commitSha: string;
+  /** Install / migrate / seed / run — never the branch fetch, which the read composes. */
+  setupCommands: SetupCommandDTO[];
+}
+
+/** One stored version of a run target's HOW TO TEST — the output of one run. */
 export interface TestInstructionsDTO {
   id: string;
+  /** The run target. */
   workItemId: string;
-  /** The `GithubRepo` id the record is keyed on. */
-  repoId: string;
-  /** The commit the instructions were written for. */
-  commitSha: string;
-  /** Ordered click-path; empty exactly when `clickPathNotApplicable`. */
+  /** Ordered click-path for the run; empty exactly when `clickPathNotApplicable`. */
   clickPathSteps: string[];
   clickPathNotApplicable: boolean;
   clickPathNotApplicableReason: string | null;
   /** The path to open on the preview host, e.g. `/items/ACME-7`. */
   previewPath: string | null;
-  /** Install / migrate / seed / run — never the branch fetch, which the read composes. */
-  setupCommands: SetupCommandDTO[];
   preconditionMd: string | null;
+  /** One section per repository, in the order the publisher gave them. */
+  repos: TestInstructionsRepoDTO[];
   /** The dispatch run that wrote it, when one did. */
   dispatchRunId: string | null;
   publishedById: string | null;
@@ -37,6 +48,6 @@ export interface TestInstructionsDTO {
 /** What a publish answers: the stored record, and whether this call wrote it. */
 export interface PublishTestInstructionsResultDTO {
   record: TestInstructionsDTO;
-  /** False when an identical record for the same commit already existed (a retry). */
+  /** False when an identical record for the same run already existed (a retry). */
   created: boolean;
 }

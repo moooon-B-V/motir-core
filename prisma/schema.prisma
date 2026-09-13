@@ -1095,6 +1095,7 @@ model Workspace {
   designAssets                DesignAsset[]
   // How-to-test records (Story MOTIR-4906 · MOTIR-5328). Cascade with the workspace.
   testInstructions            TestInstructions[]
+  testInstructionsRepos       TestInstructionsRepo[]
   // Preview deployments reported by connected repositories (MOTIR-5329). Cascade.
   repoDeployments             RepoDeployment[]
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
@@ -1633,6 +1634,7 @@ model Project {
   dispatchRuns                DispatchRun[]
   /// How-to-test records for this project's cards (MOTIR-5328). Cascade.
   testInstructions            TestInstructions[]
+  testInstructionsRepos       TestInstructionsRepo[]
 
   /// The addresses this project answers on, and which one is CANONICAL
   /// (Story MOTIR-3878 · `docs/decisions/public-tenant-addresses.md`).
@@ -4225,46 +4227,75 @@ model TestInstructions {
   /// pure active-workspace gate with no per-row subquery.
   workspaceId                  String   @map("workspace_id")
   projectId                    String   @map("project_id")
+  /// The RUN TARGET — the item the run was launched against (a story for a
+  /// container / scoped run, the card itself for a single-card dispatch).
+  /// `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment: HOW TO TEST
+  /// is per RUN, so one record per run lands here, never one per pull request.
   workItemId                   String   @map("work_item_id")
-  /// FK → `GithubRepo`, the provider-agnostic repository row
-  /// `github_pull_request.repo_id` and `work_item_delivery.repo_id` already key on.
-  repoId                       String   @map("repo_id")
-  /// The commit the instructions were written for. Also the idempotency key: a
-  /// second publish of the same content for the same commit writes nothing.
-  commitSha                    String   @map("commit_sha")
-  /// Ordered click-path steps (a JSON array of strings). Empty exactly when
-  /// `clickPathNotApplicable` is true — the service enforces the XOR.
+  /// Ordered click-path steps (a JSON array of strings) — ONE for the run.
+  /// Empty exactly when `clickPathNotApplicable` is true — the service enforces
+  /// the XOR.
   clickPathSteps               Json     @map("click_path_steps")
   clickPathNotApplicable       Boolean  @default(false) @map("click_path_not_applicable")
   clickPathNotApplicableReason String?  @map("click_path_not_applicable_reason") @db.Text
   /// The path to open on the preview host, e.g. `/items/ACME-7`.
   previewPath                  String?  @map("preview_path")
-  /// Ordered `{ label, command }` pairs — install, migrate, seed, run.
-  setupCommands                Json     @map("setup_commands")
   /// The seed / sign-in / role precondition, as Markdown.
   preconditionMd               String?  @map("precondition_md") @db.Text
-  /// The dispatch run that wrote it. SetNull: a pruned run loses attribution,
-  /// never the record.
+  /// The dispatch run that wrote it — the run this record is the output of. Null
+  /// for a runbook-driven run with no dispatch row. SetNull: a pruned run loses
+  /// attribution, never the record.
   dispatchRunId                String?  @map("dispatch_run_id")
   /// WHO published it. SetNull, like every other audit stamp.
   publishedById                String?  @map("published_by_id")
   isCurrent                    Boolean  @default(true) @map("is_current")
   createdAt                    DateTime @default(now()) @map("created_at")
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workItem    WorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  repo        GithubRepo   @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  dispatchRun DispatchRun? @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
-  publishedBy User?        @relation("TestInstructionsPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem    WorkItem               @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun?           @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
+  publishedBy User?                  @relation("TestInstructionsPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  repos       TestInstructionsRepo[]
 
-  /// The history + idempotency read: one pair's versions, per commit, newest
-  /// first. Its column list is deliberately NOT the partial unique index's
-  /// `(work_item_id, repo_id)` — Prisma's differ pairs indexes by column list
-  /// (the partial-index rule in CLAUDE.md, MOTIR-1960).
-  @@index([workItemId, repoId, commitSha, createdAt(sort: Desc)])
+  /// The history read: one item's runs, newest first. Its column list is
+  /// deliberately NOT the partial unique index's `(work_item_id)` — Prisma's
+  /// differ pairs indexes by column list (the partial-index rule in CLAUDE.md,
+  /// MOTIR-1960).
+  @@index([workItemId, createdAt(sort: Desc)])
   @@index([workspaceId])
   @@map("test_instructions")
+}
+
+/// One REPOSITORY SECTION of a run's HOW TO TEST record (Story MOTIR-4906 ·
+/// Subtask MOTIR-5328): the commit that repository's section was written for,
+/// and the setup commands a reviewer runs after checking out its branch. A run
+/// touching two repositories writes one `TestInstructions` with two of these.
+model TestInstructionsRepo {
+  id                 String @id @default(cuid())
+  workspaceId        String @map("workspace_id")
+  projectId          String @map("project_id")
+  testInstructionsId String @map("test_instructions_id")
+  /// FK → `GithubRepo`, the provider-agnostic repository row
+  /// `github_pull_request.repo_id` and `work_item_delivery.repo_id` already key on.
+  repoId             String @map("repo_id")
+  /// The head commit this repository's section was written for.
+  commitSha          String @map("commit_sha")
+  /// Ordered `{ label, command }` pairs — install, migrate, seed, run. Never the
+  /// branch fetch, which the read composes from the pull request's `headRef`.
+  setupCommands      Json   @map("setup_commands")
+  /// Section order within the record, as the publisher gave it.
+  position           Int    @default(0)
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testInstructions TestInstructions @relation(fields: [testInstructionsId], references: [id], onDelete: Cascade)
+  repo             GithubRepo       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([testInstructionsId, repoId])
+  @@index([repoId])
+  @@index([workspaceId])
+  @@map("test_instructions_repo")
 }
 
 /// Which vocabulary of decision verbs a gate carries (the approval-gate ADR
@@ -6357,7 +6388,7 @@ model GithubRepo {
   /// set row with a null realized repo, not a deleted plan.
   projectRepos                ProjectRepo[]
   workItemDeliveries          WorkItemDelivery[]
-  testInstructions            TestInstructions[]
+  testInstructionsRepos       TestInstructionsRepo[]
   /// Preview deployments this repository's host reported (MOTIR-5329). Cascade.
   repoDeployments             RepoDeployment[]
 
