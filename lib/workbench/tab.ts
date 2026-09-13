@@ -23,13 +23,22 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 export type WorkbenchTab = 'todo' | 'in-progress' | 'finished' | 'watching' | 'approvals';
 
-/** Every tab, in strip order. To do leads because it is the default. */
+/**
+ * Every tab, in strip order — the DESIGN's order (`design-notes.md` § 21,
+ * MOTIR-5216): what is waiting on you, what is moving, what to start, what just
+ * landed, what you follow.
+ *
+ * ⚠️ The order says NOTHING about which tab a bare `/workbench` shows. Nothing
+ * reads the first member as a default: `BY_PARAM` is built order-independently,
+ * and the default is decided by `TAB_PARAM`'s `null` entry together with
+ * `parseWorkbenchTab`'s fallback below.
+ */
 export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
-  'todo',
+  'approvals',
   'in-progress',
+  'todo',
   'finished',
   'watching',
-  'approvals',
 ];
 
 /** The `?tab=` spelling of each tab; `null` for the default, which has none. */

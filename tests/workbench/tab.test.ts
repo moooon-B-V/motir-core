@@ -5,6 +5,27 @@ import { WORKBENCH_TABS, parseWorkbenchTab, workbenchTabHref } from '@/lib/workb
 // Story MOTIR-4777 · MOTIR-4782) — the one place that decides what a tab IS and
 // how it is spelled in a URL. Pure, so it tests without a browser or a database.
 
+describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
+  it('is the design order: what waits on you, what moves, what to start, then the rest', () => {
+    expect(WORKBENCH_TABS).toEqual(['approvals', 'in-progress', 'todo', 'finished', 'watching']);
+  });
+
+  it('moves NO address — the order and the default are separate decisions', () => {
+    // The re-order is presentation only. The first member is To approve, yet the
+    // paramless tab is still To do and every href is byte-identical, so the
+    // order change is reviewable (and revertable) on its own.
+    expect(WORKBENCH_TABS[0]).toBe('approvals');
+    expect(parseWorkbenchTab(undefined)).toBe('todo');
+    expect(WORKBENCH_TABS.map((tab) => workbenchTabHref(tab))).toEqual([
+      '/workbench?tab=approvals',
+      '/workbench?tab=in-progress',
+      '/workbench',
+      '/workbench?tab=finished',
+      '/workbench?tab=watching',
+    ]);
+  });
+});
+
 describe('parseWorkbenchTab', () => {
   it('reads every addressable tab', () => {
     expect(parseWorkbenchTab('in-progress')).toBe('in-progress');

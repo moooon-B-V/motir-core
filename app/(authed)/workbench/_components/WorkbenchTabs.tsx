@@ -8,8 +8,8 @@ import type { HomeTabCountsDto } from '@/lib/dto/home';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The Workbench tab strip (Story MOTIR-4777 · MOTIR-4782, per
-// `design/workbench/design-notes.md` §"The tab strip") — To do · In progress ·
-// Recently finished · Watching · To approve.
+// `design/workbench/design-notes.md` §"The tab strip") — To approve · In progress ·
+// To do · Recently finished · Watching (re-ordered by MOTIR-5217).
 //
 // ⚠️ LINK-BASED, not the client `Segmented`, and that is the design's decision
 // rather than a shortcut. The selection has to live in the URL: a tab held only
@@ -55,21 +55,34 @@ export async function WorkbenchTabs({
 }) {
   const t = await getTranslations('workbench');
 
-  // Strip order is the design's, and it is also the reading order of a working
-  // day: what to start, what is moving, what just landed, what you follow, what
-  // wants you.
+  // Strip order is the design's (`design-notes.md` § 21, MOTIR-5216), and it is
+  // the order a person's attention should run in when agents do the work: what
+  // is waiting on YOUR decision first — an unmade decision holds up somebody
+  // else's card — then what is moving, then what to start, then what just
+  // landed and what you follow. The first three are also the landing cascade's
+  // three rungs, so the strip explains where a reader was just landed.
   const tabs: TabSpec[] = [
     {
-      key: 'todo',
-      label: t('tabs.toDo'),
-      icon: <Circle className="h-3.5 w-3.5" />,
-      count: counts.toDo,
+      // ⚠️ The LABEL is an action and the SLUG is a set. The other four name a
+      // state a work item is IN; this one names something the reader must DO,
+      // which is the whole reason it sits apart from them. Its href stays
+      // `?tab=approvals` — `lib/workbench/tab.ts` carries the rule.
+      key: 'approvals',
+      label: t('tabs.toApprove'),
+      icon: <Inbox className="h-3.5 w-3.5" />,
+      count: counts.approvals,
     },
     {
       key: 'in-progress',
       label: t('tabs.inProgress'),
       icon: <CircleDot className="h-3.5 w-3.5" />,
       count: counts.inProgress,
+    },
+    {
+      key: 'todo',
+      label: t('tabs.toDo'),
+      icon: <Circle className="h-3.5 w-3.5" />,
+      count: counts.toDo,
     },
     {
       key: 'finished',
@@ -82,16 +95,6 @@ export async function WorkbenchTabs({
       label: t('tabs.watching'),
       icon: <Star className="h-3.5 w-3.5" />,
       count: counts.watching,
-    },
-    {
-      // ⚠️ The LABEL is an action and the SLUG is a set. The other four name a
-      // state a work item is IN; this one names something the reader must DO,
-      // which is the whole reason it sits apart from them. Its href stays
-      // `?tab=approvals` — `lib/workbench/tab.ts` carries the rule.
-      key: 'approvals',
-      label: t('tabs.toApprove'),
-      icon: <Inbox className="h-3.5 w-3.5" />,
-      count: counts.approvals,
     },
   ];
 
