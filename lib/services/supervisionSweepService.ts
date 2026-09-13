@@ -8,6 +8,12 @@ import {
   type IndexSession,
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { ciRunnerBootService, type SupervisionSession } from '@/lib/services/ciRunnerBootService';
+import {
+  hostedAgentBootStepId,
+  hostedAgentContainerService,
+  type HostedAgentSession,
+} from '@/lib/services/hostedAgentContainerService';
+import { isSupervisionKind, type SupervisionKind } from '@/lib/jobs/supervision/driver';
 
 // THE ABANDONED-SUPERVISION SWEEP (Story MOTIR-3778 · Subtask MOTIR-3830) — the
 // owner of a state this story creates.
@@ -98,6 +104,74 @@ export const WORST_LEGITIMATE_GAP_MS =
 /** How many stalled supervisions one tick settles. A backlog drains over several ticks. */
 const SWEEP_BATCH = 20;
 
+/** What an abandoned supervision's terminal transition is handed, whatever its kind. */
+export interface AbandonedSupervision {
+  /** ISO-8601 — the observed container start, when a successful read saw one. */
+  startedAt: string | null;
+  failureDetail: string;
+}
+
+/** One supervisor's half of the sweep: where its boot memo lives, and its own
+ *  terminal transition. */
+export interface SupervisionSettler {
+  bootStepId(subject: string): string;
+  settle(session: unknown, abandoned: AbandonedSupervision): Promise<unknown>;
+}
+
+/**
+ * THE SUPERVISOR REGISTRY (MOTIR-4713) — every `job_supervision.kind`, and the
+ * settle path each one takes.
+ *
+ * ⚠️ IT WAS AN `if (index) … else` UNTIL A THIRD KIND EXISTED, and the `else` was
+ * the defect: any kind that was not `index` was handed to the CI runner's settle
+ * with a session of the wrong shape, and its boot memo was read from `boot-runner`.
+ * The schema comment on `JobSupervision.kind` promised an exhaustive map; this
+ * `Record` is that map, so a supervisor added to `SupervisionKind` without an
+ * entry here is a COMPILE error. Do not weaken it to a `Partial` or a fallback.
+ */
+export const SUPERVISION_SETTLERS: Record<SupervisionKind, SupervisionSettler> = {
+  index: {
+    bootStepId: (subject) => `index-boot:${subject}`,
+    settle: (session, abandoned) =>
+      codeGraphIndexDispatchService.settleIndexContainer(session as IndexSession, {
+        done: true,
+        reason: 'job_timed_out',
+        startedAt: abandoned.startedAt,
+        exitCode: null,
+        failureDetail: abandoned.failureDetail,
+      }),
+  },
+  'ci-runner': {
+    bootStepId: () => 'boot-runner',
+    settle: (session, abandoned) => {
+      const runner = session as SupervisionSession;
+      return ciRunnerBootService.settleSupervision(runner, {
+        done: true,
+        reason: 'job_timed_out',
+        startedAt: abandoned.startedAt,
+        bootLatencyMs: abandoned.startedAt
+          ? Math.max(
+              0,
+              new Date(abandoned.startedAt).getTime() - new Date(runner.queuedAt).getTime(),
+            )
+          : null,
+        failureDetail: abandoned.failureDetail,
+      });
+    },
+  },
+  'hosted-agent': {
+    bootStepId: (subject) => hostedAgentBootStepId(subject),
+    settle: (session, abandoned) =>
+      hostedAgentContainerService.settle(session as HostedAgentSession, {
+        done: true,
+        reason: 'job_timed_out',
+        startedAt: abandoned.startedAt,
+        exitCode: null,
+        failureDetail: abandoned.failureDetail,
+      }),
+  },
+};
+
 export interface SupervisionSweepResult {
   /** Rows `listStalled` returned — candidates, before the liveness check. */
   scanned: number;
@@ -147,6 +221,18 @@ export const supervisionSweepService = {
    * the transition exactly-once, and it is the same claim the driver makes.
    */
   async settleAbandoned(row: JobSupervision, cutoff: Date): Promise<boolean> {
+    // A kind no supervisor in this build owns — a row written by a newer deploy,
+    // or by hand. Handing it to any settle path would tear down a container with
+    // another fleet's teardown, so it is left WATCHING and said out loud; the
+    // fleet reaper remains its backstop.
+    if (!isSupervisionKind(row.kind)) {
+      console.error('[supervisionSweep] a stalled supervision of an unknown kind; leaving it', {
+        runId: row.runId,
+        subject: row.subject,
+        kind: row.kind,
+      });
+      return false;
+    }
     if (await this.runIsStillLive(row, cutoff)) return false;
 
     const claimed = await withSystemContext(async (tx) => {
@@ -181,26 +267,10 @@ export const supervisionSweepService = {
     const failureDetail = `supervision abandoned: no pass advanced it since ${row.nextPollAt.toISOString()}`;
 
     // THE TERMINAL TRANSITION — the supervisors' own, never a second copy.
-    if (row.kind === 'index') {
-      await codeGraphIndexDispatchService.settleIndexContainer(session as IndexSession, {
-        done: true,
-        reason: 'job_timed_out',
-        startedAt,
-        exitCode: null,
-        failureDetail,
-      });
-    } else {
-      const runner = session as SupervisionSession;
-      await ciRunnerBootService.settleSupervision(runner, {
-        done: true,
-        reason: 'job_timed_out',
-        startedAt,
-        bootLatencyMs: startedAt
-          ? Math.max(0, new Date(startedAt).getTime() - new Date(runner.queuedAt).getTime())
-          : null,
-        failureDetail,
-      });
-    }
+    await SUPERVISION_SETTLERS[row.kind as SupervisionKind].settle(session, {
+      startedAt,
+      failureDetail,
+    });
 
     // The row's job is done: the outcome now lives where every settled
     // supervision's does — the settle step's memo and the run's `job_run` row.
@@ -242,7 +312,8 @@ export const supervisionSweepService = {
    * resumed pass does, from `job_step`, WITHOUT invoking the handler at all.
    */
   async readSession(row: JobSupervision): Promise<unknown | null> {
-    const stepId = row.kind === 'index' ? `index-boot:${row.subject}` : 'boot-runner';
+    if (!isSupervisionKind(row.kind)) return null;
+    const stepId = SUPERVISION_SETTLERS[row.kind].bootStepId(row.subject);
     const memo = await withSystemContext((tx) =>
       jobStepRepository.findByRunAndStep(row.runId, stepId, tx),
     );
