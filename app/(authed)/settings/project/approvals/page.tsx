@@ -3,12 +3,15 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
+import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
+import { PrMergeModeCard } from './_components/PrMergeModeCard';
 import { guardSettingsPage } from '../_guard';
 
 // `Project settings ▸ Approvals` — server component (Story MOTIR-4925 · Subtask
 // MOTIR-5170), built to `design/projects/approvals.mock.html` panel 0 (the door)
-// and panels 1–2 (the switch's two ordinary states).
+// and panels 1–2 (the switch's two ordinary states). Its second card, the MERGE
+// MODE (Story MOTIR-4880 · Subtask MOTIR-5181), is panels 6–8.
 //
 // THE ROOM, not a card bolted onto an existing page, and the design argues it from
 // the switch's readers and writers rather than from resemblance: a second
@@ -41,10 +44,11 @@ export default async function ProjectApprovalsPage() {
   const refused = await guardSettingsPage('approvals', ctx);
   if (refused) return refused;
 
-  const settings = await approvalGateSettingsService.getSettings(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const [settings, { prMergeMode }] = await Promise.all([
+    approvalGateSettingsService.getSettings(ctx.projectId, serviceCtx),
+    projectPrMergeModeService.getPrMergeMode(ctx.projectId, serviceCtx),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -61,6 +65,8 @@ export default async function ProjectApprovalsPage() {
         projectKey={ctx.project.identifier}
         initialEnabled={settings.acceptanceVideoEnabled}
       />
+
+      <PrMergeModeCard projectKey={ctx.project.identifier} initialMode={prMergeMode} />
     </div>
   );
 }

@@ -226,6 +226,16 @@ const ROUTES: { route: string; call: Call }[] = [
       (await import('@/app/api/projects/[key]/monitors/available/route')).GET(get(), p({ key })),
   },
   {
+    // MOTIR-5181: the merge-mode card's write door. The body is a valid mode, so
+    // the request reaches the lookup rather than 400ing on the value.
+    route: 'PATCH pr-merge-mode',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/pr-merge-mode/route')).PATCH(
+        json('PATCH', { prMergeMode: 'auto' }),
+        p({ key }),
+      ),
+  },
+  {
     route: 'GET repositories',
     call: async (key) =>
       (await import('@/app/api/projects/[key]/repositories/route')).GET(get(), p({ key })),
