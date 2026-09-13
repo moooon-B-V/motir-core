@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
+  isCoverageAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
@@ -84,6 +85,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const subsumed = result.advisories.filter(isSubsumptionAdvisory);
   const oversized = result.advisories.filter(isSizingAdvisory);
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
+  const uncovered = result.advisories.filter(isCoverageAdvisory);
 
   const lines: string[] = [];
   if (references.length > 0) {
@@ -234,6 +236,28 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'remedy, because nothing has landed yet and the cheap move is a conversation.',
     );
   }
+  // The CONTAINER-COVERAGE family (MOTIR-5362) — the one advisory about a
+  // container's relationship to its CHILDREN rather than about what a card says
+  // or names. MOTIR-4882 was `valid: true` with three of its seven criteria owned
+  // by no child, because its only code child was sealed against a different card.
+  if (uncovered.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these containers have an acceptance criterion that NO child ` +
+        "owns — no direct child's title carries its distinguishing words — and at least one " +
+        'child was created BEFORE the container, so its criteria were written for a different parent:',
+      ...uncovered.map(
+        (a) =>
+          `  ${a.item} criterion ${a.criterionIndex} has no owning child ` +
+          `(adopted: ${a.adoptedChildren.join(', ')}) (${a.severity})`,
+      ),
+      'Widen the adopted work item on the record, or file the sibling that covers the difference ' +
+        "— never trim the container's criterion to fit what the children happen to do. A green " +
+        "subtree is evidence about the children, not about the container's own criteria. Noun " +
+        'overlap is not delivery: a child whose BODY delivers the criterion under a title that does ' +
+        'not name it is reported here too, and a criterion over every child ("Each story …") never is.',
+    );
+  }
   return lines;
 }
 
@@ -343,7 +367,12 @@ export function registerValidateWorkItem(
         'a CHILDLESS card is its OWN design blocker — one criterion produces a design asset and ' +
         'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
         '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +
-        'criterion onto its own card rather than cutting the list at a line). Advisories ' +
+        'criterion onto its own card rather than cutting the list at a line). A `coverage` ' +
+        'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
+        "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
+        'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +
+        '`adoptedChildren`; the remedy is to widen the adopted work item on the record or file the ' +
+        'sibling that covers the difference. Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +
