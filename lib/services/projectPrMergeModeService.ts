@@ -34,20 +34,21 @@ import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/contex
 // order is always row-then-project, so the two cannot deadlock.
 //
 // THE READ AND THE WRITE (MOTIR-5179), for the settings room (MOTIR-5181).
-// Authority is split the way the room is: anyone who may BROWSE the project may
-// READ its merge mode — so a member who may not change it arrives, sees the
-// state, and meets no 403 — and changing it takes `workflow:manage`, the key
-// the Approvals room's other switch already asserts
-// (`approvalGateSettingsService`). A merge policy decides when work may move,
-// exactly as a status graph and the acceptance-video gate do.
+// BOTH take `workflow:manage`, the key the Approvals room, its route and its
+// other switch (`approvalGateSettingsService`) are guarded by. There is no
+// read-only view of this setting (Yue, 2026-09-13): the room's front end is
+// guarded by the permission, so a member who cannot manage the project never
+// lands on the page, and a browse-gated read would serve a surface that does not
+// exist. A merge policy decides when work may move, exactly as a status graph and
+// the acceptance-video gate do.
 
 export const projectPrMergeModeService = {
-  /** The project's merge mode, for anyone who may browse the project. */
+  /** The project's merge mode, for someone who may manage the project's workflow. */
   async getPrMergeMode(
     projectId: string,
     ctx: ServiceContext,
   ): Promise<{ prMergeMode: PrMergeModeValue }> {
-    await projectAccessService.assertCanBrowse(projectId, ctx);
+    await projectAccessService.assertPermission(projectId, ctx, 'workflow:manage');
     const row = await withSystemContext((tx) => projectRepository.findPrMergeMode(projectId, tx));
     if (!row) throw new ProjectNotFoundError(projectId);
     return { prMergeMode: row.prMergeMode };

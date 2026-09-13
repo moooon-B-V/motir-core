@@ -14,10 +14,9 @@ import { truncateAuthTables } from '../helpers/db';
 
 // THE READERS MOVE OFF `Workspace` — Story MOTIR-4880 · MOTIR-5179.
 //
-// Pinned here: the value rides the base `ProjectDTO`; the project-scoped read is
-// open to anyone who may BROWSE the project (a member who may not change it
-// arrives and sees the state); the write needs `workflow:manage` and STAMPS the
-// value decided; and two projects in ONE workspace hold different values — the
+// Pinned here: the value rides the base `ProjectDTO`; the project-scoped read AND
+// write both need `workflow:manage` (the room is manage-only — no read-only view);
+// the write STAMPS the value decided; and two projects in ONE workspace hold different values — the
 // tier move proved by behaviour, not by the schema.
 
 beforeEach(async () => {
@@ -85,16 +84,18 @@ describe('the project-scoped read and write', () => {
     );
   });
 
-  it('a member who may browse but not manage READS it, and is refused the write', async () => {
+  it('a member who may browse but not manage is refused the read AND the write', async () => {
+    // There is no read-only view of this setting (Yue, 2026-09-13): the room is
+    // guarded by `workflow:manage`, so the read is too.
     const { workspace, project, ownerCtx } = await tenant();
     await projectPrMergeModeService.setPrMergeMode(project.id, 'auto', ownerCtx);
     const member = await createTestUser();
     await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
     const memberCtx = { userId: member.id, workspaceId: workspace.id };
 
-    expect(await projectPrMergeModeService.getPrMergeMode(project.id, memberCtx)).toEqual({
-      prMergeMode: 'auto',
-    });
+    await expect(
+      projectPrMergeModeService.getPrMergeMode(project.id, memberCtx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
       projectPrMergeModeService.setPrMergeMode(project.id, 'manual', memberCtx),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
