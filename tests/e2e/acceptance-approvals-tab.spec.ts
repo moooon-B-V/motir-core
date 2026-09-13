@@ -50,7 +50,7 @@ import {
 //
 // The gate under test is PUBLISHED through `publish_design_result` over
 // `/api/mcp` with a `CLI_TOKEN_GRANT` bearer, exactly as
-// `acceptance-design-approval.spec.ts` does: the `awaiting` gate is created BY
+// `design-approval.spec.ts` does: the `awaiting` gate is created BY
 // `designEvidenceService` at publish, so a seeded one would be an assertion
 // against a row the product never made. The pager's filler gates are written
 // directly — `approvals-tab-seed.ts` states that trade in full, and nothing is

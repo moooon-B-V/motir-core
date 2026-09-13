@@ -238,7 +238,7 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
 // ── THE PUBLISH, AND THE PORT'S BYTES ───────────────────────────────────────
 // Both halves of "get an AWAITING gate in front of a browser", extracted here
 // (Bug MOTIR-5118) so the specs that need that shape share one copy. The
-// comments below moved with the code from `acceptance-design-approval.spec.ts`,
+// comments below moved with the code from `design-approval.spec.ts`,
 // which paid for them.
 
 /** Open an MCP session as an AGENT would — a bearer, no cookie, no session. */
