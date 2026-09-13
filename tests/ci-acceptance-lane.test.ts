@@ -817,6 +817,24 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
   ].join('\n');
 
   /**
+   * A `seq` that behaves like macOS's BSD one (MOTIR-5364): `-s SEP` puts the
+   * separator after the LAST number too, so `seq -s, 1 3` prints `1,2,3,`.
+   * GNU `seq` — what CI's Linux runners have — prints `1,2,3`. Planted on PATH
+   * by the case that proves the gate's shard list does not depend on which one
+   * the machine carries; every other case runs the host's own `seq`.
+   */
+  const BSD_SEQ_STUB = [
+    '#!/usr/bin/env bash',
+    "sep=$'\\n'",
+    'if [ "$1" = "-s" ]; then sep="$2"; shift 2',
+    'elif [[ "$1" == -s* ]]; then sep="${1#-s}"; shift; fi',
+    'if [ "$#" -eq 1 ]; then first=1; last="$1"; else first="$1"; last="$2"; fi',
+    'for ((i = first; i <= last; i++)); do printf "%s%s" "$i" "$sep"; done',
+    "if [ \"$sep\" != $'\\n' ]; then printf '\\n'; fi",
+    '',
+  ].join('\n');
+
+  /**
    * Run the shipped gate over a lane holding `specCount` members.
    *
    * Since MOTIR-4257 the `pull_request` arm also reads the PR's CHANGED FILES,
@@ -846,11 +864,16 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     specCount: number,
     eventName: 'pull_request' | 'push' | 'merge_group',
     changedFiles: readonly string[] = ['tests/e2e/acceptance-story-1.spec.ts'],
+    { bsdSeq = false }: { bsdSeq?: boolean } = {},
   ): Record<string, string> & { stdout: string; summary: string } {
     const dir = mkdtempSync(join(tmpdir(), 'acceptance-gate-'));
     try {
       const binDir = join(dir, 'stub-bin');
       mkdirSync(binDir, { recursive: true });
+      if (bsdSeq) {
+        writeFileSync(join(binDir, 'seq'), BSD_SEQ_STUB);
+        chmodSync(join(binDir, 'seq'), 0o755);
+      }
       // The payload the endpoint would return for this PR, in its real shape.
       writeFileSync(
         join(binDir, PR_FILES_FIXTURE),
@@ -956,6 +979,20 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     expect(runGate(26, 'pull_request').shards).toBe('[1,2,3,4]');
     expect(runGate(4, 'push').shards).toBe('[1,2,3,4]');
   });
+
+  it.each([1, 2, 4])(
+    'emits a valid %i-leg shard list under BSD `seq` too — no trailing separator (MOTIR-5364)',
+    (legs) => {
+      // The gate used `seq -s,`, which on macOS prints `1,` — so the list was
+      // `[1,]`, not JSON, and nine cases here were red on every Mac while CI's
+      // GNU `seq` kept them green. The workflow runs on Linux only, but this
+      // file runs the workflow's own snippet on whatever machine runs the
+      // tests, so the snippet has to be portable, not the test tolerant.
+      const out = runGate(legs, 'pull_request', undefined, { bsdSeq: true });
+      expect(out.legs).toBe(String(legs));
+      expect(JSON.parse(out.shards!)).toEqual(Array.from({ length: legs }, (_, i) => i + 1));
+    },
+  );
 
   it('floors an empty lane at ONE leg, and only on a PR', () => {
     // A `push` against an empty lane never reaches the fan-out at all — the
