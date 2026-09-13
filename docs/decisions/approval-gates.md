@@ -1082,10 +1082,24 @@ repositories produce no preview has two paths rather than three, and says so.
 >    _"not into the pull-request body"_: the record on the work item is what
 >    Motir renders; the body is what a reviewer on the host reads. Both carry the
 >    same content, and neither replaces the other.
-> 4. **Where it renders:** on the run target's item page, and in the approval
->    port of the run target's `pull_request_approval` gate(s). **Not** under each
->    Development row. A child card of a container run shows a pointer to its run
->    target instead.
+> 4. **Where it renders — ONE gate, ONE block** (Yue, 2026-09-13: _"'approve to
+>    merge the PRs' is the gate, how to test is telling user how to validate the
+>    PRs, so they are the same gate, not 2 separated things"_). On the run target's
+>    item page the **Development block** carries the pull-request rows AND the
+>    run's How to test in one section. How to test is the EVIDENCE of the one
+>    gate _approve to merge the pull requests_, never a gate, section or verb of
+>    its own. When that gate is awaiting, the block IS the universal approval
+>    frame — its rows and How to test are the port — exactly as the Design result
+>    section is for a design decision. A child card of a container run shows a
+>    pointer to its run target instead. (The full-screen approval overlay is not
+>    part of this amendment; it is MOTIR-5214's, for every gate.)
+>
+>    **Content.** The record's content is **rich text** (`bodyMd`, sections
+>    allowed), written by the agent over MCP like a design note or an acceptance
+>    receipt. Every command sits in a fenced code block, which renders
+>    click-to-copy. Only what Motir derives stays structured: the repositories and
+>    their commits, the preview, the checks CI ran, the branch fetch.
+>
 > 5. **Which record is current:** the newest run's. Earlier runs' records remain
 >    as history.
 >
