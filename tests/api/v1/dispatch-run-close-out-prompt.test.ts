@@ -48,9 +48,13 @@ describe('assembleRunCloseOutPrompt — what the close-out agent is told', () =>
     expect(prompt).toContain('Session branches: motir/run-web, motir/run-api.');
   });
 
-  it('instructs exactly ONE publish on the run target, with a repos entry per repository', () => {
+  it('instructs exactly ONE publish on the run target — a rich-text body with fenced commands, a repos entry per repository', () => {
     const text = flat(prompt);
     expect(text).toContain(`Call the ${HOW_TO_TEST_TOOL_NAME} tool ONCE, with key ACME-1`);
+    expect(text).toContain(
+      '"bodyMd": How to test for the WHOLE run as RICH TEXT (Markdown) with sections',
+    );
+    expect(text).toContain('Put EVERY command in its own fenced code block');
     expect(text).toContain('"repos": one entry per repository the run pushed to');
     expect(text).toContain('do not include it');
     expect(MCP_TOOL_NAMES).toContain(HOW_TO_TEST_TOOL_NAME);
