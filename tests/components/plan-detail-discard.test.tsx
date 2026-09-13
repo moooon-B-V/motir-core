@@ -125,6 +125,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         blockedByNodeIds: [],
         blockedByRemovedNodeIds: [],
         committedBlockedBy: [],
+        blockerStubs: [],
         identifier: null,
         title: 'A proposed story',
         kind: 'story',

@@ -21,6 +21,21 @@
 
 export type BillingCadence = 'monthly' | 'annual';
 
+/**
+ * How often a tier's credit allotment is granted — motir-ai's `AllotmentCadence`
+ * enum on `PlanTier.allotmentCadence`, mirrored verbatim rather than re-named.
+ * A `one_time` tier is granted once and never refreshed (the allotment scheduler
+ * grants only `monthly` tiers), so the storefront must never call it monthly
+ * (MOTIR-5274). This is NOT `BillingCadence`: that is how a PRICE is billed.
+ */
+export type AllotmentCadence = 'one_time' | 'monthly';
+
+/** A tier's credit grant: how many credits, and how often they are granted. */
+export interface CreditAllotment {
+  credits: number;
+  cadence: AllotmentCadence;
+}
+
 /** One cadence's price point — the USD fee + the Stripe price lookup key. */
 export interface CatalogPrice {
   /** Whole-USD recurring fee for this cadence (annual = the yearly total). */
@@ -35,8 +50,12 @@ export interface AiPlanCatalogEntry {
   key: 'free' | 'standard' | 'pro' | 'max' | 'enterprise';
   /** Customer-facing name ("Standard", "Pro", …). */
   name: string;
-  /** Monthly credit allotment for the tier (ADR §2). */
-  monthlyCredits: number | null;
+  /**
+   * The tier's credit grant (ADR §2) — its size AND its cadence, because Free's
+   * 300 is a one-time signup grant while every paid tier refreshes monthly.
+   * `null` for Enterprise (a custom pool).
+   */
+  allotment: CreditAllotment | null;
   /** The recommended/anchor tier (Pro) — accent-bordered in the storefront. */
   recommended: boolean;
   /**
@@ -84,12 +103,18 @@ export interface BillingCatalog {
 // total (~33% off the 12× monthly), the Stripe annual-default.
 export const BILLING_CATALOG: BillingCatalog = {
   aiPlans: [
-    { key: 'free', name: 'Free', monthlyCredits: 300, recommended: false, prices: null },
+    {
+      key: 'free',
+      name: 'Free',
+      allotment: { credits: 300, cadence: 'one_time' },
+      recommended: false,
+      prices: null,
+    },
     // `starter` removed by the 2026-06-23 amendment (8.1.18 / MOTIR-1308).
     {
       key: 'standard',
       name: 'Standard',
-      monthlyCredits: 2000,
+      allotment: { credits: 2000, cadence: 'monthly' },
       recommended: false,
       prices: {
         monthly: { amountUsd: 25, priceLookupKey: 'standard_pool_monthly' },
@@ -99,7 +124,7 @@ export const BILLING_CATALOG: BillingCatalog = {
     {
       key: 'pro',
       name: 'Pro',
-      monthlyCredits: 8000,
+      allotment: { credits: 8000, cadence: 'monthly' },
       recommended: true, // the anchor tier; pro_pool_annual is Stripe's default Price
       prices: {
         monthly: { amountUsd: 75, priceLookupKey: 'pro_pool_monthly' },
@@ -109,7 +134,7 @@ export const BILLING_CATALOG: BillingCatalog = {
     {
       key: 'max',
       name: 'Max',
-      monthlyCredits: 30000,
+      allotment: { credits: 30000, cadence: 'monthly' },
       recommended: false,
       prices: {
         monthly: { amountUsd: 150, priceLookupKey: 'max_pool_monthly' },
@@ -120,7 +145,7 @@ export const BILLING_CATALOG: BillingCatalog = {
     {
       key: 'enterprise',
       name: 'Enterprise',
-      monthlyCredits: null,
+      allotment: null,
       recommended: false,
       prices: null,
     },

@@ -27,6 +27,7 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],
+    blockerStubs: [],
     identifier: null,
     title: 'A proposed item',
     kind: 'task',

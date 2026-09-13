@@ -457,7 +457,12 @@ jobs:
           # the matrix is byte-for-byte the [1,2,3,4] that card measured, so a
           # lane that legitimately grows again gets exactly the parallelism it
           # was sized for and never regresses toward the serial runtime.
-          SHARDS="[$(seq -s, 1 "${LEGS}")]"
+          # `paste -sd, -`, not `seq -s,`: BSD `seq` puts the separator after the
+          # last number too, so on a Mac the list came out `[1,]` — not JSON —
+          # and tests/ci-acceptance-lane.test.ts, which runs this snippet on the
+          # host, was red there while green here (MOTIR-5364). `paste` is POSIX
+          # and joins without a trailing separator under BSD and GNU alike.
+          SHARDS="[$(seq 1 "${LEGS}" | paste -sd, -)]"
           echo "legs=${LEGS} shards=${SHARDS}"
           echo "event=${EVENT_NAME} run=${RUN}"
           echo "run=${RUN}" >> "$GITHUB_OUTPUT"

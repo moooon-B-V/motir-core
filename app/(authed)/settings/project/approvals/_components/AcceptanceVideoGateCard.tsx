@@ -25,30 +25,21 @@ import { useToast } from '@/components/ui/Toast';
 // by rendering that card rather than reading it.
 //
 // SCOPE: this card ships the two states an admin of an entitled organisation sees.
-// `Unavailable` (no paid AI plan) and read-only are MOTIR-5171's, and the reason
-// they are not merely "the rest of the states" is that each carries a shipped
-// defect of its own.
-//
-// ⚠️ WHAT IT DOES OWE A NON-ADMIN ALREADY (MOTIR-5278): the room opens to every
-// project browser, so this card renders for actors the PATCH refuses. For them
-// the switch is DISABLED, never offered and then reverted on a 403 — the footer
-// that says why is MOTIR-5171's.
+// `Unavailable` (no paid AI plan) is MOTIR-5171's, because it carries a shipped
+// defect of its own. There is NO read-only state: the room is manage-only
+// (`design/projects/design-notes.md` § ⭐ Approvals §6, 2026-09-13), so every actor
+// who renders this card may change it. MOTIR-5278's `canManage` prop and its
+// disabled branch were reverted by MOTIR-5394.
 
 export interface AcceptanceVideoGateCardProps {
   /** The project's `MOTIR`-style identifier — the key the route is addressed by. */
   projectKey: string;
   initialEnabled: boolean;
-  /**
-   * Whether the viewer holds the room's WRITE key. Computed by the page through
-   * the registry (`settingsEntryKeys('approvals').write`), never from a literal.
-   */
-  canManage: boolean;
 }
 
 export function AcceptanceVideoGateCard({
   projectKey,
   initialEnabled,
-  canManage,
 }: AcceptanceVideoGateCardProps) {
   const t = useTranslations('approvals.acceptanceVideo');
   const { toast } = useToast();
@@ -56,9 +47,6 @@ export function AcceptanceVideoGateCard({
   const [isPending, startTransition] = useTransition();
 
   function toggle(next: boolean) {
-    // A disabled button fires no click, so this is unreachable through the UI; it
-    // stays so no future caller can turn a refused write into an optimistic flip.
-    if (!canManage) return;
     // Optimistic, then reconciled from the response — the same shape the sibling
     // editors use. On failure the value is put BACK rather than left hopeful: a
     // switch that shows a state the server refused is the worst of the three
@@ -104,7 +92,7 @@ export function AcceptanceVideoGateCard({
         <Switch
           checked={enabled}
           onCheckedChange={toggle}
-          disabled={!canManage || isPending}
+          disabled={isPending}
           aria-label={t('title')}
         />
       </div>

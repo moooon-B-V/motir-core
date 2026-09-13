@@ -114,8 +114,27 @@ export async function sendEvent<N extends WorkspaceScopedEventName>(
 export async function sendSystemEvent<N extends SystemEventName>(
   name: N,
   data: JobEventData<N>,
+  opts: SendSystemEventOptions = {},
 ): Promise<void> {
-  await dispatchToEngine(name, data, { caller: 'sendSystemEvent', strict: false });
+  await dispatchToEngine(name, data, {
+    caller: 'sendSystemEvent',
+    strict: false,
+    immediate: opts.immediate ?? false,
+  });
+}
+
+export interface SendSystemEventOptions {
+  /**
+   * Make this arrival due NOW instead of one debounce `period` from now
+   * (MOTIR-5360). It still coalesces into the pending run its debounce key
+   * holds, so it can pull a queued run forward and can never add a second one.
+   * No effect on a job that declares no debounce.
+   *
+   * For an emitter with a PERSON waiting behind it. The declared `period` is
+   * the job's default and exists for emitters that arrive in bursts, so leave
+   * this unset unless the wait itself is the cost.
+   */
+  immediate?: boolean;
 }
 
 /**
@@ -152,6 +171,8 @@ interface DispatchOptions {
    * `true` — rethrow it, for a caller that reports or retries on it.
    */
   strict: boolean;
+  /** See {@link SendSystemEventOptions.immediate}. */
+  immediate?: boolean;
 }
 
 /**
@@ -178,6 +199,7 @@ async function dispatchToEngine<N extends JobEventName>(
   try {
     await dispatchEventToEngine(name, data, {
       idempotencyKey: (data as { idempotencyKey?: string }).idempotencyKey ?? null,
+      ...(opts.immediate ? { immediate: true } : {}),
     });
   } catch (err) {
     if (opts.strict) throw err;

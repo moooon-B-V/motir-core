@@ -39,6 +39,16 @@
       bell drawer, and `Quick links` with MOTIR-2652, which is archived. See
       design-notes.md §What is NOT on this page.
 
+      ⚠️ REVISED 2026-09-13 (MOTIR-5216, story MOTIR-5213). The strip is
+      RE-ORDERED to To approve · In progress · To do · Recently finished ·
+      Watching in every panel that draws it, and the landing CASCADES: the bare
+      /workbench resolves to the first of To approve, In progress, To do with
+      anything in it, To do being terminal (panel B). Every tab now carries its
+      own ?tab=, To do included, so the paramless-default convention is REPLACED.
+      Panel 5 is redrawn as the cascade's terminal with the shipped To do empty
+      state. No empty state, row, column or pager changes.
+      design-notes.md § "AMENDED by MOTIR-5216" is the record.
+
       ⚠️ THIS MOCK IS NOT A REDRAW OF THE APP. Every element that already ships
       was DUMPED out of the real component through the repo's own vitest + RTL
       setup (`renderWithIntl` → `container.innerHTML`) and pasted here verbatim
@@ -53,6 +63,8 @@
 
       Panels (review EACH — notes.html mistake #31):
         A  the DOOR — the rail row after the rename, and the post-auth landing.
+        B  the landing CASCADE — what /workbench resolves to, rung by rung
+           (MOTIR-5216).
         1  TO DO, populated.
         2  IN PROGRESS, populated — including the Implemented and In Review rows
            that are an agent's output waiting for a person.
@@ -3785,6 +3797,62 @@
       .overflow-x-auto {
         overflow-x: auto;
       }
+      /* MOTIR-5216 — Panel B's review chrome: the cascade RULE card and the
+         strip-only frames. Board chrome, so its ink is --el-text-secondary /
+         --el-text on the page ground, per design-board-chrome-aa. */
+      .cascade-rule {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 16px 20px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      .cascade-rule__head {
+        margin: 0 0 6px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .cascade-rule ol {
+        margin: 0 0 8px;
+        padding-left: 22px;
+        list-style: decimal;
+      }
+      .cascade-rule p {
+        margin: 0 0 10px;
+        color: var(--el-text-secondary);
+      }
+      .cascade-rule code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .cascade-table {
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .cascade-table th {
+        text-align: left;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        padding: 4px 16px 4px 0;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .cascade-table td {
+        padding: 4px 16px 4px 0;
+        color: var(--el-text);
+      }
+      .cascade-strip {
+        padding: 14px 32px;
+      }
       .grid-3 {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -3816,6 +3884,12 @@
         <code>WorkbenchList</code>. Read <code>design-notes.md</code>
         beside this file for the token map, the copy, the column-set measurement, the Planning flags
         and the GIVES / TAKES table.
+        <strong>AMENDED (MOTIR-5216, story MOTIR-5213):</strong> the strip is RE-ORDERED &mdash; To
+        approve &middot; In progress &middot; To do &middot; Recently finished &middot; Watching
+        &mdash; in every panel that draws it; <strong>panel B</strong> draws the landing CASCADE
+        that <code>/workbench</code> now resolves; every tab carries its own <code>?tab=</code>, To
+        do included; and panel 5 is redrawn as the cascade&rsquo;s TERMINAL, with the shipped To do
+        empty state it lands a brand-new member on.
       </p>
     </div>
 
@@ -4441,6 +4515,8 @@
               its route <em>and</em> its own nav entry, one row below. A request to the old
               <code>/home</code> address 308s to <code>/workbench</code> with its query string
               intact, so a bookmark and a pasted link both still land.
+              <strong>MOTIR-5216:</strong> what that address DOES is now resolve — it forwards to
+              the first of To approve · In progress · To do with anything in it (panel B).
             </p>
           </div>
         </figure>
@@ -4456,9 +4532,761 @@
         signed-in landing surface (GitHub’s dashboard) because the glyph means
         <em>where you land</em> — which the rename does not change. What changed is what the surface
         DOES, and the label is what says so. Swapping a rail glyph people navigate by costs
-        recognition and buys nothing the word “Workbench” is not already carrying.
+        recognition and buys nothing the word “Workbench” is not already carrying. <br /><strong
+          >Both doors are unchanged by MOTIR-5216 and now reach a RESOLVER</strong
+        >, not a fixed tab: the rail row and <code>AUTHED_LANDING_PATH</code> still name
+        <code>/workbench</code>, and panel B draws where it forwards.
       </p>
     </div>
+
+    <p class="panel-label">
+      Panel B — the landing CASCADE: <code>/workbench</code> RESOLVES to a tab, it is not one
+    </p>
+    <div class="panel">
+      <div class="cascade-rule">
+        <p class="cascade-rule__head">The rule — stated once, for MOTIR-5217 · 5218 · 5221</p>
+        <ol>
+          <li>
+            <strong>To approve</strong> — if anything is awaiting your decision (its count &gt; 0)
+          </li>
+          <li>
+            else <strong>In progress</strong> — if anything of yours is moving (its count &gt; 0)
+          </li>
+          <li>
+            else <strong>To do</strong> — <strong>TERMINAL</strong>: landed on even when its own
+            count is 0, so the cascade always resolves
+          </li>
+        </ol>
+        <p>
+          <strong>Three tabs only</strong> — Recently finished and Watching are never landed on.
+          <strong>An explicit <code>?tab=</code> always wins</strong>, so any tab can be looked at,
+          empty or not; an unknown or misspelled value falls into the cascade rather than 404-ing.
+          The only input is the five counts the strip already reads. The strip ORDER and the cascade
+          ORDER are the same order, so the strip explains where the reader just landed.
+        </p>
+        <table class="cascade-table">
+          <thead>
+            <tr>
+              <th>tab</th>
+              <th>its one address</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>To approve</td>
+              <td><code>/workbench?tab=approvals</code></td>
+            </tr>
+            <tr>
+              <td>In progress</td>
+              <td><code>/workbench?tab=in-progress</code></td>
+            </tr>
+            <tr>
+              <td>To do</td>
+              <td><code>/workbench?tab=todo</code></td>
+            </tr>
+            <tr>
+              <td>Recently finished</td>
+              <td><code>/workbench?tab=finished</code></td>
+            </tr>
+            <tr>
+              <td>Watching</td>
+              <td><code>/workbench?tab=watching</code></td>
+            </tr>
+            <tr>
+              <td><em>the bare path</em></td>
+              <td><code>/workbench</code> — resolves and forwards; names no tab</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="stack" style="gap: 18px; margin-top: 18px">
+        <figure style="margin: 0">
+          <figcaption class="cap">Rung 1 · something awaits your decision → To approve</figcaption>
+          <div class="frame">
+            <div class="frame-bar"><span>/workbench → forwards to ?tab=approvals</span></div>
+            <div class="cascade-strip">
+              <nav
+                aria-label="Workbench views"
+                class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5 max-w-full overflow-x-auto"
+              >
+                <a
+                  href="/workbench?tab=approvals"
+                  aria-current="page"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                  ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-inbox h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                      <path
+                        d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                      /></svg></span
+                  >To approve<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >2</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=in-progress"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-dot h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="1" /></svg></span
+                  >In progress<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >4</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=todo"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" /></svg></span
+                  >To do<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >7</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=finished"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-check h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="m9 12 2 2 4-4" /></svg></span
+                  >Recently finished<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >3</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=watching"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-star h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
+                      /></svg></span
+                  >Watching<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >5</span
+                  ></a
+                >
+              </nav>
+            </div>
+          </div>
+        </figure>
+        <figure style="margin: 0">
+          <figcaption class="cap">
+            Rung 2 · nothing awaiting you, something of yours moving → In progress
+          </figcaption>
+          <div class="frame">
+            <div class="frame-bar"><span>/workbench → forwards to ?tab=in-progress</span></div>
+            <div class="cascade-strip">
+              <nav
+                aria-label="Workbench views"
+                class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5 max-w-full overflow-x-auto"
+              >
+                <a
+                  href="/workbench?tab=approvals"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-inbox h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                      <path
+                        d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                      /></svg></span
+                  >To approve<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >0</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=in-progress"
+                  aria-current="page"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                  ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-dot h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="1" /></svg></span
+                  >In progress<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >4</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=todo"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" /></svg></span
+                  >To do<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >7</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=finished"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-check h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="m9 12 2 2 4-4" /></svg></span
+                  >Recently finished<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >3</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=watching"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-star h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
+                      /></svg></span
+                  >Watching<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >5</span
+                  ></a
+                >
+              </nav>
+            </div>
+          </div>
+        </figure>
+        <figure style="margin: 0">
+          <figcaption class="cap">Rung 3 · nothing awaiting, nothing moving → To do</figcaption>
+          <div class="frame">
+            <div class="frame-bar"><span>/workbench → forwards to ?tab=todo</span></div>
+            <div class="cascade-strip">
+              <nav
+                aria-label="Workbench views"
+                class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5 max-w-full overflow-x-auto"
+              >
+                <a
+                  href="/workbench?tab=approvals"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-inbox h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                      <path
+                        d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                      /></svg></span
+                  >To approve<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >0</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=in-progress"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-dot h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="1" /></svg></span
+                  >In progress<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >0</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=todo"
+                  aria-current="page"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                  ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" /></svg></span
+                  >To do<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >7</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=finished"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-check h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="m9 12 2 2 4-4" /></svg></span
+                  >Recently finished<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >3</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=watching"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-star h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
+                      /></svg></span
+                  >Watching<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >5</span
+                  ></a
+                >
+              </nav>
+            </div>
+          </div>
+        </figure>
+        <figure style="margin: 0">
+          <figcaption class="cap">
+            Rung 3 is TERMINAL · everything empty → still To do (Panel 5 draws this page whole)
+          </figcaption>
+          <div class="frame">
+            <div class="frame-bar">
+              <span>/workbench → forwards to ?tab=todo · every count 0</span>
+            </div>
+            <div class="cascade-strip">
+              <nav
+                aria-label="Workbench views"
+                class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5 max-w-full overflow-x-auto"
+              >
+                <a
+                  href="/workbench?tab=approvals"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-inbox h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                      <path
+                        d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                      /></svg></span
+                  >To approve</a
+                >
+                <a
+                  href="/workbench?tab=in-progress"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-dot h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="1" /></svg></span
+                  >In progress</a
+                >
+                <a
+                  href="/workbench?tab=todo"
+                  aria-current="page"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                  ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" /></svg></span
+                  >To do</a
+                >
+                <a
+                  href="/workbench?tab=finished"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-check h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="m9 12 2 2 4-4" /></svg></span
+                  >Recently finished</a
+                >
+                <a
+                  href="/workbench?tab=watching"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-star h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
+                      /></svg></span
+                  >Watching</a
+                >
+              </nav>
+            </div>
+          </div>
+        </figure>
+        <figure style="margin: 0">
+          <figcaption class="cap">
+            An explicit ?tab= wins · To approve rendered at 0 — its empty state, because you asked
+          </figcaption>
+          <div class="frame">
+            <div class="frame-bar">
+              <span>/workbench?tab=approvals · asked for, so no resolution</span>
+            </div>
+            <div class="cascade-strip">
+              <nav
+                aria-label="Workbench views"
+                class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5 max-w-full overflow-x-auto"
+              >
+                <a
+                  href="/workbench?tab=approvals"
+                  aria-current="page"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                  ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-inbox h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                      <path
+                        d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                      /></svg></span
+                  >To approve<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >0</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=in-progress"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-dot h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="1" /></svg></span
+                  >In progress<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >4</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=todo"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" /></svg></span
+                  >To do<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >7</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=finished"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-check h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="m9 12 2 2 4-4" /></svg></span
+                  >Recently finished<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >3</span
+                  ></a
+                >
+                <a
+                  href="/workbench?tab=watching"
+                  class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                  ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-star h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
+                      /></svg></span
+                  >Watching<span
+                    class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                    >5</span
+                  ></a
+                >
+              </nav>
+            </div>
+          </div>
+        </figure>
+      </div>
+    </div>
+    <p class="note">
+      <strong>The bare path is an ENTRANCE, not a view.</strong> Under a cascade
+      <code>/workbench</code> names a different tab for different readers on different days, so it
+      can no longer be To do's canonical spelling — that would be one address naming many views, the
+      ambiguity the one-URL-per-tab rule forbids. The rule is kept by making it TOTAL: every tab
+      carries its own <code>?tab=</code> and the paramless-default convention is REPLACED, not bent.
+      Rung 1 reads the To-approve count the strip already shows; Recently finished and Watching
+      never take part. The strips are the shipped <code>WorkbenchTabs</code> markup in the new order
+      — each frame's counts are the whole of the input.
+    </p>
 
     <p class="panel-label">Panel 1 — TO DO, populated (viewport 1200 · rail 240 · content 894)</p>
     <div class="panel">
@@ -4780,10 +5608,9 @@
                   class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
                 >
                   <a
-                    href="/workbench"
-                    aria-current="page"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
-                    ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    href="/workbench?tab=approvals"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
                       ><svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -4794,13 +5621,16 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="lucide lucide-circle h-3.5 w-3.5"
+                        class="lucide lucide-inbox h-3.5 w-3.5"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="10" /></svg></span
-                    >To do<span
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                        <path
+                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                        /></svg></span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >7</span
+                      >0</span
                     ></a
                   >
                   <a
@@ -4825,6 +5655,30 @@
                     >In progress<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >4</span
+                    ></a
+                  >
+                  <a
+                    href="/workbench?tab=todo"
+                    aria-current="page"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                    ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" /></svg></span
+                    >To do<span
+                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                      >7</span
                     ></a
                   >
                   <a
@@ -4874,32 +5728,6 @@
                     >Watching<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >5</span
-                    ></a
-                  >
-                  <a
-                    href="/workbench?tab=approvals"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-inbox h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                        <path
-                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        /></svg></span
-                    >To approve<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >0</span
                     ></a
                   >
                 </nav>
@@ -5561,7 +6389,7 @@
                   class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
                 >
                   <a
-                    href="/workbench"
+                    href="/workbench?tab=approvals"
                     class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
                     ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
                       ><svg
@@ -5574,13 +6402,16 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="lucide lucide-circle h-3.5 w-3.5"
+                        class="lucide lucide-inbox h-3.5 w-3.5"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="10" /></svg></span
-                    >To do<span
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                        <path
+                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                        /></svg></span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >7</span
+                      >0</span
                     ></a
                   >
                   <a
@@ -5606,6 +6437,29 @@
                     >In progress<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >4</span
+                    ></a
+                  >
+                  <a
+                    href="/workbench?tab=todo"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" /></svg></span
+                    >To do<span
+                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                      >7</span
                     ></a
                   >
                   <a
@@ -5655,32 +6509,6 @@
                     >Watching<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >5</span
-                    ></a
-                  >
-                  <a
-                    href="/workbench?tab=approvals"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-inbox h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                        <path
-                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        /></svg></span
-                    >To approve<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >0</span
                     ></a
                   >
                 </nav>
@@ -6366,7 +7194,7 @@
                   class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
                 >
                   <a
-                    href="/workbench"
+                    href="/workbench?tab=approvals"
                     class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
                     ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
                       ><svg
@@ -6379,13 +7207,16 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="lucide lucide-circle h-3.5 w-3.5"
+                        class="lucide lucide-inbox h-3.5 w-3.5"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="10" /></svg></span
-                    >To do<span
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                        <path
+                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                        /></svg></span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >7</span
+                      >0</span
                     ></a
                   >
                   <a
@@ -6410,6 +7241,29 @@
                     >In progress<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >4</span
+                    ></a
+                  >
+                  <a
+                    href="/workbench?tab=todo"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" /></svg></span
+                    >To do<span
+                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                      >7</span
                     ></a
                   >
                   <a
@@ -6460,32 +7314,6 @@
                     >Watching<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >5</span
-                    ></a
-                  >
-                  <a
-                    href="/workbench?tab=approvals"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-inbox h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                        <path
-                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        /></svg></span
-                    >To approve<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >0</span
                     ></a
                   >
                 </nav>
@@ -7103,7 +7931,7 @@
                   class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
                 >
                   <a
-                    href="/workbench"
+                    href="/workbench?tab=approvals"
                     class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
                     ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
                       ><svg
@@ -7116,13 +7944,16 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="lucide lucide-circle h-3.5 w-3.5"
+                        class="lucide lucide-inbox h-3.5 w-3.5"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="10" /></svg></span
-                    >To do<span
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                        <path
+                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                        /></svg></span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >7</span
+                      >0</span
                     ></a
                   >
                   <a
@@ -7147,6 +7978,29 @@
                     >In progress<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >4</span
+                    ></a
+                  >
+                  <a
+                    href="/workbench?tab=todo"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" /></svg></span
+                    >To do<span
+                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                      >7</span
                     ></a
                   >
                   <a
@@ -7197,32 +8051,6 @@
                     >Watching<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >5</span
-                    ></a
-                  >
-                  <a
-                    href="/workbench?tab=approvals"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-inbox h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                        <path
-                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        /></svg></span
-                    >To approve<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >0</span
                     ></a
                   >
                 </nav>
@@ -7674,7 +8502,12 @@
     <p class="panel-label">Panel 5 — the ALL-EMPTY page, with five tabs to be empty in</p>
     <div class="panel">
       <div class="frame">
-        <div class="frame-bar"><span>first sign-in · no work, nothing watched</span></div>
+        <div class="frame-bar">
+          <span
+            >first sign-in · no work, nothing watched · /workbench → ?tab=todo, the cascade's
+            terminal</span
+          >
+        </div>
         <div class="shell">
           <div class="rail">
             <nav
@@ -7986,10 +8819,9 @@
                   class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
                 >
                   <a
-                    href="/workbench"
-                    aria-current="page"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
-                    ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    href="/workbench?tab=approvals"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
                       ><svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -8000,11 +8832,14 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="lucide lucide-circle h-3.5 w-3.5"
+                        class="lucide lucide-inbox h-3.5 w-3.5"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="10" /></svg></span
-                    >To do</a
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                        <path
+                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                        /></svg></span
+                    >To approve</a
                   >
                   <a
                     href="/workbench?tab=in-progress"
@@ -8026,6 +8861,27 @@
                         <circle cx="12" cy="12" r="10" />
                         <circle cx="12" cy="12" r="1" /></svg></span
                     >In progress</a
+                  >
+                  <a
+                    href="/workbench?tab=todo"
+                    aria-current="page"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                    ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" /></svg></span
+                    >To do</a
                   >
                   <a
                     href="/workbench?tab=finished"
@@ -8070,29 +8926,6 @@
                         /></svg></span
                     >Watching</a
                   >
-                  <a
-                    href="/workbench?tab=approvals"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-inbox h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                        <path
-                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        /></svg></span
-                    >To approve</a
-                  >
                 </nav>
                 <div
                   class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
@@ -8114,19 +8947,18 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="lucide lucide-circle-check h-12 w-12"
+                        class="lucide lucide-circle h-12 w-12"
                         aria-hidden="true"
                       >
                         <circle cx="12" cy="12" r="10" />
-                        <path d="m9 12 2 2 4-4" />
                       </svg>
                     </div>
-                    <h2 class="font-serif text-xl text-(--el-text)">Nothing is waiting on you</h2>
+                    <h2 class="font-serif text-xl text-(--el-text)">Nothing to start</h2>
                     <p
                       class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
                     >
-                      Work you are assigned or filed will show up here. Pick something up from Ready
-                      to get started.
+                      Work you are assigned or filed, and have not started yet, shows up here. Pick
+                      something up from Ready to get going.
                     </p>
                     <div class="mt-(--spacing-md)">
                       <a
@@ -8158,11 +8990,19 @@
         </div>
       </div>
       <p class="note">
-        ONE empty, at full page scale, naming the next action (<em>Find something to start</em> →
-        <code>/ready</code>). This is the panel that got SIMPLER when the widgets went: the
+        <strong>MOTIR-5216 — this is now the cascade&rsquo;s TERMINAL</strong>, the exact page a
+        brand-new member is landed on straight after sign-in: every count is 0, so rungs 1 and 2
+        fall through and To do is landed on empty. The empty state is therefore the SHIPPED To do
+        one, glyph and copy — the earlier drawing here said
+        <em>&ldquo;Nothing is waiting on you&rdquo;</em> under a check glyph, a pre-split state no
+        tab renders. Verdict: it stands as shipped, because it is the one empty state that already
+        carries a way forward. ONE empty, at full page scale, naming the next action (<em
+          >Find something to start</em
+        >
+        → <code>/ready</code>). This is the panel that got SIMPLER when the widgets went: the
         composite empty used to be a design problem — four nothing-yet states on one screen — and is
-        now a single statement. The tab counts are suppressed while both are zero; a "0" beside a
-        tab is noise a new user has to parse.
+        now a single statement. The tab counts are suppressed while all five are zero; a "0" beside
+        a tab is noise a new user has to parse.
       </p>
     </div>
 
@@ -8199,8 +9039,8 @@
               </div>
               <h2 class="font-serif text-xl text-(--el-text)">Nothing to start</h2>
               <p class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm">
-                Work you are assigned or filed lands here before it moves. Pick something up from
-                Ready.
+                Work you are assigned or filed, and have not started yet, shows up here. Pick
+                something up from Ready to get going.
               </p>
               <div class="mt-(--spacing-md)">
                 <a
@@ -8260,12 +9100,11 @@
               </div>
               <h2 class="font-serif text-xl text-(--el-text)">Nothing in flight</h2>
               <p class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm">
-                Cards you or your agents are working on show up here — including the ones an agent
-                has finished and nobody has looked at yet.
+                Nothing you own is being worked on right now — by you or by an agent.
               </p>
               <div class="mt-(--spacing-md)">
                 <a
-                  href="/workbench"
+                  href="/workbench?tab=todo"
                   class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
                   ><svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -8318,7 +9157,7 @@
               </div>
               <h2 class="font-serif text-xl text-(--el-text)">Nothing finished this week</h2>
               <p class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm">
-                Work you complete in the next 7 days shows up here, newest first.
+                Work you own that reaches a done status will show up here for a week after it lands.
               </p>
             </div>
           </div>
@@ -8397,7 +9236,7 @@
                 Nothing is waiting on your approval
               </h2>
               <p class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm">
-                Design results and pull requests that need your sign-off arrive here.
+                Work that needs your sign-off before it can go on will show up here.
               </p>
             </div>
           </div>
@@ -8441,12 +9280,9 @@
                     class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5 max-w-full overflow-x-auto"
                   >
                     <a
-                      href="/workbench"
-                      aria-current="page"
-                      class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) shrink-0"
-                      ><span
-                        class="inline-flex shrink-0 text-(--el-tabnav-active)"
-                        aria-hidden="true"
+                      href="/workbench?tab=approvals"
+                      class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text) shrink-0"
+                      ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
                         ><svg
                           xmlns="http://www.w3.org/2000/svg"
                           width="24"
@@ -8457,13 +9293,16 @@
                           stroke-width="2"
                           stroke-linecap="round"
                           stroke-linejoin="round"
-                          class="lucide lucide-circle h-3.5 w-3.5"
+                          class="lucide lucide-inbox h-3.5 w-3.5"
                           aria-hidden="true"
                         >
-                          <circle cx="12" cy="12" r="10" /></svg></span
-                      >To do<span
+                          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                          <path
+                            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                          /></svg></span
+                      >To approve<span
                         class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                        >7</span
+                        >0</span
                       ></a
                     >
                     <a
@@ -8488,6 +9327,32 @@
                       >In progress<span
                         class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                         >4</span
+                      ></a
+                    >
+                    <a
+                      href="/workbench?tab=todo"
+                      aria-current="page"
+                      class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) shrink-0"
+                      ><span
+                        class="inline-flex shrink-0 text-(--el-tabnav-active)"
+                        aria-hidden="true"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-circle h-3.5 w-3.5"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="10" /></svg></span
+                      >To do<span
+                        class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                        >7</span
                       ></a
                     >
                     <a
@@ -8537,32 +9402,6 @@
                       >Watching<span
                         class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                         >5</span
-                      ></a
-                    >
-                    <a
-                      href="/workbench?tab=approvals"
-                      class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text) shrink-0"
-                      ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-inbox h-3.5 w-3.5"
-                          aria-hidden="true"
-                        >
-                          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                          <path
-                            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                          /></svg></span
-                      >To approve<span
-                        class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                        >0</span
                       ></a
                     >
                   </nav>
@@ -9076,10 +9915,9 @@
                   class="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
                 >
                   <a
-                    href="/workbench"
-                    aria-current="page"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
-                    ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                    href="/workbench?tab=approvals"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
+                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
                       ><svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="24"
@@ -9090,13 +9928,16 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
-                        class="lucide lucide-circle h-3.5 w-3.5"
+                        class="lucide lucide-inbox h-3.5 w-3.5"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="10" /></svg></span
-                    >To do<span
+                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                        <path
+                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                        /></svg></span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >63</span
+                      >0</span
                     ></a
                   >
                   <a
@@ -9121,6 +9962,30 @@
                     >In progress<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >9</span
+                    ></a
+                  >
+                  <a
+                    href="/workbench?tab=todo"
+                    aria-current="page"
+                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)"
+                    ><span class="inline-flex shrink-0 text-(--el-tabnav-active)" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" /></svg></span
+                    >To do<span
+                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
+                      >63</span
                     ></a
                   >
                   <a
@@ -9170,32 +10035,6 @@
                     >Watching<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >140</span
-                    ></a
-                  >
-                  <a
-                    href="/workbench?tab=approvals"
-                    class="inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none text-(--el-text-secondary) hover:text-(--el-text)"
-                    ><span class="inline-flex shrink-0 text-(--el-text-faint)" aria-hidden="true"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-inbox h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                        <path
-                          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                        /></svg></span
-                    >To approve<span
-                      class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
-                      >0</span
                     ></a
                   >
                 </nav>

@@ -333,13 +333,7 @@ export function WorkItemNode({
             </span>
           ) : null}
           {crossBlocked ? (
-            <span
-              data-testid="cross-blocked-flag"
-              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-on-surface)"
-            >
-              <Flag className="size-3" aria-hidden="true" />
-              {t(crossBlockedSprint ? 'node.blockerNotInSprint' : 'node.blockedElsewhere')}
-            </span>
+            <CrossBlockedFlag sprint={crossBlockedSprint} />
           ) : drillable ? (
             <ChevronRight
               className="size-4 shrink-0 text-(--el-text-muted)"
@@ -473,6 +467,29 @@ function DonePill() {
     >
       <CheckCircle2 className="size-3 text-(--el-text-inverted)" aria-hidden="true" />
       {tStatus('done')}
+    </span>
+  );
+}
+
+/**
+ * The "blocked elsewhere" CHIP (MOTIR-1331) — the dependent's half of the
+ * off-level treatment, beside the `cross` arrow and the ghost anchor. In sprint
+ * scope it names the out-of-sprint BLOCKER instead (MOTIR-1568).
+ *
+ * EXPORTED (bug MOTIR-5387) because a PROPOSED card carries the same signal on
+ * the plan-review canvas (`PlanItemNode`). The chip is a reserved canvas
+ * language, and two copies of it would be two things a reader has to recognise
+ * as one.
+ */
+export function CrossBlockedFlag({ sprint = false }: { sprint?: boolean }) {
+  const t = useTranslations('roadmap.canvas.node');
+  return (
+    <span
+      data-testid="cross-blocked-flag"
+      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-on-surface)"
+    >
+      <Flag className="size-3" aria-hidden="true" />
+      {t(sprint ? 'blockerNotInSprint' : 'blockedElsewhere')}
     </span>
   );
 }

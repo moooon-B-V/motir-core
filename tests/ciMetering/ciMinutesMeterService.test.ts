@@ -7,6 +7,8 @@ import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { ciMinutesMeterService } from '@/lib/services/ciMinutesMeterService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
+import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { ciWorkflowRunUsageRepository } from '@/lib/repositories/ciWorkflowRunUsageRepository';
@@ -472,18 +474,56 @@ describe('meterWorkflowRun — the §5.1 gate and its edges', () => {
     });
   });
 
-  it('BYPASSES the meta org entirely (§4.4)', async () => {
-    // moooon B.V. pays its own GitHub bill; metering it would bill the house to
-    // itself. Mirrors the shipped credit-gate and `meta`-tier bypasses.
+  it('RECORDS the meta org’s minutes — `isMeta` suppresses the charge, not the measurement (ADR §20)', async () => {
+    // MOTIR-5283. This test used to assert ZERO rows for a meta org: the meter
+    // returned before the write, so moooon B.V.'s Actions minutes — real spend,
+    // paid on the GitHub bill — were recorded nowhere in Motir.
     const fx = await seedTenant({ isMeta: true });
     stubGithub();
 
-    expect(await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID)).toEqual({
-      outcome: 'bypassed_meta',
+    const result = await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID);
+
+    expect(result).toMatchObject({
+      outcome: 'metered',
       organizationId: fx.organizationId,
+      workspaceId: fx.workspaceId,
+      linearEquivalentMinutes: STARTER_BILLABLE_MINUTES,
+      isMeta: true,
     });
-    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
-    expect(ciWorkflowRunUsageCount).toBe(0);
+    const rows = await adminDb.ciWorkflowRunUsage.findMany({
+      where: { organizationId: fx.organizationId },
+    });
+    expect(rows.map((r) => r.runId)).toEqual(['7001']);
+  });
+
+  it('carries `isMeta: false` for an ordinary tenant', async () => {
+    await seedTenant();
+    stubGithub();
+
+    expect(await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID)).toMatchObject(
+      { outcome: 'metered', isMeta: false },
+    );
+  });
+
+  it('puts the meta org’s minutes in the period rollup the margin readout reads (ADR §20)', async () => {
+    // `getOrgPeriodCostBasis`'s denominator is this rollup. Before MOTIR-5283 it
+    // was empty for the meta org however much CI it ran, so a fleet-cost row
+    // for that org would have had nothing to divide by.
+    const fx = await seedTenant({ isMeta: true });
+    stubGithub();
+
+    await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID);
+
+    const consumption = await ciMinutesMeterService.getOrgPeriodConsumption(
+      fx.organizationId,
+      RUN_COMPLETED_AT,
+    );
+    expect(consumption.linearEquivalentMinutes).toBe(STARTER_BILLABLE_MINUTES);
+    const basis = await ciFleetCostMeterService.getOrgPeriodCostBasis(
+      fx.organizationId,
+      RUN_COMPLETED_AT,
+    );
+    expect(basis.linearEquivalentMinutes).toBe(STARTER_BILLABLE_MINUTES);
   });
 
   it('LOGS a Motir-owned repo with no attributable project rather than swallowing it (§5.4)', async () => {
@@ -862,6 +902,32 @@ describe('the webhook seam — githubWebhookService.handleWorkflowRun', () => {
     expect(result).toEqual({ event: 'workflow_run', outcome: 'metered' });
     const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
     expect(ciWorkflowRunUsageCount).toBe(1);
+  });
+
+  it('records a META org’s run and charges NOTHING for it, even past the pool (ADR §20)', async () => {
+    // MOTIR-5283. Now that the meter records a meta run, the ONLY thing keeping
+    // it uncharged is the `isMeta` this seam hands `chargeForMeteredRun` — whose
+    // bypass is keyed on that argument, not on a read of its own. One 1,200-minute
+    // job overruns the 1,000-minute floor, so an ordinary org WOULD be charged
+    // here: the assertions below are about the bypass, not about a run too small
+    // to bill.
+    const fx = await seedTenant({ isMeta: true });
+    stubGithub(jobsPayload([{ id: 1, name: 'soak', minutes: 1200 }]));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await githubWebhookService.handleEvent('workflow_run', delivery());
+
+    expect(result).toEqual({ event: 'workflow_run', outcome: 'metered' });
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(1);
+    // No charge row at all: the charger returns before `ensureRow`, and never
+    // reaches the motir-ai debit (which `stubGithub` would refuse, logging here).
+    const ciPeriodChargeCount = await adminDb.ciPeriodCharge.count();
+    expect(ciPeriodChargeCount).toBe(0);
+    expect(error).not.toHaveBeenCalled();
+    // And the entitlement still reports the org as bypassed, not as in overage.
+    const state = await ciAllowanceService.getEntitlementState(fx.organizationId, RUN_COMPLETED_AT);
+    expect(state).toMatchObject({ state: 'bypassed', overageMinutes: 0, chargedCredits: 0 });
   });
 
   it('ignores a run that has not completed — nothing billable yet (§5.7)', async () => {

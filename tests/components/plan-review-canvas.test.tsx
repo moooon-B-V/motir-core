@@ -173,6 +173,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],
+    blockerStubs: [],
     identifier: null,
     title: 'A proposed subtask',
     kind: 'subtask',
@@ -630,11 +631,10 @@ describe('PlanReviewCanvas — a proposed dependency edge (bug MOTIR-3366)', () 
   });
 
   it('draws nothing when only ONE end of the proposed edge is on the level', async () => {
-    // The unchanged rule, asserted as a control: an off-level blocker has no node
-    // here, so its edge is dropped rather than drawn to nowhere. (Surfacing it as
-    // a ghost anchor the way a committed off-level blocker is surfaced is its own
-    // card — the roadmap read that produces those stubs knows only committed
-    // edges.)
+    // The control: an off-level blocker the review model could not NAME has no
+    // node here and no stub to mint an anchor from, so its edge is dropped rather
+    // than drawn to nowhere. One that CAN be named takes the off-level treatment
+    // (bug MOTIR-5387, at the bottom of this file).
     mount(correction(['wi_somewhere_else']));
     await screen.findByText('A proposed subtask');
 
@@ -1118,5 +1118,79 @@ describe('PlanReviewCanvas — a blocker the plan RELOCATES onto the level (bug 
 
     expect(screen.queryAllByTestId('cross-flag')).toHaveLength(1);
     expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+  });
+});
+
+// ── bug MOTIR-5387 — a proposal blocked by a card OFF the level ──────────────
+//
+// The CONSUMER half: `plan-item-node.test.tsx` holds the merge's contract, and
+// this asserts what reaches the screen through the real `loadLevel` — the red
+// flag at the arrow, the dependent's chip, and an anchor whose View opens the
+// blocker BY ITS KEY. That last one only works because the canvas learns the key
+// from the review model: no level read carries a blocker a proposal names.
+describe('PlanReviewCanvas — a proposal blocked by a card OFF the level (bug MOTIR-5387)', () => {
+  const OFF_ID = 'wi_other_story_card';
+
+  function blockedElsewhere(): PlanReviewItemDto {
+    return proposal({
+      blockedByNodeIds: [OFF_ID],
+      blockerStubs: [
+        {
+          nodeId: OFF_ID,
+          identifier: 'MOTIR-99',
+          title: 'A card under another story',
+          isDone: false,
+          parentNodeId: 'wi_another_story',
+        },
+      ],
+    });
+  }
+
+  it('draws the off-level treatment BEFORE approve — flag, chip and a named anchor', async () => {
+    stubRoadmap();
+    mount([blockedElsewhere()]);
+    await screen.findByText('A proposed subtask');
+
+    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(1);
+    expect(within(el('pi_1') as HTMLElement).getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(within(el(OFF_ID) as HTMLElement).getByText('MOTIR-99')).toBeTruthy();
+    expect(within(el(OFF_ID) as HTMLElement).getByText('A card under another story')).toBeTruthy();
+  });
+
+  it('peeks the anchor by the blocker’s KEY, not by its canvas node id', async () => {
+    const fetchMock = stubRoadmap();
+    mount([blockedElsewhere()]);
+    await screen.findByText('MOTIR-99');
+
+    selectNode(OFF_ID);
+    fireEvent.click(within(el(OFF_ID) as HTMLElement).getByTestId('view-button'));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([u]) => String(u).includes('/api/work-items/peek?key=MOTIR-99')),
+      ).toBe(true),
+    );
+  });
+
+  it('draws none of it for a blocker ON the level', async () => {
+    stubRoadmap();
+    mount([
+      proposal({
+        blockedByNodeIds: [SUB_ID],
+        blockerStubs: [
+          {
+            nodeId: SUB_ID,
+            identifier: 'MOTIR-9',
+            title: 'The starter template',
+            isDone: false,
+            parentNodeId: BUG_ID,
+          },
+        ],
+      }),
+    ]);
+    await screen.findByText('A proposed subtask');
+
+    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(0);
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
   });
 });

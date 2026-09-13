@@ -270,6 +270,33 @@ export interface PlanCommittedBlockerDto {
   isDone: boolean;
 }
 
+/**
+ * What the canvas needs to NAME one blocker a proposal carries (bug MOTIR-5387)
+ * — see {@link PlanReviewItemDto.blockerStubs}.
+ *
+ * The roadmap draws a blocker that sits on another level as a ghost anchor
+ * NAMING it, and the two edge carriers name a blocker by node id alone. So before
+ * approve the review canvas had nothing to put on an anchor, and drew none.
+ */
+export interface PlanBlockerStubDto {
+  /** The blocker's canvas node id — the id the edge carriers name. */
+  nodeId: string;
+  /** Its key, or `null` for an un-materialized `add`, which has none — its
+   *  anchor puts the proposed word in the key's slot (Part IX §1.3). */
+  identifier: string | null;
+  /** The title it has; for a proposal, the title the proposal asks for. */
+  title: string;
+  /** `status === 'done'` — the predicate every committed edge is drawn by. */
+  isDone: boolean;
+  /**
+   * Where the blocker SITS once the plan is approved: the placement the plan
+   * gives it when the plan names it, the committed row's parent otherwise. It is
+   * how the canvas tells a blocker OFF the level from a member of the level that
+   * the capped read did not carry (bug MOTIR-5043).
+   */
+  parentNodeId: string | null;
+}
+
 /** A proposed operation, enriched for the canvas + review rail. */
 export interface PlanReviewItemDto {
   /** The PlanItem id — the stable review key. */
@@ -380,6 +407,23 @@ export interface PlanReviewItemDto {
    * excluded, the same rule the readiness reads apply.
    */
   committedBlockedBy: PlanCommittedBlockerDto[];
+  /**
+   * A NAMING STUB for every blocker the two edge carriers above name —
+   * `blockedByNodeIds` ∪ `committedBlockedBy`, one per node id (bug MOTIR-5387).
+   *
+   * A blocker ON the proposal's level is drawn from the level's own nodes and
+   * needs nothing here. A blocker OFF it takes the roadmap's off-level treatment
+   * — the `cross` arrow, a ghost anchor naming it, and the dependent's "blocked
+   * elsewhere" chip — and an anchor has to say what it stands for. With ids
+   * alone, `mergePlanLevel` dropped every such edge, and the bad-plan signal
+   * first appeared after approve, when the roadmap read supplied the stub.
+   *
+   * Resolved from the SAME batched row read as the targets, never a per-item
+   * query. A blocker neither the plan nor that read can resolve (archived,
+   * deleted, outside the workspace) has no stub, and the canvas draws nothing
+   * for it rather than an anchor it cannot name.
+   */
+  blockerStubs: PlanBlockerStubDto[];
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`,
    *  which has no key, and the target's real key for every proposal that does. */
   identifier: string | null;

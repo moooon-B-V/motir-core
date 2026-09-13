@@ -467,6 +467,11 @@ export interface JobEventDataMap {
    *  carries no payload beyond the scheduled envelope. Cross-tenant by design:
    *  it DISCOVERS across workspaces and WRITES within each. */
   'system.dispatch-run-sweep': SystemScheduledData;
+  /** The open-delivery reconcile (MOTIR-5390) — re-reads open, delivering pull
+   *  requests from GitHub and replays a close whose webhook delivery was lost, so
+   *  a missed merge no longer holds its card at In Review for ever. Carries no
+   *  payload beyond the scheduled envelope. Cross-tenant by design. */
+  'system.pull-request-reconcile': SystemScheduledData;
   /** The abandoned-plan reconciler (MOTIR-3064) — asks motir-ai what became of
    *  the job behind every empty `generating` plan past its grace, and declines
    *  the ones whose producer is gone, so a dead generation can no longer pause a

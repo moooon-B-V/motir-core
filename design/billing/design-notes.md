@@ -1038,6 +1038,28 @@ rule had a user.
 **Filed as a bug** against `ci-line.mock.html`, because the latent copy is a trap
 for the NEXT asset that splices from it — which is exactly how it reached this one.
 
+### Corrected at source (MOTIR-4667) — and the drift was SIX rules, not two
+
+The two rules above were the ones that had FIRED. A whole-block diff of the three
+spliced copies against `billing.mock.html` found every drifted ink rule, and all
+now follow the base's `--el-text-secondary`:
+
+| Rule                   | Was (copied)      | `ci-line.mock.html` | `search-line.mock.html` |
+| ---------------------- | ----------------- | ------------------- | ----------------------- |
+| `.plan .seat.off`      | `--el-text-faint` | corrected           | corrected               |
+| `.bundle .bpr`         | `--el-text-muted` | corrected           | corrected               |
+| `.billed`              | `--el-text-muted` | corrected           | corrected               |
+| `.state .ico`          | `--el-text-muted` | corrected           | already corrected here  |
+| `.state .passive-note` | `--el-text-faint` | corrected           | corrected               |
+| `.menu .mlabel`        | `--el-text-faint` | corrected           | already corrected here  |
+
+After this, the three `<style>` token blocks differ from the base only by
+deliberate, local additions. **One base rule is deliberately NOT spliced:**
+`.pill-exempt` (MOTIR-4819) draws the EXEMPT org's states, which neither amendment
+draws — copied in, it would be a dead declaration in each asset. **Note the splice
+is NOT asserted at build time**, whatever the CI-line section above says: nothing
+compares the copies, which is how six rules drifted unobserved.
+
 ## Copy strings (en — the `billing` namespace; MOTIR-4557 adds each with a `zh` twin)
 
 - Name: **"Motir Search"**
