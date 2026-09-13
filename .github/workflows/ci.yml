@@ -260,6 +260,25 @@ jobs:
   # the branch prefixes stood for. `images` is true only when something the
   # container images are actually built from changed.
   #
+  # ── One flag per workspace-package lane (MOTIR-5323) ───────────────────────
+  #
+  # `pkg_cli`, `pkg_orchestrator` and `pkg_design_system` are true only when the
+  # diff touches that package's own directory, or an input every package lane
+  # installs from: the lockfile, the workspace and root manifests, the `pnpm`
+  # composite action, and this workflow. That is what
+  # `docs/decisions/app-shell-over-packages.md` §1.4 asks for — "gated by the
+  # `changes` classifier's path sets" — and §2 of the same ADR is why the skip is
+  # safe rather than hopeful: a package may not import the app, so a change
+  # outside the package cannot change what the package's own suite executes.
+  # None of the three depends on another workspace package; if one ever does,
+  # `tests/ci-changed-paths-gate.test.ts` re-derives that from the manifests and
+  # fails until the dependency's directory sets the flag too.
+  #
+  # ⚠️ A PACKAGE-ONLY CHANGE STILL SETS `app=true`. The app consumes the
+  # packages and root tests read package files, so these flags narrow the three
+  # package lanes and nothing else. They fail open with the other two: a push to
+  # `main` has no base, so it still runs every package lane.
+  #
   # ⚠️ BOTH DEFAULT TO `true`, AND THAT DIRECTION IS THE WHOLE SAFETY ARGUMENT.
   # A predicate that fails open costs a wasted lane; one that fails closed
   # merges untested code, which is the defect this job was written to remove.
@@ -282,12 +301,15 @@ jobs:
     # Observed 0.4–2.4 min → 10 (~4x). Ten is the floor every short job
     # gets; see the ceilings block above.
     timeout-minutes: 10
-    # Reads the diff, writes two booleans. Nothing else.
+    # Reads the diff, writes five booleans. Nothing else.
     permissions:
       contents: read
     outputs:
       app: ${{ steps.classify.outputs.app }}
       images: ${{ steps.classify.outputs.images }}
+      pkg_cli: ${{ steps.classify.outputs.pkg_cli }}
+      pkg_orchestrator: ${{ steps.classify.outputs.pkg_orchestrator }}
+      pkg_design_system: ${{ steps.classify.outputs.pkg_design_system }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -319,7 +341,10 @@ jobs:
           emit() {
             echo "app=$1" >>"$GITHUB_OUTPUT"
             echo "images=$2" >>"$GITHUB_OUTPUT"
-            echo "app=$1 images=$2"
+            echo "pkg_cli=$3" >>"$GITHUB_OUTPUT"
+            echo "pkg_orchestrator=$4" >>"$GITHUB_OUTPUT"
+            echo "pkg_design_system=$5" >>"$GITHUB_OUTPUT"
+            echo "app=$1 images=$2 pkg_cli=$3 pkg_orchestrator=$4 pkg_design_system=$5"
           }
 
           # Resolve the pair to diff FROM THE EVENT, and fail open on any event
@@ -349,7 +374,7 @@ jobs:
           # fail-CLOSED direction.
           if [ -z "$base" ] || [ -z "$head" ]; then
             echo "::warning::No base/head commit for event '$EVENT' — running every lane."
-            emit true true
+            emit true true true true true
             exit 0
           fi
 
@@ -357,18 +382,21 @@ jobs:
           # the diff's own exit status, which is the thing being guarded on.
           if ! files=$(git diff --name-only "$base...$head"); then
             echo '::warning::Could not diff against the merge base — running every lane.'
-            emit true true
+            emit true true true true true
             exit 0
           fi
           if [ -z "$files" ]; then
             echo '::warning::Empty changed-file set — running every lane.'
-            emit true true
+            emit true true true true true
             exit 0
           fi
           echo "$files"
 
           app=false
           images=false
+          pkg_cli=false
+          pkg_orchestrator=false
+          pkg_design_system=false
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             # Anything that is NOT docs / design / plan-seed makes this a code
@@ -420,9 +448,21 @@ jobs:
               .github/workflows/sandbox-images.yml|.github/workflows/runner-image.yml) images=true ;;
               .github/workflows/ci.yml|.github/actions/buildx/*) images=true ;;
             esac
+            # The package lanes (MOTIR-5323): the package's own directory, then
+            # the install inputs all three lanes consume. The guard re-derives
+            # those inputs from the lanes' job bodies and the composite action
+            # they use, so a lane that gains an input this list lacks goes red.
+            case "$f" in
+              packages/cli/*) pkg_cli=true ;;
+              packages/orchestrator/*) pkg_orchestrator=true ;;
+              packages/design-system/*) pkg_design_system=true ;;
+            esac
+            case "$f" in
+              pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc|.github/actions/pnpm/*|.github/workflows/ci.yml) pkg_cli=true pkg_orchestrator=true pkg_design_system=true ;;
+            esac
           done <<<"$files"
 
-          emit "$app" "$images"
+          emit "$app" "$images" "$pkg_cli" "$pkg_orchestrator" "$pkg_design_system"
 
   lint:
     name: Lint + Prettier
@@ -647,6 +687,11 @@ jobs:
     runs-on: ubuntu-latest
     # Observed 1.1–1.3 min → 10 (~8x, the short-job floor).
     timeout-minutes: 10
+    # Runs when the diff reaches this package — its own paths, or an install
+    # input every package lane shares (MOTIR-5323, `app-shell-over-packages.md`
+    # §1.4). `changes` fails open, so a push to `main` still runs it.
+    needs: changes
+    if: ${{ needs.changes.outputs.pkg_design_system == 'true' }}
     # The @motir/design-system package ships its own vitest suite (registries,
     # apply API, render, and the RSC-safe-barrel guard) that the root Vitest lane
     # does NOT run — its `include` globs only `tests/**`. Run it here so the
@@ -677,6 +722,9 @@ jobs:
     runs-on: ubuntu-latest
     # Observed 1.3–1.6 min → 10 (~6x, the short-job floor).
     timeout-minutes: 10
+    # Gated on its own package's paths, as `design-system` above (MOTIR-5323).
+    needs: changes
+    if: ${{ needs.changes.outputs.pkg_cli == 'true' }}
     # Same gap as the design-system job above: `@motir/cli`'s own vitest suite
     # (config stores, link resolution, dispatch, the client core, the agent
     # profile table, and the 7.9.7a sandbox-image invariants) lives at
@@ -713,6 +761,9 @@ jobs:
     # both take the 10-minute short-job floor. Re-derive it from this lane's own
     # runs once there are four, per MOTIR-3569's bar.
     timeout-minutes: 10
+    # Gated on its own package's paths, as `design-system` above (MOTIR-5323).
+    needs: changes
+    if: ${{ needs.changes.outputs.pkg_orchestrator == 'true' }}
     # Same gap as the two package jobs above, and the reason `@motir/orchestrator`
     # needed one the day it was extracted: its suite lives at
     # `packages/orchestrator/test/**`, which the root Vitest lane does NOT glob

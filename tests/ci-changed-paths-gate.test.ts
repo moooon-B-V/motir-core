@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -31,6 +31,10 @@ import { dirname, join } from 'node:path';
 //      referencing the job would run unconditionally (merely wasteful) or, if
 //      its `needs` were dropped, read an empty output and skip forever
 //      (silently un-tested).
+//   4. Each PACKAGE lane runs on its own package's paths and on every input it
+//      installs from (MOTIR-5323). Those inputs are re-derived from the lane's
+//      job body, the composite action it uses and the package's own manifest,
+//      so a lane that gains an input the classifier lacks fails here.
 //
 // Same mould, and the same no-YAML-parser constraint, as
 // `tests/ci-complete-gate.test.ts` and `tests/ci-design-guards-lane.test.ts`.
@@ -84,6 +88,21 @@ const changesCode = codeOf(ciJobs.get('changes') ?? '');
 /** The shell `case` patterns that set a given output to true. */
 function patternsSetting(flag: string): string[] {
   return [...changesCode.matchAll(new RegExp(`^\\s*([^\\s].*?)\\)\\s*${flag}=true\\s*;;`, 'gm'))]
+    .flatMap((m) => m[1]!.split('|'))
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The `case` patterns of every arm whose action sets `flag` to true — including
+ * an arm that sets several flags at once, which `patternsSetting` (flag alone,
+ * last before `;;`) does not read. The package flags' shared install inputs are
+ * written that way. One line per arm: `[ \t]` rather than `\s`, or the first
+ * arm of a block would be read together with the `case` line above it.
+ */
+function armsSetting(flag: string): string[] {
+  return [...changesCode.matchAll(/^[ \t]*([^\s#][^)\n]*?)\)[ \t]*([^;\n]*?)[ \t]*;;[ \t]*$/gm)]
+    .filter((m) => new RegExp(`\\b${flag}=true\\b`).test(m[2]!))
     .flatMap((m) => m[1]!.split('|'))
     .map((s) => s.trim())
     .filter(Boolean);
@@ -173,7 +192,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       expect(changesCode).toMatch(/if \[ -z "\$files" \]/);
     });
 
-    it('emits `true true` on every one of those paths, and nowhere assumes false', () => {
+    it('emits every flag `true` on every one of those paths, and nowhere assumes false', () => {
       // Still THREE early exits, each emitting both flags true — MOTIR-5124
       // MERGED two cases into one arm rather than adding a fourth: the empty
       // base/head test now covers both the unclassifiable event the old
@@ -183,7 +202,9 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       // lands here. Every one of the three is EXECUTED in `the merge-queue arm`
       // below; this count is what catches an arm added with no case written for
       // it.
-      expect([...changesCode.matchAll(/^\s*emit true true$/gm)]).toHaveLength(3);
+      // Five flags since MOTIR-5323 — `app`, `images` and the three package
+      // lanes' — so an early exit that forgets the new ones is not counted.
+      expect([...changesCode.matchAll(/^\s*emit true true true true true$/gm)]).toHaveLength(3);
     });
 
     it('stops on the first failure', () => {
@@ -269,7 +290,9 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
      * `design-and-docs-only` is the ejected pull request's own shape (above).
      * The other three are the criterion's two image inputs and one app-only
      * control — the control is what stops `images` widening to "always true",
-     * which would make every assertion here pass for the wrong reason.
+     * which would make every assertion here pass for the wrong reason. The last
+     * three are MOTIR-5323's package-lane cases: one package, no package, and an
+     * install input every package lane shares.
      */
     const HEADS: Record<string, readonly string[]> = {
       'design-and-docs-only': [
@@ -282,6 +305,9 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       'ci-runner-image-input': ['infra/ci-runner/Dockerfile'],
       'runner-image-workflow': ['.github/workflows/runner-image.yml'],
       'app-only': ['app/page.tsx'],
+      'cli-package-only': ['packages/cli/src/index.ts'],
+      'lib-only': ['lib/db.ts'],
+      'lockfile-only': ['pnpm-lock.yaml'],
     };
 
     let repo: string;
@@ -328,6 +354,16 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       if (repo) rmSync(repo, { recursive: true, force: true });
     });
 
+    /** Every output the `changes` job declares, plus what it printed. */
+    type Outputs = {
+      app: string;
+      images: string;
+      pkg_cli: string;
+      pkg_orchestrator: string;
+      pkg_design_system: string;
+      stdout: string;
+    };
+
     /** Run the shipped classifier with these `env:` values, and read its outputs. */
     function classify(env: {
       EVENT: string;
@@ -335,7 +371,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       HEAD_SHA?: string;
       MERGE_BASE_SHA?: string;
       MERGE_HEAD_SHA?: string;
-    }): { app: string; images: string; stdout: string } {
+    }): Outputs {
       const outPath = join(repo, 'github-output');
       writeFileSync(outPath, '');
       let stdout: string;
@@ -372,7 +408,14 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
             return [line.slice(0, at), line.slice(at + 1)] as const;
           }),
       ) as Record<string, string>;
-      return { app: outputs.app!, images: outputs.images!, stdout };
+      return {
+        app: outputs.app!,
+        images: outputs.images!,
+        pkg_cli: outputs.pkg_cli!,
+        pkg_orchestrator: outputs.pkg_orchestrator!,
+        pkg_design_system: outputs.pkg_design_system!,
+        stdout,
+      };
     }
 
     const asMergeGroup = (name: string) =>
@@ -424,11 +467,60 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       }
     });
 
+    describe('the package flags, executed (MOTIR-5323)', () => {
+      const packageFlags = ({ pkg_cli, pkg_orchestrator, pkg_design_system }: Outputs) => ({
+        pkg_cli,
+        pkg_orchestrator,
+        pkg_design_system,
+      });
+
+      it('runs only the CLI lane for a change inside packages/cli', () => {
+        const outputs = asPullRequest('cli-package-only');
+        expect(packageFlags(outputs)).toEqual({
+          pkg_cli: 'true',
+          pkg_orchestrator: 'false',
+          pkg_design_system: 'false',
+        });
+        // ⚠️ AND THE APP LANES STILL RUN. The app consumes the package and root
+        // tests such as `tests/api/public/contract-drift.test.ts` read its files,
+        // so these flags narrow the package lanes and nothing else.
+        expect(outputs.app).toBe('true');
+      });
+
+      it.each([['lib-only'], ['app-only']])('runs no package lane for %s', (name) => {
+        // The saving. If this flips, every pull request builds and tests all
+        // three packages again whatever it touched.
+        expect(packageFlags(asPullRequest(name))).toEqual({
+          pkg_cli: 'false',
+          pkg_orchestrator: 'false',
+          pkg_design_system: 'false',
+        });
+      });
+
+      it('runs every package lane when the lockfile changes', () => {
+        // An install input all three lanes consume, so none of them may skip.
+        expect(packageFlags(asPullRequest('lockfile-only'))).toEqual({
+          pkg_cli: 'true',
+          pkg_orchestrator: 'true',
+          pkg_design_system: 'true',
+        });
+      });
+    });
+
+    /** What a fail-open arm must emit: every lane runs. */
+    const EVERY_FLAG_TRUE = {
+      app: 'true',
+      images: 'true',
+      pkg_cli: 'true',
+      pkg_orchestrator: 'true',
+      pkg_design_system: 'true',
+    };
+
     describe('and every fail-open arm still fires — executed, not asserted in prose', () => {
       it.each([['push'], ['workflow_dispatch'], ['schedule']])(
         'runs everything on a `%s` event, which carries no base/head',
         (event) => {
-          expect(classify({ EVENT: event })).toMatchObject({ app: 'true', images: 'true' });
+          expect(classify({ EVENT: event })).toMatchObject(EVERY_FLAG_TRUE);
         },
       );
 
@@ -439,14 +531,8 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         // fail-closed, on the merge gate. Both recognised events are checked,
         // because the emptiness test is shared and a future edit could route
         // one of them around it.
-        expect(classify({ EVENT: 'merge_group' })).toMatchObject({
-          app: 'true',
-          images: 'true',
-        });
-        expect(classify({ EVENT: 'pull_request' })).toMatchObject({
-          app: 'true',
-          images: 'true',
-        });
+        expect(classify({ EVENT: 'merge_group' })).toMatchObject(EVERY_FLAG_TRUE);
+        expect(classify({ EVENT: 'pull_request' })).toMatchObject(EVERY_FLAG_TRUE);
       });
 
       it('runs everything when the diff FAILS', () => {
@@ -456,13 +542,13 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         const absent = '0'.repeat(40);
         expect(
           classify({ EVENT: 'merge_group', MERGE_BASE_SHA: absent, MERGE_HEAD_SHA: base }),
-        ).toMatchObject({ app: 'true', images: 'true' });
+        ).toMatchObject(EVERY_FLAG_TRUE);
       });
 
       it('runs everything when the changed-file set is empty', () => {
         expect(
           classify({ EVENT: 'merge_group', MERGE_BASE_SHA: base, MERGE_HEAD_SHA: base }),
-        ).toMatchObject({ app: 'true', images: 'true' });
+        ).toMatchObject(EVERY_FLAG_TRUE);
       });
     });
   });
@@ -728,6 +814,9 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       ['e2e-at-scale', 'app'],
       ['sandbox', 'images'],
       ['runner-image', 'images'],
+      ['design-system', 'pkg_design_system'],
+      ['cli', 'pkg_cli'],
+      ['orchestrator', 'pkg_orchestrator'],
     ])('%s is gated on needs.changes.outputs.%s', (job, flag) => {
       const code = codeOf(ciJobs.get(job) ?? '');
       expect(code, `${job} exists`).not.toBe('');
@@ -737,9 +826,112 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       expect(code, `${job} needs the changes job`).toMatch(/^\s*needs:.*\bchanges\b/m);
     });
 
-    it('declares both outputs it is read for', () => {
-      expect(changesCode).toMatch(/^\s*app: \$\{\{ steps\.classify\.outputs\.app \}\}$/m);
-      expect(changesCode).toMatch(/^\s*images: \$\{\{ steps\.classify\.outputs\.images \}\}$/m);
+    it('declares every output it is read for', () => {
+      for (const flag of ['app', 'images', 'pkg_cli', 'pkg_orchestrator', 'pkg_design_system']) {
+        expect(changesCode, flag).toMatch(
+          new RegExp(`^\\s*${flag}: \\$\\{\\{ steps\\.classify\\.outputs\\.${flag} \\}\\}$`, 'm'),
+        );
+      }
+    });
+  });
+
+  describe('each PACKAGE lane runs on what it consumes (MOTIR-5323)', () => {
+    const LANES = [
+      { job: 'cli', flag: 'pkg_cli', dir: 'packages/cli' },
+      { job: 'orchestrator', flag: 'pkg_orchestrator', dir: 'packages/orchestrator' },
+      { job: 'design-system', flag: 'pkg_design_system', dir: 'packages/design-system' },
+    ] as const;
+
+    type Manifest = {
+      name?: string;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+    const manifest = (dir: string): Manifest => JSON.parse(read(`${dir}/package.json`)) as Manifest;
+
+    it.each(LANES)('$job runs on its own package directory', ({ flag, dir }) => {
+      const patterns = armsSetting(flag);
+      expect(patterns.length, `some arm sets ${flag}`).toBeGreaterThan(0);
+      for (const path of [
+        `${dir}/src/index.ts`,
+        `${dir}/package.json`,
+        `${dir}/test/any.test.ts`,
+      ]) {
+        expect(covers(patterns, path), path).toBe(true);
+      }
+    });
+
+    it.each(LANES)('$job skips the app, the docs and the other packages', ({ flag, dir }) => {
+      const others = LANES.filter((lane) => lane.dir !== dir).map(
+        (lane) => `${lane.dir}/src/index.ts`,
+      );
+      for (const path of [
+        'app/page.tsx',
+        'lib/db.ts',
+        'docs/decisions/x.md',
+        'prisma/schema.prisma',
+        ...others,
+      ]) {
+        expect(covers(armsSetting(flag), path), path).toBe(false);
+      }
+    });
+
+    it.each(LANES)('$job runs on every input its own job body reads', ({ job, flag }) => {
+      // Re-derived, not restated: the composite actions the lane `uses:`, every
+      // file the lane or those actions hash or `require`, and this workflow.
+      const body = codeOf(ciJobs.get(job) ?? '');
+      expect(body, `${job} exists`).not.toBe('');
+      const actions = [...body.matchAll(/uses: \.\/(\.github\/actions\/[A-Za-z0-9_-]+)/g)].map(
+        (m) => `${m[1]!}/action.yml`,
+      );
+      expect(actions.length, `${job} uses a composite action`).toBeGreaterThan(0);
+      const hashed = (text: string): string[] =>
+        [...text.matchAll(/hashFiles\('([^']+)'\)/g)].map((m) => m[1]!);
+      const required = (text: string): string[] =>
+        [...text.matchAll(/require\('\.\/([^']+)'\)/g)].map((m) => m[1]!);
+      const inputs = new Set([
+        '.github/workflows/ci.yml',
+        ...actions,
+        ...hashed(body),
+        ...actions.flatMap((action) => {
+          const code = codeOf(read(action));
+          return [...hashed(code), ...required(code)];
+        }),
+      ]);
+      const patterns = armsSetting(flag);
+      for (const input of inputs)
+        expect(covers(patterns, input), `${job} reads ${input}`).toBe(true);
+    });
+
+    it.each(LANES)('$job runs when a workspace package it depends on changes', ({ flag, dir }) => {
+      const own = manifest(dir);
+      expect(own.name, `${dir}/package.json names its package`).toMatch(/^@motir\//);
+      const workspace = new Map<string, string>(
+        readdirSync(join(ROOT, 'packages')).flatMap((entry): [string, string][] => {
+          try {
+            const name = manifest(`packages/${entry}`).name;
+            return name ? [[name, `packages/${entry}`]] : [];
+          } catch {
+            return [];
+          }
+        }),
+      );
+      expect(workspace.get(own.name!)).toBe(dir);
+      // None of the three depends on another workspace package today. This is
+      // what turns a future `@motir/*` dependency into a red suite rather than a
+      // lane that skips on the change most able to break it.
+      const deps = Object.keys({
+        ...own.dependencies,
+        ...own.devDependencies,
+        ...own.peerDependencies,
+      }).filter((name) => workspace.has(name));
+      for (const dep of deps) {
+        expect(
+          covers(armsSetting(flag), `${workspace.get(dep)!}/src/index.ts`),
+          `${dir} depends on ${dep}`,
+        ).toBe(true);
+      }
     });
   });
 
