@@ -12,10 +12,13 @@ import { adminDb } from './helpers/adminDb';
 // started a refresh" while nothing is running would be a new instance of exactly
 // the silent dishonesty this story exists to remove, wearing the fix's clothes.
 
-const enqueueMock = vi.fn<(d: unknown) => Promise<void>>();
+const enqueueMock = vi.fn<(d: unknown, opts?: unknown) => Promise<void>>();
 vi.mock('@/lib/github/indexEnqueue', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
-  return { ...actual, enqueueCodeGraphRefresh: (d: unknown) => enqueueMock(d) };
+  return {
+    ...actual,
+    enqueueCodeGraphRefresh: (d: unknown, opts?: unknown) => enqueueMock(d, opts),
+  };
 });
 
 const { resolvePlanningCodeContext, resolveRefreshDisposition } =
@@ -317,7 +320,7 @@ describe('resolvePlanningCodeContext', () => {
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 
-  it('a STALE graph enqueues a refresh THROUGH the shipped debounced path, and says so', async () => {
+  it('a STALE graph enqueues a refresh THROUGH the shipped path, as a session start, and says so', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
     await connect(workspace.id);
@@ -339,8 +342,11 @@ describe('resolvePlanningCodeContext', () => {
       indexedAt: expect.any(Date),
       commitsBehind: null,
     });
-    // Through `enqueueCodeGraphRefresh` — so the 2-min debounce and its cap apply,
-    // rather than a second trigger with its own semantics.
+    // Through `enqueueCodeGraphRefresh` — the same event and debounce key a push
+    // uses, rather than a second trigger with its own semantics — but as a
+    // SESSION START, so it is due now instead of sitting out the 2-minute push
+    // debounce (MOTIR-5360; the row-level assertion is
+    // tests/jobs/code-graph-refresh-session-start.test.ts).
     expect(enqueueMock).toHaveBeenCalledTimes(1);
     expect(enqueueMock.mock.calls[0]![0]).toMatchObject({
       workspaceId: workspace.id,
@@ -348,6 +354,7 @@ describe('resolvePlanningCodeContext', () => {
       repoName: 'web',
       defaultBranch: 'main',
     });
+    expect(enqueueMock.mock.calls[0]![1]).toEqual({ trigger: 'session_start' });
   });
 
   it('repeated session starts stay IN FLIGHT on every one of them — not only the first', async () => {
