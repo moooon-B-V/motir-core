@@ -11,9 +11,12 @@ import {
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronUp,
   Folder as FolderIcon,
+  FolderInput,
   FolderPlus,
   Loader2,
   Pencil,
@@ -22,7 +25,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
 import { useToast } from '@/components/ui/Toast';
 import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
-import type { FolderDto } from '@/lib/dto/folders';
+import type { FolderDto, FolderPickerNodeDto } from '@/lib/dto/folders';
 import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
 import {
@@ -45,12 +48,16 @@ import {
   createFolderAction,
   listChildIssuesAction,
   listFolderLevelAction,
+  listProjectFoldersAction,
   listRootIssuesAction,
+  moveFolderAction,
   renameFolderAction,
   type FolderWriteResult,
+  type ListProjectFoldersResult,
 } from '../actions';
 import { useFolderCommands } from './FolderCommands';
 import { FolderNameField } from './FolderNameField';
+import { FolderPickerPanel, FolderPickerPopover } from './FolderPicker';
 import { FolderRowMenu, type FolderMenuEntry } from './FolderRowMenu';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
 
@@ -81,7 +88,16 @@ const folderKey = (folderId: string) => `${FOLDER_PREFIX}${folderId}`;
  *  or an expanded folder's "nothing filed here" row. */
 type TreeNode =
   | { kind: 'issue'; row: IssueRowData }
-  | { kind: 'folder'; folder: FolderTreeRowDto; expanded: boolean; renaming: boolean }
+  | {
+      kind: 'folder';
+      folder: FolderTreeRowDto;
+      expanded: boolean;
+      renaming: boolean;
+      /** The level the row sits in, and whether it is that level's first / last folder. */
+      levelKey: string;
+      isFirstFolder: boolean;
+      isLastFolder: boolean;
+    }
   | { kind: 'folderDraft' }
   | { kind: 'loading' }
   | { kind: 'emptyFolder' }
@@ -94,6 +110,32 @@ type TreeNode =
 type FolderDraft =
   | { mode: 'create'; levelKey: string; parentFolderId: string | null }
   | { mode: 'rename'; folderId: string };
+
+/** The open Move to… picker (MOTIR-5345): which folder, where it sits, the list, a refusal. */
+interface FolderPickerState {
+  folderId: string;
+  name: string;
+  parentFolderId: string | null;
+  levelKey: string;
+  folders: FolderPickerNodeDto[] | null;
+  truncated: boolean;
+  refusal: string | null;
+  pending: boolean;
+}
+
+/** Set `hasChildren` on a folder row wherever it is loaded (mutates `levels`' entries by replacement). */
+function markHasChildren(levels: Record<string, LevelState>, folderId: string, value: boolean) {
+  for (const [key, lvl] of Object.entries(levels)) {
+    if (lvl.rows.some((r) => r.kind === 'folder' && r.id === folderId)) {
+      levels[key] = {
+        ...lvl,
+        rows: lvl.rows.map((r) =>
+          r.kind === 'folder' && r.id === folderId ? { ...r, hasChildren: value } : r,
+        ),
+      };
+    }
+  }
+}
 
 /** One lazily-loaded level: the accumulated rows + the level's full total. */
 interface LevelState {
@@ -170,6 +212,13 @@ export function IssueTreeTable({
   const [draftError, setDraftError] = useState<string | null>(null);
   const [draftPending, setDraftPending] = useState(false);
   const draftSeq = useRef(0);
+
+  // The open Move to… picker (MOTIR-5345). `pickerSeq` retires a read or write
+  // answering a picker that was closed or reopened meanwhile; `folderActionSeq`
+  // keeps overlapping moves of ONE folder from applying out of order.
+  const [picker, setPicker] = useState<FolderPickerState | null>(null);
+  const pickerSeq = useRef(0);
+  const folderActionSeq = useRef<Record<string, number>>({});
 
   // ⚠️ THE ONE PLACE LEVEL STATE CHANGES. Every level — the roots, a work item's
   // children, a folder's contents — lives in `levels`, keyed by its container,
@@ -412,24 +461,277 @@ export function IssueTreeTable({
     [draft, t, tv, toast, insertFolder, renameInLevels],
   );
 
+  // ── Folder move + reorder (MOTIR-5345) ─────────────────────────────────────
+  const loadPickerFolders = useCallback(
+    (folderId: string, seq: number) => {
+      startTransition(async () => {
+        let res: ListProjectFoldersResult;
+        try {
+          res = await listProjectFoldersAction();
+        } catch (err) {
+          if (pickerSeq.current !== seq) return;
+          setPicker(null);
+          toast({ variant: 'error', title: tv(serverActionRejectionKey(err)) });
+          return;
+        }
+        if (pickerSeq.current !== seq) return;
+        setPicker((p) =>
+          p && p.folderId === folderId
+            ? res.ok
+              ? { ...p, folders: res.data.folders, truncated: res.data.truncated }
+              : { ...p, folders: [], truncated: false, refusal: res.error }
+            : p,
+        );
+      });
+    },
+    [toast, tv],
+  );
+
+  const openMovePicker = useCallback(
+    (folder: FolderTreeRowDto, levelKey: string) => {
+      const seq = ++pickerSeq.current;
+      setPicker({
+        folderId: folder.id,
+        name: folder.name,
+        parentFolderId: folder.parentFolderId,
+        levelKey,
+        folders: null,
+        truncated: false,
+        refusal: null,
+        pending: false,
+      });
+      loadPickerFolders(folder.id, seq);
+    },
+    [loadPickerFolders],
+  );
+
+  const closePicker = useCallback(() => {
+    pickerSeq.current += 1;
+    setPicker(null);
+  }, []);
+
+  // A MOVE leaves its source level and joins its destination IN PLACE when that
+  // level is loaded (after its last folder), and both parents' `hasChildren`
+  // follow. Both levels' sequences move on, so a read taken before the move
+  // cannot put the row back.
+  const applyFolderMove = useCallback((folder: FolderDto, fromLevelKey: string) => {
+    const toLevelKey = folder.parentFolderId === null ? ROOTS : folderKey(folder.parentFolderId);
+    for (const key of [fromLevelKey, toLevelKey]) {
+      levelSeq.current[key] = (levelSeq.current[key] ?? 0) + 1;
+    }
+    setLevels((prev) => {
+      const next = { ...prev };
+      const from = prev[fromLevelKey];
+      let moved: FolderTreeRowDto | undefined;
+      if (from) {
+        moved = from.rows.find(
+          (r): r is FolderTreeRowDto => r.kind === 'folder' && r.id === folder.id,
+        );
+        const rows = from.rows.filter((r) => !(r.kind === 'folder' && r.id === folder.id));
+        next[fromLevelKey] = {
+          ...from,
+          rows,
+          total: Math.max(0, from.total - (moved ? 1 : 0)),
+          loading: false,
+        };
+        // The old parent is empty only when its WHOLE level was loaded and is now empty.
+        if (fromLevelKey.startsWith(FOLDER_PREFIX) && rows.length === 0 && !from.hasMore) {
+          markHasChildren(next, fromLevelKey.slice(FOLDER_PREFIX.length), false);
+        }
+      }
+      const to = next[toLevelKey];
+      if (to) {
+        const row: FolderTreeRowDto = {
+          kind: 'folder',
+          id: folder.id,
+          parentId: null,
+          parentFolderId: folder.parentFolderId,
+          name: folder.name,
+          position: folder.position,
+          hasChildren: moved?.hasChildren ?? true,
+        };
+        let lastFolder = -1;
+        to.rows.forEach((r, i) => {
+          if (r.kind === 'folder') lastFolder = i;
+        });
+        next[toLevelKey] = {
+          ...to,
+          rows: [...to.rows.slice(0, lastFolder + 1), row, ...to.rows.slice(lastFolder + 1)],
+          total: to.total + 1,
+          loading: false,
+        };
+      }
+      if (folder.parentFolderId !== null) markHasChildren(next, folder.parentFolderId, true);
+      return next;
+    });
+  }, []);
+
+  // A REORDER swaps the folder with its neighbour in place.
+  const applyFolderReorder = useCallback(
+    (folder: FolderDto, levelKey: string, direction: 'up' | 'down') => {
+      levelSeq.current[levelKey] = (levelSeq.current[levelKey] ?? 0) + 1;
+      setLevels((prev) => {
+        const lvl = prev[levelKey];
+        if (!lvl) return prev;
+        const i = lvl.rows.findIndex((r) => r.kind === 'folder' && r.id === folder.id);
+        const j = direction === 'up' ? i - 1 : i + 1;
+        const self = lvl.rows[i];
+        const other = lvl.rows[j];
+        if (i < 0 || !self || self.kind !== 'folder' || !other || other.kind !== 'folder') {
+          return prev;
+        }
+        const rows = [...lvl.rows];
+        rows[i] = other;
+        rows[j] = { ...self, position: folder.position };
+        return { ...prev, [levelKey]: { ...lvl, rows, loading: false } };
+      });
+    },
+    [],
+  );
+
+  /** Start one write for `folderId`; the returned check says whether it is still the latest. */
+  const beginFolderAction = useCallback((folderId: string) => {
+    const seq = (folderActionSeq.current[folderId] ?? 0) + 1;
+    folderActionSeq.current[folderId] = seq;
+    return () => folderActionSeq.current[folderId] === seq;
+  }, []);
+
+  const pickDestination = useCallback(
+    (targetId: string | null) => {
+      const current = picker;
+      if (!current || current.pending) return;
+      const isLatest = beginFolderAction(current.folderId);
+      const openSeq = pickerSeq.current;
+      setPicker((p) => (p ? { ...p, pending: true } : p));
+      startTransition(async () => {
+        let res: FolderWriteResult;
+        try {
+          res = await moveFolderAction({
+            folderId: current.folderId,
+            targetParentFolderId: targetId,
+          });
+        } catch (err) {
+          if (!isLatest()) return;
+          setPicker((p) => (p && p.folderId === current.folderId ? { ...p, pending: false } : p));
+          toast({ variant: 'error', title: tv(serverActionRejectionKey(err)) });
+          return;
+        }
+        if (!isLatest()) return;
+        if (res.ok) {
+          closePicker();
+          applyFolderMove(res.folder, current.levelKey);
+          return;
+        }
+        // A refusal the picker could not have known about: say why at its top and
+        // re-read the list, so it shows the tree as it now is.
+        const refusal =
+          res.code === 'FOLDER_CYCLE'
+            ? t('folders.cycleRefused')
+            : res.code === 'CROSS_PROJECT_FOLDER'
+              ? t('folders.crossProjectRefused')
+              : res.code === 'FOLDER_NAME_TAKEN'
+                ? t('folders.nameTaken', { name: current.name })
+                : res.code === 'FOLDER_NOT_FOUND'
+                  ? t('folders.folderGone')
+                  : null;
+        if (refusal === null) {
+          setPicker((p) => (p && p.folderId === current.folderId ? { ...p, pending: false } : p));
+          toast({ variant: 'error', title: res.error });
+          return;
+        }
+        if (pickerSeq.current !== openSeq) return;
+        setPicker((p) =>
+          p && p.folderId === current.folderId
+            ? { ...p, pending: false, refusal, folders: null }
+            : p,
+        );
+        loadPickerFolders(current.folderId, openSeq);
+      });
+    },
+    [picker, beginFolderAction, toast, tv, t, closePicker, applyFolderMove, loadPickerFolders],
+  );
+
+  const reorderFolder = useCallback(
+    (folder: FolderTreeRowDto, levelKey: string, direction: 'up' | 'down') => {
+      const lvl = levels[levelKey];
+      if (!lvl) return;
+      const siblings = lvl.rows.filter((r): r is FolderTreeRowDto => r.kind === 'folder');
+      const k = siblings.findIndex((f) => f.id === folder.id);
+      if (k < 0 || (direction === 'up' && k === 0)) return;
+      if (direction === 'down' && k === siblings.length - 1) return;
+      // `beforeId` is the sibling it will sort AFTER, `afterId` the one it sorts BEFORE.
+      const beforeId =
+        direction === 'up' ? (siblings[k - 2]?.id ?? null) : (siblings[k + 1]?.id ?? null);
+      const afterId =
+        direction === 'up' ? (siblings[k - 1]?.id ?? null) : (siblings[k + 2]?.id ?? null);
+      const isLatest = beginFolderAction(folder.id);
+      startTransition(async () => {
+        let res: FolderWriteResult;
+        try {
+          res = await moveFolderAction({
+            folderId: folder.id,
+            targetParentFolderId: folder.parentFolderId,
+            beforeId,
+            afterId,
+          });
+        } catch (err) {
+          if (!isLatest()) return;
+          toast({ variant: 'error', title: tv(serverActionRejectionKey(err)) });
+          return;
+        }
+        if (!isLatest()) return;
+        if (!res.ok) {
+          toast({ variant: 'error', title: res.error });
+          return;
+        }
+        applyFolderReorder(res.folder, levelKey, direction);
+      });
+    },
+    [levels, beginFolderAction, toast, tv, applyFolderReorder],
+  );
+
   const folderMenuEntries = useCallback(
-    (folder: FolderTreeRowDto): FolderMenuEntry[] => [
+    (node: Extract<TreeNode, { kind: 'folder' }>): FolderMenuEntry[] => [
       {
         kind: 'item',
         key: 'new-folder-inside',
         label: t('folders.newFolderInside'),
         icon: FolderPlus,
-        onSelect: () => startCreateInside(folder),
+        onSelect: () => startCreateInside(node.folder),
       },
       {
         kind: 'item',
         key: 'rename',
         label: t('folders.rename'),
         icon: Pencil,
-        onSelect: () => startRename(folder),
+        onSelect: () => startRename(node.folder),
+      },
+      {
+        kind: 'item',
+        key: 'move-to',
+        label: t('folders.moveTo'),
+        icon: FolderInput,
+        onSelect: () => openMovePicker(node.folder, node.levelKey),
+      },
+      { kind: 'separator', key: 'order' },
+      {
+        kind: 'item',
+        key: 'move-up',
+        label: t('folders.moveUp'),
+        icon: ArrowUp,
+        disabled: node.isFirstFolder,
+        onSelect: () => reorderFolder(node.folder, node.levelKey, 'up'),
+      },
+      {
+        kind: 'item',
+        key: 'move-down',
+        label: t('folders.moveDown'),
+        icon: ArrowDown,
+        disabled: node.isLastFolder,
+        onSelect: () => reorderFolder(node.folder, node.levelKey, 'down'),
       },
     ],
-    [t, startCreateInside, startRename],
+    [t, startCreateInside, startRename, openMovePicker, reorderFolder],
   );
 
   // A folder row's whole-row target (and Enter on the row) toggles it — a folder
@@ -501,6 +803,9 @@ export function IssueTreeTable({
       total: number,
       levelKey: string,
     ): TreeTableRow<TreeNode>[] => {
+      const levelFolders = level.filter((r) => r.kind === 'folder');
+      const firstFolderId = levelFolders[0]?.id;
+      const lastFolderId = levelFolders[levelFolders.length - 1]?.id;
       const nodes = level.map((dto, i): TreeTableRow<TreeNode> => {
         if (dto.kind === 'folder') {
           const key = folderKey(dto.id);
@@ -512,6 +817,9 @@ export function IssueTreeTable({
               folder: dto,
               expanded: isExpanded,
               renaming: draft?.mode === 'rename' && draft.folderId === dto.id,
+              levelKey,
+              isFirstFolder: dto.id === firstFolderId,
+              isLastFolder: dto.id === lastFolderId,
             },
             // Always expandable: an empty folder opens onto its empty row.
             hasChildren: true,
@@ -611,11 +919,35 @@ export function IssueTreeTable({
             // editor (MOTIR-5344).
             if (!isTree) {
               if (isLast && node.kind === 'folder' && canEdit && !node.renaming) {
+                const pickerOpen = picker?.folderId === node.folder.id;
                 return (
-                  <FolderRowMenu
-                    label={t('folders.actionsAria', { name: node.folder.name })}
-                    entries={folderMenuEntries(node.folder)}
-                  />
+                  <FolderPickerPopover
+                    open={pickerOpen}
+                    onOpenChange={(open) => {
+                      if (!open) closePicker();
+                    }}
+                    anchor={
+                      <FolderRowMenu
+                        label={t('folders.actionsAria', { name: node.folder.name })}
+                        entries={folderMenuEntries(node)}
+                      />
+                    }
+                  >
+                    {pickerOpen && picker ? (
+                      <FolderPickerPanel
+                        mode="move"
+                        title={t('folders.pickerTitle', { name: picker.name })}
+                        folders={picker.folders}
+                        truncated={picker.truncated}
+                        currentFolderId={picker.parentFolderId}
+                        movingFolderId={picker.folderId}
+                        refusal={picker.refusal}
+                        pending={picker.pending}
+                        onPick={pickDestination}
+                        onDismiss={closePicker}
+                      />
+                    ) : null}
+                  </FolderPickerPopover>
                 );
               }
               return null;
@@ -699,6 +1031,9 @@ export function IssueTreeTable({
       toggleFolder,
       canEdit,
       folderMenuEntries,
+      picker,
+      closePicker,
+      pickDestination,
       draftError,
       draftPending,
       submitDraft,

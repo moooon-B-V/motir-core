@@ -21,12 +21,13 @@ import {
 import { WorkItemLinkError } from '@/lib/workItems/linkErrors';
 import {
   CrossProjectFolderError,
+  FolderCycleError,
   FolderNameTakenError,
   FolderNotFoundError,
   InvalidFolderNameError,
 } from '@/lib/folders/errors';
 import { foldersService } from '@/lib/services/foldersService';
-import type { FolderDto } from '@/lib/dto/folders';
+import type { FolderDto, ProjectFoldersDto } from '@/lib/dto/folders';
 import type {
   CreateWorkItemLinkInput,
   WorkItemKindDto,
@@ -330,6 +331,7 @@ export type FolderWriteErrorCode =
   | 'INVALID_FOLDER_NAME'
   | 'FOLDER_NOT_FOUND'
   | 'CROSS_PROJECT_FOLDER'
+  | 'FOLDER_CYCLE'
   | 'PROJECT_ACCESS_DENIED'
   | 'NO_ACTIVE_PROJECT';
 
@@ -346,6 +348,9 @@ function folderWriteFailure(err: unknown): Extract<FolderWriteResult, { ok: fals
   }
   if (err instanceof CrossProjectFolderError) {
     return { ok: false, code: err.code, error: 'That folder belongs to another project.' };
+  }
+  if (err instanceof FolderCycleError) {
+    return { ok: false, code: err.code, error: 'A folder can’t move into one of its own folders.' };
   }
   if (err instanceof ProjectAccessDeniedError) {
     return { ok: false, code: err.code, error: 'You can’t change folders in this project.' };
@@ -395,6 +400,64 @@ export async function renameFolderAction(input: {
   } catch (err) {
     const failure = folderWriteFailure(err);
     if (failure) return failure;
+    throw err;
+  }
+}
+
+// ── Folder move + reorder (Story MOTIR-5308 · MOTIR-5345) ──────────────────
+// Transport for Move to… and Move up / Move down. A reorder is a move to the
+// folder's own parent with neighbours; `beforeId` / `afterId` keep
+// `MoveFolderInput`'s semantics. The picker's folder list is a read: a member who
+// may browse the project gets it.
+
+export async function moveFolderAction(input: {
+  folderId: string;
+  targetParentFolderId: string | null;
+  beforeId?: string | null;
+  afterId?: string | null;
+}): Promise<FolderWriteResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const folder = await foldersService.moveFolder(
+      {
+        projectId: ctx.projectId,
+        folderId: input.folderId,
+        targetParentFolderId: input.targetParentFolderId ?? null,
+        beforeId: input.beforeId ?? null,
+        afterId: input.afterId ?? null,
+      },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, folder };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
+    throw err;
+  }
+}
+
+export type ListProjectFoldersResult =
+  | { ok: true; data: ProjectFoldersDto }
+  | { ok: false; error: string };
+
+export async function listProjectFoldersAction(): Promise<ListProjectFoldersResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'No active project.' };
+  try {
+    const data = await foldersService.listProjectFolders(
+      { projectId: ctx.projectId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, data };
+  } catch (err) {
+    if (err instanceof ProjectAccessDeniedError) {
+      return { ok: false, error: 'You don’t have access to this project’s folders.' };
+    }
     throw err;
   }
 }

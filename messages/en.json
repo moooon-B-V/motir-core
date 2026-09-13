@@ -8025,6 +8025,22 @@
     "nameLabel": "Folder name",
     "nameHint": "Press Enter to save, Esc to cancel.",
     "nameRequired": "Enter a name.",
-    "nameTaken": "A folder named “{name}” is already here."
+    "nameTaken": "A folder named “{name}” is already here.",
+    "moveTo": "Move to…",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "pickerTitle": "Move “{name}” to…",
+    "pickerSearch": "Find a folder",
+    "pickerListLabel": "Folders",
+    "pickerLoading": "Loading folders…",
+    "pickerTruncated": "Showing the first {count} folders.",
+    "projectRoot": "Project root",
+    "currentLocation": "Current location",
+    "cannotMoveIntoSelf": "Can’t move a folder into itself.",
+    "insideFolder": "It’s inside “{name}”.",
+    "cycleRefused": "A folder can’t move into one of its own folders.",
+    "crossProjectRefused": "That folder belongs to another project.",
+    "folderGone": "That folder no longer exists.",
+    "noFolder": "No folder"
   }
 }

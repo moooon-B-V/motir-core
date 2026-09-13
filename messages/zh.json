@@ -8021,6 +8021,22 @@
     "nameLabel": "文件夹名称",
     "nameHint": "按 Enter 保存，按 Esc 取消。",
     "nameRequired": "请输入名称。",
-    "nameTaken": "此处已有名为“{name}”的文件夹。"
+    "nameTaken": "此处已有名为“{name}”的文件夹。",
+    "moveTo": "移动到…",
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "pickerTitle": "将“{name}”移动到…",
+    "pickerSearch": "查找文件夹",
+    "pickerListLabel": "文件夹",
+    "pickerLoading": "正在加载文件夹…",
+    "pickerTruncated": "仅显示前 {count} 个文件夹。",
+    "projectRoot": "项目根目录",
+    "currentLocation": "当前位置",
+    "cannotMoveIntoSelf": "文件夹不能移动到其自身中。",
+    "insideFolder": "它位于“{name}”之内。",
+    "cycleRefused": "文件夹不能移动到其自身的子文件夹中。",
+    "crossProjectRefused": "该文件夹属于另一个项目。",
+    "folderGone": "该文件夹已不存在。",
+    "noFolder": "无文件夹"
   }
 }

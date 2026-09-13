@@ -216,18 +216,27 @@ describe('IssueTreeTable — create and rename folders', () => {
     expect(mocks.listFolderLevelAction).not.toHaveBeenCalled();
   });
 
-  it('the folder menu is keyboard-operable and lists New folder inside, then Rename', async () => {
+  it('the folder menu is keyboard-operable and lists its entries in the design order', async () => {
     renderTree();
     const menu = await openMenu('Later');
 
     const items = within(menu).getAllByRole('menuitem');
-    expect(items.map((i) => i.textContent)).toEqual(['New folder inside', 'Rename']);
-    // Opening focuses the first entry; the arrow keys move between entries.
+    expect(items.map((i) => i.textContent)).toEqual([
+      'New folder inside',
+      'Rename',
+      'Move to…',
+      'Move up',
+      'Move down',
+    ]);
+    // Opening focuses the first entry; the arrow keys move between ENABLED
+    // entries ("Later" is the first folder, so Move up is skipped) and wrap.
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(items[0]!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(items[1]);
-    fireEvent.keyDown(items[1]!, { key: 'ArrowDown' });
+    fireEvent.keyDown(items[1]!, { key: 'ArrowUp' });
     expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(items[0]!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(items[4]);
 
     await act(async () => {
       fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
