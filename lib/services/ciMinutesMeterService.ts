@@ -44,7 +44,7 @@ import { periodEndFor, periodStartFor } from '@/lib/ciMetering/period';
 //   1. Enabled?          §8.5  — off-cloud, or no provisioning org: inert.
 //   2. Does MOTIR pay?   §5.1  — the run's OWN repository owner == Motir's org.
 //   3. Whom for?         §5.2  — repo → project-repo row → project → workspace → org.
-//   4. Meta org?         §4.4  — the internal dogfood org is bypassed entirely.
+//   4. Meta org?         §4.4  — read, and CARRIED OUT on the outcome, never a bypass here.
 //   5. Already metered?  §5.8  — a cheap pre-check; the unique index is the guard.
 //   6. How much?         §3+§5.8 — Σ ceil(per-JOB minutes) × the runner's price ratio.
 //   7. Record it.        §4.5  — one transaction: the audit row + the month's rollup.
@@ -64,8 +64,6 @@ export type MeterWorkflowRunOutcome =
    *  whose project was deleted, or one belonging to no project. Real spend
    *  charged to nobody, and LOGGED, because silence here would hide it (§5.4). */
   | { outcome: 'unattributed'; repoOwner: string; repoName: string }
-  /** The META org (moooon B.V.) — no pool accounting at all (§4.4). */
-  | { outcome: 'bypassed_meta'; organizationId: string }
   /** This run attempt was already metered — counted once (§5.8). */
   | { outcome: 'duplicate'; runId: string; runAttempt: number }
   /** The run completed with no job that produced billable time. */
@@ -80,6 +78,10 @@ export type MeterWorkflowRunOutcome =
       periodStart: Date;
       billableMinutes: number;
       linearEquivalentMinutes: number;
+      /** The META org (moooon B.V.). Its minutes are RECORDED like anyone's; this
+       *  flag is what the caller hands the CHARGE so the charge can bypass it
+       *  (§4.4 · `code-graph-index-fleet.md` §20). */
+      isMeta: boolean;
     };
 
 /** Whom a metered run belongs to — the §5.2 chain's output. */
@@ -298,13 +300,16 @@ export const ciMinutesMeterService = {
 
     const attribution = resolved.attribution;
 
-    // 4 · §4.4 — the META org is bypassed entirely: no pool accounting, no
-    // overage, no refusal. moooon B.V. pays its own GitHub bill directly, so
-    // metering it would bill the house to itself. Mirrors the shipped credit-gate
-    // and `meta`-tier bypasses.
-    if (attribution.isMeta) {
-      return { outcome: 'bypassed_meta', organizationId: attribution.organizationId };
-    }
+    // 4 · §4.4 — what `isMeta` suppresses is the CHARGE, never the MEASUREMENT
+    // (`code-graph-index-fleet.md` §20, MOTIR-5283). moooon B.V. pays its own
+    // GitHub bill, so billing it would bill the house to itself — but those
+    // minutes are still real Motir spend, and a meta run that returns before the
+    // write leaves the margin readout's denominator empty for exactly that org.
+    // So the row is written below exactly as for any tenant, and `isMeta` rides
+    // out on the `metered` outcome for the caller to hand to
+    // `ciAllowanceService.chargeForMeteredRun`, whose own `meta` bypass is keyed
+    // on that argument. (`getEntitlementState` reads `isMeta` itself and reports
+    // `bypassed` before it reads consumption, so no pool accounting follows.)
 
     // 5 · A cheap redelivery pre-check, purely to skip the GitHub round-trip.
     // NOT the correctness guard — two concurrent deliveries would both miss it;
@@ -413,6 +418,7 @@ export const ciMinutesMeterService = {
       periodStart,
       billableMinutes: usage.billableMinutes,
       linearEquivalentMinutes: usage.linearEquivalentMinutes,
+      isMeta: attribution.isMeta,
     };
   },
 
