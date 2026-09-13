@@ -205,13 +205,17 @@ describe('a NON-browser still cannot learn the room exists — the 404-vs-403 po
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
-  // ⚠️ NO ROUTE-LEVEL 404 CASE HERE, AND THAT IS A FILED DEFECT, NOT AN OVERSIGHT.
-  // One was written, and it went red on the shipped route before this card's
-  // change is ever reached: `projectsService.getByKey` refuses an in-workspace
-  // non-browser with `ProjectAccessDeniedError` — its own doc promises
-  // `ProjectNotFoundError` — and this route, like twelve other
-  // `/api/projects/[key]/*` routes, maps only the promised one, so the refusal
-  // escapes as a 500. That is MOTIR-5320, whose first criterion is exactly the
-  // case removed here, on this file's fixture. Asserting the 500 would pin the
-  // defect; asserting the 404 would fail on code this card does not own.
+  // MOTIR-5320 — the route-level case this file could not carry when it was
+  // written: `projectsService.getByKey` used to refuse this actor with
+  // `ProjectAccessDeniedError`, which this route does not map, so the GET was a
+  // 500. The lookup now refuses with the not-found error its own doc promised.
+  // Every other key-addressed route is covered the same way in
+  // `tests/projects/key-lookup-browse-denial.test.ts`.
+  it('…and is a 404 on `GET /api/projects/[key]/approval-gates`, not a 500 (MOTIR-5320)', async () => {
+    const s = await seed('outsider-route');
+    actAs(s.outsider);
+    const res = await GET(new Request('https://app.motir.co/x'), params(s.projectKey));
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe('PROJECT_NOT_FOUND');
+  });
 });

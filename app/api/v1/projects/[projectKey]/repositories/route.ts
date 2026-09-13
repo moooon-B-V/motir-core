@@ -37,8 +37,9 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 // ── 404, never 403 ──────────────────────────────────────────────────────────
 // Both refusals arrive as the service's own `ProjectNotFoundError` → 404: a key
 // in ANOTHER workspace (the read is workspace-scoped, so it finds nothing) and a
-// key in THIS workspace the caller may not browse (`assertCanBrowse` raises
-// `ProjectAccessDeniedError` → also 404). The same recorded rule as the sibling
+// key in THIS workspace the caller may not browse (`projectsService.resolveByKey`
+// re-throws the browse gate's refusal as the same `ProjectNotFoundError`,
+// MOTIR-5320). The same recorded rule as the sibling
 // project route, for the same reason: otherwise the endpoint becomes an oracle
 // for which project keys are real.
 //

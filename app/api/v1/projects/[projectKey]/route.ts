@@ -32,9 +32,10 @@ import { projectsService } from '@/lib/services/projectsService';
 // Both refusals arrive as the service's own `ProjectNotFoundError`, mapped to
 // 404 by the shipped `DOMAIN_ERROR_STATUS`: a key in ANOTHER workspace (the read
 // is workspace-scoped, so it simply finds nothing) and a key in THIS workspace
-// the caller may not browse (`assertCanBrowse` raises `ProjectAccessDeniedError`
-// → also 404). Different code paths, deliberately indistinguishable answers —
-// otherwise the endpoint becomes an oracle for which project keys are real.
+// the caller may not browse (`projectsService.resolveByKey` re-throws the browse
+// gate's refusal as the same `ProjectNotFoundError`, MOTIR-5320). Different code
+// paths, deliberately indistinguishable answers — otherwise the endpoint becomes
+// an oracle for which project keys are real.
 export const GET = withV1Route<{ projectKey: string }>(
   { permission: 'project:browse' },
   async (ctx) => {
