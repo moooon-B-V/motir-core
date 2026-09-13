@@ -3,7 +3,11 @@
 import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { WorkItemStatusPill } from '@/components/planning/WorkItemNode';
+import {
+  CrossBlockedFlag,
+  GhostAnchor,
+  WorkItemStatusPill,
+} from '@/components/planning/WorkItemNode';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -83,9 +87,19 @@ export type PlanItemOutcome = 'accepted' | 'declined';
 export function PlanItemNode({
   item,
   outcome = null,
+  crossBlocked = false,
 }: {
   item: PlanReviewItemDto;
   outcome?: PlanItemOutcome | null;
+  /**
+   * Blocked by a card OFF this level (bug MOTIR-5387) — the dependent's half of
+   * the roadmap's off-level treatment, drawn with the roadmap's own chip and in
+   * the slot `WorkItemNode` gives it. It is a DEPENDENCY fact, so it crosses
+   * every op and outcome rather than joining them: an `add` that will be blocked
+   * from another container is exactly the bad plan the legend warns about, and
+   * the warning belongs before approve.
+   */
+  crossBlocked?: boolean;
 }) {
   const t = useTranslations('planReview');
   const kind = toKind(item.kind);
@@ -165,7 +179,9 @@ export function PlanItemNode({
               category={item.statusCategory}
             />
           ) : null}
-          {item.hasChildren ? (
+          {crossBlocked ? (
+            <CrossBlockedFlag />
+          ) : item.hasChildren ? (
             <ChevronRight
               className="size-4 shrink-0 text-(--el-text-muted)"
               aria-hidden="true"
@@ -331,4 +347,18 @@ function DiffLine({
       ) : null}
     </div>
   );
+}
+
+/**
+ * The ghost anchor for an off-level blocker that is itself an un-materialized
+ * PROPOSAL (bug MOTIR-5387).
+ *
+ * Such a card has no key by construction, and a placeholder key would assert a
+ * work item that does not exist. So the anchor keeps the roadmap's `KEY / title`
+ * grammar and puts the proposed word in the key's SLOT — the substitution the
+ * breadcrumb already makes (`design/ai-planning/design-notes.md` Part IX §1.3).
+ */
+export function ProposedBlockerAnchor({ title }: { title: string }) {
+  const t = useTranslations('planReview');
+  return <GhostAnchor identifier={t('proposedCrumb')} title={title} />;
 }
