@@ -6443,6 +6443,38 @@ a family of look-alikes.
 
 ---
 
+### AMENDED 2026-09-13 — the SETTINGS DOOR (MOTIR-5176, story MOTIR-4880; panel `S`)
+
+**A KIND-SUPPLIED affordance, not a fourth band and not a verb.** ADR §7
+(`approval-gates.md`) asks for a deep link from the approval surface to the
+setting that stops asking. Someone who defaulted to _Ask before merging_ and
+cannot read a diff must be able to find it while they are stuck. A kind supplies
+an optional `settingsHref` and a label. Band 3 renders it in its **left column,
+under the consequence line**. A kind that supplies none renders nothing, and band
+3 is byte-identical to state `A`.
+
+- **Copy (pull-request-merge kind):** _Change how this project merges pull
+  requests →_. It names the PROJECT and the SETTING, never the pull request in
+  front of the reader, so it reads as _change how this project is merged_ and not
+  as _skip this decision_. It is a link (`--el-link`), not a `Button`: pressing it
+  decides nothing, and the gate stays `awaiting`.
+- **Placement, and the two rejected spots.** Not in the header, where it would
+  read as part of WHAT is being decided. Not beside the verbs, where it would read
+  as a third verb.
+- **Shown to everyone who sees the frame**, deciders or not (state `B`
+  included). It lands at `/settings/project/approvals#merge-mode`
+  (`design/projects/approvals.mock.html` panel 10), in the same tab. A reader who
+  may browse but not manage arrives at the read-only room (that asset's panel 9):
+  **they see the state, and meet no 403.**
+- **The merge PORT is still MOTIR-4882's** and is drawn only as a labelled
+  placeholder. This amendment draws no merge, no merge refusal and no
+  `pull_request_merge` gate.
+
+**Planning flags.** **MOTIR-4882 builds the door** in `ApprovalGateControl.tsx`
+as an optional kind-supplied `settingsHref` + label when it registers the merge
+kind. **MOTIR-5181 owns the landing** (the anchor and the read-only render).
+**MOTIR-4792's shipped frame needs no change** until then.
+
 ## ⭐ The ACCEPTANCE gate, in the ONE approve language (MOTIR-4942 — `acceptance-panel.mock.html`, panels G1–G5)
 
 **Amendment to _Acceptance video (Story MOTIR-1627)_, and a consumer of _THE

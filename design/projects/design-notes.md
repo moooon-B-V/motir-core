@@ -3518,9 +3518,11 @@ onWhat,offWhat,unavailableWhat,orgPlanNote,readOnlyNote,upgrade}` — replacing
 
 ### 5. Explicitly OUT of scope here
 
-The merge-mode switch (ADR §7) is **not drawn**: it is MOTIR-4882's to design and
+~~The merge-mode switch (ADR §7) is **not drawn**: it is MOTIR-4882's to design and
 build, and drawing a second card this asset would be inventing is not how a room
-earns its place. The room is justified by the readers and writers in §1. Also out
+earns its place.~~ **CORRECTED 2026-09-13 (MOTIR-5176):** the attribution was
+stale. The surface is **MOTIR-4880's** (the setting, its control, its deep link);
+MOTIR-4882 ships the merge itself. The row is now drawn in panels 6–10, see §7. The room is justified by the readers and writers in §1. Also out
 of scope: the entitlement's tier (it stays with the organisation), what a run
 records, the video's pacing, and the storage caps.
 
@@ -3684,6 +3686,85 @@ design that outranks the code, in the ordinary direction** — the same standing
 this file's _Source of truth_ carve-out gives the 2026-08-08 amendment: an
 amendment carrying a date, a reason and the card that owns it governs the code
 until that card ships.
+
+### 7. AMENDED 2026-09-13 — the MERGE-MODE row (MOTIR-5176, story MOTIR-4880; panels 6–10)
+
+**The room's second card, `Merging pull requests`, sits BELOW the acceptance-video
+switch.** It is on the same axis: what the presence of a pull request means for
+this project. It draws `Project.prMergeMode` (`docs/decisions/approval-gates.md`
+§7 and its 2026-09-13 amendment). **It is a THREE-value choice, so it is the
+shipped access-level radio-card grammar** (`access-members.mock.html`,
+`ProjectMembersSettings` `role="radiogroup"`), not a copy of its neighbour's switch.
+
+**Grounded in (read at design time):** ADR §7's value table and its
+provenance-default amendment; §7a (the audit says the SETTING authorised an
+`auto` merge, not a person); `projectPrMergeModeService` on
+`parent/MOTIR-4880-pr-merge-mode` (the read is `project:browse`, the write is
+`workflow:manage`); and §6 above (MOTIR-5190's read-only room), which merged
+**after** this card was authored and is honoured rather than re-opened.
+
+#### The copy — transcribe verbatim (MOTIR-5181)
+
+| value            | LABEL (bold line)         | HINT (secondary line)                                                                                                         | extra                                              |
+| ---------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `manual`         | Ask before merging        | A person approves each pull request in Motir before it is merged. Nothing reaches your default branch without that yes.       | icon tile `--el-tint-sky`, `user`                  |
+| `auto`           | Merge automatically       | Motir merges the pull request without asking anyone. The record says this setting allowed it — not that a person approved it. | icon tile `--el-tint-mint`, `zap`                  |
+| `review_on_fail` | Ask only when checks fail | Reserved for later. Until it is built, it behaves exactly like **Ask before merging**.                                        | `Not built yet` Pill (`--el-tint-yellow`), `clock` |
+
+- **Card title:** Merging pull requests · **description:** _What happens when a
+  pull request for this project's work is ready to merge. A project whose
+  repositories Motir hosts starts at **Merge automatically**; a project holding
+  any repository of your own starts at **Ask before merging**._
+- **The not-yet notice** (`--el-tint-sky` callout, `info` glyph, ink
+  `--el-text-strong`): _Motir does not merge pull requests yet. Until it does,
+  every pull request is merged on your git host by a person, whichever option is
+  chosen here._ It is honest about today: nothing reads the value until
+  MOTIR-4882, which removes the notice in the change that makes it false.
+- **Read-only footer** (panel 9, the panel-4 grammar): _Only someone who can
+  manage this project's workflow can change this. You are seeing what this
+  project has chosen._ Radios take `aria-disabled="true"`, never `disabled`, so
+  the chosen value is still announced.
+- **No enum member or column name is ever shown.**
+
+#### Decisions, each with its reason
+
+- **`review_on_fail` is selectable, not disabled**, and carries its pill in
+  EVERY state. A project can already hold the value, and an option that is both
+  disabled and selected reads as a broken control. The pill is read before
+  anyone picks it.
+- **Apply on change**, reconciled from the response and put BACK on failure,
+  which is the acceptance switch's idiom. A person's choice is stamped decided
+  (`prMergeModeDecidedAt`), so no copy needs to warn that a default might
+  overwrite it.
+- **The deep link is `#merge-mode`** (the card's id, beside the shipped
+  `#acceptance-video`). On arrival the card takes the ordinary
+  `--focus-ring-color` ring once. It is not a tint and not a flash (panel 10).
+- **Ink:** title `--el-text`, description / hint / footer
+  `--el-text-secondary` (never `--el-text-muted`), pill and notice
+  `--el-text-strong` on their tints (finding #35). Shape: `--radius-card` on each
+  option, `--radius-control` on the tile and the notice, `--radius-badge` on the
+  pill.
+
+#### ⚠️ Planning flags (surfaced, not silently absorbed)
+
+- **MOTIR-5181 transcribes** panels 6–10 in `en` and `zh`, reads through
+  `getPrMergeMode` and writes through `setPrMergeMode`.
+- **MOTIR-5181 must not ship panel 9 unreachable.** The room's browse view key is
+  MOTIR-5193's (and open PR #2843 for MOTIR-5278). If it has not landed, MOTIR-5181
+  wires the edge rather than shipping a state nobody can reach.
+- **MOTIR-4882 removes the not-yet notice** and builds the approval frame's
+  settings door (`design/work-items/design-notes.md`, the UNIVERSAL APPROVAL
+  FRAME's 2026-09-13 amendment).
+- **MOTIR-5183 walks** panels 6, 7 and 9.
+
+#### GIVES / TAKES
+
+| work item                    | GIVES / TAKES                                                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-5181** (the control) | **GIVES** the copy, the grammar, the five states, the anchor. **TAKES nothing** — its criteria already ask for all three values in the reader's words. |
+| **MOTIR-4882** (the merge)   | **GIVES** the room its door lands in. **TAKES** the notice's removal.                                                                                  |
+| **MOTIR-5183** (E2E)         | **GIVES** the walk's surfaces. **TAKES nothing.**                                                                                                      |
+| **MOTIR-4942 / MOTIR-5190**  | **neither** — `done`; §5's stale attribution corrected on the record above.                                                                            |
 
 ---
 
