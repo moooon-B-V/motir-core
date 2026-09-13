@@ -6,7 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { runPublishTestInstructions } from '@/lib/mcp/tools/publishTestInstructions';
-import { TEST_INSTRUCTIONS_MAX_STEPS } from '@/lib/testInstructions/caps';
+import { TEST_INSTRUCTIONS_MAX_BODY_BYTES } from '@/lib/testInstructions/caps';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -73,17 +73,13 @@ async function scenario() {
   return { fx, card, web };
 }
 
+const BODY = '## Locally\n\n```sh\npnpm install\n```\n\n## Click-path\n\n1. Open /items/ACME-7';
+
 function args(key: string, over: Record<string, unknown> = {}) {
   return {
     key,
-    repos: [
-      {
-        repo: 'web',
-        commitSha: SHA,
-        setupCommands: [{ label: 'Install', command: 'pnpm install' }],
-      },
-    ],
-    clickPathSteps: ['Open /items/ACME-7'],
+    bodyMd: BODY,
+    repos: [{ repo: 'web', commitSha: SHA }],
     ...over,
   } as Parameters<typeof runPublishTestInstructions>[0];
 }
@@ -130,7 +126,9 @@ describe('runPublishTestInstructions — success', () => {
       fx.ctx,
     );
     expect(retry.structuredContent).toMatchObject({ created: false });
-    expect(await storedRows()).toHaveLength(1);
+    const rows = await storedRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.bodyMd).toBe(BODY);
   });
 
   it('attributes the record to the RUNNING run whose SCOPE TARGET is the item, or that holds a leg for it — and to none otherwise', async () => {
@@ -253,41 +251,25 @@ describe('runPublishTestInstructions — every refusal carries its own code and 
     expect(ok.isError).toBeFalsy();
   });
 
-  it('a cap exceeded, naming the field and the limit', async () => {
+  it('a body over the cap, naming the field and the limit', async () => {
     const { fx, card } = await scenario();
     const text = errorText(
       await runPublishTestInstructions(
-        args(card.identifier, {
-          clickPathSteps: Array.from({ length: TEST_INSTRUCTIONS_MAX_STEPS + 1 }, () => 'step'),
-        }),
+        args(card.identifier, { bodyMd: 'x'.repeat(TEST_INSTRUCTIONS_MAX_BODY_BYTES + 1) }),
         fx.ctx,
       ),
     );
     expect(text).toMatch(/^TEST_INSTRUCTIONS_CAP_EXCEEDED: /);
-    expect(text).toContain('clickPathSteps');
-    expect(text).toContain(String(TEST_INSTRUCTIONS_MAX_STEPS));
+    expect(text).toContain('bodyMd');
+    expect(text).toContain(String(TEST_INSTRUCTIONS_MAX_BODY_BYTES));
   });
 
-  it('both steps and not-applicable', async () => {
+  it('a blank body', async () => {
     const { fx, card } = await scenario();
     const text = errorText(
-      await runPublishTestInstructions(
-        args(card.identifier, {
-          clickPathNotApplicable: true,
-          clickPathNotApplicableReason: 'no UI',
-        }),
-        fx.ctx,
-      ),
+      await runPublishTestInstructions(args(card.identifier, { bodyMd: '   ' }), fx.ctx),
     );
-    expect(text).toMatch(/^TEST_INSTRUCTIONS_CLICK_PATH_INVALID: .*not both/);
-  });
-
-  it('neither steps nor not-applicable', async () => {
-    const { fx, card } = await scenario();
-    const text = errorText(
-      await runPublishTestInstructions(args(card.identifier, { clickPathSteps: [] }), fx.ctx),
-    );
-    expect(text).toMatch(/^TEST_INSTRUCTIONS_CLICK_PATH_INVALID: .*clickPathNotApplicable/);
+    expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "bodyMd"/);
   });
 
   it('a malformed field', async () => {

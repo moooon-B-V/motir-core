@@ -470,10 +470,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   publish_test_instructions: {
     summary:
       'Put a RUN\u2019s HOW TO TEST onto its run target \u2014 once per run, before the run ' +
-      'finishes: one click-path for the run and a section per repository it pushed to (the ' +
-      'commit and the setup commands a reviewer runs).',
+      'finishes: rich-text Markdown with sections and every command in a fenced code block ' +
+      '(click-to-copy), plus the commit of each repository it pushed to.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'd8c088f46443',
+    descriptionFingerprint: 'a660c7e6f790',
   },
   link_pull_request: {
     summary:

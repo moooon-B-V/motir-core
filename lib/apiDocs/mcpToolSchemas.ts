@@ -1416,6 +1416,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The RUN TARGET — the work item the run was launched against (e.g. "ACME-7"): the story for a story or scoped run, the card itself for a single-card run. Case-insensitive.',
       },
+      bodyMd: {
+        type: 'string',
+        description:
+          'How to test this run, as Markdown. Use SECTIONS — e.g. "## Precondition" (the sign-in, role or data the surface needs), "## Locally" (setup after checking out the branch: install, migrate, seed, run) and "## Click-path" (what to open, click and expect to SEE) when the run creates or changes a rendered surface; otherwise say why there is none. Put EVERY command in its own fenced code block — the page renders each with a click-to-copy control. Do NOT include the branch fetch: Motir composes it from each pull request. At most 32 KiB.',
+      },
       repos: {
         type: 'array',
         items: {
@@ -1432,61 +1437,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               minLength: 1,
               description: 'The head commit the run pushed to this repository.',
             },
-            setupCommands: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  label: {
-                    type: 'string',
-                    description: 'What the step is, e.g. "Install". At most 300 characters.',
-                  },
-                  command: {
-                    type: 'string',
-                    description:
-                      'The shell command, e.g. "pnpm install --frozen-lockfile". At most 500 characters.',
-                  },
-                },
-                required: ['label', 'command'],
-                additionalProperties: false,
-              },
-              description:
-                'What a reviewer runs AFTER checking out this repository’s branch — install, migrate, seed, run — in order, at most 12. Do NOT include the branch fetch: Motir composes it from the pull request itself.',
-            },
           },
           required: ['repo', 'commitSha'],
           additionalProperties: false,
         },
         description:
-          'One entry per repository the run pushed to, at most 8. The click-path below is ONE for the whole run.',
-      },
-      clickPathSteps: {
-        type: 'array',
-        items: { type: 'string' },
-        description:
-          'The click-path a reviewer follows in the running app, in order — what to open, click and expect to SEE. At most 30 steps of 300 characters. Give these OR set "clickPathNotApplicable", never both.',
-      },
-      clickPathNotApplicable: {
-        type: 'boolean',
-        description:
-          'Set true when the run touched no rendered surface, and say why in "clickPathNotApplicableReason".',
-      },
-      clickPathNotApplicableReason: {
-        type: 'string',
-        description:
-          'Why there is no click-path, e.g. "no rendered surface changed: a service and its tests". At most 500 characters.',
+          'One entry per repository the run pushed to, at most 8, each with its pushed head commit.',
       },
       previewPath: {
         type: 'string',
         description:
-          'The path to open on the preview deployment, starting with "/" — e.g. "/items/ACME-7". A path, never a URL: Motir joins it onto the preview the host reported.',
-      },
-      preconditionMd: {
-        type: 'string',
-        description: 'The sign-in, role or data the surface needs, as Markdown. At most 8 KiB.',
+          'The path to open on the preview deployment, starting with "/" — e.g. "/items/ACME-7". A path, never a URL: Motir joins it onto the preview the host reported. At most 500 characters.',
       },
     },
-    required: ['key', 'repos'],
+    required: ['key', 'bodyMd', 'repos'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

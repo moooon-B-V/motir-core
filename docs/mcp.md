@@ -1671,55 +1671,49 @@ credential and no widened grant.
 Put a **RUN's HOW TO TEST** onto its **run target** — the work item the run was
 launched against: the story for a story or scoped run, the card itself for a
 single-card run (Story MOTIR-4906 · MOTIR-5331; `docs/decisions/approval-gates.md`
-§9 and its 2026-09-13 amendment). One record per run: ONE click-path for the run,
-the precondition, and a section per repository the run pushed to — that
-repository's head commit and the setup commands a reviewer runs after checking
-out its branch. It renders on the run target's item page and in its pull-request
-approval, beside the preview each repository's host reported and the checks CI
-ran. **Nothing else writes it**: an item without one shows that nobody wrote how
-to test it, naming the run that owed it. It does **not** replace the `## How to
-test` section of a pull-request body — both are written.
+§9 and its 2026-09-13 amendment). Its content is **rich text**: a Markdown
+`bodyMd` with sections — the precondition, local setup, and the click-path when
+the run creates or changes a rendered surface — with **every command in its own
+fenced code block**, which the page renders click-to-copy. It is written the way
+`publish_design_result` takes a design note. It renders on the run target's item
+page inside the **Development block**, with its pull requests — the evidence of
+the one approve-to-merge decision — beside the preview each repository reported
+and the checks CI ran. **Nothing else writes it.** It does **not** replace the
+`## How to test` section of a pull-request body — both are written.
 
 Call it **once per run, before the run finishes** — before a single card moves
 to `implemented`, or before a story/scoped run's pull requests are marked ready.
-Give `clickPathSteps` when the run creates or changes a rendered surface;
-otherwise `clickPathNotApplicable: true` with a reason. Do **not** include the
-branch fetch — the read composes it from each pull request's own `headRef`, so
-the copyable block always checks out the branch Motir recorded.
+Do **not** include the branch fetch — Motir composes it from each pull request's
+own `headRef`.
 
-| Input                          | Type    | Required | Notes                                                                                     |
-| ------------------------------ | ------- | -------- | ----------------------------------------------------------------------------------------- |
-| `key`                          | string  | yes      | The run target's identifier, e.g. `ACME-7`.                                               |
-| `repos`                        | array   | yes      | One `{ repo, commitSha, setupCommands? }` per repository the run pushed to; at most 8.    |
-| `repos[].repo`                 | string  | yes      | `name` or `owner/name`; one of the item's project repositories, and each at most once.    |
-| `repos[].commitSha`            | string  | yes      | That repository's pushed head commit (7–64 hex).                                          |
-| `repos[].setupCommands`        | array   | no       | `{ label, command }` — install, migrate, seed, run; at most 12, label 300 / command 500.  |
-| `clickPathSteps`               | array   | one of   | Ordered strings — at most 30 steps of 300 characters.                                     |
-| `clickPathNotApplicable`       | boolean | one of   | `true` when no rendered surface changed.                                                  |
-| `clickPathNotApplicableReason` | string  | with ↑   | Why there is no click-path; at most 500 characters.                                       |
-| `previewPath`                  | string  | no       | A PATH on the preview host starting with a single `/`, e.g. `/items/ACME-7`; never a URL. |
-| `preconditionMd`               | string  | no       | The sign-in, role or data the surface needs, as Markdown; at most 8 KiB.                  |
+| Input               | Type   | Required | Notes                                                                                     |
+| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------- |
+| `key`               | string | yes      | The run target's identifier, e.g. `ACME-7`.                                               |
+| `bodyMd`            | string | yes      | Markdown, not blank, at most 32 KiB (UTF-8 bytes). Stored as written, trimmed.            |
+| `repos`             | array  | yes      | One `{ repo, commitSha }` per repository the run pushed to; at most 8.                    |
+| `repos[].repo`      | string | yes      | `name` or `owner/name`; one of the item's project repositories, and each at most once.    |
+| `repos[].commitSha` | string | yes      | That repository's pushed head commit (7–64 hex).                                          |
+| `previewPath`       | string | no       | A PATH on the preview host starting with a single `/`, e.g. `/items/ACME-7`; never a URL. |
 
 **Behaviour.** A run target holds ONE current record — the newest run's — and
 keeps every earlier run's as history. The owing dispatch run is resolved
 server-side — the newest RUNNING run whose scope target is the item or that
 holds a leg for it — and is never an argument. The same content from the same
-run twice writes nothing and answers `created: false`; different content from
-the same run, or any publish from another run, becomes the new current record.
+run twice writes nothing and answers `created: false`; different content from the
+same run, or any publish from another run, becomes the new current record.
 
 **Output** — `structuredContent`: `{ id, workItemKey, repos: [{ repoId,
-commitSha }], created, isCurrent, dispatchRunId, createdAt }`.
+commitSha }], bodyBytes, created, isCurrent, dispatchRunId, createdAt }`.
 
 **Refusals** — each a typed code whose message names what to fix:
 
-| Refusal                                 | When                                                                                                             |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT` | A `repos[].repo` is not one of the project's repositories (or a bare name is ambiguous). Lists the valid set.    |
-| `TEST_INSTRUCTIONS_CAP_EXCEEDED`        | A field is over its limit — the message names the field and the limit. Never truncated.                          |
-| `TEST_INSTRUCTIONS_CLICK_PATH_INVALID`  | Both a click-path and not-applicable, neither, or not-applicable with no reason.                                 |
-| `TEST_INSTRUCTIONS_INVALID_FIELD`       | A malformed field: no `repos`, a repository twice, a non-hex `commitSha`, an empty step, a URL as `previewPath`. |
-| `PERMISSION_DENIED`                     | The token or the member's role lacks `work_item:edit`.                                                           |
-| unknown / cross-workspace `key`         | A 404, indistinguishable from a work item the token cannot reach.                                                |
+| Refusal                                 | When                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT` | A `repos[].repo` is not one of the project's repositories (or a bare name is ambiguous). Lists the valid set.       |
+| `TEST_INSTRUCTIONS_CAP_EXCEEDED`        | A field is over its limit — the message names the field and the limit. Never truncated.                             |
+| `TEST_INSTRUCTIONS_INVALID_FIELD`       | A malformed field: a blank `bodyMd`, no `repos`, a repository twice, a non-hex `commitSha`, a URL as `previewPath`. |
+| `PERMISSION_DENIED`                     | The token or the member's role lacks `work_item:edit`.                                                              |
+| unknown / cross-workspace `key`         | A 404, indistinguishable from a work item the token cannot reach.                                                   |
 
 **Permission** — `work_item:edit`, the key the evidence publishers above assert
 and one `CLI_TOKEN_GRANT` already carries. The grant is **not** widened.

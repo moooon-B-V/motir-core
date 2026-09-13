@@ -9,9 +9,8 @@ import { CLI_TOKEN_GRANT, toolPermission } from '@/lib/mcp/toolPermissions';
 import * as route from '@/app/api/mcp/route';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
+  TEST_INSTRUCTIONS_MAX_BODY_BYTES,
   TEST_INSTRUCTIONS_MAX_REPOS,
-  TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS,
-  TEST_INSTRUCTIONS_MAX_STEPS,
 } from '@/lib/testInstructions/caps';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -105,23 +104,16 @@ async function scenario() {
   return { fx, card, repo };
 }
 
+const BODY =
+  '## Precondition\n\nSign in as a member.\n\n## Locally\n\n```sh\npnpm install --frozen-lockfile\n```\n\n```sh\npnpm dev\n```\n\n## Click-path\n\n1. Open the item\n2. Scroll to How to test';
+
 const CALL = (key: string) => ({
   name: 'publish_test_instructions',
   arguments: {
     key,
-    repos: [
-      {
-        repo: 'acme/web',
-        commitSha: SHA,
-        setupCommands: [
-          { label: 'Install', command: 'pnpm install --frozen-lockfile' },
-          { label: 'Run', command: 'pnpm dev' },
-        ],
-      },
-    ],
-    clickPathSteps: ['Open the item', 'Scroll to How to test'],
+    bodyMd: BODY,
+    repos: [{ repo: 'acme/web', commitSha: SHA }],
     previewPath: '/items/ACME-1',
-    preconditionMd: 'Sign in as a member.',
   },
 });
 
@@ -146,31 +138,16 @@ describe('publish_test_instructions over /api/mcp', () => {
       properties: Record<string, { description?: string }>;
       required?: string[];
     };
-    for (const field of [
-      'key',
-      'repos',
-      'clickPathSteps',
-      'clickPathNotApplicable',
-      'clickPathNotApplicableReason',
-      'previewPath',
-      'preconditionMd',
-    ]) {
+    for (const field of ['key', 'bodyMd', 'repos', 'previewPath']) {
       expect(schema.properties, `tools/list omits \`${field}\``).toHaveProperty(field);
     }
-    expect(schema.required).toEqual(expect.arrayContaining(['key', 'repos']));
-    expect(schema.properties.clickPathSteps!.description).toContain(
-      String(TEST_INSTRUCTIONS_MAX_STEPS),
-    );
+    expect(schema.required).toEqual(expect.arrayContaining(['key', 'bodyMd', 'repos']));
+    const body = schema.properties.bodyMd!.description ?? '';
+    expect(body).toContain('SECTIONS');
+    expect(body).toContain('fenced code block');
+    expect(body).toContain('click-to-copy');
+    expect(body).toContain(String(TEST_INSTRUCTIONS_MAX_BODY_BYTES / 1024));
     expect(schema.properties.repos!.description).toContain(String(TEST_INSTRUCTIONS_MAX_REPOS));
-    const section = (
-      schema.properties.repos as unknown as {
-        items: { properties: Record<string, { description?: string }>; required?: string[] };
-      }
-    ).items;
-    expect(section.required).toEqual(expect.arrayContaining(['repo', 'commitSha']));
-    expect(section.properties.setupCommands!.description).toContain(
-      String(TEST_INSTRUCTIONS_MAX_SETUP_COMMANDS),
-    );
     await client.close();
   });
 
@@ -197,21 +174,13 @@ describe('publish_test_instructions over /api/mcp', () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      clickPathSteps: ['Open the item', 'Scroll to How to test'],
+      bodyMd: BODY,
       previewPath: '/items/ACME-1',
-      preconditionMd: 'Sign in as a member.',
       publishedById: fx.ownerId,
       isCurrent: true,
     });
     expect(rows[0]!.repos).toHaveLength(1);
-    expect(rows[0]!.repos[0]).toMatchObject({
-      repoId: repo.id,
-      commitSha: SHA,
-      setupCommands: [
-        { label: 'Install', command: 'pnpm install --frozen-lockfile' },
-        { label: 'Run', command: 'pnpm dev' },
-      ],
-    });
+    expect(rows[0]!.repos[0]).toMatchObject({ repoId: repo.id, commitSha: SHA });
     await client.close();
   });
 

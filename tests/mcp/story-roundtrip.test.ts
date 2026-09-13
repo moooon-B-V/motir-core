@@ -380,9 +380,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // neither learns A's repositories nor writes a record onto A's card.
         publish_test_instructions: {
           key: item1,
+          bodyMd: 'rogue',
           repos: [{ repo: 'acme/web', commitSha: 'a'.repeat(40) }],
-          clickPathNotApplicable: true,
-          clickPathNotApplicableReason: 'rogue',
         },
         // MOTIR-3526. Aimed at tenant A's item like its neighbours: the ITEM key
         // must read as not-found BEFORE the repository is looked at, so a
@@ -874,9 +873,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // read-only-token loop asserts it is REFUSED at the scope gate.
         publish_test_instructions: {
           key: item1,
+          bodyMd: 'scoped',
           repos: [{ repo: 'acme/web', commitSha: 'a'.repeat(40) }],
-          clickPathNotApplicable: true,
-          clickPathNotApplicableReason: 'scoped',
         },
         // MOTIR-3526 — the caller's OWN item. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate; the
