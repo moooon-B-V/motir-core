@@ -4262,7 +4262,9 @@ enum ApprovalGateAuthority {
   assignee
   /// The work item's reporter — the routing fallback when there is no assignee.
   reporter
-  /// A workspace owner / admin, deciding a gate they were not routed.
+  /// Decided under `approval:decide_any` — a gate the actor was NOT routed
+  /// (MOTIR-5292). Until then it meant a workspace owner / admin; every such row
+  /// was written by an actor who holds the key, so none is migrated.
   admin
 
   @@map("approval_gate_authority")

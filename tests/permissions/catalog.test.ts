@@ -297,6 +297,13 @@ const REMOVAL_SPLIT_ENFORCED: PermissionKey[] = ['work_item:archive'];
 const INTEGRATION_ENFORCED: PermissionKey[] = ['integration:manage'];
 
 /**
+ * MOTIR-5292's approval key — deciding a gate routed to somebody else. Enforced
+ * in the same pull request that consults it (`resolveGateAuthority`), so it
+ * never sat `planned`; its own list for the reason every list above gives.
+ */
+const APPROVAL_ENFORCED: PermissionKey[] = ['approval:decide_any'];
+
+/**
  * MOTIR-5293's saved-filter "anyone's" key — its own list on the same terms as
  * the lists above: this key was wired by none of the stories they record. It
  * arrives `enforced` because the gate moves in the same change —
@@ -376,6 +383,10 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => INTEGRATION_ENFORCED.includes(k)).sort()).toEqual(
       [...INTEGRATION_ENFORCED].sort(),
     );
+    // …and MOTIR-5292's approval key, on the same terms again.
+    expect(ENFORCED_PERMISSIONS.filter((k) => APPROVAL_ENFORCED.includes(k)).sort()).toEqual(
+      [...APPROVAL_ENFORCED].sort(),
+    );
     // …and MOTIR-5293's saved-filter manage-any key, on the same terms again.
     expect(
       ENFORCED_PERMISSIONS.filter((k) => SAVED_FILTER_ANY_ENFORCED.includes(k)).sort(),
@@ -388,6 +399,7 @@ describe('enforcement — the seam that lets naming and wiring land separately',
         LESSON_LIBRARY_ENFORCED.length +
         REMOVAL_SPLIT_ENFORCED.length +
         INTEGRATION_ENFORCED.length +
+        APPROVAL_ENFORCED.length +
         SAVED_FILTER_ANY_ENFORCED.length,
     );
   });
