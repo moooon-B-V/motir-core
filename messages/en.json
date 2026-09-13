@@ -364,6 +364,7 @@
       "comment": "Comments",
       "attachment": "Attachments",
       "watcher": "Watchers",
+      "approval": "Approvals",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -420,6 +421,10 @@
     "watcher_manage": {
       "label": "Manage watchers",
       "description": "Add and remove other people from a work item's watcher list. Anyone who can view a work item may watch it themselves."
+    },
+    "approval_decide_any": {
+      "label": "Decide any approval",
+      "description": "Approve or request changes on an approval routed to someone else, not only one routed to you."
     },
     "public_request_comment": {
       "label": "Comment on requests",

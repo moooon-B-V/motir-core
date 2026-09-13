@@ -364,6 +364,7 @@
       "comment": "评论",
       "attachment": "附件",
       "watcher": "关注者",
+      "approval": "审批",
       "public_request": "公开请求",
       "member": "成员与访问",
       "board": "面板",
@@ -420,6 +421,10 @@
     "watcher_manage": {
       "label": "管理关注者",
       "description": "将他人添加到工作项的关注列表或从中移除。任何能查看工作项的人都可以自行关注。"
+    },
+    "approval_decide_any": {
+      "label": "决定任意审批",
+      "description": "对分派给他人的审批作出批准或要求修改，而不仅是分派给自己的审批。"
     },
     "public_request_comment": {
       "label": "评论请求",

@@ -55,7 +55,7 @@ afterAll(async () => {
  * that overlap made the reporter arm untestable in isolation (MOTIR-5192).
  *
  * Everything the fixture creates is reported by `fx.ownerId`, who is the
- * workspace's owner — so `isWorkspaceManagerFor` is true for them and the ADMIN
+ * workspace's owner — so they hold `approval:decide_any` and the ADMIN
  * arm authorises them whatever the reporter arm says. Under the old
  * `assignee OR reporter OR admin` rule the reporter term short-circuited first
  * and nobody noticed; the moment that term became conditional, every "the
