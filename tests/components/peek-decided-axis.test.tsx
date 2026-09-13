@@ -111,6 +111,8 @@ const DECLINED_ADD: PlanReviewItemDto = planReviewItem({
 });
 
 const PEEK_RESPONSE = {
+  folderId: null,
+  folderPath: [],
   id: 'wi_1',
   identifier: 'MOTIR-7',
   title: 'One peek for a proposal',
