@@ -122,6 +122,14 @@ export interface MergeCaptureInput {
   changedPathsTruncated: boolean;
 }
 
+/** One open-delivery reconcile candidate (MOTIR-5390): the mirror row, the
+ *  connection tier the host read needs, and the delivery rows that say which
+ *  cards — in which workspaces — the pull request delivers. */
+export type ReconcileCandidate = GithubPullRequest & {
+  repo: GithubRepo & { installation: GithubInstallation };
+  deliveries: { workItemId: string; workspaceId: string }[];
+};
+
 export const githubPullRequestRepository = {
   /** One PR by its `(repo, number)` identity, or null. */
   async findByRepoAndNumber(
@@ -495,6 +503,65 @@ export const githubPullRequestRepository = {
         changedPaths: data.changedPaths,
         changedPathsTruncated: data.changedPathsTruncated,
       },
+    });
+    return result.count;
+  },
+
+  /** The DELIVERING GitHub pull requests whose last delivery may never have
+   *  finished — the candidate set of the open-delivery reconcile (MOTIR-5390).
+   *  Oldest first, capped at `take`, with the connection tier and the delivery
+   *  rows the reconcile needs to decide liveness and read the host. Two arms:
+   *
+   *  - **OPEN**, quiet since `updatedBefore` — the merge delivery failed before
+   *    the sync wrote anything, or never arrived.
+   *  - **MERGED with no `mergedAt`**, quiet since `updatedBefore` but touched
+   *    since `mergedSince` — the merge delivery wrote the row and then died
+   *    before the post-commit capture that stamps `mergedAt`, i.e. somewhere in
+   *    the transition. The lower bound keeps out rows mirrored before the
+   *    `merged_at` column existed, which carry the same null for a different
+   *    reason.
+   *
+   *  Every table this touches carries an `app.system_admin` arm
+   *  (`github_pull_request`, `github_repo`, `github_installation`,
+   *  `work_item_delivery`), which is what lets a cross-tenant discovery run under
+   *  `withSystemContext`. It deliberately does NOT filter on the work item: that
+   *  table has no such arm, so the liveness check is the service's, per tenant. */
+  async listReconcileCandidates(
+    opts: { updatedBefore: Date; mergedSince: Date; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<ReconcileCandidate[]> {
+    return tx.githubPullRequest.findMany({
+      where: {
+        provider: 'github',
+        deliveries: { some: {} },
+        OR: [
+          { state: 'open', updatedAt: { lt: opts.updatedBefore } },
+          {
+            merged: true,
+            mergedAt: null,
+            updatedAt: { lt: opts.updatedBefore, gte: opts.mergedSince },
+          },
+        ],
+      },
+      include: {
+        repo: { include: { installation: true } },
+        deliveries: { select: { workItemId: true, workspaceId: true } },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: opts.take,
+    });
+  },
+
+  /** Record that the reconcile ASKED the host about this row and the answer
+   *  changed nothing (MOTIR-5390). `updatedAt` is documented above as "when did we
+   *  last hear about this PR", and a host read is exactly that — so moving it is
+   *  what rotates a long-lived open pull request to the back of the candidate
+   *  queue instead of letting it take a place in every run. `updateMany` for the
+   *  reason `recordMergeCapture` gives: the row may be gone by now. Write → `tx`. */
+  async markReconciled(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: { id },
+      data: { updatedAt: new Date() },
     });
     return result.count;
   },
