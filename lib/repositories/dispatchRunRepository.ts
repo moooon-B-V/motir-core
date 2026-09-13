@@ -64,6 +64,24 @@ export const dispatchRunRepository = {
     return tx.dispatchRun.create({ data });
   },
 
+  /**
+   * The id of the newest RUNNING run holding a leg for one work item, or null —
+   * the owing run a How-to-test record is attributed to (MOTIR-5331). Read
+   * server-side so an agent is never asked for an id it cannot know. Reads
+   * through the leg, like {@link listByWorkItem}.
+   */
+  async findLatestRunningIdForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.dispatchRun.findFirst({
+      where: { status: 'running', cards: { some: { workItemId } } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  },
+
   /** One run WITH its legs, in stored `position` order. */
   async findByIdWithCards(
     id: string,

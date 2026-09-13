@@ -1407,6 +1407,77 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  publish_test_instructions: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository these instructions are for — its name ("web") or "owner/name" ("acme/web"). It must be one of the work item’s project repositories; call once per repository you opened a pull request in.',
+      },
+      commitSha: {
+        type: 'string',
+        minLength: 1,
+        description: 'The head commit you just pushed — the instructions are recorded against it.',
+      },
+      clickPathSteps: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'The click-path a reviewer follows in the running app, in order — what to open, click and expect to SEE. At most 30 steps of 300 characters. Give these OR set "clickPathNotApplicable", never both.',
+      },
+      clickPathNotApplicable: {
+        type: 'boolean',
+        description:
+          'Set true when the change touched no rendered surface, and say why in "clickPathNotApplicableReason".',
+      },
+      clickPathNotApplicableReason: {
+        type: 'string',
+        description:
+          'Why there is no click-path, e.g. "no rendered surface changed: a service and its tests". At most 500 characters.',
+      },
+      previewPath: {
+        type: 'string',
+        description:
+          'The path to open on the repository’s preview deployment, starting with "/" — e.g. "/items/ACME-7". A path, never a URL: Motir joins it onto the preview the host reported.',
+      },
+      setupCommands: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            label: {
+              type: 'string',
+              description: 'What the step is, e.g. "Install". At most 300 characters.',
+            },
+            command: {
+              type: 'string',
+              description:
+                'The shell command, e.g. "pnpm install --frozen-lockfile". At most 500 characters.',
+            },
+          },
+          required: ['label', 'command'],
+          additionalProperties: false,
+        },
+        description:
+          'What a reviewer runs AFTER checking out the branch — install, migrate, seed, run — in order, at most 12. Do NOT include the branch fetch: Motir composes it from the pull request itself.',
+      },
+      preconditionMd: {
+        type: 'string',
+        description: 'The sign-in, role or data the surface needs, as Markdown. At most 8 KiB.',
+      },
+    },
+    required: ['key', 'repo', 'commitSha'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   reinforce_lesson: {
     type: 'object',
     properties: {

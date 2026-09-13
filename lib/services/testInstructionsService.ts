@@ -3,6 +3,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import type {
@@ -41,8 +42,13 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 export interface PublishTestInstructionsInput {
   workItemId: string;
-  /** The `GithubRepo` id — must be one of the item's project repositories. */
-  repoId: string;
+  /**
+   * The repository, as EITHER the `GithubRepo` id (`repoId`) OR how a person
+   * names it (`repoRef`: `name` or `owner/name`) — exactly one. Either way it
+   * must be one of the item's project repositories.
+   */
+  repoId?: string | null;
+  repoRef?: string | null;
   /** The head commit the instructions were written for. */
   commitSha: string;
   clickPathSteps?: readonly string[] | null;
@@ -51,8 +57,12 @@ export interface PublishTestInstructionsInput {
   previewPath?: string | null;
   setupCommands?: readonly SetupCommandDTO[] | null;
   preconditionMd?: string | null;
-  /** The run that wrote it. The MCP door resolves this server-side; never agent-supplied. */
-  dispatchRunId?: string | null;
+  /**
+   * Attribute the record to the newest RUNNING dispatch run holding a leg for
+   * this item (the MCP door sets it; MOTIR-5331). Never an id the caller passes:
+   * an agent cannot know it, and must not be able to claim another run's.
+   */
+  attributeToRunningDispatch?: boolean;
 }
 
 /** The validated, normalised content a record stores — also what "identical" compares. */
@@ -218,6 +228,45 @@ export function translateTestInstructionsConflict(err: unknown, workItemId: stri
   return err;
 }
 
+/**
+ * Resolve the publish's repository to a `GithubRepo` id that is one of the
+ * project's repositories, or refuse naming the valid set.
+ *
+ * `repoRef` matches the realized repository's `name` or `owner/name`,
+ * case-insensitively. A bare name shared by two repositories under different
+ * owners is ambiguous and refused — the valid set in the message shows the
+ * `owner/name` to use instead.
+ */
+async function resolveProjectRepoId(
+  projectId: string,
+  input: Pick<PublishTestInstructionsInput, 'repoId' | 'repoRef'>,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const repoId = blankToNull(input.repoId);
+  const repoRef = blankToNull(input.repoRef);
+  if ((repoId === null) === (repoRef === null)) {
+    throw new TestInstructionsInvalidFieldError(
+      'repo',
+      'name exactly one repository — by id or by name.',
+    );
+  }
+  const set = await projectRepoRepository.listByProject(projectId, ctx.workspaceId, tx);
+  const realized = set.flatMap((row) => (row.githubRepo ? [row.githubRepo] : []));
+  const valid = realized.map((r) => `${r.owner}/${r.name}`);
+
+  if (repoId !== null) {
+    if (realized.some((r) => r.id === repoId)) return repoId;
+    throw new TestInstructionsRepoNotInProjectError(repoId, valid);
+  }
+  const wanted = repoRef!.toLowerCase();
+  const matches = realized.filter(
+    (r) => `${r.owner}/${r.name}`.toLowerCase() === wanted || r.name.toLowerCase() === wanted,
+  );
+  if (matches.length === 1) return matches[0]!.id;
+  throw new TestInstructionsRepoNotInProjectError(repoRef!, valid);
+}
+
 export const testInstructionsService = {
   /**
    * Write a HOW TO TEST record for one (work item, repository), making it the
@@ -256,30 +305,14 @@ export const testInstructionsService = {
       return await withWorkspaceContext(
         { userId: ctx.userId, workspaceId: ctx.workspaceId },
         async (tx) => {
-          const member = await projectRepoRepository.findByProjectAndGithubRepoId(
-            item.projectId,
-            input.repoId,
-            tx,
-          );
-          if (!member) {
-            const set = await projectRepoRepository.listByProject(
-              item.projectId,
-              ctx.workspaceId,
-              tx,
-            );
-            const valid = set.flatMap((row) =>
-              row.githubRepo ? [`${row.githubRepo.owner}/${row.githubRepo.name}`] : [],
-            );
-            throw new TestInstructionsRepoNotInProjectError(input.repoId, valid);
-          }
-
+          const repoId = await resolveProjectRepoId(item.projectId, input, ctx, tx);
           // Serialise every publish for this item BEFORE the read that decides.
           const locked = await workItemRepository.lockById(item.id, tx);
           if (!locked) throw new TestInstructionsWorkItemNotFoundError(input.workItemId);
 
           const existing = await testInstructionsRepository.findLatestByCommit(
             item.id,
-            input.repoId,
+            repoId,
             content.commitSha,
             tx,
           );
@@ -287,13 +320,13 @@ export const testInstructionsService = {
             return { record: toTestInstructionsDto(existing), created: false };
           }
 
-          await testInstructionsRepository.markNotCurrentByPair(item.id, input.repoId, tx);
+          await testInstructionsRepository.markNotCurrentByPair(item.id, repoId, tx);
           const row = await testInstructionsRepository.create(
             {
               workspaceId: ctx.workspaceId,
               projectId: item.projectId,
               workItemId: item.id,
-              repoId: input.repoId,
+              repoId: repoId,
               commitSha: content.commitSha,
               clickPathSteps: content.clickPathSteps,
               clickPathNotApplicable: content.clickPathNotApplicable,
@@ -304,7 +337,9 @@ export const testInstructionsService = {
                 command: c.command,
               })),
               preconditionMd: content.preconditionMd,
-              dispatchRunId: input.dispatchRunId ?? null,
+              dispatchRunId: input.attributeToRunningDispatch
+                ? await dispatchRunRepository.findLatestRunningIdForWorkItem(item.id, tx)
+                : null,
               publishedById: ctx.userId,
               isCurrent: true,
             },

@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **61 tools**.
+`initialize` handshake and registers **62 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1665,6 +1665,59 @@ these tools and the HTTP publish routes answer one rule:
 the same one `publish_design_result` asserts and one `CLI_TOKEN_GRANT` already
 carries — so a dispatched run can call these the day they ship, with no new
 credential and no widened grant.
+
+#### `publish_test_instructions`
+
+Put **HOW TO TEST** onto a work item for ONE repository — the setup commands a
+reviewer runs after checking out the branch, the precondition, and the
+click-path through the running app (Story MOTIR-4906 · MOTIR-5331;
+`docs/decisions/approval-gates.md` §9). It renders under that repository's pull
+request on the item page, beside the preview the repository's host reported and
+the checks CI ran. **Nothing else writes it**: a card without one shows that
+nobody wrote how to test it, naming the run that owed it.
+
+Call it after pushing and `link_pull_request`, **before** moving the card to
+`implemented`, once per repository a pull request was opened in, for the commit
+just pushed. Give `clickPathSteps` when the change creates or changes a rendered
+surface; otherwise `clickPathNotApplicable: true` with a reason. Do **not**
+include the branch fetch — the read composes it from the pull request's own
+`headRef`, so the copyable block always checks out the branch Motir recorded.
+
+| Input                          | Type    | Required | Notes                                                                                          |
+| ------------------------------ | ------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `key`                          | string  | yes      | The work item identifier, e.g. `ACME-7`.                                                       |
+| `repo`                         | string  | yes      | `name` or `owner/name`; must be one of the item's project repositories.                        |
+| `commitSha`                    | string  | yes      | The pushed head commit (7–64 hex). Also the **idempotency key**.                               |
+| `clickPathSteps`               | array   | one of   | Ordered strings — at most 30 steps of 300 characters.                                          |
+| `clickPathNotApplicable`       | boolean | one of   | `true` when no rendered surface changed.                                                       |
+| `clickPathNotApplicableReason` | string  | with ↑   | Why there is no click-path; at most 500 characters.                                            |
+| `previewPath`                  | string  | no       | A PATH on the preview host starting with a single `/`, e.g. `/items/ACME-7`; never a URL.      |
+| `setupCommands`                | array   | no       | `{ label, command }` — install, migrate, seed, run; at most 12, label 300 / command 500 chars. |
+| `preconditionMd`               | string  | no       | The sign-in, role or data the surface needs, as Markdown; at most 8 KiB.                       |
+
+**Behaviour.** A work item holds ONE current record per repository and keeps
+every earlier version as history. The same content for the same commit twice
+writes nothing and answers `created: false`; different content for the same
+commit becomes the new current record. The owing dispatch run is resolved
+server-side — the newest RUNNING run holding a leg for the item — and is never
+an argument.
+
+**Output** — `structuredContent`: `{ id, workItemKey, repoId, commitSha,
+created, isCurrent, dispatchRunId, createdAt }`.
+
+**Refusals** — each a typed code whose message names what to fix:
+
+| Refusal                                 | When                                                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT` | `repo` is not one of the project's repositories (or a bare name is ambiguous). Lists the valid set. |
+| `TEST_INSTRUCTIONS_CAP_EXCEEDED`        | A field is over its limit — the message names the field and the limit. Never truncated.             |
+| `TEST_INSTRUCTIONS_CLICK_PATH_INVALID`  | Both a click-path and not-applicable, neither, or not-applicable with no reason.                    |
+| `TEST_INSTRUCTIONS_INVALID_FIELD`       | A malformed field: a non-hex `commitSha`, an empty step, a URL as `previewPath`.                    |
+| `PERMISSION_DENIED`                     | The token or the member's role lacks `work_item:edit`.                                              |
+| unknown / cross-workspace `key`         | A 404, indistinguishable from a work item the token cannot reach.                                   |
+
+**Permission** — `work_item:edit`, the key the evidence publishers above assert
+and one `CLI_TOKEN_GRANT` already carries. The grant is **not** widened.
 
 #### `link_work_items`
 

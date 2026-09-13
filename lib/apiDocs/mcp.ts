@@ -467,6 +467,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '8fd1253a91cf',
   },
+  publish_test_instructions: {
+    summary:
+      'Put HOW TO TEST onto a work item for one repository \u2014 the setup commands, the ' +
+      'precondition and the click-path a reviewer follows. Call it after pushing and linking the ' +
+      'pull request, before implemented, once per repository.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '8e1de699ecff',
+  },
   link_pull_request: {
     summary:
       'Declare which work item a pull request delivers — call it right after opening one, once ' +

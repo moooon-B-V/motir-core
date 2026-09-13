@@ -276,6 +276,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // `toolPermissions.ts`); this deprecated table only needs the nearest bucket.
   create_acceptance_upload: 'work_items:write',
   publish_acceptance_result: 'work_items:write',
+  // `publish_test_instructions` (MOTIR-5331) — a WRITE: it puts a record on the
+  // item. The real gate is `work_item:edit` in `toolPermissions.ts`.
+  publish_test_instructions: 'work_items:write',
   // `link_pull_request` (MOTIR-3526). A WRITE — it sets the change-request row's
   // `work_item_id`, and may create the row itself. This legacy table has no
   // integration-link axis finer than `integration`, which is the MERGE report's
