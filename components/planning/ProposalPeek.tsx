@@ -88,6 +88,8 @@ function proposedPayload(item: PlanReviewItemDto, projectIdentifier: string): Qu
     : [];
 
   const payload: QuickViewData = {
+    folderId: null,
+    folderPath: [],
     repoDelivery,
     // An un-materialized `add` has no row, so no id. Proposal mode writes
     // nothing, and both write paths are keyed by this — an empty id is

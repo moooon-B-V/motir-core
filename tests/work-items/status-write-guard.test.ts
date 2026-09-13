@@ -76,6 +76,10 @@ const STATUS_WRITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'never-terminal',
     "writes the project's own `blocked` status, resolved by category — `blocked` is category `todo`, so this write cannot enter or leave the done category; the row is also freshly created and carries no stamp to clear",
   ],
+  'lib/services/plansService.ts#applyModify#workItemRepository.update': [
+    'never-terminal',
+    "the RE-SCOPE RESET (MOTIR-5359) — `resolveRescopeReset` returns a move only FROM an `in_progress`-category status and only TO the project's initial status when that status is `todo`-category, so this write can neither enter nor leave the done category; every other key in the patch is content, not status",
+  ],
   'lib/services/workflowsService.ts#deleteStatus#workItemRepository.update': [
     'stamps-itself',
     'the status-DELETION reassign — a workflow-admin bulk move that walks no legal edges, so it cannot call the seam; it compares the deleted and target CATEGORIES and stamps or clears `completedAt` in the same patch',

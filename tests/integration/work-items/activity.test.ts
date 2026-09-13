@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { backlogService } from '@/lib/services/backlogService';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -207,6 +208,32 @@ describe('activityService.listHistory — entry rendering', () => {
     // The assignToSprint diff ALSO wrote backlogRank — suppressed, so the
     // entry renders partially: no backlogRank part anywhere.
     expect(partsOf(entry).some((p) => 'field' in p && p.field === 'backlogRank')).toBe(false);
+  });
+
+  it('renders filing into a folder by the folder NAME, and a since-deleted folder as none (MOTIR-5313)', async () => {
+    const fx = await makeWorkItemFixture();
+    const issue = await createIssue(fx);
+    const gone = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Gone' },
+      fx.ctx,
+    );
+    const later = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Later' },
+      fx.ctx,
+    );
+    await foldersService.fileWorkItem(issue.id, { folderId: gone.id }, fx.ctx);
+    await foldersService.fileWorkItem(issue.id, { folderId: later.id }, fx.ctx);
+    // "Gone" is empty again, so it can be deleted; the entry that names it
+    // must not print its id once it has no name to show.
+    await foldersService.deleteFolder({ projectId: fx.projectId, folderId: gone.id }, fx.ctx);
+
+    const page = await activityService.listHistory(issue.id, {}, fx.ctx);
+    expect(fieldPart(page.entries[0], 'folderId')).toEqual({
+      kind: 'field',
+      field: 'folderId',
+      from: { type: 'none' },
+      to: { type: 'text', text: 'Later' },
+    });
   });
 
   it('renders link add/remove with the target identifier', async () => {

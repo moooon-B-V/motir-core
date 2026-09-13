@@ -17,6 +17,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     workspaceId: 'ws_1',
     projectId: 'proj_1',
     parentId: null,
+    folderId: null,
     kind: 'subtask',
     key: 7,
     identifier: 'PROD-7',

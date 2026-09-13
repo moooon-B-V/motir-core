@@ -145,6 +145,10 @@ export interface QuickViewData {
    */
   archived: { atLabel: string; byName: string | null } | null;
   parent: { identifier: string; title: string; kind: WorkItemKindDto } | null;
+  /** The folder the item is filed in, or `null` (Story MOTIR-5308 · MOTIR-5352). */
+  folderId: string | null;
+  /** That folder's name and every ancestor's, ROOT FIRST; `[]` when unfiled. */
+  folderPath: string[];
   /**
    * The ready/blocked readiness signal (Subtask 2.5.21), shaped for the shipped
    * ReadinessBadge. `ready` is the service verdict (true when the item has no

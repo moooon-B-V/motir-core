@@ -12,6 +12,15 @@ import 'server-only';
 
 import { mintJobToken } from './jobToken';
 import {
+  parseIndexAllowanceSummary,
+  parseIndexAllowanceVerdict,
+  parseOrgIndexPools,
+  parseOrgTiers,
+  type IndexAllowanceSummary,
+  type OrgIndexPools,
+  type IndexAllowanceVerdict,
+} from '@/lib/ciFleet/indexAllowance';
+import {
   MotirAiConfigError,
   MotirAiUnavailableError,
   errorFromProblem,
@@ -351,6 +360,143 @@ export async function debitCiOverage(
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawCiOverageDebitResponse;
+}
+
+/**
+ * POST /v1/credits/index-check — may this organisation's next index container
+ * boot? (MOTIR-4593; motir-ai MOTIR-5284.)
+ *
+ * ⚠️ Motir does not charge for code indexing. This reads an internal allowance and
+ * attributes nothing.
+ *
+ * ⚠️ TOTAL, like {@link fetchCodeGraphRunVerdict}: every failure — unconfigured,
+ * unreachable, a non-2xx, an older motir-ai that does not serve the route, a body
+ * that is not a verdict — returns `null`. `null` means "could not ask", and the
+ * DISPATCHER decides what that means (it boots: see
+ * `codeGraphIndexDispatchService.askIndexAllowance`). That is also what lets the
+ * two repositories' pull requests merge in either order.
+ */
+export async function checkIndexAllowance(
+  coreOrganizationId: string,
+): Promise<IndexAllowanceVerdict | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/credits/index-check`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ coreOrganizationId }),
+    });
+    if (!res.ok) return null;
+    return parseIndexAllowanceVerdict(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /v1/credits/index-draw — attribute ONE torn-down container's seconds to the
+ * organisation's index allowance (MOTIR-4593; motir-ai MOTIR-5284). Idempotent on
+ * `idempotencyKey`, so a replayed settle attributes once.
+ *
+ * ⚠️ Never a charge, and it cannot move the visible balance — motir-ai has no
+ * path from this route to the ledger.
+ *
+ * ⚠️ TOTAL: `null` on every failure, for the reason above. A draw that could not
+ * be sent is a gap in internal accounting; it must never fail a teardown.
+ */
+export async function drawIndexAllowance(input: {
+  coreOrganizationId: string;
+  containerSeconds: number;
+  idempotencyKey: string;
+}): Promise<IndexAllowanceVerdict | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/credits/index-draw`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return null;
+    return parseIndexAllowanceVerdict(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /v1/admin/index-allowance/summary — the per-tier index-allowance summary for
+ * one period, for the PLATFORM ADMIN's Monitoring section (MOTIR-4595; motir-ai
+ * MOTIR-5340). Internal accounting only — Motir does not charge for code indexing.
+ *
+ * ⚠️ TOTAL: `null` on every failure. The caller renders `null` as UNKNOWN, never as
+ * a table of zeros — a missing read drawn as "0 crossed" would tell an operator
+ * the gate holds when nobody asked.
+ */
+export async function fetchIndexAllowanceSummary(
+  window?: string,
+): Promise<IndexAllowanceSummary | null> {
+  try {
+    const { url, serviceToken } = config();
+    const query = window ? `?${new URLSearchParams({ window }).toString()}` : '';
+    const res = await aiFetch(`${url}/v1/admin/index-allowance/summary${query}`, {
+      method: 'GET',
+      headers: authHeaders(serviceToken),
+    });
+    if (!res.ok) return null;
+    return parseIndexAllowanceSummary(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /v1/admin/index-allowance/orgs/:coreOrganizationId — one organisation's two
+ * pools, never conflated, for the PLATFORM ADMIN's org page (MOTIR-5341; motir-ai
+ * MOTIR-5340). Internal accounting only.
+ *
+ * ⚠️ TOTAL: `null` on every failure, which the card renders as UNKNOWN — both pools,
+ * never zero. `{ known: false }` is a different answer: motir-ai has never seen the
+ * org.
+ */
+export async function fetchOrgIndexPools(
+  coreOrganizationId: string,
+): Promise<OrgIndexPools | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(
+      `${url}/v1/admin/index-allowance/orgs/${encodeURIComponent(coreOrganizationId)}`,
+      { method: 'GET', headers: authHeaders(serviceToken) },
+    );
+    if (!res.ok) return null;
+    return parseOrgIndexPools(await res.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /v1/admin/orgs/tiers — resolve a page of organisations to their motir-ai
+ * tier in one call (MOTIR-4595; motir-ai MOTIR-5340). At most 100 ids.
+ *
+ * ⚠️ TOTAL: `null` when the lookup failed, so a caller can tell "tier unknown"
+ * (could not ask) from "no tier" (motir-ai has never seen the org).
+ */
+export async function fetchOrgTiers(
+  coreOrganizationIds: string[],
+): Promise<Map<string, string | null> | null> {
+  if (coreOrganizationIds.length === 0) return new Map();
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/admin/orgs/tiers`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ coreOrganizationIds }),
+    });
+    if (!res.ok) return null;
+    return parseOrgTiers(await res.json());
+  } catch {
+    return null;
+  }
 }
 
 /**

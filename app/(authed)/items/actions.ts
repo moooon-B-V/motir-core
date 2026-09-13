@@ -11,7 +11,7 @@ import { isRelationshipKind } from '@/lib/workItems/linkRelationships';
 import { parseSort } from '@/lib/issues/issueListView';
 import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
 import {
   IllegalParentTypeError,
@@ -19,6 +19,21 @@ import {
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkItemLinkError } from '@/lib/workItems/linkErrors';
+import {
+  CrossProjectFolderError,
+  FolderCycleError,
+  FolderNameTakenError,
+  FolderNotFoundError,
+  InvalidFolderNameError,
+  SubtaskNeedsPlacementError,
+} from '@/lib/folders/errors';
+import { foldersService } from '@/lib/services/foldersService';
+import type {
+  DeleteFolderResultDto,
+  FolderDeletionPreviewDto,
+  FolderDto,
+  ProjectFoldersDto,
+} from '@/lib/dto/folders';
 import type {
   CreateWorkItemLinkInput,
   WorkItemKindDto,
@@ -279,6 +294,237 @@ export async function listChildIssuesAction(
     if (err instanceof WorkItemNotFoundError) {
       return { ok: false, error: 'That issue no longer exists.' };
     }
+    throw err;
+  }
+}
+
+/**
+ * One FOLDER's level for the lazy tree (Story MOTIR-5308 · MOTIR-5315) — its
+ * child folders, then the work items filed in it, paged like a work item's
+ * children. The service gates on browsing the folder's project; a folder that
+ * vanished (deleted in another tab) is a benign error, never a leak.
+ */
+export async function listFolderLevelAction(
+  input: ListTreeLevelInput & { folderId: string },
+): Promise<TreeLevelResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'No active project.' };
+  try {
+    const level = await workItemsService.listFolderLevel(
+      input.folderId,
+      { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, level };
+  } catch (err) {
+    if (err instanceof FolderNotFoundError) {
+      return { ok: false, error: 'That folder no longer exists.' };
+    }
+    throw err;
+  }
+}
+
+// ── Folder create + rename (Story MOTIR-5308 · MOTIR-5344) ─────────────────
+// Transport for the tree's inline folder name row: resolve the session + active
+// project, call ONE `foldersService` method, and hand every expected refusal back
+// as a stable `code` — the tree renders the name collision inline and toasts the
+// rest. No folder rule lives here (CLAUDE.md's 4-layer contract).
+
+export type FolderWriteErrorCode =
+  | 'FOLDER_NAME_TAKEN'
+  | 'INVALID_FOLDER_NAME'
+  | 'FOLDER_NOT_FOUND'
+  | 'CROSS_PROJECT_FOLDER'
+  | 'FOLDER_CYCLE'
+  | 'SUBTASK_NEEDS_PLACEMENT'
+  | 'PROJECT_ACCESS_DENIED'
+  | 'NO_ACTIVE_PROJECT';
+
+export type FolderWriteResult =
+  | { ok: true; folder: FolderDto }
+  | {
+      ok: false;
+      code: FolderWriteErrorCode;
+      error: string;
+      /** `FOLDER_NAME_TAKEN`: the name that collided, when the service knows it. */
+      folderName?: string | null;
+    };
+
+function folderWriteFailure(err: unknown): Extract<FolderWriteResult, { ok: false }> | null {
+  if (err instanceof FolderNameTakenError) {
+    return { ok: false, code: err.code, error: err.message, folderName: err.folderName };
+  }
+  if (err instanceof InvalidFolderNameError) {
+    return { ok: false, code: err.code, error: err.message };
+  }
+  if (err instanceof SubtaskNeedsPlacementError) {
+    return { ok: false, code: err.code, error: err.message };
+  }
+  if (err instanceof FolderNotFoundError) {
+    return { ok: false, code: err.code, error: 'That folder no longer exists.' };
+  }
+  if (err instanceof CrossProjectFolderError) {
+    return { ok: false, code: err.code, error: 'That folder belongs to another project.' };
+  }
+  if (err instanceof FolderCycleError) {
+    return { ok: false, code: err.code, error: 'A folder can’t move into one of its own folders.' };
+  }
+  if (err instanceof ProjectAccessDeniedError) {
+    return { ok: false, code: err.code, error: 'You can’t change folders in this project.' };
+  }
+  return null;
+}
+
+export async function createFolderAction(input: {
+  parentFolderId: string | null;
+  name: string;
+}): Promise<FolderWriteResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const folder = await foldersService.createFolder(
+      {
+        projectId: ctx.projectId,
+        parentFolderId: input.parentFolderId ?? null,
+        name: String(input.name ?? ''),
+      },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, folder };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
+    throw err;
+  }
+}
+
+export async function renameFolderAction(input: {
+  folderId: string;
+  name: string;
+}): Promise<FolderWriteResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const folder = await foldersService.renameFolder(
+      { projectId: ctx.projectId, folderId: input.folderId, name: String(input.name ?? '') },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, folder };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
+    throw err;
+  }
+}
+
+// ── Folder move + reorder (Story MOTIR-5308 · MOTIR-5345) ──────────────────
+// Transport for Move to… and Move up / Move down. A reorder is a move to the
+// folder's own parent with neighbours; `beforeId` / `afterId` keep
+// `MoveFolderInput`'s semantics. The picker's folder list is a read: a member who
+// may browse the project gets it.
+
+export async function moveFolderAction(input: {
+  folderId: string;
+  targetParentFolderId: string | null;
+  beforeId?: string | null;
+  afterId?: string | null;
+}): Promise<FolderWriteResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const folder = await foldersService.moveFolder(
+      {
+        projectId: ctx.projectId,
+        folderId: input.folderId,
+        targetParentFolderId: input.targetParentFolderId ?? null,
+        beforeId: input.beforeId ?? null,
+        afterId: input.afterId ?? null,
+      },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, folder };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
+    throw err;
+  }
+}
+
+export type ListProjectFoldersResult =
+  | { ok: true; data: ProjectFoldersDto }
+  | { ok: false; error: string };
+
+export async function listProjectFoldersAction(): Promise<ListProjectFoldersResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'No active project.' };
+  try {
+    const data = await foldersService.listProjectFolders(
+      { projectId: ctx.projectId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, data };
+  } catch (err) {
+    if (err instanceof ProjectAccessDeniedError) {
+      return { ok: false, error: 'You don’t have access to this project’s folders.' };
+    }
+    throw err;
+  }
+}
+
+// ── Folder delete (Story MOTIR-5308 · MOTIR-5346) ──────────────────────────
+// The delete confirmation reads what the delete WOULD move before the person
+// confirms, then the delete itself. Both refusals of a delete — a child folder's
+// name already at the destination, a subtask that would land at the root — come
+// back as codes the open dialog renders.
+
+export type FolderFailure = Extract<FolderWriteResult, { ok: false }>;
+
+export async function describeFolderDeletionAction(input: {
+  folderId: string;
+}): Promise<{ ok: true; preview: FolderDeletionPreviewDto } | FolderFailure> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const preview = await foldersService.describeFolderDeletion(
+      { projectId: ctx.projectId, folderId: input.folderId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, preview };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
+    throw err;
+  }
+}
+
+export async function deleteFolderAction(input: {
+  folderId: string;
+}): Promise<{ ok: true; result: DeleteFolderResultDto } | FolderFailure> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const result = await foldersService.deleteFolder(
+      { projectId: ctx.projectId, folderId: input.folderId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, result };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
     throw err;
   }
 }

@@ -8,6 +8,8 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { withSystemContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
+import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
+import type { IndexAllowanceAsk } from '@/lib/services/codeGraphIndexDispatchService';
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
 import type {
@@ -262,6 +264,28 @@ export async function runIndexFleetSteps(
   // throws: run it a second time and nothing exists twice. It throws identically
   // on every pass, which is exactly what a deployment fault should do.
   indexFleetConfig();
+
+  // ⚠️ ASK THE INDEX ALLOWANCE BEFORE THE REPOSITORY IS CLAIMED AND BEFORE A SLOT
+  // IS TAKEN (MOTIR-4593 · Story MOTIR-4335). A HARD STOP pauses indexing for this
+  // repository: nothing is admitted, nothing boots, the pause reason is recorded on
+  // the repository row, and the run SUCCEEDS as a no-op carrying that reason — the
+  // same ledger contract as the other `indexed: false` verdicts above. A refused
+  // dispatch is not a failure to retry five times; it is a state the catch-up sweep
+  // (MOTIR-5290) re-asks about.
+  //
+  // ⚠️ Motir does not charge for code indexing. The allowance is internal.
+  //
+  // ⚠️ MEMOIZED, so every later pass of this run acts on the answer the first pass
+  // got. A verdict that flipped to a stop mid-run must not strand a container that
+  // is already supervised.
+  const allowance = await ctx.step.run('index-allowance', () =>
+    askIndexAllowanceUnlessBooted(ctx, services, target),
+  );
+  if (!allowance.proceed) {
+    await pauseIndexingRepo(target.repoRef, allowance.reason);
+    return { indexed: false, reason: allowance.reason };
+  }
+  await liftIndexingPause(target.repoRef);
 
   // ⚠️ CLAIM THE REPOSITORY, AND CAPTURE THE HEAD IT IS BEING INDEXED AT
   // (Story MOTIR-4669 · MOTIR-4724). Two facts nothing else can supply:
@@ -598,6 +622,56 @@ async function finishIndexRun(
     // produce exactly the row they produced before.
     ...(indexModes.length > 0 ? { indexModes } : {}),
   };
+}
+
+/**
+ * The allowance ask, UNLESS this run already booted its container.
+ *
+ * ⚠️ THE ROLLOUT ARM (the MOTIR-5020 lesson). A run that started before this step
+ * existed resumes under this code with its `index-boot:<pid>` memo already
+ * written and a container already running. Asking then, and getting a stop, would
+ * return from the run without ever settling that container — leaving it to the
+ * reaper and its slot to the TTL, and its cost undrawn. So a run that is past its
+ * boot proceeds without asking; the settle it is about to reach draws as usual.
+ *
+ * Exported for the rollout arm's own test; the job is its only production caller.
+ */
+export async function askIndexAllowanceUnlessBooted(
+  ctx: Pick<JobContext, 'runId'>,
+  services: JobServices,
+  target: Extract<IndexTarget, { indexed: true }>,
+): Promise<IndexAllowanceAsk> {
+  try {
+    const booted = await withSystemContext((tx) =>
+      jobStepRepository.findByRunAndStep(ctx.runId, `index-boot:${target.anchorProjectId}`, tx),
+    );
+    if (booted) return { proceed: true, outcome: null };
+  } catch (err) {
+    // An unreadable memo table is not evidence of a boot; ask as a fresh run would.
+    console.error('[index-fleet] could not read the boot memo before the allowance ask', err);
+  }
+  return services.codeGraphIndexDispatch.askIndexAllowance(target.organizationId);
+}
+
+/** Record a hard-stop pause on the repository (MOTIR-4593). Never throws: the
+ *  run's own `indexed: false` verdict still carries the reason if this write
+ *  fails. */
+async function pauseIndexingRepo(repoRef: string, reason: string): Promise<void> {
+  try {
+    await withSystemContext((tx) => githubRepoRepository.markIndexPaused(repoRef, { reason }, tx));
+  } catch (err) {
+    console.error('[index-fleet] could not record the index pause', repoRef, err);
+  }
+}
+
+/** Lift a recorded pause once the allowance lets a dispatch boot (MOTIR-4593).
+ *  Never throws. */
+async function liftIndexingPause(repoRef: string): Promise<void> {
+  try {
+    await withSystemContext((tx) => githubRepoRepository.clearIndexPause(repoRef, tx));
+  } catch (err) {
+    console.error('[index-fleet] could not lift the index pause', repoRef, err);
+  }
 }
 
 /** The named failure for a dispatch outcome that did not index. */

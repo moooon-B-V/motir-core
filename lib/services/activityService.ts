@@ -32,6 +32,7 @@ import type {
   WorkItemRevision,
 } from '@/generated/prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { folderRepository } from '@/lib/repositories/folderRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
@@ -151,7 +152,7 @@ async function buildResolvers(
   // (checked against `pg_policies`), so it stays on the singleton.
   const users =
     refs.users.size > 0 ? await userRepository.findByIds([...refs.users]) : ([] as User[]);
-  const { statuses, sprints, issues } = await withWorkspaceServiceContext(
+  const { statuses, sprints, issues, folders } = await withWorkspaceServiceContext(
     ctx.workspaceId,
     async (tx) => ({
       statuses:
@@ -166,6 +167,7 @@ async function buildResolvers(
         refs.issues.size > 0
           ? await workItemRepository.findByIds([...refs.issues], tx)
           : ([] as WorkItem[]),
+      folders: refs.folders.size > 0 ? await folderRepository.findByIds([...refs.folders], tx) : [],
     }),
   );
 
@@ -175,6 +177,9 @@ async function buildResolvers(
   // Identifiers stay workspace-gated even through old diffs (finding #44):
   // a foreign-workspace id — impossible today, but cheap to refuse — renders
   // as the not-found fallback rather than leaking its identifier.
+  const folderById = new Map(
+    folders.filter((f) => f.workspaceId === ctx.workspaceId).map((f) => [f.id, f]),
+  );
   const issueById = new Map(
     issues.filter((w) => w.workspaceId === ctx.workspaceId).map((w) => [w.id, w]),
   );
@@ -192,6 +197,12 @@ async function buildResolvers(
     },
     issue(id: string): ActivityValueDto {
       return { type: 'issue', workItemId: id, identifier: issueById.get(id)?.identifier ?? null };
+    },
+    // A folder renders by its CURRENT name; one deleted since the entry was
+    // written has none to show, and says so rather than printing an id.
+    folder(id: string): ActivityValueDto {
+      const name = folderById.get(id)?.name;
+      return name === undefined ? { type: 'none' } : { type: 'text', text: name };
     },
   };
 }

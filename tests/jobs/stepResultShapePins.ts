@@ -72,7 +72,7 @@ export interface RetiredStepId {
 /**
  * Every live memoized step, by id.
  *
- * 57 entries over 65 call sites: an id used at several sites in one handler is
+ * 59 entries over 67 call sites: an id used at several sites in one handler is
  * pinned once, and the guard requires those sites to agree.
  */
 export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
@@ -122,6 +122,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
       '{ childIds: Array<string>; itemId: string; outcome: "cascaded"; postDatedIds?: Array<string> | undefined; toStatus: string } | { itemId: string; outcome: "access_denied" } | { itemId: string; outcome: "no_matching_status" } | { itemId: string; outcome: "no_open_children" } | { itemId: string; outcome: "post_dated_only"; postDatedIds: Array<string> } | { itemId: string; outcome: "toggle_off" } | { outcome: "not_done" } | { outcome: "unresolvable" }',
+  },
+  'catch-up-paused-indexes': {
+    file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
+    shape:
+      '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
   },
   'deliver-digest': {
     file: 'lib/jobs/definitions/publicFollowDigestDeliver.ts',
@@ -173,6 +178,21 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
     shape:
       '{ detail: string; reference: string; verdict: "indeterminate" } | { detail: string; reference: string; verdict: "unpullable" } | { detail: string; verdict: "not_applicable" } | { digest: null | string; reference: string; verdict: "bootable" }',
+  },
+  'hostedAgentBootStepId(request.dispatchId)': {
+    file: 'lib/services/hostedAgentContainerService.ts',
+    shape:
+      '{ outcome: { billableSeconds: number; containerId: string; costUsd: string; exitCode: null | number; failureDetail: null | string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "admission_deferred"; reason: string } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workspaceId: string }; bootedAt: string; dispatchId: string; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string }; runId: string; size: { cpuKind: "performance" | "shared"; cpus: number; memoryMb: number }; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; timeoutSeconds: number } }',
+  },
+  'hostedAgentSettleStepId(request.dispatchId)': {
+    file: 'lib/services/hostedAgentContainerService.ts',
+    shape:
+      '{ billableSeconds: number; containerId: string; costUsd: string; exitCode: null | number; failureDetail: null | string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "admission_deferred"; reason: string } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }',
+  },
+  'index-allowance': {
+    file: 'lib/jobs/indexFleetSteps.ts',
+    shape:
+      '{ outcome: null | string; proceed: true } | { outcome: string; proceed: false; reason: `paused_index_${string}` }',
   },
   'index-container-ai-address': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',

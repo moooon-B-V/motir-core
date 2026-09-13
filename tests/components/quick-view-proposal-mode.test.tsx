@@ -32,6 +32,8 @@ vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
 import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 
 const DATA: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   id: 'cmqvitem00000000000000p7',
   identifier: 'PROD-7',
   title: 'Email + password sign-in',

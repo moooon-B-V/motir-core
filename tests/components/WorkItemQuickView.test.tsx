@@ -28,6 +28,8 @@ vi.mock('next/navigation', () => ({
 // lands on not-found, null peekKey renders nothing, and close fires onClose.
 
 const DATA: QuickViewData = {
+  folderId: null,
+  folderPath: [],
   identifier: 'MOTIR-12',
   title: 'Build the planning canvas',
   projectIdentifier: 'MOTIR',

@@ -34,6 +34,7 @@ export interface DiffRefs {
   statuses: Set<string>;
   sprints: Set<string>;
   issues: Set<string>;
+  folders: Set<string>;
 }
 
 /** The user-shaped display value (narrowed so the actor needs no re-check). */
@@ -49,6 +50,8 @@ export interface DisplayResolvers {
   status(key: string): ActivityValueDto;
   sprint(id: string): ActivityValueDto;
   issue(id: string): ActivityValueDto;
+  /** A folder, by name (MOTIR-5313); the placement a `folderId` diff records. */
+  folder(id: string): ActivityValueDto;
 }
 
 type RefCollector = (value: unknown, refs: DiffRefs) => void;
@@ -357,6 +360,13 @@ const REGISTRY: Record<string, RegistryEntry> = {
   backlogRank: suppressed,
   key: suppressed,
   identifier: suppressed,
+  // The RE-SCOPE RESET's reason (bug MOTIR-5359) — `{ planId, reason, arm }` on the
+  // one revision an approved `modify` writes when it walks an in-progress card
+  // back to To Do. Suppressed, not rendered: the `status` cell beside it already
+  // reads "changed status Implemented → To Do" in the History, and this key is
+  // the provenance behind that line (which plan, which arm) for a reader of the
+  // trail, not a second visible change.
+  statusReset: suppressed,
   // -- plain scalar fields -------------------------------------------------
   title: textField(),
   kind: textField(),
@@ -405,6 +415,8 @@ const REGISTRY: Record<string, RegistryEntry> = {
   reporterId: resolvedField('users', (r, id) => r.user(id)),
   sprintId: resolvedField('sprints', (r, id) => r.sprint(id)),
   parentId: resolvedField('issues', (r, id) => r.issue(id)),
+  // Filing into / out of a folder (Story MOTIR-5308 · MOTIR-5313).
+  folderId: resolvedField('folders', (r, id) => r.folder(id)),
   // -- date fields ----------------------------------------------------------
   dueDate: dateField(),
   archivedAt: dateField(),
@@ -490,7 +502,13 @@ export function collectDiffRefs(changeKind: string, diff: unknown, refs: DiffRef
 }
 
 export function emptyDiffRefs(): DiffRefs {
-  return { users: new Set(), statuses: new Set(), sprints: new Set(), issues: new Set() };
+  return {
+    users: new Set(),
+    statuses: new Set(),
+    sprints: new Set(),
+    issues: new Set(),
+    folders: new Set(),
+  };
 }
 
 /**

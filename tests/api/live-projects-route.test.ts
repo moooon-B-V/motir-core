@@ -7,7 +7,11 @@ import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { POST } from '@/app/api/internal/ai/live-projects/route';
-import { truncateAuthTables, truncateCodeGraphOffboarding } from '../helpers/db';
+import {
+  truncateAuthTables,
+  truncateCodeGraphOffboarding,
+  truncateRateLimitCounters,
+} from '../helpers/db';
 
 // THE LIVE-PROJECT READ SEAM (MOTIR-2197 ·
 // `docs/decisions/code-graph-index-fleet.md` §14.5) — real Postgres, the real
@@ -39,6 +43,10 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateCodeGraphOffboarding();
+  // The `ai:internal` limiter counts per presented service token, and the live-projects and
+  // live-organizations suites present the same one — so without this the sibling on the same leg spends the
+  // budget and this suite reads 429s (MOTIR-5359's merge-queue ejection; `truncateRateLimitCounters`).
+  await truncateRateLimitCounters();
 });
 afterEach(() => vi.restoreAllMocks());
 

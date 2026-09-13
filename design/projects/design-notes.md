@@ -3518,9 +3518,11 @@ onWhat,offWhat,unavailableWhat,orgPlanNote,readOnlyNote,upgrade}` — replacing
 
 ### 5. Explicitly OUT of scope here
 
-The merge-mode switch (ADR §7) is **not drawn**: it is MOTIR-4882's to design and
+~~The merge-mode switch (ADR §7) is **not drawn**: it is MOTIR-4882's to design and
 build, and drawing a second card this asset would be inventing is not how a room
-earns its place. The room is justified by the readers and writers in §1. Also out
+earns its place.~~ **CORRECTED 2026-09-13 (MOTIR-5176):** the attribution was
+stale. The surface is **MOTIR-4880's** (the setting, its control, its deep link);
+MOTIR-4882 ships the merge itself. The row is now drawn in panels 6–8, see §7. The room is justified by the readers and writers in §1. Also out
 of scope: the entitlement's tier (it stays with the organisation), what a run
 records, the video's pacing, and the storage caps.
 
@@ -3684,6 +3686,98 @@ design that outranks the code, in the ordinary direction** — the same standing
 this file's _Source of truth_ carve-out gives the 2026-08-08 amendment: an
 amendment carrying a date, a reason and the card that owns it governs the code
 until that card ships.
+
+### 7. AMENDED 2026-09-13 — the MERGE-MODE row (MOTIR-5176, story MOTIR-4880; panels 6–8)
+
+**The room's second card, `Merging pull requests`, sits BELOW the acceptance-video
+switch.** It is on the same axis: what the presence of a pull request means for
+this project. It draws `Project.prMergeMode` (`docs/decisions/approval-gates.md`
+§7 and its 2026-09-13 amendment). **It is a choice between two described modes,
+so it is the shipped access-level radio-card grammar** (`access-members.mock.html`,
+`ProjectMembersSettings` `role="radiogroup"`), not a copy of its neighbour's switch.
+
+**Grounded in (read at design time):** ADR §7's value table and its
+provenance-default amendment; §7a (the audit says the SETTING authorised an
+`auto` merge, not a person); `projectPrMergeModeService` on
+`parent/MOTIR-4880-pr-merge-mode` (the read and the write are both
+`workflow:manage`).
+
+> **⚠️ MANAGE-ONLY — there is NO read-only state (Yue, 2026-09-13, on this card's
+> design review).** The room's front end is guarded by the permission: a member
+> who cannot manage the project never lands on the page, so a read-only render
+> draws a state nothing can reach. The first cut drew one (a panel 9 following
+> §6 above), and it is withdrawn. **This contradicts §6 (MOTIR-5190) and panel
+> 4, and open PR #2843 (MOTIR-5278), which opens the room to `project:browse`.**
+> Those are named here and not reworked by this card.
+
+> **⚠️ TWO VALUES — `review_on_fail` is RETIRED (Yue, 2026-09-13).** Only a GREEN
+> pull request is ever a merge candidate: a red one never reaches In Review and
+> stays with the run that is fixing it. So "ask only when checks fail" would put
+> a merge approval on broken code, and no meaning survives the name. The first
+> cut drew it as a third option with a _Not built yet_ pill (a panel 8); that
+> option, its pill and its panel are withdrawn, and the enum value is removed by
+> the story's migration (ADR §7 amendment, point 4).
+
+#### The copy — transcribe verbatim (MOTIR-5181)
+
+| value    | LABEL (bold line)   | HINT (secondary line)                                                                                                                               | extra                             |
+| -------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `manual` | Ask before merging  | When its checks pass, a person approves the pull request in Motir before it is merged. Nothing reaches your default branch without that yes.        | icon tile `--el-tint-sky`, `user` |
+| `auto`   | Merge automatically | When its checks pass, Motir merges the pull request without asking anyone. The record says this setting allowed it — not that a person approved it. | icon tile `--el-tint-mint`, `zap` |
+
+**Both hints open on _when its checks pass_**, because that is the only moment a
+merge is on the table in either mode. A pull request whose checks fail is never
+offered for merging; it stays with the run that is fixing it.
+
+- **Card title:** Merging pull requests · **description:** _What happens when a
+  pull request for this project's work is ready to merge. A project whose
+  repositories Motir hosts starts at **Merge automatically**; a project holding
+  any repository of your own starts at **Ask before merging**._
+- **The not-yet notice** (`--el-tint-sky` callout, `info` glyph, ink
+  `--el-text-strong`): _Motir does not merge pull requests yet. Until it does,
+  every pull request is merged on your git host by a person, whichever option is
+  chosen here._ It is honest about today: nothing reads the value until
+  MOTIR-4882, which removes the notice in the change that makes it false.
+- **No enum member or column name is ever shown.**
+
+#### Decisions, each with its reason
+
+- **Apply on change**, reconciled from the response and put BACK on failure,
+  which is the acceptance switch's idiom. A person's choice is stamped decided
+  (`prMergeModeDecidedAt`), so no copy needs to warn that a default might
+  overwrite it.
+- **The deep link is `#merge-mode`** (the card's id, beside the shipped
+  `#acceptance-video`). On arrival the card takes the ordinary
+  `--focus-ring-color` ring once. It is not a tint and not a flash (panel 8). The
+  link is guarded as the room is: ⌘K does not list it, and the approval frame
+  renders no door, for anyone without `workflow:manage`.
+- **Ink:** title `--el-text`, description / hint
+  `--el-text-secondary` (never `--el-text-muted`), notice `--el-text-strong` on
+  its tint (finding #35). Shape: `--radius-card` on each option, `--radius-control`
+  on the tile and the notice.
+
+#### ⚠️ Planning flags (surfaced, not silently absorbed)
+
+- **MOTIR-5181 transcribes** panels 6–8 in `en` and `zh`, reading through
+  `getPrMergeMode` and writing through `setPrMergeMode`, both `workflow:manage`.
+- **The room is manage-only.** A non-manager is refused the route, and nothing
+  here draws what they would see instead.
+- **Out of step with this decision:** §6 / panel 4 (MOTIR-5190) and open PR #2843
+  (MOTIR-5278) both open the room to `project:browse`.
+- **MOTIR-4882 removes the not-yet notice** and builds the approval frame's
+  settings door (`design/work-items/design-notes.md`, the UNIVERSAL APPROVAL
+  FRAME's 2026-09-13 amendment).
+- **MOTIR-5183 walks** panels 6, 7 and 8, and asserts a member without
+  `workflow:manage` is refused the route.
+
+#### GIVES / TAKES
+
+| work item                    | GIVES / TAKES                                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-5181** (the control) | **GIVES** the copy, the grammar, the three states, the anchor. **TAKES** — its criteria drop `review_on_fail` (amended on the card). |
+| **MOTIR-4882** (the merge)   | **GIVES** the room its door lands in. **TAKES** the notice's removal.                                                                |
+| **MOTIR-5183** (E2E)         | **GIVES** the walk's surfaces. **TAKES nothing.**                                                                                    |
+| **MOTIR-4942 / MOTIR-5190**  | **neither** — `done`; §5's stale attribution corrected on the record above.                                                          |
 
 ---
 

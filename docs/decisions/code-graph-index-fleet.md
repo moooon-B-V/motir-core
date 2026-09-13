@@ -1587,3 +1587,182 @@ real tree on fleet hardware, or the number is about something else.**
 - **motir-ai keeps `tests/codegraphChangedPaths.test.ts`**, the executable record that `indexFiles`
   drops resolved edges on both 1.1.6 and 1.5.0. Unused code, deliberately kept: it is the cheapest
   way for the next person to learn this without re-deriving it.
+
+## §20 — §9.1's warning, RE-TAKEN against the shared fleet: every `isMeta` branch dispositioned, and Decision 8 re-affirmed in its internal-accounting form (MOTIR-4543, 2026-09-12)
+
+**Dated 2026-09-12. Measured at `motir-core` `0e35d4cbc` and `motir-ai` `8ca2138`.** Nothing above this line is edited; §9 and §9.1 stand as written, and this section says what has changed since them.
+
+> ⚠️ **Motir does not charge for code indexing.** This section describes an internal allowance and internal cost accounting, never a customer charge. It is the sentence a later reader should be able to quote out of it.
+
+§9.1 filed a warning against its own Decision 8: `isMeta` is a **billing** flag that had been used as a proxy for _"this workload is not real"_, and that proxy stops being safe the moment meta shares infrastructure with customers. **Decision 7 shipped, so that condition is today's condition.** §9.1 could not dispose of the branches it warned about — _"whether `ciFleetCostMeterService`'s CI bypass should change is not decided here"_ — and this section does.
+
+### §20.1 — The rule, in one sentence
+
+**`isMeta` may suppress a CHARGE, a PRICE, an ENTITLEMENT CAP, a PAYWALL or a REFUSAL — it may never suppress a MEASUREMENT, and it never decides WHERE work runs.**
+
+### §20.2 — The enumeration, with its commands
+
+```
+# motir-core @ 0e35d4cbc
+git grep -n 'isMeta' 0e35d4cbc -- lib app scripts packages     # 139 hits in 46 files
+
+# motir-ai @ 8ca2138 — the flag as it arrives on the job-submit envelope
+git grep -n 'isMeta' 8ca2138 -- src scripts                    #  30 hits in 11 files
+```
+
+Tests are outside both path sets on purpose: a test that names the flag asserts a branch, it is not one.
+
+**Of the 169 hits, 13 are BRANCHES** — a conditional whose outcome depends on the flag. Every one is dispositioned in §20.3. The other **156** are comments, types, propagation onto the envelope, queries and seed data; every one of them is accounted for, per file, in §20.6, and those tables sum to the two counts above.
+
+### §20.3 — The branches and their dispositions
+
+Three dispositions, and only three: **CORRECT AS IT STANDS** (suppresses a charge or an entitlement and nothing else) · **CORRECT AND NOW DEAD** (also suppresses a measurement, but unreachable — with the premise and what would revive it) · **WRONG AND OWED A FIX** (suppresses a measurement on a reachable path — with the card that fixes it; this section fixes nothing).
+
+**motir-core — 11 branch lines:**
+
+| #   | branch (`0e35d4cbc`)                                                                                                          | what it suppresses                                                                                                                              | disposition                                   |
+| --- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 1   | `app/(authed)/settings/organization/billing/_components/BillingClient.tsx:66` — `isBillingExempt` returns `data.isMeta`       | the billing storefront — a price and a charge                                                                                                   | **CORRECT AS IT STANDS**                      |
+| 2   | `app/(authed)/settings/organization/usage/_components/OrgUsageClient.tsx:58` — `planningIsCreditGated` returns `!data.isMeta` | the _planning is paused_ credit-gate framing; the usage figure itself renders for every org (the ternary that hid it was deleted by MOTIR-4572) | **CORRECT AS IT STANDS**                      |
+| 3   | `lib/billing/entitlements.ts:150` — `pmTierForOrg` → `'meta'`                                                                 | seat and entitlement caps                                                                                                                       | **CORRECT AS IT STANDS**                      |
+| 4   | `lib/services/entitlementsService.ts:267` — `hasUncappedOrg` includes `o.isMeta`                                              | entitlement caps                                                                                                                                | **CORRECT AS IT STANDS**                      |
+| 5   | `lib/services/billingService.ts:252` — `if (org?.isMeta) return notApplicableAiAccess()`                                      | the AI paywall                                                                                                                                  | **CORRECT AS IT STANDS**                      |
+| 6   | `lib/services/ciActionsGateService.ts:101` — `{ outcome: 'bypassed', reason: 'meta' }`                                        | the CI Actions dispatch gate — a refusal                                                                                                        | **CORRECT AS IT STANDS**                      |
+| 7   | `lib/services/ciAllowanceService.ts:143` — pool accounting returns `state: 'bypassed'`                                        | the CI minutes POOL — an entitlement. The zero figures it returns sit under `applicable: false` and are never rendered as figures               | **CORRECT AS IT STANDS**                      |
+| 8   | `lib/services/ciAllowanceService.ts:256` — overage charge `{ outcome: 'bypassed', reason: 'meta' }`                           | the CI overage charge                                                                                                                           | **CORRECT AS IT STANDS**                      |
+| 9   | **`lib/services/ciMinutesMeterService.ts:305` — `bypassed_meta`, returned BEFORE the usage row is written**                   | **the minutes MEASUREMENT itself**                                                                                                              | **WRONG AND OWED A FIX — MOTIR-5283** (§20.4) |
+| 10  | `app/(admin)/admin/tenants/[orgId]/page.tsx:127` — the `isMeta` chip                                                          | nothing — it displays the flag to platform staff                                                                                                | **CORRECT AS IT STANDS**                      |
+| 11  | `app/(admin)/admin/tenants/page.tsx:168` — the `isMeta` chip                                                                  | nothing — display                                                                                                                               | **CORRECT AS IT STANDS**                      |
+
+**motir-ai — 2 branch lines:**
+
+| #   | branch (`8ca2138`)                                                                                       | what it suppresses                                                                                                                                                                                 | disposition              |
+| --- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 12  | `src/jobs/worker.ts:120` — `assertHasCredits`: `if (isMeta) return;`                                     | the worker's out-of-credits **refusal**. The debit is still written — the function's own comment: _"its balance may even go negative; the gate ignores it"_ — so meta's token usage stays measured | **CORRECT AS IT STANDS** |
+| 13  | `src/services/gatewaySyncService.ts:331` — `hasCredits = (org?.isMeta ?? false) \|\| balanceCredits > 0` | the gateway pre-flight **refusal**                                                                                                                                                                 | **CORRECT AS IT STANDS** |
+
+**Two conditionals that look like branches and are not policy**, named so a reader re-running the command does not have to rediscover it: `motir-ai` `src/envelope.ts` tests the RAW wire value's type (`tenant.isMeta must be a boolean when present`), and `src/services/aiOrganizationService.ts` `syncOrgFlags` skips a write when the stored flags already equal core's. Neither decides anything about a meta org.
+
+**No branch is CORRECT AND NOW DEAD.** The candidate for that disposition — row 9 — is reachable, which is §20.4.
+
+### §20.4 — The two branches §9.1 left undecided, by name, with the premise re-read
+
+§9.1 left both on one premise: **meta CI never reaches the fleet.** It is re-read here rather than inherited.
+
+**The premise, re-read 2026-09-12: TRUE TODAY — and held on the LABEL axis, not by `isMeta`.**
+
+- The fleet provisions a runner only for a job whose requested labels name the Motir runner: `ciRunnerProvisioningService` returns `not_fleet_job` unless `isMotirFleetJob(event.requestedLabels)`. `lib/ciFleet/config.ts` states the axis outright — _"⚠️ AND NOT BY TENANT FLAG. `Organization.isMeta` (§4.4) and `moooon-B-V` (a GitHub org) are DIFFERENT AXES that happen to coincide today."_
+- Motir's own workflows request no such label: `git grep -nE "runs-on:.*motir" <ref> -- .github` returns **0** in `motir-core` @ `0e35d4cbc` and **0** in `motir-ai` @ `8ca2138`; both run `ubuntu-latest`.
+- **What would make it false, and it is one provisioning away:** repositories Motir provisions read `runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` (`config.ts`, §N's portability seam). The first meta-org project Motir provisions puts meta CI on the fleet — and no `isMeta` branch anywhere prevents it, correctly (`fleetCeilingService`: _"`isMeta` does NOT lift it"_).
+
+**`ciMinutesMeterService`'s `bypassed_meta` → WRONG AND OWED A FIX (MOTIR-5283).** It returns **before the measurement**, and the premise does not protect it, because this meter is not fleet-only: it meters Actions wall-clock for connected repositories, GitHub-hosted runs included. So it fires on every meta workflow run that reaches it — real Motir spend, paid on the GitHub bill and recorded nowhere in Motir. And on the day the premise fails, `ciFleetCostMeterService` records the meta org's container COGS (it has no bypass) while this meter records no minutes, leaving `getOrgPeriodCostBasis`'s denominator empty for exactly that org. **The fix is to move the bypass from the measurement to the charge — and the charge is already bypassed twice** (rows 7 and 8), so recording the row charges nothing. MOTIR-5283 carries the criteria.
+
+**`lib/ciMetering/allowance.ts`'s `bypassed` state → CORRECT AS IT STANDS.** Its one hit is the state's own doc comment — _"`isMeta`, or `MOTIR_CLOUD=false` — no pool accounting at all"_. It is the value row 7 returns: the absence of an entitlement pool. It suppresses no measurement; the measurement is the meter's, above.
+
+**The worked example — `ciFleetCostMeterService` has NO `isMeta` branch at all.** MOTIR-1995 removed it on purpose, and the module header records why: meta indexing runs on the shared fleet, so a bypass would mean _"real Fly spend with no row"_, and meta's cost is readable as its own line instead (`getMetaPeriodCostSplit`). Its six hits are all comments. That is what a correct disposition looks like, and row 9's fix makes the minutes meter look the same.
+
+### §20.5 — Decision 8, re-taken: the charge decision (MOTIR-4541)
+
+**Re-affirmed, not inherited — decided 2026-09-05 and amended twice on 2026-09-12, by Yue.** Transcribed in MOTIR-4541's own terms.
+
+**The option: absorb, in INTERNAL-ACCOUNTING form — two separate pools, a soft gate that reports rather than blocks, and hard gates that stop. Motir does not charge for code indexing, does not say that it does, and never announces otherwise.**
+
+| pool                | drawn by                          | the customer sees                                     |
+| ------------------- | --------------------------------- | ----------------------------------------------------- |
+| **credit balance**  | planner · hosted agent            | **yes** — and it is the whole truth about that number |
+| **index allowance** | code-graph indexing, nothing else | **no**                                                |
+
+Indexing can never draw the visible balance, under any condition. Internally a tier is costed at the sum; `catalog.ts`'s `monthlyCredits` stays the advertised figure.
+
+- **Soft gate — the index allowance.** Crossing it does not stop indexing on a paid tier; Motir absorbs the overrun and records a crossing. It is a calibration instrument, not enforcement.
+- **Hard gate A — the visible balance is zero ⇒ indexing stops**, because an org with no credit is not planning. A staleness-gated catch-up runs when the gate lifts.
+- **Hard gate B — index COGS reaches the reserved headroom (`agent-lane margin × revenue`) ⇒ indexing stops**, on the list basis, for the safety reason recorded in MOTIR-4541. **Not active yet:** its margin input is undecided (MOTIR-4483, MOTIR-4598), and it is its own task, MOTIR-5280.
+- **At a hard stop the graph freezes; it is not withheld** — the planner is told how far behind it is and reaches current source through `read_file`.
+
+**Amended 2026-09-12:**
+
+- **The Free tier:** its index allowance is **one-time**, never re-granted, and **a hard stop** — a zero-revenue tier has no margin to absorb an overrun against. Hard gate B does not apply to it. A shared pool (free-tier indexing drawing the visible credits) was considered and rejected: it would make _"Motir does not charge for code indexing"_ false for that tier.
+- **No entitlement gate on cloud:** every connected repository is indexed, and the allowance is what bounds its cost. The previous _no AI plan ⇒ no indexing_ position was withdrawn, because in practice it guaranteed every new organisation's first planning session would be code-blind.
+- **A prerequisite this exposed:** the Free tier's one-time credit grant is decided (`billing-tiering.md`) but never issued in code, so gate A currently stops every Free organisation — MOTIR-5281.
+
+**The code-blind argument (MOTIR-1981's rejection of charging indexing to CI credits): INAPPLICABLE.** It was about a refusal blinding a planner by coupling two products through one exhaustion state. Under two pools the planner draws a pool indexing cannot touch, so indexing can never stop a planner; and where indexing stops, `read_file` keeps the planner sighted. The argument has not weakened; it no longer has a subject.
+
+**The triggers that re-open it** — stated against what this story ships:
+
+1. **The soft-gate crossing rate per tier**, read on Monitoring's _Index allowance_ section (MOTIR-4595). Large on a tier ⇒ the gate is mis-derived; still large after recalculating ⇒ the ratio is the wrong instrument and the choice of option is taken again. MOTIR-4588 proposes the threshold and cadence.
+2. **Index COGS stops tracking token consumption** — the `index` line of `pnpm ops:fleet-cost` (MOTIR-4540) against token spend for the same period.
+3. **Orgs reach hard gate B routinely** rather than as outliers.
+4. **The gap between the soft gate and the reserved headroom is thin**, so the absorption the design promises does not exist.
+
+### §20.6 — Every hit that is not a branch, per file
+
+Each count is `git grep -c 'isMeta' <ref> -- <paths>` for that file; the totals equal §20.2's.
+
+**motir-core @ `0e35d4cbc`:**
+
+| file                                                                       |    hits | what they are                                                                          |
+| -------------------------------------------------------------------------- | ------: | -------------------------------------------------------------------------------------- |
+| `app/(admin)/admin/tenants/[orgId]/_components/ClassificationBar.tsx`      |       1 | comment only                                                                           |
+| `app/(admin)/admin/tenants/[orgId]/page.tsx`                               |       2 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `app/(admin)/admin/tenants/page.tsx`                                       |       2 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `app/(authed)/settings/organization/billing/_components/BillingClient.tsx` |       6 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `app/(authed)/settings/organization/billing/_components/searchFigures.ts`  |       1 | comment only                                                                           |
+| `app/(authed)/settings/organization/usage/_components/OrgUsageClient.tsx`  |       9 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `app/(authed)/settings/organization/usage/_components/searchUsage.ts`      |       1 | comment only                                                                           |
+| `lib/ai/tenantOrg.ts`                                                      |       4 | propagation onto the job-submit tenant envelope                                        |
+| `lib/ai/types.ts`                                                          |       3 | type / DTO field                                                                       |
+| `lib/billing/aiEntitlement.ts`                                             |       1 | comment only                                                                           |
+| `lib/billing/entitlements.ts`                                              |       3 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `lib/ciFleet/config.ts`                                                    |       1 | comment only                                                                           |
+| `lib/ciMetering/allowance.ts`                                              |       1 | comment only                                                                           |
+| `lib/dto/aiUsage.ts`                                                       |       2 | type / DTO field                                                                       |
+| `lib/dto/billing.ts`                                                       |       3 | type / DTO field                                                                       |
+| `lib/dto/platform.ts`                                                      |       1 | type / DTO field                                                                       |
+| `lib/mappers/platformMappers.ts`                                           |       1 | query / select / mapper                                                                |
+| `lib/repositories/ciContainerPeriodCostRepository.ts`                      |       8 | query / select / mapper                                                                |
+| `lib/repositories/organizationMembershipRepository.ts`                     |       4 | query / select / mapper                                                                |
+| `lib/repositories/organizationRepository.ts`                               |      10 | query / select / mapper                                                                |
+| `lib/services/acceptanceVideoEligibilityService.ts`                        |       1 | comment only                                                                           |
+| `lib/services/aiAskService.ts`                                             |       4 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiBugTelemetryService.ts`                                    |       2 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiChatService.ts`                                            |       2 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiConventionService.ts`                                      |       2 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiExplanationService.ts`                                     |       2 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiGenerationService.ts`                                      |       4 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiJobsService.ts`                                            |       2 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiPlanEditsService.ts`                                       |       6 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiSprintPlanningService.ts`                                  |       2 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/aiUsageService.ts`                                           |       5 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/billingService.ts`                                           |       3 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `lib/services/ciActionsGateService.ts`                                     |       5 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `lib/services/ciAllowanceService.ts`                                       |       5 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `lib/services/ciFleetCostMeterService.ts`                                  |       6 | comment only                                                                           |
+| `lib/services/ciMinutesMeterService.ts`                                    |       5 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `lib/services/ciRunnerAdmissionService.ts`                                 |       1 | comment only                                                                           |
+| `lib/services/ciRunnerProvisioningService.ts`                              |       1 | comment only                                                                           |
+| `lib/services/codeGraphIndexAdmissionService.ts`                           |       2 | comment only                                                                           |
+| `lib/services/codeGraphIndexDispatchService.ts`                            |       5 | comment only                                                                           |
+| `lib/services/conventionEstablishService.ts`                               |       2 | propagation onto the job-submit tenant envelope                                        |
+| `lib/services/entitlementsService.ts`                                      |       2 | BRANCH file (branch lines listed above; remaining hits are comments, reads and fields) |
+| `lib/services/fleetCeilingService.ts`                                      |       1 | comment only                                                                           |
+| `lib/services/platformBillingClassificationService.ts`                     |       2 | comment only                                                                           |
+| `scripts/plan-seed/seed.ts`                                                |       2 | seed data / comment                                                                    |
+| `scripts/plan-seed/testProject.ts`                                         |       1 | seed data / comment                                                                    |
+| **total**                                                                  | **139** |                                                                                        |
+
+**motir-ai @ `8ca2138`:**
+
+| file                                           |   hits | what they are                                                                    |
+| ---------------------------------------------- | -----: | -------------------------------------------------------------------------------- |
+| `src/creditKinds.ts`                           |      1 | comment only                                                                     |
+| `src/envelope.ts`                              |      9 | envelope type + wire parsing (a type check on the raw value, not a policy)       |
+| `src/jobs/planJobService.ts`                   |      2 | flag sync from core (a no-op-if-equal compare, not a policy)                     |
+| `src/jobs/worker.ts`                           |      4 | BRANCH file (branch line listed above; remaining hits are the type and the read) |
+| `src/repositories/aiOrganizationRepository.ts` |      1 | flag sync from core (a no-op-if-equal compare, not a policy)                     |
+| `src/seed/dogfoodDirectionDocs.ts`             |      2 | seed data / comment                                                              |
+| `src/seed/seedBaseLessons.ts`                  |      1 | seed data / comment                                                              |
+| `src/seed/testProjectPreplan.ts`               |      1 | seed data / comment                                                              |
+| `src/services/aiOrganizationService.ts`        |      5 | flag sync from core (a no-op-if-equal compare, not a policy)                     |
+| `src/services/gatewaySyncService.ts`           |      1 | BRANCH file (branch line listed above; remaining hits are the type and the read) |
+| `src/services/orgReconciliationService.ts`     |      3 | operator report field                                                            |
+| **total**                                      | **30** |                                                                                  |
