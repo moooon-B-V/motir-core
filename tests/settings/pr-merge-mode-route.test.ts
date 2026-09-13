@@ -139,6 +139,32 @@ describe('PATCH /api/projects/[key]/pr-merge-mode', () => {
     expect(res.status).toBe(400);
   });
 
+  it('a JSON `null` body carries no mode, so it is refused as an invalid value', async () => {
+    const s = await seed('null-body');
+    actAs(s.owner);
+    const res = await PATCH(patch('null'), params(s.project.identifier));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'INVALID_PR_MERGE_MODE' });
+  });
+
+  it('an unauthenticated request is answered by the compliance gate, before any lookup', async () => {
+    const refusal = Response.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: false, response: refusal });
+    const res = await PATCH(patch({ prMergeMode: 'auto' }), params('ANY'));
+    expect(res).toBe(refusal);
+  });
+
+  it('an error the route does not map is rethrown, not swallowed into a status', async () => {
+    const s = await seed('rethrow');
+    actAs(s.owner);
+    const boom = new Error('boom');
+    const spy = vi.spyOn(projectsService, 'getByKey').mockRejectedValueOnce(boom);
+    await expect(PATCH(patch({ prMergeMode: 'auto' }), params(s.project.identifier))).rejects.toBe(
+      boom,
+    );
+    spy.mockRestore();
+  });
+
   it('an unknown project key is a 404', async () => {
     const s = await seed('unknown');
     actAs(s.owner);

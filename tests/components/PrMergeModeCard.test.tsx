@@ -129,6 +129,19 @@ describe('PrMergeModeCard — the #merge-mode deep link (panel 8)', () => {
     expect(card.className).not.toContain('ring-2');
   });
 
+  it('moving focus INSIDE the card keeps the arrival ring; leaving it clears the ring', async () => {
+    window.location.hash = '#merge-mode';
+    const { container } = renderCard('manual');
+    const card = container.querySelector('#merge-mode') as HTMLElement;
+    await waitFor(() => expect(document.activeElement).toBe(card));
+
+    act(() => option(AUTO).focus());
+    expect(card.className).toContain('ring-2');
+
+    act(() => option(AUTO).blur());
+    expect(card.className).not.toContain('ring-2');
+  });
+
   it('without the anchor, nothing is focused and no ring is drawn', () => {
     const { container } = renderCard('manual');
     const card = container.querySelector('#merge-mode') as HTMLElement;
