@@ -27,6 +27,7 @@ import {
   dispatchRunCardSchema,
   dispatchRunCloseBodySchema,
   dispatchRunCloseOutPromptSchema,
+  currentTestInstructionsSchema,
   dispatchRunOpenBodySchema,
   dispatchRunOpenedSchema,
   dispatchRunSchema,
@@ -835,6 +836,36 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // 404 for an unknown or cross-workspace run; 422 for a run with no run target.
     errorStatuses: [404, 422],
   }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/how-to-test',
+    operationId: 'getWorkItemHowToTest',
+    summary: 'Get a run target’s current How to test',
+    description:
+      'The CURRENT How-to-test record on a work item — the one the newest run published onto ' +
+      'its run target: the precondition, ONE click-path (or why there is none), the preview ' +
+      'path, and a section per repository with its commit and setup commands. `record` is ' +
+      '`null` when no run has written one. A CLI renders it into the `## How to test` section ' +
+      'of each session pull request body, so the body and the item page show one record. ' +
+      'A read.',
+    permission: 'project:browse',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: currentTestInstructionsSchema },
+      description: 'The current record, or `record: null`.',
+    },
+    // 404 for an unknown or unreachable item; 422 for a malformed key.
+    errorStatuses: [404, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -854,4 +885,5 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchRunOpened: dispatchRunOpenedSchema,
   DispatchRunAppended: dispatchRunAppendedSchema,
   DispatchRunCloseOutPrompt: dispatchRunCloseOutPromptSchema,
+  CurrentTestInstructions: currentTestInstructionsSchema,
 };

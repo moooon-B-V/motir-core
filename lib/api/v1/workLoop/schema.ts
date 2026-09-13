@@ -10,6 +10,7 @@ import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
+import type { CurrentTestInstructionsDTO } from '@/lib/dto/testInstructions';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
 // The v1 WORK-LOOP resources, declared once (Story 11.7 · Subtask 11.7.3 —
@@ -1898,5 +1899,64 @@ export function presentDispatchRunCloseOutPrompt(
     targetKey: dto.targetKey,
     prompt: dto.prompt,
     landedKeys: [...dto.landedKeys],
+  };
+}
+
+/**
+ * A run target's CURRENT How-to-test record (Story MOTIR-4906 · MOTIR-5358) — one
+ * per run: one click-path, the precondition, and a section per repository.
+ */
+export const currentTestInstructionsSchema = z.object({
+  key: workItemKeySchema,
+  /** Null when no run has written How to test onto this item. */
+  record: z
+    .object({
+      /** The dispatch run that wrote it, when one did. */
+      dispatchRunId: z.string().nullable(),
+      createdAt: z.string(),
+      preconditionMd: z.string().nullable(),
+      clickPathSteps: z.array(z.string()),
+      clickPathNotApplicable: z.boolean(),
+      clickPathNotApplicableReason: z.string().nullable(),
+      previewPath: z.string().nullable(),
+      repos: z.array(
+        z.object({
+          /** `owner/name`, or null when the repository is no longer the project's. */
+          repo: z.string().nullable(),
+          commitSha: z.string(),
+          setupCommands: z.array(z.object({ label: z.string(), command: z.string() })),
+        }),
+      ),
+    })
+    .nullable(),
+});
+export type V1CurrentTestInstructions = z.infer<typeof currentTestInstructionsSchema>;
+
+/** Map the current record to the wire — field by field; the internal ids stay off it. */
+export function presentCurrentTestInstructions(
+  dto: CurrentTestInstructionsDTO,
+): V1CurrentTestInstructions {
+  const record = dto.record;
+  return {
+    key: dto.workItemKey,
+    record: record
+      ? {
+          dispatchRunId: record.dispatchRunId,
+          createdAt: record.createdAt,
+          preconditionMd: record.preconditionMd,
+          clickPathSteps: [...record.clickPathSteps],
+          clickPathNotApplicable: record.clickPathNotApplicable,
+          clickPathNotApplicableReason: record.clickPathNotApplicableReason,
+          previewPath: record.previewPath,
+          repos: record.repos.map((section) => ({
+            repo: section.repoName,
+            commitSha: section.commitSha,
+            setupCommands: section.setupCommands.map((c) => ({
+              label: c.label,
+              command: c.command,
+            })),
+          })),
+        }
+      : null,
   };
 }

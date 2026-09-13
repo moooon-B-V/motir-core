@@ -574,6 +574,24 @@ describe('every operation’s REAL response validates against its declared schem
       send('/api/v1/scope-claims', 'POST', { kind: 'work_item', key: scopeRoot }),
     );
 
+    // ── HOW TO TEST (Story MOTIR-4906 · MOTIR-5358) ───────────────────────────
+    // On an item no run has published to: `record: null` is the answer shape a
+    // CLI most often reads, and it still has to parse.
+    //
+    // ⚠️ THE WINDOW IS RESET HERE. This suite drives every operation through ONE
+    // token inside one rate-limit window, and the operation count has reached
+    // the per-window budget: without a reset, the LAST drive (the activity read)
+    // answers 429 and fails a schema check it has nothing to do with. What this
+    // file asserts is response SHAPES, not the limiter, which has its own suite.
+    resetRateLimitStore();
+    const howToTestItem = await createItem('An item nobody wrote How to test for');
+    await drive(
+      'getWorkItemHowToTest',
+      () => import('@/app/api/v1/work-items/[key]/how-to-test/route'),
+      send(`/api/v1/work-items/${howToTestItem}/how-to-test`, 'GET'),
+      { key: howToTestItem },
+    );
+
     // ── The DISPATCH RUN ingest (Story MOTIR-1789 · MOTIR-1792) ────────────
     // All three in ORDER on ONE run, because they are a lifecycle rather than
     // three independent endpoints: the append needs an open run and the close

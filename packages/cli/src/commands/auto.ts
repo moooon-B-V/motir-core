@@ -1,3 +1,4 @@
+import type { HowToTestForBody } from '../closeOutHowToTest.js';
 import { CliError, ContainerHasOpenChildrenError, PlanNotDecidableError } from '../errors.js';
 import { info } from '../output.js';
 import { createLegLogTee } from '../agentLogTee.js';
@@ -1765,6 +1766,12 @@ export function closeOutRepos(
    * missing — and the work gets CI, which the hold denied it.
    */
   open: { containerKey: string; openChildren: readonly string[] } | null = null,
+  /**
+   * The run's HOW TO TEST (MOTIR-5358) — its run target and the record the
+   * close-out step read back — rendered as each body's `## How to test` section.
+   * Omitted by `motir auto`, which has no run target.
+   */
+  howToTest?: HowToTestForBody,
 ): void {
   const outstanding = open && open.openChildren.length > 0 ? open : null;
   if (outstanding) {
@@ -1774,7 +1781,7 @@ export function closeOutRepos(
     };
   }
   for (const repo of summary.repos) {
-    const report = closeOutRepo(summary, repo, run, outstanding);
+    const report = closeOutRepo(summary, repo, run, outstanding, howToTest);
     summary.prs.push(report);
   }
 }
@@ -1784,6 +1791,7 @@ function closeOutRepo(
   repo: RepoSession,
   run: CommandRunner,
   outstanding: { containerKey: string; openChildren: readonly string[] } | null,
+  howToTest?: HowToTestForBody,
 ): PrReport {
   const base = { repoName: repo.repoName, branch: repo.branch };
   try {
@@ -1820,6 +1828,7 @@ function closeOutRepo(
           repo.branch,
           mine,
           sessionBranchCommits(repo.cwd, repo.branch, run),
+          howToTest ? { ...howToTest, repoName: repo.repoName } : undefined,
         ),
       },
       run,
@@ -1843,6 +1852,7 @@ function closeOutRepo(
             repo.branch,
             mine,
             sessionBranchCommits(repo.cwd, repo.branch, run),
+            howToTest ? { ...howToTest, repoName: repo.repoName } : undefined,
           ),
         },
         run,

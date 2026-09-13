@@ -9,8 +9,10 @@ import {
 import { testInstructionsRepoRepository } from '@/lib/repositories/testInstructionsRepoRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import type {
+  CurrentTestInstructionsDTO,
   PublishTestInstructionsResultDTO,
   SetupCommandDTO,
   TestInstructionsDTO,
@@ -434,6 +436,43 @@ export const testInstructionsService = {
     } catch (err) {
       throw translateTestInstructionsConflict(err, input.workItemId);
     }
+  },
+
+  /**
+   * The CURRENT record for a run target named by its KEY, with each section's
+   * repository `owner/name` — the public read a CLI renders into a session pull
+   * request body (MOTIR-5358). `record: null` when no run has written one.
+   * Requires `project:browse` on the item's project.
+   */
+  async getCurrentByIdentifier(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<CurrentTestInstructionsDTO> {
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+    const record = await this.getCurrentForWorkItem(item.id, ctx);
+    if (!record) return { workItemKey: item.identifier, record: null };
+    const repos = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
+    );
+    const nameOf = new Map(
+      repos.flatMap((row) =>
+        row.githubRepo
+          ? [[row.githubRepo.id, `${row.githubRepo.owner}/${row.githubRepo.name}`]]
+          : [],
+      ),
+    );
+    return {
+      workItemKey: item.identifier,
+      record: {
+        ...record,
+        repos: record.repos.map((section) => ({
+          ...section,
+          repoName: nameOf.get(section.repoId) ?? null,
+        })),
+      },
+    };
   },
 
   /**

@@ -1,3 +1,4 @@
+import type { HowToTestRecord } from './client.js';
 import { formatTable, truncate } from './render.js';
 import type { SessionCommit } from './git.js';
 
@@ -498,6 +499,13 @@ export function renderSessionPrBody(
   branch: string,
   records: DispatchRecord[],
   commits: SessionCommit[] = [],
+  /**
+   * The run's HOW TO TEST (MOTIR-5358) — the run target and its current record,
+   * rendered as this body's `## How to test` section for THIS repository. Omitted
+   * for a run with no run target (`motir auto`), whose cards each published their
+   * own and whose body keeps its old shape.
+   */
+  howToTest?: { targetKey: string; record: HowToTestRecord | null; repoName: string | null },
 ): string {
   const carried = records.filter(landedWork);
   const failed = records.filter((r) => r.outcome === 'failed');
@@ -523,6 +531,8 @@ export function renderSessionPrBody(
     }
   }
 
+  if (howToTest) lines.push('', ...renderHowToTestSection(howToTest, branch));
+
   if (failed.length > 0) {
     lines.push(
       '',
@@ -546,6 +556,65 @@ export function renderSessionPrBody(
     'Review — flip them back or re-dispatch them.',
   );
   return lines.join('\n');
+}
+
+/**
+ * The `## How to test` section of a session pull request body (Story MOTIR-4906 ·
+ * MOTIR-5358), rendered from the run target's CURRENT record — the same record
+ * the item page shows, so the two cannot disagree. §9's 2026-09-13 amendment
+ * keeps this section in the body; the record is what Motir renders, the body is
+ * what a reviewer on the host reads.
+ *
+ * Only THIS repository's section of the record is rendered: a two-repository run
+ * publishes one record, and each pull request shows its own setup. The
+ * precondition and the click-path are the run's, so every body carries them.
+ */
+export function renderHowToTestSection(
+  howToTest: { targetKey: string; record: HowToTestRecord | null; repoName: string | null },
+  branch: string,
+): string[] {
+  const { targetKey, record, repoName } = howToTest;
+  if (!record) {
+    return [
+      '## How to test',
+      '',
+      `No run has written How to test onto ${targetKey} — nothing to follow here yet.`,
+    ];
+  }
+  const matches = (repo: string | null) =>
+    repo !== null &&
+    repoName !== null &&
+    (repo.toLowerCase() === repoName.toLowerCase() ||
+      repo.toLowerCase().endsWith(`/${repoName.toLowerCase()}`));
+  const section =
+    record.repos.find((r) => matches(r.repo)) ??
+    (record.repos.length === 1 ? record.repos[0] : undefined);
+
+  const lines = ['## How to test', '', `Written onto ${targetKey} by the run.`];
+  if (record.preconditionMd) lines.push('', `**Precondition.** ${record.preconditionMd}`);
+  lines.push(
+    '',
+    '**Locally**',
+    '',
+    '```sh',
+    `git fetch origin ${branch} && git checkout ${branch}`,
+  );
+  for (const step of section?.setupCommands ?? []) lines.push(`${step.command}  # ${step.label}`);
+  lines.push('```');
+  if (!section) {
+    lines.push('', `_The record has no section for this repository._`);
+  }
+  if (record.clickPathNotApplicable) {
+    lines.push('', `**Click-path.** Not applicable — ${record.clickPathNotApplicableReason ?? ''}`);
+  } else {
+    lines.push(
+      '',
+      `**Click-path**${record.previewPath ? ` (open \`${record.previewPath}\`)` : ''}`,
+      '',
+    );
+    record.clickPathSteps.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+  }
+  return lines;
 }
 
 const SUMMARY_HEADERS = ['ITEM', 'OUTCOME', 'TIME', 'BRANCH', 'TITLE'];

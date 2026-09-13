@@ -447,6 +447,26 @@ export function isReferenceAdvisory(a: DispatchAdvisory): a is DispatchReference
   return a.kind === undefined || a.kind === 'reference';
 }
 
+/**
+ * A run target's current HOW TO TEST record (MOTIR-5358) — one per run: one
+ * click-path, the precondition, and a section per repository (`repo` is
+ * `owner/name`).
+ */
+export interface HowToTestRecord {
+  dispatchRunId: string | null;
+  createdAt: string;
+  preconditionMd: string | null;
+  clickPathSteps: string[];
+  clickPathNotApplicable: boolean;
+  clickPathNotApplicableReason: string | null;
+  previewPath: string | null;
+  repos: {
+    repo: string | null;
+    commitSha: string;
+    setupCommands: { label: string; command: string }[];
+  }[];
+}
+
 /** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt
  * text plus the facts the CLI routes on before it runs the agent. */
 export interface DispatchPrompt {
@@ -1804,6 +1824,28 @@ export class MotirClient {
         body: { events: args.events },
       }),
     );
+  }
+
+  /**
+   * The run's CLOSE-OUT prompt (MOTIR-5357) — the text a scoped run hands ONE
+   * agent before marking its pull requests ready, so HOW TO TEST is written onto
+   * the run target. The server resolves the target and the landed cards from the
+   * run's own record; this names only the run.
+   */
+  async dispatchRunCloseOutPrompt(
+    runId: string,
+  ): Promise<{ targetKey: string; prompt: string; landedKeys: string[] }> {
+    const body = await this.v1.request('getDispatchRunCloseOutPrompt', { path: { id: runId } });
+    return { targetKey: body.targetKey, prompt: body.prompt, landedKeys: [...body.landedKeys] };
+  }
+
+  /**
+   * A run target's CURRENT How-to-test record (MOTIR-5358), or `null` when no
+   * run has written one — rendered into each session pull request body.
+   */
+  async workItemHowToTest(key: string): Promise<HowToTestRecord | null> {
+    const body = await this.v1.request('getWorkItemHowToTest', { path: { key } });
+    return body.record;
   }
 
   /** CLOSE the run with its stop reason. The status is DERIVED server-side. */

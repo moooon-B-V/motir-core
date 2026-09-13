@@ -51,3 +51,17 @@ export interface PublishTestInstructionsResultDTO {
   /** False when an identical record for the same run already existed (a retry). */
   created: boolean;
 }
+
+/**
+ * A run target's CURRENT record as the public read answers it (MOTIR-5358) — each
+ * section carrying the repository's `owner/name`, so a CLI can render the section
+ * belonging to the repository whose pull request body it is writing.
+ */
+export interface CurrentTestInstructionsDTO {
+  workItemKey: string;
+  record:
+    | (Omit<TestInstructionsDTO, 'repos'> & {
+        repos: Array<TestInstructionsRepoDTO & { repoName: string | null }>;
+      })
+    | null;
+}

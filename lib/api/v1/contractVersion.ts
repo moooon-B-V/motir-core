@@ -370,5 +370,12 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.26.0` at the branch point, so this claims `1.27.0`. If a sibling has
  *   taken it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.28.0` — MOTIR-5358 adds `getWorkItemHowToTest`
+ *   (`GET /api/v1/work-items/{key}/how-to-test`): a run target's CURRENT
+ *   How-to-test record, each repository section named `owner/name`, so the CLI
+ *   renders the `## How to test` section of a session pull request body from the
+ *   same record the item page shows. Additive: ONE new operation; gated on
+ *   `project:browse`. Same re-read-before-merge rule as `1.27.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.27.0';
+export const V1_CONTRACT_VERSION = '1.28.0';
