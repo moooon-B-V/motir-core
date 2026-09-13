@@ -45,9 +45,9 @@ describe('ProjectDTO.prMergeMode', () => {
     const { project } = await tenant();
     const row = await adminDb.project.update({
       where: { id: project.id },
-      data: { prMergeMode: 'review_on_fail' },
+      data: { prMergeMode: 'auto' },
     });
-    expect(toProjectDTO(row).prMergeMode).toBe('review_on_fail');
+    expect(toProjectDTO(row).prMergeMode).toBe('auto');
   });
 });
 
@@ -107,7 +107,7 @@ describe('the project-scoped read and write', () => {
   it('refuses a value outside the vocabulary before touching anything', async () => {
     const { project, ownerCtx } = await tenant();
     await expect(
-      projectPrMergeModeService.setPrMergeMode(project.id, 'sometimes', ownerCtx),
+      projectPrMergeModeService.setPrMergeMode(project.id, 'review_on_fail', ownerCtx),
     ).rejects.toBeInstanceOf(InvalidPrMergeModeError);
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
     expect(row.prMergeModeDecidedAt).toBeNull();

@@ -822,11 +822,11 @@ happened. That guard is a sibling story, not this record's to ship.
 - Both are nearly free **today**: the column has no functional reader, and will
   have one the moment §4 ships.
 
-| value                | behaviour                                                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`manual`**         | a `pull_request_merge` gate IS created; a person decides it. The default for a project whose repositories are imported                                             |
-| **`auto`**           | **no gate is created.** The default for a project established with Motir-hosted repositories                                                                       |
-| **`review_on_fail`** | **RESERVED and UNIMPLEMENTED.** It behaves as `manual`. Stated here rather than left to be discovered; the enum value ships to avoid a later Postgres enum `ALTER` |
+| value                    | behaviour                                                                                                                                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`manual`**             | a `pull_request_merge` gate IS created; a person decides it. The default for a project whose repositories are imported                                                                                                             |
+| **`auto`**               | **no gate is created.** The default for a project established with Motir-hosted repositories                                                                                                                                       |
+| ~~**`review_on_fail`**~~ | ~~**RESERVED and UNIMPLEMENTED.** It behaves as `manual`. Stated here rather than left to be discovered; the enum value ships to avoid a later Postgres enum `ALTER`~~ — **RETIRED 2026-09-13, see the amendment below (point 4)** |
 
 **The DEFAULT is derived from repository PROVENANCE, and it is a default rather
 than a law.** A project established with Motir-hosted repositories seeds `auto`;
@@ -843,8 +843,7 @@ diff can reach the switch that stops asking them.
 §7 above decides the rename, the tier and that the default follows provenance.
 It left three things unsaid, and Story MOTIR-4880's cards build on all three.
 They are settled here, so every card reads one record rather than three plan
-summaries. **Nothing above is struck:** the value table stands as written, and
-`review_on_fail` is still RESERVED and UNIMPLEMENTED, behaving as `manual`.
+summaries. **One row above is struck**: `review_on_fail` is retired (point 4).
 
 **1. The default is written at ESTABLISHMENT, not at `project.create`.** A
 project row exists before it has any repositories. `projectRepository`'s create
@@ -925,6 +924,25 @@ The phases:
 | **3**   | the column is dropped                                                                                                                                          |
 
 Releases 2 and 3 are Story **MOTIR-5175**, `blocked_by` MOTIR-4880.
+
+**4. `review_on_fail` is RETIRED, not reserved (Yue, 2026-09-13).** Only a
+**green** pull request is ever a merge candidate, in every mode. A red pull
+request never reaches In Review: it belongs to the run's fix loop, and when that
+loop gives up the work item is stuck, which is not an approval. So a mode that
+"asks when checks fail" would put a merge approval on broken code, and no
+meaning survives its name. The reason it was reserved had the cost backwards:
+adding a Postgres enum value later is a cheap `ALTER TYPE … ADD VALUE`, and
+**removing** one is the expensive direction.
+
+- `PrMergeMode` is `auto | manual`. The migration that renames the type
+  (`20260913120000_project_pr_merge_mode`) rebuilds it without the retired
+  member, mapping any workspace that held it to `manual`, which is how it
+  behaved.
+- The two modes, stated against the lifecycle: **`manual`** — a person approves
+  a green pull request before it merges; **`auto`** — Motir merges a green pull
+  request with no gate.
+- A future mode that needs a third value (e.g. _merge automatically unless the
+  run had to repair its own checks_) is added then, as its own decision.
 
 #### 7a. What the audit trail says when `auto` means no gate — DECIDED BY THE PLANNER (rung: Yue's own §6c principle)
 

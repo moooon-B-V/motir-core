@@ -67,10 +67,8 @@ export interface ProjectDTO {
    * project-row column, like `accessLevel`) so the settings room and, later, the
    * merge gate read it off the active-project context WITHOUT a second round-trip.
    *
-   * - `manual` — a person decides each merge.
-   * - `auto` — Motir merges with no approval asked.
-   * - `review_on_fail` — RESERVED and UNIMPLEMENTED: it behaves exactly as
-   *   `manual`, and the surface must say so rather than let it be discovered.
+   * - `manual` — a person approves each green pull request before it merges.
+   * - `auto` — Motir merges a green pull request with no approval asked.
    *
    * It REPLACED the workspace-tier merge field, which no DTO carries any more.
    */
@@ -102,12 +100,8 @@ export interface PreviousKeyDTO {
   retiredAt: string;
 }
 
-/** The three merge modes (`approval-gates.md` §7), as they cross the DTO boundary. */
-export type PrMergeModeValue = 'auto' | 'manual' | 'review_on_fail';
+/** The two merge modes (`approval-gates.md` §7), as they cross the DTO boundary. */
+export type PrMergeModeValue = 'auto' | 'manual';
 
 /** Every merge mode, in the order a surface lists them. */
-export const PR_MERGE_MODE_VALUES: readonly PrMergeModeValue[] = [
-  'manual',
-  'auto',
-  'review_on_fail',
-];
+export const PR_MERGE_MODE_VALUES: readonly PrMergeModeValue[] = ['manual', 'auto'];

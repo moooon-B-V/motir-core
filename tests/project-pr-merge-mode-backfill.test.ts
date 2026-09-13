@@ -31,15 +31,15 @@ const MIGRATION = path.join(
   'prisma/migrations/20260913120000_project_pr_merge_mode/migration.sql',
 );
 
-/** The migration's top-level statements, comments stripped, in file order. The
- *  `DO $$ … $$` block carries inner semicolons, so it is dropped before splitting
- *  — it renames the type and has already run on the test database. */
+/** The migration's top-level statements, comments stripped, in file order. The two
+ *  `DO $$ … $$` blocks carry inner semicolons, so they are dropped before splitting
+ *  — they rename and rebuild the type, and have already run on the test database. */
 function migrationStatements(): string[] {
   return readFileSync(MIGRATION, 'utf8')
     .split('\n')
     .filter((line) => !line.trimStart().startsWith('--'))
     .join('\n')
-    .replace(/DO \$\$[\s\S]*?\$\$;/, '')
+    .replace(/DO \$\$[\s\S]*?END \$\$;/g, '')
     .split(';')
     .map((s) => s.trim())
     .filter(Boolean);
@@ -183,12 +183,28 @@ describe('Project.prMergeMode inherits its workspace value', () => {
     expect((await stored(project.id)).prMergeModeDecidedAt).toEqual(first);
   });
 
-  it('the migration renames the type in place rather than creating a second one', () => {
+  it('the migration renames the type in place, then rebuilds it without `review_on_fail`', () => {
     const sql = readFileSync(MIGRATION, 'utf8');
     expect(sql).toMatch(/ALTER TYPE "subtask_pr_merge_mode" RENAME TO "pr_merge_mode"/);
-    expect(sql).not.toMatch(/CREATE TYPE/);
-    // The rename precedes the column that references the renamed type.
-    expect(sql.indexOf('RENAME TO')).toBeLessThan(sql.indexOf('ADD COLUMN'));
+    // The retirement maps the retired value to `manual` BEFORE the type swap, so a
+    // workspace holding it keeps the behaviour it already had.
+    const retire = sql.indexOf(`SET "subtaskPrMergeMode" = 'manual'`);
+    expect(retire).toBeGreaterThan(sql.indexOf('RENAME TO "pr_merge_mode"'));
+    expect(retire).toBeLessThan(
+      sql.indexOf(`CREATE TYPE "pr_merge_mode_v2" AS ENUM ('auto', 'manual')`),
+    );
+    // …and it all happens before the project column is added, so one column moves.
+    expect(sql.indexOf('DROP TYPE "pr_merge_mode"')).toBeLessThan(
+      sql.indexOf('ALTER TABLE "project" ADD COLUMN'),
+    );
+  });
+
+  it('the deployed type carries exactly the two live members', async () => {
+    const rows = await adminDb.$queryRawUnsafe<Array<{ enumlabel: string }>>(
+      `SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'pr_merge_mode' ORDER BY e.enumsortorder`,
+    );
+    expect(rows.map((r) => r.enumlabel)).toEqual(['auto', 'manual']);
   });
 });
 

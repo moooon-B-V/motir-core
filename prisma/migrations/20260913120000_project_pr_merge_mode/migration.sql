@@ -8,8 +8,14 @@
 --
 -- 1. The enum is RENAMED IN PLACE, before the column is added, so the new column
 --    references the renamed type and the workspace column keeps pointing at the same
---    one. One type, two columns, for the length of the expand window. No member is
---    added, removed or renamed.
+--    one. One type, two columns, for the length of the expand window.
+-- 1b. ⚠️ AND ITS RESERVED `review_on_fail` MEMBER IS RETIRED (Yue, 2026-09-13). Only a
+--    GREEN pull request is ever a merge candidate, so no meaning survives for "ask
+--    when checks fail". It was reserved "to avoid a later enum ALTER", which had the
+--    cost backwards: `ADD VALUE` is cheap, and removing a value is this block. Postgres
+--    cannot drop an enum member, so the type is rebuilt with `auto` and `manual` only.
+--    Any workspace holding the retired value is mapped to `manual`, which is exactly
+--    how it behaved. It runs before the project column exists, so one column moves.
 -- 2. `project.pr_merge_mode` is added with `manual` as a FLOOR. The provenance default
 --    cannot be a column default — a project exists before it has repositories — and is
 --    written at establishment by application code (MOTIR-5178).
@@ -32,6 +38,37 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'subtask_pr_merge_mode')
      AND NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'pr_merge_mode') THEN
     ALTER TYPE "subtask_pr_merge_mode" RENAME TO "pr_merge_mode";
+  END IF;
+END $$;
+
+-- 1b. Retire `review_on_fail`: rebuild the type with the two live members.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+     WHERE t.typname = 'pr_merge_mode' AND e.enumlabel = 'review_on_fail'
+  ) THEN
+    UPDATE "workspace" SET "subtaskPrMergeMode" = 'manual'
+     WHERE "subtaskPrMergeMode" = 'review_on_fail';
+    CREATE TYPE "pr_merge_mode_v2" AS ENUM ('auto', 'manual');
+    ALTER TABLE "workspace" ALTER COLUMN "subtaskPrMergeMode" DROP DEFAULT;
+    ALTER TABLE "workspace" ALTER COLUMN "subtaskPrMergeMode" TYPE "pr_merge_mode_v2"
+      USING ("subtaskPrMergeMode"::text::"pr_merge_mode_v2");
+    ALTER TABLE "workspace" ALTER COLUMN "subtaskPrMergeMode" SET DEFAULT 'manual';
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+       WHERE table_name = 'project' AND column_name = 'pr_merge_mode'
+    ) THEN
+      UPDATE "project" SET "pr_merge_mode" = 'manual' WHERE "pr_merge_mode" = 'review_on_fail';
+      ALTER TABLE "project" ALTER COLUMN "pr_merge_mode" DROP DEFAULT;
+      ALTER TABLE "project" ALTER COLUMN "pr_merge_mode" TYPE "pr_merge_mode_v2"
+        USING ("pr_merge_mode"::text::"pr_merge_mode_v2");
+      ALTER TABLE "project" ALTER COLUMN "pr_merge_mode" SET DEFAULT 'manual';
+    END IF;
+    DROP TYPE "pr_merge_mode";
+    ALTER TYPE "pr_merge_mode_v2" RENAME TO "pr_merge_mode";
   END IF;
 END $$;
 

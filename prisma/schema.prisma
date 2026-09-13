@@ -1951,19 +1951,17 @@ enum ProjectAccessLevel {
   @@map("project_access_level")
 }
 
-/// Workspace-level setting controlling whether Subtask PRs auto-merge into
-/// the Story branch. Defaults to `manual` (developer-friendly review flow).
-/// `review_on_fail` is reserved for a later Story that ships the CI-driven
-/// gate; shipping the enum value now avoids a Postgres enum ALTER later.
 /// How a project's pull requests are merged (`docs/decisions/approval-gates.md`
-/// §7). `manual` — a person decides the merge; `auto` — Motir merges with no
-/// gate; `review_on_fail` — RESERVED and UNIMPLEMENTED, behaves as `manual`.
-/// Renamed in place from the `subtask_pr_merge_mode` type (`ALTER TYPE … RENAME`), because a
-/// pull request is no longer a subtask's: a parent run opens one for a story.
+/// §7). `manual` — a person approves a GREEN pull request before it merges;
+/// `auto` — Motir merges a green pull request with no gate. A red pull request is
+/// never a merge candidate in either mode. Renamed in place from the
+/// `subtask_pr_merge_mode` type, because a pull request is no longer a subtask's.
+/// The reserved `review_on_fail` value was RETIRED (MOTIR-4880, 2026-09-13): no
+/// meaning survives the rule that only a green pull request is merged, and adding
+/// an enum value later is a cheap `ADD VALUE` while removing one is not.
 enum PrMergeMode {
   auto
   manual
-  review_on_fail
 
   @@map("pr_merge_mode")
 }
