@@ -268,3 +268,35 @@ test('a hidden destination refuses a VIEWER the same way, per destination', asyn
     await expect(page.getByText(description), href).toBeVisible();
   }
 });
+
+// MOTIR-5319 — THE DOOR GOES WHERE THE ACTOR CAN GO. The door's visibility was
+// always view-gated, but its `href` was the Details room for everyone, and Details
+// is `project:administer`. So a hand-composed role that opens SOME room but not
+// Details got a door that landed on `Admins only`. These walk the door as two such
+// roles and PRESS it, because the defect was never the href string — it was the
+// page a person arrived on.
+const partialDoors: [string, keyof PermissionGatedSeed, string, string][] = [
+  ['`board:configure`', 'boardsOnlyEmail', '/settings/project/board', 'Boards'],
+  // `workflow:manage` opens Workflow AND Approvals; Workflow is first in the rail.
+  ['`workflow:manage`', 'workflowOnlyEmail', '/settings/project/workflow', 'Workflow'],
+];
+for (const [held, persona, href, room] of partialDoors) {
+  test(`a PARTIAL role on ${held} presses the door and lands in ${room}, not on \`Admins only\``, async ({
+    page,
+  }) => {
+    await enterShellAs(page, seed[persona]);
+
+    await expect(settingsDoor(page)).toHaveAttribute('href', href);
+    await settingsDoor(page).click();
+    await page.waitForURL(`**${href}`);
+
+    // The room it arrived in is the one the rail marks current…
+    await expect(settingsRail(page).getByRole('link', { name: room })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    // …and it is a room, not the refusal the old destination produced.
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toHaveCount(0);
+    await expect(settingsRail(page).getByRole('link', { name: 'Details' })).toHaveCount(0);
+  });
+}
