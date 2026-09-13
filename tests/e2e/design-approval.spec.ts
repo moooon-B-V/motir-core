@@ -1,4 +1,4 @@
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn, startSignedOut } from './_helpers/shell-session';
 import {
@@ -11,8 +11,22 @@ import {
   type DesignApprovalSeed,
 } from './_helpers/design-approval-seed';
 
-// THE ACCEPTANCE RECEIPT FOR APPROVING A DESIGN THAT HAS NO PULL REQUEST
+// APPROVING A DESIGN THAT HAS NO PULL REQUEST — the story's end-to-end walk
 // (Story MOTIR-4778 · Subtask MOTIR-4797).
+//
+// ⚠️ PROMOTED OUT OF THE ACCEPTANCE LANE (Bug MOTIR-5306, 2026-09-13). This was
+// `acceptance-design-approval.spec.ts`, the story's acceptance RECEIPT. The story
+// is `done`, so its receipt is frozen and — per
+// `docs/decisions/acceptance-receipt-lifecycle.md` §3 — the spec leaves that lane.
+// It is PROMOTED rather than retired because it is the only browser walk of the
+// whole claim (a reader sees no verbs → the routed reviewer approves → the card
+// the design blocked becomes ready); `approval-gate-repaint.spec.ts` covers the
+// repaint alone. Every assertion is kept; the receipt's `chapter()`/`beat()`
+// pacing and `acceptanceStory()` tag are gone (`test.step` keeps the structure),
+// and the one assertion that had gone stale is updated to the product's current
+// copy. It went red on main because MOTIR-5191 made the pending state name its
+// approver — exactly the drift a lane that runs on every PR catches the day it
+// happens, rather than when an unrelated PR next touches the acceptance lane.
 //
 // ════════════════════════════════════════════════════════════════════════════
 // ⚠️ THE CARD'S 2026-09-08 AMENDMENT IS WHAT THIS FILE IS, and it is recorded
@@ -63,18 +77,10 @@ import {
 // piece of work, and the clip's argument is the two item pages either side of
 // one button.
 //
-// ⚠️ THE PACING IS A REQUIREMENT OF THIS CARD, NOT A COURTESY. Acceptance in
-// this project rides the receipt, so a walk that races through the decision
-// proves the code works and shows the reviewer nothing. Every phase is a
-// `chapter()`, which paces itself; the two chapters either side of the button
-// hold an extra `beat()`, because the before/after on the DEPENDENT card is the
-// story's whole claim and it takes a moment to read.
-//
 // DETERMINISM (`motir-core/CLAUDE.md` § E2E): every wait is a rendered landmark
 // or an element's own visible state — the state pill is set from the decide
 // action's AUTHORITATIVE response (`setCurrent(result.gate)`), never
-// optimistically. There is no `waitForTimeout`; the only holds are `chapter()`
-// and `beat()`, which run AFTER each phase has already asserted.
+// optimistically. There is no `waitForTimeout`.
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -89,20 +95,14 @@ test.describe('a published design waits, the control clears it, and the work it 
   test('approving a design on the item page moves the card it was blocking', async ({
     page,
     baseURL,
-    chapter,
-    beat,
-    acceptanceStory,
   }) => {
-    // The receipt belongs to the STORY, not to this subtask.
-    acceptanceStory('MOTIR-4778');
-
     // The published mock's bytes, served at the app's content route so the
     // sandboxed frame can render them — and so the frame offers its verbs at all.
     // The why is at `servePublishedMock`; it moved there with this code so the
     // regression guard shares one copy (MOTIR-5118).
     await servePublishedMock(page);
 
-    await chapter('An agent publishes the design — one call, a bearer, no browser', async () => {
+    await test.step('An agent publishes the design — one call, a bearer, no browser', async () => {
       // The gate is not seeded: publishing is what CREATES it, with its subject
       // pinned to these bytes and its question routed to the card's assignee.
       const client = await openAgentSession(seed.token, baseURL!);
@@ -111,29 +111,24 @@ test.describe('a published design waits, the control clears it, and the work it 
       await client.close();
     });
 
-    await chapter(
-      'The work waiting on it cannot start — and says what it is waiting for',
-      async () => {
-        await signIn(page, seed.reviewerEmail, seed.password);
-        await page.goto(`/items/${seed.dependentKey}`);
-        await expect(page.getByRole('heading', { name: seed.dependentTitle })).toBeVisible();
-        // The readiness banner, in its BLOCKED arm, naming the design card by key.
-        // This is the "before" half of the story's whole claim.
-        await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
-        await expect(page.getByText('Waiting on 1 work item')).toBeVisible();
-        // ⚠️ `.first()` because the key is a link TWICE on this page — once in
-        // the readiness banner's blocker list (`ReadinessBadge`) and once as
-        // the blocked-by row in the relationships panel. Both are correct
-        // evidence that this card names its blocker, and an unqualified
-        // `getByRole` is a strict-mode violation rather than a stronger
-        // assertion.
-        await expect(page.getByRole('link', { name: seed.designKey }).first()).toBeVisible();
-        await beat();
-        await beat();
-      },
-    );
+    await test.step('The work waiting on it cannot start — and says what it is waiting for', async () => {
+      await signIn(page, seed.reviewerEmail, seed.password);
+      await page.goto(`/items/${seed.dependentKey}`);
+      await expect(page.getByRole('heading', { name: seed.dependentTitle })).toBeVisible();
+      // The readiness banner, in its BLOCKED arm, naming the design card by key.
+      // This is the "before" half of the story's whole claim.
+      await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
+      await expect(page.getByText('Waiting on 1 work item')).toBeVisible();
+      // ⚠️ `.first()` because the key is a link TWICE on this page — once in
+      // the readiness banner's blocker list (`ReadinessBadge`) and once as
+      // the blocked-by row in the relationships panel. Both are correct
+      // evidence that this card names its blocker, and an unqualified
+      // `getByRole` is a strict-mode violation rather than a stronger
+      // assertion.
+      await expect(page.getByRole('link', { name: seed.designKey }).first()).toBeVisible();
+    });
 
-    await chapter('A reader who may not decide is offered nothing to press', async () => {
+    await test.step('A reader who may not decide is offered nothing to press', async () => {
       // ⚠️ THIS CHAPTER RUNS BEFORE THE DECISION, DELIBERATELY. The absence of
       // controls has to be read off an AWAITING gate — on a decided one every
       // verb is gone from everybody, and the assertion would pass without the
@@ -152,17 +147,18 @@ test.describe('a published design waits, the control clears it, and the work it 
       await expect(page.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
       await expect(page.getByText('Awaiting', { exact: true })).toBeVisible();
       await expect(page.getByRole('heading', { name: NOTE_HEADING })).toBeVisible();
-      await expect(page.getByText("Waiting on this work item's assignee.")).toBeVisible();
+      // Since MOTIR-5191 the pending state NAMES the person it waits on — the
+      // seed's routed reviewer — rather than "this work item's assignee".
+      await expect(page.getByRole('main').getByText('Waiting on Robin Vale.')).toBeVisible();
 
       // ⚠️ ABSENCE, NOT A DISABLED CONTROL — the card asks for exactly this
       // distinction. A disabled button still tells a reader the act is theirs
       // to be denied; the frame simply does not draw a verb it will not honour.
       await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
-      await beat();
     });
 
-    await chapter('The person it was routed to meets the same frame, with its verbs', async () => {
+    await test.step('The person it was routed to meets the same frame, with its verbs', async () => {
       await startSignedOut(page);
       await signIn(page, seed.reviewerEmail, seed.password);
       await page.goto(`/items/${seed.designKey}`);
@@ -186,10 +182,9 @@ test.describe('a published design waits, the control clears it, and the work it 
 
       await expect(page.getByRole('button', { name: 'Request changes' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
-      await beat();
     });
 
-    await chapter('Approve — and the frame says what that will do before it does it', async () => {
+    await test.step('Approve — and the frame says what that will do before it does it', async () => {
       await page.getByRole('button', { name: 'Approve' }).click();
       // The confirm band. Approving is TERMINAL for this kind, which is the
       // whole reason this verb confirms and Request changes does not.
@@ -198,7 +193,6 @@ test.describe('a published design waits, the control clears it, and the work it 
         page.getByText(`move ${seed.designKey} to Done, starting the work items waiting on it.`),
       ).toBeVisible();
       await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
-      await beat();
 
       await page.getByRole('button', { name: 'Yes, Approve' }).click();
 
@@ -210,10 +204,9 @@ test.describe('a published design waits, the control clears it, and the work it 
       // The verbs are gone because the question is answered, not because this
       // reader may not act.
       await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
-      await beat();
     });
 
-    await chapter('The design card is Done, and the record says which version', async () => {
+    await test.step('The design card is Done, and the record says which version', async () => {
       // ⚠️ NO RELOAD — THE DEFECT IT WORKED AROUND IS FIXED (MOTIR-5118). This
       // chapter opened with `await page.reload()` and a block explaining that
       // the in-place refresh does not reach this rail. It does reach it; it was
@@ -231,10 +224,9 @@ test.describe('a published design waits, the control clears it, and the work it 
       // The approval pinned the bytes it was about, so the record can still say
       // WHAT was approved rather than only that something was.
       await expect(page.getByText('Files kept')).toBeVisible();
-      await beat();
     });
 
-    await chapter('And the work it was holding up is ready to start', async () => {
+    await test.step('And the work it was holding up is ready to start', async () => {
       // ⚠️ THE ASSERTION THE WHOLE STORY IS FOR, and the one a
       // plausible-but-wrong build passes without. A gate that recorded an
       // opinion and moved nothing would leave this banner exactly as chapter
@@ -243,8 +235,6 @@ test.describe('a published design waits, the control clears it, and the work it 
       await expect(page.getByRole('heading', { name: seed.dependentTitle })).toBeVisible();
       await expect(page.getByText('All blockers resolved')).toBeVisible();
       await expect(page.getByText('Blocked', { exact: true })).toHaveCount(0);
-      await beat();
-      await beat();
     });
   });
 });

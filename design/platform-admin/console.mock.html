@@ -719,6 +719,43 @@
       .seg-opt.active svg {
         color: var(--el-accent-on-surface);
       }
+      /* MOTIR-4594 rev 2 - a segment carries its row COUNT, and a reason that is not
+         active yet is drawn disabled rather than omitted. The disabled state is carried
+         by its WORDS and the cursor, not by a fainter ink: faint and muted inks fail AA
+         on the segmented surface (tests/design-ink-contrast.test.ts). */
+      .seg-count {
+        margin-left: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .seg-opt.is-disabled {
+        cursor: not-allowed;
+      }
+      .seg-opt.is-disabled .seg-count {
+        font-weight: 500;
+        font-style: italic;
+      }
+      .stopped-tools {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .stopped-tools .stopped-search {
+        max-width: 260px;
+      }
+      .tbl th.sorted {
+        color: var(--el-text-strong);
+      }
+      .tbl th.sorted svg {
+        width: 12px;
+        height: 12px;
+        margin-left: 4px;
+        vertical-align: -2px;
+      }
 
       /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
       .card {
@@ -4776,6 +4813,28 @@
                           <td><span class="muted">Reserved region above.</span></td>
                         </tr>
                         <tr>
+                          <td>
+                            <strong>Index &amp; fleet cost card</strong> — both pools, indexing
+                            state, fleet COGS by workload, token spend
+                          </td>
+                          <td><span class="pill pill-internal">MOTIR-4595</span></td>
+                          <td>
+                            <span class="muted"
+                              >Panel 14. A new card above the reserved rollup; takes none of its
+                              cells.</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Margin ceiling — each org’s distance, and its hard-stop list</td>
+                          <td><span class="pill pill-neutral">MOTIR-5280</span></td>
+                          <td>
+                            <span class="muted"
+                              >Drawn not-yet-active (Panels 13–14) until hard gate B lands.</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
                           <td>Workspace and project drill-down levels</td>
                           <td><span class="pill pill-ws">MOTIR-733</span></td>
                           <td><span class="muted">Not drawn here at all.</span></td>
@@ -5057,6 +5116,782 @@
             Story 10.3 (MOTIR-745) and are not drawn here. When that hash chain lands it extends
             this same table; this control becomes one of its sources.</span
           >
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 13 — MONITORING · INDEX ALLOWANCE (MOTIR-4335 · MOTIR-4594) ════════════════ -->
+    <div class="panel-label">
+      13 · Monitoring · <strong>Index allowance</strong> (MOTIR-4335 · MOTIR-4594) — a NEW section
+      on the SHIPPED Monitoring page, not a segment of the unshipped Usage &amp; cost page (Yue,
+      2026-09-12). The headline is the per-tier CROSSING RATE against the recalculate threshold; the
+      Free row shows an exhausted count instead, because its one-time allowance is a hard stop.
+      Below it, ONE list of stopped orgs — the reason is a filter and a column, so it holds 212 Free
+      orgs as easily as 2; the margin ceiling is a disabled filter until MOTIR-5280 lands. Internal
+      COGS only: Motir does not charge for code indexing.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span
+                class="soon"
+                >10.1</span
+              >
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Monitoring</span>
+              <div class="row-between">
+                <div>
+                  <h2>Monitoring</h2>
+                  <p class="sub">
+                    Is the machinery running — and is the index allowance sized right?
+                  </p>
+                </div>
+              </div>
+              <div class="stack" style="margin-top: 16px">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                      ></span>
+                      <div>
+                        <h3>Scheduled jobs · overdue</h3>
+                        <p class="hsub">
+                          Shipped (Panel 8). Collapsed here to show where the new section sits.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-active">0 overdue</span>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-flame" /></svg
+                      ></span>
+                      <div>
+                        <h3>Index allowance · is the gate sized right?</h3>
+                        <p class="hsub">
+                          This period, per tier. If a large share of a tier crossed, the gate is
+                          wrong — not the orgs.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">Internal · never shown to customers</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="stat-grid" style="grid-template-columns: repeat(3, 1fr)">
+                      <div class="mini-stat">
+                        <div class="mv">1 of 3</div>
+                        <div class="ml">soft-gated tiers over the recalculate threshold</div>
+                      </div>
+                      <div class="mini-stat">
+                        <div class="mv">25%</div>
+                        <div class="ml">recalculate threshold · reviewed monthly</div>
+                      </div>
+                      <div class="mini-stat">
+                        <div class="mv">212</div>
+                        <div class="ml">Free orgs at their one-time limit</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th class="name">Tier</th>
+                          <th class="num">Orgs</th>
+                          <th class="num">Crossed / at limit</th>
+                          <th>Crossing rate</th>
+                          <th>Reading</th>
+                          <th class="num">Internal cost basis (credits + index)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="name">
+                            <strong>Free</strong><br /><span class="muted" style="font-size: 12px"
+                              >one-time · hard stop</span
+                            >
+                          </td>
+                          <td class="num">1,904</td>
+                          <td class="num">212 exhausted</td>
+                          <td><span class="muted">n/a — no soft gate · 11.1% at limit</span></td>
+                          <td><span class="pill pill-neutral">No soft gate — hard stop</span></td>
+                          <td class="num">300 + 60 <span class="muted">one-time</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <strong>Standard</strong><br /><span
+                              class="muted"
+                              style="font-size: 12px"
+                              >monthly</span
+                            >
+                          </td>
+                          <td class="num">412</td>
+                          <td class="num">37 crossed</td>
+                          <td style="min-width: 150px">
+                            <div
+                              class="row-between"
+                              style="align-items: center; gap: 8px; flex-wrap: nowrap"
+                            >
+                              <span class="usebar" style="flex: 1"
+                                ><span class="ws" style="width: 9%"></span></span
+                              ><strong style="font-variant-numeric: tabular-nums">9.0%</strong>
+                            </div>
+                          </td>
+                          <td><span class="pill pill-active">Gate holds</span></td>
+                          <td class="num">2,000 + 400 <span class="muted">/ mo</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <strong>Pro</strong><br /><span class="muted" style="font-size: 12px"
+                              >monthly</span
+                            >
+                          </td>
+                          <td class="num">128</td>
+                          <td class="num">41 crossed</td>
+                          <td style="min-width: 150px">
+                            <div
+                              class="row-between"
+                              style="align-items: center; gap: 8px; flex-wrap: nowrap"
+                            >
+                              <span class="usebar" style="flex: 1"
+                                ><span class="ws" style="width: 32%"></span></span
+                              ><strong style="font-variant-numeric: tabular-nums">32.0%</strong>
+                            </div>
+                          </td>
+                          <td><span class="pill pill-warn">Recalculate — over 25%</span></td>
+                          <td class="num">8,000 + 1,600 <span class="muted">/ mo</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <strong>Max</strong><br /><span class="muted" style="font-size: 12px"
+                              >monthly</span
+                            >
+                          </td>
+                          <td class="num">21</td>
+                          <td class="num">2 crossed</td>
+                          <td style="min-width: 150px">
+                            <div
+                              class="row-between"
+                              style="align-items: center; gap: 8px; flex-wrap: nowrap"
+                            >
+                              <span class="usebar" style="flex: 1"
+                                ><span class="ws" style="width: 10%"></span></span
+                              ><strong style="font-variant-numeric: tabular-nums">9.5%</strong>
+                            </div>
+                          </td>
+                          <td><span class="pill pill-active">Gate holds</span></td>
+                          <td class="num">30,000 + 6,000 <span class="muted">/ mo</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <strong>Enterprise</strong><br /><span
+                              class="muted"
+                              style="font-size: 12px"
+                              >custom</span
+                            >
+                          </td>
+                          <td class="num">3</td>
+                          <td class="num"><span class="muted">—</span></td>
+                          <td><span class="muted">—</span></td>
+                          <td><span class="pill pill-neutral">Allowance not configured</span></td>
+                          <td class="num"><span class="muted">set by staff</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span style="font-size: 12px; color: var(--el-text-secondary)"
+                      ><strong>Crossing the allowance does not stop indexing</strong> on a paid tier
+                      — Motir absorbs the overrun and records the crossing, which is all this table
+                      counts. The Free tier has no soft gate: its one-time allowance is a hard stop.
+                      The advertised figure is the credit number alone; the basis adds the index
+                      allowance.
+                      <em
+                        >Figures illustrative — MOTIR-4588 sizes the ratio and proposes the
+                        threshold.</em
+                      ></span
+                    >
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg
+                      ></span>
+                      <div>
+                        <h3>Stopped orgs</h3>
+                        <p class="hsub">
+                          Indexing paused by a hard stop. Every one resumes on its own — nobody
+                          re-arms it.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-down">219 stopped</span>
+                  </div>
+                  <!-- ONE collection, ONE layout (Yue, 2026-09-12): the reason is a FILTER and a
+                       COLUMN, never a card per reason. Two cards cannot show 212 orgs. -->
+                  <div class="card-body stopped-tools">
+                    <div class="segmented" role="group" aria-label="Stop reason">
+                      <button class="seg-opt active" aria-pressed="true">
+                        All<span class="seg-count">219</span>
+                      </button>
+                      <button class="seg-opt" aria-pressed="false">
+                        No credit<span class="seg-count">7</span>
+                      </button>
+                      <button class="seg-opt" aria-pressed="false">
+                        Free allowance used<span class="seg-count">212</span>
+                      </button>
+                      <button
+                        class="seg-opt is-disabled"
+                        aria-disabled="true"
+                        title="Hard gate B is not active yet (MOTIR-5280)"
+                      >
+                        Margin ceiling<span class="seg-count">not active</span>
+                      </button>
+                    </div>
+                    <div class="searchbar stopped-search">
+                      <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Find an org…
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th class="name">Org</th>
+                          <th>Tier</th>
+                          <th>Reason</th>
+                          <th class="num sorted" aria-sort="descending">
+                            Stopped for<svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>
+                          </th>
+                          <th class="num">Graph behind</th>
+                          <th>Resumes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">H</span
+                              ><span class="nm">Hooli Labs</span></span
+                            >
+                          </td>
+                          <td>Free</td>
+                          <td><span class="pill pill-down">Free allowance used</span></td>
+                          <td class="num">41 days</td>
+                          <td class="num">1,204 commits</td>
+                          <td><span class="muted">on upgrade</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">P</span
+                              ><span class="nm">Pied Piper</span></span
+                            >
+                          </td>
+                          <td>Free</td>
+                          <td><span class="pill pill-down">Free allowance used</span></td>
+                          <td class="num">23 days</td>
+                          <td class="num">118 commits</td>
+                          <td><span class="muted">on upgrade</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">G</span
+                              ><span class="nm">Globex</span></span
+                            >
+                          </td>
+                          <td>Standard</td>
+                          <td><span class="pill pill-down">No credit</span></td>
+                          <td class="num">9 days</td>
+                          <td class="num">41 commits</td>
+                          <td><span class="muted">on top-up or renewal</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">V</span
+                              ><span class="nm">Vandelay Imports</span></span
+                            >
+                          </td>
+                          <td>Free</td>
+                          <td><span class="pill pill-down">Free allowance used</span></td>
+                          <td class="num">6 days</td>
+                          <td class="num">0 commits</td>
+                          <td><span class="muted">on upgrade</span></td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            <span class="tenant"
+                              ><span class="ava ent-org">I</span
+                              ><span class="nm">Initech</span></span
+                            >
+                          </td>
+                          <td>Pro</td>
+                          <td><span class="pill pill-down">No credit</span></td>
+                          <td class="num">6 h</td>
+                          <td class="num">2 commits</td>
+                          <td><span class="muted">on top-up or renewal</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–25 of 219 ·
+                      longest-stopped first · the catch-up refreshes only repos that moved</span
+                    >
+                    <div class="pager">
+                      <span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                      >
+                      <span>Page 1 of 9</span>
+                      <span class="pbtn"
+                        >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 14 — ORG PAGE · INDEX & FLEET COST (MOTIR-4335 · MOTIR-4594) ════════════════ -->
+    <div class="panel-label">
+      14 · Org page · <strong>Index &amp; fleet cost</strong> (MOTIR-4335 · MOTIR-4594 → built by
+      MOTIR-4595) — a NEW card on the SHIPPED org page (Panel 11), above MOTIR-733’s reserved
+      rollup. BOTH POOLS side by side and never conflated: the credit balance the customer sees, and
+      the index allowance they never do. The org is drawn in state (b) — over its allowance and
+      still indexing — because that is the state most likely to be misread as a fault. The margin
+      ceiling is not active (MOTIR-5280). The agent line is ABSENT, not zero.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span
+                class="soon"
+                >10.1</span
+              >
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="scope">
+                <span class="seg">Platform</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg">Tenants</span><span class="sep" aria-hidden="true">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+              <div class="row-between" style="margin-top: 14px; align-items: center">
+                <div>
+                  <h2 style="margin: 0; font-size: 19px">Acme Corp</h2>
+                  <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap">
+                    <span class="pill pill-active">Active</span
+                    ><span class="pill pill-plan">Pro plan</span
+                    ><span class="pill pill-neutral">6,240 credits</span>
+                  </div>
+                </div>
+              </div>
+              <div class="stack" style="margin-top: 16px">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                      ></span>
+                      <div>
+                        <h3>Index &amp; fleet cost · this period</h3>
+                        <p class="hsub">
+                          Both pools side by side, and what this org’s containers cost Motir.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-internal">MOTIR-4595</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="grid-2" style="gap: 14px">
+                      <div class="mini-stat">
+                        <div class="row-between" style="align-items: center">
+                          <strong style="font-size: 13px">Credit balance</strong
+                          ><span class="pill pill-active">Customer sees this</span>
+                        </div>
+                        <div class="mv" style="margin-top: 8px">
+                          6,240<span
+                            style="
+                              font-family: var(--font-sans);
+                              font-size: 12px;
+                              font-weight: 500;
+                              color: var(--el-text-secondary);
+                            "
+                          >
+                            remaining</span
+                          >
+                        </div>
+                        <div class="seatmeter">
+                          <span style="width: 22%; background: var(--el-accent)"></span>
+                        </div>
+                        <div class="row-between" style="margin-top: 8px">
+                          <span style="font-size: 12px; color: var(--el-text-secondary)"
+                            >granted 8,000 · consumed 1,760</span
+                          ><strong style="font-size: 12px; font-variant-numeric: tabular-nums"
+                            >22%</strong
+                          >
+                        </div>
+                        <p
+                          style="margin: 8px 0 0; font-size: 12px; color: var(--el-text-secondary)"
+                        >
+                          Drawn by the planner and the hosted agent. Token spend this period:
+                          <strong>1,760 credits</strong>.
+                        </p>
+                      </div>
+                      <div class="mini-stat">
+                        <div class="row-between" style="align-items: center">
+                          <strong style="font-size: 13px">Index allowance</strong
+                          ><span class="pill pill-neutral">Internal only</span>
+                        </div>
+                        <div class="mv" style="margin-top: 8px">
+                          0<span
+                            style="
+                              font-family: var(--font-sans);
+                              font-size: 12px;
+                              font-weight: 500;
+                              color: var(--el-text-secondary);
+                            "
+                          >
+                            remaining</span
+                          >
+                        </div>
+                        <div class="seatmeter">
+                          <span style="width: 100%; background: var(--el-info)"></span>
+                        </div>
+                        <div class="row-between" style="margin-top: 8px">
+                          <span style="font-size: 12px; color: var(--el-text-secondary)"
+                            >granted 1,600 · consumed 1,792</span
+                          ><strong style="font-size: 12px; font-variant-numeric: tabular-nums"
+                            >112%</strong
+                          >
+                        </div>
+                        <p
+                          style="margin: 8px 0 0; font-size: 12px; color: var(--el-text-secondary)"
+                        >
+                          Drawn by indexing only.
+                          <strong>Never touches the credit balance</strong> — under any condition.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="row-between" style="margin-top: 14px; align-items: center">
+                      <span style="display: inline-flex; gap: 8px; align-items: center"
+                        ><strong style="font-size: 13px">Indexing</strong
+                        ><span class="pill pill-internal"
+                          >b · Over allowance — still indexing</span
+                        ></span
+                      >
+                      <span style="font-size: 12px; color: var(--el-text-secondary)"
+                        >Margin ceiling:
+                        <span class="pill pill-neutral">Not active · MOTIR-5280</span></span
+                      >
+                    </div>
+                    <div class="note" style="margin-top: 10px">
+                      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                      <span
+                        ><strong>This is the normal, absorbed case — not a fault.</strong> Motir
+                        carries the overrun and records one crossing for the monthly calibration.
+                        The states an org can be in:
+                        <span class="pill pill-active">a · Under allowance</span>
+                        <span class="pill pill-internal">b · Over — still indexing</span>
+                        <span class="pill pill-down">c · Stopped · no credit</span>
+                        <span class="pill pill-down">c · Stopped · Free allowance used</span></span
+                      >
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th class="name">Fleet workload</th>
+                          <th class="num">Containers</th>
+                          <th class="num">Billable seconds</th>
+                          <th class="num">Internal COGS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="name">ci</td>
+                          <td class="num">212</td>
+                          <td class="num">18,440</td>
+                          <td class="num credits">$4.12</td>
+                        </tr>
+                        <tr>
+                          <td class="name">
+                            index
+                            <span class="muted" style="font-size: 12px">· 4 failed, counted</span>
+                          </td>
+                          <td class="num">38</td>
+                          <td class="num">9,120</td>
+                          <td class="num credits">$2.07</td>
+                        </tr>
+                        <tr>
+                          <td class="name">agent</td>
+                          <td class="num" colspan="3">
+                            <span class="muted"
+                              >absent — no agent container ran this period (not a zero)</span
+                            >
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span style="font-size: 12px; color: var(--el-text-secondary)"
+                      >The index line counts containers that FAILED. Internal COGS — nothing on this
+                      card is charged to the customer. Platform-wide meta / tenant split: the
+                      fleet-cost readout (MOTIR-4540), and later Usage &amp; cost.</span
+                    >
+                  </div>
+                </div>
+                <div class="card reserved">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                      ></span>
+                      <div>
+                        <h3>Usage &amp; cost rollup</h3>
+                        <p class="hsub">This org’s spend, by workspace and by model.</p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">MOTIR-733</span>
+                  </div>
+                  <div class="card-body">
+                    <p class="reserved-note">
+                      Reserved region — unchanged (Panel 11). The card above sits ABOVE it and takes
+                      none of its cells: token spend there is the shipped per-org usage total; the
+                      by-workspace and by-model breakdown stays MOTIR-733’s.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 14b — THE NOTHING STATES ════════════════ -->
+    <div class="panel-label">
+      14b · The <strong>“nothing” states</strong> of Panels 13–14. Each says what it is, because an
+      omission a reader has to notice is read as a zero. There is no “no AI plan” state: on cloud
+      every connected repository is indexed (MOTIR-4541, decision A, 2026-09-12).
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 24px">
+        <div class="states-grid">
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg
+            ></span>
+            <h4>No index activity this period</h4>
+            <p>
+              The index line is <strong>absent</strong> — nothing ran under it. This is not a
+              measured zero.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg
+            ></span>
+            <h4>Meter disabled</h4>
+            <p>
+              A self-hosted build has no fleet, so there are no figures to show. No zero is drawn,
+              deliberately.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+            ></span>
+            <h4>Never ran an AI job — indexed anyway</h4>
+            <p>
+              Its billing and one-time index allowance were provisioned on the first index draw. A
+              normal row, not an empty one.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+            ></span>
+            <h4>No org is stopped</h4>
+            <p>
+              The Stopped orgs list says so in words, with the filter counts at 0 — not an empty
+              table a reader has to interpret.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg
+            ></span>
+            <h4>Margin ceiling · not active</h4>
+            <p>
+              The filter is drawn <strong>disabled</strong>, never omitted. Hard gate B waits on
+              MOTIR-4483 and MOTIR-4598 (MOTIR-5280), so an empty result would mean
+              <strong>the gate is off</strong>, not that no org is near the ceiling.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-settings" /></svg
+            ></span>
+            <h4>Allowance not configured</h4>
+            <p>
+              Enterprise tier: the index allowance is set on the plan by platform staff. Until then
+              there is no gate to cross.
+            </p>
+          </div>
+          <div class="state">
+            <span class="ico"
+              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ></span>
+            <h4>Couldn’t read the pools</h4>
+            <p>
+              motir-ai did not answer. Both pools read <strong>unknown</strong> — never zero — and
+              the card says when they were last read.
+            </p>
+          </div>
         </div>
       </div>
     </div>

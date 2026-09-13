@@ -198,3 +198,9 @@ starting member is recorded below.
 
 Standing membership after this drain: **0 acceptance specs**. New in-review
 receipts may enter the lane and must leave again when approved.
+
+## MOTIR-5306 — 2026-09-13
+
+| Spec                                 | Story      | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `acceptance-design-approval.spec.ts` | MOTIR-4778 | **PROMOTE → main** as `design-approval.spec.ts`. The story is `done`, so its receipt is frozen. It went RED on main after MOTIR-5191 made the pending state name its approver — the one stale assertion now reads `Waiting on <routed reviewer>.`. Not a retire: `approval-gate-repaint.spec.ts` covers the repaint only, and this is the one browser walk of the whole claim (no verbs for a reader → the routed reviewer approves → the blocked card becomes ready). |
