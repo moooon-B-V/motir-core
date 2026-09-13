@@ -8041,6 +8041,15 @@
     "cycleRefused": "A folder can’t move into one of its own folders.",
     "crossProjectRefused": "That folder belongs to another project.",
     "folderGone": "That folder no longer exists.",
-    "noFolder": "No folder"
+    "noFolder": "No folder",
+    "delete": "Delete…",
+    "deleteTitle": "Delete folder “{name}”?",
+    "deleteLead": "Only the folder is removed. Everything filed in it stays in the project.",
+    "deleteMoves": "<strong>{kinds, select, both {{folders, plural, one {# folder} other {# folders}} and {items, plural, one {# work item} other {# work items}}} folders {{folders, plural, one {# folder} other {# folders}}} other {{items, plural, one {# work item} other {# work items}}}}</strong> will move to <strong>{destination}</strong>. No work items are deleted.",
+    "deleteEmpty": "“{name}” is empty. Deleting it removes only the folder.",
+    "deleteConfirm": "Delete folder",
+    "deleteCounting": "Counting what moves…",
+    "deleteNameTaken": "A folder named “{name}” is already where these would move. Rename or move it first.",
+    "deleteSubtaskNeedsPlacement": "A subtask filed here would be left at the project root, where a subtask can’t sit. Move it into another folder or under a work item first."
   }
 }

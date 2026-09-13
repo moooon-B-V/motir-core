@@ -8037,6 +8037,15 @@
     "cycleRefused": "文件夹不能移动到其自身的子文件夹中。",
     "crossProjectRefused": "该文件夹属于另一个项目。",
     "folderGone": "该文件夹已不存在。",
-    "noFolder": "无文件夹"
+    "noFolder": "无文件夹",
+    "delete": "删除…",
+    "deleteTitle": "删除文件夹“{name}”？",
+    "deleteLead": "只会移除文件夹。其中归档的所有内容仍保留在项目中。",
+    "deleteMoves": "<strong>{kinds, select, both {{folders} 个文件夹和 {items} 个工作项} folders {{folders} 个文件夹} other {{items} 个工作项}}</strong>将移动到<strong>{destination}</strong>。不会删除任何工作项。",
+    "deleteEmpty": "“{name}”是空的。删除它只会移除该文件夹。",
+    "deleteConfirm": "删除文件夹",
+    "deleteCounting": "正在统计将要移动的内容…",
+    "deleteNameTaken": "这些内容将要移动到的位置已有名为“{name}”的文件夹。请先将其重命名或移走。",
+    "deleteSubtaskNeedsPlacement": "此处归档的子任务将被留在项目根目录，而子任务不能放在那里。请先将其移到其他文件夹或某个工作项下。"
   }
 }

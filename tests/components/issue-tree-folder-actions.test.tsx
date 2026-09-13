@@ -227,6 +227,7 @@ describe('IssueTreeTable — create and rename folders', () => {
       'Move to…',
       'Move up',
       'Move down',
+      'Delete…',
     ]);
     // Opening focuses the first entry; the arrow keys move between ENABLED
     // entries ("Later" is the first folder, so Move up is skipped) and wrap.
@@ -236,7 +237,7 @@ describe('IssueTreeTable — create and rename folders', () => {
     fireEvent.keyDown(items[1]!, { key: 'ArrowUp' });
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(items[0]!, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(items[4]);
+    expect(document.activeElement).toBe(items[5]);
 
     await act(async () => {
       fireEvent.keyDown(document.activeElement!, { key: 'Escape' });

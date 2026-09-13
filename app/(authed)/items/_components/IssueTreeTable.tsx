@@ -20,12 +20,13 @@ import {
   FolderPlus,
   Loader2,
   Pencil,
+  Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
 import { useToast } from '@/components/ui/Toast';
 import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
-import type { FolderDto, FolderPickerNodeDto } from '@/lib/dto/folders';
+import type { FolderDeletionPreviewDto, FolderDto, FolderPickerNodeDto } from '@/lib/dto/folders';
 import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
 import {
@@ -46,6 +47,8 @@ import { usePeekRowClick } from './IssueQuickView';
 import { makeRowShaper, type IssueRowData } from './issueRows';
 import {
   createFolderAction,
+  deleteFolderAction,
+  describeFolderDeletionAction,
   listChildIssuesAction,
   listFolderLevelAction,
   listProjectFoldersAction,
@@ -56,6 +59,7 @@ import {
   type ListProjectFoldersResult,
 } from '../actions';
 import { useFolderCommands } from './FolderCommands';
+import { FolderDeleteDialog } from './FolderDeleteDialog';
 import { FolderNameField } from './FolderNameField';
 import { FolderPickerPanel, FolderPickerPopover } from './FolderPicker';
 import { FolderRowMenu, type FolderMenuEntry } from './FolderRowMenu';
@@ -119,6 +123,16 @@ interface FolderPickerState {
   levelKey: string;
   folders: FolderPickerNodeDto[] | null;
   truncated: boolean;
+  refusal: string | null;
+  pending: boolean;
+}
+
+/** The open delete confirmation (MOTIR-5346): which folder, what it would move, a refusal. */
+interface FolderDeleteState {
+  folderId: string;
+  name: string;
+  levelKey: string;
+  preview: FolderDeletionPreviewDto | null;
   refusal: string | null;
   pending: boolean;
 }
@@ -219,6 +233,11 @@ export function IssueTreeTable({
   const [picker, setPicker] = useState<FolderPickerState | null>(null);
   const pickerSeq = useRef(0);
   const folderActionSeq = useRef<Record<string, number>>({});
+
+  // The open delete confirmation (MOTIR-5346); `deleteSeq` retires a read or a
+  // write answering a dialog that was closed or reopened meanwhile.
+  const [deleting, setDeleting] = useState<FolderDeleteState | null>(null);
+  const deleteSeq = useRef(0);
 
   // ⚠️ THE ONE PLACE LEVEL STATE CHANGES. Every level — the roots, a work item's
   // children, a folder's contents — lives in `levels`, keyed by its container,
@@ -690,6 +709,105 @@ export function IssueTreeTable({
     [levels, beginFolderAction, toast, tv, applyFolderReorder],
   );
 
+  // ── Folder delete (MOTIR-5346) ─────────────────────────────────────────────
+  // A deleted folder's row leaves its level in place.
+  const removeFolderRow = useCallback((folderId: string, levelKey: string) => {
+    setLevels((prev) => {
+      const lvl = prev[levelKey];
+      if (!lvl || !lvl.rows.some((r) => r.kind === 'folder' && r.id === folderId)) return prev;
+      return {
+        ...prev,
+        [levelKey]: {
+          ...lvl,
+          rows: lvl.rows.filter((r) => !(r.kind === 'folder' && r.id === folderId)),
+          total: Math.max(0, lvl.total - 1),
+        },
+      };
+    });
+  }, []);
+
+  const closeDelete = useCallback(() => {
+    deleteSeq.current += 1;
+    setDeleting(null);
+  }, []);
+
+  // Opening the dialog COUNTS what the delete would move; until that answers the
+  // dialog shows no number and cannot be confirmed.
+  const openDelete = useCallback(
+    (folder: FolderTreeRowDto, levelKey: string) => {
+      const seq = ++deleteSeq.current;
+      setDeleting({
+        folderId: folder.id,
+        name: folder.name,
+        levelKey,
+        preview: null,
+        refusal: null,
+        pending: false,
+      });
+      startTransition(async () => {
+        let res: Awaited<ReturnType<typeof describeFolderDeletionAction>>;
+        try {
+          res = await describeFolderDeletionAction({ folderId: folder.id });
+        } catch (err) {
+          if (deleteSeq.current !== seq) return;
+          setDeleting(null);
+          toast({ variant: 'error', title: tv(serverActionRejectionKey(err)) });
+          return;
+        }
+        if (deleteSeq.current !== seq) return;
+        if (res.ok) {
+          const preview = res.preview;
+          setDeleting((d) => (d && d.folderId === folder.id ? { ...d, preview } : d));
+          return;
+        }
+        setDeleting(null);
+        if (res.code === 'FOLDER_NOT_FOUND') removeFolderRow(folder.id, levelKey);
+        else toast({ variant: 'error', title: res.error });
+      });
+    },
+    [toast, tv, removeFolderRow],
+  );
+
+  // Confirming deletes; the row leaves its level and the PARENT level is re-read
+  // once, so the moved-up folders and work items appear in their stored order —
+  // inserting them locally would re-implement the service's ordering.
+  const confirmDelete = useCallback(() => {
+    const current = deleting;
+    if (!current || current.preview === null || current.pending) return;
+    const seq = deleteSeq.current;
+    setDeleting((d) => (d ? { ...d, pending: true, refusal: null } : d));
+    startTransition(async () => {
+      let res: Awaited<ReturnType<typeof deleteFolderAction>>;
+      try {
+        res = await deleteFolderAction({ folderId: current.folderId });
+      } catch (err) {
+        if (deleteSeq.current !== seq) return;
+        setDeleting((d) => (d ? { ...d, pending: false } : d));
+        toast({ variant: 'error', title: tv(serverActionRejectionKey(err)) });
+        return;
+      }
+      if (deleteSeq.current !== seq) return;
+      if (res.ok || res.code === 'FOLDER_NOT_FOUND') {
+        closeDelete();
+        removeFolderRow(current.folderId, current.levelKey);
+        if (res.ok) fetchLevel(current.levelKey, 0, false);
+        return;
+      }
+      const refusal =
+        res.code === 'FOLDER_NAME_TAKEN'
+          ? t('folders.deleteNameTaken', { name: res.folderName ?? '' })
+          : res.code === 'SUBTASK_NEEDS_PLACEMENT'
+            ? t('folders.deleteSubtaskNeedsPlacement')
+            : null;
+      if (refusal === null) {
+        setDeleting((d) => (d ? { ...d, pending: false } : d));
+        toast({ variant: 'error', title: res.error });
+        return;
+      }
+      setDeleting((d) => (d ? { ...d, pending: false, refusal } : d));
+    });
+  }, [deleting, toast, tv, t, closeDelete, removeFolderRow, fetchLevel]);
+
   const folderMenuEntries = useCallback(
     (node: Extract<TreeNode, { kind: 'folder' }>): FolderMenuEntry[] => [
       {
@@ -730,8 +848,17 @@ export function IssueTreeTable({
         disabled: node.isLastFolder,
         onSelect: () => reorderFolder(node.folder, node.levelKey, 'down'),
       },
+      { kind: 'separator', key: 'danger' },
+      {
+        kind: 'item',
+        key: 'delete',
+        label: t('folders.delete'),
+        icon: Trash2,
+        tone: 'danger',
+        onSelect: () => openDelete(node.folder, node.levelKey),
+      },
     ],
-    [t, startCreateInside, startRename, openMovePicker, reorderFolder],
+    [t, startCreateInside, startRename, openMovePicker, reorderFolder, openDelete],
   );
 
   // A folder row's whole-row target (and Enter on the row) toggles it — a folder
@@ -1073,6 +1200,16 @@ export function IssueTreeTable({
                 : undefined
         }
       />
+      {deleting ? (
+        <FolderDeleteDialog
+          folderName={deleting.name}
+          preview={deleting.preview}
+          refusal={deleting.refusal}
+          pending={deleting.pending}
+          onConfirm={confirmDelete}
+          onCancel={closeDelete}
+        />
+      ) : null}
     </IssueInlineEditProvider>
   );
 }

@@ -25,9 +25,15 @@ import {
   FolderNameTakenError,
   FolderNotFoundError,
   InvalidFolderNameError,
+  SubtaskNeedsPlacementError,
 } from '@/lib/folders/errors';
 import { foldersService } from '@/lib/services/foldersService';
-import type { FolderDto, ProjectFoldersDto } from '@/lib/dto/folders';
+import type {
+  DeleteFolderResultDto,
+  FolderDeletionPreviewDto,
+  FolderDto,
+  ProjectFoldersDto,
+} from '@/lib/dto/folders';
 import type {
   CreateWorkItemLinkInput,
   WorkItemKindDto,
@@ -332,15 +338,28 @@ export type FolderWriteErrorCode =
   | 'FOLDER_NOT_FOUND'
   | 'CROSS_PROJECT_FOLDER'
   | 'FOLDER_CYCLE'
+  | 'SUBTASK_NEEDS_PLACEMENT'
   | 'PROJECT_ACCESS_DENIED'
   | 'NO_ACTIVE_PROJECT';
 
 export type FolderWriteResult =
   | { ok: true; folder: FolderDto }
-  | { ok: false; code: FolderWriteErrorCode; error: string };
+  | {
+      ok: false;
+      code: FolderWriteErrorCode;
+      error: string;
+      /** `FOLDER_NAME_TAKEN`: the name that collided, when the service knows it. */
+      folderName?: string | null;
+    };
 
 function folderWriteFailure(err: unknown): Extract<FolderWriteResult, { ok: false }> | null {
-  if (err instanceof FolderNameTakenError || err instanceof InvalidFolderNameError) {
+  if (err instanceof FolderNameTakenError) {
+    return { ok: false, code: err.code, error: err.message, folderName: err.folderName };
+  }
+  if (err instanceof InvalidFolderNameError) {
+    return { ok: false, code: err.code, error: err.message };
+  }
+  if (err instanceof SubtaskNeedsPlacementError) {
     return { ok: false, code: err.code, error: err.message };
   }
   if (err instanceof FolderNotFoundError) {
@@ -458,6 +477,54 @@ export async function listProjectFoldersAction(): Promise<ListProjectFoldersResu
     if (err instanceof ProjectAccessDeniedError) {
       return { ok: false, error: 'You don’t have access to this project’s folders.' };
     }
+    throw err;
+  }
+}
+
+// ── Folder delete (Story MOTIR-5308 · MOTIR-5346) ──────────────────────────
+// The delete confirmation reads what the delete WOULD move before the person
+// confirms, then the delete itself. Both refusals of a delete — a child folder's
+// name already at the destination, a subtask that would land at the root — come
+// back as codes the open dialog renders.
+
+export type FolderFailure = Extract<FolderWriteResult, { ok: false }>;
+
+export async function describeFolderDeletionAction(input: {
+  folderId: string;
+}): Promise<{ ok: true; preview: FolderDeletionPreviewDto } | FolderFailure> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const preview = await foldersService.describeFolderDeletion(
+      { projectId: ctx.projectId, folderId: input.folderId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, preview };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
+    throw err;
+  }
+}
+
+export async function deleteFolderAction(input: {
+  folderId: string;
+}): Promise<{ ok: true; result: DeleteFolderResultDto } | FolderFailure> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, code: 'NO_ACTIVE_PROJECT', error: 'No active project.' };
+  try {
+    const result = await foldersService.deleteFolder(
+      { projectId: ctx.projectId, folderId: input.folderId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, result };
+  } catch (err) {
+    const failure = folderWriteFailure(err);
+    if (failure) return failure;
     throw err;
   }
 }

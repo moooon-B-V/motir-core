@@ -27,6 +27,8 @@ export type FolderMenuEntry =
       icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
       onSelect: () => void;
       disabled?: boolean;
+      /** `danger` for a destructive entry: danger-on-surface words, a danger glyph. */
+      tone?: 'danger';
     }
   | { kind: 'separator'; key: string };
 
@@ -111,9 +113,18 @@ export function FolderRowMenu({ label, entries }: { label: string; entries: Fold
                   setOpen(false);
                   entry.onSelect();
                 }}
-                className="flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-[13px] text-(--el-text) hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none disabled:cursor-default disabled:text-(--el-text-faint) disabled:hover:bg-transparent"
+                className={cn(
+                  'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-[13px] hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none disabled:cursor-default disabled:text-(--el-text-faint) disabled:hover:bg-transparent',
+                  entry.tone === 'danger' ? 'text-(--el-danger-on-surface)' : 'text-(--el-text)',
+                )}
               >
-                <entry.icon className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+                <entry.icon
+                  className={cn(
+                    'h-4 w-4 shrink-0',
+                    entry.tone === 'danger' ? 'text-(--el-danger)' : 'text-(--el-text-secondary)',
+                  )}
+                  aria-hidden
+                />
                 <span className="flex-1 truncate">{entry.label}</span>
               </button>
             ),
