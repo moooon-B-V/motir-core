@@ -1674,7 +1674,7 @@ Three dispositions, and only three: **CORRECT AS IT STANDS** (suppresses a charg
 | **credit balance**  | planner · hosted agent            | **yes** — and it is the whole truth about that number |
 | **index allowance** | code-graph indexing, nothing else | **no**                                                |
 
-Indexing can never draw the visible balance, under any condition. Internally a tier is costed at the sum; `catalog.ts`'s `monthlyCredits` stays the advertised figure.
+Indexing can never draw the visible balance, under any condition. Internally a tier is costed at the sum; `catalog.ts`'s `allotment.credits` stays the advertised figure.
 
 - **Soft gate — the index allowance.** Crossing it does not stop indexing on a paid tier; Motir absorbs the overrun and records a crossing. It is a calibration instrument, not enforcement.
 - **Hard gate A — the visible balance is zero ⇒ indexing stops**, because an org with no credit is not planning. A staleness-gated catch-up runs when the gate lifts.

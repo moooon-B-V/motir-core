@@ -920,7 +920,7 @@ twin: _is the gate sized right?_
   `No soft gate — hard stop`. Drawing a crossing-rate bar there would contradict the tier's own shape.
 - **Enterprise** reads `Allowance not configured` — set on the plan by staff.
 - **Internal cost basis** is `advertised credits + index allowance`, drawn as a sum with its cadence,
-  so it can never be read as the advertised figure (which stays `catalog.ts`'s `monthlyCredits`).
+  so it can never be read as the advertised figure (which stays `catalog.ts`'s `allotment.credits`).
 - **ONE list of stopped orgs, the reason as a FILTER and a COLUMN** _(revised 2026-09-12, Yue: "Stopped · no credit and Stopped · Free allowance used are designed as 2 cards, I don't see how I can see a large list of orgs there")._ The first revision drew one card per reason, and it contradicted its own table: the Free row counts **212** exhausted orgs, and a card of rows cannot hold them. The stopped set is one collection, so it gets one layout:
   - **Head:** `Stopped orgs` + a `pill-down` total (`219 stopped`).
   - **Toolbar:** a `Segmented` reason filter, each option carrying its count — `All 219` · `No credit 7` · `Free allowance used 212` · `Margin ceiling · not active`. The last is **drawn disabled, never omitted**: hard gate B waits on MOTIR-4483 / MOTIR-4598 (MOTIR-5280), and a missing option would read as "no such stop". An org search sits beside it.

@@ -694,6 +694,9 @@ function MotirAiLine({
   const low = key === 'past_due' || (allotment > 0 && balance / allotment < 0.1);
   const cadence = cadenceFromPriceId(subscription.priceId);
   const catalogTier = data.catalog.aiPlans.find((p) => p.key === tier?.key);
+  // A one-time grant (Free) is never "per month", and has no month to measure
+  // against — its meter reads as the one grant it is (MOTIR-5274).
+  const oneTime = catalogTier?.allotment?.cadence === 'one_time';
   const fee = catalogTier?.prices?.[cadence]?.amountUsd ?? null;
   const renews = fmtDate(subscription.currentPeriodEnd);
   // Panel 3 (e) — REPLACES this line's body for an exempt org. GONE: the `Free`
@@ -748,7 +751,7 @@ function MotirAiLine({
                 <div className="flex flex-wrap items-center gap-2">
                   <TierPill name={tier.name} />
                   <span className="font-sans text-sm text-(--el-text)">
-                    {t('ai.creditsPerMo', { n: fmt(allotment) })}
+                    {t(oneTime ? 'ai.creditsOneTime' : 'ai.creditsPerMo', { n: fmt(allotment) })}
                   </span>
                 </div>
                 {fee !== null ? (
@@ -759,14 +762,14 @@ function MotirAiLine({
               </div>
               <div>
                 <p className="font-sans text-xs text-(--el-text-muted)">
-                  {t('ai.allotmentThisMonth')}
+                  {oneTime ? t('trial.label') : t('ai.allotmentThisMonth')}
                 </p>
                 <Meter pct={pct} low={low} />
                 <p className="mt-2 font-sans text-xs text-(--el-text-muted)">
                   {t('ai.creditsLeft', { left: fmt(Math.max(0, balance)), total: fmt(allotment) })}
                 </p>
               </div>
-              {key === 'trialing' ? (
+              {key === 'trialing' || oneTime ? (
                 <p className="font-sans text-xs text-(--el-text-muted)">
                   <strong className="text-(--el-text-secondary)">{t('trial.label')}.</strong>{' '}
                   {t('trial.note')}
@@ -1325,6 +1328,7 @@ function PlansView({
   const allotment = tier?.monthlyCreditAllotment ?? 0;
   const renews = fmtDate(subscription.currentPeriodEnd);
   const aiPlans = data.catalog.aiPlans;
+  const oneTime = aiPlans.find((p) => p.key === tier?.key)?.allotment?.cadence === 'one_time';
   const paidActive =
     !!tier &&
     tier.key !== 'free' &&
@@ -1357,11 +1361,16 @@ function PlansView({
               <TierPill name={tier.name} />
               <StatusPill status={subscription.status} t={t} />
               <span className="font-sans text-sm text-(--el-text-muted)">
-                {t('plans.currentStrip', {
-                  n: fmt(allotment),
-                  left: fmt(Math.max(0, balance)),
-                  date: renews ?? '—',
-                })}
+                {oneTime
+                  ? t('plans.currentStripOneTime', {
+                      n: fmt(allotment),
+                      left: fmt(Math.max(0, balance)),
+                    })
+                  : t('plans.currentStrip', {
+                      n: fmt(allotment),
+                      left: fmt(Math.max(0, balance)),
+                      date: renews ?? '—',
+                    })}
               </span>
             </div>
             {canManage ? (
@@ -1609,8 +1618,13 @@ function PlanCard({
       </p>
       {priceBlock}
       <p className="font-sans text-sm font-semibold text-(--el-text-strong)">
-        {plan.monthlyCredits != null
-          ? t('plans.creditsAllotment', { n: fmt(plan.monthlyCredits) })
+        {plan.allotment
+          ? t(
+              plan.allotment.cadence === 'one_time'
+                ? 'plans.creditsAllotmentOneTime'
+                : 'plans.creditsAllotment',
+              { n: fmt(plan.allotment.credits) },
+            )
           : t('plans.customPool')}
       </p>
       {/* bundled Motir seat (8.1.22) */}
