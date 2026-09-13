@@ -8,7 +8,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueType } from '@/lib/issues/parentRules';
-import { isReferenceAdvisory } from '@/lib/dto/workItems';
+import { isCoverageAdvisory, isReferenceAdvisory } from '@/lib/dto/workItems';
 import type { ExecutorDto, WorkItemTypeDto, WorkItemValidityDto } from '@/lib/dto/workItems';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -1791,6 +1791,208 @@ describe('validate_work_item (MCP) — the SELF-BLOCKING-DESIGN advisory reaches
     // Still VALID: four advisories, no blockers, at every severity.
     expect(struct(res).valid).toBe(true);
     expect(struct(res).blockers).toEqual([]);
+    await client.close();
+  });
+});
+
+describe('workItemsService.validateWorkItem — the CONTAINER-COVERAGE advisory (MOTIR-5362)', () => {
+  /** Criterion 1 names a seam no child's title carries; criterion 2 the refusal copy one child's does. */
+  const COVERAGE_BODY = [
+    '## Acceptance criteria',
+    '',
+    '- `GitProvider` declares `mergeChangeRequest` and the provider returns a typed result.',
+    '- Every refusal renders in the merge control.',
+  ].join('\n');
+
+  const container = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    descriptionMd: string = COVERAGE_BODY,
+    placement: { kind?: IssueType; parentId?: string } = {},
+  ) =>
+    workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: placement.kind ?? 'story',
+        title: 'Motir merges the pull request',
+        descriptionMd,
+        parentId: placement.parentId,
+      },
+      fx.ctx,
+    );
+
+  /** Backdate a child a minute before its container, so it reads as ADOPTED. */
+  const adopt = (childId: string, containerCreatedAt: string | Date) =>
+    adminDb.workItem.update({
+      where: { id: childId },
+      data: { createdAt: new Date(new Date(containerCreatedAt).getTime() - 60_000) },
+    });
+
+  const coverageOf = (result: WorkItemValidityDto) => result.advisories.filter(isCoverageAdvisory);
+
+  it('MOTIR-4882 SHAPE: a criterion no adopted child owns is reported — and the container stays VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await container(fx);
+    const gate = await mk(
+      fx,
+      'The merge gate — every refusal renders in the control',
+      'subtask',
+      story.id,
+    );
+    await adopt(gate.id, story.createdAt);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.blockers).toEqual([]);
+    expect(coverageOf(result)).toEqual([
+      {
+        kind: 'coverage',
+        item: story.identifier,
+        severity: 'likely-unowned-criterion',
+        criterionIndex: 1,
+        adoptedChildren: [gate.identifier],
+      },
+    ]);
+  });
+
+  it('says nothing when every child was written UNDER the container — adoption is the gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await container(fx);
+    await mk(fx, 'The merge gate — every refusal renders in the control', 'subtask', story.id);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(coverageOf(result)).toEqual([]);
+  });
+
+  it('a DONE child still OWNS a criterion — finished work is delivery too', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await container(fx);
+    const seam = await mk(fx, 'The `GitProvider.mergeChangeRequest` seam', 'subtask', story.id);
+    const gate = await mk(
+      fx,
+      'The merge gate — every refusal renders in the control',
+      'subtask',
+      story.id,
+    );
+    await adopt(seam.id, story.createdAt);
+    await adopt(gate.id, story.createdAt);
+    await markDone(seam.id);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(coverageOf(result)).toEqual([]);
+  });
+
+  it('a container with no acceptance-criteria heading never fires, adopted child or not', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await container(
+      fx,
+      '## Verification\n\n- walk the GitProvider mergeChangeRequest recipe',
+    );
+    const gate = await mk(fx, 'Unrelated billing work', 'subtask', story.id);
+    await adopt(gate.id, story.createdAt);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(coverageOf(result)).toEqual([]);
+  });
+
+  it('⚠️ `valid` and `blockers` are BYTE-IDENTICAL whether or not it is emitted', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await container(fx);
+    const gate = await mk(
+      fx,
+      'The merge gate — every refusal renders in the control',
+      'subtask',
+      story.id,
+    );
+    await adopt(gate.id, story.createdAt);
+    const external = await mk(fx, 'Work outside the subtree', 'task');
+    await link(fx, gate.id, external.id);
+
+    const withFinding = await workItemsService.validateWorkItem(
+      fx.projectId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(withFinding)).toHaveLength(1);
+
+    // Give the criterion an owner: the finding goes, and nothing else moves.
+    await adminDb.workItem.update({
+      where: { id: gate.id },
+      data: { title: 'The `GitProvider.mergeChangeRequest` seam and every refusal in the control' },
+    });
+    const without = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(coverageOf(without)).toEqual([]);
+    expect(without.valid).toBe(false);
+    expect(without.valid).toBe(withFinding.valid);
+    expect(without.blockers).toEqual(withFinding.blockers);
+  });
+
+  it('scans a whole SUBTREE — validating the EPIC reports its story’s unowned criterion', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Approval gates', 'epic');
+    const story = await container(fx, COVERAGE_BODY, { parentId: epic.id });
+    const gate = await mk(
+      fx,
+      'The merge gate — every refusal renders in the control',
+      'subtask',
+      story.id,
+    );
+    await adopt(gate.id, story.createdAt);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, epic.identifier, fx.ctx);
+    expect(coverageOf(result)).toEqual([
+      expect.objectContaining({ item: story.identifier, criterionIndex: 1 }),
+    ]);
+  });
+});
+
+describe('validate_work_item (MCP) — the CONTAINER-COVERAGE advisory reaches the author', () => {
+  const struct = (r: CallToolResult) => r.structuredContent as unknown as WorkItemValidityDto;
+  const text = (r: CallToolResult) => JSON.stringify(r.content);
+
+  it('names the criterion, the adopted children and the WIDEN-OR-FILE remedy — still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'story',
+        title: 'Motir merges the pull request',
+        descriptionMd: [
+          '## Acceptance criteria',
+          '',
+          '- `GitProvider` declares `mergeChangeRequest` and the provider returns a typed result.',
+        ].join('\n'),
+      },
+      fx.ctx,
+    );
+    const gate = await mk(
+      fx,
+      'The merge gate — every refusal renders in the control',
+      'subtask',
+      story.id,
+    );
+    await adminDb.workItem.update({
+      where: { id: gate.id },
+      data: { createdAt: new Date(new Date(story.createdAt).getTime() - 60_000) },
+    });
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: story.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).advisories).toMatchObject([
+      { kind: 'coverage', severity: 'likely-unowned-criterion', criterionIndex: 1 },
+    ]);
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain('NOT a blocker');
+    expect(text(res)).toContain('NO child');
+    expect(text(res)).toContain(`${story.identifier} criterion 1 has no owning child`);
+    expect(text(res)).toContain(`adopted: ${gate.identifier}`);
+    expect(text(res)).toContain(
+      'Widen the adopted work item on the record, or file the sibling that covers the difference',
+    );
     await client.close();
   });
 });
