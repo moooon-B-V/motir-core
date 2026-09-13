@@ -531,6 +531,13 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // placeholder; a 0 would not be, since 0 in this table means *contributes no
   // tests to a bulk leg*, which is false of this spec.
   'approval-gate-repaint.spec.ts': 4.8,
+  // MOTIR-5306. Promoted from the acceptance lane (it was
+  // `acceptance-design-approval.spec.ts`). Measured LOCALLY (4.2 s, one test,
+  // against a production build), not from a green CI run — there is none in this
+  // lane yet. Its acceptance-lane runtime (~40 s) is not comparable: that was the
+  // receipt's `beat()` pacing, which the promotion removed. Re-measure from the
+  // first green `playwright-report-bulk-*` artifact that includes it.
+  'design-approval.spec.ts': 4.2,
   'design-result.spec.ts': 9.2,
   'design-result-publish.spec.ts': 8.0,
   'epic2-acceptance.spec.ts': 7.4,
