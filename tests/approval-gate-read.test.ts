@@ -486,3 +486,21 @@ describe('routedToLabel — the *waiting on* line NAMES somebody (MOTIR-5191)', 
     expect(frozen.routedToId).toBe(first.id);
   });
 });
+
+describe('getForWorkItem is TOTAL over ApprovalGateKind (MOTIR-5223)', () => {
+  it('an UNREGISTERED kind with a row returns the gate instead of throwing', async () => {
+    // The approval overlay asks this read about any kind its URL names, and
+    // `handlerFor` refuses a kind with no handler. A render read must still
+    // draw the row: the routed-to name falls back to §2's shared rule.
+    const { item, gate } = await designSubtaskWithGate({ kind: 'pull_request_merge' });
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_merge' },
+      fx.ctx,
+    );
+
+    expect(read.gate?.id).toBe(gate.id);
+    expect(read.gate?.kind).toBe('pull_request_merge');
+    expect(read.routedToLabel).not.toBeNull();
+  });
+});

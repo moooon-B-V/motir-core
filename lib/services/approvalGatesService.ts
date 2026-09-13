@@ -9,7 +9,7 @@ import type {
 } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { handlerFor } from '@/lib/approvalGates/registry';
+import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import {
   ApprovalGateAlreadyDecidedError,
@@ -388,7 +388,19 @@ export const approvalGatesService = {
       // page's render path, so a per-render round trip is exactly what it may
       // not add. `routeTo` reads the item already in hand and resolves no row of
       // its own.
-      const routedToId = handlerFor(input.kind).routeTo({ item, ctx, tx });
+      //
+      // ⚠️ A KIND THIS BUILD DOES NOT REGISTER STILL HAS A ROW TO DRAW
+      // (MOTIR-5223). The approval overlay is addressed by (work item, kind)
+      // from a URL, so it asks this read about `pull_request_merge` as readily
+      // as `design_result` — and `handlerFor` THROWS for a kind with no
+      // handler, which is right at the decide door and wrong on a render read,
+      // whose honest answer is the row plus the not-built-yet arm. Such a kind
+      // has no `routeTo` of its own to consult, so it takes §2's shared
+      // expression (`routingTargetId`) — the rule every registered handler
+      // implements, not a second copy of it.
+      const routedToId = isRegisteredGateKind(input.kind)
+        ? handlerFor(input.kind).routeTo({ item, ctx, tx })
+        : routingTargetId(item);
       const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
 
       return {
