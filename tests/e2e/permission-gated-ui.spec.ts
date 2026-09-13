@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   seedPermissionGatedUi,
@@ -172,7 +172,10 @@ test('a MEMBER is offered ONE settings room — Approvals, read-only — and eve
   // PANEL 4 — THE ROOM A MEMBER MAY READ, as a real round trip rather than a
   // rail-only check. The stored value is flipped OFF first (the column defaults
   // on), so a page that rendered a default instead of reading the row cannot pass.
-  await db.project.update({
+  // `adminDb`, not the `db` singleton: under `motir_app` a singleton write is
+  // silently refused, and `tests/rls/test-singleton-statement-guard.test.ts`
+  // ratchets that population down.
+  await adminDb.project.update({
     where: { id: seed.projectId },
     data: { acceptanceVideoEnabled: false },
   });
