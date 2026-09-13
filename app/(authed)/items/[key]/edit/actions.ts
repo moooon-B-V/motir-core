@@ -1,7 +1,10 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
+import { getErrorsTranslator, getServerTranslator } from '@/lib/i18n/errorsTranslator';
+import { foldersService } from '@/lib/services/foldersService';
+import { CrossProjectFolderError, FolderNotFoundError } from '@/lib/folders/errors';
+import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -117,6 +120,43 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
     if (err instanceof IllegalParentTypeError)
       return { ok: false, error: workItemErrorMessage(err, t), field: 'parent' };
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
+    throw err;
+  }
+}
+
+/**
+ * File a work item into a folder, or take it out of one, from the quick view's
+ * Folder field (Story MOTIR-5308 · MOTIR-5316). Transport only: the placement
+ * rules — filing clears a work-item parent, a subtask may not land at the root —
+ * are `fileWorkItem`'s. Answers in the rail's own result shape, and the success
+ * arm carries the row's new `updatedAt` so the rail's NEXT edit submits a fresh
+ * token (MOTIR-5352).
+ */
+export async function fileWorkItemAction(input: {
+  workItemId: string;
+  folderId: string | null;
+}): Promise<IssueActionResult> {
+  const ctx = await requireContext();
+  try {
+    const result = await foldersService.fileWorkItem(
+      input.workItemId,
+      { folderId: input.folderId ?? null },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, updatedAt: result.updatedAt };
+  } catch (err) {
+    if (err instanceof FolderNotFoundError || err instanceof CrossProjectFolderError) {
+      const tf = await getServerTranslator('folders');
+      return { ok: false, error: tf('fileRefused') };
+    }
+    if (err instanceof ProjectAccessDeniedError) {
+      const ta = await getServerTranslator('projectAccess');
+      return { ok: false, error: ta('readOnlyHint') };
+    }
+    if (err instanceof WorkItemError) {
+      const t = await getErrorsTranslator();
+      return { ok: false, error: workItemErrorMessage(err, t) };
+    }
     throw err;
   }
 }
