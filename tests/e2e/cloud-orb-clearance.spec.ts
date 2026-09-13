@@ -224,7 +224,9 @@ test("the Workbench pager's Next clears the orb at the end of a scrolled page", 
 }) => {
   await seedPaginatedProject(page, `orb-clearance-home-${Date.now()}@example.com`);
 
-  await page.goto('/workbench');
+  // To do is where the seed puts all 65 items, and it has its own address
+  // (MOTIR-5218) — the bare path names no tab.
+  await page.goto('/workbench?tab=todo');
   await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
 
   // ⚠️ THIS CASE USED TO ASSERT A `Next` **LINK** — the keyset pager's one-way

@@ -304,12 +304,12 @@ test('the landing surface splits by LIFECYCLE — to do, in flight, just landed,
   });
 
   await chapter('Five tabs, and the one you land on is what to start', async () => {
-    for (const key of ['todo', 'in-progress', 'finished', 'watching', 'approvals']) {
+    for (const key of ['approvals', 'in-progress', 'todo', 'finished', 'watching']) {
       await expect(page.getByTestId(`workbench-tab-${key}`)).toBeVisible();
     }
-    // To do is the DEFAULT, and it is spelled as the absence of `?tab=` — one
-    // canonical URL per tab, so a link to the Workbench and a link to To do are
-    // the same link.
+    // To do has its OWN address (MOTIR-5218): one canonical URL per tab, and the
+    // bare `/workbench` is the entrance, not To do's spelling.
+    await page.goto('/workbench?tab=todo');
     await expect(page.getByTestId('workbench-tab-todo')).toHaveAttribute('aria-current', 'page');
     await holdsExactly(page, every, [fx.at.todo!, fx.at.blocked!]);
     await beat();
@@ -452,6 +452,7 @@ test('a reader with nothing anywhere meets the all-empty page, not five zeroes',
     projectId: project.id,
   });
   await signIn(page, FRESH, PASSWORD);
+  await page.goto('/workbench?tab=todo');
 
   await expect(page.getByTestId('workbench-page')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Nothing to start' })).toBeVisible();

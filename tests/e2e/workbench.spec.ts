@@ -192,10 +192,14 @@ test.describe('the Workbench journey', () => {
 
     // 1b. THE FIVE-TAB STRIP, as one landmark — the composition every later
     // card in this story merges on top of.
-    await expect(page.getByTestId('workbench-tab-todo')).toHaveAttribute('aria-current', 'page');
-    for (const tab of ['in-progress', 'finished', 'watching', 'approvals']) {
+    for (const tab of ['approvals', 'in-progress', 'todo', 'finished', 'watching']) {
       await expect(page.getByTestId(`workbench-tab-${tab}`)).toBeVisible();
     }
+    // ⚠️ TO DO IS ASKED FOR BY ITS OWN ADDRESS (MOTIR-5218). The bare path names
+    // no tab any more — which tab a landing picks is the resolver's, asserted
+    // where it is built — so a walk about To do's contents opens To do.
+    await page.goto('/workbench?tab=todo');
+    await expect(page.getByTestId('workbench-tab-todo')).toHaveAttribute('aria-current', 'page');
 
     // 2. TO DO — all three relations present, from the ACTIVE project. Every
     // seeded row sits at the workflow's INITIAL status, so the default tab is
@@ -347,6 +351,8 @@ test.describe('the Workbench journey', () => {
     // The fixture is unchanged; only the expectation is.
     const fx = await seed();
     await signIn(page, OWNER, TEST_PASSWORD);
+    // The rows asserted below are To do's; ask for that tab by its address.
+    await page.goto('/workbench?tab=todo');
 
     // Project A is active: its rows, and not project B's.
     await expect(page.locator(row(fx.assigned))).toBeVisible();
@@ -536,6 +542,8 @@ test.describe('the pager and the kind order', () => {
   }) => {
     await seedPaging();
     await signIn(page, PAGER_OWNER, TEST_PASSWORD);
+    // The walk pages To do, so it opens To do by its address (MOTIR-5218).
+    await page.goto('/workbench?tab=todo');
 
     // 1 ── the footer reads the range and the REAL total, and the run is there.
     const footer = page.getByRole('navigation', { name: 'Pagination' });
@@ -552,7 +560,7 @@ test.describe('the pager and the kind order', () => {
     //      which only the server can produce for the third window.
     await page.getByRole('button', { name: 'Page 3' }).click();
     await expect(page.getByText(/Showing 51–61 of 61/)).toBeVisible();
-    await expect(page).toHaveURL(/\?page=3$/);
+    await expect(page).toHaveURL(/\?tab=todo&page=3$/);
     const pageThree = await kindRanks(page);
     expect(pageThree).toHaveLength(11);
 
@@ -571,12 +579,13 @@ test.describe('the pager and the kind order', () => {
     // 3 ── the back chevron returns page two.
     await page.getByRole('button', { name: 'Previous page' }).click();
     await expect(page.getByText(/Showing 26–50 of 61/)).toBeVisible();
-    await expect(page).toHaveURL(/\?page=2$/);
+    await expect(page).toHaveURL(/\?tab=todo&page=2$/);
 
-    // 4 ── page one carries NO param, and prev is inert there.
+    // 4 ── page one carries NO page param — the tab's own address — and prev is
+    //      inert there.
     await page.getByRole('button', { name: 'Page 1' }).click();
     await expect(page.getByText(/Showing 1–25 of 61/)).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}\\?tab=todo$`));
     await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
 
     // 5 ── every other tab carries the footer with its OWN total.
@@ -602,7 +611,7 @@ test.describe('the pager and the kind order', () => {
     // 10 ── `zh`. The pager's range line and its controls' accessible names are
     //       the Chinese strings, so an untranslated control fails the walk.
     await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: page.url() }]);
-    await page.goto('/workbench');
+    await page.goto('/workbench?tab=todo');
     await expect(page.getByText(/显示第 1–25 项，共 61 项/)).toBeVisible();
     await expect(page.getByRole('navigation', { name: '分页' })).toBeVisible();
     await expect(page.getByRole('button', { name: '下一页' })).toBeVisible();
@@ -615,6 +624,7 @@ test.describe('the pager and the kind order', () => {
     await seedPaging();
     // The second seeded reader owns nothing, so every tab is empty for them.
     await signIn(page, PAGER_EMPTY, TEST_PASSWORD);
+    await page.goto('/workbench?tab=todo');
 
     await expect(page.getByRole('heading', { name: 'Nothing to start' })).toBeVisible();
     // ⚠️ THE ABSENCE IS THE ASSERTION. "A pager on every tab", read literally,

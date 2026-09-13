@@ -15,7 +15,8 @@ import { workbenchTabHref } from '@/lib/workbench/tab';
 // rather than a shortcut. The selection has to live in the URL: a tab held only
 // in component state cannot be linked, cannot survive a reload, and cannot be
 // asserted without driving a click. So each tab is a real `<a>` carrying
-// `aria-current="page"`, and To do is spelled as the ABSENCE of `?tab=`.
+// `aria-current="page"`, and every tab — To do included — carries its own
+// `?tab=` (MOTIR-5218; the bare `/workbench` names no tab).
 //
 // Styled to match the shipped `Segmented` exactly — the same
 // `--el-tabnav-track` track at `--radius-btn` with a 2px inset, the same raised
