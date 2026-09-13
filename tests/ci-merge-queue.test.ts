@@ -161,6 +161,10 @@ const contextFor = (event: Event): Record<string, string> => ({
   'github.ref': event === 'push' ? 'refs/heads/main' : 'refs/pull/1/merge',
   'needs.changes.outputs.app': 'true',
   'needs.changes.outputs.images': 'true',
+  // The package lanes' flags (MOTIR-5323), `'true'` for the same reason.
+  'needs.changes.outputs.pkg_cli': 'true',
+  'needs.changes.outputs.pkg_orchestrator': 'true',
+  'needs.changes.outputs.pkg_design_system': 'true',
 });
 
 /**
@@ -287,9 +291,13 @@ const PUSH_LANE = [
   'design-guards',
   'cli',
   // The third package lane (MOTIR-4299), here for the same reason its two
-  // neighbours are: it carries no `if:`, because a package's own suite is not
-  // something a bypassed merge should be able to skip. It measured 1m2s in CI,
-  // so the invariant above is intact — the lane's length is still `lint`'s.
+  // neighbours are: a package's own suite is not something a bypassed merge
+  // should be able to skip. It measured 1m2s in CI, so the invariant above is
+  // intact — the lane's length is still `lint`'s.
+  //
+  // ⚠️ All three package lanes carry an `if:` since MOTIR-5323 — each reads its
+  // own `pkg_*` flag — and they are STILL here, because the `changes` job fails
+  // open on a push (a push carries no base to diff) and emits every flag `true`.
   'orchestrator',
   // The docs-guard lane (MOTIR-4408), here for the same reason the two guard
   // lanes above it are: it carries no `if:`, because a lane that exists to run
