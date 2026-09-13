@@ -6721,3 +6721,74 @@ MCP tools and plan proposals are MOTIR-5310's. Drag-and-drop is planned nowhere.
 | **MOTIR-5316** — the Folder field | **GIVES**         | the rail row and its place below Parent, the path value, the picker in file mode, the parent note, the pending / confirmed / refused states, the tree's landed row                                            |
 | **MOTIR-5313** / **MOTIR-5314**   | **TAKES nothing** | the asset is drawn to their rules and adds none                                                                                                                                                               |
 | **MOTIR-5309** — other surfaces   | **GIVES**         | the picker component to reuse on the full page                                                                                                                                                                |
+
+## ⭐ AMENDED 2026-09-13 — the pull-request frame's PORT is the Development block (MOTIR-5327)
+
+Card [MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2) · Story [MOTIR-4906](motir:cmtt4ogi0000dhutx1ekfm43s).
+The full spec is `design/github/design-notes.md` **§20**; the board is `design/github/github.mock.html`
+Panels 12a–12o. This section records what changes in **this** area.
+
+### What this supersedes
+
+The per-run draft of this card (motir-core #2847, evidence `cmtzuqv0j00pzhvtxvj1axmwf`) drew How to
+test as a **separate `How to test` section card after Development**, with its own mock in this area,
+mounted a second time as the port of **each** pull request's frame. That is **superseded** (Yue,
+2026-09-13: _"in the work item page the PRs and how to test should be one block … like the design
+result"_, and _"'approve to merge the PRs' is the gate … they are the same gate, not 2 separated
+things"_):
+
+- How to test joins the pull-request rows **in the Development card**; there is no section of its own.
+- There is **one** gate, _approve to merge the pull requests_, over **all** the run target's pull
+  requests — never a frame per pull request.
+- The block becomes the frame exactly as Design result does.
+
+**The separate `how-to-test` mock is NOT added to this area.** Against the spec it no longer serves as
+a surface: the spec draws no How to test section, and the combined block is owned by the Development
+section's asset in `design/github/` (the spec's _"amends … the Development section's asset in
+`design/github/`"_). A second mock of the same block here would be a copy to keep in step with no
+surface of its own, which is the drift §19 exists to stop. Because this card's branch was rebuilt on
+`origin/main`, the draft's files never landed, so nothing is deleted from `main`.
+
+### The placement table gains a row
+
+The frame's homes (§ _The UNIVERSAL APPROVAL FRAME_ → _Placement_) now include a second item-page
+home. Recorded here rather than edited into that table, so the table stays as MOTIR-4789 drew it:
+
+| route              | where the frame sits                                                                                                                                                                           | door                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **`/items/[key]`** | for an awaiting `pull_request_approval`, inside the **Development** `ContentSectionCard`: band 2 is the rows plus the run's How to test, unchanged from the no-gate card (`design/github` 12c) | you are already on the card |
+
+**No gate ⇒ no frame**, as for Design result: until [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)
+registers the kind, the card renders the same block without bands 1 and 3.
+
+### `approval-control.mock.html` — Panel `U`, port band only
+
+Panel `U`'s _Pull request · code_ frame no longer carries the placeholder
+(a hatched box reading _WHAT CHANGED, and HOW TO TEST IT_ and citing MOTIR-4906 as the owner). **Its port now holds the
+Development block**, composed from `design/github/github.mock.html` Panel 12b: the two derived
+pull-request rows, the caption, and the run's How to test (the rich-text body with a copyable command,
+and a sub-block per repository). The block's CSS is scoped to the port (`.dvb-scope`), its pills are
+`.dvb-pill*` so they cannot collide with this board's gate `.pill`, and its nine sprites are extracted
+from `lucide-react@1.16.0` (`node scripts/audit-mock-sprites.mjs design/work-items/approval-control.mock.html --strict`: 0 drifted).
+
+**The edit stops at the port band.** Band 1 (_Pull request · code_ with one pull request's branch) and
+band 3 (_Approve_) are unchanged here. Their words for the one approve-and-merge gate — a kind label
+over all the run's pull requests, and _Approve and merge_ — are MOTIR-4909's, drawn in
+`design/github` 12c; re-wording them in this board is left to that story so this asset is not edited
+in two places at once.
+
+### No overlay
+
+No overlay and no full-screen view is drawn in either asset. The port's _Expand_ control is the frame's
+own and is drawn at rest; what it opens is [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u) /
+[MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar)'s, for every gate.
+
+### GIVES / TAKES
+
+| key                                                                                           | GIVES / TAKES                                                                                      |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)                                                 | **GIVES** the port (this block) for the ONE gate. **TAKES** band 1's words and _Approve and merge_ |
+| [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u) / [MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar) | **nothing either way**                                                                             |
+| [MOTIR-4881](motir:cmtrwx33s0054hxphinsoyt0f)                                                 | **nothing either way** — the port draws no review link                                             |
+| [MOTIR-5351](motir:cmtzsio9b01cjhvoirkfuxmxl)                                                 | **GIVES** the narrow row (`design/github` 12n); nothing in this area                               |
+| [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw)                                                 | **GIVES** the block in both homes; the spec is `design/github` §20                                 |
