@@ -66,7 +66,7 @@
         (2) OFF
         (3) no paid AI plan — the entitlement stays with the ORGANISATION, so
             the switch is moot and says so, disabled, with Upgrade
-        (4) read-only — a member who may browse but not manage the project
+        (4) WITHDRAWN 2026-09-13 (MOTIR-5393) — manage-only; the number is kept
         (5) WHAT THE ROOM IS FOR — the readers/writers argument, and where the
             merge-mode switch (ADR §7) lands beside this one
       AMENDED 2026-09-13 (MOTIR-5176, story MOTIR-4880) — the MERGE-MODE row:
@@ -2234,75 +2234,13 @@
       </p>
     </div>
 
-    <!-- ════════════════ PANEL 4 — READ-ONLY ════════════════ -->
+    <!-- ════════════════ PANEL 4 — WITHDRAWN (MOTIR-5393) ════════════════ -->
     <div class="panel-label">
-      4 &middot; <b>Read-only</b> &mdash; a member who may browse the project but does not hold
-      <span class="mono">workflow:manage</span>. The state is fully legible and the control is
-      inert, with a line saying why. The room is NOT hidden: what a project asks of you is something
-      you are entitled to know.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="page" style="max-width: 640px; margin: 0 auto; padding: 22px">
-          <span class="crumb">Settings &middot; motir &middot; Approvals</span>
-          <div class="gcard">
-            <div class="gcard-head">
-              <span class="gtitle"
-                ><svg viewBox="0 0 24 24"><use href="#i-video" /></svg>Acceptance video
-                approval</span
-              >
-              <p class="gdesc">
-                A story that has an acceptance video is held until a person approves it &mdash; it
-                cannot be finished, and its status cannot be moved by hand, until they do. It makes
-                no difference where the video came from: a Motir agent run publishes one, and so
-                does anything using the acceptance API.
-              </p>
-            </div>
-            <div class="gcard-body">
-              <span class="gstate">
-                <span class="gstate-name">On</span>
-                <span class="gstate-what"
-                  >Any story with an acceptance video waits for approval &mdash; whoever published
-                  it.</span
-                >
-              </span>
-              <button
-                class="sw"
-                aria-label="Acceptance video approval"
-                aria-pressed="true"
-                disabled
-              ></button>
-            </div>
-            <div class="gcard-foot">
-              <span class="gfoot-why"
-                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Only a project admin can
-                change this. You are seeing what this project has chosen.</span
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-      <p class="legend">
-        <b>Also a correction.</b> Rendered from its own source, the shipped card&rsquo;s
-        <span class="mono">canManage: false</span> state is byte-identical to its admin state except
-        that the switch will not move &mdash; no explanation anywhere. A disabled control with no
-        reason reads as a bug. The footer line is the whole fix. <br />⚠️
-        <b
-          >The RAIL row has its answer now &mdash; DECIDED (Yue, 2026-09-11): this room is SEEN by a
-          member and CHANGED by an admin.</b
-        >
-        The entry takes TWO keys: <span class="mono">viewPermission: 'project:browse'</span> opens
-        the row and the destination, <span class="mono">permission: 'workflow:manage'</span> stays
-        what the switch requires. As shipped there is only one key, and
-        <span class="mono">app/(authed)/settings/project/_guard.tsx</span> reads that same key to
-        refuse the destination &mdash; so today a member sees no row AND is refused the deep link,
-        and this panel draws a state nothing can reach. The second key is MOTIR-5193&rsquo;s to
-        build. <br />This does not re-open the 2026-08-08 amendment: its rule hides a room the actor
-        &ldquo;has no path to <em>and no need to know exists</em>&rdquo;, and approvals is the first
-        room to fail the first test and pass the second &mdash; what a project asks of you decides
-        whether your own finished work waits. design-notes.md &sect;6 carries the whole argument,
-        the two rejected shapes, and the consequence for every other room.
-      </p>
+      4 &middot; <b>Withdrawn 2026-09-13</b> &mdash; this panel drew a read-only card for a member
+      without <span class="mono">workflow:manage</span>. The room is MANAGE-ONLY (Yue, 2026-09-13):
+      a member who cannot manage the project is refused the room, so nothing renders for them. The
+      number is kept so panels 5&ndash;8 keep theirs. design-notes.md &sect;6 carries the amendment
+      and the struck reasoning.
     </div>
 
     <!-- ════════════════ PANEL 5 — WHAT THE ROOM IS FOR ════════════════ -->
@@ -2703,10 +2641,10 @@
           <b>MANAGE-ONLY, and no read-only state (Yue, 2026-09-13).</b> The room&rsquo;s front end
           is guarded by the permission, so a member who cannot manage the project never lands on the
           page and a read-only render would draw a state nothing reaches.
-          <b>This contradicts</b> panel 4&rsquo;s read-only acceptance card and &sect;6 of
-          design-notes.md (MOTIR-5190), and open PR #2843 (MOTIR-5278), which opens the room to
-          <span class="mono">project:browse</span>; those are named here and not reworked by this
-          card.
+          <b>Resolved by MOTIR-5393:</b> panel 4&rsquo;s acceptance card is withdrawn and &sect;6 of
+          design-notes.md (MOTIR-5190) is amended to manage-only. PR #2843 (MOTIR-5278), which
+          opened the room to <span class="mono">project:browse</span>, merged; MOTIR-5394 reverts
+          it.
         </li>
         <li>
           <b>MOTIR-4882 removes the not-yet notice</b> in the same change that makes Motir merge on
