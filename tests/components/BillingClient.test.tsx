@@ -496,6 +496,70 @@ describe('BillingClient', () => {
     expect(screen.getByText('Everything in Standard, plus')).toBeTruthy();
   });
 
+  // MOTIR-5274 — the allotment line states the grant's CADENCE, read off the
+  // catalog entry, never off the tier key: a later tier with a one-time grant
+  // must render the one-time form without anyone remembering to special-case it.
+  it('every storefront card states its allotment in the form its CADENCE names', async () => {
+    renderWithBody(activeStandard());
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+    await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+
+    const withAllotment = BILLING_CATALOG.aiPlans.filter((p) => p.allotment);
+    expect(withAllotment.some((p) => p.allotment!.cadence === 'one_time')).toBe(true);
+    expect(withAllotment.some((p) => p.allotment!.cadence === 'monthly')).toBe(true);
+    for (const plan of withAllotment) {
+      const n = plan.allotment!.credits.toLocaleString('en-US');
+      if (plan.allotment!.cadence === 'one_time') {
+        expect(screen.getByText(`${n} credits · one-time`)).toBeTruthy();
+        expect(screen.queryByText(`${n} credits / mo`)).toBeNull();
+      } else {
+        expect(screen.getByText(`${n} credits / mo`)).toBeTruthy();
+      }
+    }
+  });
+
+  it('a Free org (no subscription) sees its grant as ONE-TIME on the overview line, never monthly', async () => {
+    renderWithBody({
+      ...activeStandard(),
+      motirAi: {
+        tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
+        balance: 185,
+        subscription: { status: null, currentPeriodEnd: null, priceId: null, planTier: null },
+      },
+    });
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    expect(screen.getByText('300 credits · one-time')).toBeTruthy();
+    expect(screen.getByText('185 of 300 credits left')).toBeTruthy();
+    expect(screen.queryByText('300 credits / mo')).toBeNull();
+    expect(screen.queryByText('Allotment this month')).toBeNull();
+    expect(screen.getByText(/granted once and don't refresh/)).toBeTruthy();
+  });
+
+  it('a one-time tier in the current-plan strip reads as one-time, with no renewal', async () => {
+    renderWithBody({
+      ...activeStandard(),
+      motirAi: {
+        tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
+        balance: 185,
+        subscription: {
+          status: 'canceled',
+          currentPeriodEnd: null,
+          priceId: null,
+          planTier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
+        },
+      },
+    });
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    // A canceled org is dropped back to Free; its CTA re-enters the plans view.
+    fireEvent.click(screen.getByRole('button', { name: 'Resubscribe' }));
+    await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+
+    expect(screen.getByText('300 credits · one-time · 185 left')).toBeTruthy();
+    expect(screen.queryByText(/300 credits \/ mo/)).toBeNull();
+  });
+
   it('SeatsView surfaces the bundled Motir seat when the org holds a paid AI plan (8.1.25)', async () => {
     const withAiSeat = {
       ...activeStandard(),
