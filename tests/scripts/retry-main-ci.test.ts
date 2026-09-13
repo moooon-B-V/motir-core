@@ -205,7 +205,7 @@ function runScript(api: string, extra: Record<string, string> = {}) {
     const child = spawn('node', ['scripts/retry-main-ci.mjs'], {
       cwd: ROOT,
       env: {
-        PATH: process.env.PATH,
+        ...process.env,
         GITHUB_API_URL: api,
         GITHUB_REPOSITORY: 'acme/app',
         GITHUB_TOKEN: 'fake',
