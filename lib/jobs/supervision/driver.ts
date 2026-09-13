@@ -87,9 +87,30 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002';
 }
 
+/**
+ * EVERY SUPERVISOR THAT CAN OWN A `job_supervision` ROW (MOTIR-4713).
+ *
+ * `JobSupervision.kind` is TEXT so a new supervisor is a registry edit rather
+ * than a migration, and this closed union is the registry: the abandoned-
+ * supervision sweep keys its boot-step and settle dispatch on
+ * `Record<SupervisionKind, …>`, so a supervisor added here without a settle path
+ * is a COMPILE error there rather than a row handed to another fleet's teardown.
+ */
+export const SUPERVISION_KINDS = ['index', 'ci-runner', 'hosted-agent'] as const;
+export type SupervisionKind = (typeof SUPERVISION_KINDS)[number];
+
+/** Narrow a `job_supervision.kind` read back from the database. */
+export function isSupervisionKind(kind: string): kind is SupervisionKind {
+  return (SUPERVISION_KINDS as readonly string[]).includes(kind);
+}
+
 /** Which supervision, and the session instant its clock is anchored to. */
 export interface SupervisionKey {
-  /** Which supervisor — `index` / `ci-runner`. Recorded on the row for the sweep's attribution. */
+  /**
+   * Which supervisor — a {@link SupervisionKind}. Recorded on the row for the
+   * sweep's attribution. Typed as the column is (TEXT), because the sweep reads it
+   * back from the database and narrows it with {@link isSupervisionKind}.
+   */
   kind: string;
   /**
    * WHAT is being supervised, within this run: the `projectId` for the index
