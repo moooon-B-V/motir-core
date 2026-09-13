@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { HowToTestBlock, type HowToTestRowRef } from '@/components/howToTest/HowToTestBlock';
-import type { HowToTestDto, HowToTestPreviewDto } from '@/lib/dto/howToTest';
+import type { HowToTestDto, HowToTestPreviewDto, HowToTestRepoDto } from '@/lib/dto/howToTest';
 import {
   CORE_FETCH,
   CORE_PR,
@@ -381,5 +381,100 @@ describe('an unknown state', () => {
       history: [],
     });
     expect(document.body.textContent).toContain('archived_somehow');
+  });
+});
+
+describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
+  const bare: HowToTestDto = {
+    state: 'record',
+    runTarget: null,
+    owedBy: null,
+    record: null,
+    repos: [],
+    history: [],
+  };
+
+  it('state record with NO record renders the missing callout, not a crash', () => {
+    renderBlock(bare);
+    expect(screen.getByRole('status').textContent).toContain(t.missing.noRun);
+  });
+
+  it('tested_via_ancestor with no run target names nothing and links nowhere', () => {
+    renderBlock({ ...bare, state: 'tested_via_ancestor' });
+    expect(document.body.textContent).toContain('Tested as part of');
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('a record written by no run, with a blank body and no sections, draws only its head', () => {
+    const dto = recordDto({ repos: [], history: [] });
+    renderBlock({ ...dto, record: { ...dto.record!, run: null, bodyMd: '   ' } }, []);
+    const part = screen.getByRole('group', { name: t.title });
+    expect(part.textContent).not.toContain('Written by');
+    expect(within(part).queryByRole('heading', { level: 2 })).toBeNull();
+    expect(screen.queryByText(t.preview.title)).toBeNull();
+  });
+
+  it('a section bound to no row id still takes its heading from the row of the SAME repository', () => {
+    renderBlock(
+      recordDto({
+        repos: [
+          coreRepo({ pullRequest: { ...coreRepo().pullRequest!, id: 'pr-elsewhere' } }),
+          gatewayRepo({ repoName: '', pullRequest: null, fetchCommand: null }),
+        ],
+      }),
+      [ROW_CORE],
+    );
+    expect(screen.getByRole('group', { name: 'moooon/motir-core · #131' })).toBeTruthy();
+  });
+
+  it('a stale section with no pull request names an empty head rather than failing', () => {
+    renderBlock(recordDto({ repos: [coreRepo({ stale: true, pullRequest: null })] }), []);
+    expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
+  });
+
+  it('a not-ready deployment in a state this build does not know renders the raw value', () => {
+    const preview = {
+      status: 'deployment_not_ready',
+      state: 'teleporting',
+      rawState: null,
+      environment: 'preview',
+    } as unknown as HowToTestPreviewDto;
+    const { container } = renderBlock(recordDto({ repos: [coreRepo({ preview })] }));
+    expect(container.textContent).toContain('teleporting');
+    renderBlock(
+      recordDto({
+        repos: [
+          coreRepo({
+            preview: {
+              status: 'deployment_not_ready',
+              state: 'unknown',
+              rawState: null,
+              environment: 'staging',
+            },
+          }),
+        ],
+      }),
+    );
+    expect(document.body.textContent).toContain('The staging deployment for this head is unknown.');
+  });
+
+  it('a check conclusion or a CI status this build does not know renders the raw value', () => {
+    const ci = {
+      status: 'available',
+      checks: [
+        { name: 'e2e', conclusion: 'skipped', rawConclusion: null },
+        { name: 'lint', conclusion: 'unknown', rawConclusion: null },
+      ],
+    } as unknown as HowToTestRepoDto['ci'];
+    const { container } = renderBlock(recordDto({ repos: [coreRepo({ ci })] }));
+    expect(container.textContent).toContain('skipped');
+    expect(container.textContent).toContain('unknown');
+    cleanup();
+    renderBlock(
+      recordDto({
+        repos: [coreRepo({ ci: { status: 'audited' } as unknown as HowToTestRepoDto['ci'] })],
+      }),
+    );
+    expect(screen.getByText('audited')).toBeTruthy();
   });
 });

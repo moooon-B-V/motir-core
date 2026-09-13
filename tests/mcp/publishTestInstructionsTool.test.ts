@@ -283,6 +283,21 @@ describe('runPublishTestInstructions — every refusal carries its own code and 
     expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos\[0\]\.commitSha"/);
   });
 
+  it('an ABSENT body or repos (a caller that skipped the schema) is the same typed refusal, not a crash', async () => {
+    // The transport's schema requires both; the adapter is also reachable from a
+    // direct caller, so an omitted field must degrade to the refusal (MOTIR-5337).
+    const { fx, card } = await scenario();
+    const noBody = errorText(
+      await runPublishTestInstructions(args(card.identifier, { bodyMd: undefined }), fx.ctx),
+    );
+    expect(noBody).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "bodyMd"/);
+    const noRepos = errorText(
+      await runPublishTestInstructions(args(card.identifier, { repos: undefined }), fx.ctx),
+    );
+    expect(noRepos).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos"/);
+    expect(await storedRows()).toHaveLength(0);
+  });
+
   it('no repository sections', async () => {
     const { fx, card } = await scenario();
     const text = errorText(

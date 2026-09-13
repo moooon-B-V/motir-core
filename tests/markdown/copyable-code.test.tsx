@@ -101,6 +101,40 @@ describe('MarkdownView copyableCode (MOTIR-5336)', () => {
     expect(screen.getByText('pnpm dev')).toBeTruthy();
   });
 
+  it('with NO clipboard at all (an insecure origin), says so rather than throwing', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    render(<MarkdownView value={'```sh\npnpm dev\n```'} copyableCode />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    });
+    expect(screen.getByText("Couldn't copy — select the text instead")).toBeTruthy();
+  });
+
+  it('a second copy inside the copied window restarts it, and a bare fence prints no language', async () => {
+    vi.useFakeTimers();
+    const { container } = render(<MarkdownView value={'```\nmake test\n```'} copyableCode />);
+    expect(container.querySelector('.motir-code-block > div > span:first-child')?.textContent).toBe(
+      '',
+    );
+    const control = screen.getByRole('button', { name: 'Copy code' });
+    await act(async () => {
+      fireEvent.click(control);
+    });
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    await act(async () => {
+      fireEvent.click(control);
+    });
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    // 3s after the first copy, but only 1.5s after the second: still copied.
+    expect(control.getAttribute('data-state')).toBe('copied');
+    expect(writeText).toHaveBeenCalledTimes(2);
+    expect(writeText).toHaveBeenLastCalledWith('make test');
+  });
+
   it('WITHOUT the opt-in, a description renders no copy control at all', () => {
     const { container } = render(<MarkdownView value={TWO_COMMANDS} />);
     expect(screen.queryByRole('button', { name: 'Copy code' })).toBeNull();

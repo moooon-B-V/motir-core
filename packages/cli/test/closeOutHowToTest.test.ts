@@ -264,3 +264,63 @@ describe('renderSessionPrBody — the `## How to test` section', () => {
     );
   });
 });
+
+describe('runCloseOutHowToTest — every failure is LOGGED and the run carries on (MOTIR-5337)', () => {
+  const throwing = (what: unknown) => async () => {
+    throw what;
+  };
+
+  it('an unreadable record, an unfetchable prompt and an agent that cannot start are each logged', async () => {
+    const { fn } = agentFn();
+    const unreadable = {
+      workItemHowToTest: throwing(new Error('503 from motir')),
+      dispatchRunCloseOutPrompt: throwing('offline'),
+    } as unknown as MotirClient;
+    const result = await runCloseOutHowToTest({
+      client: unreadable,
+      dispatchRunId: RUN_ID,
+      targetKey: 'PROD-1',
+      summary: summary(),
+      agent: { parsed: agent },
+      runAgentFn: fn as never,
+    });
+    expect(result).toEqual({ targetKey: 'PROD-1', record: null });
+    expect(stderr).toContain('Could not read How to test on PROD-1: 503 from motir');
+    expect(stderr).toContain('Could not fetch the close-out prompt: offline');
+    expect(fn).not.toHaveBeenCalled();
+
+    const spawnFails = vi.fn(throwing('spawn ENOENT'));
+    const after = await runCloseOutHowToTest({
+      client: {
+        workItemHowToTest: throwing(42),
+        dispatchRunCloseOutPrompt: async () => ({
+          targetKey: 'PROD-1',
+          prompt: 'P\n',
+          landedKeys: [],
+        }),
+      } as unknown as MotirClient,
+      dispatchRunId: RUN_ID,
+      targetKey: 'PROD-1',
+      summary: { ...summary(), repos: [] } as unknown as AutoSummary,
+      agent: { parsed: agent },
+      runAgentFn: spawnFails as never,
+    });
+    expect(spawnFails).toHaveBeenCalledWith(expect.objectContaining({ cwd: process.cwd() }));
+    expect(stderr).toContain('Could not read How to test on PROD-1: 42');
+    expect(stderr).toContain('The close-out agent could not run: spawn ENOENT');
+    expect(after.record).toBeNull();
+  });
+
+  it('an agent error object is logged by its message', async () => {
+    const { client } = fakeClient({ before: null, after: null });
+    await runCloseOutHowToTest({
+      client,
+      dispatchRunId: RUN_ID,
+      targetKey: 'PROD-1',
+      summary: summary(),
+      agent: { parsed: agent },
+      runAgentFn: vi.fn(throwing(new Error('killed'))) as never,
+    });
+    expect(stderr).toContain('The close-out agent could not run: killed');
+  });
+});

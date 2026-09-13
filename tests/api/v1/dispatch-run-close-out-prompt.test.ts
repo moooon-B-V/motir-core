@@ -73,6 +73,26 @@ describe('assembleRunCloseOutPrompt — what the close-out agent is told', () =>
   });
 });
 
+describe('assembleRunCloseOutPrompt — a run with nothing to name (MOTIR-5337)', () => {
+  it('says so for no description, an untyped card with no branch, and no landed card at all', () => {
+    const bare = assembleRunCloseOutPrompt({
+      runId: 'run-2',
+      target: { key: 'ACME-9', kind: 'task', title: 'Bare', descriptionMd: '   ' },
+      cards: [{ key: 'ACME-10', title: 'Loose', type: null, sessionBranch: null }],
+    });
+    expect(bare).toContain('(no description)');
+    expect(bare).toContain('- ACME-10 [untyped] Loose\n');
+    expect(bare).toContain('No session branch was recorded for these cards.');
+
+    const empty = assembleRunCloseOutPrompt({
+      runId: 'run-3',
+      target: { key: 'ACME-9', kind: 'task', title: 'Bare', descriptionMd: null },
+      cards: [],
+    });
+    expect(empty).toContain('- (no card landed)');
+  });
+});
+
 describe('GET /api/v1/dispatch-runs/{id}/close-out-prompt', () => {
   let caller: V1ProjectCaller;
 

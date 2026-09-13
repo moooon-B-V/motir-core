@@ -13,6 +13,7 @@ import {
   type PublishTestInstructionsRepoInput,
 } from '@/lib/services/testInstructionsService';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
+import { testInstructionsRepoRepository } from '@/lib/repositories/testInstructionsRepoRepository';
 import {
   TEST_INSTRUCTIONS_MAX_BODY_BYTES,
   TEST_INSTRUCTIONS_MAX_REPOS,
@@ -618,5 +619,44 @@ describe('toTestInstructionsDto', () => {
     expect(dto.bodyMd).toBe(BODY);
     expect(dto.repos.map((r) => r.repoId)).toEqual(['first', 'second']);
     expect(dto.createdAt).toBe(now.toISOString());
+  });
+});
+
+describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
+  it('an ABSENT body or repos list is the typed refusal naming the field, never a TypeError', () => {
+    const base = input('wi', 'repo');
+    expect(() =>
+      normalizeTestInstructionsContent({ ...base, bodyMd: undefined as unknown as string }),
+    ).toThrow(TestInstructionsInvalidFieldError);
+    let err: unknown;
+    try {
+      normalizeTestInstructionsContent({
+        ...base,
+        repos: undefined as unknown as PublishTestInstructionsRepoInput[],
+      });
+    } catch (e) {
+      err = e;
+    }
+    expect((err as TestInstructionsInvalidFieldError).field).toBe('repos');
+  });
+
+  it('the current-record read of an item that does not exist is the typed not-found', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      testInstructionsService.getCurrentForWorkItem('no-such-item', fx.ctx),
+    ).rejects.toBeInstanceOf(TestInstructionsWorkItemNotFoundError);
+  });
+
+  it('inserting NO sections writes nothing and answers 0', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => testInstructionsRepoRepository.createMany([], tx)),
+    ).resolves.toBe(0);
+  });
+
+  it('a project with NO connected repositories says so, rather than listing an empty set', () => {
+    const err = new TestInstructionsRepoNotInProjectError('acme/web', []);
+    expect(err.message).toContain('the project has no connected repositories');
+    expect(err.message).not.toContain('Use one of');
   });
 });
