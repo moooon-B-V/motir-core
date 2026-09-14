@@ -59,8 +59,10 @@ describe('listRootIssues', () => {
 
     const level = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
 
-    // Roots only, key asc — after the seeded Bugs folder row every level leads with (MOTIR-4935).
+    // Roots only, key asc. The root reads its epics, then its folders — the seeded
+    // Bugs folder (MOTIR-4935) — then its other work items (MOTIR-5550).
     expect(level.rows.filter((r) => r.kind !== 'folder').map((r) => r.id)).toEqual([E.id, X.id]);
+    expect(level.rows.map((r) => r.kind)).toEqual(['epic', 'folder', 'bug']);
     expect(level.rows.find((r) => r.id === E.id)?.hasChildren).toBe(true);
     expect(level.rows.find((r) => r.id === X.id)?.hasChildren).toBe(false);
     expect(level.rows.every((r) => r.parentId === null)).toBe(true);
@@ -110,8 +112,8 @@ describe('listRootIssues', () => {
 
     const p1 = await workItemsService.listRootIssues(
       fx.projectId,
-      // Offset 0 is the seeded Bugs folder: folders lead every level (MOTIR-4935).
-      { sort: sort(), take: 1, offset: 1 },
+      // Offset 0 is epic E; the seeded Bugs folder (MOTIR-4935) follows the epics (MOTIR-5550).
+      { sort: sort(), take: 1, offset: 0 },
       fx.ctx,
     );
     expect(p1.rows.map((r) => r.id)).toEqual([E.id]);

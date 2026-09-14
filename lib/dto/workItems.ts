@@ -1034,7 +1034,11 @@ export type ProjectTreeRowDto = FolderTreeRowDto | WorkItemTreeRowDto;
  * 128" affordance.
  */
 export interface TreeLevelDto {
-  /** Folders first (by position), then work items (by the active sort). */
+  /**
+   * Inside a folder: its folders (by position), then its work items (by the
+   * active sort). At the project root: its epics, then its folders, then its
+   * other work items (MOTIR-5550).
+   */
   rows: ProjectTreeRowDto[];
   hasMore: boolean;
   total: number;

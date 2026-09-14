@@ -142,13 +142,16 @@ const rootLevel: TreeLevelDto = {
   total: 4,
 };
 
-function renderTree({ canEdit = true }: { canEdit?: boolean } = {}) {
+function renderTree({
+  canEdit = true,
+  level = rootLevel,
+}: { canEdit?: boolean; level?: TreeLevelDto } = {}) {
   mocks.canEdit.current = canEdit;
   return render(
     <FolderCommandsProvider>
       <NewFolderButton />
       <IssueTreeTable
-        initialLevel={rootLevel}
+        initialLevel={level}
         sort={{ column: 'key', direction: 'asc' }}
         filter={EMPTY_FILTER}
         workflow={workflow}
@@ -214,6 +217,47 @@ describe('IssueTreeTable — create and rename folders', () => {
     expect(screen.queryByRole('textbox', { name: 'Folder name' })).toBeNull();
     expect(mocks.listRootIssuesAction).not.toHaveBeenCalled();
     expect(mocks.listFolderLevelAction).not.toHaveBeenCalled();
+  });
+
+  it('at a root with epics and no folder, New folder opens and lands after the epics and before the other work items', async () => {
+    // The project root reads its epics, then its folders, then the rest (MOTIR-5550).
+    mocks.createFolderAction.mockResolvedValue({
+      ok: true,
+      folder: folderDto('f9', 'Parked', null),
+    });
+    renderTree({
+      level: {
+        rows: [{ ...item(1), kind: 'epic' }, { ...item(2), kind: 'epic' }, item(3)],
+        hasMore: false,
+        total: 3,
+      },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
+    });
+    const input = await screen.findByRole('textbox', { name: 'Folder name' });
+    expect(rowIds()).toEqual([
+      'issue-row-PROD-1',
+      'issue-row-PROD-2',
+      'folder-draft-row',
+      'issue-row-PROD-3',
+    ]);
+
+    fireEvent.change(input, { target: { value: 'Parked' } });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+    });
+
+    await waitFor(() =>
+      expect(rowIds()).toEqual([
+        'issue-row-PROD-1',
+        'issue-row-PROD-2',
+        'folder-row-f9',
+        'issue-row-PROD-3',
+      ]),
+    );
+    expect(mocks.listRootIssuesAction).not.toHaveBeenCalled();
   });
 
   it('the folder menu is keyboard-operable and lists its entries in the design order', async () => {

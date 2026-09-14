@@ -98,12 +98,19 @@ const folderLevel = (fx: WorkItemFixture, folderId: string) =>
 const childLevel = (fx: WorkItemFixture, parentId: string) =>
   workItemsService.listChildIssues(parentId, { sort: sort() }, fx.ctx);
 
-/** The folder rows of a level, then the SET of its work-item rows. */
-function split(level: TreeLevelDto) {
+/**
+ * The folder rows of a level, then the SET of its work-item rows — after
+ * asserting the level's BANDS are in order: at the project root its epics, then
+ * its folders, then its other work items (MOTIR-5550); inside a folder its
+ * folders, then its work items.
+ */
+function split(level: TreeLevelDto, at: 'root' | 'folder' = 'root') {
   const folders = level.rows.filter((r) => r.kind === 'folder');
   const items = level.rows.filter((r) => r.kind !== 'folder');
-  // Folders first: no folder row may sit after a work-item row.
-  expect(level.rows.slice(0, folders.length).every((r) => r.kind === 'folder')).toBe(true);
+  const band = (kind: string) =>
+    at === 'root' ? (kind === 'epic' ? 0 : kind === 'folder' ? 1 : 2) : kind === 'folder' ? 0 : 1;
+  const bands = level.rows.map((r) => band(r.kind));
+  expect(bands).toEqual([...bands].sort((a, b) => a - b));
   return {
     folders: folders.map((r) => [r.id, r.hasChildren]),
     items: items.map((r) => r.id).sort(),
@@ -129,7 +136,7 @@ describe('seam · service → tree read', () => {
       ],
       items: [epic.id, task.id].sort(),
     });
-    expect(split(await folderLevel(fx, y2025.id))).toEqual({ folders: [], items: [] });
+    expect(split(await folderLevel(fx, y2025.id), 'folder')).toEqual({ folders: [], items: [] });
 
     // file: the task leaves the root and is the only row of 2025.
     await file(fx, task.id, y2025.id);

@@ -22,8 +22,11 @@ import {
 // What the card asks this file to prove, and where:
 //   1  a level is its folders THEN its work items, at the root and inside a
 //      folder, with a correct `hasChildren` on every folder  → 'a level'
-//   2  one take/offset walks folders then items with no row repeated or skipped
-//      → 'paging across the boundary'
+//   1a the project ROOT reads its epics, then its folders, then its other work
+//      items, and a sort reorders within the epic and work-item bands only
+//      (MOTIR-5550)  → 'the project root'
+//   2  one take/offset walks the root's three bands with no row repeated or
+//      skipped  → 'paging across the boundary'
 //   3  a filed item appears at the /items root in no read, and the sprint arm
 //      excludes it when asked — while the roadmap's read, which does not ask,
 //      still returns it (the amendment on MOTIR-5314)  → 'filed items leave the root'
@@ -56,7 +59,7 @@ function file(fx: WorkItemFixture, workItemId: string, folderId: string) {
 }
 
 describe('a level', () => {
-  it('is its folders then its work items, at the root and inside each folder', async () => {
+  it('is its folders then its work items inside each folder, and at a root with no epics', async () => {
     const fx = await makeFixture();
     // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
     const bugs = await seededBugsFolderId(fx.projectId);
@@ -135,35 +138,86 @@ describe('a level', () => {
   });
 });
 
-describe('paging across the boundary', () => {
-  it('walks three folders then four work items with take 2, each row exactly once', async () => {
+describe('the project root', () => {
+  it('reads its epics, then its folders, then its other work items, and a sort moves rows only within a band', async () => {
     const fx = await makeFixture();
     // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
     const bugs = await seededBugsFolderId(fx.projectId);
-    const folders = [await folder(fx, 'A'), await folder(fx, 'B'), await folder(fx, 'C')];
+    // Created interleaved, so neither key order nor creation order yields the bands.
+    const task = await createWorkItem(fx, { kind: 'task', title: 'Alpha task' });
+    const zulu = await createWorkItem(fx, { kind: 'epic', title: 'Zulu epic' });
+    const later = await folder(fx, 'Later');
+    const bug = await createWorkItem(fx, { kind: 'bug', title: 'Mike bug' });
+    const alpha = await createWorkItem(fx, { kind: 'epic', title: 'Alpha epic' });
+    // Named to sort FIRST by name, and created last: folders keep their position.
+    const aardvark = await folder(fx, 'Aardvark');
+    const story = await createWorkItem(fx, { kind: 'story', title: 'Bravo story' });
+    const folders = [bugs, later.id, aardvark.id];
+
+    const byKey = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
+    expect(byKey.rows.map((r) => r.id)).toEqual([
+      zulu.id,
+      alpha.id,
+      ...folders,
+      task.id,
+      bug.id,
+      story.id,
+    ]);
+    expect(byKey).toMatchObject({ total: 8, hasMore: false });
+
+    const byTitle = await workItemsService.listRootIssues(
+      fx.projectId,
+      { sort: { column: 'title', direction: 'asc' } },
+      fx.ctx,
+    );
+    expect(byTitle.rows.map((r) => r.id)).toEqual([
+      alpha.id,
+      zulu.id,
+      ...folders,
+      task.id,
+      story.id,
+      bug.id,
+    ]);
+    expect(byTitle).toMatchObject({ total: 8, hasMore: false });
+  });
+});
+
+describe('paging across the boundary', () => {
+  it('walks two epics, three folders and four work items with take 3, straddling both boundaries, each row exactly once', async () => {
+    const fx = await makeFixture();
+    // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
+    const bugs = await seededBugsFolderId(fx.projectId);
+    const folders = [await folder(fx, 'A'), await folder(fx, 'B')];
+    const epics = [];
     const items = [];
     for (let i = 1; i <= 4; i += 1) {
       items.push(await createWorkItem(fx, { kind: 'task', title: `Task ${i}` }));
+      if (i <= 2) epics.push(await createWorkItem(fx, { kind: 'epic', title: `Epic ${i}` }));
     }
 
-    const seen: string[] = [];
+    const pages: string[][] = [];
     const more: boolean[] = [];
     let offset = 0;
     for (;;) {
       const level = await workItemsService.listRootIssues(
         fx.projectId,
-        { sort: sort(), take: 2, offset },
+        { sort: sort(), take: 3, offset },
         fx.ctx,
       );
-      expect(level.total).toBe(8);
-      seen.push(...level.rows.map((r) => r.id));
+      expect(level.total).toBe(9);
+      pages.push(level.rows.map((r) => r.id));
       more.push(level.hasMore);
       offset += level.rows.length;
       if (!level.hasMore) break;
     }
 
-    expect(seen).toEqual([bugs, ...folders.map((f) => f.id), ...items.map((i) => i.id)]);
-    expect(more).toEqual([true, true, true, false]);
+    // Page 1 ends in the folder band; page 2 crosses from the folders into the work items.
+    expect(pages).toEqual([
+      [epics[0]!.id, epics[1]!.id, bugs],
+      [folders[0]!.id, folders[1]!.id, items[0]!.id],
+      [items[1]!.id, items[2]!.id, items[3]!.id],
+    ]);
+    expect(more).toEqual([true, true, false]);
   });
 });
 

@@ -51,11 +51,17 @@ export type WorkItemUpdateInput = Prisma.WorkItemUncheckedUpdateInput;
  * canvas omit it: where a filed item appears on THOSE surfaces is decided by the
  * story that owns them, and a filed item is still the root it was for them.
  *   * `excludeFiled` — the ROOT level leaves out items filed in a folder, because
- *     the /items tree shows them inside their folder instead.
+ *     the /items tree shows them inside their folder instead. Its optional `band`
+ *     narrows that root to its EPICS or to every OTHER kind: the /items root reads
+ *     its epics, then its folders, then the rest (MOTIR-5550), and a band is how
+ *     each part's rows and its count share ONE predicate.
  *   * `folder` — the level IS one folder's filed items.
  * An explicit id set ignores it: a caller naming its rows has named them.
  */
-export type TreeFolderLevel = { kind: 'excludeFiled' } | { kind: 'folder'; folderId: string };
+export type TreeKindBand = 'epics' | 'others';
+export type TreeFolderLevel =
+  | { kind: 'excludeFiled'; band?: TreeKindBand }
+  | { kind: 'folder'; folderId: string };
 import {
   CrossProjectParentError,
   DepthLimitExceededError,
@@ -5657,7 +5663,14 @@ function treeLevelPredicate(
 ): Prisma.Sql {
   if (folderLevel === undefined || hasIds) return parentPred;
   if (folderLevel.kind === 'folder') return Prisma.sql`w."folderId" = ${folderLevel.folderId}`;
-  return parentId === null ? Prisma.sql`${parentPred} AND w."folderId" IS NULL` : parentPred;
+  if (parentId !== null) return parentPred;
+  const band =
+    folderLevel.band === 'epics'
+      ? Prisma.sql` AND w."kind" = 'epic'`
+      : folderLevel.band === 'others'
+        ? Prisma.sql` AND w."kind" <> 'epic'`
+        : Prisma.empty;
+  return Prisma.sql`${parentPred} AND w."folderId" IS NULL${band}`;
 }
 
 function notInTriageSql(alias: string): Prisma.Sql {
