@@ -28,7 +28,13 @@ import { describe, expect, it } from 'vitest';
  * Surfaces that ask "is this organization ENTITLED?" — a question the sentinel
  * answers wrongly if you read a raw field. They must not name it at all.
  */
-const MUST_NOT_READ = ['app/(authed)/settings/organization/page.tsx'];
+// ⚠️ THIS LIST NAMED `app/(authed)/settings/organization/page.tsx` UNTIL MOTIR-5172.
+// That page asked the question for its acceptance-video card, and the card left
+// with the switch's move to the PROJECT tier. The question moved with it: the
+// `Project settings ▸ Approvals` room now asks it — and asks the eligibility
+// service's VERDICT, which is the one place `hasPaidAiPlan` is folded into the
+// feature's answer, rather than the predicate directly. Same rule, new door.
+const MUST_NOT_READ = ['app/(authed)/settings/project/approvals/page.tsx'];
 
 /**
  * Surfaces that ask "WHICH paywall do I render?" — a question that only arises
@@ -45,9 +51,9 @@ function code(file: string): string {
 }
 
 describe('the entitlement read is encapsulated', () => {
-  it.each(MUST_NOT_READ)('%s never reads `hasPaidAiPlan` — it asks the predicate', (file) => {
+  it.each(MUST_NOT_READ)('%s never reads `hasPaidAiPlan` — it asks a shared verdict', (file) => {
     expect(code(file)).not.toContain('hasPaidAiPlan');
-    expect(code(file)).toContain('hasAiEntitlement');
+    expect(code(file)).toMatch(/hasAiEntitlement|acceptanceVideoEligibilityService/);
   });
 
   it.each(MAY_READ_WHEN_GATED)('%s reads it only behind the applicability gate', (file) => {
@@ -60,7 +66,9 @@ describe('the entitlement read is encapsulated', () => {
   });
 
   it('every consumer routes through the predicate module', () => {
-    for (const file of [...MUST_NOT_READ, ...MAY_READ_WHEN_GATED]) {
+    // `MUST_NOT_READ` is not in this loop any more: its one member asks the
+    // eligibility service, which is itself the shared computation (MOTIR-5172).
+    for (const file of MAY_READ_WHEN_GATED) {
       expect(readFileSync(file, 'utf8')).toContain('@/lib/billing/aiEntitlement');
     }
   });

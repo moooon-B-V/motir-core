@@ -100,7 +100,7 @@ export function RequireTwoFactorCard({
   }, [requiresTwoFactor]);
 
   function save(next: boolean) {
-    setEnabled(next); // optimistic — the AcceptanceVideoCard shape
+    setEnabled(next); // optimistic, then reconciled — the `AcceptanceVideoGateCard` shape
     startTransition(async () => {
       const result = await onSave(next);
       if (result.ok) {

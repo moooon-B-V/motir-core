@@ -133,15 +133,14 @@ describe('the reads (MOTIR-3448)', () => {
     expect(wave.match(/jobsDashboardService\.list\w+\(\{/g) ?? []).toHaveLength(3);
   });
 
-  it('row 13 · organization reads the members and the AI access in ONE wave', () => {
-    // The asset counts three serial reads; `listUserWorkspaces` is already
-    // concurrent in the gate's own Promise.all, so the genuine win is two.
+  it('row 13 · organization has ONE pane read — its AI-access arm left with the card', () => {
+    // ⚠️ THIS CASE USED TO ASSERT A TWO-ARM WAVE, `listMembers` + `getAiAccess`.
+    // The second arm's only consumer was the acceptance-video card, which
+    // MOTIR-5172 removed when the switch moved to the project tier — so a
+    // surviving `getAiAccess` here would be a read with nothing reading it.
     const src = code(`${S}/organization/page.tsx`);
-    expect(src).toMatch(
-      /const \[\{ total: memberCount \}, aiAccess\] = await allSettledOrThrow\(\[/,
-    );
-    expect(src).toMatch(/organizationsService\.listMembers\(/);
-    expect(src).toMatch(/billingService\.getAiAccess\(/);
+    expect((src.match(/organizationsService\.listMembers\(/g) ?? []).length).toBe(1);
+    expect(src).not.toMatch(/billingService\.getAiAccess\(/);
     // `resolveActiveOrganization` stays ABOVE: it decides the no-active-org state
     // and supplies the org name the header interpolates.
     const resolve_ = src.indexOf('resolveActiveOrganization');

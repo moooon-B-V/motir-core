@@ -25,7 +25,7 @@ import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 // NEVER `--el-text-muted`, which measures 4.12–4.34:1 on `--el-surface` /
 // `--el-muted` / `--el-surface-soft` and fails AA on every surface this card can
 // land on. The control it replaces used `--el-text-muted` for its description
-// (`AcceptanceVideoCard.tsx`), which is one of the three defects the design found
+// (the org-tier `AcceptanceVideoCard.tsx`, deleted by MOTIR-5172), which is one of the three defects the design found
 // by rendering that card rather than reading it.
 //
 // ⚠️ THREE STATES, AND THE ENTITLEMENT DECIDES THE NAME AND THE SWITCH TOGETHER
@@ -92,6 +92,11 @@ export function AcceptanceVideoGateCard({
 
   return (
     <Card
+      // THE DEEP-LINK TARGET (MOTIR-5172). The acceptance panel's "Go to settings" /
+      // "View settings" links land on `#acceptance-video`; the org-tier card this
+      // replaces carried that id, and a link whose anchor names nothing lands at
+      // the top of the room looking like it worked.
+      id="acceptance-video"
       header={
         <div>
           <h2 className="font-sans text-base font-semibold text-(--el-text)">{t('title')}</h2>

@@ -224,11 +224,10 @@ export async function LateUpperSections({
           <AcceptancePanel
             workItemId={itemId}
             itemIdentifier={itemIdentifier}
-            organizationId={r.acceptanceEligibility.organizationId}
+            projectId={r.projectId}
             eligibility={r.acceptanceEligibility}
             initialEvidence={r.acceptanceEvidence}
             canDecide={r.canDecideAcceptance}
-            settingsHref="/settings/organization"
           />
         </ContentSectionCard>
       ) : null}

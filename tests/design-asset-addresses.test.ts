@@ -1524,6 +1524,17 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'app/(public)/legal',
     why: "The same deletion, cited from the other side (MOTIR-3666 §D3). The Planner card's promise links to `/legal/model-providers`, and the note names BOTH halves of what left — `content/legal/` and the route that served it — because the implementing card has to resolve that href through motir-core's public-site origin rather than as a same-origin path. Naming the absent directory is the point of the sentence, so the citation is deliberate and permanent.",
   },
+  // ── The org-tier ACCEPTANCE-VIDEO card, deleted (MOTIR-5172) ────────────
+  // A deletion, the same shape as the rows above. The switch moved to
+  // `Project settings ▸ Approvals`, and MOTIR-5172 deleted the org-tier control.
+  // The approvals mock's header says the room was drawn against SHIPPED REALITY —
+  // that the old card was rendered from its own source first — and that sentence
+  // is history that stays true. The file is not coming back; the row is permanent.
+  {
+    file: 'design/projects/approvals.mock.html',
+    path: 'app/(authed)/settings/organization/_components/AcceptanceVideoCard.tsx',
+    why: "A point-in-time record in the mock's header comment: the org-tier control MOTIR-4942 rendered from its own source before drawing the room that replaces it. MOTIR-5172 deleted that card when the switch left the organisation tier; the sentence is about what was rendered, and it is still true.",
+  },
   // ── The `(planning)` ROUTE GROUP, deleted (MOTIR-4732, under MOTIR-4725) ──
   // The same shape as the `app/(public)/legal` rows above — a deletion, not a
   // move — and the largest one this table has held, because the group these
