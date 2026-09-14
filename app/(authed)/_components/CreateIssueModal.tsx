@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import { cn } from '@/lib/utils/cn';
 import {
   DraftWithAiButton,
@@ -206,6 +207,10 @@ export function CreateIssueModal({
         // A bad pending link (cycle / cross-workspace) — the whole create was
         // rejected (atomic); surface it on the Linked-issues section.
         setLinksError(result.error);
+      } else if (result.entitlement) {
+        // A §4 cap refusal (MOTIR-5133): the translated sentence is chosen by
+        // the KIND. `result.error` is the server's English string for it.
+        toast({ variant: 'error', title: entitlementExceededMessage(tErr, result.entitlement) });
       } else {
         toast({ variant: 'error', title: result.error });
       }

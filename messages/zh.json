@@ -692,6 +692,15 @@
       "RATE_LIMITED": "上传过于频繁，请稍候再试。",
       "failed": "上传失败，请重试。"
     },
+    "entitlementExceeded": {
+      "work_items": "你的套餐已达到工作项数量上限。",
+      "projects": "你的套餐已达到项目数量上限。",
+      "workspaces": "你的套餐已达到工作区数量上限。",
+      "organizations": "你的套餐已达到组织数量上限。",
+      "file_size": "你的套餐已达到单个文件大小上限。",
+      "storage": "你的套餐已达到存储空间上限。",
+      "custom_domains": "你的套餐已达到自定义域名数量上限。"
+    },
     "customFields": {
       "CUSTOM_FIELD_NOT_FOUND": "未找到自定义字段。",
       "VALUE_TYPE_MISMATCH": "值与字段类型不匹配。",

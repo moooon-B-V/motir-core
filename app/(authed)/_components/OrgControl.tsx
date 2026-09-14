@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import {
   createOrganizationAction,
   createWorkspaceAction,
@@ -53,6 +54,7 @@ export interface OrgControlProps {
 export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
   const ts = useTranslations('shell');
+  const tErr = useTranslations('errors');
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -243,14 +245,16 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
         label={ts('workspaceSwitcher.nameLabel')}
         submitLabel={t('menu.newWorkspace')}
         // MOTIR-5130 — a §4.4 cap refusal comes back as a VALUE, not a throw, so
-        // it is translated into the modal's failure shape and the server's
-        // message (which NAMES the plan limit) is what the reader is told. This
-        // modal used to carry no `onError` at all while its organisation twin
-        // nine lines below did, so the refusal reached the user as a 500 and
-        // then as nothing.
+        // it is translated into the modal's failure shape and the plan limit is
+        // what the reader is told. This modal used to carry no `onError` at all
+        // while its organisation twin nine lines below did, so the refusal
+        // reached the user as a 500 and then as nothing.
+        // MOTIR-5133 — the sentence is chosen by the `entitlement` KIND from the
+        // catalogue, never `result.error`: that is the server's English string,
+        // and a `zh` reader was being shown it verbatim.
         run={async (name) => {
           const result = await createWorkspaceAction(name);
-          if (!result.ok) return { error: result.error };
+          if (!result.ok) return { error: entitlementExceededMessage(tErr, result.entitlement) };
         }}
         onDone={() => router.refresh()}
         onError={(message) =>
