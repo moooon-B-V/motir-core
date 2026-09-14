@@ -173,6 +173,16 @@ describe('the SUBJECT the resolver returned as unavailable', () => {
     await waitFor(() => expect(latest()).toBe('rendered'));
   });
 
+  it('reports RENDERED for an EARLIER result whose only reachable file is its note', async () => {
+    const { latest } = renderReporting(
+      <DesignResultPanel
+        evidence={evidence({ assets: [asset({ kind: 'note_file', position: 1 })] })}
+        isDesignCard
+      />,
+    );
+    await waitFor(() => expect(latest()).toBe('rendered'));
+  });
+
   it('reports FAILED for an inline note alone — it is no longer rendered, so nothing to look at', () => {
     const { latest } = renderReporting(
       <DesignResultPanel evidence={evidence({ assets: [] })} isDesignCard />,

@@ -367,3 +367,41 @@ describe('an unmount while the probe is in flight', () => {
     await renderReady(<DesignResultPanel evidence={evidence()} isDesignCard />);
   });
 });
+
+describe('the edges a reader rarely meets', () => {
+  it('the slot drops the separator when only a sha — or nothing — was recorded', () => {
+    const { unmount } = render(
+      <DesignResultPanel
+        evidence={evidence({ producedByKey: null, assets: [NOTE] })}
+        isDesignCard
+        placement="development"
+      />,
+    );
+    const slot = screen.getByRole('group', { name: 'Design result' });
+    expect(slot.textContent).toContain('cafe123');
+    expect(slot.textContent).not.toContain('Published by');
+    expect(slot.textContent).not.toContain(' · ');
+    unmount();
+
+    render(
+      <DesignResultPanel
+        evidence={evidence({ producedByKey: null, commitSha: null, assets: [NOTE] })}
+        isDesignCard
+        placement="development"
+      />,
+    );
+    const bare = screen.getByRole('group', { name: 'Design result' });
+    expect(bare.querySelector('h4 + span')).toBeNull();
+  });
+
+  it('a new result whose mock is reclaimed still offers its note, with no frame above it', () => {
+    const { container } = render(
+      <DesignResultPanel
+        evidence={evidence({ assets: [asset({ kind: 'mock', url: null }), NOTE] })}
+        isDesignCard
+      />,
+    );
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(screen.getByRole('link', { name: /Open note/ })).toBeTruthy();
+  });
+});
