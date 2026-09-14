@@ -202,6 +202,10 @@ const SELF_WALKING_MEMBERS = [
   // every test that shells out to anything, which is a much larger set than the
   // one the lane is for.
   'tests/e2e-page-rooted-locators.test.ts',
+  // MOTIR-5459. Its own `readdirSync` over `app/`, `components/` and the design
+  // system's `src/`; it imports `importGraph`'s `stripComments` and
+  // `tailwindCascade`, neither of which walks a tree — so nothing derives it.
+  'tests/theme/lineClampDisplayOverride.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

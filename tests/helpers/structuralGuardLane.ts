@@ -367,6 +367,16 @@ export const STRUCTURAL_GUARD_SPECS = [
   // database, nothing rendered, and it imports only `node:fs`, `node:path` and
   // `typescript`, so it carries no coverage into the merged report.
   'tests/navigation/shell-single-main-landmark.test.ts',
+  // ── tests/theme/ — the clamp-overridden-by-display guard (MOTIR-5459) ─────
+  // Its own `readdirSync` over `app/`, `components/` and the design system's
+  // `src/`, reading every `.ts`/`.tsx` for class lists that pair a
+  // `line-clamp-*` with a display utility emitted after it — hence the
+  // `SELF_WALKING_MEMBERS` entry in `tests/ci-structural-guards-lane.test.ts`.
+  // It compiles `app/globals.css` once through `tailwindcss` to decide which
+  // neighbours override the clamp; it opens no database, renders nothing, and
+  // imports only `node:*`, `importGraph`'s `stripComments` and
+  // `tailwindCascade`, so it carries no coverage into the merged report.
+  'tests/theme/lineClampDisplayOverride.test.ts',
 ] as const;
 
 /**

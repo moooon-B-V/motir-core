@@ -227,8 +227,12 @@ export function PlanItemNode({
             // title line through its middle — which a `modify`'s diff line already
             // did before any folder existed. One clean ellipsis, the full title in
             // `title`.
+            // MOTIR-5459 — `block` rides WITH `truncate`, never beside `line-clamp-2`:
+            // `truncate` needs a block box for its ellipsis, while `.block` is emitted
+            // after `.line-clamp-2` and would take `display` back from its
+            // `-webkit-box`, leaving the two-line clamp inert.
             title={hasSlot ? item.title : undefined}
-            className={`mt-0.5 block text-sm leading-snug font-semibold ${hasSlot ? 'truncate' : 'line-clamp-2'} ${
+            className={`mt-0.5 text-sm leading-snug font-semibold ${hasSlot ? 'block truncate' : 'line-clamp-2'} ${
               // MOTIR-4260 — `--el-text-secondary`, not `--el-text-muted`: the
               // `remove` frame six elements up paints `bg-(--el-muted)`, where
               // the muted ink is 4.12:1 in light (AA is 4.5) and secondary is
