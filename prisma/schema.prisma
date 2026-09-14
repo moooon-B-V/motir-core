@@ -1082,15 +1082,37 @@ model Workspace {
   organizationId     String
   name               String
   slug               String      @unique
-  /// ⚠️ BEING RETIRED — read `Project.prMergeMode` (MOTIR-4880). The merge policy
-  /// moved to the PROJECT, the tier its reader (the merge gate) is scoped to, and
-  /// nothing reads this column any more. It is NOT removed with its readers: the
-  /// declaration itself is a reader (a `Workspace` fetched without a `select`
-  /// asks for every declared field), so removing it takes three releases —
-  /// Story MOTIR-5175 (`docs/decisions/approval-gates.md` §7's 2026-09-13
-  /// amendment). Its value was copied onto every project by the migration that
-  /// added `Project.prMergeMode`.
-  subtaskPrMergeMode PrMergeMode @default(manual)
+  /// ⚠️ RETIRED, AND STILL DECLARED — this is PHASE 2 of a three-phase column
+  /// removal (MOTIR-5505; `docs/decisions/delivery-reader-migration.md` §6a /
+  /// §6b; `docs/decisions/approval-gates.md` §7 point 3), and both the
+  /// declaration and the `@ignore` are the whole point of the phase, not an
+  /// oversight.
+  ///
+  /// It was the workspace-wide merge policy for pull requests (`manual` /
+  /// `auto`). The policy moved to `Project.prMergeMode`, the tier its reader
+  /// (the merge gate) is scoped to, and the migration that added that column
+  /// copied this value onto every project. PHASE 1 (MOTIR-4880) removed every
+  /// application reader and writer.
+  ///
+  /// ⚠️ `@ignore` IS HOW THE CLIENT STOPS SELECTING THE COLUMN WHILE IT STAYS.
+  /// A Prisma read with no explicit `select` — the bare `findUnique` /
+  /// `findFirst` / `findMany` / `update` calls in `workspaceRepository` among
+  /// them — emits every scalar the model DECLARES, so without it this line
+  /// would itself be a reader, the last one, and the one no grep for the name
+  /// can find. `@ignore` keeps `prisma migrate diff … --exit-code` at exit 0
+  /// (§6b); deleting the field instead IS drift by that gate. The column keeps
+  /// its database default, so an insert that omits it still writes a legal row.
+  /// Tests that are about the column itself read and write it in raw SQL.
+  ///
+  /// ⚠️ DO NOT DELETE THIS FIELD AND THE COLUMN IN ONE CHANGE, and do not drop
+  /// the `@ignore` on its own. `fly.toml`'s `release_command` migrates before any
+  /// new machine takes traffic, so a `DROP COLUMN` must land only after a build
+  /// carrying this `@ignore` is DEPLOYED and serving (MOTIR-5506 verifies that
+  /// from the platform). PHASE 3 (MOTIR-5508) then drops the column and deletes
+  /// this line together, and its migration carries
+  /// `-- @client-stopped-selecting: MOTIR-5505`, the marker
+  /// `tests/contract-phase-guard.test.ts` requires.
+  subtaskPrMergeMode PrMergeMode @default(manual) @ignore
 
   /// Whether every member of this workspace must hold a second factor
   /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
@@ -2012,6 +2034,18 @@ enum PrMergeMode {
   manual
 
   @@map("pr_merge_mode")
+}
+
+/// WHAT AUTHORISED a merge Motir performed (Story MOTIR-4882 · MOTIR-5520;
+/// `approval-gates.md` §4 second amendment, decision 9, and §7a). `gate` — a person
+/// approved a `pull_request_merge` gate; `auto_mode` — the project's `prMergeMode` is
+/// `auto`, and NO person was in the loop. A merge somebody made on the host carries
+/// neither, which is the honest answer rather than a gap.
+enum MergeAuthority {
+  gate
+  auto_mode
+
+  @@map("merge_authority")
 }
 
 /// Which value is THE planning estimate a project's surfaces display + the
@@ -6507,16 +6541,16 @@ model GithubRepo {
 /// repo AND the work item modelled on both sides (the FK-`@relation` rule). Read
 /// through the GitProvider seam as a NormalizedChangeRequest.
 model GithubPullRequest {
-  id                    String    @id @default(cuid())
+  id                    String          @id @default(cuid())
   /// Provider discriminator — always "github" for these rows.
-  provider              String    @default("github")
+  provider              String          @default("github")
   /// FK → GithubRepo.id (internal cuid).
-  repoId                String    @map("repo_id")
+  repoId                String          @map("repo_id")
   number                Int
   /// Normalized change-request state: "open" | "closed" (merged is the boolean).
   state                 String
-  merged                Boolean   @default(false)
-  headRef               String    @map("head_ref")
+  merged                Boolean         @default(false)
+  headRef               String          @map("head_ref")
   /// The branch the change request targets, as of the last delivery (Story
   /// MOTIR-2725 · MOTIR-2729). The completion decision has always compared this
   /// against the repository's mirrored `defaultBranch` — a merge onto anything
@@ -6534,7 +6568,7 @@ model GithubPullRequest {
   /// rule `merged_at` above states for the same reason. Every live path supplies
   /// it: it is REQUIRED on `NormalizedChangeRequest` for both providers and on
   /// the historical backfill, so only pre-existing rows are ever null.
-  baseRef               String?   @map("base_ref")
+  baseRef               String?         @map("base_ref")
   /// The PR's title as of the last webhook delivery (MOTIR-1579 — the
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
@@ -6596,27 +6630,42 @@ model GithubPullRequest {
   /// 2026-08-28). Phase 2 `@ignore`s the field and RELEASES; phase 3 drops the
   /// column with the `-- @client-stopped-selecting:` marker
   /// `tests/contract-phase-guard.test.ts` requires.
-  linkedManually        Boolean   @default(false) @map("linked_manually")
+  linkedManually        Boolean         @default(false) @map("linked_manually")
   /// WHEN the merge landed, stamped from the delivery's `pull_request.merged_at`
   /// (MOTIR-2922). Null on every row that has not merged — and on merged rows
   /// ingested before this column existed, which is why a consumer must treat
   /// null as "unknown", never as "merged at the epoch". `updatedAt` cannot serve
   /// this purpose: a later `check_suite`-driven upsert moves it, so it answers
   /// "when did we last hear about this PR", not "when did the work land".
-  mergedAt              DateTime? @map("merged_at")
+  mergedAt              DateTime?       @map("merged_at")
   /// The repo-relative paths the MERGE touched, captured best-effort after the
   /// status sync commits (MOTIR-2922). Empty when the PR has not merged, when
   /// the capture failed, and on rows that predate the column — all three are the
   /// same "no evidence" state on purpose, because a consumer that could tell
   /// them apart would still have nothing to do with the difference.
-  changedPaths          String[]  @default([]) @map("changed_paths")
+  changedPaths          String[]        @default([]) @map("changed_paths")
   /// Whether `changedPaths` is a PREFIX of the merge's real file list rather
   /// than the whole of it — set when the list exceeded `MAX_CAPTURED_PR_PATHS`
   /// or the page walk hit its cap. A consumer may read absence of a path as
   /// evidence ONLY while this is false (the no-silent-caps rule).
-  changedPathsTruncated Boolean   @default(false) @map("changed_paths_truncated")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  changedPathsTruncated Boolean         @default(false) @map("changed_paths_truncated")
+  /// THE MERGE RECORD (MOTIR-5520) — written ONLY when Motir itself merged or
+  /// enqueued this pull request, never by the webhook. `null` on both means *not
+  /// merged by Motir*, which is every row that predates this column and every merge a
+  /// person made on the host.
+  ///
+  /// ⚠️ IT LIVES HERE AND NOT ON `approval_gate.outcome_ref`, WHICH ALREADY MEANS
+  /// SOMETHING. That column is the status KEY the deciding transaction applied, and
+  /// the item page paints it as a status (`OptimisticStatusProvider.tsx`); a merge SHA
+  /// written there would render as one. An automatic merge has no gate row at all,
+  /// so the pull request is the one place both paths can record what happened.
+  mergeAuthority        MergeAuthority? @map("merge_authority")
+  /// What the merge PRODUCED — the merge commit SHA, or `queue:<entryId>` when the
+  /// pull request was enqueued. The queue entry is what lets a later ejection be
+  /// matched to the entry Motir created (MOTIR-5461).
+  mergeOutcomeRef       String?         @map("merge_outcome_ref")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
 
   repo               GithubRepo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
   checkRuns          GithubCheckRun[]

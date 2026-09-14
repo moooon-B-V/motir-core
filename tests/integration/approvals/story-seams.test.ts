@@ -357,9 +357,10 @@ describe('THE BOUNDARY · a kind this build registers no handler for', () => {
   it('is RETURNED and marked as unregistered rather than throwing or being dropped', async () => {
     const registered = await gate({ title: 'A design', assigneeId: meCtx.userId });
     const unregistered = await gate({
-      title: 'A merge',
+      title: 'An approval',
       assigneeId: meCtx.userId,
-      kind: 'pull_request_merge',
+      // Still a declared hole (MOTIR-4909); `pull_request_merge` is registered (MOTIR-4793).
+      kind: 'pull_request_approval',
     });
 
     const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
@@ -372,7 +373,7 @@ describe('THE BOUNDARY · a kind this build registers no handler for', () => {
 
     // MARKED — the row says the kind rather than pretending it has a subject.
     const row = page.items.find((r) => r.gateId === unregistered.gate.id)!;
-    expect(row.subject).toEqual({ kind: 'pull_request_merge' });
+    expect(row.subject).toEqual({ kind: 'pull_request_approval' });
     // POSITIVE CONTROL: the registered kind's arm is genuinely different, so the
     // assertion above is not just "everything is unregistered".
     const designRow = page.items.find((r) => r.gateId === registered.gate.id)!;

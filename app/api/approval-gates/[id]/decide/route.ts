@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
-import { ApprovalGateError, type ApprovalGateErrorTag } from '@/lib/approvalGates/errors';
-import { approvalGatesService, type GateDecision } from '@/lib/services/approvalGatesService';
+import {
+  ApprovalGateError,
+  ApprovalGateMergeRefusedError,
+  type ApprovalGateErrorTag,
+} from '@/lib/approvalGates/errors';
+import { MergeChangeRequestError } from '@/lib/git/errors';
+import type { GateDecision } from '@/lib/services/approvalGatesService';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
@@ -12,6 +18,12 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // that a property of the CSS rather than of the product. The kind decides the
 // verbs and the effect (`lib/approvalGates/registry.ts`); the door does not
 // branch on it, and neither does this layer.
+//
+// ⚠️ IT CALLS `pullRequestMergeService.decideGate`, NOT THE DOOR DIRECTLY (MOTIR-5517).
+// An APPROVE on a merge gate has to merge BEFORE it is decided — the door runs in one
+// transaction and cannot call a host — so that one case goes through the merge entry
+// point, which decides through the same door once the merge happened. Every other
+// decision reaches `approvalGatesService.decide` unchanged.
 //
 // ⚠️ ADDRESSED BY GATE, NOT BY WORK ITEM, and that is not a style choice. A card
 // carrying a repository SET legitimately holds SEVERAL simultaneous awaiting
@@ -76,7 +88,7 @@ export async function POST(
   }
 
   try {
-    const result = await approvalGatesService.decide(
+    const result = await pullRequestMergeService.decideGate(
       {
         gateId,
         decision,
@@ -97,6 +109,25 @@ export async function POST(
     // the other.
     const gateError = workItemGateErrorResponse(err);
     if (gateError) return gateError;
+    // The HOST refused the merge (MOTIR-5517): the same status table, plus what the
+    // refusal names — the permission to grant, the host's own reason.
+    if (err instanceof ApprovalGateMergeRefusedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, permission: err.permission, reason: err.reason },
+        { status: APPROVAL_GATE_STATUS[err.tag] },
+      );
+    }
+    // The host did not ANSWER — no refusal to render, nothing decided. `502`: an
+    // upstream failed, which is neither the caller's fault nor Motir's refusal.
+    if (err instanceof MergeChangeRequestError) {
+      return NextResponse.json(
+        {
+          code: 'UNEXPECTED',
+          error: 'The Git host did not answer the merge; nothing was decided.',
+        },
+        { status: 502 },
+      );
+    }
     if (err instanceof ApprovalGateError) {
       return NextResponse.json(
         { code: err.code, error: err.message },
@@ -130,6 +161,13 @@ export async function POST(
  * was supposed to. Sharing a status would make a defect indistinguishable from
  * an ordinary race on every surface anybody looks at — so it is a `500`, which
  * is what it is.
+ *
+ * The MERGE refusals (MOTIR-5512) are the HOST saying no to the merge an
+ * approval performs. The four about the pull request's own state are `409`, for
+ * the same reason as the terminal-state refusals above. The missing App
+ * permission is `424` and deliberately NOT `403`: `403` already means THIS actor
+ * lacks the authority, and here the person is entitled — it is Motir's App the
+ * host refused, a dependency failing rather than a caller being turned away.
  */
 const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_NOT_FOUND: 404,
@@ -139,4 +177,9 @@ const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_ALREADY_AWAITING: 409,
   APPROVAL_GATE_KIND_UNREGISTERED: 501,
   APPROVAL_GATE_DECIDED_IMMUTABLE: 500,
+  MERGE_CHECKS_NOT_GREEN: 409,
+  MERGE_CONFLICT: 409,
+  MERGE_BRANCH_PROTECTED: 409,
+  MERGE_ALREADY_MERGED: 409,
+  MERGE_APP_PERMISSION_MISSING: 424,
 };

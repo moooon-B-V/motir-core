@@ -2504,14 +2504,31 @@ export const workItemsService = {
     workItemId: string,
     toStatusKey: string,
     ctx: ServiceContext,
+    opts: {
+      /**
+       * Writes that must commit WITH the status write or not at all, run in its
+       * transaction after the transition applied — the CI promotion's merge gates
+       * (MOTIR-5515). Runs on a no-op move too, which is what makes a retried
+       * promotion finish what a lost race started. The post-commit event below is
+       * unchanged by it.
+       */
+      inTransaction?: (tx: Prisma.TransactionClient) => Promise<void>;
+    } = {},
   ): Promise<WorkItemDto> {
     // MOTIR-2846: `withWorkspaceContext`, not a bare `db.$transaction`. A bare
     // one binds no GUCs, so every gate read inside `applyStatusTransition` —
     // the item, its project, the workflow — comes back empty under `motir_app`
     // and the transition 404s an item that is on the screen.
-    const { dto, transition } = await withWorkspaceContext(ctx, (tx) =>
-      workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx),
-    );
+    const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
+      const applied = await workItemsService.applyStatusTransition(
+        workItemId,
+        toStatusKey,
+        ctx,
+        tx,
+      );
+      if (opts.inTransaction) await opts.inTransaction(tx);
+      return applied;
+    });
     // Post-commit, never inside the tx — a rollback must not have notified
     // (the 5.1.2 rule). A no-op move carries no transition, so it emits
     // nothing. The 5.4.5 watcher job consumes this; 5.7's bell fans in later.

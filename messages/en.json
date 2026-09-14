@@ -397,6 +397,10 @@
       "label": "Delete work items",
       "description": "Permanently delete a work item and everything beneath it. Cannot be undone."
     },
+    "work_item_merge_pull_request": {
+      "label": "Merge pull requests",
+      "description": "Approve a work item's pull request so Motir merges it on the Git host."
+    },
     "work_item_triage": {
       "label": "Triage requests",
       "description": "Accept, decline, promote or snooze an item in the triage queue."
@@ -7436,6 +7440,7 @@
       "review": "Review",
       "subjectMeta": "{files, plural, =1 {# file} other {# files}} · {version}",
       "noVersion": "no version",
+      "mergeSubjectMeta": "{pr} · pull request",
       "subjectGone": "The design this asked about is gone",
       "notRenderable": "Motir cannot show this kind yet",
       "notBuiltYet": "Not built yet",
@@ -8213,6 +8218,9 @@
     },
     "waitingOn": "Waiting on {name}.",
     "theAssignee": "this work item's assignee",
+    "settingsDoor": {
+      "mergeMode": "Change how this project merges pull requests →"
+    },
     "confirm": {
       "title": "Approving this will:",
       "cancel": "Cancel",
@@ -8260,6 +8268,27 @@
       "decidedImmutable": {
         "title": "This decision was already recorded and cannot be changed.",
         "next": "Reload the page. If this keeps happening, it is a defect worth reporting."
+      },
+      "mergeChecksNotGreen": {
+        "title": "This pull request's checks are not green.",
+        "next": "Wait for the checks to finish, or open the pull request to see what failed."
+      },
+      "mergeConflict": {
+        "title": "This pull request conflicts with its base branch.",
+        "next": "Resolve the conflict on the branch. Motir asks again once its checks are green."
+      },
+      "mergeBranchProtected": {
+        "title": "The branch's protection rules do not allow this merge yet.",
+        "next": "Satisfy the rule on GitHub, such as a required review, then approve again."
+      },
+      "mergeAlreadyMerged": {
+        "title": "This pull request is already merged.",
+        "next": "Nothing is left to do. The work item moves when the merge arrives."
+      },
+      "mergeAppPermissionMissing": {
+        "title": "Motir's GitHub App is not allowed to merge here.",
+        "next": "An organisation owner grants {permission} to Motir's GitHub App on GitHub, then you approve again.",
+        "nextUnnamed": "An organisation owner grants Motir's GitHub App the permission GitHub asked for, then you approve again."
       },
       "unexpected": {
         "title": "Your decision could not be recorded.",

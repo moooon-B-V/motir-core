@@ -857,10 +857,16 @@ back keeps its decision record and loses its bytes on the ordinary seven-day
 sweep — the intended loss. Nothing about that is yours to manage; it is here so
 you do not treat a superseded design's missing files as a defect.
 
-**The merge gate does not exist.** Opening a pull request raises no gate today —
-merging still happens on GitHub, exactly as it always has, and
-`docs/approval-gates.md` § _What does not exist yet_ is the list to trust over
-any inference from this section.
+**The merge gate is RAISED ON GREEN, not on opening (Story MOTIR-4882).** Opening a
+pull request raises nothing. When a run target's whole delivery set goes green in a
+`manual` project, Motir raises one `awaiting` `pull_request_merge` gate per pull
+request (`lib/services/mergeGates.ts`), and a push, a close or an unlink withdraws
+it. Approving one MERGES — or enqueues — that pull request first and is decided only
+once the host said yes (`pullRequestMergeService`); a refusal decides nothing. So a
+green card of yours in a manual project is waiting on a person to press merge, and
+the card reaches `done` on the merge webhook, never on your push.
+`docs/approval-gates.md` § _What does not exist yet_ is the list to trust over any
+inference from this section.
 
 ---
 

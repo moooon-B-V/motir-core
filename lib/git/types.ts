@@ -389,3 +389,52 @@ export interface CommitComparison {
    */
   reason?: 'no_common_ancestor' | 'unsupported' | 'unreachable' | 'inexact';
 }
+
+/**
+ * MERGING one change request through its host (Story MOTIR-4882 · MOTIR-5514;
+ * `approval-gates.md` §4 and its second amendment, decisions 5, 7 and 8).
+ */
+export interface MergeChangeRequestInput {
+  installationId: string;
+  owner: string;
+  name: string;
+  number: number;
+  /**
+   * The head commit the decision was taken against. The host refuses a merge whose
+   * head has moved, so a merge can only ever land the commits somebody approved —
+   * and a moved head comes back as `subject_changed`, never as a merge.
+   */
+  expectedHeadSha: string;
+}
+
+/**
+ * Why a host refused a merge, in the SEAM's own words — never a host type and never
+ * an HTTP status. The merge entry point maps these onto the gate's refusal union;
+ * `subject_changed` becomes the shipped `APPROVAL_GATE_SUPERSEDED` there rather than
+ * a refusal of its own.
+ */
+export type MergeRefusalCode =
+  | 'checks_not_green'
+  | 'conflict'
+  | 'branch_protected'
+  | 'already_merged'
+  | 'app_permission_missing'
+  | 'subject_changed';
+
+export interface MergeRefusal {
+  code: MergeRefusalCode;
+  /** `app_permission_missing` only — the permission the host said it needed. */
+  permission?: string;
+  /** The host's own account, where it gave one. For the record, never drawn as copy. */
+  reason?: string;
+}
+
+/**
+ * A merge's answer: it merged; it was handed to the base branch's merge QUEUE
+ * (MOTIR-5516 — `entryId` is the queue entry, and `done` still arrives only through the
+ * merge webhook when the queue lands it); or the host refused with a named reason.
+ */
+export type MergeChangeRequestResult =
+  | { outcome: 'merged'; commitSha: string }
+  | { outcome: 'enqueued'; entryId: string }
+  | { outcome: 'refused'; refusal: MergeRefusal };

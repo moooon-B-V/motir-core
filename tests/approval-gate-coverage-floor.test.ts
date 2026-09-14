@@ -88,9 +88,43 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
       'APPROVAL_GATE_KIND_UNREGISTERED',
       'APPROVAL_GATE_ALREADY_AWAITING',
       'APPROVAL_GATE_DECIDED_IMMUTABLE',
+      'MERGE_CHECKS_NOT_GREEN',
+      'MERGE_CONFLICT',
+      'MERGE_ALREADY_MERGED',
     ] as const) {
       expect(toGateRefusal(tag)).toEqual({ tag });
     }
+  });
+
+  it('carries what the two merge refusals with a payload can SAY (MOTIR-5512)', () => {
+    expect(
+      toGateRefusal('MERGE_APP_PERMISSION_MISSING', { permission: 'contents: write' }),
+    ).toEqual({
+      tag: 'MERGE_APP_PERMISSION_MISSING',
+      permission: 'contents: write',
+    });
+    // No header, or an empty one, is the unnamed arm — never a blank in the sentence.
+    for (const extra of [undefined, {}, { permission: null }, { permission: '' }]) {
+      expect(toGateRefusal('MERGE_APP_PERMISSION_MISSING', extra)).toEqual({
+        tag: 'MERGE_APP_PERMISSION_MISSING',
+        permission: null,
+      });
+    }
+    expect(toGateRefusal('MERGE_BRANCH_PROTECTED', { reason: 'A review is required' })).toEqual({
+      tag: 'MERGE_BRANCH_PROTECTED',
+      reason: 'A review is required',
+    });
+    expect(toGateRefusal('MERGE_BRANCH_PROTECTED')).toStrictEqual({
+      tag: 'MERGE_BRANCH_PROTECTED',
+    });
+  });
+
+  it('has NO member for a changed subject — that is the shipped SUPERSEDED, not a sixth merge refusal (MOTIR-5512)', () => {
+    // §4's second amendment, decision 8: a moved head, a closed pull request or a
+    // lost link SUPERSEDES the gate. A `MERGE_SUBJECT_CHANGED` would be the second
+    // vocabulary `refusals.ts`'s header forbids, so the client must not know it.
+    expect(toGateRefusal('MERGE_SUBJECT_CHANGED')).toEqual({ tag: 'UNEXPECTED' });
+    expect(toGateRefusal('APPROVAL_GATE_SUPERSEDED')).toEqual({ tag: 'APPROVAL_GATE_SUPERSEDED' });
   });
 
   it('carries the decider’s surviving label on ALREADY_DECIDED', () => {

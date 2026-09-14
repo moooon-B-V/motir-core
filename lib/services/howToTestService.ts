@@ -11,6 +11,7 @@ import { assembleHowToTestRepo, liveHeadSha, pickPullRequest } from '@/lib/howTo
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { HowToTestDto, HowToTestRunDto } from '@/lib/dto/howToTest';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { resolveRunTarget } from './runTarget';
 
 /**
  * The HOW TO TEST read (Story MOTIR-4906 · Subtask MOTIR-5333) — per RUN TARGET
@@ -57,19 +58,16 @@ export const howToTestService = {
         createdAt: row.createdAt.toISOString(),
       }));
 
+      // THE RUN TARGET — the one resolution the merge gate's raise also calls
+      // (MOTIR-5515), so the block a person reads and the gate a person is asked
+      // cannot name two different cards.
+      const target = await resolveRunTarget({ hasCurrentRecord: current !== null, ancestors }, tx);
+
       if (!current) {
-        // Nearest ancestor first — `findAncestors` returns root-first.
-        const nearestFirst = [...ancestors].reverse();
-        const ancestorRecords = await testInstructionsRepository.listCurrentByWorkItems(
-          nearestFirst.map((a) => a.id),
-          tx,
-        );
-        const holders = new Set(ancestorRecords.map((r) => r.workItemId));
-        const holder = nearestFirst.find((a) => holders.has(a.id));
-        if (holder) {
+        if (target.kind === 'ancestor') {
           return {
             state: 'tested_via_ancestor',
-            runTarget: { key: holder.identifier },
+            runTarget: { key: target.holder.identifier },
             owedBy: null,
             record: null,
             repos: [],

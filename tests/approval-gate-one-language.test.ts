@@ -24,8 +24,8 @@ import { APPROVAL_GATE_HANDLERS, UNREGISTERED_GATE_KINDS } from '@/lib/approvalG
 //   1 · ONE CONTROL. The approval frame is a shared, composable component:
 //       kind-agnostic in its own source, with everything kind-specific arriving
 //       as props, and every surface that renders a gate rendering THAT module.
-//   2 · ONE DOOR. A gate's DECISION state has exactly one writer, and the two
-//       non-decision writers are DECLARED here with their single call sites.
+//   2 · ONE DOOR. A gate's DECISION state has exactly one writer, and the
+//       non-decision writers are DECLARED here with their call sites.
 //   3 · REGISTRY TOTALITY, the half the shipped probe does not cover: a NEW
 //       member of the enum fails the build.
 //
@@ -197,10 +197,17 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
   const REPO = 'lib/repositories/approvalGateRepository.ts';
   const DOOR = 'lib/services/approvalGatesService.ts';
 
-  /** The two writes that are NOT decisions, each with the production callers it
-   *  is allowed. Adding a caller here is a deliberate act a reviewer sees. */
+  /** The writes that are NOT decisions, each with the production callers it is
+   *  allowed. Adding a row — or a caller — here is a deliberate act a reviewer
+   *  sees. The merge gate (MOTIR-5515) is the second kind to ASK and WITHDRAW:
+   *  `mergeGates.ts` raises one per green pull request and supersedes it BY
+   *  SUBJECT, because a card's two pull requests are two independent questions. */
   const DECLARED_NON_DECISION_WRITERS = [
-    { method: 'create', writes: 'awaiting', callers: ['lib/services/designEvidenceService.ts'] },
+    {
+      method: 'create',
+      writes: 'awaiting',
+      callers: ['lib/services/designEvidenceService.ts', 'lib/services/mergeGates.ts'],
+    },
     {
       method: 'supersedeAwaitingByWorkItem',
       writes: 'superseded',
@@ -212,6 +219,15 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         'lib/services/designEvidenceService.ts',
         'lib/services/githubPullRequestService.ts',
       ],
+    },
+    {
+      // The merge ENTRY POINT (MOTIR-5517) is the second caller, on the record: a
+      // press that finds its pull request moved, closed or unlinked WITHDRAWS the
+      // question instead of merging — the same `superseded` a webhook would write,
+      // reached a moment earlier by the person about to answer it.
+      method: 'supersedeAwaitingBySubject',
+      writes: 'superseded',
+      callers: ['lib/services/mergeGates.ts', 'lib/services/pullRequestMergeService.ts'],
     },
   ] as const;
 
@@ -244,12 +260,12 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     expect(writers).toEqual([REPO]);
   });
 
-  it('keeps each DECLARED non-decision writer to its one caller', () => {
+  it('keeps each DECLARED non-decision writer to its declared callers', () => {
     for (const { method, callers: declared } of DECLARED_NON_DECISION_WRITERS) {
       const callers = SOURCE_FILES.filter((f) =>
         codeOf(f).includes(`approvalGateRepository.${method}(`),
       );
-      expect(callers, `\`${method}\` grew an undeclared caller`).toEqual([...declared].sort());
+      expect(callers, `\`${method}\` grew an undeclared caller`).toEqual([...declared]);
     }
   });
 
