@@ -153,3 +153,20 @@ export interface WorkItemDeliveryDto {
    *  than a merge. */
   baseRef: string | null;
 }
+
+/**
+ * A pull request's MERGE RECORD (Story MOTIR-4882 · MOTIR-5520) — what authorised a
+ * merge Motir performed, and what it produced. Both `null` means Motir did not merge
+ * it: a person merged it on the host, or nobody has.
+ *
+ * Deliberately NOT a field on {@link LinkedPullRequestDto}: the Development surface
+ * renders nothing from it, and the reader it exists for — matching a merge-queue
+ * ejection to the entry Motir created (MOTIR-5461) — is server-side.
+ */
+export interface PullRequestMergeRecordDto {
+  /** `gate` — a person approved the merge gate; `auto_mode` — the project's merge
+   *  mode authorised it, with no person in the loop. */
+  mergeAuthority: 'gate' | 'auto_mode' | null;
+  /** The merge commit SHA, or `queue:<entryId>` for an enqueue. */
+  mergeOutcomeRef: string | null;
+}

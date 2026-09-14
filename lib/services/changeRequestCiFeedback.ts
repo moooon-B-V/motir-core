@@ -13,6 +13,7 @@ import { commentsService } from './commentsService';
 import { workItemsService } from './workItemsService';
 import { promoteDeliveredCardsOnGreen } from './ciPromotion';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
+import { withdrawMergeGatesOnHeadMove } from './mergeGates';
 
 // The provider-agnostic CI / pipeline → work-item feedback consumer (Story 7.10 ·
 // MOTIR-894, generalized for GitLab in Story 7.23 · MOTIR-1477). This is THE ONE
@@ -270,6 +271,11 @@ export async function applyCiStatusFeedback(
         },
         tx,
       );
+      // A pending row is usually the FIRST sign of a new head — a push starts
+      // CI before anything finishes — so it withdraws the old head's merge gate
+      // too (MOTIR-5515). `approval_gate` has no system arm: bind the tenant.
+      await bindWorkspaceContext(tx, resolved.workspaceId);
+      await withdrawMergeGatesOnHeadMove(resolved.prId, tx);
     });
     return {
       event: 'ci',
@@ -354,6 +360,12 @@ export async function applyCiStatusFeedback(
       },
       tx,
     );
+    // A check row for a NEW head is how Motir learns the head moved, so it
+    // withdraws the merge gate asked about the old one, in the transaction that
+    // records it (MOTIR-5515). The current head is the latest check's commit —
+    // the rule the gate's version was written with — so a late row for an OLD
+    // commit withdraws nothing.
+    await withdrawMergeGatesOnHeadMove(resolved.prId, tx);
     return githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx);
   });
 

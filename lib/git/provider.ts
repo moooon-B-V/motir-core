@@ -14,6 +14,8 @@ import type {
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
+  MergeChangeRequestInput,
+  MergeChangeRequestResult,
   NormalizedDeploymentStatus,
 } from './types';
 
@@ -65,6 +67,15 @@ export const REPO_FILE_READ_TIMEOUT_MS = 5_000;
  * so a host that hangs cannot hold a job open indefinitely.
  */
 export const COMMIT_COMPARE_TIMEOUT_MS = 10_000;
+
+/**
+ * Deadline for EACH host call a merge makes, in ms (MOTIR-5514). A merge is a write
+ * a person is waiting on after pressing Approve, so it is bounded like a compare
+ * rather than like a tarball: long enough for a host that is merely slow, short
+ * enough that a host which never answers becomes a typed error instead of a button
+ * that spins.
+ */
+export const MERGE_CHANGE_REQUEST_TIMEOUT_MS = 10_000;
 
 /**
  * The largest file this capability will hand back, in bytes.
@@ -245,6 +256,27 @@ export interface GitProvider {
     base: string,
     head: string,
   ): Promise<CommitComparison>;
+
+  /**
+   * MERGE one change request on the host (Story MOTIR-4882 · MOTIR-5514;
+   * `approval-gates.md` §4 second amendment, decisions 5, 7 and 8).
+   *
+   * ⚠️ OPTIONAL, AND THAT IS THE CAPABILITY DECLARATION. A host that cannot merge
+   * does not implement it, and a caller asks {@link providerSupportsMerge} — the
+   * shape {@link resolveRepoTarballUrl} and its helper already use. MOTIR-4610
+   * replaces capability-by-optional-method with a declared set and converts this
+   * site.
+   *
+   * ⚠️ EVERY ANSWER THE HOST GIVES IS A RESULT, NEVER A THROW: merged, enqueued onto
+   * the base branch's merge queue (MOTIR-5516), or refused with the seam's own code. What throws is only what is not an answer — no
+   * response within {@link MERGE_CHANGE_REQUEST_TIMEOUT_MS}, an unreachable host, or
+   * a status no refusal names (`MergeChangeRequestError`). Turning those into a
+   * refusal would tell a person the host said no when the host said nothing.
+   *
+   * ⚠️ NOTHING ABOVE THE PROVIDER SEES A HOST TYPE OR AN HTTP STATUS. The merge
+   * entry point maps the refusal codes onto the gate's refusal union.
+   */
+  mergeChangeRequest?(input: MergeChangeRequestInput): Promise<MergeChangeRequestResult>;
 
   /**
    * Fetch an installation's account (login + type) from the host, given only the
@@ -434,4 +466,16 @@ export function requireRepoTarballUrlResolver(provider: GitProvider): RepoTarbal
  */
 export function providerSupportsRepoTarballUrl(provider: GitProvider): boolean {
   return typeof provider.resolveRepoTarballUrl === 'function';
+}
+
+/**
+ * Can this host MERGE a change request (MOTIR-5514)? The one predicate a caller asks
+ * before offering a merge — deliberately not a `providerId` allow-list, for the
+ * reason {@link providerSupportsRepoTarballUrl} gives: an allow-list is a second copy
+ * of the capability that drifts the moment a provider gains or loses the method.
+ */
+export function providerSupportsMerge(
+  provider: GitProvider,
+): provider is GitProvider & Required<Pick<GitProvider, 'mergeChangeRequest'>> {
+  return typeof provider.mergeChangeRequest === 'function';
 }

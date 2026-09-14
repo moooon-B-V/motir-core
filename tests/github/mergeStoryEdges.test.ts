@@ -1,0 +1,443 @@
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { db } from '@/lib/db';
+import { getGitProvider } from '@/lib/git';
+import type { GitProvider } from '@/lib/git/provider';
+import {
+  ApprovalGateAlreadyDecidedError,
+  ApprovalGateNotFoundError,
+  ApprovalGateSupersededError,
+} from '@/lib/approvalGates/errors';
+import {
+  pullRequestMergeGateHandler,
+  pullRequestSubjectVersion,
+} from '@/lib/approvalGates/pullRequestMergeHandler';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import {
+  raiseMergeGates,
+  settleGreenVerdict,
+  withdrawMergeGatesOnHeadMove,
+} from '@/lib/services/mergeGates';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import {
+  autoMergeRefusedCommentBody,
+  pullRequestAutoMergeService,
+} from '@/lib/services/pullRequestAutoMergeService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
+import { truncateAuthTables } from '../helpers/db';
+
+// THE MERGE STORY'S DATABASE EDGES (Story MOTIR-4882 · MOTIR-5519 — the coverage floor
+// over MOTIR-5515, MOTIR-5517 and MOTIR-5518). The children's own suites drive the
+// journeys; this one drives the answers that are NOT the journey — a gate whose pull
+// request is gone, a kind the entry point is not for, a provider that cannot merge — so
+// every arm of the merge path is a tested answer rather than an untested guess.
+
+const HEAD = '9840d00ea1b2c3d4e5f60718293a4b5c6d7e8f90';
+const github = getGitProvider('github') as Required<GitProvider>;
+
+let fx: WorkItemFixture;
+
+beforeEach(async () => {
+  await truncateAuthTables();
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "approval_gate" RESTART IDENTITY CASCADE');
+  fx = await makeWorkItemFixture();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
+
+let seq = 0;
+
+/** A card in review delivered by one pull request green at HEAD, holding an awaiting
+ *  merge gate on it, assigned to the fixture's owner. */
+async function mergeGateFor(opts: { parentId?: string; gate?: boolean } = {}) {
+  seq += 1;
+  const item = await workItemsService.createWorkItem(
+    {
+      projectId: fx.projectId,
+      kind: opts.parentId ? 'task' : 'story',
+      title: `Merge me ${seq}`,
+      ...(opts.parentId ? { parentId: opts.parentId } : {}),
+    },
+    fx.ctx,
+  );
+  await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: fx.ownerId } });
+  const installation = await adminDb.githubInstallation.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      installationId: `inst-edges-${seq}-${item.id}`,
+      accountLogin: 'acme',
+      accountType: 'Organization',
+      provider: 'github',
+    },
+  });
+  const repo = await adminDb.githubRepo.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
+      installationId: installation.id,
+      repoId: `repo-edges-${seq}-${item.id}`,
+      owner: 'acme',
+      name: 'web',
+      defaultBranch: 'main',
+      provider: 'github',
+    },
+  });
+  const pr = await adminDb.githubPullRequest.create({
+    data: {
+      repoId: repo.id,
+      number: seq,
+      title: 'Merge me',
+      state: 'open',
+      headRef: `subtask/merge-me-${seq}`,
+      baseRef: 'main',
+      provider: 'github',
+    },
+  });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      workItemId: item.id,
+      githubPullRequestId: pr.id,
+      repoId: repo.id,
+    },
+  });
+  await adminDb.githubCheckRun.create({
+    data: { pullRequestId: pr.id, commitSha: HEAD, checkName: 'Vitest', conclusion: 'success' },
+  });
+  const gate =
+    opts.gate === false
+      ? null
+      : await adminDb.approvalGate.create({
+          data: {
+            workspaceId: fx.workspaceId,
+            projectId: fx.projectId,
+            workItemId: item.id,
+            kind: 'pull_request_merge',
+            subjectId: pr.id,
+            subjectVersion: `acme/web#${seq}@${HEAD}`,
+            routedToId: fx.ownerId,
+          },
+        });
+  return { item, repo, pr, gate };
+}
+
+/** A bare work item in `on`, for a gate that hangs off something other than a delivery. */
+async function bareItem(on: WorkItemFixture = fx) {
+  return workItemsService.createWorkItem(
+    { projectId: on.projectId, kind: 'task', title: 'Bare' },
+    on.ctx,
+  );
+}
+
+const inTx = <T>(
+  fn: (tx: Parameters<Parameters<typeof withWorkspaceContext>[1]>[0]) => Promise<T>,
+) => withWorkspaceContext(fx.ctx, fn);
+const itemRow = (id: string) => adminDb.workItem.findUniqueOrThrow({ where: { id } });
+const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: { id } });
+const setMode = (mode: 'auto' | 'manual') =>
+  adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: mode } });
+
+describe('the version rule and the handler, when there is no head', () => {
+  it('a pull request no check has reported on has no version', () => {
+    expect(
+      pullRequestSubjectVersion({ number: 7, repo: { owner: 'acme', name: 'web' }, checkRuns: [] }),
+    ).toBeNull();
+  });
+
+  it('a gate whose pull request no longer resolves has no version', async () => {
+    const version = await inTx((tx) =>
+      pullRequestMergeGateHandler.subjectVersion({
+        gate: {
+          id: 'g',
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: 'w',
+          subjectId: 'no-such-pull-request',
+        },
+        tx,
+      } as never),
+    );
+    expect(version).toBeNull();
+  });
+});
+
+describe('settleGreenVerdict and raiseMergeGates — the answers that owe nothing', () => {
+  it('no members, or a project that no longer resolves, settle to nothing', async () => {
+    const { item, pr } = await mergeGateFor({ gate: false });
+    const row = await itemRow(item.id);
+    await inTx(async (tx) => {
+      expect(await settleGreenVerdict({ item: row, pullRequestIds: [] }, fx.ctx, tx)).toEqual([]);
+      expect(
+        await settleGreenVerdict(
+          { item: { ...row, projectId: 'no-such-project' }, pullRequestIds: [pr.id] },
+          fx.ctx,
+          tx,
+        ),
+      ).toEqual([]);
+      expect(await raiseMergeGates({ item: row, pullRequestIds: [] }, fx.ctx, tx)).toBe(0);
+    });
+  });
+
+  it('AUTO: the run target owes its green pull request; a child under it and a closed pull request owe nothing', async () => {
+    await setMode('auto');
+    const story = await mergeGateFor({ gate: false });
+    await adminDb.testInstructions.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: story.item.id,
+        bodyMd: '## Open',
+      },
+    });
+    const child = await mergeGateFor({ parentId: story.item.id, gate: false });
+    const [storyRow, childRow] = [await itemRow(story.item.id), await itemRow(child.item.id)];
+
+    await inTx(async (tx) => {
+      expect(
+        await settleGreenVerdict({ item: storyRow, pullRequestIds: [story.pr.id] }, fx.ctx, tx),
+      ).toEqual([{ pullRequestId: story.pr.id, headSha: HEAD }]);
+      expect(
+        await settleGreenVerdict({ item: childRow, pullRequestIds: [child.pr.id] }, fx.ctx, tx),
+      ).toEqual([]);
+      // An auto project raises no gate, whoever asks.
+      expect(
+        await raiseMergeGates({ item: storyRow, pullRequestIds: [story.pr.id] }, fx.ctx, tx),
+      ).toBe(0);
+    });
+
+    await adminDb.githubPullRequest.update({
+      where: { id: story.pr.id },
+      data: { state: 'closed' },
+    });
+    await inTx(async (tx) => {
+      expect(
+        await settleGreenVerdict({ item: storyRow, pullRequestIds: [story.pr.id] }, fx.ctx, tx),
+      ).toEqual([]);
+    });
+  });
+});
+
+describe('withdrawMergeGatesOnHeadMove — nothing to compare against', () => {
+  it('a gate whose pull request is gone, or has no head, is left alone', async () => {
+    const bare = await bareItem();
+    const ghost = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: bare.id,
+        kind: 'pull_request_merge',
+        subjectId: 'no-such-pull-request',
+        subjectVersion: `acme/web#1@${HEAD}`,
+      },
+    });
+    const { pr, gate } = await mergeGateFor();
+    await adminDb.githubCheckRun.deleteMany({ where: { pullRequestId: pr.id } });
+
+    await inTx(async (tx) => {
+      expect(await withdrawMergeGatesOnHeadMove('no-such-pull-request', tx)).toBe(0);
+      expect(await withdrawMergeGatesOnHeadMove(pr.id, tx)).toBe(0);
+    });
+    expect((await gateRow(ghost.id)).state).toBe('awaiting');
+    expect((await gateRow(gate!.id)).state).toBe('awaiting');
+  });
+});
+
+describe('the merge ENTRY POINT refuses before it reaches a host', () => {
+  it('an unknown gate is a not-found', async () => {
+    await expect(
+      pullRequestMergeService.approveMergeGate({ gateId: 'no-such-gate', source: 'ui' }, fx.ctx),
+    ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+  });
+
+  it('a gate of ANOTHER kind is a programming error for approveMergeGate, and decideGate hands it to the door', async () => {
+    const bare = await bareItem();
+    const design = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: bare.id,
+        kind: 'design_result',
+        subjectId: 'ev-1',
+      },
+    });
+    await expect(
+      pullRequestMergeService.approveMergeGate({ gateId: design.id, source: 'ui' }, fx.ctx),
+    ).rejects.toThrow(/handed a design_result gate/);
+
+    const door = vi.spyOn(approvalGatesService, 'decide').mockResolvedValue({} as never);
+    await pullRequestMergeService.decideGate(
+      { gateId: design.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+    expect(door).toHaveBeenCalledWith(
+      { gateId: design.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+  });
+
+  it('a gate whose WORK ITEM is another workspace’s is a not-found', async () => {
+    const foreign = await makeWorkItemFixture();
+    const gate = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: (await bareItem(foreign)).id,
+        kind: 'pull_request_merge',
+        subjectId: 'pr-foreign',
+      },
+    });
+    await expect(
+      pullRequestMergeService.approveMergeGate({ gateId: gate.id, source: 'ui' }, fx.ctx),
+    ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+  });
+
+  it('a SUPERSEDED gate and an already DECIDED one are the door’s own refusals, with no host call', async () => {
+    const seam = vi.spyOn(github, 'mergeChangeRequest');
+    const withdrawn = await mergeGateFor();
+    await adminDb.approvalGate.update({
+      where: { id: withdrawn.gate!.id },
+      data: { state: 'superseded' },
+    });
+    await expect(
+      pullRequestMergeService.approveMergeGate(
+        { gateId: withdrawn.gate!.id, source: 'ui' },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
+
+    const decided = await mergeGateFor();
+    await adminDb.approvalGate.update({
+      where: { id: decided.gate!.id },
+      data: { state: 'approved', decidedById: fx.ownerId, decidedAt: new Date() },
+    });
+    await expect(
+      pullRequestMergeService.approveMergeGate({ gateId: decided.gate!.id, source: 'ui' }, fx.ctx),
+    ).rejects.toBeInstanceOf(ApprovalGateAlreadyDecidedError);
+    expect(seam).not.toHaveBeenCalled();
+  });
+
+  it('a gate whose pull request is GONE is withdrawn', async () => {
+    const bare = await bareItem();
+    const gate = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: bare.id,
+        kind: 'pull_request_merge',
+        subjectId: 'no-such-pull-request',
+        subjectVersion: `acme/web#1@${HEAD}`,
+      },
+    });
+    await adminDb.workItem.update({ where: { id: bare.id }, data: { assigneeId: fx.ownerId } });
+    await expect(
+      pullRequestMergeService.approveMergeGate({ gateId: gate.id, source: 'ui' }, fx.ctx),
+    ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
+    expect((await gateRow(gate.id)).state).toBe('superseded');
+  });
+
+  it('a merge gate on a provider that cannot merge is a programming error, never a refusal', async () => {
+    const { repo, gate } = await mergeGateFor();
+    await adminDb.githubRepo.update({ where: { id: repo.id }, data: { provider: 'gitlab' } });
+    await expect(
+      pullRequestMergeService.approveMergeGate({ gateId: gate!.id, source: 'ui' }, fx.ctx),
+    ).rejects.toThrow(/carries a merge gate/);
+  });
+
+  it('a seam that throws something other than a host failure is rethrown, unlogged and undecided', async () => {
+    const { gate } = await mergeGateFor();
+    vi.spyOn(github, 'mergeChangeRequest').mockRejectedValue(new Error('a bug in the provider'));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      pullRequestMergeService.approveMergeGate({ gateId: gate!.id, source: 'ui' }, fx.ctx),
+    ).rejects.toThrow('a bug in the provider');
+    expect(logged).not.toHaveBeenCalled();
+    expect((await gateRow(gate!.id)).state).toBe('awaiting');
+  });
+});
+
+describe('the AUTO merge skips what it was not dispatched for', () => {
+  const data = (pullRequestId: string, workItemId: string) => ({
+    workspaceId: fx.workspaceId,
+    workItemId,
+    pullRequestId,
+    headSha: HEAD,
+    actorUserId: fx.ownerId,
+    idempotencyKey: `${pullRequestId}:${HEAD}`,
+  });
+
+  it('gone, not open, a provider that cannot merge, and a head that moved under the merge', async () => {
+    const bare = await bareItem();
+    const seam = vi.spyOn(github, 'mergeChangeRequest');
+    await expect(
+      pullRequestAutoMergeService.mergeOnGreen(data('no-such-pull-request', bare.id), {
+        finalAttempt: false,
+      }),
+    ).resolves.toEqual({ outcome: 'skipped', reason: 'gone' });
+
+    const closed = await mergeGateFor({ gate: false });
+    await adminDb.githubPullRequest.update({
+      where: { id: closed.pr.id },
+      data: { state: 'closed' },
+    });
+    await expect(
+      pullRequestAutoMergeService.mergeOnGreen(data(closed.pr.id, closed.item.id), {
+        finalAttempt: false,
+      }),
+    ).resolves.toEqual({ outcome: 'skipped', reason: 'not_open' });
+
+    const gitlab = await mergeGateFor({ gate: false });
+    await adminDb.githubRepo.update({
+      where: { id: gitlab.repo.id },
+      data: { provider: 'gitlab' },
+    });
+    await expect(
+      pullRequestAutoMergeService.mergeOnGreen(data(gitlab.pr.id, gitlab.item.id), {
+        finalAttempt: false,
+      }),
+    ).resolves.toEqual({ outcome: 'skipped', reason: 'provider_cannot_merge' });
+    expect(seam).not.toHaveBeenCalled();
+
+    const moved = await mergeGateFor({ gate: false });
+    seam.mockResolvedValueOnce({ outcome: 'refused', refusal: { code: 'subject_changed' } });
+    await expect(
+      pullRequestAutoMergeService.mergeOnGreen(data(moved.pr.id, moved.item.id), {
+        finalAttempt: false,
+      }),
+    ).resolves.toEqual({ outcome: 'skipped', reason: 'head_moved' });
+    // A moved head is not a refusal to report — no comment on the card.
+    expect(await adminDb.comment.count({ where: { workItemId: moved.item.id } })).toBe(0);
+  });
+
+  it('the permission refusal names the permission when GitHub named one, and says so when it did not', () => {
+    expect(
+      autoMergeRefusedCommentBody('acme/web#7', {
+        code: 'app_permission_missing',
+        permission: 'contents: write',
+      }),
+    ).toContain('grants contents: write');
+    expect(autoMergeRefusedCommentBody('acme/web#7', { code: 'app_permission_missing' })).toContain(
+      'the permission GitHub asked for',
+    );
+  });
+});
+
+describe('the gate repository write the raise uses', () => {
+  it('create is the merge raise’s only writer and needs no mock — a sanity read of the row it writes', async () => {
+    const { gate } = await mergeGateFor();
+    expect(await inTx((tx) => approvalGateRepository.findById(gate!.id, tx))).toMatchObject({
+      kind: 'pull_request_merge',
+      state: 'awaiting',
+    });
+  });
+});

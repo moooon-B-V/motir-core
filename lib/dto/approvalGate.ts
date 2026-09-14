@@ -156,18 +156,36 @@ export interface DesignResultSubjectSummaryDTO {
 }
 
 /**
+ * WHICH PULL REQUEST a merge gate is asking about, at row scale (MOTIR-4793) —
+ * `owner/name#number` and the head the question was raised on, enough to recognise
+ * the change without opening it.
+ */
+export interface PullRequestMergeSubjectSummaryDTO {
+  kind: 'pull_request_merge';
+  /** Motir's own id for the `github_pull_request` row the gate asks about. */
+  pullRequestId: string;
+  /** `owner/name` — the repository half of the reference. */
+  repo: string;
+  number: number;
+  /** The title as last delivered, or null on a row ingested before titles were kept. */
+  title: string | null;
+  /** The head commit the latest recorded checks ran on, or null when none reported. */
+  headSha: string | null;
+}
+
+/**
  * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
  * day this ships, not a defensive branch.
  *
- * `lib/approvalGates/registry.ts` registers exactly one kind and names the other
- * three as declared compile-time holes owned by MOTIR-4907 / 4909 / 4910 / 4882.
+ * `lib/approvalGates/registry.ts` registers two kinds and names the other two as
+ * declared compile-time holes owned by MOTIR-4907 / 4909 / 4910.
  * A gate carrying one of them can exist — a fixture, a half-landed sibling, the
  * day the next story lands its creation path before its renderer — and the
  * honest answer is a row that SAYS the kind is not built yet, which is exactly
  * what `UNREGISTERED_GATE_KINDS` exists at runtime to let a surface do.
  */
 export interface UnregisteredSubjectSummaryDTO {
-  kind: Exclude<ApprovalGateKindDTO, 'design_result'>;
+  kind: Exclude<ApprovalGateKindDTO, 'design_result' | 'pull_request_merge'>;
 }
 
 /**
@@ -182,6 +200,7 @@ export interface UnregisteredSubjectSummaryDTO {
  */
 export type ApprovalGateSubjectSummaryDTO =
   | DesignResultSubjectSummaryDTO
+  | PullRequestMergeSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */

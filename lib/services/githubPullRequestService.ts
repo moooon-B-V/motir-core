@@ -5,6 +5,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { withdrawMergeGateOnUnlink } from './mergeGates';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -485,6 +486,9 @@ export const githubPullRequestService = {
         throw new GithubPullRequestNotFoundError(pullRequestId);
 
       const count = await workItemDeliveryRepository.remove(workItemId, pullRequestId, tx);
+      // The row left the card, so the card's merge question about it goes too, in
+      // the same transaction (MOTIR-5515).
+      if (count > 0) await withdrawMergeGateOnUnlink(workItemId, pullRequestId, tx);
       return { removed: count > 0 };
     }).then(async (result) => {
       // The mirror of the link arm (MOTIR-3675): removing the last delivery makes
@@ -563,6 +567,8 @@ export const githubPullRequestService = {
       // the one named here and keeps the other three, which is the difference
       // between a correction and a retraction.
       const count = await workItemDeliveryRepository.remove(input.workItemId, pr.id, tx);
+      // The same withdrawal the sibling arm makes (MOTIR-5515).
+      if (count > 0) await withdrawMergeGateOnUnlink(input.workItemId, pr.id, tx);
       return { removed: count > 0, pullRequestId: pr.id };
     }).then(async (result) => {
       // The same post-commit refresh both other arms do (MOTIR-3675): removing the

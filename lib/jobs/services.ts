@@ -1,5 +1,6 @@
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
+import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -109,6 +110,7 @@ export const jobServices = {
   // The open-delivery reconcile (MOTIR-5390): re-reads open, delivering pull
   // requests from GitHub and replays a close whose webhook delivery was lost.
   pullRequestReconcile: pullRequestReconcileService,
+  pullRequestAutoMerge: pullRequestAutoMergeService,
 };
 
 export type JobServices = typeof jobServices;

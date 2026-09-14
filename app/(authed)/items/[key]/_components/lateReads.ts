@@ -245,7 +245,13 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
               : null;
           return { ...read, subject };
         } catch {
-          return { gate: null, canDecide: false, routedToLabel: null, subject: null };
+          return {
+            gate: null,
+            canDecide: false,
+            routedToLabel: null,
+            settingsDoor: null,
+            subject: null,
+          };
         }
       })(),
       (async () => {
@@ -290,7 +296,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             ctx,
           );
         } catch {
-          return { gate: null, canDecide: false, routedToLabel: null };
+          return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
         }
       })(),
     ]);

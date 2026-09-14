@@ -397,6 +397,10 @@
       "label": "删除工作项",
       "description": "永久删除工作项及其下级内容，无法撤销。"
     },
+    "work_item_merge_pull_request": {
+      "label": "合并拉取请求",
+      "description": "批准工作项的拉取请求，由 Motir 在 Git 托管平台上完成合并。"
+    },
     "work_item_triage": {
       "label": "处理收件箱",
       "description": "接受、拒绝、升级或延后收件箱中的条目。"
@@ -7424,6 +7428,7 @@
       "review": "查看",
       "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
       "noVersion": "无版本号",
+      "mergeSubjectMeta": "{pr} · 拉取请求",
       "subjectGone": "此项针对的设计已不存在",
       "notRenderable": "Motir 暂不支持展示此类型",
       "notBuiltYet": "尚未实现",
@@ -8201,6 +8206,9 @@
     },
     "waitingOn": "等待 {name} 处理。",
     "theAssignee": "该工作项的负责人",
+    "settingsDoor": {
+      "mergeMode": "更改该项目合并拉取请求的方式 →"
+    },
     "confirm": {
       "title": "批准后将会：",
       "cancel": "取消",
@@ -8248,6 +8256,27 @@
       "decidedImmutable": {
         "title": "该决定已记录，无法更改。",
         "next": "请重新加载页面。若反复出现，这是一个值得上报的缺陷。"
+      },
+      "mergeChecksNotGreen": {
+        "title": "该拉取请求的检查尚未全部通过。",
+        "next": "请等待检查完成，或打开拉取请求查看失败原因。"
+      },
+      "mergeConflict": {
+        "title": "该拉取请求与其目标分支存在冲突。",
+        "next": "请在分支上解决冲突。检查通过后，Motir 会再次请求审批。"
+      },
+      "mergeBranchProtected": {
+        "title": "分支保护规则暂不允许此次合并。",
+        "next": "请先在 GitHub 上满足该规则（例如必需的审查），然后再次批准。"
+      },
+      "mergeAlreadyMerged": {
+        "title": "该拉取请求已经合并。",
+        "next": "无需再做任何操作。合并送达后，工作项会自动推进。"
+      },
+      "mergeAppPermissionMissing": {
+        "title": "Motir 的 GitHub App 无权在此合并。",
+        "next": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 {permission} 权限，然后再次批准。",
+        "nextUnnamed": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 GitHub 所要求的权限，然后再次批准。"
       },
       "unexpected": {
         "title": "无法记录你的决定。",

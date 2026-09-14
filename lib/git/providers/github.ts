@@ -1,14 +1,18 @@
 import { registerGitProvider } from '../registry';
 import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
+import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
+import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import {
   REPO_FILE_MAX_BYTES,
   COMMIT_COMPARE_TIMEOUT_MS,
+  MERGE_CHANGE_REQUEST_TIMEOUT_MS,
   REPO_FILE_READ_TIMEOUT_MS,
   REPO_TARBALL_TIMEOUT_MS,
   type GitProvider,
 } from '../provider';
 import { byteLength, describeBody, normalizeRepoFilePath } from '../fileRead';
 import {
+  MergeChangeRequestError,
   RepoFileReadError,
   RepoTarballUrlMissingLocationError,
   RepoTarballUrlNotRedirectedError,
@@ -31,6 +35,9 @@ import type {
   RepoFileReadResult,
   CommitComparison,
   DeploymentState,
+  MergeChangeRequestInput,
+  MergeChangeRequestResult,
+  MergeRefusal,
   NormalizedDeploymentStatus,
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
@@ -107,6 +114,193 @@ function mapConclusion(raw: string): CiConclusion {
     default:
       return 'neutral'; // neutral / skipped / stale / anything unrecognised
   }
+}
+
+// ── MERGE (MOTIR-5514) ────────────────────────────────────────────────────────
+
+/** One host call of a merge, bounded — a hang or a dead host is a typed error. */
+async function githubMergeFetch(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MERGE_CHANGE_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    throw controller.signal.aborted
+      ? new MergeChangeRequestError('github', 'timeout')
+      : new MergeChangeRequestError('github', 'unreachable', {
+          message: err instanceof Error ? err.message : undefined,
+        });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** A JSON body as a plain object, or null — never an `any`. */
+async function mergeBodyOf(res: Response): Promise<Record<string, unknown> | null> {
+  const body: unknown = await res.json().catch(() => null);
+  return body && typeof body === 'object' && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : null;
+}
+
+function mergeRefused(code: MergeRefusal['code'], extra: Omit<MergeRefusal, 'code'> = {}) {
+  return { outcome: 'refused' as const, refusal: { code, ...extra } };
+}
+
+/**
+ * A 403 names the permission GitHub wanted in `X-Accepted-GitHub-Permissions`
+ * (`contents=write; pull_requests=write`). Its FIRST entry is reported in the form a
+ * person reads on the App's settings page. The header is not guaranteed, and a merge
+ * needs `contents: write`, so that is the fallback.
+ */
+function refusedForPermission(res: Response): MergeChangeRequestResult {
+  const accepted = res.headers.get('x-accepted-github-permissions');
+  const first = accepted?.split(/[;,]/)[0]?.trim();
+  const permission = first && first.includes('=') ? first.replace('=', ': ') : 'contents: write';
+  return mergeRefused('app_permission_missing', { permission });
+}
+
+/**
+ * The repository's allowed merge methods, first allowed wins: squash, merge commit,
+ * rebase (decision 5). `undefined` when the repository row names none — the request
+ * then omits `merge_method` and the HOST applies its own default, rather than this
+ * code guessing one the repository may forbid.
+ */
+function allowedMergeMethod(repo: Record<string, unknown> | null): string | undefined {
+  if (repo?.['allow_squash_merge'] === true) return 'squash';
+  if (repo?.['allow_merge_commit'] === true) return 'merge';
+  if (repo?.['allow_rebase_merge'] === true) return 'rebase';
+  return undefined;
+}
+
+// GitHub's wording for a refusal made by a REQUIRED CHECK. Read from the 405's own
+// message because `mergeable_state` answers `blocked` for a missing review and a
+// failing required check alike.
+const CHECKS_NOT_GREEN_MESSAGE =
+  /status check|checks? (?:is|are) (?:expected|failing|pending|in progress)/i;
+const MERGE_QUEUE_MESSAGE = /merge queue/i;
+
+// ── THE MERGE QUEUE (MOTIR-5516) ────────────────────────────────────────────────
+// The enqueue's own error wording, matched the way the merge path matches the 405's.
+const ALREADY_QUEUED_MESSAGE = /already (?:in|been added to|queued|enqueued)/i;
+const HEAD_MOVED_MESSAGE = /expected head|head (?:oid|sha|commit)|does not match the head/i;
+const ENQUEUE_CHECKS_MESSAGE = /status check|checks? (?:is|are|have|has)\b/i;
+const PERMISSION_MESSAGE = /resource not accessible by integration/i;
+
+const ENQUEUE_MUTATION = `mutation($pullRequestId: ID!, $expectedHeadOid: GitObjectID) {
+  enqueuePullRequest(input: { pullRequestId: $pullRequestId, expectedHeadOid: $expectedHeadOid }) {
+    mergeQueueEntry { id }
+  }
+}`;
+
+const QUEUE_ENTRY_QUERY = `query($pullRequestId: ID!) {
+  node(id: $pullRequestId) { ... on PullRequest { mergeQueueEntry { id } } }
+}`;
+
+/** A plain object, or null — for walking a JSON body without an `any`. */
+function objectOf(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * The permission a refusal NAMES, when the host named one — never guessed. The queue's
+ * permission is undocumented (`approval-gates.md` §4 second amendment, decision 6), so
+ * reading what GitHub says it wanted is the only answer that cannot be wrong.
+ */
+function permissionNamedBy(res: Response): Omit<MergeRefusal, 'code'> {
+  const first = res.headers.get('x-accepted-github-permissions')?.split(/[;,]/)[0]?.trim();
+  return first && first.includes('=') ? { permission: first.replace('=', ': ') } : {};
+}
+
+/** Does the base branch's active ruleset require a merge queue? */
+function rulesRequireMergeQueue(rules: unknown): boolean {
+  return Array.isArray(rules) && rules.some((rule) => objectOf(rule)?.['type'] === 'merge_queue');
+}
+
+/** One GraphQL call of a merge, bounded like every other host call it makes. */
+function githubMergeGraphql(
+  headers: Record<string, string>,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<Response> {
+  return githubMergeFetch(`${GITHUB_API}/graphql`, {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
+  });
+}
+
+/**
+ * ENQUEUE a pull request onto its base branch's merge queue (MOTIR-5516) with
+ * `enqueuePullRequest`, pinned to the head the decision saw (`expectedHeadOid`), and
+ * map every answer onto the seam's own vocabulary:
+ *
+ *   - an entry → `enqueued`;
+ *   - ALREADY QUEUED → `enqueued` with the EXISTING entry, read back — idempotent,
+ *     because a second press on a queued pull request asked for exactly what exists;
+ *   - a head that moved → `subject_changed`; unsatisfied checks → `checks_not_green`;
+ *   - FORBIDDEN → `app_permission_missing`, naming what GitHub asked for;
+ *   - anything else the queue refused → classified as the merge path classifies a 405.
+ */
+async function githubEnqueue(
+  headers: Record<string, string>,
+  pull: Record<string, unknown> | null,
+  expectedHeadSha: string,
+): Promise<MergeChangeRequestResult> {
+  const nodeId = typeof pull?.['node_id'] === 'string' ? pull['node_id'] : null;
+  if (!nodeId) {
+    throw new MergeChangeRequestError('github', 'unexpected_status', {
+      message: 'the pull request carried no node_id to enqueue it by',
+    });
+  }
+
+  const res = await githubMergeGraphql(headers, ENQUEUE_MUTATION, {
+    pullRequestId: nodeId,
+    expectedHeadOid: expectedHeadSha,
+  });
+  if (res.status === 403) return mergeRefused('app_permission_missing', permissionNamedBy(res));
+  if (!res.ok) {
+    throw new MergeChangeRequestError('github', 'unexpected_status', { status: res.status });
+  }
+  const body = await mergeBodyOf(res);
+  const entryId = objectOf(
+    objectOf(objectOf(body?.['data'])?.['enqueuePullRequest'])?.['mergeQueueEntry'],
+  )?.['id'];
+  if (typeof entryId === 'string') return { outcome: 'enqueued', entryId };
+
+  const errors = body?.['errors'];
+  const first = Array.isArray(errors) ? objectOf(errors[0]) : null;
+  const type = typeof first?.['type'] === 'string' ? first['type'] : '';
+  const message = typeof first?.['message'] === 'string' ? first['message'] : '';
+
+  if (type === 'FORBIDDEN' || PERMISSION_MESSAGE.test(message)) {
+    return mergeRefused('app_permission_missing', permissionNamedBy(res));
+  }
+  if (ALREADY_QUEUED_MESSAGE.test(message)) {
+    const existing = await githubMergeGraphql(headers, QUEUE_ENTRY_QUERY, {
+      pullRequestId: nodeId,
+    });
+    const existingBody = existing.ok ? await mergeBodyOf(existing) : null;
+    const existingId = objectOf(
+      objectOf(objectOf(existingBody?.['data'])?.['node'])?.['mergeQueueEntry'],
+    )?.['id'];
+    if (typeof existingId === 'string') return { outcome: 'enqueued', entryId: existingId };
+    throw new MergeChangeRequestError('github', 'unexpected_status', {
+      message: 'the queue said the pull request is already queued, but no entry was found',
+    });
+  }
+  if (HEAD_MOVED_MESSAGE.test(message)) return mergeRefused('subject_changed');
+  if (ENQUEUE_CHECKS_MESSAGE.test(message)) {
+    return mergeRefused('checks_not_green', { reason: message });
+  }
+  if (pull?.['mergeable_state'] === 'dirty') return mergeRefused('conflict');
+  if (first) return mergeRefused('branch_protected', message ? { reason: message } : {});
+  throw new MergeChangeRequestError('github', 'unexpected_status', {
+    status: res.status,
+    message: 'the enqueue answered with neither an entry nor an error',
+  });
 }
 
 export const githubProvider: GitProvider = {
@@ -191,6 +385,143 @@ export const githubProvider: GitProvider = {
     const location = res.headers.get('location');
     if (!location) throw new RepoTarballUrlMissingLocationError(res.status);
     return location;
+  },
+
+  /**
+   * MERGE one pull request — or ENQUEUE it where its base branch requires a merge
+   * queue (Story MOTIR-4882 · MOTIR-5514, MOTIR-5516; `approval-gates.md` §4 second
+   * amendment, decisions 5–8). Every host call is bounded by
+   * `MERGE_CHANGE_REQUEST_TIMEOUT_MS`, and all of them share ONE installation token.
+   *
+   *   1. `GET /repos/{owner}/{name}` — which merge methods the repository ALLOWS.
+   *   2. `GET /pulls/{n}` — the pull request's `node_id` (the queue addresses it by
+   *      one) and its base branch; an already-merged, closed or moved pull request is
+   *      answered here, without a merge call.
+   *   3. `GET /rules/branches/{base}` — a `merge_queue` rule means ENQUEUE, never
+   *      merge (`metadata: read`, which every App holds).
+   *   4. `PUT /pulls/{n}/merge` with `sha: expectedHeadSha`. A 405 saying the branch
+   *      must be merged through the queue ENQUEUES too; any other 405 re-reads the
+   *      pull request, because GitHub answers the same 405 for a conflict, a missing
+   *      review, failing checks and an already-merged pull request.
+   *
+   * ⚠️ THE APP IS CHOSEN BY PROVENANCE (decision 7): a hosted repository mints
+   * through the provisioning App, an imported one through the user-facing App.
+   */
+  async mergeChangeRequest(input: MergeChangeRequestInput): Promise<MergeChangeRequestResult> {
+    const role = githubAppRoleForRepo({ owner: input.owner }, provisioningOrgLogin());
+    const { token } = await mintInstallationToken(input.installationId, role);
+    const repoUrl = `${GITHUB_API}/repos/${input.owner}/${input.name}`;
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${token}`,
+      accept: 'application/vnd.github+json',
+      'user-agent': 'motir',
+    };
+
+    // 1. The allowed merge methods. A repository the App cannot see is a
+    //    permission answer; one that is gone is a subject that changed.
+    const repoRes = await githubMergeFetch(repoUrl, { method: 'GET', headers });
+    if (repoRes.status === 403) return refusedForPermission(repoRes);
+    if (repoRes.status === 404) return mergeRefused('subject_changed');
+    if (!repoRes.ok) {
+      throw new MergeChangeRequestError('github', 'unexpected_status', { status: repoRes.status });
+    }
+    const mergeMethod = allowedMergeMethod(await mergeBodyOf(repoRes));
+
+    // 2. The pull request as it stands now — and the three answers it gives alone.
+    const pullRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+      method: 'GET',
+      headers,
+    });
+    if (pullRes.status === 404) return mergeRefused('subject_changed');
+    if (pullRes.status === 403) {
+      return mergeRefused('app_permission_missing', permissionNamedBy(pullRes));
+    }
+    if (!pullRes.ok) {
+      throw new MergeChangeRequestError('github', 'unexpected_status', { status: pullRes.status });
+    }
+    const pull = await mergeBodyOf(pullRes);
+    if (pull?.['merged'] === true) return mergeRefused('already_merged');
+    if (pull?.['state'] === 'closed') return mergeRefused('subject_changed');
+    const pullHead = objectOf(pull?.['head'])?.['sha'];
+    if (typeof pullHead === 'string' && pullHead !== input.expectedHeadSha) {
+      return mergeRefused('subject_changed');
+    }
+
+    // 3. Does the base branch REQUIRE a merge queue? A rules read that fails is not an
+    //    answer about the queue — the merge's own 405 still routes a queued branch to
+    //    the enqueue below — so it falls through rather than refusing.
+    const baseRef = objectOf(pull?.['base'])?.['ref'];
+    if (typeof baseRef === 'string') {
+      const rulesRes = await githubMergeFetch(
+        `${repoUrl}/rules/branches/${encodeURIComponent(baseRef)}`,
+        { method: 'GET', headers },
+      );
+      if (rulesRes.ok && rulesRequireMergeQueue(await rulesRes.json().catch(() => null))) {
+        return githubEnqueue(headers, pull, input.expectedHeadSha);
+      }
+    }
+
+    // 4. The merge, pinned to the head the decision saw.
+    const mergeRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}/merge`, {
+      method: 'PUT',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify(
+        mergeMethod
+          ? { sha: input.expectedHeadSha, merge_method: mergeMethod }
+          : { sha: input.expectedHeadSha },
+      ),
+    });
+    if (mergeRes.status === 200) {
+      const body = await mergeBodyOf(mergeRes);
+      if (body?.['merged'] === true && typeof body['sha'] === 'string') {
+        return { outcome: 'merged', commitSha: body['sha'] };
+      }
+      throw new MergeChangeRequestError('github', 'unexpected_status', {
+        status: 200,
+        message: 'the merge answered 200 without merged: true',
+      });
+    }
+    if (mergeRes.status === 409 || mergeRes.status === 404) return mergeRefused('subject_changed');
+    if (mergeRes.status === 403) return refusedForPermission(mergeRes);
+    if (mergeRes.status !== 405) {
+      throw new MergeChangeRequestError('github', 'unexpected_status', { status: mergeRes.status });
+    }
+
+    // A 405 — WHICH one.
+    const refusalBody = await mergeBodyOf(mergeRes);
+    const message = typeof refusalBody?.['message'] === 'string' ? refusalBody['message'] : '';
+
+    // The branch must be merged through its queue: ENQUEUE it (MOTIR-5516).
+    if (MERGE_QUEUE_MESSAGE.test(message))
+      return githubEnqueue(headers, pull, input.expectedHeadSha);
+
+    const prRes = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+      method: 'GET',
+      headers,
+    });
+    if (prRes.status === 404) return mergeRefused('subject_changed');
+    if (prRes.status === 403) return refusedForPermission(prRes);
+    if (!prRes.ok) {
+      throw new MergeChangeRequestError('github', 'unexpected_status', { status: prRes.status });
+    }
+    const pr = await mergeBodyOf(prRes);
+    const head = objectOf(pr?.['head']);
+
+    // Ordered by what the person can do about it: nothing is left to do; the
+    // question itself changed; then the three things somebody has to go and fix.
+    if (pr?.['merged'] === true) return mergeRefused('already_merged');
+    if (pr?.['state'] === 'closed') return mergeRefused('subject_changed');
+    if (typeof head?.['sha'] === 'string' && head['sha'] !== input.expectedHeadSha) {
+      return mergeRefused('subject_changed');
+    }
+    if (pr?.['mergeable_state'] === 'dirty') return mergeRefused('conflict');
+    if (CHECKS_NOT_GREEN_MESSAGE.test(message) || pr?.['mergeable_state'] === 'unstable') {
+      return mergeRefused('checks_not_green', message ? { reason: message } : {});
+    }
+    // `blocked`, `behind`, a draft, or a state GitHub adds later: the host said no
+    // and named a rule. It is a refusal with the host's own reason — never a throw,
+    // because the host DID answer.
+    return mergeRefused('branch_protected', message ? { reason: message } : {});
   },
 
   /**
