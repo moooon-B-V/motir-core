@@ -176,6 +176,9 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await page.keyboard.press('Escape');
       await expect(designDialog).toBeHidden();
       await expect(page).toHaveURL(onTheTab);
+      // The queue is back in the accessibility tree first — a role-rooted count
+      // taken while the dialog's hide settles reads 0 VACUOUSLY.
+      await expect(queue(page, en.workbench.tabs.toApprove)).toBeVisible();
       // AUTHORITATIVE: the decided row has left the queue…
       await expect(designRow).toHaveCount(0, { timeout: 30_000 });
       // …and the rows and the badge agree, read in the SAME state.

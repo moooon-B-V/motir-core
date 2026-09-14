@@ -333,9 +333,12 @@ async function resolveGateAuthority(
  * `canEdit`), so the item page and the approval overlay disagreed with the row
  * that opened them.
  *
- * A kind this build does not register has no door at all, so nobody can decide
- * it. The permissions are read ONCE and handed to the authority test, because
- * this is the item page's render path.
+ * ⚠️ A KIND THIS BUILD DOES NOT REGISTER HAS NO FLOOR TO HOLD — no handler names
+ * one — so it keeps the AUTHORITY answer alone, exactly as before this fix. That
+ * is what the Development block's pull-request frame draws *Awaiting you* from
+ * for the person it is routed to (MOTIR-5336); its frame has no verbs, so no
+ * door can disagree with it. The permissions are read ONCE and handed to the
+ * authority test, because this is the item page's render path.
  */
 async function canDecideGate(
   item: { assigneeId: string | null; reporterId: string | null; projectId: string },
@@ -343,9 +346,8 @@ async function canDecideGate(
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  if (!isRegisteredGateKind(kind)) return false;
   const held = await projectAccessService.getPermissions(item.projectId, ctx, tx);
-  if (!held.has(handlerFor(kind).permission)) return false;
+  if (isRegisteredGateKind(kind) && !held.has(handlerFor(kind).permission)) return false;
   return (await resolveGateAuthority(item, ctx, tx, held)) !== null;
 }
 

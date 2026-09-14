@@ -581,14 +581,23 @@ describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR
     expect(read.canDecide).toBe(true);
   });
 
-  it('an UNREGISTERED kind has no door, so nobody may decide it — not even the owner', async () => {
-    const { item } = await designSubtaskWithGate({ kind: 'pull_request_merge' });
+  it('an UNREGISTERED kind names no floor, so it keeps the AUTHORITY answer alone', async () => {
+    // No handler, no `permission` — the Development block's pull-request frame
+    // draws *Awaiting you* from this for the person the gate is routed to
+    // (MOTIR-5336), and a bystander still reads false.
+    const assignee = await projectViewer();
+    const { item } = await designSubtaskWithGate({
+      kind: 'pull_request_merge',
+      assigneeId: assignee.id,
+      reporterId: (await plainMember()).id,
+    });
+    const read = (userId: string) =>
+      approvalGatesService.getForWorkItem(
+        { workItemId: item.id, kind: 'pull_request_merge' },
+        { userId, workspaceId: fx.workspaceId },
+      );
 
-    const read = await approvalGatesService.getForWorkItem(
-      { workItemId: item.id, kind: 'pull_request_merge' },
-      fx.ctx,
-    );
-    expect(read.gate).not.toBeNull();
-    expect(read.canDecide).toBe(false);
+    expect((await read(assignee.id)).canDecide).toBe(true);
+    expect((await read((await plainMember()).id)).canDecide).toBe(false);
   });
 });

@@ -233,11 +233,16 @@ test.describe('every decision waiting on you, in one place', () => {
         (url) => url.pathname === '/workbench' && url.search === '?tab=approvals',
       );
 
-      // AUTHORITATIVE: the row count reaching zero, never a timeout.
-      await expect(rows(page)).toHaveCount(0, { timeout: 30_000 });
-      // …and the badge agrees IN THAT SAME STATE.
+      // AUTHORITATIVE: the tab's empty state, drawn only once the refreshed read
+      // has landed. ⚠️ NOT the row count first: `rows` is role-rooted, and while
+      // the dialog's hide settles the page is still outside the accessibility
+      // tree, so `toHaveCount(0)` passed VACUOUSLY and the badge was read stale.
+      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible({
+        timeout: 30_000,
+      });
+      // …and the rows and the badge agree IN THAT SAME STATE.
+      await expect(rows(page)).toHaveCount(0);
       expect(await badgeCount(page)).toBe(0);
-      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible();
     });
     await beat();
 
