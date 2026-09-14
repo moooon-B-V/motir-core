@@ -166,7 +166,9 @@ test.describe('every decision waiting on you, in one place', () => {
       await expect(rows(page)).toHaveCount(1);
       await expect(rows(page).getByText('Design result')).toBeVisible();
       await expect(
-        rows(page).getByRole('link', { name: new RegExp(seed.designKey) }),
+        // Anchored on the key: since MOTIR-5225 the whole-row door is a link too,
+        // named `Review <KEY> <title>`, and an unanchored match finds both.
+        rows(page).getByRole('link', { name: new RegExp(`^${seed.designKey}`) }),
       ).toBeVisible();
 
       // ⚠️ THE BADGE AND THE ROWS, IN THE SAME PAGE STATE. Two reads a render
