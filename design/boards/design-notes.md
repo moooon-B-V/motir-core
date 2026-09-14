@@ -130,6 +130,85 @@ mirror-product standard, not a deviation.
   the same way with a toast. The card never stays in a rejected position; the
   issue status is unchanged.
 
+### A move HELD by an approval or a merge (panel 2b) — ADDED 2026-09-14 (MOTIR-5525 · story MOTIR-4887)
+
+**Yue's direction, 2026-09-14:** _"the design should be like near or on the status
+control/change, there should be access directly to open the approval gate/port — the full
+screen overlay, give the user a message saying status can't be changed directly and give the
+user the access to the approval gate."_ On the board, the control being used is **the card
+being dragged**, so the message sits ON the card.
+
+**What is held depends on whether the card has an OPEN pull request** (Yue, the same day:
+_"it's about if there's a PR"_ … _"not only done is blocked, approved manual set should be
+blocked too"_ — `docs/decisions/approval-gates.md` §6d AMENDMENT, rules 1–5 and **2b**):
+
+| the card has…        | a drop onto… | `waitingOn` | the door                                        |
+| -------------------- | ------------ | ----------- | ----------------------------------------------- |
+| no pull request      | Done         | `decision`  | Review & approve if `canDecide`, else the name  |
+| an open pull request | Approved     | `decision`  | Review & approve if `canDecide`, else no button |
+| an open pull request | Done         | `merge`     | **never a button** — merging moves it           |
+
+**The branch, and the ONLY one:** `POST …/move` answers **409** with
+`{ code: 'APPROVAL_GATE_PENDING', error, gate: { itemKey, kind, waitingOn, canDecide, routedToLabel } }`.
+When — and only when — `code` is `APPROVAL_GATE_PENDING`:
+
+1. **The card returns to its origin**, exactly as panel 2's snap-back does. The board never
+   shows a status the item does not have.
+2. **No toast.** The status-control design's held line is anchored **ON the returned card**,
+   directly under it, rendered from `gate`:
+   - `waitingOn: decision`, `canDecide` → the decision sentence + **Review & approve**, a link to
+     the board's own URL with `withApprovalOverlay(href, { itemKey: gate.itemKey, kind: gate.kind })`
+     (`lib/approvals/overlayAddress.ts`), written with `shallowPush` so the overlay opens over the
+     board and Close returns to it;
+   - `waitingOn: decision`, not `canDecide` → the _"… is waiting on {name}"_ sentence
+     (`gate.routedToLabel`), no button — and, with no name (no gate raised yet), the
+     _"asked for once the pull request's checks pass"_ sentence, no button;
+   - `waitingOn: merge` → the merge sentence, **never a button**.
+3. **It stays** until `Esc`, a click outside, or the start of the next drag. It never blocks
+   dragging another card.
+4. **Keyboard:** the `aria-live` region reads `{key} returned. {the held line}` — beside
+   panel 3's `rejected:` announcement, not instead of it for other refusals — and focus moves to
+   **Review & approve** when it renders, else stays on the returned card.
+5. **Mobile:** the same line under the returned card, at the column's full width.
+
+**The four refusals that KEEP panel 2's toast, unchanged:** the illegal workflow edge (409
+`ILLEGAL_BOARD_MOVE`), missing artifact evidence (409, folded into `ILLEGAL_BOARD_MOVE`), open
+children (409, folded into `ILLEGAL_BOARD_MOVE`) and the unmapped column (422
+`UNMAPPED_COLUMN_TARGET`), plus network errors. The code branches on
+`code: 'APPROVAL_GATE_PENDING'` and on nothing else — never on the status, the HTTP status
+alone, or the message text.
+
+**Copy — composed VERBATIM from `design/work-items/design-notes.md` § _The status control says
+so_** (`approvalGate.statusHeld.decision` / `decisionSeeOnly` / `decisionNotRaised` / `merge`,
+`decisionNoun.<kind>`, `reviewAndApprove`). This panel adds exactly one string:
+
+| key (proposed)           | en                       | zh                     |
+| ------------------------ | ------------------------ | ---------------------- |
+| `board.announcementHeld` | `{key} returned. {line}` | `{key} 已退回。{line}` |
+
+where `{line}` is the composed held sentence.
+
+**Composed primitives and tokens:**
+
+| element                  | composes                                               | colour                                                                                      | shape                                                              |
+| ------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| the returned card        | `BoardCard` (unchanged) + panel 2's brief focus ring   | as today                                                                                    | `--radius-card`                                                    |
+| the held line (anchored) | the status-control design's held message box, one line | background `--el-tint-yellow` · border `--el-border-soft` · text + glyph `--el-text-strong` | `--radius-control` · `--spacing-control-x/y` · `--shadow-elevated` |
+| the glyph                | lucide `lock` (decision) / `git-merge` (merge), 14px   | `--el-text-strong`                                                                          | —                                                                  |
+| **Review & approve**     | `Button` `variant="primary"` `size="sm"`, as a link    | `--el-accent` · `--el-accent-text`                                                          | `--radius-btn` · `--height-btn-sm`                                 |
+| the announcement         | the board's `aria-live` region (sr-only)               | —                                                                                           | —                                                                  |
+
+**Allocation:** every element above is built by MOTIR-5529 (the board and list card).
+
+**Out of scope:** the "a decision is waiting" marker on a board card (MOTIR-4908); the overlay
+(MOTIR-5222); every guard rule (the ADR amendment).
+
+**Grounding:** the snap-back this branches from was read in
+`app/(authed)/boards/_components/BoardContainer.tsx` (`runMove` → `snapBack` → an error
+`Toast`, on `origin/main` @ `1871ec0e1`) and rendered from this asset's panel 2, which the
+shipped board was built to; the held line was composed from the MERGED status-control asset
+(#2900), not redrawn.
+
 ### Keyboard DnD (panel 3) — operable with no mouse
 
 - **Space/Enter** pick up & drop · **↑↓** move within a column · **←→** move
