@@ -531,6 +531,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // placeholder; a 0 would not be, since 0 in this table means *contributes no
   // tests to a bulk leg*, which is false of this spec.
   'approval-gate-repaint.spec.ts': 4.8,
+  // MOTIR-5224 — the approval overlay's smoke. Measured LOCALLY (2.8 s, one test,
+  // against a production build), not from a green CI run — there is none yet.
+  // Re-measure from the first green `playwright-report-bulk-*` artifact with it.
+  'approval-overlay.spec.ts': 2.8,
   // MOTIR-5306. Promoted from the acceptance lane (it was
   // `acceptance-design-approval.spec.ts`). Measured LOCALLY (4.2 s, one test,
   // against a production build), not from a green CI run — there is none in this

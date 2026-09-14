@@ -195,6 +195,11 @@ describe('shape-swap lint — no surface shapes its radius past the token layer'
       // border) precisely so nothing draws a frame around the page underneath;
       // `border-0 p-0` beside it are that decision in the other axes.
       'components/planning/PlanningWorkspaceOverlay.tsx → rounded-none',
+      // The same case a fourth time (MOTIR-5224): the approval overlay is that
+      // pattern's fourth instance — a `size="full"` dialog over the page it opens
+      // on, drawn edge to edge by design-notes § 22 so the frame's bands run to
+      // the display's own corners. `border-0 p-0` beside it are the same decision.
+      'components/approvals/ApprovalOverlay.tsx → rounded-none',
       // A value DERIVED from a semantic token: the inner pill of a segmented
       // control fits its shell only at `--radius-btn` minus the shell's 2px
       // border, and `calc()` over the role token is how that stays true under

@@ -35,8 +35,10 @@ import { truncateAuthTables } from '../../helpers/db';
 //      DIFFER by construction, with the positive control beside the negative.
 //
 // …and the GUARDS a percentage cannot see: one close seam, totality over
-// `ApprovalGateKind` read FROM the constant, one decide path, and the permission
-// inventory balanced in both directions.
+// `ApprovalGateKind` read FROM the constant, and one decide path. (The permission
+// inventory's two directions are `tests/permissions/inventoryCoverage.test.ts`'s,
+// and it runs in the docs lane — a spec here that read the document would be
+// one a docs-only pull request never runs.)
 //
 // ⚠️ happy-dom + REAL POSTGRES in one file, deliberately — the seams END at a
 // screen (`tests/permissions/customRolesStoryGate.integration.test.tsx` is the
@@ -435,20 +437,5 @@ describe('GUARD · ONE decide path — no second approve control', () => {
     const list = codeOf('app/(authed)/workbench/_components/ApprovalsList.tsx');
     expect(list).not.toContain('ApprovalGateControl');
     expect(list).not.toContain('decideApprovalGateAction');
-  });
-});
-
-describe('GUARD · the permission inventory balances in both directions', () => {
-  const inventory = fs.readFileSync(
-    path.join(ROOT, 'docs/decisions/permission-inventory.md'),
-    'utf8',
-  );
-
-  it('lists the overlay’s route, and no longer lists the deleted subject action', () => {
-    expect(inventory).toContain('`/api/work-items/approval-gate`');
-    expect(inventory).not.toContain('loadApprovalSubjectAction');
-    expect(fs.existsSync(path.join(ROOT, 'app/(authed)/workbench/approvalsActions.ts'))).toBe(
-      false,
-    );
   });
 });

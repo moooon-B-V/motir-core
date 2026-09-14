@@ -63,10 +63,12 @@ describe('every production mount of the approval frame NAMES who it is waiting o
     // A rename of the component or of its module path would empty the list
     // above, and an empty `forEach` is a green test asserting nothing. This is
     // the assertion that turns that into a failure instead. Two sites today:
-    // the item page's design-result section and the Workbench's Approvals tab.
+    // the item page's design-result section and the approval OVERLAY — which
+    // replaced the Approvals tab's in-list frame when the row began opening it
+    // (Story MOTIR-5214 · MOTIR-5225).
     expect(MOUNT_SITES.map((s) => s.file).sort()).toEqual([
       'app/(authed)/items/[key]/_components/DesignResultSection.tsx',
-      'app/(authed)/workbench/_components/ApprovalsList.tsx',
+      'components/approvals/ApprovalOverlay.tsx',
     ]);
   });
 
