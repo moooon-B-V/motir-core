@@ -519,6 +519,10 @@ function buildAddDiff(
     kind: { from: null, to: row.kind },
     status: { from: null, to: row.status },
   };
+  // The folder a plan filed the item into (MOTIR-5423) — `folderId` has a
+  // `resolvedField` disposition in lib/activity/renderers.ts, the same cell the
+  // service's created revision records. Omitted when unfiled.
+  if (row.folderId != null) diff.folderId = { from: null, to: row.folderId };
   if (row.descriptionMd != null) diff.descriptionMd = { from: null, to: row.descriptionMd };
   // AI-drafted explanation (MOTIR-850) — record it when set (null = none is
   // omitted). `explanationMd` has an `editedField()` disposition in
@@ -960,10 +964,46 @@ async function assertProposalsPersistable(
       items.filter((i) => i.op !== 'add' && i.workItemId != null).map((i) => i.workItemId!),
     ),
   ].sort();
+  // The FOLDERS the plan files into (MOTIR-5423) are locked too, so the gate's
+  // "does this folder still exist, in this project?" verdict holds until
+  // materialize writes: `foldersService.deleteFolder` locks the same row, and a
+  // delete racing the approve now queues behind it instead of landing between
+  // the check and the insert. Sorted, like the work-item locks, so two approves
+  // filing into the same folders cannot deadlock.
+  const folderIds = [...collectReferencedFolderIds(items.map(toProposalNode))].sort();
   await withProjectNarrowingSuspended(tx, planProjectId, async () => {
     for (const id of targetIds) await workItemRepository.lockById(id, tx);
+    for (const id of folderIds) await folderRepository.lockById(id, tx);
     await runPersistGate(items, ctx, terminalStatusKeys, planProjectId, tx);
   });
+}
+
+/**
+ * Resolve a proposal's `folder:<id>` placement at materialize (Story MOTIR-5310 ·
+ * MOTIR-5423): lock the folder row and return its id.
+ *
+ * The approve gate has already refused a folder that was deleted or moved to
+ * another project since the append, under the lock `assertProposalsPersistable`
+ * takes — so a miss here is the defensive backstop, and it raises the SAME typed
+ * refusal the gate does (`INVALID_PLAN_REF_GRAPH` / `dangling`, naming the ref
+ * and the proposal), never a raw foreign-key error mid-approve.
+ */
+async function lockPlacementFolder(
+  item: PlanItem,
+  ref: string,
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const id = folderRefId(ref);
+  const locked = await folderRepository.lockById(id, tx);
+  if (!locked) {
+    throw new PlanRefGraphError(
+      'dangling',
+      item.id,
+      `${proposalLabel({ op: item.op, workItemId: item.workItemId, title: (item.proposedFields as PlanItemProposedFields | null)?.title })}: ` +
+        `"${ref}" names no folder in this workspace — the folder was deleted after the plan was written.`,
+    );
+  }
+  return locked.id;
 }
 
 // ── The proposed REPO PIN, resolved before the transaction (MOTIR-1884) ───────
@@ -1643,7 +1683,14 @@ async function materialize(
   for (const item of topoOrderAdds(adds)) {
     const pf = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
     const kind = (pf.kind as WorkItemKind | undefined) ?? 'task';
-    const parentId = item.parentRef ? resolveRef(item.parentRef) : null;
+    // A `folder:<id>` placement (Story MOTIR-5310 · MOTIR-5423) is a FOLDER, not a
+    // parent — branched on explicitly, so `resolveRef` keeps returning work-item
+    // ids only and the insert is never handed a prefixed string as a `parentId`.
+    const folderId =
+      item.parentRef && isFolderRef(item.parentRef)
+        ? await lockPlacementFolder(item, item.parentRef, tx)
+        : null;
+    const parentId = item.parentRef && folderId === null ? resolveRef(item.parentRef) : null;
 
     const number = await projectRepository.allocateWorkItemNumber(plan.projectId, tx);
     // Re-read the identifier prefix under the lock allocateWorkItemNumber took
@@ -1669,8 +1716,17 @@ async function materialize(
       tx,
     );
 
-    const siblings = await workItemRepository.findSiblings(plan.projectId, parentId, tx);
-    const position = keyForAppend(siblings.length ? siblings[siblings.length - 1]!.position : null);
+    // A filed add is appended at its FOLDER's level (the `createWorkItem` rule);
+    // everything else after its work-item siblings, as before.
+    const position =
+      folderId !== null
+        ? keyForAppend(
+            await workItemRepository.findLastPositionAtFolderLevel(plan.projectId, folderId, tx),
+          )
+        : keyForAppend(
+            (await workItemRepository.findSiblings(plan.projectId, parentId, tx)).at(-1)
+              ?.position ?? null,
+          );
     const lastRank = await workItemRepository.findBoundaryBacklogRank(
       plan.projectId,
       ctx.workspaceId,
@@ -1684,6 +1740,7 @@ async function materialize(
       workspaceId: ctx.workspaceId,
       projectId: plan.projectId,
       parentId,
+      folderId,
       kind,
       key: number,
       identifier,
@@ -2487,10 +2544,22 @@ async function applyModify(
   // `parentId` already has a diff-cell disposition in lib/activity/renderers.ts —
   // `moveWorkItem` and the patch path both emit it — so the modify revision
   // renders with no new registry entry.
+  //
+  // ⚠️ AND A PLACEMENT IS TWO COLUMNS, NOT ONE (Story MOTIR-5310 · MOTIR-5423).
+  // `work_item_parent_xor_folder` admits a parent OR a folder, so every arm
+  // writes both, mirroring the service's `planFolderFiling` / `moveWorkItem`:
+  //   `folder:<id>`  → set `folderId`, clear `parentId`, append at that folder's level
+  //   a work item    → set `parentId`, clear `folderId` (the write that used to trip the CHECK)
+  //   `null` (root)  → clear both; a filed item is appended at the root level
   let reparent: ReparentMove | null = null;
   const patchedParentRef = patch.parentRef;
   if (patchedParentRef !== undefined) {
-    const nextParentId = patchedParentRef === null ? null : resolveRef(patchedParentRef);
+    const nextFolderId =
+      patchedParentRef !== null && isFolderRef(patchedParentRef)
+        ? await lockPlacementFolder(item, patchedParentRef, tx)
+        : null;
+    const nextParentId =
+      patchedParentRef === null || nextFolderId !== null ? null : resolveRef(patchedParentRef);
     if (nextParentId !== current.parentId) {
       update.parentId = nextParentId;
       diff.parentId = { from: current.parentId, to: nextParentId };
@@ -2499,6 +2568,24 @@ async function applyModify(
         previousParentId: current.parentId,
         newParentId: nextParentId,
       };
+    }
+    if (nextFolderId !== current.folderId) {
+      update.folderId = nextFolderId;
+      diff.folderId = { from: current.folderId, to: nextFolderId };
+      // Filed into a folder, or taken out of one to the root: the item joins a
+      // new FOLDER LEVEL, so it is appended there. A move under a work item keeps
+      // the position it had, as the work-item re-parent always has.
+      if (nextParentId === null) {
+        const position = keyForAppend(
+          await workItemRepository.findLastPositionAtFolderLevel(
+            current.projectId,
+            nextFolderId,
+            tx,
+          ),
+        );
+        update.position = position;
+        diff.position = { from: current.position, to: position };
+      }
     }
   }
 
