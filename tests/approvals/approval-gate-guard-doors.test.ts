@@ -140,6 +140,7 @@ describe('POST /api/board/move', () => {
       itemKey: item.identifier,
       kind: 'design_result',
       waitingOn: 'decision',
+      gateRaised: true,
       canDecide: true,
       routedToLabel: expect.any(String),
     });

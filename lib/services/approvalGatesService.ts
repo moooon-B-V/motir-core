@@ -5,6 +5,7 @@ import type {
   ApprovalGateDecisionSourceDTO,
   ApprovalGateKindDTO,
   ApprovalGatePendingPayloadDTO,
+  HeldTransitionDTO,
   ApprovalQueuePageDto,
   GateDecision,
 } from '@/lib/dto/approvalGate';
@@ -39,6 +40,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toApprovalGateDto, toApprovalQueueRowDto } from '@/lib/mappers/approvalGateMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { heldMoves } from '@/lib/approvalGates/heldMoves';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -451,6 +454,64 @@ export const approvalGatesService = {
   },
 
   /**
+   * THE MOVES AN APPROVAL HOLDS on one work item, for the status control (Story
+   * MOTIR-4887 · Subtask MOTIR-5528; ADR `approval-gates.md` §6d AMENDMENT rules 1
+   * and 2b; design § _The status control says so_).
+   *
+   * ⚠️ THE GUARD'S OWN RULE, NOT A SECOND ONE. It hands this item's statuses, its
+   * open-pull-request fact and its awaiting gates to `heldMoves` — the function
+   * `applyStatusTransition` refuses with — so the item page, quick view and edit
+   * page lock exactly the moves the door would refuse, and nothing else.
+   *
+   * The move INTO the item's CURRENT status is never listed: nothing is held about
+   * a status the card already has. A render read — no lock, one transaction.
+   */
+  async listHeldTransitions(workItemId: string, ctx: ServiceContext): Promise<HeldTransitionDTO[]> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) return [];
+      const [statuses, openPullRequests, awaiting] = await Promise.all([
+        workflowsService.listStatusesByProject(item.projectId, ctx.workspaceId, tx),
+        workItemDeliveryRepository.countOpenByWorkItem(item.id, tx),
+        approvalGateRepository.findAwaitingByWorkItem(item.id, tx),
+      ]);
+      const moves = heldMoves({
+        statuses,
+        hasOpenPullRequest: openPullRequests > 0,
+        awaitingGates: awaiting,
+        intentOf: (kind) =>
+          isRegisteredGateKind(kind as ApprovalGateKindDTO)
+            ? handlerFor(kind as ApprovalGateKindDTO).statusIntent
+            : null,
+      }).filter((move) => move.statusKey !== item.status);
+      if (moves.length === 0) return [];
+
+      const out: HeldTransitionDTO[] = [];
+      for (const move of moves) {
+        const kind = move.gateKind as ApprovalGateKindDTO;
+        const canDecide =
+          move.waitingOn === 'decision' && move.gateId !== null
+            ? await canDecideGate(item, kind, ctx, tx)
+            : false;
+        const routedToId = isRegisteredGateKind(kind)
+          ? handlerFor(kind).routeTo({ item, ctx, tx })
+          : routingTargetId(item);
+        const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
+        out.push({
+          statusKey: move.statusKey,
+          statusLabel: statuses.find((s) => s.key === move.statusKey)?.label ?? move.statusKey,
+          waitingOn: move.waitingOn,
+          kind,
+          gateId: move.gateId,
+          canDecide,
+          routedToLabel: routedToDisplayName(routedTo),
+        });
+      }
+      return out;
+    });
+  },
+
+  /**
    * ENTERING REVIEW ASKS AGAIN (Story MOTIR-4887 · Subtask MOTIR-5532; ADR
    * `approval-gates.md` §6d AMENDMENT, rule 7). Called by `applyStatusTransition`
    * when an item moves into `in_review`, IN that transaction, after the funnel has
@@ -531,6 +592,7 @@ export const approvalGatesService = {
           itemKey: err.itemKey,
           kind,
           waitingOn: err.waitingOn,
+          gateRaised: err.gateId !== null,
           canDecide: false,
           routedToLabel: null,
         };
@@ -544,6 +606,7 @@ export const approvalGatesService = {
         itemKey: err.itemKey,
         kind,
         waitingOn: err.waitingOn,
+        gateRaised: err.gateId !== null,
         // Nothing is left to decide on an approved gate awaiting its merge, so no
         // surface may offer an approve door for it.
         // A door is offered only when a gate is actually waiting on a decision:

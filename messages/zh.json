@@ -8268,6 +8268,21 @@
         "keepsFiles": "保留该版本的文件，使该决定始终可核查；",
         "movesToDone": "将 {key} 标记为已完成，并解除对其等待中的工作项的阻塞。"
       }
+    },
+    "statusHeld": {
+      "decision": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待。",
+      "decisionSeeOnly": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待 {name} 处理。",
+      "decisionNotRaised": "无法直接将状态改为<strong>{status}</strong>——合并请求的检查通过后才会发起<strong>{decision}</strong>。",
+      "merge": "无法直接将状态改为<strong>{status}</strong>——合并该合并请求后会自动变更。",
+      "decisionNoun": {
+        "design_result": "设计审批",
+        "pull_request_approval": "合并请求审批",
+        "decision_approval": "决策审批",
+        "pull_request_merge": "合并审批"
+      },
+      "reviewAndApprove": "审阅并批准",
+      "needsApproval": "需要审批",
+      "movesOnMerge": "合并后变更"
     }
   },
   "approvalOverlay": {

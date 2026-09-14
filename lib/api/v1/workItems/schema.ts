@@ -1059,6 +1059,7 @@ export const approvalGatePendingSchema = z.object({
     itemKey: z.string(),
     kind: z.string(),
     waitingOn: z.enum(['decision', 'merge']),
+    gateRaised: z.boolean(),
     canDecide: z.boolean(),
     routedToLabel: z.string().nullable(),
   }),

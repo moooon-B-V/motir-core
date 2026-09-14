@@ -59,6 +59,11 @@ vi.mock('@/lib/services/projectAccessService', () => ({
 vi.mock('@/lib/services/assignableMembersService', () => ({
   assignableMembersService: { list: listMembers },
 }));
+// The moves an approval HOLDS (MOTIR-5528) — the edit page reads them beside the
+// member list; nothing is held on this fixture.
+vi.mock('@/lib/services/approvalGatesService', () => ({
+  approvalGatesService: { listHeldTransitions: vi.fn(async () => []) },
+}));
 vi.mock('@/lib/issues/aliasRedirect', () => ({ resolveAliasedIssueKey }));
 vi.mock('@/lib/ai/availability', () => ({ isMotirAiConfigured: () => false }));
 

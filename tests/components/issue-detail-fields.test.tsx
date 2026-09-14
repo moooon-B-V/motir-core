@@ -61,7 +61,13 @@ vi.mock('@/app/(authed)/items/[key]/labelComponentActions', () => ({
   addComponentAction: vi.fn().mockResolvedValue({ ok: true, components: [] }),
   removeComponentAction: vi.fn().mockResolvedValue({ ok: true, components: [] }),
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshSpy }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: refreshSpy }),
+  // The held-status notice's Review & approve link addresses the overlay over the
+  // current page (MOTIR-5528).
+  usePathname: () => '/items/PROD-7',
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
 import { CoreFieldsPanel } from '@/app/(authed)/items/[key]/_components/CoreFieldsPanel';
@@ -198,6 +204,68 @@ describe('CoreFieldsPanel (inline rail)', () => {
     expect(screen.getByRole('button', { name: 'Edit Priority' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit Type' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Edit Reporter/i })).toBeNull();
+  });
+
+  it('says a held move ON the status card without opening it, and locks it in the picker (MOTIR-5528)', async () => {
+    render(
+      <CoreFieldsPanel
+        item={makeItem()}
+        members={members}
+        workflow={workflow}
+        parent={null}
+        reporterIsSelf
+        heldTransitions={[
+          {
+            statusKey: 'done',
+            statusLabel: 'Done',
+            waitingOn: 'decision',
+            kind: 'design_result',
+            gateId: 'g1',
+            canDecide: true,
+            routedToLabel: 'Grace Hopper',
+          },
+        ]}
+      />,
+    );
+
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain("Status can't be moved to Done directly");
+    expect(within(notice).getByRole('link', { name: 'Review & approve' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: /Done/ }));
+    expect(statusSpy).not.toHaveBeenCalled();
+  });
+
+  it('a hold that arrives on commit REVERTS the status and says so on the card — not a toast (MOTIR-5528)', async () => {
+    statusSpy.mockResolvedValue({
+      ok: false,
+      error: 'held',
+      field: 'status',
+      code: 'APPROVAL_GATE_PENDING',
+      gate: {
+        itemKey: 'PROD-7',
+        kind: 'design_result',
+        waitingOn: 'decision',
+        gateRaised: true,
+        canDecide: false,
+        routedToLabel: 'Grace Hopper',
+      },
+    });
+    renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: 'Done' }));
+    await act(async () => {});
+
+    expect(statusSpy).toHaveBeenCalledWith({ id: 'wi_1', toStatusKey: 'done' });
+    expect(toastSpy).not.toHaveBeenCalled();
+    expect(screen.getByText('To Do')).toBeTruthy();
+    expect(screen.getByTestId('status-held-notice').textContent).toContain(
+      'a design approval is waiting on Grace Hopper.',
+    );
   });
 
   it('reveals + commits a priority change through updateIssueAction', async () => {

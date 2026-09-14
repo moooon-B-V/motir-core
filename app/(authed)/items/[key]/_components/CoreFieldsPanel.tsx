@@ -25,6 +25,9 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
+import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
+import { useStatusHeld } from '@/components/issues/useStatusHeld';
+import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { SprintPicker } from '@/components/issues/SprintPicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
@@ -72,6 +75,12 @@ import { QuickViewFolderControl } from '../../_components/QuickViewFolderField';
 
 export interface CoreFieldsPanelProps {
   item: WorkItemDto;
+  /**
+   * The status moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528) — the
+   * status card draws them as a message under its value and locks them in the
+   * picker. Defaults to `[]`, the state almost every card is in.
+   */
+  heldTransitions?: HeldTransitionDTO[];
   members: WorkspaceMemberDTO[];
   workflow: WorkflowDto;
   /** The resolved parent summary (for the Parent card's display). */
@@ -173,6 +182,7 @@ export function CoreFieldsPanel({
   deliveries = [],
   labelsComponents,
   sprints = [],
+  heldTransitions,
 }: CoreFieldsPanelProps) {
   const router = useRouter();
   const t = useTranslations('issueViews');
@@ -189,6 +199,7 @@ export function CoreFieldsPanel({
   const { can } = useProjectAccess();
   const canEdit = can('work_item:edit');
   const readOnly = !canEdit;
+  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses);
   const [editing, setEditing] = useState<EditableKey | null>(null);
   const [updatedAt, setUpdatedAt] = useState(item.updatedAt);
   const [dueDate, setDueDate] = useState(item.dueDate ? item.dueDate.slice(0, 10) : '');
@@ -337,6 +348,12 @@ export function CoreFieldsPanel({
       const res = await changeStatusAction({ id: item.id, toStatusKey });
       if (res.ok) {
         setUpdatedAt(res.updatedAt);
+        statusHeld.onMoved(toStatusKey);
+      } else if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
+        // A hold that arrived after render (MOTIR-5528): revert, and say so ON the
+        // status control with its door — not in a toast that points nowhere.
+        revert(['status']);
+        statusHeld.onRefused(toStatusKey, res.gate);
       } else {
         revert(['status']);
         toast({ variant: 'error', title: res.error });
@@ -392,24 +409,30 @@ export function CoreFieldsPanel({
         editing={editing === 'status'}
         onToggle={() => toggle('status')}
       >
-        {editing === 'status' ? (
-          <StatusPicker
-            statuses={workflow.statuses}
-            transitions={workflow.transitions}
-            policyMode={workflow.policyMode}
-            value={eff.status}
-            onChange={changeStatus}
-            disabled={isPending || readOnly}
-          />
-        ) : statusMeta ? (
-          <StatusPill
-            statusKey={statusMeta.key}
-            category={statusMeta.category}
-            label={statusMeta.label}
-          />
-        ) : (
-          <Pill tone="neutral">{eff.status}</Pill>
-        )}
+        <div className="flex flex-col items-start gap-2">
+          {editing === 'status' ? (
+            <StatusPicker
+              statuses={workflow.statuses}
+              transitions={workflow.transitions}
+              policyMode={workflow.policyMode}
+              value={eff.status}
+              onChange={changeStatus}
+              disabled={isPending || readOnly}
+              held={statusHeld.held}
+            />
+          ) : statusMeta ? (
+            <StatusPill
+              statusKey={statusMeta.key}
+              category={statusMeta.category}
+              label={statusMeta.label}
+            />
+          ) : (
+            <Pill tone="neutral">{eff.status}</Pill>
+          )}
+          {/* The held message sits UNDER the value and stays visible whether or not
+              the picker is open (design § The status control says so). */}
+          <StatusHeldNotice itemKey={item.identifier} lines={statusHeld.lines} />
+        </div>
       </FieldCard>
 
       {/* Session branch (Subtask 7.8.11) — a READ-ONLY line under Status,

@@ -5,6 +5,7 @@ import {
   type WorkItemKind,
   type WorkItemLink,
   type WorkItemPriority,
+  type ApprovalGateKind,
 } from '@/generated/prisma/client';
 import {
   astHasEpic5Conditions,
@@ -53,9 +54,9 @@ import {
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
+import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
-import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -1051,13 +1052,6 @@ const ROADMAP_CANCELLED_KEY = 'cancelled';
 /** The status an item enters to be reviewed — the one whose entry re-asks its
  *  pending questions (ADR `approval-gates.md` §6d AMENDMENT, rule 7). */
 const REVIEW_STATUS_KEY = 'in_review';
-/** The status an approve-to-merge approval writes — never set by hand while a
- *  pull request is open (ADR `approval-gates.md` §6d AMENDMENT, rule 2b). */
-const APPROVED_STATUS_KEY = 'approved';
-/** The gate kind that decides a card with a pull request (§1's amendment). Named
- *  by the refusal when no gate row has been raised yet — the pull request is
- *  open but not yet green. */
-const PULL_REQUEST_GATE_KIND = 'pull_request_approval';
 
 /** The status keys that count as DONE on a roadmap meter: every `done`-category
  *  status except `cancelled`. */
@@ -2786,54 +2780,52 @@ export const workItemsService = {
     // (`approval_gate_work_item_id_idx`) and no status read.
     let statuses: WorkflowStatusDto[] | null = null;
 
-    // RULE 2b — WITH A PULL REQUEST, `approved` AND `done` HAVE ONE WRITER EACH
-    // (Yue, 2026-09-14; ADR §6d AMENDMENT, rule 2b). *"It's about if there's a
-    // PR."* When the item has an OPEN delivering pull request, the approval is the
-    // approve-to-merge gate: approving writes `approved` (and merges or enqueues),
-    // and the merge webhook writes `done`. So a hand move INTO `approved` is
-    // refused unless it is the deciding gate's own write, and a hand move INTO the
-    // done category (other than Cancelled) is refused outright — the merge makes
-    // it. The merge itself passes: the sync commits its pull request as closed
-    // before it transitions the card. System writes are exempt, as everywhere.
+    // THE HELD MOVES — rule 2b and rule 1, stated ONCE in `heldMoves`
+    // (`lib/approvalGates/heldMoves.ts`), the same function the status control
+    // reads to lock these moves before anyone tries them.
     //
-    // Checked BEFORE rule 1's awaiting-gate hold, because with a pull request open
-    // the answer to "what is Done waiting for?" is the MERGE, whichever gate rows
-    // exist. Only a move into one of the two held statuses pays the delivery read.
-    const intoApproved = toStatusKey === APPROVED_STATUS_KEY && !opts.decidingGateId;
-    const intoDone = target.category === 'done' && toStatusKey !== ROADMAP_CANCELLED_KEY;
-    if (
-      !opts.system &&
-      (intoApproved || intoDone) &&
-      (await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0
-    ) {
-      const gate = awaitingGates[0] ?? null;
-      throw new ApprovalGatePendingError({
-        statusKey: toStatusKey,
-        gateId: gate?.id ?? null,
-        gateKind: gate?.kind ?? PULL_REQUEST_GATE_KIND,
-        itemKey: current.identifier,
-        workItemId,
-        waitingOn: intoDone ? 'merge' : 'decision',
-      });
-    }
-
+    //   · RULE 2b — "it's about if there's a PR" (Yue, 2026-09-14). With an OPEN
+    //     delivering pull request, `approved` is written only by the approval (a
+    //     hand move there is refused unless it IS that approval's own write) and
+    //     every done-category status but Cancelled only by the merge webhook. The
+    //     merge itself passes: the sync commits its pull request as closed before
+    //     it transitions the card.
+    //   · RULE 1 — an `awaiting` gate holds the status its kind's intent resolves
+    //     to, and the deciding gate never holds its own write.
+    //
+    // Cost: the delivery read is paid only by a move INTO one of the statuses rule
+    // 2b can hold, and the status list only when there is something to resolve.
     if (!opts.system) {
-      for (const gate of awaitingGates) {
-        if (gate.id === opts.decidingGateId || !isRegisteredGateKind(gate.kind)) continue;
-        const intent = handlerFor(gate.kind).statusIntent;
-        if (!intent) continue;
+      const candidateFor2b =
+        toStatusKey === APPROVED_STATUS_KEY ||
+        (target.category === 'done' && toStatusKey !== ROADMAP_CANCELLED_KEY);
+      const hasOpenPullRequest =
+        candidateFor2b &&
+        (await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0;
+      if (hasOpenPullRequest || awaitingGates.length > 0) {
         statuses ??= await workflowsService.listStatusesByProject(
           current.projectId,
           ctx.workspaceId,
           tx,
         );
-        if (resolveStatusIntent(statuses, intent) === toStatusKey) {
+        const held = heldMoves({
+          statuses,
+          hasOpenPullRequest,
+          awaitingGates,
+          intentOf: (kind) =>
+            isRegisteredGateKind(kind as ApprovalGateKind)
+              ? handlerFor(kind as ApprovalGateKind).statusIntent
+              : null,
+          decidingGateId: opts.decidingGateId,
+        }).find((move) => move.statusKey === toStatusKey);
+        if (held) {
           throw new ApprovalGatePendingError({
             statusKey: toStatusKey,
-            gateId: gate.id,
-            gateKind: gate.kind,
+            gateId: held.gateId,
+            gateKind: held.gateKind,
             itemKey: current.identifier,
             workItemId,
+            waitingOn: held.waitingOn,
           });
         }
       }
@@ -5715,7 +5707,10 @@ export const workItemsService = {
     // The filed item's folder PATH (MOTIR-5352) — one bounded chain read, and
     // none at all for an unfiled item: this payload is fetched on every row click.
     const folderPath = await this.getFolderPath(detail.folderId, ctx);
-    return toQuickViewData(
+    // The moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528) — the peek's
+    // status field says so the way the detail page's does, from the same read.
+    const heldTransitions = await approvalGatesService.listHeldTransitions(detail.item.id, ctx);
+    const view = toQuickViewData(
       detail,
       members,
       locale,
@@ -5731,6 +5726,7 @@ export const workItemsService = {
       deliveryView.deliveries,
       folderPath,
     );
+    return { ...view, heldTransitions };
   },
 
   /**

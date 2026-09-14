@@ -51,6 +51,31 @@ export interface ApprovalGatePendingPayloadDTO {
    *  item's pull request is still open, so the surface offers no approve door:
    *  the merge makes the move (ADR §6d AMENDMENT, rule 2b). */
   waitingOn: 'decision' | 'merge';
+  /** False while a pull request is open and no gate has been raised yet (its
+   *  checks are not green) — the status control then says the approval is
+   *  asked for once they pass, rather than naming someone it is waiting on. */
+  gateRaised: boolean;
+  canDecide: boolean;
+  routedToLabel: string | null;
+}
+
+/**
+ * One status move an approval holds on a work item, as the STATUS CONTROL draws it
+ * before anyone tries the move (Story MOTIR-4887 · Subtask MOTIR-5528; design
+ * `design/work-items/design-notes.md` § _The status control says so_). The same
+ * rule the guard refuses with — `heldMoves` — read outside any lock.
+ */
+export interface HeldTransitionDTO {
+  statusKey: string;
+  /** The held status's own label, for the sentence. */
+  statusLabel: string;
+  waitingOn: 'decision' | 'merge';
+  /** The kind whose decision this is — addresses the overlay. */
+  kind: ApprovalGateKindDTO;
+  /** Null while a pull request is open and no gate has been raised yet. */
+  gateId: string | null;
+  /** A Review & approve door is drawn only when true: a `decision` move with a gate
+   *  actually awaiting, and this reader holding the floor AND the authority. */
   canDecide: boolean;
   routedToLabel: string | null;
 }

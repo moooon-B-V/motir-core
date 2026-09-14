@@ -1,3 +1,4 @@
+import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   ExecutorDto,
@@ -61,6 +62,13 @@ export type QuickViewSprintOption = Pick<SprintDto, 'id' | 'name' | 'state' | 's
 
 /** The serializable payload the peek renders (a condensed slice of the detail read). */
 export interface QuickViewData {
+  /**
+   * The status moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528), read by
+   * `approvalGatesService.listHeldTransitions` — the peek's status field draws
+   * them as the detail page does. Absent on a PROPOSAL, which has no status to
+   * move.
+   */
+  heldTransitions?: HeldTransitionDTO[];
   /**
    * The work item's INTERNAL id (cuid) — not the `identifier`. Both write paths
    * the editable rail uses are keyed by it: `updateIssueAction` and

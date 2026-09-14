@@ -130,6 +130,18 @@ vi.mock('@/lib/services/workItemsService', () => ({
     resolveReferenceSummaries: deferred('workItemRefs', [], 'tierTwo'),
   },
 }));
+// The moves an approval HOLDS (MOTIR-5528) — a tier-two member: the held message
+// sits under the rail's status value. PARTIAL, because the late reads still reach
+// the rest of the service.
+vi.mock('@/lib/services/approvalGatesService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/services/approvalGatesService')>();
+  return {
+    approvalGatesService: {
+      ...actual.approvalGatesService,
+      listHeldTransitions: deferred('heldTransitions', [], 'tierTwo'),
+    },
+  };
+});
 vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: {
     getPermissions: () => getPermissions(),
@@ -424,6 +436,9 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       // late, and it costs the group max() rather than sum() only while it is
       // IN the group — a serial await here is the shape MOTIR-3435 removed.
       'pendingPlans',
+      // The held status moves (MOTIR-5528): the rail's status card draws them
+      // under its value, so they are read with the rail, not after it.
+      'heldTransitions',
     ]) {
       expect(started, `${name} should already be in flight`).toContain(name);
     }
