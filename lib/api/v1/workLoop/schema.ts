@@ -9,6 +9,8 @@ import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
+import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
+import type { CurrentTestInstructionsDTO } from '@/lib/dto/testInstructions';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
 // The v1 WORK-LOOP resources, declared once (Story 11.7 · Subtask 11.7.3 —
@@ -1871,3 +1873,80 @@ export const dispatchRunCloseBodySchema = z
   })
   .strict();
 export type V1DispatchRunCloseBody = z.infer<typeof dispatchRunCloseBodySchema>;
+
+/**
+ * A run's CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) — the text a scoped
+ * run hands one agent before marking its pull requests ready, so HOW TO TEST is
+ * written onto the run target.
+ */
+export const dispatchRunCloseOutPromptSchema = z.object({
+  runId: z.string(),
+  /** The run target — the item the run was launched against. */
+  targetKey: workItemKeySchema,
+  /** The full prompt text, ready to hand to a coding agent. */
+  prompt: z.string(),
+  /** The cards the run landed (integrated or implemented), in run order. */
+  landedKeys: z.array(workItemKeySchema),
+});
+export type V1DispatchRunCloseOutPrompt = z.infer<typeof dispatchRunCloseOutPromptSchema>;
+
+/** Map the close-out prompt to the wire — field by field, never a spread. */
+export function presentDispatchRunCloseOutPrompt(
+  dto: DispatchRunCloseOutPromptDto,
+): V1DispatchRunCloseOutPrompt {
+  return {
+    runId: dto.runId,
+    targetKey: dto.targetKey,
+    prompt: dto.prompt,
+    landedKeys: [...dto.landedKeys],
+  };
+}
+
+/**
+ * A run target's CURRENT How-to-test record (Story MOTIR-4906 · MOTIR-5358) — one
+ * per run: its rich-text body, and a section per repository.
+ */
+export const currentTestInstructionsSchema = z.object({
+  key: workItemKeySchema,
+  /** Null when no run has written How to test onto this item. */
+  record: z
+    .object({
+      /** The dispatch run that wrote it, when one did. */
+      dispatchRunId: z.string().nullable(),
+      createdAt: z.string(),
+      /** The run's How to test as rich text (Markdown), exactly as the agent wrote it. */
+      bodyMd: z.string(),
+      previewPath: z.string().nullable(),
+      repos: z.array(
+        z.object({
+          /** `owner/name`, or null when the repository is no longer the project's. */
+          repo: z.string().nullable(),
+          commitSha: z.string(),
+        }),
+      ),
+    })
+    .nullable(),
+});
+export type V1CurrentTestInstructions = z.infer<typeof currentTestInstructionsSchema>;
+
+/** Map the current record to the wire — field by field; the internal ids stay off it. */
+export function presentCurrentTestInstructions(
+  dto: CurrentTestInstructionsDTO,
+): V1CurrentTestInstructions {
+  const record = dto.record;
+  return {
+    key: dto.workItemKey,
+    record: record
+      ? {
+          dispatchRunId: record.dispatchRunId,
+          createdAt: record.createdAt,
+          bodyMd: record.bodyMd,
+          previewPath: record.previewPath,
+          repos: record.repos.map((section) => ({
+            repo: section.repoName,
+            commitSha: section.commitSha,
+          })),
+        }
+      : null,
+  };
+}

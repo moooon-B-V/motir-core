@@ -563,8 +563,11 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // `work-item-pull-requests-route.test.ts`, and the drift guard drives it end
     // to end — so excluding it here hides nothing, exactly as the attachment
     // note below argues for its own door.)
+    // (`…/how-to-test` joined them in MOTIR-5358 — it reads the HOW TO TEST a
+    // RUN wrote onto its target, for the CLI's close-out summary. Its journey is
+    // `work-item-how-to-test.test.ts`.)
     const WORK_LOOP_SUBRESOURCES =
-      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval|pull-requests)\//;
+      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval|pull-requests|how-to-test)\//;
     // ⚠️ Story MOTIR-3000's attachment door is excluded for the SAME reason as
     // the two groups above, and the reason is worth stating rather than
     // inheriting: `…/attachments` hangs off a work item because that is what the

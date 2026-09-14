@@ -117,7 +117,20 @@ async function badgeCount(page: Page): Promise<number> {
   return digits === '' ? 0 : Number(digits);
 }
 
-const rows = (page: Page) => page.getByTestId(/^approval-row-/);
+// ⚠️ ROLE-ROOTED, NEVER PAGE-ROOTED (MOTIR-5386). The workbench streams its tab
+// behind an in-page `<Suspense>`, so the DOM can briefly hold a HIDDEN second
+// copy of what the tab renders — and a page-rooted `getByText` / `getByTestId`
+// resolves both and dies on strict mode. That ejected two unrelated pull
+// requests from the merge queue in one day. `getByRole` reads the accessibility
+// tree, which excludes the hidden copy, so every locator below starts from one
+// (`docs/decisions/page-rooted-locator-disposition.md`, incident 7). The rows
+// keep their test id, scoped to the live table rather than the page: the
+// `row` role alone would also count the header row and each open disclosure.
+const rows = (page: Page) =>
+  page.getByRole('table', { name: 'To approve' }).getByTestId(/^approval-row-/);
+
+/** The empty state's heading — an `<h2>`, so it has a role and a name. */
+const emptyHeading = (page: Page, name: string) => page.getByRole('heading', { name });
 
 test.describe('every decision waiting on you, in one place', () => {
   let seed: ApprovalsTabSeed;
@@ -190,14 +203,16 @@ test.describe('every decision waiting on you, in one place', () => {
       await page.getByRole('button', { name: 'Approve', exact: true }).click();
       // The confirm band — approving a design is TERMINAL, so it asks once, and
       // says what it is about to do before it does it.
-      await expect(page.getByText('Approving this will:')).toBeVisible();
+      await expect(
+        page.getByRole('paragraph').filter({ hasText: 'Approving this will:' }),
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Yes, Approve' }).click();
 
       // AUTHORITATIVE: the row count reaching zero, never a timeout.
       await expect(rows(page)).toHaveCount(0, { timeout: 30_000 });
       // …and the badge agrees IN THAT SAME STATE.
       expect(await badgeCount(page)).toBe(0);
-      await expect(page.getByText('Nothing is waiting on your approval')).toBeVisible();
+      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible();
     });
     await beat();
 
@@ -228,7 +243,7 @@ test.describe('every decision waiting on you, in one place', () => {
     await signIn(page, seed.readerEmail, seed.password);
     await page.goto('/workbench?tab=approvals');
 
-    await expect(page.getByText('Nothing is waiting on your approval')).toBeVisible();
+    await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible();
     await expect(rows(page)).toHaveCount(0);
     // The badge is SUPPRESSED at zero rather than reading `0`.
     expect(await badgeCount(page)).toBe(0);
@@ -242,8 +257,12 @@ test.describe('every decision waiting on you, in one place', () => {
       'aria-current',
       'page',
     );
-    await expect(page.getByText('没有等待你审批的工作')).toBeVisible();
-    await expect(page.getByText('需要你签字确认才能继续的工作会显示在这里。')).toBeVisible();
+    await expect(emptyHeading(page, '没有等待你审批的工作')).toBeVisible();
+    // The body is a `<p>`: the `paragraph` role carries no accessible name, so
+    // it is narrowed by its text — still inside the accessibility tree.
+    await expect(
+      page.getByRole('paragraph').filter({ hasText: '需要你签字确认才能继续的工作会显示在这里。' }),
+    ).toBeVisible();
     // Negatively too: the English literal must not be reachable on a `zh` page.
     await expect(page.getByText('Nothing is waiting on your approval')).toHaveCount(0);
   });

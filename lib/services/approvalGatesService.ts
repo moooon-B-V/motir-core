@@ -9,7 +9,7 @@ import type {
 } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { handlerFor } from '@/lib/approvalGates/registry';
+import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import {
   ApprovalGateAlreadyDecidedError,
@@ -388,7 +388,15 @@ export const approvalGatesService = {
       // page's render path, so a per-render round trip is exactly what it may
       // not add. `routeTo` reads the item already in hand and resolves no row of
       // its own.
-      const routedToId = handlerFor(input.kind).routeTo({ item, ctx, tx });
+      //
+      // ⚠️ A READ MUST NOT REFUSE AN UNREGISTERED KIND (MOTIR-4906). `handlerFor`
+      // throws for a kind with no handler — right for the decide door, which
+      // cannot act on it — but this read only NAMES whom a row is waiting on, and
+      // a row of a not-yet-registered kind (the pull-request gate before MOTIR-4909)
+      // must still render its frame. Such a kind routes by §2's shared rule.
+      const routedToId = isRegisteredGateKind(input.kind)
+        ? handlerFor(input.kind).routeTo({ item, ctx, tx })
+        : routingTargetId(item);
       const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
 
       return {

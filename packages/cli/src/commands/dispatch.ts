@@ -23,6 +23,7 @@ import {
 } from './scope.js';
 import { orderClaimedSet } from '../scopedRun.js';
 import { drainScope } from './scopeDrain.js';
+import { runCloseOutHowToTest } from '../closeOutHowToTest.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
 import { closeOutContainer, closeOutRepos, parseMax, requireAgent } from './auto.js';
 import {
@@ -838,10 +839,28 @@ export async function runCommand(
       // READY, which is the same question asked at the only moment it can be
       // answered.
       const open = await readOpenChildren(client, decision.target);
+      // ⚠️ HOW TO TEST IS WRITTEN BEFORE THE PULL REQUESTS GO READY (MOTIR-5358;
+      // `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment). The run
+      // target is the claimed container; ONE agent, handed the server's close-out
+      // prompt, publishes the run's record onto it, and the record it reads back
+      // is rendered into every body below. It never strands the run — a failure
+      // is logged and the close-out carries on. A sprint scope has no work-item
+      // target, so it has no step.
+      const howToTest =
+        decision.target.kind === 'work_item'
+          ? await runCloseOutHowToTest({
+              client,
+              dispatchRunId: reporter.runId,
+              targetKey: decision.target.key,
+              summary,
+              agent,
+              runAgentFn: deps.runAgentFn ?? runAgent,
+            })
+          : undefined;
       // ONE pull request per TOUCHED repo, through the shipped close-out. On a
       // multi-repo scope that is one PER REPO, and the summary names each — "one
       // pull request, one CI run" is exactly true for a single-repo scope only.
-      closeOutRepos(summary, run, open);
+      closeOutRepos(summary, run, open, howToTest);
       // ⚠️ THEN THE CONTAINER (MOTIR-4969), and only then. The close-out above
       // is what rewrites every repository's pull request and marks it ready; the
       // story is told it is built afterwards, so a run that dies in between

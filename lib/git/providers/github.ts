@@ -30,7 +30,10 @@ import type {
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
+  DeploymentState,
+  NormalizedDeploymentStatus,
 } from '../types';
+import { DEPLOYMENT_STATES } from '../types';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
 // the FIRST registered provider. It normalizes GitHub's `pull_request` and
@@ -494,6 +497,54 @@ export const githubProvider: GitProvider = {
     }
 
     return null;
+  },
+
+  /**
+   * A `deployment_status` delivery → the normalized preview record (Story
+   * MOTIR-4906 · MOTIR-5329). The mapping is exact and deliberately narrow:
+   *
+   * - `deployment.sha` → `commitSha`, `deployment.ref` → `ref`,
+   *   `deployment.environment` → `environment`, `deployment.id` →
+   *   `providerDeploymentId`;
+   * - `deployment_status.state` → `state` (an unknown state normalizes to null
+   *   rather than to a plausible member);
+   * - `deployment_status.environment_url` → `environmentUrl`, and **never
+   *   `target_url`**, which is the deployment's LOG link, not the app;
+   * - `deployment_status.updated_at` (else `created_at`) → `occurredAt`.
+   */
+  parseDeploymentStatusEvent(rawPayload: unknown): NormalizedDeploymentStatus | null {
+    const payload = asRecord(rawPayload);
+    if (!payload) return null;
+    const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
+    const deployment = asRecord(payload['deployment']);
+    const status = asRecord(payload['deployment_status']);
+    if (!providerRepoId || !deployment || !status) return null;
+
+    const providerDeploymentId = idToString(deployment['id']);
+    const commitSha = typeof deployment['sha'] === 'string' ? deployment['sha'] : '';
+    const ref = typeof deployment['ref'] === 'string' ? deployment['ref'] : '';
+    const environment =
+      typeof deployment['environment'] === 'string' ? deployment['environment'] : '';
+    const rawState = status['state'];
+    const state = (DEPLOYMENT_STATES as readonly string[]).includes(rawState as string)
+      ? (rawState as DeploymentState)
+      : null;
+    const occurredAt = parseDate(status['updated_at']) ?? parseDate(status['created_at']);
+    if (!providerDeploymentId || !commitSha || !ref || !environment || !state || !occurredAt) {
+      return null;
+    }
+
+    const url = status['environment_url'];
+    return {
+      providerRepoId,
+      providerDeploymentId,
+      commitSha,
+      ref,
+      environment,
+      state,
+      environmentUrl: typeof url === 'string' && url.length > 0 ? url : null,
+      occurredAt,
+    };
   },
 
   parsePushEvent(rawPayload: unknown): NormalizedPushEvent | null {

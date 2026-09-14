@@ -332,6 +332,8 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // four surfaces that render no work-item type chip.
     'apiDocs.codeCopy': 'clipboard verb — copies a code sample on the API docs page',
     'codeHealth.deepen.copy': 'clipboard verb — copies the deepen audit prompt',
+    'github.development.howToTest.code.copy':
+      'clipboard verb — copies a How to test command block (MOTIR-5336)',
     'publicProjects.copyFeed': 'clipboard verb — copies the public feed URL',
     'settings.apiTokens.created.copy': 'clipboard verb — copies the new API token',
     'settings.public.copy': 'clipboard verb — copies the public project URL',

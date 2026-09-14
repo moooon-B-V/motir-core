@@ -34,9 +34,20 @@ export interface MarkdownViewProps {
    * `renderMarkdown`; omitted, a token degrades to a struck-through bare key.
    */
   workItemRefs?: WorkItemRefMap;
+  /**
+   * Opt in to a click-to-copy bar on every fenced code block (MOTIR-5336) —
+   * passed straight to `renderMarkdown`. Omitted, no copy control renders.
+   */
+  copyableCode?: boolean;
 }
 
-export function MarkdownView({ value, className, workItemRefs, ...rest }: MarkdownViewProps) {
+export function MarkdownView({
+  value,
+  className,
+  workItemRefs,
+  copyableCode,
+  ...rest
+}: MarkdownViewProps) {
   // Link underlining (WCAG link-in-text-block) is handled inside renderMarkdown
   // so every render surface — this view, the editor preview, the server render —
   // gets it from the ONE module.
@@ -45,7 +56,7 @@ export function MarkdownView({ value, className, workItemRefs, ...rest }: Markdo
       className={['wmde-markdown', 'motir-prose', className].filter(Boolean).join(' ')}
       {...rest}
     >
-      {renderMarkdown(value, { workItemRefs })}
+      {renderMarkdown(value, { workItemRefs, copyableCode })}
     </div>
   );
 }

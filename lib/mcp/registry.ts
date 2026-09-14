@@ -58,6 +58,10 @@ import {
   PUBLISH_ACCEPTANCE_RESULT_TOOL_NAME,
   registerPublishAcceptanceResult,
 } from './tools/publishAcceptanceResult';
+import {
+  PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME,
+  registerPublishTestInstructions,
+} from './tools/publishTestInstructions';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
@@ -142,6 +146,7 @@ export const MCP_TOOL_NAMES = [
   CREATE_DESIGN_UPLOAD_TOOL_NAME,
   CREATE_ACCEPTANCE_UPLOAD_TOOL_NAME,
   PUBLISH_ACCEPTANCE_RESULT_TOOL_NAME,
+  PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME,
   LINK_PULL_REQUEST_TOOL_NAME,
   UNLINK_PULL_REQUEST_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
@@ -284,6 +289,8 @@ export function registerMcpTools(
   // a tool argument: mint a presigned PUT, upload the bytes straight to the
   // store, register the pathname.
   registerPublishAcceptanceResult(target, resolveContext);
+  // HOW TO TEST, written by the agent onto the work item (MOTIR-5331).
+  registerPublishTestInstructions(target, resolveContext);
   // The pull-request LINK door (Story MOTIR-3525 · MOTIR-3526) — an executing
   // agent declares which card its pull request delivers, at the one moment it
   // knows with certainty. The branch/title parse stays as the fallback for a

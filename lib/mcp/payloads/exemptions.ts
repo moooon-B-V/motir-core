@@ -73,6 +73,12 @@ export const EXEMPT_TOOLS = {
     '`pending` and only a person moves it to `approved`, so a caller that reads this field ' +
     'learns the publish SUCCEEDED and the story is still not accepted, which is the whole ' +
     'shape of the gate (MOTIR-4704).',
+  publish_test_instructions:
+    'Returns the published RECORD\u2019s confirmation \u2014 `{ id, workItemKey, repoId, commitSha, ' +
+    'created, isCurrent, dispatchRunId, createdAt }`. No `/api/v1` operation exposes a How-to-test ' +
+    'record \u2014 the item page reads it server-side \u2014 so there is no shared shape to derive ' +
+    'from. `created` is load-bearing: `false` tells a retrying agent its earlier call already ' +
+    'landed and nothing changed (MOTIR-5331).',
   link_work_items:
     'Returns the created EDGE ROW (`WorkItemLinkDto` — `id`, `fromId`, `toId`, `kind`, ' +
     '`createdById`). v1 has a link-create endpoint, but its 201 body is an inline ' +
