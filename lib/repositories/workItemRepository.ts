@@ -795,6 +795,27 @@ export const workItemRepository = {
   },
 
   /**
+   * The folder each FILED work item among `workItemIds` sits in, keyed by item id
+   * — the placement the planner's tree read carries (Story MOTIR-5310 ·
+   * MOTIR-5410). ONE batched read for the whole projection, never a per-row
+   * fetch; an unfiled item simply has no entry. It stays a read the tree read
+   * OWNS, so `folderId` never has to widen the published `WorkItemDto`.
+   */
+  async findFolderIdsByWorkItemIds(
+    workItemIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, string>> {
+    if (workItemIds.length === 0) return new Map();
+    const rows = await tx.workItem.findMany({
+      where: { id: { in: workItemIds }, folderId: { not: null } },
+      select: { id: true, folderId: true },
+    });
+    const byId = new Map<string, string>();
+    for (const row of rows) if (row.folderId !== null) byId.set(row.id, row.folderId);
+    return byId;
+  },
+
+  /**
    * How many work items are filed DIRECTLY in a folder — exactly the set
    * `findFiledInFolder` returns (no archive or triage filter), so a delete
    * confirmation counts what `foldersService.deleteFolder` will move.

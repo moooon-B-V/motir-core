@@ -554,9 +554,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '77241589544a',
   },
   skeleton: {
+    // Re-pinned for MOTIR-5410: the description now names the folder placement
+    // (`folderId` on a filed row, the project's `folders`) the read carries.
     summary:
-      "The whole project's tree shape in one read — every item's key, kind, title, status and parent, with no paging loop.",
-    descriptionFingerprint: '26ceb84cf462',
+      "The whole project's tree shape in one read — every item's key, kind, title, status, parent and folder, with no paging loop.",
+    descriptionFingerprint: 'e2e04caf7f60',
   },
   list_folders: {
     summary:

@@ -616,6 +616,11 @@ export const mcpSkeletonRowSchema = workItemRefSchema
   .extend({
     id: z.string(),
     revision: z.string().nullable(),
+    // The folder the item is FILED in — its OWN placement, set only on a root
+    // (Story MOTIR-5310 · MOTIR-5410). Without it a filed item reads as an
+    // ordinary root and no agent orienting over the tree can tell where the team
+    // put it. Resolve the id against the payload's `folders` for its name path.
+    folderId: z.string().nullable(),
   });
 export type McpSkeletonRow = z.infer<typeof mcpSkeletonRowSchema>;
 
@@ -629,8 +634,21 @@ export function presentMcpSkeletonRow(item: PlanTreeSkeletonItem): McpSkeletonRo
     parentKey: item.parentKey,
     id: item.id,
     revision: item.revision,
+    folderId: item.folderId,
   };
 }
+
+/**
+ * One folder of the project as `skeleton` carries it (MOTIR-5410) — the same
+ * four fields the internal tree read serves, `path` being the names ROOT FIRST.
+ */
+export const mcpSkeletonFolderSchema = z.object({
+  id: z.string(),
+  parentFolderId: z.string().nullable(),
+  name: z.string(),
+  path: z.array(z.string()),
+});
+export type McpSkeletonFolder = z.infer<typeof mcpSkeletonFolderSchema>;
 
 /**
  * The `skeleton` response — the whole project's tree shape, plus the four
@@ -650,6 +668,11 @@ export const skeletonPayload = definePayload({
       returned: z.number().int(),
       truncated: z.boolean(),
       limit: z.number().int(),
+      // The project's folders, BESIDE the rows and never among them. The four
+      // numbers above count WORK ITEMS only; the folder list has its own bound
+      // and says so in `foldersTruncated`.
+      folders: z.array(mcpSkeletonFolderSchema),
+      foldersTruncated: z.boolean(),
     })
     .catchall(z.unknown()) as unknown as z.ZodType<
     {
@@ -659,6 +682,8 @@ export const skeletonPayload = definePayload({
       returned: number;
       truncated: boolean;
       limit: number;
+      folders: McpSkeletonFolder[];
+      foldersTruncated: boolean;
     } & Record<string, unknown>
   >,
   // No probe: the row is a NARROWING of `WorkItemRef` (see above), so it cannot

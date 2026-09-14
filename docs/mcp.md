@@ -3336,14 +3336,16 @@ thing on the other.
 
 **Output** — `structuredContent`:
 
-| Field       | Type             | Notes                                                                |
-| ----------- | ---------------- | -------------------------------------------------------------------- |
-| `project`   | object           | `{ projectId, projectKey }`.                                         |
-| `items`     | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision }` — see below. |
-| `total`     | integer          | Live work items in the project, **before** the bound is applied.     |
-| `returned`  | integer          | Rows in `items`.                                                     |
-| `truncated` | boolean          | Whether the bound bit.                                               |
-| `limit`     | integer          | The bound actually applied.                                          |
+| Field              | Type             | Notes                                                                          |
+| ------------------ | ---------------- | ------------------------------------------------------------------------------ |
+| `project`          | object           | `{ projectId, projectKey }`.                                                   |
+| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId }` — see below. |
+| `total`            | integer          | Live work items in the project, **before** the bound is applied.               |
+| `returned`         | integer          | Rows in `items`.                                                               |
+| `truncated`        | boolean          | Whether the bound bit.                                                         |
+| `limit`            | integer          | The bound actually applied.                                                    |
+| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below. |
+| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                   |
 
 `parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
 makes the response a TREE rather than a list — the hierarchy is rebuildable from
@@ -3351,6 +3353,17 @@ this one call. `id` is the real work-item cuid `add_plan_items` takes for
 `parentRef` / `blockedByRefs` (it also accepts the `<KEY>-<n>` key), and `revision` is
 the `baseRevision` a `modify` / `remove` proposal anchors on — both ride the row
 so orienting and proposing do not cost a `get_work_item` per target.
+
+**Folders.** `folderId` is the folder an item is **filed** in — its OWN placement,
+null for everything else. Only a root can be filed (an item has a parent OR a
+folder, never both), so a story under a filed epic reads `folderId: null`; its
+placement follows from its ancestors' keys. `folders` lists every folder of the
+project in tree order, each with `path` — its name and every ancestor's, root
+first (`["Parked", "2025"]`) — so a `folderId` resolves to a name without a
+second read. Folders travel **beside** the rows, never as rows of `items`, and
+`total` / `returned` / `truncated` / `limit` count work items only; the folder list
+has its own bound, reported by `foldersTruncated`. The text summary names each
+returned filed row with its folder path (`Parked ▸ 2025`) and lists the folders.
 
 **The bound announces itself, always.** `total` / `returned` / `truncated` /
 `limit` are on every response, not only a truncated one. A skeleton that quietly

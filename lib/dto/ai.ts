@@ -31,11 +31,36 @@ export interface PlanTreeSkeletonItem {
   // base-revision drift compares it to the target's current latest). Populated by
   // ONE batched `findLatestIdsByWorkItemIds` on the read (MOTIR-1531), never N+1.
   revision: string | null;
+  // The folder the item is FILED in — its OWN placement, never an ancestor's
+  // (Story MOTIR-5310 · MOTIR-5410). Only a root can carry one: the
+  // `work_item_parent_xor_folder` CHECK keeps `parentKey` and `folderId` apart,
+  // so a story under a filed epic reads `folderId: null` and its placement is
+  // derivable from its ancestors' keys. Populated by ONE batched lookup per read.
+  folderId: string | null;
+}
+
+// One folder of the project, as the tree read carries it (MOTIR-5410). `path` is
+// the folder's name and every ancestor's, ROOT FIRST — what a planner shows a
+// filed item under ("Parked ▸ 2025"). Folders travel BESIDE the work items, never
+// as rows of `items`: motir-ai reads `items` untyped, and a folder row there would
+// be taken for a work item.
+export interface PlanTreeFolder {
+  id: string;
+  parentFolderId: string | null;
+  name: string;
+  path: string[];
 }
 
 export interface PlanTreeResponse {
   project: { projectId: string; projectKey: string };
   items: PlanTreeSkeletonItem[];
+  // Every folder of the project in tree order, bounded by the folder picker's own
+  // cap. `foldersTruncated` says the project holds more than were read, so a
+  // consumer never mistakes a capped list for the whole set. Always present: an
+  // EMPTY array means the project has no folders (a consumer reading an older
+  // core that omits the key treats the set as unknown, not as empty).
+  folders: PlanTreeFolder[];
+  foldersTruncated: boolean;
 }
 
 // ── Story 7.5 — the plan-tree GRAPH-TRAVERSAL read family ──────────────────

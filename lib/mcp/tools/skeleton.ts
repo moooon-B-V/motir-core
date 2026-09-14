@@ -75,19 +75,46 @@ const inputSchema = {
     ),
 };
 
-/** Compact human summary — the shape of the answer, and whether it is complete. */
+/** How a folder's name path reads to a person — the quick view's own form. */
+const PATH_SEPARATOR = ' ▸ ';
+
+/**
+ * Compact human summary — the shape of the answer, whether it is complete, and
+ * where the team has FILED work (MOTIR-5410): each returned filed row with its
+ * folder path, then the project's folders.
+ */
 export function summarizeSkeleton(input: {
   projectKey: string;
   total: number;
   returned: number;
   truncated: boolean;
   limit: number;
+  items?: Array<{ key: string; kind: string; folderId: string | null }>;
+  folders?: Array<{ id: string; path: string[] }>;
+  foldersTruncated?: boolean;
 }): string {
   const head = `${input.projectKey} — ${input.total} live work item(s)`;
-  return input.truncated
-    ? `${head}; TRUNCATED at limit ${input.limit} — ${input.returned} returned. ` +
+  const lines = [
+    input.truncated
+      ? `${head}; TRUNCATED at limit ${input.limit} — ${input.returned} returned. ` +
         'This is NOT the whole project: raise `limit` before concluding anything is absent.'
-    : `${head}, all ${input.returned} returned — the whole tree.`;
+      : `${head}, all ${input.returned} returned — the whole tree.`,
+  ];
+  const folders = input.folders ?? [];
+  const pathById = new Map(folders.map((f) => [f.id, f.path.join(PATH_SEPARATOR)]));
+  const filed = (input.items ?? []).filter((row) => row.folderId !== null);
+  if (filed.length > 0) {
+    lines.push('', 'Filed in folders:');
+    for (const row of filed) {
+      const path = pathById.get(row.folderId as string) ?? `folder ${row.folderId}`;
+      lines.push(`- ${row.key} (${row.kind}) — ${path}`);
+    }
+  }
+  if (folders.length > 0) {
+    lines.push('', `Folders (${folders.length}${input.foldersTruncated ? ', TRUNCATED' : ''}):`);
+    for (const folder of folders) lines.push(`- ${folder.path.join(PATH_SEPARATOR)}`);
+  }
+  return lines.join('\n');
 }
 
 /** The adapter: resolve the project by key, then read its breadth projection. */
@@ -108,6 +135,8 @@ export async function runSkeleton(
       returned: rows.length,
       truncated: rows.length < total,
       limit,
+      folders: tree.folders,
+      foldersTruncated: tree.foldersTruncated,
     };
     return toolOk(
       summarizeSkeleton({ projectKey: project.identifier, ...payload }),
@@ -126,7 +155,9 @@ export function registerSkeleton(server: McpServer, resolveContext: McpContextRe
       description:
         'ORIENT before proposing: the whole project’s tree SHAPE in ONE read — every live ' +
         'work item’s key, kind, title, status and parent, plus the `id` and `revision` a ' +
-        'plan proposal anchors on. This is what to call FIRST when you need to know what a ' +
+        'plan proposal anchors on, and the `folderId` of an item FILED in a folder beside the ' +
+        'project’s `folders` (each with its name path), so work the team put away is not read ' +
+        'as an ordinary root. This is what to call FIRST when you need to know what a ' +
         'project already contains; it REPLACES paging `search_work_items` fifty flat rows at a ' +
         'time and re-parenting them client-side, and it is not a second way to list items — it ' +
         'carries no descriptions, no assignees and no filters. `total`, `returned` and ' +
