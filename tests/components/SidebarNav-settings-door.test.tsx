@@ -4,6 +4,7 @@ import { cleanup, screen } from '@testing-library/react';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { toSettingsNavPermissions, visibleSettingsNav } from '@/lib/settings/projectSettingsNav';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 
 // Subtask MOTIR-2468 — THE AREA DOOR, and the rail behind it (design panels 1
@@ -98,9 +99,51 @@ describe('the Project settings door (design panel 1)', () => {
     expect(settingsRow()).toBeNull();
   });
 
-  it('ONE administrative key is enough to earn the door', () => {
+  // ⚠️ AMENDED (MOTIR-5319). This asserted the door pointed at
+  // `/settings/project` — Details, which is `project:administer` — for an actor
+  // who holds only `board:configure`. That was the defect, pinned: the actor got
+  // a door and it led to `Admins only`. The KEY still earns the door; the door
+  // now goes to the room the key opens.
+  it('ONE administrative key is enough to earn the door — and it opens on that room', () => {
     renderRail(['project:browse', 'board:configure']);
-    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project');
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project/board');
+  });
+
+  it('a key that opens SEVERAL rooms goes to the first one in rail order', () => {
+    // `workflow:manage` opens Workflow and Approvals, both in the Work group;
+    // Workflow precedes Approvals in the registry, which IS the rail order.
+    renderRail(['project:browse', 'workflow:manage']);
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project/workflow');
+  });
+
+  it("the door's destination is the first entry of the actor's view-gated rail, for every shape", () => {
+    // The property, not just the two fixtures above: whatever the actor holds,
+    // the door and the rail cannot disagree about where the area starts.
+    for (const held of [
+      ADMIN,
+      ['project:browse', 'board:configure', 'estimation:manage'],
+      ['project:browse', 'member:manage'],
+      ['project:browse', 'automation:manage'],
+    ] as PermissionKey[][]) {
+      cleanup();
+      renderRail(held);
+      const first = visibleSettingsNav(toSettingsNavPermissions(held))[0];
+      expect(settingsRow()?.getAttribute('href'), held.join(' + ')).toBe(first?.href);
+    }
+  });
+
+  it('the door reads its destination from the registry filter — no href literal', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('app/(authed)/_components/SidebarNav.tsx', 'utf8');
+    const start = src.indexOf('const bottomItems');
+    const door = src.slice(start, src.indexOf("sections.push({ id: 'bottom'", start));
+    expect(door.length).toBeGreaterThan(0);
+    expect(door).toContain('href: settingsDoorHref');
+    expect(door).not.toMatch(/href: ['"`]/);
+    expect(door).not.toContain('PROJECT_SETTINGS_ROOT');
+    expect(src).toContain(
+      'const settingsDoorHref = visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability)[0]?.href;',
+    );
   });
 
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
@@ -302,7 +345,12 @@ describe('the settings door yields to a more specific workspace sub-route', () =
   it('has no row left to yield to — every sub-route row left this section', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync('app/(authed)/_components/SidebarNav.tsx', 'utf8');
-    const door = src.slice(src.indexOf('const bottomItems'), src.indexOf('sections.push({ id:'));
+    // ⚠️ THIS SLICE WAS EMPTY UNTIL MOTIR-5319: `sections.push({ id: 'primary' })`
+    // precedes `bottomItems`, so the end index came first and every `not.toContain`
+    // below passed against ''. Bounded to the bottom push now, and asserted non-empty.
+    const start = src.indexOf('const bottomItems');
+    const door = src.slice(start, src.indexOf("sections.push({ id: 'bottom'", start));
+    expect(door.length).toBeGreaterThan(0);
     // The door's `active` predicate negates NOTHING now: there is nothing below
     // it in this section to be more specific than it.
     expect(door).not.toContain("!isActive(pathname, '/settings/workspace/security')");
