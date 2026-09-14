@@ -1,10 +1,16 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import { ChevronLeft, SearchX } from 'lucide-react';
+import { Pill } from '@/components/ui/Pill';
 import { getSession } from '@/lib/auth';
+import type { DispatchRunScopeDto } from '@/lib/dto/dispatchRuns';
 import { getActiveProject } from '@/lib/projects';
+import { RUNS_SCOPE_PARAM, parseRunsScope, runsHref } from '@/lib/runs/runsAddress';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/runs/timeline';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { RunsIndex } from './_components/RunsIndex';
 import { RunsIndexSkeleton } from './_components/RunsIndexSkeleton';
 
@@ -30,11 +36,34 @@ import { RunsIndexSkeleton } from './_components/RunsIndexSkeleton';
 // is its own in-page <Suspense>, placed AFTER the page's own gate, and no
 // `loading.tsx` is added under `app/(authed)` at all. The boundary below sits
 // after the session + project gates for exactly that reason.
+//
+// ⚠️ `?scope=<KEY>` NARROWS THIS SAME PAGE — it is not a second page (Story
+// MOTIR-5363 · design MOTIR-5402, `design/runs/run-scope.mock.html` panels 4–9).
+// Both sections stay, both reads are narrowed by the QUERY, and the header names
+// the scope. Entering or leaving a narrowing changes both server reads, so it is
+// a real navigation (a link); opening a run over it is not (`RunsIndex`).
 
 /** One page of past runs — the read's own default, and the design's number. */
 const PAGE = 25;
 
-export default async function RunsPage() {
+/**
+ * What the header knows about a `?scope=` key, before the list renders.
+ *
+ * Three answers and they are different faces: the key RESOLVED (the header names
+ * it), it resolves to NOTHING (panel 7 — distinct from empty, because *has no
+ * runs* and *is not yours* are opposite facts), or the header read itself FAILED
+ * (the key stays plain text, and the list's own reads show their failed face).
+ */
+type ScopeHeader =
+  | { state: 'found'; scope: DispatchRunScopeDto }
+  | { state: 'missing' }
+  | { state: 'unread' };
+
+export default async function RunsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+} = {}) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -45,23 +74,110 @@ export default async function RunsPage() {
   // left is a session-less request — and it redirects rather than rendering.
   if (!ctx) redirect('/sign-in');
 
+  const projectKey = ctx.project.identifier;
+  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const scopeKey = parseRunsScope((await searchParams)?.[RUNS_SCOPE_PARAM]);
+
+  if (!scopeKey) {
+    return (
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-1">
+          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+            {t('indexHeading')}
+          </h1>
+          <p className="text-sm text-(--el-text-secondary)">
+            {t('indexSubtitle', { project: ctx.project.name })}
+          </p>
+        </header>
+        <Suspense fallback={<RunsIndexSkeleton />}>
+          <RunsIndexData projectKey={projectKey} ctx={wsCtx} scopeKey={null} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  // The header's read — the design's one new read — is made only on a narrowed
+  // address, and only once: the list's poll and paging never ask for it again.
+  const header = await readScopeHeader(projectKey, scopeKey, wsCtx);
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
+        <Link
+          href={runsHref()}
+          className="inline-flex items-center gap-1 self-start text-sm text-(--el-link)"
+        >
+          <ChevronLeft className="size-4" aria-hidden="true" />
+          {t('scopeIndex.allRuns')}
+        </Link>
         <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('indexHeading')}</h1>
-        <p className="text-sm text-(--el-text-secondary)">
-          {t('indexSubtitle', { project: ctx.project.name })}
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-(--el-text-secondary)">
+          {header.state === 'found' ? (
+            <>
+              <span>
+                {t.rich('scopeIndex.subtitle', {
+                  key: header.scope.key,
+                  title: header.scope.title,
+                  item: (chunks) => (
+                    <Link
+                      href={`/items/${encodeURIComponent(header.scope.key)}`}
+                      className="text-(--el-link) underline"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </span>
+              {header.scope.archived ? (
+                <Pill tone="neutral">{t('scopeIndex.archived')}</Pill>
+              ) : null}
+            </>
+          ) : (
+            // Unresolved or unread: the key is PLAIN TEXT — there is nothing
+            // (known) for it to open.
+            <span>{t('scopeIndex.subtitleMissing', { key: scopeKey })}</span>
+          )}
         </p>
       </header>
-      <Suspense fallback={<RunsIndexSkeleton />}>
-        <RunsIndexData
-          projectKey={ctx.project.identifier}
-          userId={ctx.userId}
-          workspaceId={ctx.workspaceId}
-        />
-      </Suspense>
+      {header.state === 'missing' ? (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-sky) px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-strong)"
+        >
+          <SearchX className="mt-0.5 size-4 flex-none" aria-hidden="true" />
+          <div className="flex flex-col gap-0.5">
+            <p className="font-semibold">{t('scopeIndex.notFoundTitle', { key: scopeKey })}</p>
+            <p>{t('scopeIndex.notFoundBody')}</p>
+          </div>
+        </div>
+      ) : (
+        <Suspense fallback={<RunsIndexSkeleton />}>
+          <RunsIndexData projectKey={projectKey} ctx={wsCtx} scopeKey={scopeKey} />
+        </Suspense>
+      )}
     </div>
   );
+}
+
+/**
+ * Resolve a `?scope=` key for the header. Only `WorkItemNotFoundError` means
+ * *no such work item here*; any other failure is a failed READ, which must not
+ * wear the unresolvable face — the list's own reads will say they failed.
+ */
+async function readScopeHeader(
+  projectKey: string,
+  scopeKey: string,
+  ctx: { userId: string; workspaceId: string },
+): Promise<ScopeHeader> {
+  try {
+    return {
+      state: 'found',
+      scope: await dispatchRunService.getRunScope(projectKey, scopeKey, ctx),
+    };
+  } catch (err) {
+    if (err instanceof WorkItemNotFoundError) return { state: 'missing' };
+    return { state: 'unread' };
+  }
 }
 
 /**
@@ -77,35 +193,43 @@ export default async function RunsPage() {
  * separate faces — *we could not load this* and *nothing has run* are opposite
  * facts — so the catch resolves to a flag the island renders its own error for,
  * rather than throwing into a boundary that would replace the whole page.
+ *
+ * A `scopeKey` narrows BOTH reads by the query, never the page.
  */
 async function RunsIndexData({
   projectKey,
-  userId,
-  workspaceId,
+  ctx,
+  scopeKey,
 }: {
   projectKey: string;
-  userId: string;
-  workspaceId: string;
+  ctx: { userId: string; workspaceId: string };
+  scopeKey: string | null;
 }) {
-  const ctx = { userId, workspaceId };
+  const narrowing = scopeKey ? { scopeWorkItemKey: scopeKey } : {};
   const [live, past] = await Promise.all([
     dispatchRunService
       .listRunsForProject(
         projectKey,
-        { take: PAGE, statuses: [...DISPATCH_RUN_LIVE_STATUSES] },
+        { take: PAGE, statuses: [...DISPATCH_RUN_LIVE_STATUSES], ...narrowing },
         ctx,
       )
       .catch(() => null),
     dispatchRunService
       .listRunsForProject(
         projectKey,
-        { take: PAGE, statuses: [...DISPATCH_RUN_PAST_STATUSES] },
+        { take: PAGE, statuses: [...DISPATCH_RUN_PAST_STATUSES], ...narrowing },
         ctx,
       )
       .catch(() => null),
   ]);
 
   return (
-    <RunsIndex projectKey={projectKey} initialLive={live} initialPast={past} pageSize={PAGE} />
+    <RunsIndex
+      projectKey={projectKey}
+      scopeKey={scopeKey}
+      initialLive={live}
+      initialPast={past}
+      pageSize={PAGE}
+    />
   );
 }

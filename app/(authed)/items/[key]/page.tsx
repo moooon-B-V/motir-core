@@ -199,6 +199,8 @@ export default async function IssueDetailPage({
     activityTab,
     canEdit,
     itemIdentifier: item.identifier,
+    projectKey: ctx.project.identifier,
+    hasChildren: detail.children.length > 0,
   });
 
   // ── TIER TWO: what the reader came for, awaited before the first flush ─────
