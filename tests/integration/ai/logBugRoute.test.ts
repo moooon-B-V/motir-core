@@ -17,7 +17,7 @@ import {
 } from '@/lib/ai/plannerTenantBug';
 import { POST as logBugPOST } from '@/app/api/internal/ai/log-bug/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
-import { createTestProject } from '../../fixtures/projectFixtures';
+import { createTestProject, seededBugsFolderId } from '../../fixtures/projectFixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -131,6 +131,37 @@ describe('POST /api/internal/ai/log-bug — the filing, and what it records', ()
       workItemKey: json.key,
       title: 'Search ignores the archived filter',
     });
+  });
+
+  it('a planner bug that names NO parent lands in the project’s bug destination — one that names a parent keeps it (MOTIR-4937)', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_log_bug_destination';
+    await openPlan(fx, jobId);
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Checkout' },
+      fx.ctx,
+    );
+
+    const unparented = await file(fx, jobId, { title: 'Filed on its own' });
+    const parented = await file(fx, jobId, {
+      title: 'Filed under a key',
+      parentKey: story.identifier,
+    });
+    expect(unparented.status).toBe(201);
+    expect(parented.status).toBe(201);
+
+    const loose = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: ((await unparented.json()) as { id: string }).id },
+    });
+    const kept = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: ((await parented.json()) as { id: string }).id },
+    });
+    // Motir filed it on its own, so it goes where the project files those.
+    expect(loose.folderId).toBe(await seededBugsFolderId(fx.projectId));
+    expect(loose.parentId).toBeNull();
+    // A named parent is kept, and never also filed.
+    expect(kept.parentId).toBe(story.id);
+    expect(kept.folderId).toBeNull();
   });
 
   it('files under a parent named by key, inside the token’s project', async () => {
