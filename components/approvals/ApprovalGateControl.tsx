@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill, type PillProps } from '@/components/ui/Pill';
@@ -116,6 +117,16 @@ export interface ApprovalGateControlProps {
   verbs: GateVerb[];
   /** Band 3's sentence: what approving will DO, beside the verbs. */
   consequence: ReactNode;
+  /**
+   * THE SETTINGS DOOR (MOTIR-5513; `approval-control.mock.html` panel `S`) — a
+   * KIND-SUPPLIED way out of being asked: a link to the project setting that
+   * decides whether this kind asks at all. Rendered in band 3's LEFT column, under
+   * the consequence line; never a verb and never beside the verbs, and pressing it
+   * decides nothing. The CALLER passes it only to a viewer holding the key its
+   * destination is guarded by (`settingsDoorFor`) — the frame never guesses.
+   * Absent, band 3 is byte-identical to state `A`.
+   */
+  settingsDoor?: { href: string; label: string };
   /** The confirm band's list — what approving is about to do, per kind. */
   confirmConsequences: ReactNode[];
   /** Who the gate is waiting on, for state `B`. */
@@ -527,6 +538,7 @@ export function ApprovalGateControl({
   port,
   verbs,
   consequence,
+  settingsDoor,
   confirmConsequences,
   routedToLabel,
   filesKept = null,
@@ -607,6 +619,23 @@ export function ApprovalGateControl({
       : phase.kind === 'pending'
         ? { severity: 'info' }
         : { tone: 'awaiting' };
+
+  // Band 3's left-hand sentence — what approving will DO, who it waits on, or
+  // (state `X`) that the verbs return once the subject renders. Hoisted so the
+  // settings door can sit UNDER it without the no-door row changing by a byte.
+  const consequenceLine = (
+    <span className="text-[13px] text-(--el-text-secondary)">
+      {!canDecide
+        ? t('waitingOn', { name: routedToLabel ?? t('theAssignee') })
+        : portShown
+          ? consequence
+          : // The asset's `X` footer, verbatim in intent: "The verbs
+            // return when the subject renders." It replaces the
+            // consequence sentence because there is no consequence to
+            // state — nothing is pressable.
+            tPort('verbsReturn')}
+    </span>
+  );
 
   const frame = (
     <div
@@ -765,17 +794,22 @@ export function ApprovalGateControl({
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3">
-          <span className="text-[13px] text-(--el-text-secondary)">
-            {!canDecide
-              ? t('waitingOn', { name: routedToLabel ?? t('theAssignee') })
-              : portShown
-                ? consequence
-                : // The asset's `X` footer, verbatim in intent: "The verbs
-                  // return when the subject renders." It replaces the
-                  // consequence sentence because there is no consequence to
-                  // state — nothing is pressable.
-                  tPort('verbsReturn')}
-          </span>
+          {settingsDoor ? (
+            // THE SETTINGS DOOR (MOTIR-5513, panel `S`): band 3's LEFT column,
+            // UNDER the consequence line. A column only when a kind supplies one,
+            // so a kind that supplies none renders this row exactly as before.
+            <span className="flex min-w-0 flex-col gap-1">
+              {consequenceLine}
+              <Link
+                href={settingsDoor.href}
+                className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
+              >
+                {settingsDoor.label}
+              </Link>
+            </span>
+          ) : (
+            consequenceLine
+          )}
           {/* ⚠️ STATE `B` RENDERS NO VERBS AT ALL — not disabled ones. A reader
               who may not decide can still SEE what is being decided; a greyed
               button would tell them the control is theirs and broken.

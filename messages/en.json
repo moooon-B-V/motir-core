@@ -8205,6 +8205,9 @@
     },
     "waitingOn": "Waiting on {name}.",
     "theAssignee": "this work item's assignee",
+    "settingsDoor": {
+      "mergeMode": "Change how this project merges pull requests →"
+    },
     "confirm": {
       "title": "Approving this will:",
       "cancel": "Cancel",

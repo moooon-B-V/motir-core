@@ -8201,6 +8201,9 @@
     },
     "waitingOn": "等待 {name} 处理。",
     "theAssignee": "该工作项的负责人",
+    "settingsDoor": {
+      "mergeMode": "更改该项目合并拉取请求的方式 →"
+    },
     "confirm": {
       "title": "批准后将会：",
       "cancel": "取消",
