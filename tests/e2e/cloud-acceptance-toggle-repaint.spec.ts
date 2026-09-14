@@ -59,6 +59,19 @@ import {
 // late `<Suspense>` stack (MOTIR-3436). Filed as its own bug; this file is its
 // reproduction.
 //
+// ⚠️ RESOLVED (MOTIR-5255) — AND IT WAS NEITHER HALF OF THE PAGE-STATE CONTRACT.
+// The React that `next@16.2.6` vendors DROPS a Suspense ping that lands during
+// the render phase (`pingSuspendedRoot`'s `&& prepareFreshStack`), so the late
+// section whose Flight chunk arrived mid-render never re-renders and the press's
+// transition never settles — the switch's `disabled` at the failing assertion is
+// that. Measured 2026-09-14: both RSC responses finished carrying State A; the
+// rail and the LOWER late boundary rendered the new tree and the UPPER one
+// (this panel) never did; an unrelated state update six seconds later painted
+// State A with no request. Removing `router.refresh()` or `revalidatePath` each
+// left 2/24 red. `patches/next@16.2.6.patch` applies React's upstream fix and
+// `tests/react-dom-ping-patch.test.ts` holds it: 1/16 red on `main`, 0 in the
+// patched runs quoted on the pull request, with this sibling as the control.
+//
 // **So a green run of this file means "no repaint regression", never "the race
 // cannot happen" — and a RED one is not automatically your diff.**
 //
@@ -152,10 +165,10 @@ test.describe('turning the acceptance video on repaints the panel in place', () 
   // `approvalGateSettingsService`, the Approvals room's own door), which is what
   // makes this body runnable again. The body and every assertion are UNCHANGED.
   //
-  // ⚠️ THE ASSERTION MAY STILL NOT BE RELAXED. MOTIR-5255 — the intermittent
-  // ~1-in-16 repaint failure this spec measured before the tier moved — is still
-  // open, and this test is its only detector. A red run here is that bug's
-  // signal, not a reason to add a `reload()`.
+  // ⚠️ THE ASSERTION MAY STILL NOT BE RELAXED. It is the only BEHAVIOURAL
+  // detector of MOTIR-5255 — the dropped Suspense ping in the vendored React —
+  // and it is the test that goes red if that patch is ever lost. A red run here
+  // is that signal, not a reason to add a `reload()`.
   // ─────────────────────────────────────────────────────────────────────────
   test('the admin presses Turn on and State A arrives, with no reload', async ({ page }) => {
     const seed = await seedBillingOwner(page, 'toggle-repaint@example.com');
