@@ -1463,14 +1463,23 @@
          mirrors its .held / .btn rules so panel 13 can draw it in the peek. ── */
       .held {
         display: flex;
+        flex-direction: column;
         gap: 8px;
-        align-items: flex-start;
         width: 100%;
         margin-top: 8px;
         padding: var(--spacing-control-y) var(--spacing-control-x);
         background: var(--el-tint-yellow);
         border: 1px solid var(--el-border-soft);
         border-radius: var(--radius-control);
+      }
+      .hl {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .hl + .hl {
+        padding-top: 8px;
+        border-top: 1px solid var(--el-border-soft);
       }
       .held-glyph {
         flex: none;
@@ -3176,46 +3185,47 @@
       <!-- ═══════════ PANEL 13 — AMENDED 2026-09-14 (MOTIR-5523) ═══════════ -->
       <div class="panel">
         <div class="panel-label">
-          13 · AMENDED 2026-09-14 (MOTIR-5523) — an approval holds a move: the message on the status
-          control
+          13 · AMENDED 2026-09-14 (MOTIR-5523) — REVISED the same day — held moves depend on whether
+          there is a pull request: the message on the status control
         </div>
         <div class="rail-row">
           <div>
-            <p class="rail-cap">Gate awaiting · reader may decide</p>
+            <p class="rail-cap">No pull request · gate awaiting · reader may decide — Done held</p>
             <div class="rail-solo">
               <dl class="qv-rail">
                 <div class="rail-field is-editable">
                   <dt>
-                    Status
-                    <button class="chev" aria-label="Edit Status">
+                    Status<button class="chev" aria-label="Edit Status">
                       <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
                     </button>
                   </dt>
                   <dd>
                     <span class="pill pill--inprogress">In Review</span>
                     <div class="held" role="status">
-                      <span class="held-glyph" aria-hidden="true"
-                        ><svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                      ></span>
-                      <div class="held-body">
-                        <p class="held-text">
-                          Status can't be moved to <strong>Done</strong> directly — a
-                          <strong>Design result</strong> approval is waiting.
-                        </p>
-                        <a
-                          class="held-btn"
-                          href="?peek=PROD-23&amp;approval=PROD-23&amp;approvalKind=design_result"
-                          >Review &amp; approve</a
-                        >
+                      <div class="hl">
+                        <span class="held-glyph" aria-hidden="true"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
+                        ></span>
+                        <div class="held-body">
+                          <p class="held-text">
+                            Status can't be moved to <strong>Done</strong> directly — a
+                            <strong>design approval</strong> is waiting.
+                          </p>
+                          <a
+                            class="held-btn"
+                            href="?peek=PROD-23&amp;approval=PROD-23&amp;approvalKind=design_result"
+                            >Review &amp; approve</a
+                          >
+                        </div>
                       </div>
                     </div>
                   </dd>
@@ -3224,37 +3234,65 @@
             </div>
           </div>
           <div>
-            <p class="rail-cap">Gate awaiting · reader may only look</p>
+            <p class="rail-cap">
+              Open pull request · gate awaiting · reader may decide — Approved and Done held
+            </p>
             <div class="rail-solo">
               <dl class="qv-rail">
                 <div class="rail-field is-editable">
                   <dt>
-                    Status
-                    <button class="chev" aria-label="Edit Status">
+                    Status<button class="chev" aria-label="Edit Status">
                       <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
                     </button>
                   </dt>
                   <dd>
                     <span class="pill pill--inprogress">In Review</span>
                     <div class="held" role="status">
-                      <span class="held-glyph" aria-hidden="true"
-                        ><svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-                      ></span>
-                      <div class="held-body">
-                        <p class="held-text">
-                          Status can't be moved to <strong>Done</strong> directly — a
-                          <strong>Design result</strong> approval is waiting on
-                          <strong>Mara S.</strong>
-                        </p>
+                      <div class="hl">
+                        <span class="held-glyph" aria-hidden="true"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
+                        ></span>
+                        <div class="held-body">
+                          <p class="held-text">
+                            Status can't be moved to <strong>Approved</strong> directly — a
+                            <strong>pull-request approval</strong> is waiting.
+                          </p>
+                          <a
+                            class="held-btn"
+                            href="?peek=PROD-23&amp;approval=PROD-23&amp;approvalKind=pull_request_approval"
+                            >Review &amp; approve</a
+                          >
+                        </div>
+                      </div>
+                      <div class="hl">
+                        <span class="held-glyph" aria-hidden="true"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <circle cx="18" cy="18" r="3" />
+                            <circle cx="6" cy="6" r="3" />
+                            <path d="M6 21V9a9 9 0 0 0 9 9" /></svg
+                        ></span>
+                        <div class="held-body">
+                          <p class="held-text">
+                            Status can't be moved to <strong>Done</strong> directly — merging the
+                            pull request moves it.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </dd>
@@ -3264,13 +3302,15 @@
           </div>
         </div>
         <p class="panel-note">
-          <strong>The message on the control IS the quick view's signal.</strong> No second line
-          elsewhere in the peek. <strong>Review &amp; approve</strong> adds the approval overlay's
-          address beside <code>?peek=</code>, so the overlay opens over the peek's host page and
-          closing it returns to the open peek. The held option in the open picker, the list row and
-          every copy string are specified in <code>status-held-by-decision.mock.html</code> and
-          design-notes § <em>The status control says so</em>. Values are examples of interpolated
-          values.
+          <strong>The held lines on the control ARE the quick view's signal.</strong> No pull
+          request: Done is held for the decision. An open pull request: Approved is held for the
+          approve-to-merge decision and Done for the merge (no button on the merge line). No second
+          line elsewhere in the peek. <strong>Review &amp; approve</strong> adds the approval
+          overlay's address beside <code>?peek=</code>, so the overlay opens over the peek's host
+          page and closing it returns to the open peek. The held option in the open picker, the list
+          row and every copy string are specified in
+          <code>status-held-by-decision.mock.html</code> and design-notes §
+          <em>The status control says so</em>. Values are examples of interpolated values.
         </p>
       </div>
     </div>

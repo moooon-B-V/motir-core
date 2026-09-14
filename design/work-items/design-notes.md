@@ -18,7 +18,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **DatePicker calendar (Due-date field)**                    | **`datepicker.mock.html`** (HTML mockup)                                              | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Create modal — Due date field**                           | **`create.mock.html`** (HTML mockup)                                                  | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Work-item quick view (peek)**                             | **`quick-view.mock.html`** + `quick-view.png`                                         | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. **8.8.4 EXPANDS the rail to the full core-field set (gates 8.8.8) — overturns the curated subset.** **MOTIR-2561 makes the rail a WRITE surface (panels 7–12) — overturns the read-only decision; gates MOTIR-2563 / 2564 / 2565 / 2566.** See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **The status control says so — a move held by an approval** | **`status-held-by-decision.mock.html`** + `status-held-by-decision.png` + `.dark.png` | While an `awaiting` gate owns one of the item's moves, the status control carries the held message and ONE **Review & approve** button into the full-screen overlay; the held option in the dropdown; the `/items` row after a refused commit; the see-only reader; the three unheld gate states; `zh`. MOTIR-5523 (story MOTIR-4887) — gates MOTIR-5528 / MOTIR-5529, composed by MOTIR-5525. See § _The status control says so_.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **The status control says so — a move held by an approval** | **`status-held-by-decision.mock.html`** + `status-held-by-decision.png` + `.dark.png` | While a move is held, the status control carries one held line per held status — Done with no pull request; Approved (decision) and Done (merge) with one open — and a **Review & approve** button into the full-screen overlay only on a decidable decision line; the held options in the dropdown; the `/items` row after a refused commit; the look-only reader; nothing-held states; `zh`. REVISED 2026-09-14. MOTIR-5523 (story MOTIR-4887) — gates MOTIR-5528 / MOTIR-5529, composed by MOTIR-5525. See § _The status control says so_.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Comments + @mentions (Activity section)**                 | **`comments.mock.html`** (HTML mockup)                                                | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Draft explanation with AI**                               | **`draft-with-ai.mock.html`** + `draft-with-ai.png`                                   | The _Draft with AI_ INTERACTION for `explanationMd`, on BOTH the create modal and the detail page. Drawn against the SHIPPED components (`CreateIssueModal` disclosure + min `MarkdownEditor` + the existing disabled secondary "Draft with AI" button · `IssueExplanation` read-only card · `EditIssueForm`), NOT the legacy pens. Specifies streaming (SSE, 8.8.11), the draft landing in the editor (no accept/discard gate), `ai_draft` / `user_edited` source signalling, the cloud-gate, and the error state. Story 8.8 · 8.8.6 (MOTIR-1090). Gates 8.8.12 (MOTIR-1096). See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Work-item provenance on the detail rail**                 | **`provenance.mock.html`** + `provenance.png`                                         | `detail.pen`/`CoreFieldsPanel` draw no provenance surface — two new READ-ONLY rail `FieldCard`s (Planning · Implementation), each a `source · harness · model` triple + the "—" unknown state. Composes the shipped rail (does not redraw); source = a tinted `Pill`-chip (six values). Story MOTIR-1685 · MOTIR-1688 (design). Gates MOTIR-1693. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -6926,20 +6926,26 @@ is planned nowhere.
 | **MOTIR-5376** — the Folder filter field | **TAKES a premise** | the menu position IS the registry position it registered (last, after `cmp`)                                                                                                                             |
 | **MOTIR-5316** / **MOTIR-5311**          | **lose nothing**    | the quick view's Folder field, its control and the picker are reused unchanged                                                                                                                           |
 
-## ⭐ The status control says so — a move held by a pending approval (Story MOTIR-4887 · MOTIR-5523 — `status-held-by-decision.mock.html`)
+## ⭐ The status control says so — a move held by a pending approval or a merge (Story MOTIR-4887 · MOTIR-5523 — `status-held-by-decision.mock.html`)
 
 **Yue's direction, 2026-09-14, which governs this asset:** _"the design should be like
 near or on the status control/change, there should be access directly to open the
 approval gate/port — the full screen overlay, give the user a message saying status
 can't be changed directly and give the user the access to the approval gate."_
-Confirmed the same day: **only the move the approval performs is locked.** Sending the
-card back, blocking it and cancelling it stay available.
+
+> **REVISED 2026-09-14, the same day, on Yue's direction — the first revision held only
+> Done, and that was wrong.** _"when the design work item has a linked PR, approve the
+> design should change the status to approved, and merge should be auto triggered or auto
+> enqueued, webhook changes approved to done after PR merge. if no PR, the work item status
+> will be changed to done after approving. so it's about if there's a PR. if there's a PR,
+> the design gate is actually gone, approval gate is the trigger merge gate like any other
+> regular PR"_ … _"not only done is blocked, approved manual set should be blocked too."_
+> **What is held depends on whether the card has an open pull request.**
 
 The behaviour drawn here is `docs/decisions/approval-gates.md` §6d AMENDMENT (MOTIR-5522),
-rules 1–5: an `awaiting` gate owns exactly one move — into the status its kind's
-`statusIntent` resolves to — and every door refuses that move with
-`APPROVAL_GATE_PENDING` and the payload `{ itemKey, kind, canDecide, routedToLabel }`.
-This asset decides no guard rule.
+rules 1–5 and **2b**: every door refuses a held move with `APPROVAL_GATE_PENDING` and the
+payload `{ itemKey, kind, waitingOn: 'decision' | 'merge', canDecide, routedToLabel }`.
+Every move that is not held stays offered. This asset decides no guard rule.
 
 ### Grounded in a render of the shipped control
 
@@ -6953,62 +6959,64 @@ shape the design: on the item page the CLOSED control is a `FieldCard` showing a
 opening" has to live in the card, not in the picker; and the shipped `ComboboxOption`
 has no per-option `disabled`, so the held option is a primitive growth (below).
 
+### The states — the pull request is the discriminator
+
+| the card has…                                                         | gate                                            | held status  | `waitingOn` | door                                           |
+| --------------------------------------------------------------------- | ----------------------------------------------- | ------------ | ----------- | ---------------------------------------------- |
+| **no pull request**                                                   | `design_result` `awaiting`                      | **Done**     | `decision`  | Review & approve if `canDecide`; else the name |
+| **an open pull request, checks green**                                | `pull_request_approval` `awaiting`              | **Approved** | `decision`  | Review & approve if `canDecide`; else the name |
+|                                                                       |                                                 | **Done**     | `merge`     | **never a button** — merging moves it          |
+| **an open pull request, not green**                                   | none raised yet                                 | **Approved** | `decision`  | no button (`canDecide` false)                  |
+|                                                                       |                                                 | **Done**     | `merge`     | never a button                                 |
+| **an open pull request, approved**                                    | `pull_request_approval` `approved`              | **Done**     | `merge`     | never a button — the card sits at Approved     |
+| no pull request, gate decided / withdrawn; or the pull request merged | `approved` · `changes_requested` · `superseded` | nothing      | —           | the control exactly as today                   |
+
+One held LINE per held status, stacked in ONE message box under the value. The item page,
+quick view and edit page read the item's state and show every line that holds. **The list
+reads no state per row**: it shows only the ONE refusal a commit returned.
+
 ### Panels
 
-1. **Item page rail — closed control, gate `awaiting`, reader may decide.** The held
-   message sits inside the Status `FieldCard`, directly under the `StatusPill`. Beside it,
-   the address the button writes.
-2. **Item page rail — dropdown open.** The message stays in place above the picker; the
-   held target shows a lock and _needs approval_ and cannot be picked.
-3. **Quick view rail and edit page.** The same message on `EditableRailField`'s status
-   field (the quick view's only signal) and above `EditIssueForm`'s picker. Also drawn as
-   the DATED panel 13 of `quick-view.mock.html`, re-exported to `quick-view.png`.
-4. **`/items` row after a refused commit.** The cell reverts, and the message + button
-   anchor to the status cell instead of a toast.
-5. **See-only reader** (`canDecide: false`). The same message ending _… waiting on
-   {name}_ — on the rail and on the list row — and no button.
-6. **Gate `approved` · `changes_requested` · `superseded`.** The control exactly as
-   today: no message, no held option.
-7. **`zh`**, both variants and the held option.
+1. **No pull request** — closed control (may decide), dropdown with Done locked, look-only reader.
+2. **Open pull request, gate awaiting** — two lines (Approved with the door; Done with the merge
+   line), dropdown with BOTH locked, look-only reader.
+3. **Open pull request, no gate yet** (Approved held with no door, Done held) · **after approving**
+   (card at Approved, only Done held) and its dropdown.
+4. **Quick view and edit page** — the same lines (also the REVISED dated panel 13 of
+   `quick-view.mock.html`, re-exported).
+5. **`/items` row after a refused commit** — `waitingOn: decision` with the door, and
+   `waitingOn: merge` without.
+6. **Nothing held** — decided or withdrawn with no pull request, and a merged pull request.
+7. **`zh`**, every line and the dropdown tags.
 
-Light and dark boards: `status-held-by-decision.png` and `status-held-by-decision.dark.png`.
-
-### The states — the gate enum is the checklist
-
-| gate state                                      | reader may decide | what renders                                                                  |
-| ----------------------------------------------- | ----------------- | ----------------------------------------------------------------------------- |
-| `awaiting`                                      | yes               | message + **Review & approve** on the control; held option in the dropdown    |
-| `awaiting`                                      | no                | message with the routed-to name, NO button; held option in the dropdown       |
-| `approved` · `changes_requested` · `superseded` | either            | the control exactly as today (Panel 6) — reopening an approved card is unheld |
-
-**Where the message comes from, per surface.** The item page, quick view and edit page
-read the item's gate (`approvalGatesService.getForWorkItem` → `{ gate, canDecide,
-routedToLabel }`) and render the message whenever an `awaiting` gate's owned status is a
-legal target. **The list reads no gate per row**: it renders the message only when a
-commit comes back `APPROVAL_GATE_PENDING`, from that refusal's payload.
+Light and dark boards: `status-held-by-decision.png` and `status-held-by-decision.dark.png`
+(this area still follows `CLAUDE.md`'s three-file set on `origin/main`, so the exports are kept).
 
 ### Elements — primitives and tokens
 
-| element                         | composes                                                          | colour                                                                                                                               | shape                                                         |
-| ------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| the Status card                 | `CoreFieldsPanel`'s `FieldCard` (unchanged)                       | `--el-page-bg` · `--el-border` · label `--el-text-secondary`                                                                         | `--radius-card` · `--shadow-card`                             |
-| the value                       | `StatusPill` → `Pill` (unchanged)                                 | the status's tint background · `--el-text-strong`                                                                                    | `--radius-badge` · `--spacing-chip-x/y`                       |
-| **the held message** (NEW)      | a status region under the value                                   | background `--el-tint-yellow` (the approval frame's own _awaiting_ hue) · border `--el-border-soft` · text + lock `--el-text-strong` | `--radius-control` · `--spacing-control-x/y`                  |
-| **Review & approve** (NEW here) | `Button` `variant="primary"` `size="sm"`, rendered as a link      | `--el-accent` · `--el-accent-text`                                                                                                   | `--radius-btn` · `--height-btn-sm`                            |
-| the picker                      | `StatusPicker` → `Combobox` (unchanged trigger + menu)            | trigger `--el-border` · active row `--el-option-active-bg` · check `--el-accent-on-surface`                                          | `--radius-input` · `--radius-card` menu · `--shadow-elevated` |
-| **the held option** (NEW)       | `ComboboxOption` + `disabled` + its existing `trailing` slot      | label and tag `--el-text-secondary` (AA on the page in both themes) — no opacity dim                                                 | `--radius-control` · `--spacing-control-x/y`                  |
-| the list-row anchored message   | the held message, anchored under the status cell                  | as the held message · `--shadow-elevated`                                                                                            | `--radius-control`                                            |
-| the overlay                     | `ApprovalOverlay` via `withApprovalOverlay` — composed, not drawn | —                                                                                                                                    | `design/workbench/design-notes.md` § 22                       |
+| element                        | composes                                                          | colour                                                                                                                                    | shape                                                         |
+| ------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| the Status card                | `CoreFieldsPanel`'s `FieldCard` (unchanged)                       | `--el-page-bg` · `--el-border` · label `--el-text-secondary`                                                                              | `--radius-card` · `--shadow-card`                             |
+| the value                      | `StatusPill` → `Pill` (unchanged)                                 | the status's tint background · `--el-text-strong`                                                                                         | `--radius-badge` · `--spacing-chip-x/y`                       |
+| **the held message box** (NEW) | a status region under the value, one line per held status         | background `--el-tint-yellow` (the approval frame's _awaiting_ hue) · border `--el-border-soft` · a `--el-border-soft` rule between lines | `--radius-control` · `--spacing-control-x/y`                  |
+| a `decision` line              | lucide `lock` 14px + text                                         | text + glyph `--el-text-strong`                                                                                                           | —                                                             |
+| a `merge` line                 | lucide `git-merge` 14px + text, **no button ever**                | text + glyph `--el-text-strong`                                                                                                           | —                                                             |
+| **Review & approve**           | `Button` `variant="primary"` `size="sm"`, rendered as a link      | `--el-accent` · `--el-accent-text`                                                                                                        | `--radius-btn` · `--height-btn-sm`                            |
+| the picker                     | `StatusPicker` → `Combobox` (unchanged trigger + menu)            | trigger `--el-border` · active row `--el-option-active-bg` · check `--el-accent-on-surface`                                               | `--radius-input` · `--radius-card` menu · `--shadow-elevated` |
+| **a held option** (NEW)        | `ComboboxOption` + `disabled` + its existing `trailing` slot      | label and tag `--el-text-secondary` — no opacity dim; tag glyph `lock` (decision) or `git-merge` (merge)                                  | `--radius-control` · `--spacing-control-x/y`                  |
+| the list-row anchored message  | the held message box with the ONE refused line                    | as the box · `--shadow-elevated`                                                                                                          | `--radius-control`                                            |
+| the overlay                    | `ApprovalOverlay` via `withApprovalOverlay` — composed, not drawn | —                                                                                                                                         | `design/workbench/design-notes.md` § 22                       |
 
-**The held option is focusable and announced**, not skipped: `aria-disabled="true"`, read
-as _"Done, needs approval, unavailable"_. Choosing it does nothing; the message above is
-already the explanation. **`ComboboxOption` gains `disabled?: boolean`** in
-`@motir/design-system` for this — built by MOTIR-5528.
+**A held option is focusable and announced**, not skipped: `aria-disabled="true"`, read as
+_"Done, moves on merge, unavailable"_ or _"Approved, needs approval, unavailable"_.
+**`ComboboxOption` gains `disabled?: boolean`** in `@motir/design-system` for this — built by
+MOTIR-5528.
 
 **The button is a LINK to the current page with the overlay address added**
-(`withApprovalOverlay(href, { itemKey, kind })`), written with `shallowPush`, so the
-overlay opens over whatever page holds the control — the item page, the peek's host
-(`?peek=` kept), the list — and Close returns there with every other parameter intact.
+(`withApprovalOverlay(href, { itemKey, kind })`, `kind` = the refusal's kind —
+`design_result` with no pull request, `pull_request_approval` with one), written with
+`shallowPush`, so the overlay opens over whatever page holds the control and Close returns
+there. **It renders only on a `decision` line with `canDecide: true`.**
 
 **The label is `Review & approve`**, the same words as MOTIR-5215's item-page control.
 MOTIR-5228 has not yet settled a different string in this file; if it does, this asset
@@ -7016,34 +7024,42 @@ follows it.
 
 ### Copy — English and Chinese
 
-`{status}` is the held target's own label and `{decision}` the gate kind's label
-(`approvalGate.<kind>.kindLabel`), both interpolated — never hard-coded.
+`{status}` is the held target's own label. `{decision}` is a per-kind NOUN PHRASE that
+already says _approval_ — the catalog's kind LABELS (`workbench.approvals.kind.*`) cannot
+be used, because _"a Pull-request approval approval"_ doubles the word.
 
-| key (proposed)                             | en                                                                                       | zh                                                               |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `approvalGate.statusHeld.message`          | Status can't be moved to {status} directly — a {decision} approval is waiting.           | 无法直接将状态改为{status}——{decision}审批正在等待。             |
-| `approvalGate.statusHeld.messageSeeOnly`   | Status can't be moved to {status} directly — a {decision} approval is waiting on {name}. | 无法直接将状态改为{status}——{decision}审批正在等待 {name} 处理。 |
-| `approvalGate.statusHeld.reviewAndApprove` | Review & approve                                                                         | 审阅并批准                                                       |
-| `approvalGate.statusHeld.needsApproval`    | needs approval                                                                           | 需要审批                                                         |
+| key (proposed)                                               | en                                                                                                          | zh                                                                   |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `approvalGate.statusHeld.decision`                           | Status can't be moved to {status} directly — a {decision} is waiting.                                       | 无法直接将状态改为{status}——{decision}正在等待。                     |
+| `approvalGate.statusHeld.decisionSeeOnly`                    | Status can't be moved to {status} directly — a {decision} is waiting on {name}.                             | 无法直接将状态改为{status}——{decision}正在等待 {name} 处理。         |
+| `approvalGate.statusHeld.decisionNotRaised`                  | Status can't be moved to {status} directly — a {decision} is asked for once the pull request's checks pass. | 无法直接将状态改为{status}——合并请求的检查通过后才会发起{decision}。 |
+| `approvalGate.statusHeld.merge`                              | Status can't be moved to {status} directly — merging the pull request moves it.                             | 无法直接将状态改为{status}——合并该合并请求后会自动变更。             |
+| `approvalGate.statusHeld.decisionNoun.design_result`         | design approval                                                                                             | 设计审批                                                             |
+| `approvalGate.statusHeld.decisionNoun.pull_request_approval` | pull-request approval                                                                                       | 合并请求审批                                                         |
+| `approvalGate.statusHeld.decisionNoun.decision_approval`     | decision approval                                                                                           | 决策审批                                                             |
+| `approvalGate.statusHeld.reviewAndApprove`                   | Review & approve                                                                                            | 审阅并批准                                                           |
+| `approvalGate.statusHeld.needsApproval`                      | needs approval                                                                                              | 需要审批                                                             |
+| `approvalGate.statusHeld.movesOnMerge`                       | moves on merge                                                                                              | 合并后变更                                                           |
 
 ### Allocation — read by the code cards as their SCOPE and their EDGES
 
-| element                                                                                            | built by                                                        |
-| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| the message + button on the control; the held dropdown option; item page, quick view and edit page | MOTIR-5528                                                      |
-| the list row's message on the status cell after a refused commit                                   | MOTIR-5529                                                      |
-| the board card's refusal                                                                           | the board design MOTIR-5525, composing THIS sentence and button |
+| element                                                                                                             | built by                                                          |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| the held message box (both line kinds) + button; the held options; item page, quick view and edit page              | MOTIR-5528                                                        |
+| the list row's ONE refused line after a commit — `waitingOn: decision` (door when `canDecide`) or `merge` (no door) | MOTIR-5529                                                        |
+| the board card's refusal                                                                                            | the board design MOTIR-5525, composing THESE lines and the button |
 
 ### Out of scope here
 
 The overlay itself (§ 22 of the workbench notes); the item page's gate section and its
-_Review & approve_ band (MOTIR-5228); the waiting indicator (MOTIR-4908); every guard
-rule (the ADR amendment).
+_Review & approve_ band (MOTIR-5228); the waiting indicator (MOTIR-4908); the
+approve-to-merge gate, the `approved` write and the merge or enqueue (MOTIR-4909 /
+MOTIR-4882); every guard rule (the ADR amendment).
 
 ### GIVES / TAKES
 
-- **GIVES** MOTIR-5528 the message, the button, the held option, the `disabled` growth on
-  `ComboboxOption` and the four strings; MOTIR-5529 the anchored list-row message;
-  MOTIR-5525 the sentence and button it composes on the board card.
-- **TAKES** the refusal payload from MOTIR-5526, the overlay address from
-  `lib/approvals/overlayAddress.ts`, and the kind labels already in the catalog.
+- **GIVES** MOTIR-5528 the box, both line kinds, the button rule, the held options, the
+  `disabled` growth on `ComboboxOption` and the strings; MOTIR-5529 the anchored single-line
+  refusal; MOTIR-5525 the lines and button it composes on the board card.
+- **TAKES** the refusal payload (`waitingOn` included) from MOTIR-5526, the overlay address
+  from `lib/approvals/overlayAddress.ts`, and rule 2b's pull-request discriminator.

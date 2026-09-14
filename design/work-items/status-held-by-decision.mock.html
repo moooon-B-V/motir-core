@@ -12,11 +12,14 @@
       Gates MOTIR-5528 (item page, quick view, edit page) and MOTIR-5529 (the list
       row); composed by the board design MOTIR-5525.
 
-      WHAT IT DRAWS. While an awaiting approval gate owns one of a work item's
-      moves (approval-gates.md section 6d AMENDMENT, rules 1-5), the STATUS CONTROL
-      carries a held message and ONE Review & approve button that opens the
-      full-screen approval overlay (design/workbench/design-notes.md section 22)
-      over the current page. Only the owned move is held.
+      WHAT IT DRAWS. While a move is held (approval-gates.md section 6d AMENDMENT,
+      rules 1-5 and 2b), the STATUS CONTROL carries one held line per held status
+      and, where a decision is waiting and the reader may make it, ONE Review &
+      approve button that opens the full-screen approval overlay
+      (design/workbench/design-notes.md section 22) over the current page.
+      REVISED 2026-09-14 on Yue's direction: it is about whether there is a PULL
+      REQUEST. No PR: a pending design approval holds Done. An open PR: Approved
+      is held for the approve-to-merge decision and Done is held for the merge.
 
       GROUNDED IN A RENDER. Before drawing, the shipped StatusPill and StatusPicker
       were bundled and rendered headlessly with the real theme tokens (In Review in
@@ -251,10 +254,6 @@
         gap: 36px;
         align-items: flex-start;
       }
-      .stage-col {
-        flex-direction: column;
-        gap: 14px;
-      }
       .specimen {
         display: flex;
         flex-direction: column;
@@ -316,13 +315,6 @@
         align-items: flex-start;
         gap: 8px;
       }
-      .ghost-bar {
-        height: 20px;
-        width: 60%;
-        border-radius: var(--radius-control);
-        background: var(--el-surface);
-        border: 1px solid var(--el-border-soft);
-      }
       /* StatusPill — Pill's emitted classes: chip padding + badge radius, the hue in the tint background, --el-text-strong ink */
       .spill {
         display: inline-flex;
@@ -343,13 +335,6 @@
       }
       .spill-done {
         background: var(--el-tint-mint);
-      }
-      .spill-todo {
-        background: var(--el-surface);
-        border-color: var(--el-border-soft);
-      }
-      .spill-blocked {
-        background: var(--el-tint-peach);
       }
       /* ── THE HELD MESSAGE — the new element ── */
       .held {
@@ -485,9 +470,6 @@
         font-size: 14px;
         color: var(--el-text);
       }
-      .cbx-opt.is-active {
-        background: var(--el-option-active-bg);
-      }
       .cbx-opt .check {
         margin-left: 4px;
         display: inline-flex;
@@ -615,65 +597,38 @@
         align-items: center;
         justify-content: center;
       }
-      /* address + overlay stub */
-      .address {
-        display: flex;
+
+      /* ── REVISED 2026-09-14 — stacked held lines, the merge variant, state chips ── */
+      .held {
         flex-direction: column;
-        gap: 6px;
-        font-size: 12px;
-        color: var(--el-text);
+        gap: 8px;
       }
-      .addr-row {
+      .hl {
         display: flex;
-        gap: 10px;
-        align-items: baseline;
+        gap: 8px;
+        align-items: flex-start;
       }
-      .addr-k {
-        width: 48px;
+      .hl + .hl {
+        padding-top: 8px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .state-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chip {
         font-family: var(--font-mono);
         font-size: 11px;
-        color: var(--el-text-secondary);
-        text-transform: uppercase;
-      }
-      .overlay-stub {
-        width: 420px;
-        height: 170px;
-        background: var(--el-page-bg);
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
         border: 1px solid var(--el-border);
-        border-radius: var(--radius-modal);
-        box-shadow: var(--shadow-modal);
-        overflow: hidden;
-      }
-      .ov-exit {
-        display: flex;
-        justify-content: flex-end;
-        padding: 10px 14px;
-        border-bottom: 1px solid var(--el-border-soft);
-        font-size: 13px;
-        color: var(--el-text);
-      }
-      .ov-body {
-        padding: 18px;
-        font-size: 13px;
+        background: var(--el-page-bg);
         color: var(--el-text-secondary);
       }
-      .legend-t {
-        border-collapse: collapse;
-        max-width: 460px;
-        font-size: 12.5px;
-      }
-      .legend-t th {
-        text-align: left;
-        vertical-align: top;
-        padding: 6px 12px 6px 0;
+      .chip strong {
         color: var(--el-text-strong);
         font-weight: 600;
-        white-space: nowrap;
-      }
-      .legend-t td {
-        padding: 6px 0;
-        color: var(--el-text-secondary);
-        line-height: 1.5;
       }
     </style>
   </head>
@@ -689,9 +644,11 @@
           moves (ADR <code>approval-gates.md</code> §6d AMENDMENT, rules 1–5), the status control
           itself says the status can't be moved there directly, and hands the reader the door: one
           <strong>Review &amp; approve</strong> button into the full-screen approval overlay. Only
-          that one move is held. Every value below that names a status or a gate kind is an
+          the move a decision or a merge performs is held —
+          <strong>which one depends on whether the card has an open pull request</strong> (REVISED
+          2026-09-14, rule 2b). Every value below that names a status or a gate kind is an
           <em>example of an interpolated value</em> (<code>{status}</code> = In Review → Done,
-          <code>{decision}</code> = Design result).
+          <code>{decision}</code> = design approval / pull-request approval).
         </p>
       </div>
       <button
@@ -753,117 +710,93 @@
           <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
           <circle cx="12" cy="12" r="1" />
         </g>
+        <g
+          id="i-merge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M6 21V9a9 9 0 0 0 9 9" />
+        </g>
       </defs>
     </svg>
 
-    <!-- ═══ PANEL 1 — the item page rail, CLOSED control, awaiting · may decide ═══ -->
     <div class="panel-label">
-      1 · Item page rail — closed control · gate <code>awaiting</code> · reader MAY decide
+      1 · NO pull request — gate <code>design_result</code> <code>awaiting</code> — Done is held for
+      the DECISION
     </div>
     <div class="stage">
       <div class="specimen">
+        <div class="state-chips">
+          <span class="chip">pull request <strong>none</strong></span
+          ><span class="chip">gate <strong>awaiting</strong></span
+          ><span class="chip">waitingOn <strong>decision</strong></span
+          ><span class="chip">canDecide <strong>true</strong></span>
+        </div>
         <p class="cap">
-          The shipped Status FieldCard, unopened. The held message sits INSIDE the card, directly
-          under the status value — visible without opening anything.
+          Closed control, reader MAY decide. One held line under the value, and the Review &amp;
+          approve door. Approving writes Done.
         </p>
         <div class="rail">
           <div class="fcard">
             <div class="head">
-              <span class="flabel">Status</span>
-              <button class="chev" aria-label="Edit Status">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
                 <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
               </button>
             </div>
             <div class="fvalue">
               <span class="spill spill-review">In Review</span>
               <div class="held" role="status">
-                <span class="held-glyph" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-                ></span>
-                <div class="held-body">
-                  <p class="held-text">
-                    Status can't be moved to <strong>Done</strong> directly — a
-                    <strong>Design result</strong> approval is waiting.
-                  </p>
-                  <a
-                    class="btn btn-primary btn-sm"
-                    href="?approval=MOTIR-812&amp;approvalKind=design_result"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
-                    >Review &amp; approve
-                  </a>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — a
+                      <strong>design approval</strong> is waiting.
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-          <div class="fcard">
-            <div class="head"><span class="flabel">Type</span></div>
-            <div class="fvalue"><div class="ghost-bar"></div></div>
-          </div>
-          <div class="fcard">
-            <div class="head"><span class="flabel">Assignee</span></div>
-            <div class="fvalue"><div class="ghost-bar"></div></div>
-          </div>
         </div>
       </div>
       <div class="specimen">
-        <p class="cap">
-          The button is a link to the SAME page with the overlay address added —
-          <code>withApprovalOverlay(href, { itemKey, kind })</code>. It opens the full-screen
-          overlay (<code>design/workbench/design-notes.md</code> § 22) over this page; closing it
-          returns here with every other parameter untouched.
-        </p>
-        <div class="address">
-          <span class="addr-row"
-            ><span class="addr-k">before</span><code>/items/MOTIR-812</code></span
-          >
-          <span class="addr-row"
-            ><span class="addr-k">after</span
-            ><code>/items/MOTIR-812?approval=MOTIR-812&amp;approvalKind=design_result</code></span
-          >
-        </div>
-        <div class="overlay-stub" aria-hidden="true">
-          <div class="ov-exit"><span>Close</span></div>
-          <div class="ov-body">The approval overlay — composed, not redrawn (§ 22 Panel 1)</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ PANEL 2 — the open dropdown, awaiting · may decide ═══ -->
-    <div class="panel-label">
-      2 · Item page rail — dropdown open · gate <code>awaiting</code> · the held option
-    </div>
-    <div class="stage">
-      <div class="specimen">
-        <p class="cap">
-          Opening the picker keeps the message in place above it. The held target renders a lock and
-          “needs approval” and cannot be picked. Every other legal target works as it does today.
-        </p>
+        <p class="cap">Dropdown open: Done is locked, every other legal move is offered.</p>
         <div class="rail">
           <div class="fcard">
-            <div class="head">
-              <span class="flabel">Status</span>
-              <button class="chev" aria-label="Close Status">
-                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
-              </button>
-            </div>
+            <div class="head"><span class="flabel">Status</span></div>
             <div class="fvalue">
               <div class="held" role="status">
-                <span class="held-glyph" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-                ></span>
-                <div class="held-body">
-                  <p class="held-text">
-                    Status can't be moved to <strong>Done</strong> directly — a
-                    <strong>Design result</strong> approval is waiting.
-                  </p>
-                  <a
-                    class="btn btn-primary btn-sm"
-                    href="?approval=MOTIR-812&amp;approvalKind=design_result"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
-                    >Review &amp; approve
-                  </a>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — a
+                      <strong>design approval</strong> is waiting.
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
+                  </div>
                 </div>
               </div>
               <div class="cbx">
@@ -872,14 +805,14 @@
                     class="dot"
                     style="background: var(--el-status-in-review)"
                     aria-hidden="true"
-                  ></span>
-                  <span class="tval">In Review</span>
-                  <span class="updown"
+                  ></span
+                  ><span class="tval">In Review</span
+                  ><span class="updown"
                     ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
                   ></span>
                 </button>
                 <div class="cbx-menu" role="listbox" aria-label="Status">
-                  <div class="cbx-opt is-active" role="option">
+                  <div class="cbx-opt" role="option">
                     <span
                       class="dot"
                       style="background: var(--el-status-blocked)"
@@ -922,7 +855,7 @@
                     ></span
                     ><span class="olabel">Done</span
                     ><span class="held-tag"
-                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg>needs
+                      ><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-lock" /></svg>needs
                       approval</span
                     >
                   </div>
@@ -941,192 +874,55 @@
         </div>
       </div>
       <div class="specimen">
-        <p class="cap">
-          The option set is the shipped one for this workflow from In Review (rendered from the real
-          <code>StatusPicker</code> before drawing). Only the target the gate OWNS is held — for a
-          <code>design_result</code> gate that is the project's done-category status. Blocked, In
-          Progress, Approved and Cancelled stay pickable.
-        </p>
-        <table class="legend-t">
-          <tbody>
-            <tr>
-              <th>held option</th>
-              <td>
-                <code>aria-disabled="true"</code>, not focus-skipped: arrow keys land on it and the
-                screen reader reads “Done, needs approval, unavailable”.
-              </td>
-            </tr>
-            <tr>
-              <th>ink</th>
-              <td>
-                label <code>--el-text-secondary</code> · tag <code>--el-text-secondary</code> · lock
-                12px. No opacity dim.
-              </td>
-            </tr>
-            <tr>
-              <th>primitive</th>
-              <td>
-                <code>ComboboxOption</code> gains <code>disabled?: boolean</code> + the
-                <code>trailing</code> tag it already has.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ═══ PANEL 3 — the quick view rail + edit page ═══ -->
-    <div class="panel-label">
-      3 · Quick view rail and edit page — the same control, the same message
-    </div>
-    <div class="stage">
-      <div class="specimen">
-        <p class="cap">
-          Quick view (<code>IssueQuickViewPanel</code> → <code>EditableRailField</code>). The
-          message on the control IS the quick view's signal — no second line elsewhere in the peek.
-          The overlay opens OVER the peek's host page.
-        </p>
-        <dl class="qv-rail">
-          <div class="rail-field">
-            <dt>
-              Status
-              <span class="updown"
-                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-              ></span>
-            </dt>
-            <dd>
+        <div class="state-chips">
+          <span class="chip">waitingOn <strong>decision</strong></span
+          ><span class="chip">canDecide <strong>false</strong></span>
+        </div>
+        <p class="cap">Reader may only LOOK: the routed-to name, no button.</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
               <span class="spill spill-review">In Review</span>
               <div class="held" role="status">
-                <span class="held-glyph" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-                ></span>
-                <div class="held-body">
-                  <p class="held-text">
-                    Status can't be moved to <strong>Done</strong> directly — a
-                    <strong>Design result</strong> approval is waiting.
-                  </p>
-                  <a
-                    class="btn btn-primary btn-sm"
-                    href="?peek=MOTIR-812&amp;approval=MOTIR-812&amp;approvalKind=design_result"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
-                    >Review &amp; approve
-                  </a>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — a
+                      <strong>design approval</strong> is waiting on <strong>Mara S.</strong>.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </dd>
-          </div>
-          <div class="rail-field">
-            <dt>Type</dt>
-            <dd><div class="ghost-bar"></div></dd>
-          </div>
-        </dl>
-      </div>
-      <div class="specimen">
-        <p class="cap">
-          Edit page (<code>EditIssueForm</code>) renders the same <code>StatusPicker</code>, so it
-          carries the same message above the picker and the same held option. No extra panel, no
-          banner on the form.
-        </p>
-        <div class="form-field">
-          <label class="ff-label">Status</label>
-          <div class="held" role="status">
-            <span class="held-glyph" aria-hidden="true"
-              ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-            ></span>
-            <div class="held-body">
-              <p class="held-text">
-                Status can't be moved to <strong>Done</strong> directly — a
-                <strong>Design result</strong> approval is waiting.
-              </p>
-              <a
-                class="btn btn-primary btn-sm"
-                href="?approval=MOTIR-812&amp;approvalKind=design_result"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg>Review
-                &amp; approve
-              </a>
             </div>
           </div>
-          <div class="cbx">
-            <button class="cbx-trigger" role="combobox" aria-expanded="false">
-              <span
-                class="dot"
-                style="background: var(--el-status-in-review)"
-                aria-hidden="true"
-              ></span>
-              <span class="tval">In Review</span>
-              <span class="updown"
-                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-              ></span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
-
-    <!-- ═══ PANEL 4 — the /items row status cell after a refused commit ═══ -->
     <div class="panel-label">
-      4 · <code>/items</code> row — the status cell after a commit comes back
-      <code>APPROVAL_GATE_PENDING</code>
-    </div>
-    <div class="stage stage-col">
-      <p class="cap">
-        The list reads NO gate per row. The row learns of the hold only when a commit is refused:
-        the cell reverts to its old value and the message + button anchor to that cell, in place of
-        the toast. It closes on Escape, an outside click, or opening the overlay.
-      </p>
-      <div class="list">
-        <div class="lrow">
-          <span class="lr-id">MOTIR-811</span
-          ><span class="grow">Settings room — the switch row</span
-          ><span class="scell"><span class="spill spill-progress">In Progress</span></span
-          ><span class="avatar">P</span>
-        </div>
-        <div class="lrow is-refused">
-          <span class="lr-id">MOTIR-812</span
-          ><span class="grow">Design — the status control says so</span>
-          <span class="scell">
-            <span class="spill spill-review">In Review</span>
-            <div class="held held-anchored" role="alert">
-              <span class="held-glyph" aria-hidden="true"
-                ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-              ></span>
-              <div class="held-body">
-                <p class="held-text">
-                  Status can't be moved to <strong>Done</strong> directly — a
-                  <strong>Design result</strong> approval is waiting.
-                </p>
-                <a
-                  class="btn btn-primary btn-sm"
-                  href="?approval=MOTIR-812&amp;approvalKind=design_result"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg>Review
-                  &amp; approve
-                </a>
-              </div>
-            </div>
-          </span>
-          <span class="avatar">M</span>
-        </div>
-        <div class="lrow">
-          <span class="lr-id">MOTIR-813</span><span class="grow">Board refuses on the card</span
-          ><span class="scell"><span class="spill spill-todo">To Do</span></span
-          ><span class="avatar">Y</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ PANEL 5 — see-only reader ═══ -->
-    <div class="panel-label">
-      5 · A reader who may SEE but not decide — gate <code>awaiting</code> ·
-      <code>canDecide: false</code>
+      2 · OPEN pull request — gate <code>pull_request_approval</code> <code>awaiting</code> —
+      Approved held for the DECISION, Done held for the MERGE
     </div>
     <div class="stage">
       <div class="specimen">
+        <div class="state-chips">
+          <span class="chip">pull request <strong>open · green</strong></span
+          ><span class="chip">gate <strong>awaiting</strong></span
+          ><span class="chip">Approved <strong>decision · canDecide true</strong></span
+          ><span class="chip">Done <strong>merge</strong></span>
+        </div>
         <p class="cap">
-          Same message, ending with who it waits on (<code>routedToLabel</code>). NO button — a door
-          that would refuse the person pressing it is not offered.
+          Reader MAY decide. Two held lines: Approved carries the door (approving writes Approved
+          and triggers or enqueues the merge); Done names the merge and carries NO button — no
+          person decides a merge from here.
         </p>
         <div class="rail">
           <div class="fcard">
@@ -1139,14 +935,33 @@
             <div class="fvalue">
               <span class="spill spill-review">In Review</span>
               <div class="held" role="status">
-                <span class="held-glyph" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-                ></span>
-                <div class="held-body">
-                  <p class="held-text">
-                    Status can't be moved to <strong>Done</strong> directly — a
-                    <strong>Design result</strong> approval is waiting on <strong>Mara S.</strong>
-                  </p>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Approved</strong> directly — a
+                      <strong>pull-request approval</strong> is waiting.
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=pull_request_approval"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1155,42 +970,513 @@
       </div>
       <div class="specimen">
         <p class="cap">
-          The see-only reader in the list, after a refused commit: the same anchored message, no
-          button. The held option in their dropdown is identical to Panel 2.
+          Dropdown open: BOTH Approved and Done are locked — Done with the merge tag. In Progress,
+          Blocked and Cancelled stay offered.
         </p>
-        <div class="list list-narrow">
-          <div class="lrow is-refused">
-            <span class="lr-id">MOTIR-812</span
-            ><span class="grow">Design — the status control…</span>
-            <span class="scell">
-              <span class="spill spill-review">In Review</span>
-              <div class="held held-anchored" role="alert">
-                <span class="held-glyph" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-                ></span>
-                <div class="held-body">
-                  <p class="held-text">
-                    Status can't be moved to <strong>Done</strong> directly — a
-                    <strong>Design result</strong> approval is waiting on <strong>Mara S.</strong>
-                  </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Status</span></div>
+            <div class="fvalue">
+              <div class="held" role="status">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Approved</strong> directly — a
+                      <strong>pull-request approval</strong> is waiting.
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=pull_request_approval"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </span>
+              <div class="cbx">
+                <button class="cbx-trigger is-focus" role="combobox" aria-expanded="true">
+                  <span
+                    class="dot"
+                    style="background: var(--el-status-in-review)"
+                    aria-hidden="true"
+                  ></span
+                  ><span class="tval">In Review</span
+                  ><span class="updown"
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </button>
+                <div class="cbx-menu" role="listbox" aria-label="Status">
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-blocked)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Blocked</span>
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-in-progress)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">In Progress</span>
+                  </div>
+                  <div class="cbx-opt" role="option" aria-selected="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-in-review)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">In Review</span
+                    ><span class="check"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                  </div>
+                  <div class="cbx-opt is-held" role="option" aria-disabled="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-approved)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Approved</span
+                    ><span class="held-tag"
+                      ><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-lock" /></svg>needs
+                      approval</span
+                    >
+                  </div>
+                  <div class="cbx-opt is-held" role="option" aria-disabled="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-done)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Done</span
+                    ><span class="held-tag"
+                      ><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                      >moves on merge</span
+                    >
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-cancelled)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Cancelled</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <div class="state-chips">
+          <span class="chip">Approved <strong>decision · canDecide false</strong></span
+          ><span class="chip">Done <strong>merge</strong></span>
+        </div>
+        <p class="cap">
+          Reader may only LOOK: the name on the decision line, no button on either line.
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="spill spill-review">In Review</span>
+              <div class="held" role="status">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Approved</strong> directly — a
+                      <strong>pull-request approval</strong> is waiting on <strong>Mara S.</strong>.
+                    </p>
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- ═══ PANEL 6 — every other gate state: unchanged ═══ -->
     <div class="panel-label">
-      6 · Gate <code>approved</code> · <code>changes_requested</code> · <code>superseded</code> —
-      the control exactly as today
+      3 · OPEN pull request, NO gate yet (checks not green) · and AFTER approving with a pull
+      request
+    </div>
+    <div class="stage">
+      <div class="specimen">
+        <div class="state-chips">
+          <span class="chip">pull request <strong>open · checks pending</strong></span
+          ><span class="chip">gate <strong>none</strong></span
+          ><span class="chip">Approved <strong>decision · canDecide false</strong></span
+          ><span class="chip">Done <strong>merge</strong></span>
+        </div>
+        <p class="cap">
+          Checks not green: no gate has been raised, so canDecide is false and there is no door.
+          Approved is still held; so is Done.
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="spill spill-review">Implemented</span>
+              <div class="held" role="status">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Approved</strong> directly — a
+                      <strong>pull-request approval</strong> is asked for once the pull request's
+                      checks pass.
+                    </p>
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <div class="state-chips">
+          <span class="chip">pull request <strong>open · merging</strong></span
+          ><span class="chip">gate <strong>approved</strong></span
+          ><span class="chip">Done <strong>merge</strong></span>
+        </div>
+        <p class="cap">
+          After approving: the card sits at Approved and the merge is triggered or enqueued. Only
+          Done is held, with the merge line, until the webhook moves it.
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="spill spill-done">Approved</span>
+              <div class="held" role="status">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap">
+          …and its dropdown: Done locked with the merge tag; Approved is the current value; In
+          Progress, Blocked and Cancelled offered.
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Status</span></div>
+            <div class="fvalue">
+              <div class="held" role="status">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="cbx">
+                <button class="cbx-trigger is-focus" role="combobox" aria-expanded="true">
+                  <span
+                    class="dot"
+                    style="background: var(--el-status-approved)"
+                    aria-hidden="true"
+                  ></span
+                  ><span class="tval">Approved</span
+                  ><span class="updown"
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </button>
+                <div class="cbx-menu" role="listbox" aria-label="Status">
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-in-progress)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">In Progress</span>
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-blocked)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Blocked</span>
+                  </div>
+                  <div class="cbx-opt" role="option" aria-selected="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-approved)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Approved</span
+                    ><span class="check"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                  </div>
+                  <div class="cbx-opt is-held" role="option" aria-disabled="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-done)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Done</span
+                    ><span class="held-tag"
+                      ><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                      >moves on merge</span
+                    >
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-cancelled)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Cancelled</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      4 · Quick view rail and edit page — the same held lines, the same doors
     </div>
     <div class="stage">
       <div class="specimen">
         <p class="cap">
-          <code>approved</code> — the card is Done; reopening it by hand is a legal, unheld move
-          (§6d).
+          Quick view (<code>EditableRailField</code>), open pull request, may decide. The held lines
+          ARE the quick view's signal. The door keeps <code>?peek=</code>.
+        </p>
+        <dl class="qv-rail">
+          <div class="rail-field">
+            <dt>
+              Status
+              <span class="updown"
+                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+              ></span>
+            </dt>
+            <dd>
+              <span class="spill spill-review">In Review</span>
+              <div class="held" role="status">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Approved</strong> directly — a
+                      <strong>pull-request approval</strong> is waiting.
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=pull_request_approval"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <div class="specimen">
+        <p class="cap">
+          Edit page (<code>EditIssueForm</code>), no pull request: the held line above the same
+          <code>StatusPicker</code>.
+        </p>
+        <div class="form-field">
+          <label class="ff-label">Status</label>
+          <div class="held" role="status">
+            <div class="hl">
+              <span class="held-glyph" aria-hidden="true"
+                ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+              ></span>
+              <div class="held-body">
+                <p class="held-text">
+                  Status can't be moved to <strong>Done</strong> directly — a
+                  <strong>design approval</strong> is waiting.
+                </p>
+                <a
+                  class="btn btn-primary btn-sm"
+                  href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                  >Review &amp; approve</a
+                >
+              </div>
+            </div>
+          </div>
+          <div class="cbx">
+            <button class="cbx-trigger" role="combobox" aria-expanded="false">
+              <span
+                class="dot"
+                style="background: var(--el-status-in-review)"
+                aria-hidden="true"
+              ></span
+              ><span class="tval">In Review</span
+              ><span class="updown"
+                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+              ></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      5 · <code>/items</code> row — the status cell after a commit comes back
+      <code>APPROVAL_GATE_PENDING</code> (one refusal, one line)
+    </div>
+    <div class="stage">
+      <div class="specimen">
+        <p class="cap">
+          The list reads no gate per row; it shows only the ONE refusal the commit returned.
+          <code>waitingOn: decision</code> and <code>canDecide</code> true — with the door.
+        </p>
+        <div class="list list-narrow">
+          <div class="lrow is-refused">
+            <span class="lr-id">MOTIR-812</span><span class="grow">Design — status control</span
+            ><span class="scell"
+              ><span class="spill spill-review">In Review</span>
+              <div class="held held-anchored" role="alert">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Approved</strong> directly — a
+                      <strong>pull-request approval</strong> is waiting.
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=pull_request_approval"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
+                  </div>
+                </div>
+              </div></span
+            ><span class="avatar">M</span>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap"><code>waitingOn: merge</code> — the merge line, never a button.</p>
+        <div class="list list-narrow">
+          <div class="lrow is-refused">
+            <span class="lr-id">MOTIR-812</span><span class="grow">Design — status control</span
+            ><span class="scell"
+              ><span class="spill spill-done">Approved</span>
+              <div class="held held-anchored" role="alert">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      Status can't be moved to <strong>Done</strong> directly — merging the pull
+                      request moves it.
+                    </p>
+                  </div>
+                </div>
+              </div></span
+            ><span class="avatar">M</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">6 · Nothing held — the control exactly as today</div>
+    <div class="stage">
+      <div class="specimen">
+        <p class="cap">
+          No pull request, gate <code>approved</code> — the card is Done; reopening by hand is
+          unheld.
         </p>
         <div class="rail">
           <div class="fcard">
@@ -1205,7 +1491,9 @@
         </div>
       </div>
       <div class="specimen">
-        <p class="cap"><code>changes_requested</code> — no message, no held option.</p>
+        <p class="cap">
+          No pull request, gate <code>changes_requested</code> or <code>superseded</code>.
+        </p>
         <div class="rail">
           <div class="fcard">
             <div class="head">
@@ -1219,7 +1507,9 @@
         </div>
       </div>
       <div class="specimen">
-        <p class="cap"><code>superseded</code> — the question was withdrawn; nothing is held.</p>
+        <p class="cap">
+          The pull request MERGED — the webhook moved the card; nothing is open, nothing held.
+        </p>
         <div class="rail">
           <div class="fcard">
             <div class="head">
@@ -1228,41 +1518,41 @@
                 <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
               </button>
             </div>
-            <div class="fvalue"><span class="spill spill-blocked">Blocked</span></div>
+            <div class="fvalue"><span class="spill spill-done">Done</span></div>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- ═══ PANEL 7 — zh ═══ -->
-    <div class="panel-label">7 · <code>zh</code> — both variants</div>
-    <div class="stage" lang="zh">
+    <div class="panel-label">7 · <code>zh</code> — every line</div>
+    <div class="stage">
       <div class="specimen">
-        <p class="cap">可决定的读者</p>
+        <p class="cap">无合并请求 · 可决定</p>
         <div class="rail">
           <div class="fcard">
             <div class="head">
               <span class="flabel">状态</span
-              ><button class="chev" aria-label="编辑状态">
+              ><button class="chev" aria-label="Edit 状态">
                 <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
               </button>
             </div>
             <div class="fvalue">
               <span class="spill spill-review">审阅中</span>
               <div class="held" role="status">
-                <span class="held-glyph" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-                ></span>
-                <div class="held-body">
-                  <p class="held-text">
-                    无法直接将状态改为<strong>已完成</strong>——<strong>设计成果</strong>审批正在等待。
-                  </p>
-                  <a
-                    class="btn btn-primary btn-sm"
-                    href="?approval=MOTIR-812&amp;approvalKind=design_result"
-                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
-                    >审阅并批准</a
-                  >
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      无法直接将状态改为<strong>已完成</strong>——<strong>设计审批</strong>正在等待。
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >审阅并批准</a
+                    >
+                  </div>
                 </div>
               </div>
             </div>
@@ -1270,42 +1560,133 @@
         </div>
       </div>
       <div class="specimen">
-        <p class="cap">仅可查看的读者 · 下拉中被保留的选项</p>
+        <p class="cap">有合并请求 · 可决定 · 下拉</p>
         <div class="rail">
           <div class="fcard">
             <div class="head"><span class="flabel">状态</span></div>
             <div class="fvalue">
               <div class="held" role="status">
-                <span class="held-glyph" aria-hidden="true"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
-                ></span>
-                <div class="held-body">
-                  <p class="held-text">
-                    无法直接将状态改为<strong>已完成</strong>——<strong>设计成果</strong>审批正在等待
-                    <strong>Mara S.</strong> 处理。
-                  </p>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      无法直接将状态改为<strong>已批准</strong>——<strong>合并请求审批</strong>正在等待。
+                    </p>
+                    <a
+                      class="btn btn-primary btn-sm"
+                      href="?approval=MOTIR-812&amp;approvalKind=pull_request_approval"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                      >审阅并批准</a
+                    >
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      无法直接将状态改为<strong>已完成</strong>——合并该合并请求后会自动变更。
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div class="cbx-menu" role="listbox" aria-label="状态">
-                <div class="cbx-opt" role="option">
-                  <span
-                    class="dot"
-                    style="background: var(--el-status-in-progress)"
-                    aria-hidden="true"
-                  ></span
-                  ><span class="olabel">进行中</span>
+              <div class="cbx">
+                <div class="cbx-menu" role="listbox" aria-label="Status">
+                  <div class="cbx-opt" role="option" aria-selected="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-in-progress)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">进行中</span
+                    ><span class="check"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                  </div>
+                  <div class="cbx-opt is-held" role="option" aria-disabled="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-approved)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">已批准</span
+                    ><span class="held-tag"
+                      ><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      >需要审批</span
+                    >
+                  </div>
+                  <div class="cbx-opt is-held" role="option" aria-disabled="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-done)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">已完成</span
+                    ><span class="held-tag"
+                      ><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                      >合并后变更</span
+                    >
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-cancelled)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">已取消</span>
+                  </div>
                 </div>
-                <div class="cbx-opt is-held" role="option" aria-disabled="true">
-                  <span
-                    class="dot"
-                    style="background: var(--el-status-done)"
-                    aria-hidden="true"
-                  ></span
-                  ><span class="olabel">已完成</span
-                  ><span class="held-tag"
-                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
-                    >需要审批</span
-                  >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap">仅可查看 · 检查未通过</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">状态</span
+              ><button class="chev" aria-label="Edit 状态">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="spill spill-review">审阅中</span>
+              <div class="held" role="status">
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      无法直接将状态改为<strong>已批准</strong>——<strong>合并请求审批</strong>正在等待
+                      <strong>Mara S.</strong> 处理。
+                    </p>
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      无法直接将状态改为<strong>已批准</strong>——合并请求的检查通过后才会发起<strong>合并请求审批</strong>。
+                    </p>
+                  </div>
+                </div>
+                <div class="hl">
+                  <span class="held-glyph" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                  ></span>
+                  <div class="held-body">
+                    <p class="held-text">
+                      无法直接将状态改为<strong>已完成</strong>——合并该合并请求后会自动变更。
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
