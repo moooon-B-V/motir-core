@@ -1,7 +1,6 @@
-import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 
-// THE APPROVAL FRAME'S SETTINGS DOOR (Story MOTIR-4882 · MOTIR-5513;
+// THE APPROVAL FRAME'S SETTINGS DOOR (Story MOTIR-4882 · MOTIR-5513, and MOTIR-4793;
 // `design/work-items/design-notes.md` § AMENDED 2026-09-13 — the SETTINGS DOOR,
 // `approval-control.mock.html` panel `S`; ADR `approval-gates.md` §7).
 //
@@ -11,14 +10,16 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 // in band 3's left column, under the consequence line — never a verb, never beside
 // the verbs.
 //
+// ⚠️ THE KIND SUPPLIES THE DOOR, AND THIS MODULE ONLY GATES IT. The door's values live
+// on the kind's handler (`GateHandler.settingsDoor`, MOTIR-4793), so registering a
+// kind is still a row in the enum, a handler and a renderer. This module takes the
+// door rather than the kind so it never imports the registry: the registry imports
+// the handlers, and a handler names a door type from here.
+//
 // ⚠️ IT IS GUARDED LIKE THE ROOM IT OPENS. The Approvals room and its route are
 // behind `workflow:manage`, and there is no read-only room (Yue, 2026-09-13), so a
 // door for a viewer without the key would lead to a refusal. The gate read hands a
 // door out only to a holder; the frame never guesses.
-//
-// ⚠️ ONLY A KIND WITH A PROJECT SETTING HAS ONE. A design result has nothing a
-// project setting changes, so its frame renders no door and band 3 stays
-// byte-identical to state `A`.
 
 /** The key the door's destination is guarded by — the Approvals room's own. */
 export const SETTINGS_DOOR_PERMISSION: PermissionKey = 'workflow:manage';
@@ -31,25 +32,13 @@ export interface GateSettingsDoor {
 }
 
 /**
- * The doors, per kind. The merge kind's lands on the merge-mode setting at
- * `PrMergeModeCard`'s `#merge-mode` anchor (MOTIR-5181), in the same tab.
- */
-export const GATE_SETTINGS_DOORS: Readonly<Partial<Record<ApprovalGateKindDTO, GateSettingsDoor>>> =
-  {
-    pull_request_merge: {
-      href: '/settings/project/approvals#merge-mode',
-      labelKey: 'mergeMode',
-    },
-  };
-
-/**
- * The door THIS viewer is handed for a gate of `kind` — the kind's own door when
- * they hold the room's key, and `null` otherwise. `null` renders nothing.
+ * The door THIS viewer is handed — the kind's own door when they hold the room's
+ * key, and `null` otherwise, or when the kind supplies none. `null` renders nothing.
  */
 export function settingsDoorFor(
-  kind: ApprovalGateKindDTO,
+  door: GateSettingsDoor | undefined,
   held: ReadonlySet<PermissionKey>,
 ): GateSettingsDoor | null {
-  if (!held.has(SETTINGS_DOOR_PERMISSION)) return null;
-  return GATE_SETTINGS_DOORS[kind] ?? null;
+  if (!door) return null;
+  return held.has(SETTINGS_DOOR_PERMISSION) ? door : null;
 }

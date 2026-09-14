@@ -17,6 +17,7 @@ import type {
   ApprovalGateStateDTO,
   ApprovalQueueRowDto,
   DesignResultSubjectSummaryDTO,
+  PullRequestMergeSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), built to
@@ -111,6 +112,18 @@ function SubjectMeta({ row }: { row: ApprovalQueueRowDto }) {
     // second is a gate worth withdrawing, and collapsing them would report a
     // shipped kind as unbuilt.
     return <span className="truncate text-xs text-(--el-text-secondary)">{t('subjectGone')}</span>;
+  }
+  if (row.subject.kind === 'pull_request_merge') {
+    // A REGISTERED kind with a real subject (MOTIR-4793): the row names the pull
+    // request. Its decide surface is MOTIR-4909's frame, so the Decide cell still
+    // takes the no-renderer treatment — but the SUBJECT is known, and "Motir cannot
+    // show this kind" would be false about it.
+    const merge: PullRequestMergeSubjectSummaryDTO = row.subject;
+    return (
+      <span className="truncate text-xs text-(--el-text-secondary)">
+        {t('mergeSubjectMeta', { pr: `${merge.repo}#${merge.number}` })}
+      </span>
+    );
   }
   if (row.subject.kind !== 'design_result') {
     return (

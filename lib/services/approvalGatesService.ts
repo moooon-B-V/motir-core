@@ -452,7 +452,10 @@ export const approvalGatesService = {
         gate: toApprovalGateDto(row),
         canDecide,
         routedToLabel: routedToDisplayName(routedTo),
-        settingsDoor: settingsDoorFor(input.kind, held),
+        settingsDoor: settingsDoorFor(
+          isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
+          held,
+        ),
       };
     });
   },

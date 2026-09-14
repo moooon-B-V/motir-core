@@ -219,6 +219,21 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     },
   );
 
+  it('the REGISTERED merge kind returns its gate and the not-built answer — its port is MOTIR-4909s (MOTIR-4793)', async () => {
+    // `pull_request_merge` has a handler now, so it is no longer in
+    // `UNREGISTERED_GATE_KINDS` above. The overlay still has no PORT for it, and the
+    // route says so with the same state rather than inventing a resolved subject.
+    const card = await designCard();
+    const gate = await rawGate(card, 'pull_request_merge', 'subject-merge');
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: card.identifier, kind: 'pull_request_merge' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.gate).toMatchObject({ id: gate.id, kind: 'pull_request_merge' });
+    expect(body.subject).toEqual({ state: 'kind_not_built' });
+  });
+
   it('never serves a cached gate — its state changes under the reader by design', async () => {
     const card = await designCard();
     signIn(owner());

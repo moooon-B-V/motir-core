@@ -84,6 +84,9 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // `member` gains it, `admin` gains it as part of this whole set, and the
   // implicit workspace-member grant does not.
   'work_item:archive',
+  // MOTIR-4793 — approving a pull request's merge. Role-gated like `work_item:edit`,
+  // which every holder of it also holds.
+  'work_item:merge_pull_request',
   'comment:add',
   'comment:moderate',
   'attachment:create',
@@ -204,6 +207,10 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
     // Linear shape" for leaving children intact). `viewer` does NOT gain it: a
     // read-only actor removes nothing.
     'work_item:archive',
+    // MOTIR-4793 — every built-in role that edits work items may approve their merge.
+    // `viewer` edits nothing, and the implicit workspace-member grant takes neither:
+    // merging onto a repository is an act of ownership on a project nobody put them on.
+    'work_item:merge_pull_request',
     'comment:add',
     'attachment:create',
     // MOTIR-2291 — the six member-facing keys the decision puts at `member`.

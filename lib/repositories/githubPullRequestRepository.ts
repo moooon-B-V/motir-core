@@ -530,6 +530,21 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
+  /** The pull requests a page of merge gates asks about, keyed by id, with the
+   *  repository and check rows a queue row renders (MOTIR-4793) — ONE query for the
+   *  whole page, never one per gate. An id that no longer resolves is simply absent. */
+  async findManyByIdsForSummary(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, GithubPullRequestWithContext>> {
+    if (ids.length === 0) return new Map();
+    const rows = await tx.githubPullRequest.findMany({
+      where: { id: { in: ids } },
+      include: { repo: true, checkRuns: true },
+    });
+    return new Map(rows.map((row) => [row.id, row]));
+  },
+
   /** Stamp a merged PR's capture facts onto its row (MOTIR-2922). `updateMany`
    *  rather than `update` deliberately: this runs POST-COMMIT and best-effort, so
    *  the row it targets could have been deleted between the sync's commit and this

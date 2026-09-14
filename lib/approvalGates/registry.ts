@@ -4,6 +4,8 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
+import { pullRequestMergeGateHandler } from '@/lib/approvalGates/pullRequestMergeHandler';
+import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 
 // THE APPROVAL-GATE REGISTRY (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md §1).
@@ -50,7 +52,9 @@ import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler
  * it, and each later kind is then a row in the enum, a handler, and a renderer
  * rather than a second approval feature.
  */
-export type RegisteredGateKind = 'design_result';
+// MOTIR-4793 registers the SECOND: `pull_request_merge`, the kind Story MOTIR-4882
+// merges through (`approval-gates.md` §4 and its second amendment).
+export type RegisteredGateKind = 'design_result' | 'pull_request_merge';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -60,7 +64,6 @@ export type RegisteredGateKind = 'design_result';
  * | ----------------------- | -------------------------------------------------- |
  * | `decision_approval`     | MOTIR-4907 — the DECISION gate                     |
  * | `pull_request_approval` | MOTIR-4909 / MOTIR-4910 — approve a PR in Motir    |
- * | `pull_request_merge`    | MOTIR-4882 — Motir MERGES the pull request         |
  *
  * ⚠️ The card's own text names ONE hole (`pull_request_merge`), because it was
  * written before MOTIR-4911's ADR amendment added `decision_approval` and split
@@ -81,7 +84,6 @@ export type UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>
 export const UNREGISTERED_GATE_KINDS = [
   'decision_approval',
   'pull_request_approval',
-  'pull_request_merge',
 ] as const satisfies readonly UnregisteredGateKind[];
 
 // TOTALITY, asserted at the type level. `Exclude` gives us the complement of the
@@ -257,6 +259,15 @@ export interface GateHandler<TSubject = unknown> {
    */
   statusIntent: { key: string; category: StatusCategoryDto } | null;
 
+  /**
+   * THE SETTINGS DOOR this kind supplies to its approval frame (MOTIR-5513 ·
+   * MOTIR-4793), or none. A kind whose asking is governed by a PROJECT SETTING names
+   * where that setting lives; the gate read hands it only to a viewer holding the key
+   * the destination is guarded by (`settingsDoorFor`). A kind with no such setting
+   * leaves it out, and its frame's band 3 is byte-identical to state `A`.
+   */
+  settingsDoor?: GateSettingsDoor;
+
   /** What `approve` DOES, beyond recording the decision. */
   approve(args: GateEffectArgs): Promise<GateEffect>;
 
@@ -270,6 +281,7 @@ export interface GateHandler<TSubject = unknown> {
  */
 export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   design_result: designResultGateHandler,
+  pull_request_merge: pullRequestMergeGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

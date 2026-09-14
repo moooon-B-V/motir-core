@@ -223,13 +223,14 @@ describe('the Approvals list — the row OPENS THE APPROVAL OVERLAY', () => {
 describe('the Approvals list — rows with no subject to show', () => {
   it('says a kind is NOT BUILT YET, offers nothing to decide, and still opens — on its own kind', () => {
     const row = designRow({
-      gateId: 'gate-merge',
-      kind: 'pull_request_merge',
-      subject: { kind: 'pull_request_merge' },
+      gateId: 'gate-approval',
+      // Still a declared hole (MOTIR-4909); the merge kind is registered (MOTIR-4793).
+      kind: 'pull_request_approval',
+      subject: { kind: 'pull_request_approval' },
     });
     renderRows([row]);
 
-    expect(screen.getByText('Pull-request merge')).toBeTruthy();
+    expect(screen.getByText('Pull-request approval')).toBeTruthy();
     expect(screen.getByText('Not built yet')).toBeTruthy();
     expect(screen.getByText('Motir cannot show this kind yet')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
@@ -237,8 +238,28 @@ describe('the Approvals list — rows with no subject to show', () => {
     // The overlay draws this arm (§ 22 Panel 4a), so the row has the door.
     fireEvent.click(rowDoor());
     expect(shallowPush).toHaveBeenCalledWith(
-      '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=pull_request_merge',
+      '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=pull_request_approval',
     );
+  });
+
+  it('names the pull request for a MERGE gate — a registered kind with a real subject (MOTIR-4793)', () => {
+    const row = designRow({
+      gateId: 'gate-merge',
+      kind: 'pull_request_merge',
+      subject: {
+        kind: 'pull_request_merge',
+        pullRequestId: 'pr-1',
+        repo: 'acme/web',
+        number: 7,
+        title: 'The merge seam',
+        headSha: 'abc123',
+      },
+    });
+    renderRows([row]);
+
+    expect(screen.getByText('Pull-request merge')).toBeTruthy();
+    expect(screen.getByText('acme/web#7 · pull request')).toBeTruthy();
+    expect(screen.queryByText('Motir cannot show this kind yet')).toBeNull();
   });
 
   it('says the SUBJECT IS GONE — a different row from not-built-yet — and still opens', () => {

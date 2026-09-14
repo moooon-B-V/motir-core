@@ -8,7 +8,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { GATE_SETTINGS_DOORS, settingsDoorFor } from '@/lib/approvalGates/settingsDoor';
+import { settingsDoorFor } from '@/lib/approvalGates/settingsDoor';
+import { handlerFor } from '@/lib/approvalGates/registry';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
@@ -151,16 +152,19 @@ describe('the door lands where the room says it does', () => {
     const anchor = card.match(/export const MERGE_MODE_ANCHOR = '([^']+)'/)?.[1];
     expect(anchor).toBe('merge-mode');
     expect(card).toMatch(/id=\{MERGE_MODE_ANCHOR\}/);
-    expect(GATE_SETTINGS_DOORS.pull_request_merge?.href).toBe(
+    expect(handlerFor('pull_request_merge').settingsDoor?.href).toBe(
       `/settings/project/approvals#${anchor}`,
     );
   });
 
   it('settingsDoorFor is the key check and nothing else', () => {
-    expect(settingsDoorFor('pull_request_merge', new Set())).toBeNull();
-    expect(settingsDoorFor('pull_request_merge', new Set(['workflow:manage']))).toEqual(
-      GATE_SETTINGS_DOORS.pull_request_merge,
-    );
-    expect(settingsDoorFor('decision_approval', new Set(['workflow:manage']))).toBeNull();
+    const mergeDoor = handlerFor('pull_request_merge').settingsDoor;
+    expect(mergeDoor).toBeDefined();
+    expect(settingsDoorFor(mergeDoor, new Set())).toBeNull();
+    expect(settingsDoorFor(mergeDoor, new Set(['workflow:manage']))).toEqual(mergeDoor);
+    // A kind that supplies no door hands out none, whatever the viewer holds.
+    expect(
+      settingsDoorFor(handlerFor('design_result').settingsDoor, new Set(['workflow:manage'])),
+    ).toBeNull();
   });
 });

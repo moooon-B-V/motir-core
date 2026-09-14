@@ -99,6 +99,12 @@ async function readSubject(
         ? { state: 'resolved', kind: 'design_result', evidence, filesKept }
         : { state: 'gone' };
     }
+    case 'pull_request_merge':
+      // REGISTERED (MOTIR-4793) but with no overlay PORT yet: the approve-and-merge
+      // port is MOTIR-5437 / MOTIR-4909's. Until it lands the overlay draws the
+      // not-built arm — the same answer the Approvals list's Decide cell gives a
+      // merge row — rather than a resolved subject nothing can render.
+      return { state: 'kind_not_built' };
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */
