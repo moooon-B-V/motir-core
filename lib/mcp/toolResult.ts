@@ -92,6 +92,15 @@ import {
   GithubRepoNotFoundError,
 } from '@/lib/github/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
+import {
+  CrossProjectFolderError,
+  FolderCycleError,
+  FolderNameTakenError,
+  FolderNotFoundError,
+  InvalidFolderNameError,
+  PlacementConflictError,
+  SubtaskNeedsPlacementError,
+} from '@/lib/folders/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
@@ -512,6 +521,25 @@ export function toToolError(err: unknown): CallToolResult {
   // this is only reachable in the race where it was revoked mid-request — map it
   // to a clean tool error so an agent reads NOT_A_MEMBER and stops, rather than
   // an opaque JSON-RPC internal error.
+  // The folder family (MOTIR-5409). Enumerated rather than matched on a base,
+  // because `lib/folders/errors.ts` has none — each class is its own. Every one
+  // is something an agent can act on: a folder id that is gone (a retried
+  // delete), a name already taken at that level (a retried create — the message
+  // names it), a move into its own subtree, another project's folder, a subtask
+  // that would be left with no parent and no folder, and a work item given a
+  // parent AND a folder at once (MOTIR-5407's placement rule, which the work-item
+  // tools reach through the same service).
+  if (
+    err instanceof FolderNotFoundError ||
+    err instanceof InvalidFolderNameError ||
+    err instanceof FolderNameTakenError ||
+    err instanceof FolderCycleError ||
+    err instanceof CrossProjectFolderError ||
+    err instanceof SubtaskNeedsPlacementError ||
+    err instanceof PlacementConflictError
+  ) {
+    return toolError(err.code, err.message);
+  }
   if (err instanceof NotAMemberError) {
     return toolError(err.code, err.message);
   }

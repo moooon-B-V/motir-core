@@ -37,6 +37,7 @@ import {
   planSubmitPayload,
   sessionCloseOutPayload,
 } from './workLoop';
+import { folderDeletionPayload, folderWritePayload, listFoldersPayload } from './folders';
 
 // The TOOL → PAYLOAD map (Story 11.6 · Subtask 11.6.6 — MOTIR-2232).
 //
@@ -89,6 +90,13 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // NARROWING of `WorkItemRef`, so it derives (and carries no probe) for the
   // same reason the search row does.
   skeleton: skeletonPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-5409 — the folder tools. The two writes return v1's `Folder` /
+  // `FolderDeletion` resources whole and PROBE them; the tree read is a declared
+  // narrowing of `Folder` and carries no probe, like the search row.
+  list_folders: listFoldersPayload as unknown as PayloadDefinition<never>,
+  create_folder: folderWritePayload as unknown as PayloadDefinition<never>,
+  update_folder: folderWritePayload as unknown as PayloadDefinition<never>,
+  delete_folder: folderDeletionPayload as unknown as PayloadDefinition<never>,
   attach_file: attachFilePayload as unknown as PayloadDefinition<never>,
   // 11.6.4 — project / sprint / backlog / identity
   list_projects: listProjectsPayload as unknown as PayloadDefinition<never>,

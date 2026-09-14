@@ -647,6 +647,28 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  create_folder: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+      name: {
+        type: 'string',
+        description: 'The new folder’s name. Unique among the folders at its level.',
+      },
+      parentFolderId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          'The folder to create it inside (an id from `list_folders`). Omit or pass null to create it at the project root.',
+      },
+    },
+    required: ['projectKey', 'name'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   create_plan: {
     type: 'object',
     properties: {
@@ -823,6 +845,24 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['commentId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  delete_folder: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+      folderId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The folder id (as returned by `list_folders`).',
+      },
+    },
+    required: ['projectKey', 'folderId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -1073,6 +1113,19 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  list_folders: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+    },
+    required: ['projectKey'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -1856,6 +1909,41 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  update_folder: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+      folderId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The folder id (as returned by `list_folders`).',
+      },
+      name: {
+        type: 'string',
+        description: 'RENAME: the folder’s new name. Do not combine with a placement.',
+      },
+      parentFolderId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          'PLACE: the folder to move it into (an id from `list_folders`), or null for the project root. Omit to keep its current parent and only reorder it. Do not combine with `name`.',
+      },
+      beforeId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description: 'PLACE: the sibling folder this one should sort AFTER.',
+      },
+      afterId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description: 'PLACE: the sibling folder this one should sort BEFORE.',
+      },
+    },
+    required: ['projectKey', 'folderId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

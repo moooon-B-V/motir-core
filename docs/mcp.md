@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **62 tools**.
+`initialize` handshake and registers **66 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1909,6 +1909,93 @@ UI; a missing / cross-tenant key is an indistinguishable 404.
 
 **Output** — `structuredContent`: the re-parented `WorkItemDto` (its `parentId`
 now the new parent, or `null` at the top level).
+
+### Folders
+
+A **folder** is a named, nestable place in a project's tree that holds work items
+and other folders and carries **no workflow** of its own. These four tools see and
+tidy a project's folders over the same folder service the `/items` tree uses.
+Placing a _work item_ into a folder is the work-item tools' job, not these.
+Every refusal is the folder service's own, returned as a typed tool error
+carrying its code:
+
+| Code                      | Meaning                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `FOLDER_NOT_FOUND`        | No such folder in your workspace (also a retried delete on a folder already gone).         |
+| `INVALID_FOLDER_NAME`     | The name is empty or over the length cap.                                                  |
+| `FOLDER_NAME_TAKEN`       | A folder with that name already sits at that level; the message names it.                  |
+| `FOLDER_CYCLE`            | The move would put a folder inside itself or one of its own folders.                       |
+| `CROSS_PROJECT_FOLDER`    | The folder belongs to another project.                                                     |
+| `SUBTASK_NEEDS_PLACEMENT` | The change would leave a subtask with neither a parent nor a folder.                       |
+| `PLACEMENT_CONFLICT`      | A work item was given a parent and a folder at once (reached through the work-item tools). |
+
+#### `list_folders`
+
+Every folder of a project in **one read**, in tree order — so an agent resolving
+"the Backlog ideas folder" gets every path at once, the way `skeleton` hands it
+the whole work-item tree. The read is capped (the Move to… picker's cap), and
+`truncated` is always reported. Gated on `project:browse`.
+
+| Input        | Type   | Required | Notes                       |
+| ------------ | ------ | -------- | --------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`. |
+
+**Output** — `structuredContent`: `{ projectKey, folders, truncated }`, where each
+row of `folders` is `{ id, parentFolderId, name, path }` and `path` is the
+folder's name and every ancestor's, root first (`["Parked", "2025"]`). The text
+summary is the indented tree.
+
+#### `create_folder`
+
+Create a folder at the project root, or inside another folder. Names are unique
+among the folders at one level. **Re-delivery:** a retried create meets
+`FOLDER_NAME_TAKEN` naming the folder the first call made — call `list_folders`
+to find it rather than creating again. Gated on `work_item:edit`.
+
+| Input            | Type           | Required | Notes                                                        |
+| ---------------- | -------------- | -------- | ------------------------------------------------------------ |
+| `projectKey`     | string         | yes      | Project key.                                                 |
+| `name`           | string         | yes      | The folder's name.                                           |
+| `parentFolderId` | string \| null | no       | The folder to create it inside; omit or `null` for the root. |
+
+**Output** — `structuredContent`: the folder, exactly as `/api/v1` publishes it —
+`{ id, projectKey, parentFolderId, name, path, position, createdAt, updatedAt }`.
+
+#### `update_folder`
+
+**Rename** a folder, **or place** it — move it into another folder and/or reorder
+it among its siblings. A rename and a placement in **one call is refused**
+(`INVALID_REQUEST`) and changes nothing: the service performs them as separate
+writes, so a combined call could half-apply. Make two calls. A call carrying
+neither is refused the same way. The split is the one `PATCH /api/v1/folders/{folderId}`
+uses, so the two doors agree. Gated on `work_item:edit`.
+
+| Input            | Type           | Required | Notes                                                                                            |
+| ---------------- | -------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `projectKey`     | string         | yes      | Project key.                                                                                     |
+| `folderId`       | string         | yes      | The folder to change, from `list_folders`.                                                       |
+| `name`           | string         | no       | RENAME: the new name. Not with a placement.                                                      |
+| `parentFolderId` | string \| null | no       | PLACE: the destination folder, or `null` for the root. Omit to keep the parent and only reorder. |
+| `beforeId`       | string \| null | no       | PLACE: the sibling folder this one sorts AFTER.                                                  |
+| `afterId`        | string \| null | no       | PLACE: the sibling folder this one sorts BEFORE.                                                 |
+
+**Output** — `structuredContent`: the folder, in `create_folder`'s shape.
+
+#### `delete_folder`
+
+Delete a folder. **Nothing inside it is deleted**: its folders and filed work
+items move up to the deleted folder's parent, or to the project root, and the
+result names every id that moved. A retried delete returns `FOLDER_NOT_FOUND`.
+Gated on `work_item:edit`.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key.                               |
+| `folderId`   | string | yes      | The folder to delete, from `list_folders`. |
+
+**Output** — `structuredContent`: `{ deletedFolderId, destinationFolderId,
+movedFolderIds, movedWorkItemIds }` — `destinationFolderId` is `null` when the
+contents moved to the root.
 
 ### Search
 

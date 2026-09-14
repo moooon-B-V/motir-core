@@ -175,6 +175,11 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   // `{ key, title, score }` ranking is not a work-item representation and ADR §2
   // forbids it from becoming one.
   skeleton: true,
+  // MOTIR-5409 — the folder tools.
+  list_folders: true,
+  create_folder: true,
+  update_folder: true,
+  delete_folder: true,
 };
 
 /** The runtime view the assertions below walk. */

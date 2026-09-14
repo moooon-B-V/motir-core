@@ -556,6 +556,24 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "The whole project's tree shape in one read — every item's key, kind, title, status and parent, with no paging loop.",
     descriptionFingerprint: '26ceb84cf462',
   },
+  list_folders: {
+    summary:
+      "Every folder of a project in one read — each folder's id and its path — to find a folder by name.",
+    descriptionFingerprint: 'ef6a154466b6',
+  },
+  create_folder: {
+    summary: 'Create a folder at the root or inside another folder; names are unique per level.',
+    descriptionFingerprint: '4a0a04e70d18',
+  },
+  update_folder: {
+    summary: 'Rename a folder, or move and reorder it — one or the other per call, never both.',
+    descriptionFingerprint: 'eeec61eb8ae9',
+  },
+  delete_folder: {
+    summary:
+      'Delete a folder; its folders and work items move up, and the result lists what moved.',
+    descriptionFingerprint: 'ba8ca89ae989',
+  },
   search_work_items_semantic: {
     summary:
       'Has this already been built? Search by MEANING rather than substring — keys, titles and scores only.',
