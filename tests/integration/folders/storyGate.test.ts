@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { seededBugsFolderId } from '../../fixtures/projectFixtures';
 
 // The folders story's VITEST GATE (Story MOTIR-5308 · MOTIR-5317) on a REAL
 // Postgres: the ASSEMBLED feature, not each card's own units. Only the session
@@ -112,6 +113,8 @@ function split(level: TreeLevelDto) {
 describe('seam · service → tree read', () => {
   it('each write of the folder service reads back through the tree level exactly as written', async () => {
     const fx = await makeFixture();
+    // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
+    const bugs = await seededBugsFolderId(fx.projectId);
     const task = await createWorkItem(fx, { kind: 'task', title: 'Loose task' });
     const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
     await createWorkItem(fx, { kind: 'story', title: 'Story', parentId: epic.id });
@@ -120,14 +123,23 @@ describe('seam · service → tree read', () => {
     const later = await folder(fx, 'Later');
     const y2025 = await folder(fx, '2025', later.id);
     expect(split(await rootLevel(fx))).toEqual({
-      folders: [[later.id, true]],
+      folders: [
+        [bugs, false],
+        [later.id, true],
+      ],
       items: [epic.id, task.id].sort(),
     });
     expect(split(await folderLevel(fx, y2025.id))).toEqual({ folders: [], items: [] });
 
     // file: the task leaves the root and is the only row of 2025.
     await file(fx, task.id, y2025.id);
-    expect(split(await rootLevel(fx))).toEqual({ folders: [[later.id, true]], items: [epic.id] });
+    expect(split(await rootLevel(fx))).toEqual({
+      folders: [
+        [bugs, false],
+        [later.id, true],
+      ],
+      items: [epic.id],
+    });
     expect(shape(await folderLevel(fx, later.id))).toEqual([['folder', y2025.id, true]]);
     expect(shape(await folderLevel(fx, y2025.id))).toEqual([['task', task.id, false]]);
 
@@ -138,6 +150,7 @@ describe('seam · service → tree read', () => {
     );
     expect(split(await rootLevel(fx))).toEqual({
       folders: [
+        [bugs, false],
         [later.id, false],
         [y2025.id, true],
       ],
@@ -147,7 +160,10 @@ describe('seam · service → tree read', () => {
     // delete: 2025's task moves up to 2025's parent — the root.
     await foldersService.deleteFolder({ projectId: fx.projectId, folderId: y2025.id }, fx.ctx);
     expect(split(await rootLevel(fx))).toEqual({
-      folders: [[later.id, false]],
+      folders: [
+        [bugs, false],
+        [later.id, false],
+      ],
       items: [epic.id, task.id].sort(),
     });
   });
@@ -157,6 +173,8 @@ describe('seam · the quick view files an item', () => {
   it('filing a story that has an epic parent: it is in the folder, gone from the epic, and keeps its own children', async () => {
     const fx = await makeFixture();
     actAs(fx);
+    // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
+    const bugs = await seededBugsFolderId(fx.projectId);
     const later = await folder(fx, 'Later');
     const epic = await createWorkItem(fx, { kind: 'epic', title: 'Auth' });
     const sibling = await createWorkItem(fx, { kind: 'story', title: 'Stays', parentId: epic.id });
@@ -170,7 +188,13 @@ describe('seam · the quick view files an item', () => {
     expect(shape(await folderLevel(fx, later.id))).toEqual([['story', story.id, true]]);
     expect(shape(await childLevel(fx, epic.id))).toEqual([['story', sibling.id, false]]);
     expect(shape(await childLevel(fx, story.id))).toEqual([['subtask', sub.id, false]]);
-    expect(split(await rootLevel(fx))).toEqual({ folders: [[later.id, true]], items: [epic.id] });
+    expect(split(await rootLevel(fx))).toEqual({
+      folders: [
+        [bugs, false],
+        [later.id, true],
+      ],
+      items: [epic.id],
+    });
   });
 });
 
@@ -178,6 +202,8 @@ describe('seam · folder-row refusals', () => {
   it('each typed refusal reaches the action boundary as its mapped code, never a raw database error', async () => {
     const fx = await makeFixture();
     actAs(fx);
+    // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
+    const bugs = await seededBugsFolderId(fx.projectId);
     const later = await folder(fx, 'Later');
     const inner = await folder(fx, 'Inner', later.id);
     const other = await projectsService.createProject({
@@ -213,7 +239,13 @@ describe('seam · folder-row refusals', () => {
     });
 
     // And none of the three wrote anything.
-    expect(split(await rootLevel(fx))).toEqual({ folders: [[later.id, true]], items: [] });
+    expect(split(await rootLevel(fx))).toEqual({
+      folders: [
+        [bugs, false],
+        [later.id, true],
+      ],
+      items: [],
+    });
     expect(shape(await folderLevel(fx, later.id))).toEqual([['folder', inner.id, false]]);
   });
 });
@@ -298,7 +330,10 @@ describe('guard · filing is invisible to workflow reads', () => {
     for (const f of [q1, y2025, later, research]) {
       await foldersService.deleteFolder({ projectId: fx.projectId, folderId: f.id }, fx.ctx);
     }
-    expect((await rootLevel(fx)).rows.filter((r) => r.kind === 'folder')).toHaveLength(0);
+    // Only the seeded Bugs folder (MOTIR-4935) is left, and it was never touched.
+    expect((await rootLevel(fx)).rows.filter((r) => r.kind === 'folder').map((r) => r.id)).toEqual([
+      await seededBugsFolderId(fx.projectId),
+    ]);
 
     expect(await workflowReads(fx)).toEqual(before);
   });

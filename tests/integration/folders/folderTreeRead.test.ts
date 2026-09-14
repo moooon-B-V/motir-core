@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { seededBugsFolderId } from '../../fixtures/projectFixtures';
 import { db } from '@/lib/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -57,6 +58,8 @@ function file(fx: WorkItemFixture, workItemId: string, folderId: string) {
 describe('a level', () => {
   it('is its folders then its work items, at the root and inside each folder', async () => {
     const fx = await makeFixture();
+    // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
+    const bugs = await seededBugsFolderId(fx.projectId);
     const outer = await folder(fx, 'Outer');
     const second = await folder(fx, 'Second');
     const nested = await folder(fx, 'Nested', outer.id);
@@ -68,11 +71,25 @@ describe('a level', () => {
     await file(fx, epic.id, nested.id);
 
     const root = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
-    expect(root.rows.map((r) => r.id)).toEqual([outer.id, second.id, task.id, bug.id, loose.id]);
-    expect(root.rows.map((r) => r.kind)).toEqual(['folder', 'folder', 'task', 'bug', 'story']);
+    expect(root.rows.map((r) => r.id)).toEqual([
+      bugs,
+      outer.id,
+      second.id,
+      task.id,
+      bug.id,
+      loose.id,
+    ]);
+    expect(root.rows.map((r) => r.kind)).toEqual([
+      'folder',
+      'folder',
+      'folder',
+      'task',
+      'bug',
+      'story',
+    ]);
     expect(root.rows.find((r) => r.id === outer.id)?.hasChildren).toBe(true);
     expect(root.rows.find((r) => r.id === second.id)?.hasChildren).toBe(false);
-    expect(root).toMatchObject({ total: 5, hasMore: false });
+    expect(root).toMatchObject({ total: 6, hasMore: false });
 
     const inOuter = await workItemsService.listFolderLevel(outer.id, { sort: sort() }, fx.ctx);
     expect(inOuter.rows).toEqual([
@@ -121,6 +138,8 @@ describe('a level', () => {
 describe('paging across the boundary', () => {
   it('walks three folders then four work items with take 2, each row exactly once', async () => {
     const fx = await makeFixture();
+    // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
+    const bugs = await seededBugsFolderId(fx.projectId);
     const folders = [await folder(fx, 'A'), await folder(fx, 'B'), await folder(fx, 'C')];
     const items = [];
     for (let i = 1; i <= 4; i += 1) {
@@ -136,14 +155,14 @@ describe('paging across the boundary', () => {
         { sort: sort(), take: 2, offset },
         fx.ctx,
       );
-      expect(level.total).toBe(7);
+      expect(level.total).toBe(8);
       seen.push(...level.rows.map((r) => r.id));
       more.push(level.hasMore);
       offset += level.rows.length;
       if (!level.hasMore) break;
     }
 
-    expect(seen).toEqual([...folders.map((f) => f.id), ...items.map((i) => i.id)]);
+    expect(seen).toEqual([bugs, ...folders.map((f) => f.id), ...items.map((i) => i.id)]);
     expect(more).toEqual([true, true, true, false]);
   });
 });
@@ -154,6 +173,8 @@ describe('filed items leave the root', () => {
     const sprint = await adminDb.sprint.create({
       data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name: 'Sprint 1', sequence: 1 },
     });
+    // Every project is born with a Bugs folder (MOTIR-4935), so it is part of this read.
+    const bugs = await seededBugsFolderId(fx.projectId);
     const later = await folder(fx, 'Later');
     const filed = await createWorkItem(fx, { kind: 'task', title: 'Filed' });
     const unfiled = await createWorkItem(fx, { kind: 'task', title: 'Unfiled' });
@@ -164,8 +185,8 @@ describe('filed items leave the root', () => {
     await file(fx, filed.id, later.id);
 
     const root = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
-    expect(root.rows.map((r) => r.id)).toEqual([later.id, unfiled.id]);
-    expect(root.total).toBe(2);
+    expect(root.rows.map((r) => r.id)).toEqual([bugs, later.id, unfiled.id]);
+    expect(root.total).toBe(3);
 
     const [sprintRoot, sprintCount, roadmapRoot, roadmapCount] = await withWorkspaceServiceContext(
       fx.workspaceId,

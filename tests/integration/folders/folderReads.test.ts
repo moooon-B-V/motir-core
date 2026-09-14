@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { seededBugsFolderId } from '../../fixtures/projectFixtures';
 import { db } from '@/lib/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
@@ -78,12 +79,13 @@ describe('listProjectFolders', () => {
 
     expect(result.truncated).toBe(false);
     expect(result.folders.map((f) => ({ id: f.id, path: f.path }))).toEqual([
+      { id: await seededBugsFolderId(fx.projectId), path: ['Bugs'] },
       { id: later.id, path: ['Later'] },
       { id: y2025.id, path: ['Later', '2025'] },
       { id: q1.id, path: ['Later', '2025', 'Q1'] },
       { id: archive.id, path: ['Archive'] },
     ]);
-    expect(result.folders[1]).toMatchObject({ parentFolderId: later.id, name: '2025' });
+    expect(result.folders[2]).toMatchObject({ parentFolderId: later.id, name: '2025' });
   });
 
   it('with the cap lowered, returns exactly `limit` folders, keeps every ancestor, and flags truncation', async () => {
@@ -108,11 +110,12 @@ describe('listProjectFolders', () => {
     }
 
     const exact = await foldersService.listProjectFolders(
-      { projectId: fx.projectId, limit: 4 },
+      // Four it made, plus the seeded Bugs folder (MOTIR-4935).
+      { projectId: fx.projectId, limit: 5 },
       fx.ctx,
     );
     expect(exact).toMatchObject({ truncated: false });
-    expect(exact.folders).toHaveLength(4);
+    expect(exact.folders).toHaveLength(5);
   });
 
   it('is open to a member who can browse, and closed to a non-member', async () => {
@@ -122,7 +125,7 @@ describe('listProjectFolders', () => {
     const outsider = await createTestUser({ email: 'reads-outsider@ex.com', name: 'Outsider' });
 
     const seen = await foldersService.listProjectFolders({ projectId: fx.projectId }, viewer);
-    expect(seen.folders.map((f) => f.name)).toEqual(['Later']);
+    expect(seen.folders.map((f) => f.name)).toEqual(['Bugs', 'Later']);
 
     await expect(
       foldersService.listProjectFolders(

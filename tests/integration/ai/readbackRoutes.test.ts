@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { seededBugsFolderId } from '../../fixtures/projectFixtures';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { foldersService } from '@/lib/services/foldersService';
@@ -91,6 +92,12 @@ describe('GET /api/internal/ai/plan-tree — read-back auth', () => {
     expect(byKey.get(filed.identifier)).toBe(parked.id);
     expect(byKey.get(loose.identifier)).toBeNull();
     expect(body.folders).toEqual([
+      {
+        id: await seededBugsFolderId(fx.projectId),
+        parentFolderId: null,
+        name: 'Bugs',
+        path: ['Bugs'],
+      },
       { id: parked.id, parentFolderId: null, name: 'Parked', path: ['Parked'] },
     ]);
     expect(body.foldersTruncated).toBe(false);

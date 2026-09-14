@@ -59,12 +59,13 @@ describe('listRootIssues', () => {
 
     const level = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
 
-    expect(level.rows.map((r) => r.id)).toEqual([E.id, X.id]); // roots only, key asc
+    // Roots only, key asc — after the seeded Bugs folder row every level leads with (MOTIR-4935).
+    expect(level.rows.filter((r) => r.kind !== 'folder').map((r) => r.id)).toEqual([E.id, X.id]);
     expect(level.rows.find((r) => r.id === E.id)?.hasChildren).toBe(true);
     expect(level.rows.find((r) => r.id === X.id)?.hasChildren).toBe(false);
     expect(level.rows.every((r) => r.parentId === null)).toBe(true);
     expect(level.hasMore).toBe(false);
-    expect(level.total).toBe(2); // the FULL roots count (for aria-setsize)
+    expect(level.total).toBe(3); // the FULL level count (for aria-setsize) — E, X and the seeded Bugs folder
   });
 
   it("projects each row's work `type` (Subtask 8.8.9 — Type column)", async () => {
@@ -109,16 +110,17 @@ describe('listRootIssues', () => {
 
     const p1 = await workItemsService.listRootIssues(
       fx.projectId,
-      { sort: sort(), take: 1, offset: 0 },
+      // Offset 0 is the seeded Bugs folder: folders lead every level (MOTIR-4935).
+      { sort: sort(), take: 1, offset: 1 },
       fx.ctx,
     );
     expect(p1.rows.map((r) => r.id)).toEqual([E.id]);
     expect(p1.hasMore).toBe(true);
-    expect(p1.total).toBe(2); // total is the FULL count, not the page size
+    expect(p1.total).toBe(3); // total is the FULL count, not the page size
 
     const p2 = await workItemsService.listRootIssues(
       fx.projectId,
-      { sort: sort(), take: 1, offset: 1 },
+      { sort: sort(), take: 1, offset: 2 },
       fx.ctx,
     );
     expect(p2.rows.map((r) => r.id)).toEqual([X.id]);

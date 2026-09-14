@@ -262,6 +262,7 @@ describe('seam 2 — an agent files work into a folder through a plan', () => {
     expect(filed.get(story.identifier)).toBe(folder.id);
     expect(filed.get(committed.key)).toBe(folder.id);
     expect(tree.folders).toEqual([
+      expect.objectContaining({ name: 'Bugs', path: ['Bugs'] }),
       expect.objectContaining({ id: folder.id, name: 'Backlog ideas', path: ['Backlog ideas'] }),
     ]);
   });

@@ -1,4 +1,5 @@
 import { projectsService } from '@/lib/services/projectsService';
+import { adminDb } from '../helpers/adminDb';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Shared test fixtures — project rows (Subtask 1.4.7).
@@ -34,4 +35,25 @@ export async function createTestProject(opts: CreateTestProjectOptions): Promise
     name: opts.name ?? 'Motir',
     identifier: opts.identifier ?? 'PROD',
   });
+}
+
+/**
+ * The id of the Bugs folder every project is created with — its bug destination
+ * at birth (Story MOTIR-4927 · MOTIR-4935). A test that reads a project's
+ * folders sees this one too; name it through here, never by its label.
+ */
+export async function seededBugsFolderId(projectId: string): Promise<string> {
+  const project = await adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
+  if (project.bugDestinationFolderId === null) {
+    throw new Error(`project ${projectId} has no bug destination folder`);
+  }
+  return project.bugDestinationFolderId;
+}
+
+/** Every project's seeded Bugs folder, for a test that reads folders across projects. */
+export async function seededBugsFolderIds(): Promise<Set<string>> {
+  const projects = await adminDb.project.findMany({ select: { bugDestinationFolderId: true } });
+  return new Set(
+    projects.flatMap((p) => (p.bugDestinationFolderId ? [p.bugDestinationFolderId] : [])),
+  );
 }

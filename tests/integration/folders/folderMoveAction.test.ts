@@ -42,7 +42,8 @@ function folder(fx: WorkItemFixture, name: string, parentFolderId: string | null
   return foldersService.createFolder({ projectId: fx.projectId, parentFolderId, name }, fx.ctx);
 }
 
-/** The project's ROOT folder names, in display order, read back through the picker's action. */
+/** The project's ROOT folder names, in display order, read back through the picker's action.
+ *  The first is always the seeded Bugs folder every project is born with (MOTIR-4935). */
 async function rootOrder(): Promise<string[]> {
   const res = await listProjectFoldersAction();
   if (!res.ok) throw new Error(res.error);
@@ -64,7 +65,7 @@ describe('moveFolderAction', () => {
     await expect(
       moveFolderAction({ folderId: y2025.id, targetParentFolderId: null }),
     ).resolves.toMatchObject({ ok: true, folder: { id: y2025.id, parentFolderId: null } });
-    await expect(rootOrder()).resolves.toEqual(['Later', 'Research', '2025']);
+    await expect(rootOrder()).resolves.toEqual(['Bugs', 'Later', 'Research', '2025']);
   });
 
   it('reorders among three siblings with the before / after neighbours, read back in order', async () => {
@@ -83,7 +84,7 @@ describe('moveFolderAction', () => {
         afterId: b.id,
       }),
     ).resolves.toMatchObject({ ok: true });
-    await expect(rootOrder()).resolves.toEqual(['A', 'C', 'B']);
+    await expect(rootOrder()).resolves.toEqual(['Bugs', 'A', 'C', 'B']);
 
     // A down: after C, before B.
     await expect(
@@ -94,7 +95,7 @@ describe('moveFolderAction', () => {
         afterId: b.id,
       }),
     ).resolves.toMatchObject({ ok: true });
-    await expect(rootOrder()).resolves.toEqual(['C', 'A', 'B']);
+    await expect(rootOrder()).resolves.toEqual(['Bugs', 'C', 'A', 'B']);
 
     // B up to the top: nothing before it, C after it.
     await expect(
@@ -105,7 +106,7 @@ describe('moveFolderAction', () => {
         afterId: c.id,
       }),
     ).resolves.toMatchObject({ ok: true });
-    await expect(rootOrder()).resolves.toEqual(['B', 'C', 'A']);
+    await expect(rootOrder()).resolves.toEqual(['Bugs', 'B', 'C', 'A']);
   });
 
   it('refuses a move into its own descendant with FOLDER_CYCLE, and into a clashing name with FOLDER_NAME_TAKEN', async () => {
@@ -164,6 +165,6 @@ describe('listProjectFoldersAction', () => {
     const res = await listProjectFoldersAction();
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.data.folders.map((f) => f.path)).toEqual([['Later'], ['Later', '2025']]);
+    expect(res.data.folders.map((f) => f.path)).toEqual([['Bugs'], ['Later'], ['Later', '2025']]);
   });
 });
