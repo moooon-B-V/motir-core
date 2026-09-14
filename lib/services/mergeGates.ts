@@ -2,13 +2,16 @@ import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
 import type { GitProviderId } from '@/lib/git/types';
-import { derivePrCiState } from '@/lib/github/prCiState';
+import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import {
   pullRequestMergeGateHandler,
   pullRequestSubjectVersion,
 } from '@/lib/approvalGates/pullRequestMergeHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import {
+  githubPullRequestRepository,
+  type GithubPullRequestWithInstallation,
+} from '@/lib/repositories/githubPullRequestRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveRunTargetFor } from './runTarget';
@@ -34,6 +37,65 @@ import { resolveRunTargetFor } from './runTarget';
 // (`tests/approval-gate-merge-kind.test.ts` pins the identity).
 
 const KIND = 'pull_request_merge' as const;
+
+/** One auto merge the promotion owes AFTER it commits (MOTIR-5518). */
+export interface AutoMergeRequest {
+  pullRequestId: string;
+  headSha: string;
+}
+
+/**
+ * Is this pull request a merge candidate NOW — open, on a provider that can merge, and
+ * green at its latest head? The ONE statement both modes ask: a gate in `manual`, a
+ * job in `auto`. Re-asked per member because a push can land between the verdict and
+ * the transaction asking.
+ */
+function isMergeCandidate(
+  pr: GithubPullRequestWithInstallation | null,
+): pr is GithubPullRequestWithInstallation {
+  return (
+    pr !== null &&
+    pr.state === 'open' &&
+    !pr.merged &&
+    providerSupportsMerge(getGitProvider(pr.repo.provider as GitProviderId)) &&
+    derivePrCiState(pr.checkRuns) === 'passing'
+  );
+}
+
+/**
+ * SETTLE A GREEN VERDICT on a card — the one hook the CI promotion calls, in its own
+ * transaction, for both modes (MOTIR-5515 · MOTIR-5518):
+ *
+ *   - `manual` → raise the gates ({@link raiseMergeGates}) and owe nothing after commit;
+ *   - `auto` → raise NOTHING, and return the merges to dispatch once the transaction
+ *     has committed — a job enqueued before the commit could run against a promotion
+ *     that then rolled back.
+ *
+ * Either way only the RUN TARGET's members count, and only merge candidates.
+ */
+export async function settleGreenVerdict(
+  args: { item: WorkItem; pullRequestIds: readonly string[] },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<AutoMergeRequest[]> {
+  if (args.pullRequestIds.length === 0) return [];
+  const mode = await projectRepository.findPrMergeMode(args.item.projectId, tx);
+  if (mode?.prMergeMode === 'manual') {
+    await raiseMergeGates(args, ctx, tx);
+    return [];
+  }
+  if (mode?.prMergeMode !== 'auto') return [];
+  if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') return [];
+
+  const requests: AutoMergeRequest[] = [];
+  for (const pullRequestId of args.pullRequestIds) {
+    const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
+    if (!isMergeCandidate(pr)) continue;
+    const headSha = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+    if (headSha) requests.push({ pullRequestId: pr.id, headSha });
+  }
+  return requests;
+}
 
 /**
  * Raise an `awaiting` merge gate for each delivering pull request that is a merge
@@ -75,9 +137,7 @@ export async function raiseMergeGates(
   for (const pullRequestId of args.pullRequestIds) {
     if (awaiting.has(pullRequestId)) continue;
     const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
-    if (!pr || pr.state !== 'open' || pr.merged) continue;
-    if (!providerSupportsMerge(getGitProvider(pr.repo.provider as GitProviderId))) continue;
-    if (derivePrCiState(pr.checkRuns) !== 'passing') continue;
+    if (!isMergeCandidate(pr)) continue;
     const subjectVersion = pullRequestSubjectVersion(pr);
     if (!subjectVersion) continue;
 

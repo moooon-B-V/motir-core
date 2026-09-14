@@ -509,6 +509,27 @@ export interface JobEventDataMap {
   'work-item/child-set.changed': WorkItemChildSetChangedData;
   'work-item/derivation.requested': WorkItemDerivationRequestedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
+  'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
+}
+
+/**
+ * The `pull-request/auto-merge.requested` event payload (Story MOTIR-4882 ·
+ * MOTIR-5518) — one pull request, at the head whose checks just went green, on a run
+ * target in an `auto` project. Emitted by the CI promotion AFTER it commits.
+ */
+export interface PullRequestAutoMergeRequestedData {
+  workspaceId: string;
+  /** The RUN TARGET — the work item a refusal comment is posted on. */
+  workItemId: string;
+  /** The `github_pull_request` row to merge. */
+  pullRequestId: string;
+  /** The head that went green. A pull request no longer at it is skipped, and the
+   *  merge is pinned to it (`expectedHeadSha`). */
+  headSha: string;
+  /** Who a refusal comment is written as — the promotion's actor, the workspace owner. */
+  actorUserId: string;
+  /** `<pullRequestId>:<headSha>` — the job's dedup key, so one head is attempted once. */
+  idempotencyKey: string;
 }
 
 /**

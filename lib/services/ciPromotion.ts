@@ -21,7 +21,8 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
-import { raiseMergeGates } from './mergeGates';
+import { settleGreenVerdict, type AutoMergeRequest } from './mergeGates';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
@@ -417,37 +418,62 @@ async function reconcileClaimedCompleteDeliveries(
 }
 
 /**
- * Raise this card's merge gates over the SAME delivery set the verdict was judged on
- * (MOTIR-5515) — `collectDeliveries`, so a member the verdict counted is a member the
- * raise asks about.
+ * Settle this card's green verdict — merge gates in a `manual` project, the auto merges
+ * owed in an `auto` one — over the SAME delivery set the verdict was judged on
+ * (MOTIR-5515 · MOTIR-5518): `collectDeliveries`, so a member the verdict counted is a
+ * member the settlement asks about.
  */
-async function raiseMergeGatesForCard(
+async function settleMergesForCard(
   item: WorkItem,
   ctx: { userId: string; workspaceId: string },
   tx: Prisma.TransactionClient,
-): Promise<void> {
+): Promise<AutoMergeRequest[]> {
   const members = await collectDeliveries(item, tx);
-  await raiseMergeGates({ item, pullRequestIds: [...members.keys()] }, ctx, tx);
+  return settleGreenVerdict({ item, pullRequestIds: [...members.keys()] }, ctx, tx);
+}
+
+/**
+ * Dispatch the auto merges a committed settlement owes (MOTIR-5518) — ONE job per pull
+ * request, keyed on `(pull request, head)` so a redelivered verdict enqueues nothing new.
+ * Post-commit by construction: it is called only after the transaction returned.
+ */
+async function dispatchAutoMerges(
+  workItemId: string,
+  requests: readonly AutoMergeRequest[],
+  ctx: { userId: string; workspaceId: string },
+): Promise<void> {
+  for (const request of requests) {
+    await sendEvent('pull-request/auto-merge.requested', {
+      workspaceId: ctx.workspaceId,
+      workItemId,
+      pullRequestId: request.pullRequestId,
+      headSha: request.headSha,
+      actorUserId: ctx.userId,
+      idempotencyKey: `${request.pullRequestId}:${request.headSha}`,
+    });
+  }
 }
 
 /**
  * RE-RAISE for cards already in review (MOTIR-5515): under the card's row lock — the
  * same lock the promotion's status write takes, so two green events for one card
  * serialise and the second finds the first's gates — re-judge the whole set and raise
- * whatever is missing. A card whose set is not green raises nothing.
+ * whatever is missing. A card whose set is not green raises nothing. In an `auto`
+ * project the same verdict dispatches the new head's merge instead (MOTIR-5518).
  */
 async function reRaiseMergeGates(
   workItemIds: readonly string[],
   ctx: { userId: string; workspaceId: string },
 ): Promise<void> {
   for (const id of workItemIds) {
-    await withWorkspaceContext(ctx, async (tx) => {
-      if (!(await workItemRepository.lockById(id, tx))) return;
+    const requests = await withWorkspaceContext(ctx, async (tx) => {
+      if (!(await workItemRepository.lockById(id, tx))) return [];
       const item = await workItemRepository.findById(id, tx);
-      if (!item || !REVIEW_STATUSES.includes(item.status)) return;
-      if (!(await everyDeliveryIsGreen(item, tx))) return;
-      await raiseMergeGatesForCard(item, ctx, tx);
+      if (!item || !REVIEW_STATUSES.includes(item.status)) return [];
+      if (!(await everyDeliveryIsGreen(item, tx))) return [];
+      return settleMergesForCard(item, ctx, tx);
     });
+    await dispatchAutoMerges(id, requests, ctx);
   }
 }
 
@@ -472,13 +498,17 @@ async function promoteEach(
   const promoted: string[] = [];
   for (const id of workItemIds) {
     try {
+      let autoMerges: AutoMergeRequest[] = [];
       await workItemsService.updateStatus(id, TARGET_STATUS, ctx, {
         inTransaction: async (tx) => {
           const item = await workItemRepository.findById(id, tx);
-          if (item) await raiseMergeGatesForCard(item, ctx, tx);
+          if (item) autoMerges = await settleMergesForCard(item, ctx, tx);
         },
       });
       promoted.push(id);
+      // AFTER the promotion committed (MOTIR-5518) — and the promotion to in_review
+      // stands whatever the merge does.
+      await dispatchAutoMerges(id, autoMerges, ctx);
     } catch (err) {
       if (!SKIPPABLE.some((kind) => err instanceof kind)) throw err;
       console.warn('[ciPromotion] skipped a card CI green could not promote', {

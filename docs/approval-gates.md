@@ -135,8 +135,11 @@ guessing about the rest:
   There is no single place that lists everything waiting on you.
 - **Merging from Motir is new and partial.** In a project set to ask before merging,
   a pull request whose checks all pass gets a merge gate, and approving it merges the
-  pull request (or adds it to the repository's merge queue). The Development section's
-  control for it is not built yet, and GitLab merge requests get no merge gate.
+  pull request (or adds it to the repository's merge queue). In a project set to merge
+  automatically, Motir merges it with no gate and records on the pull request that the
+  setting allowed it; a refusal is posted as one comment on the work item. The
+  Development section's control for the gate is not built yet, and GitLab merge
+  requests are not merged from Motir.
 - **Motir does not review pull requests**: there is no gate for approving a pull
   request's changes, and outside a merge gate, merging still happens on GitHub.
 - **There is no per-project setting** that turns any of this on or off.
