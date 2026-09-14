@@ -9,6 +9,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { isWorkItemRef } from '@/lib/plans/refs';
 
 import { PlanNotFoundError } from '@/lib/plans/errors';
 
@@ -43,13 +44,16 @@ import type { PlanItemStalenessDto, PlanStalenessDto, StaleReason } from '@/lib/
 //     a new rule is one entry, no caller change.
 //   - A plan unchanged since `plannedAt` returns all-clear.
 
-const TEMP_REF_PREFIX = 'planItem:';
-
-/** A ref is "real" (points at a committed work item) when it is NOT an
- *  intra-plan temp-ref `planItem:<id>` (which points at another `add` in the
- *  same plan — not in the tree, so nothing to be stale against). */
+/** A ref is "real" (points at a committed work item) when it is neither an
+ *  intra-plan temp-ref `planItem:<id>` (another `add` in the same plan — not in
+ *  the tree, so nothing to be stale against) nor a FOLDER placement
+ *  `folder:<id>` (Story MOTIR-5310 · MOTIR-5414). A folder is not a work item:
+ *  looking its id up among work items finds nothing and used to read as
+ *  `parent_removed` on EVERY filed proposal. A folder deleted since the append
+ *  is the review model's `folderMissing` and the approve gate's refusal, not a
+ *  staleness reason. */
 function isRealRef(ref: string): boolean {
-  return !ref.startsWith(TEMP_REF_PREFIX);
+  return isWorkItemRef(ref);
 }
 
 /** The batched tree snapshot every rule reads from — built once per plan.
