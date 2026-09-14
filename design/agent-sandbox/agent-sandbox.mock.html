@@ -1187,8 +1187,9 @@
             <div class="codeblock">
               <div class="cap">sh · the shape</div>
               <pre>
-docker run -it --name motir-sandbox \
+docker run -it --rm --pull=always \
   -v "$PWD:/workspace" \
+  -v motir-auth:/home/node/.config/motir \
   -v "$HOME/&lt;credential mount&gt;:/home/node/&lt;credential mount&gt;:ro" \
   ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt;</pre
               >
@@ -1226,20 +1227,22 @@ docker run -it --name motir-sandbox \
               <div class="cap">sh · copy, then swap the two parts for your row</div>
               <button class="copy" type="button">Copy</button>
               <pre>
-docker run -it --name motir-sandbox \
+docker run -it --rm --pull=always \
   -v "$PWD:/workspace" \
+  -v motir-auth:/home/node/.config/motir \
   -v "$HOME/.claude:/home/node/.claude:ro" \
   ghcr.io/moooon-b-v/motir-sandbox:claude</pre
               >
             </div>
-            <div class="callout callout--warn">
-              <span aria-hidden="true">▲</span>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
               <span
-                >Note there is <strong>no <code>--rm</code></strong
-                >, and the container has a name. The sign-in in step 4 is written inside the
-                container, so a <code>--rm</code> run would throw it away the moment you exit. Set
-                it up once and come back to it with
-                <code>docker start -ai motir-sandbox</code>.</span
+                >Note the <strong><code>--rm</code></strong
+                >: the container is deleted the moment you exit, and that is the point — nothing
+                accumulates and nothing goes stale. <strong>Your sign-in survives it.</strong> Step
+                4 writes into the <code>motir-auth</code> volume, which lives outside the container,
+                so you sign in once and every later run picks it up. To sign out for good, remove
+                the volume: <code>docker volume rm motir-auth</code>.</span
               >
             </div>
 
@@ -1542,7 +1545,11 @@ docker run -it --name motir-sandbox \
           <div class="codeblock">
             <div class="cap">sh · scrolls here, not the page →</div>
             <pre>
-docker run -it --name motir-sandbox -v "$PWD:/workspace" ghcr.io/moooon-b-v/motir-sandbox:claude</pre
+docker run -it --rm --pull=always \
+  -v "$PWD:/workspace" \
+  -v motir-auth:/home/node/.config/motir \
+  -v "$HOME/.claude:/home/node/.claude:ro" \
+  ghcr.io/moooon-b-v/motir-sandbox:claude</pre
             >
           </div>
         </div>
