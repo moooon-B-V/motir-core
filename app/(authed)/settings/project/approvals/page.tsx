@@ -2,14 +2,16 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
-import { guardSettingsPage, settingsEntryKeys } from '../_guard';
+import { guardSettingsPage } from '../_guard';
 
 // `Project settings ▸ Approvals` — server component (Story MOTIR-4925 · Subtask
 // MOTIR-5170), built to `design/projects/approvals.mock.html` panel 0 (the door)
-// and panels 1–2 (the switch's two ordinary states).
+// and panels 1–3 (On, Off, and Unavailable when the organisation has no paid AI
+// plan — MOTIR-5171).
 //
 // THE ROOM, not a card bolted onto an existing page, and the design argues it from
 // the switch's readers and writers rather than from resemblance: a second
@@ -42,18 +44,25 @@ export default async function ProjectApprovalsPage() {
   const refused = await guardSettingsPage('approvals', ctx);
   if (refused) return refused;
 
-  // ⚠️ THE GUARD ADMITS ON THE VIEW KEY, SO THE ACTOR HERE MAY CHANGE NOTHING
-  // (MOTIR-5278). `approvals` opens on `project:browse`, so the switch is live
-  // only for an actor holding the entry's WRITE key — looked up through the
-  // registry, never typed: `tests/settings/projectSettingsNav.test.ts` fails this
-  // page if it names the literal. `canManage` decides only whether the control is
-  // offered; the read-only STATE, with the reason it carries, is MOTIR-5171's.
-  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const [held, settings] = await Promise.all([
-    projectAccessService.getPermissions(ctx.projectId, actor),
-    approvalGateSettingsService.getSettings(ctx.projectId, actor),
+  // TWO reads, and the room owns only the first. The switch's stored value is this
+  // room's SETTING; whether the organisation may publish acceptance video at all is
+  // the eligibility service's verdict, read off its DTO and never re-derived here —
+  // that service is the one place the entitlement AND is computed. `no_plan` is the
+  // only reason that makes the switch moot: `not_applicable` (self-host / the meta
+  // org) is UNGATED, so it is entitled. `allSettledOrThrow`, not `Promise.all`: the
+  // eligibility read runs an org-access gate that rejects on an ordinary path, and a
+  // sibling read must not be left running unobserved when it does (MOTIR-3077).
+  const [settings, eligibility] = await allSettledOrThrow([
+    approvalGateSettingsService.getSettings(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    acceptanceVideoEligibilityService.resolve({
+      actorUserId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
+    }),
   ]);
-  const canManage = held.has(settingsEntryKeys('approvals').write);
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -69,7 +78,7 @@ export default async function ProjectApprovalsPage() {
       <AcceptanceVideoGateCard
         projectKey={ctx.project.identifier}
         initialEnabled={settings.acceptanceVideoEnabled}
-        canManage={canManage}
+        entitled={eligibility.reason !== 'no_plan'}
       />
     </div>
   );

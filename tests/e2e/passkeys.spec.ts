@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { adminDb, db, resetDatabase } from './_helpers/db-reset';
 import { addVirtualAuthenticator, type VirtualAuthenticator } from './_helpers/webauthn';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // Story 8.12 · Subtask MOTIR-3615 — the passkey journey, end to end.
 //
@@ -55,7 +56,7 @@ async function signUp(page: Page): Promise<void> {
   // there and navigating on.
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 /**
@@ -151,7 +152,7 @@ test.describe('passkeys', () => {
     );
     await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
     expect((await assertion).status()).toBe(200);
-    await page.waitForURL('**/workbench');
+    await page.waitForURL(isLandedWorkbenchUrl);
 
     // Asserted NEGATIVELY, because the point is what never happened: a passkey
     // mints a session outright, so neither the password step nor the two-factor

@@ -1329,10 +1329,13 @@ this call wrote it), and `pullRequest` — the same `LinkedPullRequestDto` the i
 page's Development section renders. (`movedFrom` was removed by MOTIR-3757 along
 with the column whose move it reported; a link adds, so there is no move.)
 
-An unknown or cross-workspace **repository** (`GITHUB_REPO_NOT_FOUND`) and an
-unknown item key are both refused with no existence leak — the repository is
-resolved from the repo row's own workspace, never through its installation
-(MOTIR-1931), so a repository Motir created resolves like any other.
+An unknown **repository** or another organisation's (`GITHUB_REPO_NOT_FOUND`)
+and an unknown item key are all refused with no existence leak. The repository
+is resolved from the repo row, never through its installation (MOTIR-1931), so a
+repository Motir created resolves like any other — and across the caller's
+ORGANISATION, not its workspace (MOTIR-5188): a repository is connected once, to
+the organisation, so every workspace of it can link a pull request on it. The
+same resolution backs `unlink_pull_request`.
 
 Requires the work-item edit permission (`work_item:edit`) — linking a pull
 request to a card is editing that card. It is already in the CLI's fixed grant,
@@ -2070,6 +2073,24 @@ cutting a branch to fix it yourself. See
 [the dispatch advisories](#the-dispatch-advisories) for the full shape, the two
 arms' different time semantics, and what path capture cannot see. A card whose
 body opts out (`isSubsumptionCheckExempt`) is never reported.
+
+A `coverage` entry (`kind: "coverage"`, severity `likely-unowned-criterion`) is
+the one family about a CONTAINER's relationship to its children: one of its
+acceptance criteria has no direct child whose TITLE carries that criterion's
+distinguishing words (at least two of them, or its only one). It is emitted only
+when at least one child was created BEFORE the container — an ADOPTED work item,
+scoped and sealed against a different parent, which is the population where a
+criterion goes unowned while every child is green. It carries `criterionIndex`
+(numbered as the shape checks number criteria) and `adoptedChildren`, and the
+remedy is to widen the adopted work item on the record or file the sibling that
+covers the difference. Two kinds of criterion are never reported: one with no
+distinguishing word, and one that quantifies over the children themselves
+(_"Each story carries its own ADR"_). It reads child TITLES rather than bodies
+by measurement (MOTIR-5362): bodies name a container's nouns as context and as
+explicit non-scope, which read every unowned criterion on the live tree as
+owned. So its false-positive class is a child whose body delivers a criterion
+under a title that does not name it. It rides this tool only — the dispatch
+surfaces hand out leaves, which have no children.
 
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it

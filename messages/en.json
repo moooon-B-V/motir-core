@@ -8182,6 +8182,10 @@
       "off": "Off",
       "onWhat": "Any story with an acceptance video waits for approval — whoever published it.",
       "offWhat": "No acceptance video is accepted for this project, and no story is held.",
+      "unavailable": "Unavailable",
+      "unavailableWhat": "Your organisation has no paid Motir AI plan, so no acceptance video can be published.",
+      "orgPlanNote": "The plan is bought once, for the organisation — not per project.",
+      "upgrade": "Upgrade",
       "saved": "Saved",
       "saveError": "Couldn't save — try again."
     }

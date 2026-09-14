@@ -1,5 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { generateKeyPairSync } from 'node:crypto';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -9,8 +10,15 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { repoFileReadService } from '@/lib/services/repoFileReadService';
+import { githubCodeScanningProxyService } from '@/lib/services/githubCodeScanningProxyService';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
-import { GithubNotConnectedError, GithubPullRequestNotFoundError } from '@/lib/github/errors';
+import {
+  GithubNotConnectedError,
+  GithubPullRequestNotFoundError,
+  GithubRepoNotFoundError,
+} from '@/lib/github/errors';
 import { UnknownTargetRepoError } from '@/lib/workItems/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -238,6 +246,11 @@ beforeEach(async () => {
     title: 'Rate-limit the widgets',
     accountLogin: 'zeta-labs',
   });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 afterAll(async () => {
@@ -658,5 +671,339 @@ describe('the org read arm under a WORKSPACE-only context', () => {
       tx.githubRepo.findMany({ where: { organizationId: one.organizationId } }),
     );
     expect(seen.map((r) => r.name).sort()).toEqual(['motir-ai', 'motir-core']);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE FIFTH HOP — MOTIR-5188. The same question, asked of a DIFFERENT method.
+//
+// MOTIR-5152 enumerated the callers of `githubRepoRepository.listByWorkspace`
+// and fixed both. Its CLAIM was about every caller asking the WORKSPACE for the
+// organisation's repositories, which is a larger set:
+// `findConnectedByWorkspaceAndName` asks the identical question of the
+// identical column and shares no symbol with that grep. It had four callers:
+//
+//   * `linkPullRequestByCoordinates`   — `link_pull_request` over the MCP
+//   * `unlinkPullRequestByCoordinates` — `unlink_pull_request`
+//   * `repoFileReadService.readFile`   — answered `repo_not_connected`
+//   * `githubCodeScanningProxyService` — returned null, and degraded
+//
+// The first two RAISED `GithubRepoNotFoundError` in every workspace but the
+// installing one. The other two failed SILENTLY, with an answer
+// indistinguishable from a repository that genuinely is not connected. All four
+// now resolve through `findConnectedByOrganizationAndName`; the workspace-keyed
+// method stays, because MOTIR-1931's question is still a real one.
+// ════════════════════════════════════════════════════════════════════════════
+
+const FILE_TEXT = 'export const answer = 5188;\n';
+
+/** The GitHub App env + a fetch mock for the token mint, a file read and the
+ *  code-scanning list. Returns the mock so a test can read which URLs it saw. */
+function stubGithub(): ReturnType<typeof vi.fn> {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+  vi.stubEnv('GITHUB_APP_ID', '999');
+  vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+  const fetchMock = vi.fn(async (url: string): Promise<Response> => {
+    const json = (b: unknown) =>
+      new Response(JSON.stringify(b), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    if (String(url).endsWith('/access_tokens')) {
+      return json({
+        token: 'ghs_5188',
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      });
+    }
+    if (String(url).includes('/contents/')) return new Response(FILE_TEXT, { status: 200 });
+    if (String(url).includes('/code-scanning/analyses')) {
+      return json([{ id: 42, tool: { name: 'CodeQL' }, created_at: '2026-09-01T00:00:00Z' }]);
+    }
+    return new Response('not found', { status: 404 });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+// ── SITE 3 · `link_pull_request` / `unlink_pull_request` by coordinates ─────
+
+describe('linking by COORDINATES, from a workspace that did NOT install the App', () => {
+  it('⚠️ LINKS `moooon/motir-core#4101` — the defect, stated as what is now false', async () => {
+    // THIS IS THE REPRODUCTION. The repository read asked the WORKSPACE, found
+    // nothing in the sibling, and raised `GithubRepoNotFoundError` — so the one
+    // door an agent has for linking a pull request was shut here.
+    const item = await siblingItem();
+
+    const { created } = await githubPullRequestService.linkPullRequestByCoordinates(
+      {
+        workItemId: item.id,
+        projectId: sibling.projectId,
+        owner: 'moooon',
+        name: 'motir-core',
+        number: 4101,
+        headRef: 'subtask/rate-limit',
+        baseRef: 'main',
+        title: 'Rate-limit the API',
+      },
+      sibling.ctx,
+    );
+
+    // The EXISTING row, not a second one: the read resolved the repository the
+    // webhook ingested the pull request under.
+    expect(created).toBe(false);
+    expect(await deliveredItemIds(corePrId)).toEqual([item.id]);
+  });
+
+  it('UNLINKS it again by the same coordinates', async () => {
+    const item = await siblingItem();
+    await githubPullRequestService.linkPullRequest(item.id, corePrId, sibling.ctx);
+
+    const result = await githubPullRequestService.unlinkPullRequestByCoordinates(
+      {
+        workItemId: item.id,
+        projectId: sibling.projectId,
+        owner: 'moooon',
+        name: 'motir-core',
+        number: 4101,
+      },
+      sibling.ctx,
+    );
+
+    expect(result).toEqual({ removed: true, pullRequestId: corePrId });
+    expect(await deliveredItemIds(corePrId)).toEqual([]);
+  });
+
+  it('still raises `GithubRepoNotFoundError` for a DIFFERENT organisation`s repository, in both directions', async () => {
+    const item = await siblingItem();
+    const coords = { owner: 'zeta-labs', name: 'widgets', number: 4202 };
+
+    await expect(
+      githubPullRequestService.linkPullRequestByCoordinates(
+        {
+          workItemId: item.id,
+          projectId: sibling.projectId,
+          ...coords,
+          headRef: 'subtask/rate-limit-rival',
+          baseRef: 'main',
+          title: null,
+        },
+        sibling.ctx,
+      ),
+    ).rejects.toBeInstanceOf(GithubRepoNotFoundError);
+    await expect(
+      githubPullRequestService.unlinkPullRequestByCoordinates(
+        { workItemId: item.id, projectId: sibling.projectId, ...coords },
+        sibling.ctx,
+      ),
+    ).rejects.toBeInstanceOf(GithubRepoNotFoundError);
+
+    // …and org two's own reader links it — so the refusal above is a scoped
+    // read, not a missing row.
+    const rivalItem = await workItemsService.createWorkItem(
+      { projectId: rival.projectId, kind: 'task', title: 'Rival card' },
+      rival.ctx,
+    );
+    await githubPullRequestService.linkPullRequestByCoordinates(
+      {
+        workItemId: rivalItem.id,
+        projectId: rival.projectId,
+        ...coords,
+        headRef: 'subtask/rate-limit-rival',
+        baseRef: 'main',
+        title: null,
+      },
+      rival.ctx,
+    );
+    expect(await deliveredItemIds(rivalPrId)).toEqual([rivalItem.id]);
+  });
+});
+
+// ── SITE 4 · `repoFileReadService` — the silent `repo_not_connected` ────────
+
+describe('reading a file, from a workspace that did NOT install the App', () => {
+  it('⚠️ returns the file — not `repo_not_connected`, which was a false reason', async () => {
+    stubGithub();
+
+    const result = await repoFileReadService.readFile(sibling.ctx, 'moooon/motir-core', 'lib/x.ts');
+
+    expect(result).toEqual({
+      outcome: 'found',
+      path: 'lib/x.ts',
+      ref: 'main',
+      text: FILE_TEXT,
+      bytes: FILE_TEXT.length,
+    });
+  });
+
+  it('still answers `repo_not_connected` for another organisation`s repository', async () => {
+    const fetchMock = stubGithub();
+
+    expect(
+      await repoFileReadService.readFile(sibling.ctx, 'zeta-labs/widgets', 'lib/x.ts'),
+    ).toEqual({ outcome: 'repo_not_connected', repoRef: 'zeta-labs/widgets' });
+    // Refused before any credential was minted for it.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── SITE 5 · the code-scanning proxy — the silent `null` ────────────────────
+
+describe('the code-scanning proxy, from a workspace that did NOT install the App', () => {
+  it('⚠️ resolves org one`s repository and mints ITS installation`s token', async () => {
+    const fetchMock = stubGithub();
+
+    const analyses = await githubCodeScanningProxyService.listAnalyses(
+      sibling.ctx,
+      'moooon/motir-core',
+    );
+
+    expect(analyses).not.toBeNull();
+    // The assertion is about WHICH row resolved: the mint names org one's
+    // installation, and the read names the stored coordinates.
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes(`/app/installations/${INST_ONE}/access_tokens`))).toBe(true);
+    expect(urls.some((u) => u.includes('/repos/moooon/motir-core/code-scanning/analyses'))).toBe(
+      true,
+    );
+  });
+
+  it('still degrades to null for another organisation`s repository, minting nothing', async () => {
+    const fetchMock = stubGithub();
+
+    expect(
+      await githubCodeScanningProxyService.listAnalyses(sibling.ctx, 'zeta-labs/widgets'),
+    ).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── The READ itself, at the repository layer under `motir_app` ──────────────
+
+describe('githubRepoRepository.findConnectedByOrganizationAndName — under `motir_app`', () => {
+  const siblingReader = () => ({
+    userId: one.userId,
+    workspaceId: one.siblingWorkspaceId,
+  });
+
+  it('admits the organisation`s repository to a SIBLING workspace, case-insensitively, with its installation', async () => {
+    // No `app.organization_id` bound — the ordinary request path. What admits
+    // the row is `github_repo_org_read`, and what admits the include is
+    // `github_installation_org_read`; under the superuser both would be inert.
+    const found = await asAppRole(siblingReader(), (tx) =>
+      githubRepoRepository.findConnectedByOrganizationAndName(
+        one.organizationId,
+        'MOOOON',
+        'Motir-Core',
+        tx,
+      ),
+    );
+
+    expect(found?.name).toBe('motir-core');
+    expect(found?.organizationId).toBe(one.organizationId);
+    expect(found?.installation.installationId).toBe(INST_ONE);
+  });
+
+  it('refuses ANOTHER organisation`s repository — and org two`s own reader proves the row exists', async () => {
+    expect(
+      await asAppRole(siblingReader(), (tx) =>
+        githubRepoRepository.findConnectedByOrganizationAndName(
+          two.organizationId,
+          'zeta-labs',
+          'widgets',
+          tx,
+        ),
+      ),
+    ).toBeNull();
+
+    const theirs = await asAppRole(
+      { userId: two.userId, workspaceId: two.siblingWorkspaceId },
+      (tx) =>
+        githubRepoRepository.findConnectedByOrganizationAndName(
+          two.organizationId,
+          'zeta-labs',
+          'widgets',
+          tx,
+        ),
+    );
+    expect(theirs?.name).toBe('widgets');
+  });
+
+  it('⚠️ the RLS arm refuses on its own — asking for org two`s row BY org two`s id, as org one`s reader', async () => {
+    // The `where` alone would admit this: the organisation id matches the row.
+    // Only the policy refuses it, which is what this block exists to measure.
+    const found = await asAppRole(siblingReader(), (tx) =>
+      tx.githubRepo.findFirst({ where: { organizationId: two.organizationId } }),
+    );
+    expect(found).toBeNull();
+  });
+
+  it('leaves `findConnectedByWorkspaceAndName` answering the WORKSPACE question', async () => {
+    // MOTIR-1931's tenancy invariant: which repositories were connected FROM
+    // this workspace. Not widened in place — the sibling still gets nothing.
+    expect(
+      await asAppRole(siblingReader(), (tx) =>
+        githubRepoRepository.findConnectedByWorkspaceAndName(
+          one.siblingWorkspaceId,
+          'moooon',
+          'motir-core',
+          tx,
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      (
+        await asAppRole({ userId: one.userId, workspaceId: one.installingWorkspaceId }, (tx) =>
+          githubRepoRepository.findConnectedByWorkspaceAndName(
+            one.installingWorkspaceId,
+            'moooon',
+            'motir-core',
+            tx,
+          ),
+        )
+      )?.name,
+    ).toBe('motir-core');
+  });
+});
+
+describe('no write path is widened — the OTHER direction', () => {
+  it('the INSTALLING workspace cannot update or delete a repository row the SIBLING owns', async () => {
+    // The block above asserts sibling → installing. This is installing →
+    // sibling, so the invariant is pinned both ways: the `FOR ALL` write arm
+    // keys on the row's own `workspace_id`, whichever workspace that is.
+    const installation = await adminDb.githubInstallation.findFirstOrThrow({
+      where: { installationId: INST_ONE },
+    });
+    const owned = await adminDb.githubRepo.create({
+      data: {
+        installationId: installation.id,
+        workspaceId: one.siblingWorkspaceId,
+        organizationId: one.organizationId,
+        repoId: '5188-sibling-owned',
+        owner: 'moooon',
+        name: 'sibling-owned',
+        defaultBranch: 'main',
+      },
+    });
+    const installingWriter = {
+      userId: one.userId,
+      workspaceId: one.installingWorkspaceId,
+      organizationId: one.organizationId,
+    };
+
+    const touched = await asAppRole(installingWriter, (tx) =>
+      tx.githubRepo.updateMany({ where: { id: owned.id }, data: { archived: true } }),
+    );
+    const deleted = await asAppRole(installingWriter, (tx) =>
+      tx.githubRepo.deleteMany({ where: { id: owned.id } }),
+    );
+
+    expect(touched.count).toBe(0);
+    expect(deleted.count).toBe(0);
+    const after = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: owned.id } });
+    expect(after.archived).toBe(false);
   });
 });

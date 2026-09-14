@@ -8,6 +8,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { waitForEmail, extractResetUrl } from './_helpers/email-capture';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // The smoke dashboard's "Sign out" form posts to /api/auth/sign-out with
 // an empty body and no content-type, which Better-Auth answers with 415.
@@ -87,7 +88,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
 
   await page.goto('/workbench');
 
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
   // Confirm the session bound by opening the top-nav Account menu and
   // checking the rendered email. The old assertion targeted a
   // `<strong>{email}</strong>` debug dump on the dashboard that
@@ -138,7 +139,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   // BOTH credential flows land on `/workbench` — sign-in since MOTIR-2654, sign-up
   // since MOTIR-2921 (see the wait after "Create account" above), so this is
   // the same destination the sign-up leg waited for.
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
   // See assertSignedInAs docstring (Finding #17) — same re-anchor onto
   // the Account-menu popover as the post-sign-up assertion above.
   await assertSignedInAs(page, TEST_EMAIL);
@@ -180,7 +181,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 
   // Sign-in attempt with the OLD password fails with the inline error.
   await signOut(page);

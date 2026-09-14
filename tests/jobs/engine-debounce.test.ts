@@ -323,6 +323,82 @@ describe('the deferral cap — the one place the engine is STRICTER than Inngest
   });
 });
 
+describe('an IMMEDIATE arrival — due now, and still coalesced (MOTIR-5360)', () => {
+  it('opens a window that is ALREADY due, still carrying the key', async () => {
+    const before = Date.now();
+    const result = await dispatchEventToEngine(TRIGGER, push(), { immediate: true });
+    const after = Date.now();
+
+    expect(result.enqueued).toEqual([DEBOUNCED_ID]);
+    const [row, ...rest] = await rowsFor(DEBOUNCED_ID);
+    expect(rest).toHaveLength(0);
+    expect(row!.runAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(row!.runAt.getTime()).toBeLessThanOrEqual(after);
+    // The key is what keeps it a debounced row rather than a skipped debounce.
+    expect(row!.debounceKey).toBe('inst_1/moooon-B-V/motir-core');
+  });
+
+  it('pulls a PENDING run forward instead of queueing a second one', async () => {
+    await dispatchEventToEngine(TRIGGER, push({ head: 'sha-1' }));
+    const before = Date.now();
+    const result = await dispatchEventToEngine(TRIGGER, push({ head: 'sha-2' }), {
+      immediate: true,
+    });
+    const after = Date.now();
+
+    expect(result.coalesced).toEqual([DEBOUNCED_ID]);
+    const rows = await rowsFor(DEBOUNCED_ID);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.runAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(rows[0]!.runAt.getTime()).toBeLessThanOrEqual(after);
+    expect(rows[0]!.eventId).toBe(result.eventId);
+  });
+
+  it('is never un-dued by an ordinary arrival before the claim — but still carries its event', async () => {
+    await dispatchEventToEngine(TRIGGER, push({ head: 'sha-1' }), { immediate: true });
+    const [due] = await rowsFor(DEBOUNCED_ID);
+
+    const later = await dispatchEventToEngine(TRIGGER, push({ head: 'sha-2' }));
+
+    expect(later.coalesced).toEqual([DEBOUNCED_ID]);
+    const after = await adminDb.jobQueueRun.findUniqueOrThrow({ where: { id: due!.id } });
+    expect(after.runAt.getTime()).toBe(due!.runAt.getTime());
+    expect(after.eventId).toBe(later.eventId);
+  });
+
+  it('changes nothing for a job that declares no debounce', async () => {
+    const before = Date.now();
+    const result = await dispatchEventToEngine(PLAIN_TRIGGER, push(), { immediate: true });
+    expect(result.enqueued).toEqual([PLAIN_ID]);
+    const [row] = await rowsFor(PLAIN_ID);
+    expect(row!.debounceKey).toBeNull();
+    expect(row!.runAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('the arithmetic: immediate is `now`, and a run already due stays where it is', () => {
+    const first = new Date('2026-09-13T10:00:00.000Z');
+    const now = new Date('2026-09-13T10:01:00.000Z');
+    const opt = { key: 'event.data.repoName', period: '2m', timeout: '15m' };
+
+    expect(debouncedRunAt(opt, now, null, { immediate: true }).toISOString()).toBe(
+      '2026-09-13T10:01:00.000Z',
+    );
+    expect(debouncedRunAt(opt, now, first, { immediate: true }).toISOString()).toBe(
+      '2026-09-13T10:01:00.000Z',
+    );
+    // A pending run already due at 10:00:30 is not pushed to 10:03.
+    const dueAt = new Date('2026-09-13T10:00:30.000Z');
+    expect(debouncedRunAt(opt, now, first, { pendingRunAt: dueAt }).toISOString()).toBe(
+      '2026-09-13T10:00:30.000Z',
+    );
+    // A pending run NOT yet due moves exactly as before.
+    const notYet = new Date('2026-09-13T10:02:00.000Z');
+    expect(debouncedRunAt(opt, now, first, { pendingRunAt: notYet }).toISOString()).toBe(
+      '2026-09-13T10:03:00.000Z',
+    );
+  });
+});
+
 describe('the resolver is ONE resolver, widened — and TOTAL', () => {
   it("resolves codeGraphRefresh's declared expression against a real payload", () => {
     // The AC's own comparison: the engine must produce for this expression the

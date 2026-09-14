@@ -478,7 +478,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned again for MOTIR-3757, and the SUMMARY changed with it: the description said
     // the link a work item carries is SINGULAR and MOVES, which stopped being true when the
     // column it described was dropped.
-    descriptionFingerprint: '97a9ab212c18',
+    // Re-pinned for MOTIR-5188: the description said a "cross-workspace repository" is
+    // refused, which stopped being true when the repository read moved to the ORGANISATION.
+    // The summary names no tier, so it stands.
+    descriptionFingerprint: '120f83a21d3e',
   },
   unlink_pull_request: {
     summary:
@@ -596,9 +599,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // agent run alone. Summary UNCHANGED for the reason above, which the
     // paragraph anticipated: the drift is on the advisory channel, and the
     // summary describes the verdict.
+    //
+    // Re-pinned for MOTIR-5362's new advisory FAMILY, `coverage`
+    // (`likely-unowned-criterion` — a container criterion no child owns). Summary
+    // UNCHANGED, and this is the first re-pin that was a family rather than a
+    // severity: still the advisory channel, still never a gate, so the verdict
+    // line stays true.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '5e25f8f8a9fb',
+    descriptionFingerprint: '03c985aeafef',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

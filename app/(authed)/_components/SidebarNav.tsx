@@ -27,11 +27,9 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import {
   groupSettingsNav,
-  hasVisibleSettingsArea,
   isProjectSettingsPath,
   isSettingsEntryActive,
   PROJECT_SETTINGS_NAV,
-  PROJECT_SETTINGS_ROOT,
   toSettingsNavPermissions,
   visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
@@ -593,7 +591,17 @@ export function SidebarNav({
   // the row still targets workspace settings and is ALWAYS rendered", which was
   // right for a state the product no longer has. What survives is the arm that
   // was always taken for a reader with a project.
-  const showSettingsDoor = hasVisibleSettingsArea(held, availability);
+  //
+  // ⚠️ AND THE DOOR'S DESTINATION IS THE SAME READ (MOTIR-5319). It deep-linked
+  // to `PROJECT_SETTINGS_ROOT` unconditionally — the Details room, gated on
+  // `project:administer` — while its VISIBILITY came from the view-gated filter.
+  // So a hand-composed role that could open some room but not Details (Boards on
+  // `board:configure`, Workflow on `workflow:manage`) got a door, pressed it, and
+  // landed on `Admins only`. Both halves now come from ONE `visibleSettingsNav`
+  // call: the door renders exactly when that list has a first entry, and goes to
+  // it. For an administrator that entry is still Details, so the admin's door is
+  // unchanged.
+  const settingsDoorHref = visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability)[0]?.href;
 
   // ⚠️ BOTH WORKSPACE ROWS LEFT THIS SECTION (Story MOTIR-4843 · MOTIR-4847 ·
   // `design/shell/rail-bottom-section.mock.html`, amended by MOTIR-4845).
@@ -618,12 +626,13 @@ export function SidebarNav({
   // below was written ahead of that and is now load-bearing: a section that can
   // vanish must not ship as an empty container with a stray separator.
   const bottomItems = [
-    ...(showSettingsDoor
+    ...(settingsDoorHref !== undefined
       ? [
           {
             icon: <Settings />,
             label: t('nav.settings'),
-            // Deep-links to project settings, unconditionally.
+            // Deep-links to the first project-settings room this actor can open
+            // (MOTIR-5319) — Details for an administrator.
             //
             // ⚠️ THE NO-PROJECT ARM IS GONE (MOTIR-4873), and this is the ONE
             // edit MOTIR-4843's restructure needs on this branch. It read
@@ -637,7 +646,7 @@ export function SidebarNav({
             // taken. `workspaceTierRevealed` still decides the org/workspace
             // rows below, so the disclosure rule itself is untouched — only its
             // use HERE, which existed solely to serve the projectless case.
-            href: PROJECT_SETTINGS_ROOT,
+            href: settingsDoorHref,
             // Stay un-highlighted when a more-specific row in this same section
             // is the active route, so only one row ever reads current.
             //
@@ -649,12 +658,15 @@ export function SidebarNav({
             // Sidebar before this block is ever built — so a clause that can
             // never fire is not a safe extra: it is an untested branch that
             // still reads as covered (MOTIR-4368's finding about this very
-            // predicate). Only `Git` still has a row here to yield to.
-            active:
-              isActive(pathname, '/settings') &&
-              // Git moved to the organisation tier (MOTIR-4680); the clause
-              // follows the row it exists to yield to.
-              !isActive(pathname, '/settings/organization/git'),
+            // predicate).
+            //
+            // ⚠️ AND THE THIRD, `Git`'s, WENT TOO (MOTIR-5319). It negated
+            // `/settings/organization/git` after `Git` left this section
+            // (MOTIR-4643), and that path returns the organisation area's own
+            // Sidebar before this block is built — the same double
+            // unreachability. Its test asserted it gone and passed only because
+            // the source slice it read was empty.
+            active: isActive(pathname, '/settings'),
           },
         ]
       : []),

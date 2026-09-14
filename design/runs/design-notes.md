@@ -61,11 +61,12 @@ check the RENDER. A copy-only edit must reproduce the committed height exactly, 
 
 ## The surfaces
 
-| Surface                            | Asset                                           | What it settles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **The run SECTION on a work item** | **`run-section.mock.html`** + `run-section.png` | The work item's own run: its live timeline over the CARD-SCOPED event vocabulary, the "one of N" link-out when the run covers a set, this work item's recent runs as a paged list, and the collapsed log console. Every terminal state, including the two that get improvised when undrawn — **re-planned** and **reporting-offline**. **Also carries this area's TONE TABLE** (panel 12), which every other run surface consumes. MOTIR-1795 (design). Gates MOTIR-1796.                              |
-| **The RUNS INDEX** (`/runs`)       | **`runs-index.mock.html`** + `runs-index.png`   | Every run the project has made, current and past, and **the rail row that reaches it**. The surface that makes a run FINDABLE at all — it is what replaced the `/ready` strip this area used to draw (below). MOTIR-3893 (design). Gates MOTIR-3923.                                                                                                                                                                                                                                                   |
-| **The run MODAL** (over `/runs`)   | **`run-modal.mock.html`** + `run-modal.png`     | One run, FULL SCREEN over the list rather than at a route of its own: the header, the **reused canvas** carrying every work item the run owns with its disposition in this run, and the **log pane** carrying what the agent is saying. All three set shapes, the skips with their reasons, the run's own states, and the log pane's three distinct silences. COMPOSES `design/roadmap/`'s canvas and this folder's tone table; defines neither. MOTIR-3893 (design). Gates MOTIR-3895 and MOTIR-3962. |
+| Surface                                                                         | Asset                                           | What it settles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The run SECTION on a work item**                                              | **`run-section.mock.html`** + `run-section.png` | The work item's own run: its live timeline over the CARD-SCOPED event vocabulary, the "one of N" link-out when the run covers a set, this work item's recent runs as a paged list, and the collapsed log console. Every terminal state, including the two that get improvised when undrawn — **re-planned** and **reporting-offline**. **Also carries this area's TONE TABLE** (panel 12), which every other run surface consumes. MOTIR-1795 (design). Gates MOTIR-1796.                                                                                                          |
+| **The RUNS INDEX** (`/runs`)                                                    | **`runs-index.mock.html`** + `runs-index.png`   | Every run the project has made, current and past, and **the rail row that reaches it**. The surface that makes a run FINDABLE at all — it is what replaced the `/ready` strip this area used to draw (below). MOTIR-3893 (design). Gates MOTIR-3923.                                                                                                                                                                                                                                                                                                                               |
+| **A container's OWN runs** — the door on its item page, and `/runs?scope=<KEY>` | **`run-scope.mock.html`** + `run-scope.png`     | The runs a work item was the SCOPE of, which its own Run section cannot show because a scoped run's legs are the CHILDREN. The door in all three cases (scope only · both · never), the index narrowed to one scope, the address contract that keeps `?scope=` across opening and closing a run, every face of the narrowed page (empty · a key that resolves to nothing · an archived scope · wait · failure), and the runs `?scope=` can never address. COMPOSES `run-section.mock.html` and `runs-index.mock.html`; defines nothing new. MOTIR-5402 (design). Gates MOTIR-5363. |
+| **The run MODAL** (over `/runs`)                                                | **`run-modal.mock.html`** + `run-modal.png`     | One run, FULL SCREEN over the list rather than at a route of its own: the header, the **reused canvas** carrying every work item the run owns with its disposition in this run, and the **log pane** carrying what the agent is saying. All three set shapes, the skips with their reasons, the run's own states, and the log pane's three distinct silences. COMPOSES `design/roadmap/`'s canvas and this folder's tone table; defines neither. MOTIR-3893 (design). Gates MOTIR-3895 and MOTIR-3962.                                                                             |
 
 ### ⚠️ WHAT THIS AREA DREW ONCE AND WILL NOT DRAW AGAIN — the `/ready` run STRIP
 
@@ -610,6 +611,135 @@ showing more than that would be a design specifying a privacy change.
 
 ---
 
+## A container's OWN runs — the door on its page, and `/runs?scope=<KEY>`
+
+`run-scope.mock.html` · MOTIR-5402 (design) · gates MOTIR-5363. Measured on `origin/main`
+`f5a24c941`; nothing under `design/runs/`, `app/(authed)/runs/` or the run section changed since
+the card's base `1491d2af0` (`git log 1491d2af0..origin/main -- …` returned nothing).
+
+### Why a story that was run says it never was
+
+A scoped run (`motir run <story>`) records its CHILDREN as legs; the container has no leg of its
+own. The Run section reads legs — `listRunsForWorkItemKey` → `listByWorkItem` — so on a story that
+was run it renders _No runs yet_ (panel 0). The read that answers correctly already ships:
+`dispatchRunService.listRunsForProject` with `scopeWorkItemKey` → `dispatchRunRepository.listByScope`,
+indexed `@@index([scopeWorkItemId, startedAt])`, routed as `GET /api/projects/[key]/dispatch-runs?scope=`.
+Before this asset nothing sent it: `RunsIndex.tsx` fetches with `status` and `cursor` only.
+
+### The DOOR — a scope block inside the Run section (panels 1–3)
+
+| the work item has                         | the section shows                                                                                                     |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| been a run's scope, never a leg (panel 1) | **no empty state**; the header pill is the latest scoped run's; a _Run as a scope_ block: one line, one row, the door |
+| legs AND a scoped run (panel 2)           | the leg content first, unchanged, its pill in the header; the scope block below the section's soft divider            |
+| neither (panel 3)                         | `run-section.mock.html` panel 8, byte for byte                                                                        |
+
+**The copy.** Sub-heading _Run as a scope_. Line, live: _An agent is working this work item's
+children as one run._ — finished: _An agent worked this work item's children as one run._ Door:
+_See every run of `<KEY>` →_. The row is the section's recent-runs row: pill · `<command> ·
+<agent> · <model> · <leg summary>` · duration · when. Keyed on _work item_, never on a kind noun,
+so one string serves a story, a task and a bug.
+
+**The reads each piece needs — and the one it deliberately does not show.**
+
+| shown                              | read                                                                                               | new?                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------- |
+| whether the block renders at all   | `listRunsForProject(projectKey, { take: 1, scopeWorkItemKey: <key> })` — one row or none           | no — the shipped read |
+| the row, the leg summary, the pill | the same row (`DispatchRunListItemDto`: command, agent, model, status, startedAt, legs, cardCount) | no                    |
+| _is working_ vs _worked_           | the same row's status, through `RUN_IS_LIVE` (`lib/runs/timeline.ts`)                              | no                    |
+| **a count of scoped runs**         | **not shown** — no count read exists, and a number here would be one                               | —                     |
+
+**Made only for a work item that HAS CHILDREN**, beside the leg read in `lateReads`. A leaf cannot be
+a scope: the CLI sends `scopeKey` only on its scope path, which claims a container
+(`packages/cli/src/commands/dispatch.ts`, `command: 'run_scope'`, `decision.target.kind ===
+'work_item'`), and a leaf run takes the leaf path with no scope. So the extra query never runs on the
+item page's commonest case.
+
+**Static at page load; no stream.** The section's connection rule (_opens no stream unless THIS work
+item has a live run_) is about the LEG and is unchanged. Watching a scoped run live is the modal's
+job, one click away.
+
+**In panel 2 the header pill stays the LEG's**, because the section already reads its current run
+off the leg history's first row; the scope run carries its own pill on its own row, so neither status
+stands for the other.
+
+### The NARROWED INDEX — `/runs?scope=<KEY>` (panels 4, 6–9)
+
+The same page, narrowed by the QUERY: both sections, the same row, the same paging and poll.
+
+- **Header.** Title unchanged. Above it, the page's own `.crumb` back link: _All runs_ → `/runs`.
+  Subtitle: _Runs of `<KEY>` · `<title>`_, the key linking to `/items/<KEY>`.
+- **The Scope column is dropped** under the narrowing — every row would repeat the header.
+- **Every client fetch carries `scope=`**: the live poll, the past re-read when a run settles, and
+  _Show more_. A poll that dropped it would refill the page with the whole project.
+- **⚠️ The header needs a read the page does not make today.** `listRunsForProject` resolves the scope
+  row inside its transaction and returns only runs. The subtitle's title and the archived pill need
+  that row's key, title and `archivedAt` — returned beside the runs, or read separately. Either way it
+  is a read shape MOTIR-5363 owns, and it is the only new read this design calls for.
+
+| face (narrowed)         | panel | what it shows                                                                                                                                                                                                                                                           |
+| ----------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| never run as a scope    | 6     | the index's empty grammar — bot glyph · _`<KEY>` has not been run as a scope yet._ · _Run the whole work item with `motir run <KEY>`. A run that worked one of its children on its own shows on that child's page._                                                     |
+| key resolves to nothing | 7     | search-x on the **info** ground, no command, no retry · _No work item `<KEY>` in this project._ · _It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label._ The subtitle key is plain text. |
+| archived scope          | 8     | runs listed normally; the subtitle carries an outlined **work-item** pill, _Archived_ — never a run tone. `workItemRepository.findByIdentifier` has no archive filter, so it resolves.                                                                                  |
+| loading                 | 9     | runs-index panel 5's skeleton at the narrowed column set; an in-page `<Suspense>`, never a `loading.tsx`                                                                                                                                                                |
+| failed read             | 9     | runs-index panel 5's alert + _Try again_; the retry re-reads the narrowed address                                                                                                                                                                                       |
+
+**Three faces, three glyphs — empty is not unresolvable is not failed.** The route answers 404 for an
+unresolvable key so that _has no runs_ and _is not yours_ stay different facts; the page keeps them
+different too. The copy cannot say _deleted_ or _no access_, because the route deliberately does not.
+
+**A deleted scope is unresolvable, and its runs are not lost.** `scope` is `onDelete: SetNull`, so a
+deleted work item's runs lose their scope id and cannot be narrowed to — they stay on `/runs` under
+their stored `scopeLabel` (runs-index panel 4). Panel 7's copy points there.
+
+### The ADDRESS CONTRACT (panel 5)
+
+| from                    | action                     | address                      | how                                                     |
+| ----------------------- | -------------------------- | ---------------------------- | ------------------------------------------------------- |
+| item page · Run section | the door, or the scope row | `/runs?scope=<KEY>`          | a link — a route change; the server reads both sections |
+| narrowed index          | open a run                 | `/runs?scope=<KEY>&run=<id>` | `shallowPush` — keeps a history entry                   |
+| run modal               | close · `ESC` · Back       | `/runs?scope=<KEY>`          | `shallowPush` (Back pops the entry)                     |
+| narrowed index          | _All runs_                 | `/runs`                      | a link — a different server read                        |
+| narrowed index          | the subtitle key           | `/items/<KEY>`               | a link                                                  |
+
+- **The parameter is `scope`, and it takes a work-item KEY.** The service upper-cases it, so a
+  lower-case key resolves; every link the product writes uses the upper-case key.
+- **`run` composes with `scope`; neither replaces the other.** `RunsIndex` today writes
+  `/runs?run=<id>` and `/runs` literally on open and close, which would drop the narrowing on the
+  first click — the build adds and removes `run` while keeping every other parameter.
+- **The navigation primitive follows `CLAUDE.md`'s discriminator.** Entering or leaving a scope
+  changes both server reads the page makes, so it is a real navigation. Opening or closing a run is
+  not: the modal fetches its run client-side (the `?run=` rule above, unchanged).
+- A `run` that is not a run of that scope still opens: the modal reads by id and does not check the
+  list behind it.
+
+### What `?scope=` can never address (panel 10)
+
+`scopeWorkItemId` is set in exactly one place — the scope path of `motir run`, when it claims a
+CONTAINER. So a sprint run (`scopeLabel` only, _the active sprint_), every leaf / `next` / `batch` /
+`auto` run (legs only) and a run whose scope was since deleted (scope set to null) are never
+addressable by `?scope=`. None is missing: each is on `/runs`, and every leg is on its own work item's
+Run section.
+
+### GIVES / TAKES — the build card this design gates
+
+`grep -o 'MOTIR-[0-9]*' run-scope.mock.html | sort -u` names MOTIR-1511, MOTIR-1789, MOTIR-1795,
+MOTIR-2044, MOTIR-2210, MOTIR-3412, MOTIR-5363, MOTIR-5402 and MOTIR-9999. MOTIR-1795 is the header
+comment's citation of the area's owner; MOTIR-5363 and MOTIR-5402 are this design and its build.
+The rest are **fixture keys** in drawn rows, not references to those work items.
+
+- **MOTIR-5363 — GIVES**, and its criteria are amended on the record in the same pass: the scope
+  block and its `take: 1` read in `lateReads` (children only) · the narrowed header, **including the
+  one new read** (the scope row's key, title and archived flag) · the dropped Scope column · the
+  empty, unresolvable and archived faces · `scope=` on every fetch · `?scope=` + `?run=` composition
+  on open and close · the new `runs` strings in `en` and `zh`. **TAKES nothing.**
+- **MOTIR-5398** — neither: it moves the section's links onto `?run=`; this design only adds
+  `scope` alongside.
+- **MOTIR-1796 · MOTIR-3923** — `done`; their surfaces are extended, not reopened.
+
+---
+
 ## At scale — two different growth curves, two different answers
 
 | surface       | what grows                                                     | drawn against | the decision                                                                                                                                                                                                           |
@@ -731,6 +861,23 @@ of its states are about the run and the list.
 | a finding whose TARGET is gone     | —                      | panel 12              | Drawn from the event's `data` alone, unlinked. **Never dropped, never an empty state.**          |
 | reporting-offline, with findings   | —                      | panel 12              | The only state where the strip appears carrying none: incomplete ≠ produced nothing.             |
 
+**A container's own runs** — `run-scope.mock.html`, whose states belong to neither table above: three
+are the Run SECTION's on a container, and the rest are the INDEX's under a narrowing.
+
+| State                              | `run-scope.mock.html` | Note                                                                                                    |
+| ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
+| the false empty state, as it ships | panel 0               | A story that was run reads _No runs yet_ — the defect, drawn so the fix has a before.                   |
+| run as a scope, never as a leg     | panel 1               | The scope block replaces the empty state; the header pill is the latest scoped run's. No step timeline. |
+| a leg AND a scoped run             | panel 2               | Leg content first and unchanged; the scope block below the soft divider.                                |
+| never run either way               | panel 3               | `run-section.mock.html` panel 8, unchanged.                                                             |
+| the narrowed index                 | panel 4               | Both sections, no Scope column, _All runs_ back link, the key linking to the work item.                 |
+| the address contract               | panel 5               | `scope` survives opening and closing a run.                                                             |
+| never run as a scope (narrowed)    | panel 6               | The index's empty grammar — **never an error face**.                                                    |
+| a key that resolves to nothing     | panel 7               | Info ground, search-x, no command, no retry — **distinct from empty and from failed**.                  |
+| an archived scope                  | panel 8               | Resolves; outlined work-item pill in the subtitle.                                                      |
+| loading · a failed read (narrowed) | panel 9               | runs-index panel 5 at the narrowed column set; the retry keeps `scope`.                                 |
+| runs `?scope=` can never address   | panel 10              | Sprint, leaf / `next` / `batch` / `auto`, a deleted scope — each with where it is instead.              |
+
 ---
 
 ## The log console
@@ -789,25 +936,31 @@ head sit on `--el-surface-soft`. `--el-text-faint` is used nowhere at all.
 
 ## Where each behaviour came from
 
-| Behaviour drawn here                                                            | Decided by                                                                                              |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| the CARD-SCOPED event vocabulary the timeline renders                           | `docs/decisions/dispatch-run-record.md` **Q2** (MOTIR-1790)                                             |
-| the disposition vocabulary the tone table covers                                | the same decision's `DispatchCardDisposition` and `DispatchStopReason`                                  |
-| a run covers a SET, so a work item can be "4 of 11"                             | the same decision's **Q1**                                                                              |
-| the pull request and CI are NOT the run's                                       | the same decision's **Q3**, boundary 1                                                                  |
-| the log console, its opt-in, and the 30-day retention                           | the same decision's **Q4**                                                                              |
-| reporting is best-effort, hence _reporting-offline_ as a first-class state      | MOTIR-1794 (the CLI reporter) — the emissions this visualises                                           |
-| ordering by `seq`, hence a resumable stream and the reconnecting notice         | MOTIR-1791 (`@@unique([dispatchRunId, seq])`) and MOTIR-1793 (the `?since=` cursor)                     |
-| SSE rather than a WebSocket, and the terminal `done` frame that closes it       | MOTIR-1793's stream route, which mirrors the shipped plan-generation stream                             |
-| the three SET shapes, and that a single work item is the degenerate case of one | `packages/cli/src/scopedRun.ts` (`renderClaimedScope`) and `packages/cli/src/batchPlan.ts` (`Snapshot`) |
-| every stop reason and its sentence                                              | `packages/cli/src/autoLoop.ts` + `packages/cli/src/batchPlan.ts` (`STOP_LABEL`)                         |
-| the six skip reasons and their sentences                                        | `packages/cli/src/batchPlan.ts` (`SKIP_LABEL`)                                                          |
-| the In-Progress-from-t=0 warning, in the words the terminal prints              | `packages/cli/src/scopedRun.ts`                                                                         |
-| the rail convention every top-level view follows                                | `app/(authed)/_components/SidebarNav.tsx` + `design/shell/design-notes.md`                              |
-| the nav row's registration, and that omitting it hides the page silently        | `lib/settings/projectNavAccess.ts` and its own header                                                   |
-| the table grammar the two pages compose                                         | `app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx` (`TableShell` / `Th` / `Td`)       |
-| the run history is "every run that carried a leg for this work item"            | MOTIR-1793's read                                                                                       |
-| the late stack's ONE settle                                                     | `design/work-items/design-notes.md` § _The item page at ARRIVAL_ (MOTIR-3432, amended by MOTIR-3465)    |
+| Behaviour drawn here                                                            | Decided by                                                                                                           |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| the CARD-SCOPED event vocabulary the timeline renders                           | `docs/decisions/dispatch-run-record.md` **Q2** (MOTIR-1790)                                                          |
+| the disposition vocabulary the tone table covers                                | the same decision's `DispatchCardDisposition` and `DispatchStopReason`                                               |
+| a run covers a SET, so a work item can be "4 of 11"                             | the same decision's **Q1**                                                                                           |
+| the pull request and CI are NOT the run's                                       | the same decision's **Q3**, boundary 1                                                                               |
+| the log console, its opt-in, and the 30-day retention                           | the same decision's **Q4**                                                                                           |
+| reporting is best-effort, hence _reporting-offline_ as a first-class state      | MOTIR-1794 (the CLI reporter) — the emissions this visualises                                                        |
+| ordering by `seq`, hence a resumable stream and the reconnecting notice         | MOTIR-1791 (`@@unique([dispatchRunId, seq])`) and MOTIR-1793 (the `?since=` cursor)                                  |
+| SSE rather than a WebSocket, and the terminal `done` frame that closes it       | MOTIR-1793's stream route, which mirrors the shipped plan-generation stream                                          |
+| the three SET shapes, and that a single work item is the degenerate case of one | `packages/cli/src/scopedRun.ts` (`renderClaimedScope`) and `packages/cli/src/batchPlan.ts` (`Snapshot`)              |
+| every stop reason and its sentence                                              | `packages/cli/src/autoLoop.ts` + `packages/cli/src/batchPlan.ts` (`STOP_LABEL`)                                      |
+| the six skip reasons and their sentences                                        | `packages/cli/src/batchPlan.ts` (`SKIP_LABEL`)                                                                       |
+| the In-Progress-from-t=0 warning, in the words the terminal prints              | `packages/cli/src/scopedRun.ts`                                                                                      |
+| the rail convention every top-level view follows                                | `app/(authed)/_components/SidebarNav.tsx` + `design/shell/design-notes.md`                                           |
+| the nav row's registration, and that omitting it hides the page silently        | `lib/settings/projectNavAccess.ts` and its own header                                                                |
+| the table grammar the two pages compose                                         | `app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx` (`TableShell` / `Th` / `Td`)                    |
+| the run history is "every run that carried a leg for this work item"            | MOTIR-1793's read                                                                                                    |
+| the late stack's ONE settle                                                     | `design/work-items/design-notes.md` § _The item page at ARRIVAL_ (MOTIR-3432, amended by MOTIR-3465)                 |
+| a container's own runs are its SCOPED runs, a different question from its legs  | `listRunsForProject` + `scopeWorkItemKey` → `listByScope` (MOTIR-3922); decided surface-not-drop on MOTIR-5363       |
+| only a container is ever a scope, and a sprint run has no scope work item       | `packages/cli/src/commands/dispatch.ts` (the `run_scope` path) + `lib/services/dispatchRunService.ts` (the run open) |
+| an unresolvable scope key is a 404, not an empty list                           | `app/api/projects/[key]/dispatch-runs/route.ts` + `listRunsForProject`'s own comment                                 |
+| an archived scope still resolves                                                | `workItemRepository.findByIdentifier` — no archive filter                                                            |
+| a deleted scope's runs lose the scope id and keep their label                   | `prisma/schema.prisma` — `DispatchRun.scope` `onDelete: SetNull`, beside `scopeLabel`                                |
+| a link to enter or leave a scope, `shallowPush` to open or close a run          | `CLAUDE.md` § _URL state the CLIENT reads is written with `shallowPush`_                                             |
 
 ---
 

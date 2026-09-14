@@ -386,9 +386,12 @@ export const jobQueueRepository = {
     jobId: string,
     debounceKey: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ id: string; debounceFirstSeenAt: Date | null } | null> {
-    const rows = await tx.$queryRaw<Array<{ id: string; debounceFirstSeenAt: Date | null }>>`
+  ): Promise<{ id: string; runAt: Date; debounceFirstSeenAt: Date | null } | null> {
+    const rows = await tx.$queryRaw<
+      Array<{ id: string; runAt: Date; debounceFirstSeenAt: Date | null }>
+    >`
       SELECT "id",
+             "run_at" AS "runAt",
              "debounce_first_seen_at" AS "debounceFirstSeenAt"
         FROM "job_queue"
        WHERE "job_id"       = ${jobId}

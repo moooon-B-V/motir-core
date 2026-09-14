@@ -9,6 +9,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'projects-flow-pass-123';
 const USER_EMAIL = 'e2e-projects@example.com';
@@ -58,14 +59,14 @@ async function signUp(page: Page, email: string): Promise<void> {
     ]);
     if (landed || page.url().includes('/onboarding')) {
       await page.goto('/workbench');
-      await page.waitForURL('**/workbench');
+      await page.waitForURL(isLandedWorkbenchUrl);
       return;
     }
     await page.waitForTimeout(11_000);
   }
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 async function applyTheme(page: Page, mode: 'light' | 'dark'): Promise<void> {
@@ -173,7 +174,7 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   // reflects the newly-active project.
   await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: /^Mobile App/ }).click();
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
 
   // 6) Archive — navigate to project settings, open archive modal. The area now
@@ -237,7 +238,7 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await page.goto('/items');
   await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: /^Marketing Site/ }).click();
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(
     'Marketing Site',
   );

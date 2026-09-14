@@ -15,6 +15,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { waitForEmail, extractInviteUrl } from './_helpers/email-capture';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'workspace-flow-pass-123';
 const OWNER_EMAIL = 'e2e-ws-owner@example.com';
@@ -92,7 +93,7 @@ async function signUp(page: Page, email: string): Promise<void> {
     ]);
     if (landed || page.url().includes('/onboarding')) {
       await page.goto('/workbench');
-      await page.waitForURL('**/workbench');
+      await page.waitForURL(isLandedWorkbenchUrl);
       return;
     }
     // Throttled — wait out the full 10s window (+buffer) so the bucket
@@ -101,7 +102,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   }
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 // Navigate to an authed route, tolerating the rare post-sign-up race
@@ -200,7 +201,7 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   // owner instead of naming a route of its own. The `/dashboard` wait further
   // down this file is a LEAVE-workspace redirect — a server redirect on a
   // different path, untouched by that card.
-  await inviteePage.waitForURL('**/workbench');
+  await inviteePage.waitForURL(isLandedWorkbenchUrl);
 
   // Accepting switches the active workspace to the joined one. The invitee now
   // belongs to two orgs (their own + the owner's) with ONE workspace in each,

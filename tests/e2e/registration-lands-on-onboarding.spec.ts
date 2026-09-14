@@ -19,6 +19,7 @@ import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { SHELL_PASSWORD, signUpToOnboarding, startSignedOut } from './_helpers/shell-session';
 import { AUTHED_LANDING_PATH, ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -80,6 +81,7 @@ test('a SIGN-IN still lands on the signed-in landing — the arm is registration
   await page.getByPlaceholder('Password').fill(SHELL_PASSWORD);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-  await page.waitForURL(`**${AUTHED_LANDING_PATH}`, { timeout: 30_000 });
+  // The landing RESOLVES to a tab (MOTIR-5221), so it is settled once the address names one.
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
   await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 });

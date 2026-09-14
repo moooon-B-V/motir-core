@@ -3,6 +3,9 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { projectMembersService } from '@/lib/services/projectMembersService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // Seed for Story MOTIR-2258's E2E + acceptance recording (Subtask MOTIR-2479).
 //
@@ -22,6 +25,10 @@ export interface PermissionGatedSeed {
   adminEmail: string;
   memberEmail: string;
   viewerEmail: string;
+  /** A CUSTOM role holding `project:browse` + `board:configure` (MOTIR-5319). */
+  boardsOnlyEmail: string;
+  /** A CUSTOM role holding `project:browse` + `workflow:manage` (MOTIR-5319). */
+  workflowOnlyEmail: string;
   password: string;
 }
 
@@ -76,6 +83,39 @@ export async function seedPermissionGatedUi(slug: string): Promise<PermissionGat
   await persona('viewer', 'viewer');
   await pin(owner.id);
 
+  // Two PARTIAL roles (MOTIR-5319) — hand-composed custom roles that open SOME
+  // settings room but not Details. They are what the door's destination is for:
+  // the built-in member and viewer get no door at all on the manage-only base,
+  // so only a custom role can tell "the door goes to Details" from "the door goes
+  // to the first room this actor can open".
+  //
+  // ⚠️ A custom role goes on through the SERVICES, not `persona`'s raw insert:
+  // `projectMembership.role` and `roleDefinitionId` move together, and
+  // `setRole` is the writer that keeps them aligned. `addMember` accepts only a
+  // built-in, so the actor is added as a `member` first and then re-roled — the
+  // same two steps `lesson-library-seed.ts` documents.
+  const ownerCtx = { userId: owner.id, workspaceId: workspace.id };
+  async function partialPersona(label: string, permissions: PermissionKey[]) {
+    const role = await projectRoleDefinitionService.create({
+      projectId: project.id,
+      ctx: ownerCtx,
+      name: label,
+      permissions,
+    });
+    const user = await usersService.createUser({
+      email: `pgu-${label}-${slug}@example.com`,
+      password: PERMISSION_GATED_PASSWORD,
+      name: label,
+    });
+    await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
+    const member = { key: project.identifier, actorUserId: owner.id, ctx: ownerCtx };
+    await projectMembersService.addMember({ ...member, targetUserId: user.id, role: 'member' });
+    await projectMembersService.setRole({ ...member, targetUserId: user.id, role: role.id });
+    await pin(user.id);
+  }
+  await partialPersona('boards-only', ['project:browse', 'board:configure']);
+  await partialPersona('workflow-only', ['project:browse', 'workflow:manage']);
+
   // One work item, so the detail page has something to render and the in-place
   // treatments (panel 5) have a surface to be UNCHANGED on.
   const item = await workItemsService.createWorkItem(
@@ -90,6 +130,8 @@ export async function seedPermissionGatedUi(slug: string): Promise<PermissionGat
     adminEmail: `pgu-admin-${slug}@example.com`,
     memberEmail: `pgu-member-${slug}@example.com`,
     viewerEmail: `pgu-viewer-${slug}@example.com`,
+    boardsOnlyEmail: `pgu-boards-only-${slug}@example.com`,
+    workflowOnlyEmail: `pgu-workflow-only-${slug}@example.com`,
     password: PERMISSION_GATED_PASSWORD,
   };
 }

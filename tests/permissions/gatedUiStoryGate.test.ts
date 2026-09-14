@@ -77,13 +77,12 @@ const SERVICE_OF: Record<string, string> = {
   roles: 'lib/services/projectMembersService.ts',
   'code-access': 'lib/services/projectRepoAccessService.ts',
   workflow: 'lib/services/workflowsService.ts',
-  // MOTIR-4925 · MOTIR-5170. The room's writes are `updateSettings`, which asserts
-  // `workflow:manage` through `projectAccessService` — why the literal is
-  // greppable here with no alias row. ⚠️ Since MOTIR-5278 its READ asserts
-  // `project:browse` instead: the entry's VIEW key, which this three-way check
-  // does not read (it reads `permission`, the WRITE key). The view key's
-  // agreement with the destination read is the drift test's, in
-  // `tests/settings/projectSettingsNav.test.ts`.
+  // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
+  // MOTIR-5394); MOTIR-5278's browse view is reverted.
+  // MOTIR-5278 had said its READ asserted `project:browse` instead.
+  // MOTIR-4925 · MOTIR-5170. The room's writes are `updateSettings`, and its
+  // READ asserts the same key — both through `projectAccessService`, which is
+  // why the literal `'workflow:manage'` is greppable here with no alias row.
   approvals: 'lib/services/approvalGateSettingsService.ts',
   board: 'lib/services/boardsService.ts',
   estimation: 'lib/services/estimationService.ts',
@@ -156,7 +155,15 @@ describe('no second gating list — every gated surface resolves through its reg
   // it belongs, in the registry's own suite.
   it('the settings rail reads the registry', () => {
     expect(SIDEBAR).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability)');
-    expect(SIDEBAR).toContain('hasVisibleSettingsArea(held, availability)');
+    // ⚠️ AMENDED (MOTIR-5319): the door's VISIBILITY and its DESTINATION are now
+    // ONE `visibleSettingsNav` read — it renders when that list has a first entry
+    // and links to it — so the separate `hasVisibleSettingsArea(held, availability)`
+    // call this pinned is gone from the sidebar. The predicate itself is still
+    // asserted equal to "the filter is non-empty" by the access-matrix suite, so
+    // the claim this line made (the door reads the registry) is unchanged.
+    expect(SIDEBAR).toContain(
+      'const settingsDoorHref = visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability)[0]?.href',
+    );
   });
 
   it('the palette settings block reads the SAME registry', () => {

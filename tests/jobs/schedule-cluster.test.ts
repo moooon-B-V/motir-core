@@ -168,7 +168,9 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // 23 since `system.code-graph-index-catch-up` (MOTIR-5290), at `0,30 * * * *` —
     // the third job on both clustered minutes, costing NO NEW WAKE. Derived by the
     // grep above.
-    expect(jobSchedules().length).toBe(23);
+    // 24 since `system.pull-request-reconcile` (MOTIR-5390), at `0,30 * * * *` — the
+    // fourth job on both clustered minutes, costing NO NEW WAKE. Derived by the grep above.
+    expect(jobSchedules().length).toBe(24);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

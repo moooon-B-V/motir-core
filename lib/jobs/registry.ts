@@ -54,6 +54,7 @@ import { jobRunReap } from './definitions/jobRunReap';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
+import { pullRequestReconcile } from './definitions/pullRequestReconcile';
 import { accountErasureSweep } from './definitions/accountErasureSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
@@ -124,4 +125,5 @@ export const jobDefinitions = [
   dataExportExpirySweep,
   dispatchRunSweep,
   accountErasureSweep,
+  pullRequestReconcile,
 ];

@@ -3348,10 +3348,14 @@ follow from it, with no layout change:
   href: '/settings/project/approvals',
   icon: ShieldCheck,
   labelKey: 'nav.approvals',
-  viewPermission: 'project:browse',    // SEE the room — §6, MOTIR-5190
-  permission: 'workflow:manage',       // CHANGE what is in it
+  permission: 'workflow:manage',       // SEE it, OPEN it, CHANGE it — §6, MANAGE-ONLY
 }
 ```
+
+**AMENDED 2026-09-13 (MOTIR-5393):** the snippet carried a second line,
+`viewPermission: 'project:browse'` (_SEE the room — §6, MOTIR-5190_). It is removed,
+not struck, because code cannot carry a strike: the room is MANAGE-ONLY and
+`approvals` declares one key, as every other room does. See §6.
 
 **Why `group: 'work'`, after Workflow.** A status graph and an approval gate are
 the two things in Motir that decide when work may move; they are neighbours.
@@ -3361,13 +3365,16 @@ has no warrant to add a permission to the catalog. A dedicated `gate:manage` is 
 reasonable later split — the same shape as `ai:configure` / `lesson:view` — and
 is explicitly NOT decided here.
 
-> **⚠️ `viewPermission` DOES NOT EXIST ON `SettingsNavEntry` YET — it is
+> ~~**⚠️ `viewPermission` DOES NOT EXIST ON `SettingsNavEntry` YET — it is
 > [MOTIR-5193](motir:cmtx9wctp013uhvoil4s80ykf)'s deliverable, and this snippet is
 > the TARGET rather than a description.** The entry as
 > [MOTIR-5170](motir:cmtx6c1m800awhvoidw3die74) shipped it carries
 > `permission: 'workflow:manage'` alone, which is correct for a one-key registry
 > and is what makes panel 4 unreachable today. **§6 below is the decision that
-> second line records**, and it is the whole of what this asset owes that card.
+> second line records**, and it is the whole of what this asset owes that card.~~
+>
+> **SUPERSEDED 2026-09-13 (MOTIR-5393):** there is no second line to record. The room is
+> MANAGE-ONLY (§6), and MOTIR-5193 is owed nothing by this asset.
 
 ### 2. Rejected candidates, and why each fails
 
@@ -3390,14 +3397,14 @@ of a concept the plan already has a container for.
 
 ### 3. The surface — panels and states
 
-| panel | what it draws                                                                                                 |
-| ----- | ------------------------------------------------------------------------------------------------------------- |
-| **0** | **the DOOR** — the project-settings rail with `Work ▸ Approvals` ACTIVE. The access path is drawn, not named. |
-| **1** | the acceptance-video gate switch, **ON**                                                                      |
-| **2** | **OFF**                                                                                                       |
-| **3** | **no paid AI plan** — disabled, the entitlement explained, Upgrade                                            |
-| **4** | **read-only** — a member who holds `project:browse` and not `workflow:manage`. **Reachable: see §6**          |
-| **5** | the readers/writers argument and the rejected candidates, drawn beside the thing they justify                 |
+| panel | what it draws                                                                                                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0** | **the DOOR** — the project-settings rail with `Work ▸ Approvals` ACTIVE. The access path is drawn, not named.                                                                                 |
+| **1** | the acceptance-video gate switch, **ON**                                                                                                                                                      |
+| **2** | **OFF**                                                                                                                                                                                       |
+| **3** | **no paid AI plan** — disabled, the entitlement explained, Upgrade                                                                                                                            |
+| **4** | ~~**read-only** — a member who holds `project:browse` and not `workflow:manage`~~ **WITHDRAWN 2026-09-13 (MOTIR-5393)** — the room is manage-only (§6); the number is kept so 5–8 keep theirs |
+| **5** | the readers/writers argument and the rejected candidates, drawn beside the thing they justify                                                                                                 |
 
 ### Copy — the gate is CONDITIONAL, and that is the whole of it
 
@@ -3437,12 +3444,12 @@ governed, on a run it cannot assume.
 **The state line carries a NAME and a CONSEQUENCE**, because "On" alone does not
 tell a reader what their project just started doing:
 
-| state     | name            | consequence line                                                                      |
-| --------- | --------------- | ------------------------------------------------------------------------------------- |
-| on        | **On**          | Any story with an acceptance video waits for approval — whoever published it.         |
-| off       | **Off**         | No acceptance video is accepted for this project, and no story is held.               |
-| no plan   | **Unavailable** | Your organisation has no paid Motir AI plan, so no acceptance video can be published. |
-| read-only | **On**          | _(as above)_, plus the footer line below                                              |
+| state         | name            | consequence line                                                                                             |
+| ------------- | --------------- | ------------------------------------------------------------------------------------------------------------ |
+| on            | **On**          | Any story with an acceptance video waits for approval — whoever published it.                                |
+| off           | **Off**         | No acceptance video is accepted for this project, and no story is held.                                      |
+| no plan       | **Unavailable** | Your organisation has no paid Motir AI plan, so no acceptance video can be published.                        |
+| ~~read-only~~ | ~~**On**~~      | ~~_(as above)_, plus the footer line below~~ **WITHDRAWN 2026-09-13 (MOTIR-5393)** — no read-only state (§6) |
 
 **OFF is enforced at the PUBLISH doors, not only in the panel** — which is what
 makes the OFF line true for a team outside Motir's path. `publishAuth` and
@@ -3465,9 +3472,10 @@ anything."
 > decision for whoever schedules the two; the design states the end state.
 
 Footers: the no-plan state carries _"The plan is bought once, for the
-organisation — not per project."_ + **Upgrade**; the read-only state carries
+organisation — not per project."_ + **Upgrade**. ~~The read-only state carries
 _"Only a project admin can change this. You are seeing what this project has
-chosen."_
+chosen."_ (`readOnlyNote`)~~ **STRUCK 2026-09-13 (MOTIR-5393):** there is no
+read-only state, so there is no `readOnlyNote` string (§6).
 
 **Primitives and token roles.** `Card` (header / body / footer slots — the same
 composition `AcceptanceVideoCard.tsx` already uses) · `Switch` · `Button`
@@ -3490,10 +3498,12 @@ here was drawn (`AcceptanceVideoCard.tsx` in all four states, with the real
    prints **"On"** beside a switch that is **off**. The two disagree on the one
    screen a reader would use to check. In this design the entitlement decides
    BOTH, and the state is named _Unavailable_.
-2. **The read-only state explains nothing.** `canManage: false` renders
+2. ~~**The read-only state explains nothing.** `canManage: false` renders
    byte-identical to the admin state except that the switch will not move. A
    disabled control with no reason reads as a bug. The footer line is the whole
-   fix.
+   fix.~~ **WITHDRAWN 2026-09-13 (MOTIR-5393):** the room has no `canManage:
+false` render to fix (§6). The org-tier card that has one is deleted by
+   MOTIR-5172.
 
 **The rest of what MOTIR-4925 and MOTIR-4950 owe the code:**
 
@@ -3501,8 +3511,9 @@ here was drawn (`AcceptanceVideoCard.tsx` in all four states, with the real
 - the route `app/(authed)/settings/project/approvals/page.tsx`, gated on
   `workflow:manage`, so the route↔registry totality test stays green;
 - the copy keys — `approvals.acceptanceVideo.{title,desc,on,off,unavailable,
-onWhat,offWhat,unavailableWhat,orgPlanNote,readOnlyNote,upgrade}` — replacing
-  the `acceptance.card.*` set, whose `desc` is the recording claim;
+onWhat,offWhat,unavailableWhat,orgPlanNote,upgrade}` — replacing
+  the `acceptance.card.*` set, whose `desc` is the recording claim. ~~`readOnlyNote`~~
+  is struck (MOTIR-5393, §6);
 - **and `acceptance.states.toggleOff.desc` on the PANEL, which carries the same
   wrong claim one surface over:** _"Turn it on to record and attach a video
   receipt when this story's E2E passes."_ It becomes _"Turn it on and any
@@ -3526,9 +3537,70 @@ MOTIR-4882 ships the merge itself. The row is now drawn in panels 6–8, see §7
 of scope: the entitlement's tier (it stays with the organisation), what a run
 records, the video's pacing, and the storage caps.
 
-### 6. WHO MAY SEE THE ROOM — the room is VISIBLE to a member, WRITABLE by an admin (MOTIR-5190)
+### 6. AMENDED 2026-09-13 — MANAGE-ONLY: the room is seen, opened and changed by a manager, and by nobody else (MOTIR-5393)
 
-**The asset shipped with its two halves contradicting each other**, and
+**DECIDED (Yue, 2026-09-13, at [MOTIR-5176](motir:cmtx6ghv900dchvoi9jg3gbam)'s design
+review):**
+
+> _"read only option doesn't stand, frontend is guarded by the permission too, if
+> the user can't manage the project, the user won't be able to land on the page."_
+
+This supersedes [MOTIR-5190](motir:cmtx85ynp00y6i0tx2lmi7cez)'s decision of
+2026-09-11, whose body is kept below, struck, so a pointer to §6 lands on the
+reversal rather than on nothing.
+
+#### The rule in force
+
+1. **`approvals` carries ONE key, `workflow:manage`,** for the rail row, the
+   destination and the read. It declares no `viewPermission`. View equals write,
+   as it does for every other room in the registry.
+2. **A member who cannot manage the project is refused the room.** The room gives
+   them no settings door, and they are not shown the value: no rail row, no
+   read-only render, no footer naming who may change it.
+3. **A deep link into the room renders only for a viewer holding
+   `workflow:manage`.** That covers `#acceptance-video` and `#merge-mode` alike.
+   Anyone else meets the settings guard's refusal, never the room.
+
+#### What moves with it
+
+- **Panel 4 is withdrawn** from `approvals.mock.html`. Its number is kept as a
+  placeholder, so panels 5–8 keep the numbers MOTIR-5181 and MOTIR-5183 cite.
+- **Struck where they stand:** §1's `viewPermission` line and the note under it,
+  §3's panel-4 row, the copy table's read-only row, the read-only footer
+  (`readOnlyNote`) and its key, and §4's read-only defect.
+- **§7's two "out of step" flags** now say the contradiction is resolved here.
+
+#### Why the struck argument no longer holds
+
+It rested on a member's _need to know_ what the project asks of them, and on a
+read-only room being where they learn it. The ruling does not answer that
+argument; it removes its premise. The room's front end is guarded by the same
+permission that changes the room, so a read-only render draws a state nothing
+reaches. A member learns what the gate asks where the gate meets their work: on
+their own story. That is the struck body's second rejected shape. It is now in
+force as a consequence of the ruling, not because a new argument beat the old one.
+
+**Amendment 2026-08-08 needs no reconciliation any more.** `approvals` is an
+ordinary room under that amendment's rule 1: the entry point is hidden from an
+actor with no path to the destination. The settings AREA door therefore stops
+reappearing for every member on this room's account.
+
+#### Who owns the code
+
+[MOTIR-5394](motir:cmu09oxzx00a6hwtxme79ckyj) makes the room manage-only again. It
+reverts what [MOTIR-5278](motir:cmtys0kdg00elhvoi3nesxn3w) merged as PR #2843:
+`approvals` drops its view key, its read returns to `workflow:manage`, and the
+suites MOTIR-5278 inverted are restored on the record. **Until it merges, the
+shipped room is visible to every project browser, and this section outranks it.**
+[MOTIR-5171](motir:cmtx6c1os00ayhvoiwsda64c0) builds panel 3 only. Whether the
+registry keeps MOTIR-5193's two-key mechanism with no room declaring it is
+MOTIR-5394's decision, not this asset's.
+
+#### The retired body — MOTIR-5190, 2026-09-11, struck
+
+~~WHO MAY SEE THE ROOM — the room is VISIBLE to a member, WRITABLE by an admin (MOTIR-5190)~~
+
+~~**The asset shipped with its two halves contradicting each other**, and
 [MOTIR-5190](motir:cmtx85ynp00y6i0tx2lmi7cez) is the card that found it. §1's
 registry entry gated the row on `workflow:manage`; panel 4 drew a read-only state
 for _"a member who may browse the project but does not hold `workflow:manage`"_
@@ -3539,33 +3611,33 @@ both ship, because a registry entry's `permission` does two jobs:
 entry** to refuse the DESTINATION — deliberately, so that _"the row that hides the
 page and the page that refuses the actor cannot gate on different keys."_ So with
 one key the reader panel 4 is drawn for never reaches the room, by the rail or by
-a deep link.
+a deep link.~~
 
-#### The decision
+#### ~~The decision~~
 
-**DECIDED (Yue, 2026-09-11): the room is shown READ-ONLY to a member who cannot
+~~**DECIDED (Yue, 2026-09-11): the room is shown READ-ONLY to a member who cannot
 manage it. Panel 4 ships as drawn.** The principle, in Yue's own words, was
-stated about the gate's pending state and applies here unchanged:
+stated about the gate's pending state and applies here unchanged:~~
 
-> _"the to be approved status should be showing read only for the user who can't
-> approve, and just showing the first approver name there."_
+> ~~_"the to be approved status should be showing read only for the user who can't
+> approve, and just showing the first approver name there."_~~
 
-Don't hide; show the state, and name who acts. Panel 4's _"what a project asks of
+~~Don't hide; show the state, and name who acts. Panel 4's _"what a project asks of
 you is something you are entitled to know"_ is the same sentence about a
 different surface, so **the asset's two halves are reconciled in panel 4's
-favour** and §1's entry gains a second key.
+favour** and §1's entry gains a second key.~~
 
-#### Why the other two shapes were not taken
+#### ~~Why the other two shapes were not taken~~
 
-- **Withdraw panel 4** (the room stays admin-only; the read-only state stops
+- ~~**Withdraw panel 4** (the room stays admin-only; the read-only state stops
   existing). Cheap, and it is the shape that ratifies the defect rather than
   fixing it: the member keeps meeting a gate that holds their story and keeps
   having no way to find out what their project asks of them. It also throws away
   the argument panel 4 was making without anyone having answered it, which is
   exactly the move a design pass should not make — **an asset re-worded until it
   describes the shipped behaviour accurately is still an asset that specifies
-  the shipped behaviour.**
-- **The acceptance PANEL carries the answer instead** (the room stays admin-only;
+  the shipped behaviour.**~~
+- ~~**The acceptance PANEL carries the answer instead** (the room stays admin-only;
   the member learns the rule on their own story). The strongest of the three
   rejects, and it fails on COVERAGE rather than on principle: the panel exists
   only once a story already HAS a video, so it can explain a gate the member has
@@ -3575,11 +3647,11 @@ favour** and §1's entry gains a second key.
   does not contain the second. It is also already owned elsewhere: the gate's own
   read-only state is shipped, and the one thing missing from it is the approver's
   NAME, filed as [MOTIR-5191](motir:cmtx98fys011lhvoioaqy2kuw). Nothing about
-  this decision displaces that card; the two are the room and the story.
+  this decision displaces that card; the two are the room and the story.~~
 
-#### The VISIBILITY key: `project:browse`
+#### ~~The VISIBILITY key: `project:browse`~~
 
-**`viewPermission: 'project:browse'`, and `permission: 'workflow:manage'`
+~~**`viewPermission: 'project:browse'`, and `permission: 'workflow:manage'`
 unchanged.** `project:browse` is the shipped catalog key
 (`lib/permissions/catalog.ts`) for _may you see this project at all_, and it is
 the honest one here for a reason that is structural rather than aesthetic: it is
@@ -3587,57 +3659,57 @@ already the floor for reaching the settings shell. `layout.tsx` answers a
 NON-browser with the project-level no-access state before any settings page
 runs, so every actor who can arrive at this room's URL holds `project:browse`
 by construction. **No new permission is invented** — MOTIR-5193's scope boundary
-forbids growing the catalog, and nothing here needs it.
+forbids growing the catalog, and nothing here needs it.~~
 
-#### What happens to the other rooms' entries: NOTHING, and that is a decision
+#### ~~What happens to the other rooms' entries: NOTHING, and that is a decision~~
 
-**Every other registry entry keeps exactly one key, and `approvals` is the only
+~~**Every other registry entry keeps exactly one key, and `approvals` is the only
 entry that splits.** A view key that is absent means view = write, so the other
 sixteen rooms behave identically and the migration is the empty diff
 (MOTIR-5193 criterion 1 asserts precisely this). They are right to: the rest of
 the registry configures things a non-admin cannot act on and has no stake in —
 which is what the **Amendment 2026-08-08** above settled, and this decision does
-not re-open it. See the reconciliation below.
+not re-open it. See the reconciliation below.~~
 
-**⚠️ BUT THE SPLIT HAS ONE CONSEQUENCE THAT REACHES EVERY PROJECT, AND IT IS NOT
+~~**⚠️ BUT THE SPLIT HAS ONE CONSEQUENCE THAT REACHES EVERY PROJECT, AND IT IS NOT
 IN MOTIR-5193's CRITERIA — the settings AREA DOOR comes back for every member.**
 `hasVisibleSettingsArea` is a `some()` over the same per-entry predicate, and the
 `code-access` entry states the arithmetic outright: _"every actor who reaches
 this shell holds `project:browse`, so one browse-gated entry means the settings
 AREA door never disappears for anyone."_ That entry was de-browse-gated partly to
 make the door disappear. **A browse-visible `approvals` brings it back**, for
-every member of every project, permanently.
+every member of every project, permanently.~~
 
-That is accepted, and it is coherent rather than a regression — but it must be
-built knowingly:
+~~That is accepted, and it is coherent rather than a regression — but it must be
+built knowingly:~~
 
-- A member's settings rail is **not empty and not full**: it holds exactly one
+- ~~A member's settings rail is **not empty and not full**: it holds exactly one
   row, Approvals, in the `work` group. `groupSettingsNav` drops the three empty
-  groups on its own, so the rail is one section with one row.
-- The area door then opens onto a real room instead of a corridor, which is the
+  groups on its own, so the rail is one section with one row.~~
+- ~~The area door then opens onto a real room instead of a corridor, which is the
   condition Amendment 2026-08-08 row 2 actually states — it says HIDE the door
   _when every entry inside filters away_, not _when the actor is not an admin_.
-  With one visible entry the antecedent is false and the door is correct.
-- **`resolveSettingsRefusal`'s back-link still resolves.** It takes
+  With one visible entry the antecedent is false and the door is correct.~~
+- ~~**`resolveSettingsRefusal`'s back-link still resolves.** It takes
   `visibleSettingsNav(held)[0]`, so a member refused anywhere else in the area
   lands on Approvals rather than falling out to `/dashboard`. That is a better
   destination than the one they get today, and MOTIR-5193 criterion 4 is what
-  holds it.
+  holds it.~~
 
-#### Reconciling this with _Amendment 2026-08-08_ — it is NOT a carve-out
+#### ~~Reconciling this with _Amendment 2026-08-08_ — it is NOT a carve-out~~
 
-The amendment above is in this same file and its rule 1 says **HIDE an entry
+~~The amendment above is in this same file and its rule 1 says **HIDE an entry
 point whose destination the actor cannot use at all**; six registry entries cite
 it as the reason they stopped being browse-gated. This decision looks like a
 reversal and is not one, because the amendment's dividing line has **two
 conjuncts**, stated once so it could be applied to a surface its table does not
-list:
+list:~~
 
-> _"hide when the actor has no path to the destination **and no need to know it
+> ~~_"hide when the actor has no path to the destination **and no need to know it
 > exists**; disable when the actor is already standing on the surface and the
-> control is the only thing that would tell them the action exists."_
+> control is the only thing that would tell them the action exists."_~~
 
-**Every room swept in 2026-08-08 fails BOTH conjuncts.** A member has no path to
+~~**Every room swept in 2026-08-08 fails BOTH conjuncts.** A member has no path to
 the repository connections and no need to know they exist; the same for roles,
 fields, components, automation. **Approvals is the first room to fail the first
 and PASS the second** — a member has no path to the switch, and a very direct
@@ -3646,15 +3718,15 @@ finished work waits for someone. The amendment did not anticipate this room; it
 wrote the clause that admits it. So nothing above is superseded, no row of its
 treatment table changes, and **the strike-through / amendment convention it
 established is not repeated here** — this is the amendment being applied, not
-amended.
+amended.~~
 
-What DOES move is the amendment's own note that it _"does not assign permission
+~~What DOES move is the amendment's own note that it _"does not assign permission
 KEYS to surfaces"_: each implementing card decides that against its own server
-guard, and §1's two keys above are this room's answer.
+guard, and §1's two keys above are this room's answer.~~
 
-#### What MOTIR-5193 owes, restated as this asset's demand
+#### ~~What MOTIR-5193 owes, restated as this asset's demand~~
 
-The one-key model is a **defence**, not an oversight — `_guard.tsx` looks the key
+~~The one-key model is a **defence**, not an oversight — `_guard.tsx` looks the key
 up rather than re-declaring it _"precisely so they cannot drift… That divergence
 is invisible in review — everything renders, everything refuses, and the only
 symptom is that the wrong people are let in or kept out."_ Splitting the keys
@@ -3664,28 +3736,28 @@ keys, when an entry's declared `viewPermission` is not the key its destination
 checks — proven by a fixture that drifts on purpose rather than asserted to
 exist. That is MOTIR-5193 criterion 5, and this asset is the reason it is
 non-negotiable: a comment asking the next author for care is exactly what stops
-working once there are two keys to keep aligned instead of one.
+working once there are two keys to keep aligned instead of one.~~
 
-#### The build order, and the state of the room today
+#### ~~The build order, and the state of the room today~~
 
-`approvals` ships **admin-only right now** — MOTIR-5170 shipped §1's entry with
+~~`approvals` ships **admin-only right now** — MOTIR-5170 shipped §1's entry with
 the single key, matching its own criterion 4, and that was correct on the day.
-The sequence from here is:
+The sequence from here is:~~
 
-1. **[MOTIR-5193](motir:cmtx9wctp013uhvoil4s80ykf)** — the registry learns
+1. ~~**[MOTIR-5193](motir:cmtx9wctp013uhvoil4s80ykf)** — the registry learns
    `viewPermission`, both consumers read the right key, the drift test fires, and
    `approvals` declares `project:browse`. Blocked by this card precisely so the
-   vocabulary is chosen before the mechanism is built.
-2. **[MOTIR-5171](motir:cmtx6c1os00ayhvoiwsda64c0)** — renders the room's
+   vocabulary is chosen before the mechanism is built.~~
+2. ~~**[MOTIR-5171](motir:cmtx6c1os00ayhvoiwsda64c0)** — renders the room's
    ENTITLEMENT and PERMISSION states, panel 4 among them. Its read-only state is
    **confirmed in scope**, not deleted: the shape that would have deleted it is
-   the one not taken.
+   the one not taken.~~
 
-Until step 1 lands, panel 4 draws a state the product cannot reach. **That is a
+~~Until step 1 lands, panel 4 draws a state the product cannot reach. **That is a
 design that outranks the code, in the ordinary direction** — the same standing
 this file's _Source of truth_ carve-out gives the 2026-08-08 amendment: an
 amendment carrying a date, a reason and the card that owns it governs the code
-until that card ships.
+until that card ships.~~
 
 ### 7. AMENDED 2026-09-13 — the MERGE-MODE row (MOTIR-5176, story MOTIR-4880; panels 6–8)
 
@@ -3706,9 +3778,11 @@ provenance-default amendment; §7a (the audit says the SETTING authorised an
 > design review).** The room's front end is guarded by the permission: a member
 > who cannot manage the project never lands on the page, so a read-only render
 > draws a state nothing can reach. The first cut drew one (a panel 9 following
-> §6 above), and it is withdrawn. **This contradicts §6 (MOTIR-5190) and panel
+> §6 above), and it is withdrawn. ~~**This contradicts §6 (MOTIR-5190) and panel
 > 4, and open PR #2843 (MOTIR-5278), which opens the room to `project:browse`.**
-> Those are named here and not reworked by this card.
+> Those are named here and not reworked by this card.~~ **RESOLVED 2026-09-13 by
+> MOTIR-5393:** §6 is amended to MANAGE-ONLY and panel 4 is withdrawn. PR #2843
+> merged, and MOTIR-5394 reverts it.
 
 > **⚠️ TWO VALUES — `review_on_fail` is RETIRED (Yue, 2026-09-13).** Only a GREEN
 > pull request is ever a merge candidate: a red one never reaches In Review and
@@ -3762,8 +3836,9 @@ offered for merging; it stays with the run that is fixing it.
   `getPrMergeMode` and writing through `setPrMergeMode`, both `workflow:manage`.
 - **The room is manage-only.** A non-manager is refused the route, and nothing
   here draws what they would see instead.
-- **Out of step with this decision:** §6 / panel 4 (MOTIR-5190) and open PR #2843
-  (MOTIR-5278) both open the room to `project:browse`.
+- ~~**Out of step with this decision:** §6 / panel 4 (MOTIR-5190) and open PR #2843
+  (MOTIR-5278) both open the room to `project:browse`.~~ **RESOLVED 2026-09-13:**
+  MOTIR-5393 amends §6 and withdraws panel 4; MOTIR-5394 reverts the merged #2843.
 - **MOTIR-4882 removes the not-yet notice** and builds the approval frame's
   settings door (`design/work-items/design-notes.md`, the UNIVERSAL APPROVAL
   FRAME's 2026-09-13 amendment).

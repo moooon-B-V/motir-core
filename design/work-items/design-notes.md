@@ -10,6 +10,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | Tree view (issue list, nested)                        | `tree.pen` + `tree.png`                                                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Tree view at scale (sort · lazy · virtual)**        | **`tree-scale.mock.html`** (HTML mockup)                                    | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Folders in the tree + the quick-view Folder field** | **`folders.mock.html`** + `folders.png`                                     | Folder ROWS in the `/items` tree (pinned above work items, no work-item cells), the folder MENU (New folder inside · Rename · Move to… · Move up/down · Delete…), the toolbar `New folder`, the folder PICKER (move a folder / file a work item), the delete confirmation that moves contents up, and the quick view rail's Folder field. COMPOSES the shipped TreeTable and `QuickViewRailEdit`. Design card MOTIR-5311, story MOTIR-5308. See § Folders below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Placement — page Folder field, breadcrumb, filter** | **`placement.mock.html`** + `placement.png`                                 | A filed work item outside the tree: the Folder `FieldCard` below Parent on its page (filed · through its root · not filed; open · saving · refused · read-only), the breadcrumb's folder segment, and the builder's Folder condition row on `/items` and in automation rules. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Flat sortable List view + view switcher**           | **`list.mock.html`** (HTML mockup)                                          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Filter bar (kind · status · assignee · text)**      | **`filter.mock.html`** (HTML mockup)                                        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Relationships panel + ready/blocked badge**         | **`relationships.mock.html`** (HTML mockup)                                 | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -6721,3 +6722,205 @@ MCP tools and plan proposals are MOTIR-5310's. Drag-and-drop is planned nowhere.
 | **MOTIR-5316** — the Folder field | **GIVES**         | the rail row and its place below Parent, the path value, the picker in file mode, the parent note, the pending / confirmed / refused states, the tree's landed row                                            |
 | **MOTIR-5313** / **MOTIR-5314**   | **TAKES nothing** | the asset is drawn to their rules and adds none                                                                                                                                                               |
 | **MOTIR-5309** — other surfaces   | **GIVES**         | the picker component to reuse on the full page                                                                                                                                                                |
+
+## ⭐ AMENDED 2026-09-13 — the pull-request frame's PORT is the Development block (MOTIR-5327)
+
+Card [MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2) · Story [MOTIR-4906](motir:cmtt4ogi0000dhutx1ekfm43s).
+The full spec is `design/github/design-notes.md` **§20**; the board is `design/github/github.mock.html`
+Panels 12a–12o. This section records what changes in **this** area.
+
+### What this supersedes
+
+The per-run draft of this card (motir-core #2847, evidence `cmtzuqv0j00pzhvtxvj1axmwf`) drew How to
+test as a **separate `How to test` section card after Development**, with its own mock in this area,
+mounted a second time as the port of **each** pull request's frame. That is **superseded** (Yue,
+2026-09-13: _"in the work item page the PRs and how to test should be one block … like the design
+result"_, and _"'approve to merge the PRs' is the gate … they are the same gate, not 2 separated
+things"_):
+
+- How to test joins the pull-request rows **in the Development card**; there is no section of its own.
+- There is **one** gate, _approve to merge the pull requests_, over **all** the run target's pull
+  requests — never a frame per pull request.
+- The block becomes the frame exactly as Design result does.
+
+**The separate `how-to-test` mock is NOT added to this area.** Against the spec it no longer serves as
+a surface: the spec draws no How to test section, and the combined block is owned by the Development
+section's asset in `design/github/` (the spec's _"amends … the Development section's asset in
+`design/github/`"_). A second mock of the same block here would be a copy to keep in step with no
+surface of its own, which is the drift §19 exists to stop. Because this card's branch was rebuilt on
+`origin/main`, the draft's files never landed, so nothing is deleted from `main`.
+
+### The placement table gains a row
+
+The frame's homes (§ _The UNIVERSAL APPROVAL FRAME_ → _Placement_) now include a second item-page
+home. Recorded here rather than edited into that table, so the table stays as MOTIR-4789 drew it:
+
+| route              | where the frame sits                                                                                                                                                                           | door                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **`/items/[key]`** | for an awaiting `pull_request_approval`, inside the **Development** `ContentSectionCard`: band 2 is the rows plus the run's How to test, unchanged from the no-gate card (`design/github` 12c) | you are already on the card |
+
+**No gate ⇒ no frame**, as for Design result: until [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)
+registers the kind, the card renders the same block without bands 1 and 3.
+
+### `approval-control.mock.html` — Panel `U`, port band only
+
+Panel `U`'s _Pull request · code_ frame no longer carries the placeholder
+(a hatched box reading _WHAT CHANGED, and HOW TO TEST IT_ and citing MOTIR-4906 as the owner). **Its port now holds the
+Development block**, composed from `design/github/github.mock.html` Panel 12b: the two derived
+pull-request rows, the caption, and the run's How to test (the rich-text body with a copyable command,
+and a sub-block per repository). The block's CSS is scoped to the port (`.dvb-scope`), its pills are
+`.dvb-pill*` so they cannot collide with this board's gate `.pill`, and its nine sprites are extracted
+from `lucide-react@1.16.0` (`node scripts/audit-mock-sprites.mjs design/work-items/approval-control.mock.html --strict`: 0 drifted).
+
+**The edit stops at the port band.** Band 1 (_Pull request · code_ with one pull request's branch) and
+band 3 (_Approve_) are unchanged here. Their words for the one approve-and-merge gate — a kind label
+over all the run's pull requests, and _Approve and merge_ — are MOTIR-4909's, drawn in
+`design/github` 12c; re-wording them in this board is left to that story so this asset is not edited
+in two places at once.
+
+### No overlay
+
+No overlay and no full-screen view is drawn in either asset. The port's _Expand_ control is the frame's
+own and is drawn at rest; what it opens is [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u) /
+[MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar)'s, for every gate.
+
+### GIVES / TAKES
+
+| key                                                                                           | GIVES / TAKES                                                                                      |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)                                                 | **GIVES** the port (this block) for the ONE gate. **TAKES** band 1's words and _Approve and merge_ |
+| [MOTIR-5214](motir:cmtxm4v3600edhztx2s78ff0u) / [MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar) | **nothing either way**                                                                             |
+| [MOTIR-4881](motir:cmtrwx33s0054hxphinsoyt0f)                                                 | **nothing either way** — the port draws no review link                                             |
+| [MOTIR-5351](motir:cmtzsio9b01cjhvoirkfuxmxl)                                                 | **GIVES** the narrow row (`design/github` 12n); nothing in this area                               |
+| [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw)                                                 | **GIVES** the block in both homes; the spec is `design/github` §20                                 |
+
+## Placement — a filed work item's Folder field on its page, its breadcrumb, and the Folder filter row (Story MOTIR-5309 · MOTIR-5374 — `placement.mock.html`)
+
+Once work can be filed (§ Folders), every other place that shows where a work item sits has to say
+so. This asset draws the three surfaces the folders story left to MOTIR-5309 — **the work item
+page's rail**, **its breadcrumb**, and **the advanced filter builder** — and COMPOSES each as it
+ships: the rail is `CoreFieldsPanel.tsx`'s `FieldCard` (as `provenance.mock.html` mirrors it), the
+eyebrow is `app/(authed)/items/[key]/page.tsx` + `ParentBreadcrumb.tsx`, and the builder is
+`FilterConditionBuilder.tsx` (as `filter-builder.mock.html` draws it). The Folder control and its
+picker are the quick view's, reused unforked: `QuickViewFolderControl` over `FolderPickerPanel` in
+`file` mode (`folders.mock.html` panel 6).
+
+**The behaviour is not this asset's.** Every rule below comes from a workflow-spec card:
+
+| card                                   | what it settles for the design                                                                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5313** — the folder service    | an item sits under a work item OR in a folder, never both; filing clears the parent; setting a parent clears the folder                                                 |
+| **MOTIR-5375** — the placement read    | the EFFECTIVE folder is the item's own, else its root ancestor's (only a root can be filed); `placementFolder.path` root first, and `via` the ancestor it comes through |
+| **MOTIR-5381** — the breadcrumb        | the page's placement channel; the breadcrumb repaints after a move on the page, without a reload                                                                        |
+| **MOTIR-5377** — the page Folder field | the card below Parent, the shipped control, the optimistic write, the refusal reverting both cards, read-only without `work_item:edit`                                  |
+| **MOTIR-5376** — the Folder filter     | `folder` is `folder-select`, nullable; list operators match the effective folder and every folder inside the chosen ones; a deleted or foreign folder is a stale value  |
+| **MOTIR-5378** — the builder row       | the row on both mounts (`/items`, automation rules), the value editor, the stale chip, the summary chip                                                                 |
+
+### Panels
+
+| #   | panel                                   | what it settles                                                                                                                                                                                                                              |
+| --- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **The access paths**                    | Nothing new to reach. The page opens from a `/items` row's quick view; the builder from the `/items` toolbar's [Advanced] and from Settings → Project → Automation → a rule → Conditions.                                                    |
+| 2   | **The Folder field at rest**            | A `FieldCard` directly below Parent. Filed directly: the path, Parent _None_. Through its root: the path plus _Through {key} {title}_. Not filed: _No folder_.                                                                               |
+| 3   | **Open · saving · refused · read-only** | Open: the note, then the picker in flow, the item's OWN folder checked. Saving: both values change at once, every rail control disabled. Refused: both cards revert, the reason in the page's error `Toast`. Read-only: values, no chevrons. |
+| 4   | **The breadcrumb**                      | Filed directly (a filed root now has a breadcrumb) · through its root (the path, then the ancestor chain) · unfiled (unchanged) · a long path wrapping and truncating inside the shipped bounded cell.                                       |
+| 5   | **The builder's Folder row**            | Folder last in the menu's _Other_ group; values and chips by path; the included-folders hint; _is empty_; a deleted folder; no folders; a truncated list; the applied chip; the automation rule's copy of the row.                           |
+| 6   | **Dark parity**                         | Panels 2–5 on `data-theme="dark"`.                                                                                                                                                                                                           |
+
+### Elements — primitive and tokens
+
+| element                      | composes                                                                               | colour                                                                                                                    | shape                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Folder card                  | `FieldCard` (label + corner chevron + value), below Parent                             | label `--el-text-secondary`; value `--el-text`; _No folder_ / _None_ `--el-text-secondary` italic (the shipped `muted()`) | `Card`: `--radius-card`, `--shadow-card`                                  |
+| folder value                 | lucide `folder` glyph + the path joined with `▸`                                       | glyph `--el-text-secondary`; `▸` `--el-text-secondary`                                                                    | 16px glyph                                                                |
+| _Through {key} {title}_      | a second value line                                                                    | `--el-text-secondary`; the key in the mono identifier grammar                                                             | 12px                                                                      |
+| open control                 | `QuickViewFolderControl` → `FolderPickerPanel` (`file`), in flow                       | as `folders.mock.html` § Folders (note `--el-text-secondary`; check `--el-accent`)                                        | `--radius-card` well, `--radius-input` search, `--radius-control` options |
+| saving                       | the rail's `disabled={isPending \|\| readOnly}`                                        | chevrons `--el-text-faint` (disabled glyph only)                                                                          | —                                                                         |
+| refusal                      | `Toast` variant `error`, the rail's `toast({ variant: 'error' })`                      | glyph `--el-danger`; words `--el-text-strong` on `--el-page-bg`                                                           | `--radius-card`, `--shadow-elevated`                                      |
+| breadcrumb folder segment    | a `<span>` in `ParentBreadcrumb`'s `<nav>`, lucide `folder`, visually-hidden _Folder:_ | words + glyph `--el-text-secondary`; no hover                                                                             | truncates inside the bounded `min-w-0 flex-1` cell                        |
+| breadcrumb work-item segment | unchanged `next/link` + `IssueTypeIcon`                                                | unchanged (`--el-text-muted`, hover `--el-text`)                                                                          | unchanged                                                                 |
+| Folder menu entry            | `Combobox` option, lucide `folder`                                                     | as every field option                                                                                                     | `--radius-control`, `--height-control`                                    |
+| Folder value editor          | `MultiSelectPicker` over `FolderPickerNodeDto.path`                                    | chips neutral `--el-surface` / `--el-border`, words `--el-text-secondary`, glyph `--el-text-secondary`                    | `--radius-badge`, `--spacing-chip-x/y`                                    |
+| included-folders hint        | a row line under a list-operator row                                                   | `--el-text-secondary`, lucide `info` glyph                                                                                | 12px                                                                      |
+| truncated / empty lines      | lines in the listbox                                                                   | `--el-text-secondary`; the truncated line takes a `--el-border-soft` rule above it                                        | —                                                                         |
+| stale value                  | the shipped _Unknown value_ chip + notice                                              | `--el-tint-peach`, `--el-warning` glyph, `--el-text-strong`                                                               | `--radius-badge`                                                          |
+| applied chip                 | the shipped `sum-chip` readout                                                         | `--el-surface` / `--el-border`; field name `--el-text-strong`                                                             | `--radius-badge`                                                          |
+
+No new primitive, no new token, no Tier-0 `--color-*`.
+
+### Decisions this asset makes
+
+- **An item placed through its root shows the path, marked as inherited.** A story under a filed
+  epic IS in that folder — the tree draws it there and the Folder filter matches it there
+  (MOTIR-5376) — so the card reads `Parked ▸ 2025` with a second line, _Through PROD-12 Old
+  import_, from `placementFolder.via`. _No folder_ would contradict the tree. The card stays
+  editable: filing the story is legal, and the open field says what it costs.
+- **In the open picker, the checked option is the item's OWN folder.** For an item placed through
+  its root that is _No folder_, so picking it writes nothing, and picking the inherited folder files
+  the item directly (out of its parent, into the same folder) — the picker's shipped
+  `currentFolderId` contract, unchanged.
+- **A refusal on the PAGE is the page's error `Toast`, not a reason on the row.** Both cards revert.
+  `CoreFieldsPanel.tsx` raises `toast({ variant: 'error', title })` for every failed rail save; the
+  on-row reason in `folders.mock.html` panel 6 is the quick view dialog's grammar. MOTIR-5374's
+  body asked for "reason on the row"; the shipped page grammar outranks it, and MOTIR-5377 already
+  specifies the toast.
+- **No confirmed check on the page.** The page rail draws none for any field; after a success the
+  card closes on its new value.
+- **A breadcrumb folder segment is text, not a link.** Nothing in the product takes a reader to a
+  folder: `git grep -n -i "searchParams.*folder\|get('folder')" origin/main -- 'app/(authed)/items/'
+'lib/issues/'` returns nothing (2026-09-13), so a link would need a destination this story does
+  not build. No sibling is handed one.
+- **The folder path is ONE segment, and it leads.** It follows the identifier with the shipped `·`,
+  before the ancestor chain; inside it the folders join with `▸`, the separator the field and the
+  picker already use.
+- **A filed root renders a breadcrumb for the first time**, holding only its folder segment.
+- **The breadcrumb landmark is named by its content.** _Folder and parent work items_ when a folder
+  segment is present; the shipped _Parent work items_ otherwise.
+- **Folder is the last entry of the field menu's _Other_ group**, after Component — its position in
+  `FILTER_FIELDS`, where MOTIR-5376 registered it (registry order is menu order).
+- **Options and chips are labelled by PATH**, because two teams can both keep a _2025_.
+- **The included-folders hint shows under a list-operator row only**; the empty pair collapses the
+  value slot as every nullable field's does.
+
+### Copy — English and Chinese
+
+| key                                                    | en                                                                             | zh                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------ |
+| `issueViews.parent` (shipped)                          | Parent                                                                         | 父级                                             |
+| `issueViews.none` (shipped)                            | None                                                                           | 无                                               |
+| `folders.fieldLabel` (shipped)                         | Folder                                                                         | 文件夹                                           |
+| `folders.noFolder` (shipped)                           | No folder                                                                      | 无文件夹                                         |
+| `folders.removesFromParent` (shipped)                  | Filing it removes it from {key} {title}.                                       | 归档后，它将不再属于 {key} {title}。             |
+| `folders.fileRefused` (shipped)                        | That folder belongs to another project, so this work item stayed where it was. | 该文件夹属于另一个项目，因此此工作项保持原位。   |
+| `folders.pickerSearch` (shipped)                       | Find a folder                                                                  | 查找文件夹                                       |
+| `folders.pickerListLabel` (shipped)                    | Folders                                                                        | 文件夹                                           |
+| `folders.pickerTruncated` (shipped)                    | Showing the first {count} folders.                                             | 仅显示前 {count} 个文件夹。                      |
+| `folders.placedThrough` (new)                          | Through {key} {title}                                                          | 经由 {key} {title}                               |
+| `folders.breadcrumbFolderLabel` (new, visually hidden) | Folder:                                                                        | 文件夹：                                         |
+| `issueViews.placementBreadcrumbAria` (new)             | Folder and parent work items                                                   | 文件夹和父级工作项                               |
+| `issueViews.parentIssuesAria` (shipped)                | Parent work items                                                              | 父级工作项                                       |
+| `issueViews.advancedFieldFolder` (new)                 | Folder                                                                         | 文件夹                                           |
+| `issueViews.advancedFolderIncludesInside` (new)        | Folders inside a chosen folder are included.                                   | 所选文件夹内的文件夹也包含在内。                 |
+| `issueViews.advancedFolderNone` (new)                  | This project has no folders yet.                                               | 此项目还没有文件夹。                             |
+| `issueViews.advancedStaleValue` (shipped)              | Unknown value                                                                  | 未知值                                           |
+| `issueViews.advancedStaleNote` (shipped)               | This value no longer exists in the project — this condition matches nothing.   | 该值在此项目中已不存在——此条件不会匹配任何内容。 |
+
+The operator labels, _Add…_, _Remove {value}_ and the count line reuse the shipped
+`issueViews.advanced*` keys; the applied chip composes the field label, the operator and the paths.
+
+### Out of scope here
+
+The roadmap, the public project, boards, the backlog and reports gain no folder display (the story
+decided those). `/api/v1`, the MCP tools and `skeleton` are MOTIR-5310's. A folder destination page
+is planned nowhere.
+
+### GIVES / TAKES
+
+| work item                                | GIVES / TAKES       | what                                                                                                                                                                                                     |
+| ---------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5381** — the breadcrumb          | **GIVES**           | the folder segment (text, glyph, visually-hidden _Folder:_), its place ahead of the chain, the `·` / `▸` separators, the content-named landmark, a filed root's breadcrumb, wrapping and truncation      |
+| **MOTIR-5377** — the page Folder field   | **GIVES**           | the card below Parent, the three at-rest readings including _Through {key} {title}_, the open control with the item's own folder checked, saving, the refusal toast with both cards reverting, read-only |
+| **MOTIR-5378** — the builder row         | **GIVES**           | the menu position, the row, values and chips by path, the included-folders hint, the empty pair, the stale chip, the truncated and empty listbox lines, the applied chip, the automation mount           |
+| **MOTIR-5375** — the placement read      | **TAKES a premise** | the inherited line reads `placementFolder.via`                                                                                                                                                           |
+| **MOTIR-5376** — the Folder filter field | **TAKES a premise** | the menu position IS the registry position it registered (last, after `cmp`)                                                                                                                             |
+| **MOTIR-5316** / **MOTIR-5311**          | **lose nothing**    | the quick view's Folder field, its control and the picker are reused unchanged                                                                                                                           |
