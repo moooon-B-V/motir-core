@@ -8,9 +8,15 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { ENFORCED_PERMISSIONS, PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
+import {
+  ENFORCED_PERMISSIONS,
+  PERMISSIONS,
+  isEnforced,
+  type PermissionKey,
+} from '@/lib/permissions/catalog';
 import { CUSTOM_ROLE_TIER, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { grantablePermissionKeys } from '@/lib/services/projectRoleDefinitionService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -321,6 +327,40 @@ describe('the rails, resolved through the database', () => {
     }
   });
 
+  // MOTIR-5305 — `approval:view_any`, the Approvals room's full view. Asserted
+  // through the SERVICE rather than by reading the constant, because what the room
+  // will consult is `getPermissions`, and the rail is the part a constant cannot show.
+  it('`approval:view_any` resolves for the rail and the built-in admin, and for no member or viewer', async () => {
+    const s = await buildScenario('private', 'view-any');
+    const holds = async (who: keyof Scenario['ctxs']) =>
+      (await projectAccessService.getPermissions(s.projectId, s.ctxs[who])).has(
+        'approval:view_any',
+      );
+    expect(await holds('owner'), 'workspace owner, through the always-pass rail').toBe(true);
+    expect(await holds('wsAdmin'), 'workspace admin, through the always-pass rail').toBe(true);
+    expect(await holds('admin'), 'the built-in project admin set').toBe(true);
+    expect(await holds('member'), 'a member sees their OWN records — no key').toBe(false);
+    expect(await holds('viewer')).toBe(false);
+  });
+
+  it('while `planned`, `approval:view_any` is on NO role screen and grantable to NO custom role', async () => {
+    const s = await buildScenario('open', 'view-any-planned');
+    expect(ENFORCED_PERMISSIONS).not.toContain('approval:view_any');
+    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const rows = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
+    const levelRows = catalog.levelGatedDomains.flatMap((d) => d.permissions.map((p) => p.key));
+    expect(rows, 'a planned key would render as a switch that controls nothing').not.toContain(
+      'approval:view_any',
+    );
+    expect(levelRows).not.toContain('approval:view_any');
+    for (const role of catalog.roles) {
+      expect(role.permissions, `${role.key} lists a planned key`).not.toContain(
+        'approval:view_any',
+      );
+    }
+    expect(grantablePermissionKeys().has('approval:view_any')).toBe(false);
+  });
+
   it('an actor with no workspace membership holds nothing on a non-public project', async () => {
     const s = await buildScenario('open', 'rail-null');
     const outsider = await usersService.createUser({
@@ -424,8 +464,10 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed
     // when it grouped the keys by domain. The membership is the contract, not
     // the ordering of the source constant.
+    // …minus any role-gated key still `planned` (MOTIR-5305's `approval:view_any`),
+    // which the admin set HOLDS and no role screen may draw.
     expect([...(catalog.roles.find((r) => r.key === 'admin')?.permissions ?? [])].sort()).toEqual(
-      [...ROLE_GATED_PERMISSIONS].sort(),
+      ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key)).sort(),
     );
 
     // No role holds a level-gated public-request grant — a role cannot give one.
@@ -449,11 +491,14 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // role can hold or withhold one; drawn as role rows they are a permanent dash
     // against every role, which reads as "nobody has this" rather than "roles do
     // not govern this". They are not hidden — they get their own card.
-    expect([...flattened].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
-    expect(PERMISSIONS.filter((k) => !flattened.includes(k)).sort()).toEqual(
+    // The screens draw the role-gated keys a gate CONSULTS: a `planned` key may be
+    // role-holdable already (MOTIR-5305) and still never renders as a switch.
+    const offered = ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key));
+    expect([...flattened].sort()).toEqual([...offered].sort());
+    expect(ENFORCED_PERMISSIONS.filter((k) => !flattened.includes(k)).sort()).toEqual(
       PERMISSIONS.filter((k) => k.startsWith('public_request:')).sort(),
     );
-    // Every row the screens draw is live — MOTIR-2356 wired the last key.
+    // Every row the screens draw is live.
     expect(flattened.filter((k) => !ENFORCED_PERMISSIONS.includes(k))).toEqual([]);
     for (const domain of catalog.domains) {
       expect(domain.permissions.length, `${domain.domain} is empty`).toBeGreaterThan(0);
@@ -461,12 +506,12 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     }
     // The `M` in the list row's `N of M`, carried on the DTO so no client
     // re-derives it by importing the catalog.
-    expect(catalog.roleGatedPermissionCount).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(catalog.roleGatedPermissionCount).toBe(offered.length);
     expect(catalog.roleGatedPermissionCount).toBe(flattened.length);
     // …and the keys the role rows leave out come back on their own card, so the
     // two together are the whole catalog and nothing falls off the page.
     const levelGated = catalog.levelGatedDomains.flatMap((d) => d.permissions.map((p) => p.key));
-    expect([...flattened, ...levelGated].sort()).toEqual([...PERMISSIONS].sort());
+    expect([...flattened, ...levelGated].sort()).toEqual([...ENFORCED_PERMISSIONS].sort());
     expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog);
   });
 });

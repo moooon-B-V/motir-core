@@ -224,6 +224,14 @@ export const PERMISSIONS = [
   // this key decides ANYONE's — the shape `attachment:delete_any` and
   // `comment:moderate` already give "act on what is not yours".
   'approval:decide_any',
+  // MOTIR-5305 — SEEING every approval record of a project, other people's
+  // included: the Approvals room's full view. `_any` as in `attachment:delete_any`,
+  // and what it does NOT cover is part of its definition — records ROUTED TO you
+  // and records YOU DECIDED need no key beyond `project:browse`, because those are
+  // relationships to a row, not permissions. The key only WIDENS a reader's view
+  // from their own records to the project's. `planned`, so after its enforced
+  // sibling: MOTIR-5301's records read is the call site that flips it.
+  'approval:view_any',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -339,6 +347,7 @@ const PERMISSION_META: Record<
   'attachment:delete_any': { domain: 'attachment', enforcement: 'enforced' },
   'watcher:manage': { domain: 'watcher', enforcement: 'enforced' },
   'approval:decide_any': { domain: 'approval', enforcement: 'enforced' }, // MOTIR-5292
+  'approval:view_any': { domain: 'approval', enforcement: 'planned' }, // MOTIR-5305 → MOTIR-5301
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },

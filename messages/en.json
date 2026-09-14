@@ -429,6 +429,10 @@
       "label": "Decide any approval",
       "description": "Approve or request changes on an approval routed to someone else, not only one routed to you."
     },
+    "approval_view_any": {
+      "label": "See every approval",
+      "description": "See all of the project's approval records, including other people's. Without it you see the approvals routed to you and the ones you decided."
+    },
     "public_request_comment": {
       "label": "Comment on requests",
       "description": "Reply on a public request's thread. Public projects only."

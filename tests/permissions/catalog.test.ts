@@ -329,12 +329,24 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => PLANNED_PERMISSIONS.includes(k))).toEqual([]);
   });
 
-  it('THE MODEL IS FULLY ENFORCED — `PLANNED_PERMISSIONS` is empty (MOTIR-2356)', () => {
-    // The machine-readable definition `catalog.ts` gives itself, asserted as a
-    // SET rather than a count: a length constant would pass just as happily if a
-    // key were deleted from the catalog as if its gate were wired.
-    expect([...PLANNED_PERMISSIONS]).toEqual([]);
-    expect([...ENFORCED_PERMISSIONS].sort()).toEqual([...PERMISSIONS].sort());
+  it('`PLANNED_PERMISSIONS` holds ONLY the keys named ahead of their gate, each with its wiring card', () => {
+    // MOTIR-2356 emptied this set, and the emptiness was that story's definition
+    // of done. The seam it describes is what lets the NEXT key be named in one
+    // change and enforced in another, and MOTIR-5305 is that next key:
+    // `approval:view_any`, named with the Approvals room's permission card and
+    // consulted by MOTIR-5301's records read, which flips it to `enforced` and
+    // deletes it from this list in the same change. Asserted as a SET rather than
+    // a count: a length constant would pass just as happily if a key were deleted
+    // from the catalog as if its gate were wired.
+    const PLANNED_AHEAD_OF_THEIR_GATE: Record<string, string> = {
+      'approval:view_any': 'MOTIR-5301',
+    };
+    expect([...PLANNED_PERMISSIONS].sort()).toEqual(
+      Object.keys(PLANNED_AHEAD_OF_THEIR_GATE).sort(),
+    );
+    expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
+      [...PERMISSIONS].sort(),
+    );
   });
 
   it('marks every key with a known enforcement value', () => {
