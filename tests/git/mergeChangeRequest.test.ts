@@ -49,9 +49,42 @@ interface Call {
   body: Record<string, unknown> | undefined;
 }
 
-/** Route the three calls a merge makes: the repository read, the merge, the pull read. */
-function stubHost(routes: { repo?: Route; merge?: Route; pull?: Route }): Call[] {
+/** A pull request as GitHub reads it back — the node id the queue addresses and its base. */
+const OPEN_PULL: Route = {
+  status: 200,
+  body: {
+    node_id: 'PR_kwDO_7',
+    merged: false,
+    state: 'open',
+    head: { sha: HEAD },
+    base: { ref: 'main' },
+  },
+};
+
+/** A base branch with no active rules — the ordinary, queue-less repository. */
+const NO_RULES: Route = { status: 200, body: [] };
+
+/** The GraphQL answer to a successful enqueue. */
+const ENQUEUED = (id: string): Route => ({
+  status: 200,
+  body: { data: { enqueuePullRequest: { mergeQueueEntry: { id } } } },
+});
+
+/**
+ * Route every call a merge makes: the repository read, the pull request read(s), the
+ * base branch's rules, the merge, and the GraphQL queue calls (answered IN ORDER). The
+ * pull request and rules default to an open, queue-less one, so a case that is not
+ * about them need not say so.
+ */
+function stubHost(routes: {
+  repo?: Route;
+  merge?: Route;
+  pull?: Route;
+  rules?: Route;
+  graphql?: Route[];
+}): Call[] {
   const calls: Call[] = [];
+  const graphql = [...(routes.graphql ?? [])];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
@@ -62,8 +95,15 @@ function stubHost(routes: { repo?: Route; merge?: Route; pull?: Route }): Call[]
         method,
         body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined,
       });
-      const route =
-        method === 'PUT' ? routes.merge : /\/pulls\/\d+$/.test(u) ? routes.pull : routes.repo;
+      const route = u.endsWith('/graphql')
+        ? graphql.shift()
+        : method === 'PUT'
+          ? routes.merge
+          : /\/rules\/branches\//.test(u)
+            ? (routes.rules ?? NO_RULES)
+            : /\/pulls\/\d+$/.test(u)
+              ? (routes.pull ?? OPEN_PULL)
+              : routes.repo;
       if (!route) throw new Error(`unrouted ${method} ${u}`);
       return new Response(route.body === undefined ? null : JSON.stringify(route.body), {
         status: route.status,
@@ -188,17 +228,12 @@ describe('every GitHub answer normalizes to merged or a typed refusal', () => {
         },
       },
       {
-        name: 'the queue-required 405 → branch_protected with that reason (MOTIR-5516 enqueues it)',
+        name: 'the queue-required 405 → ENQUEUED onto the merge queue instead (MOTIR-5516)',
         routes: {
           merge: { status: 405, body: { message: 'Changes must be made through the merge queue' } },
+          graphql: [ENQUEUED('MQE_1')],
         },
-        expected: {
-          outcome: 'refused',
-          refusal: {
-            code: 'branch_protected',
-            reason: 'Changes must be made through the merge queue',
-          },
-        },
+        expected: { outcome: 'enqueued', entryId: 'MQE_1' },
       },
     ];
 
@@ -207,13 +242,22 @@ describe('every GitHub answer normalizes to merged or a typed refusal', () => {
     await expect(github.mergeChangeRequest!(INPUT)).resolves.toEqual(expected);
   });
 
-  it('the queue-required 405 does not read the pull request — it needs no classifying', async () => {
+  it('the queue-required 405 is followed by exactly ONE enqueue, carrying the node id and the head', async () => {
     const calls = stubHost({
       repo: { status: 200, body: ALL_METHODS },
       merge: { status: 405, body: { message: 'Changes must be made through the merge queue' } },
+      graphql: [ENQUEUED('MQE_1')],
     });
-    await github.mergeChangeRequest!(INPUT);
-    expect(calls.map((c) => c.method)).toEqual(['GET', 'PUT']);
+    await expect(github.mergeChangeRequest!(INPUT)).resolves.toEqual({
+      outcome: 'enqueued',
+      entryId: 'MQE_1',
+    });
+    const enqueues = calls.filter((c) => c.url.endsWith('/graphql'));
+    expect(enqueues).toHaveLength(1);
+    expect(enqueues[0]?.body?.['variables']).toEqual({
+      pullRequestId: 'PR_kwDO_7',
+      expectedHeadOid: HEAD,
+    });
   });
 });
 
@@ -300,5 +344,125 @@ describe('a host that does not answer is an ERROR, never a refusal', () => {
       merge: { status: 502, body: { message: 'Bad Gateway' } },
     });
     await expect(github.mergeChangeRequest!(INPUT)).rejects.toBeInstanceOf(MergeChangeRequestError);
+  });
+});
+
+describe('a base branch that REQUIRES a merge queue is enqueued, never merged (MOTIR-5516)', () => {
+  const QUEUE_RULES: Route = {
+    status: 200,
+    body: [{ type: 'pull_request' }, { type: 'merge_queue', parameters: {} }],
+  };
+
+  const queueError = (type: string, message: string, headers?: Record<string, string>): Route => ({
+    status: 200,
+    headers,
+    body: { data: { enqueuePullRequest: null }, errors: [{ type, message }] },
+  });
+
+  it('reads the base branch rules, makes NO merge call, and ONE enqueue carrying the node id and head', async () => {
+    const calls = stubHost({
+      repo: { status: 200, body: ALL_METHODS },
+      rules: QUEUE_RULES,
+      graphql: [ENQUEUED('MQE_9')],
+    });
+
+    await expect(github.mergeChangeRequest!(INPUT)).resolves.toEqual({
+      outcome: 'enqueued',
+      entryId: 'MQE_9',
+    });
+
+    expect(
+      calls.some((c) => c.url === 'https://api.github.com/repos/acme/web/rules/branches/main'),
+    ).toBe(true);
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0);
+    const enqueues = calls.filter((c) => c.url.endsWith('/graphql'));
+    expect(enqueues).toHaveLength(1);
+    expect(String(enqueues[0]?.body?.['query'])).toContain('enqueuePullRequest');
+    expect(enqueues[0]?.body?.['variables']).toEqual({
+      pullRequestId: 'PR_kwDO_7',
+      expectedHeadOid: HEAD,
+    });
+  });
+
+  it('an ALREADY-QUEUED pull request answers enqueued with the EXISTING entry — never a refusal', async () => {
+    stubHost({
+      repo: { status: 200, body: ALL_METHODS },
+      rules: QUEUE_RULES,
+      graphql: [
+        queueError('UNPROCESSABLE', 'Pull request is already in the merge queue'),
+        { status: 200, body: { data: { node: { mergeQueueEntry: { id: 'MQE_existing' } } } } },
+      ],
+    });
+    await expect(github.mergeChangeRequest!(INPUT)).resolves.toEqual({
+      outcome: 'enqueued',
+      entryId: 'MQE_existing',
+    });
+  });
+
+  it('a head that no longer matches expectedHeadOid → subject_changed', async () => {
+    stubHost({
+      repo: { status: 200, body: ALL_METHODS },
+      rules: QUEUE_RULES,
+      graphql: [
+        queueError(
+          'UNPROCESSABLE',
+          'Expected head oid does not match the head of the pull request',
+        ),
+      ],
+    });
+    await expect(github.mergeChangeRequest!(INPUT)).resolves.toEqual({
+      outcome: 'refused',
+      refusal: { code: 'subject_changed' },
+    });
+  });
+
+  it('unsatisfied checks → checks_not_green', async () => {
+    stubHost({
+      repo: { status: 200, body: ALL_METHODS },
+      rules: QUEUE_RULES,
+      graphql: [queueError('UNPROCESSABLE', 'Required status checks have not succeeded')],
+    });
+    await expect(github.mergeChangeRequest!(INPUT)).resolves.toEqual({
+      outcome: 'refused',
+      refusal: { code: 'checks_not_green', reason: 'Required status checks have not succeeded' },
+    });
+  });
+
+  it('FORBIDDEN names the permission GitHub asked for, rather than guessing one', async () => {
+    stubHost({
+      repo: { status: 200, body: ALL_METHODS },
+      rules: QUEUE_RULES,
+      graphql: [
+        queueError('FORBIDDEN', 'Resource not accessible by integration', {
+          'x-accepted-github-permissions': 'pull_requests=write',
+        }),
+      ],
+    });
+    await expect(github.mergeChangeRequest!(INPUT)).resolves.toEqual({
+      outcome: 'refused',
+      refusal: { code: 'app_permission_missing', permission: 'pull_requests: write' },
+    });
+  });
+
+  it('the rules read and the enqueue mint ONE token, through the provenance role', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+
+    stubHost({
+      repo: { status: 200, body: ALL_METHODS },
+      rules: QUEUE_RULES,
+      graphql: [ENQUEUED('MQE_1')],
+    });
+    await github.mergeChangeRequest!({ ...INPUT, owner: 'motir-projects' });
+    expect(mintInstallationToken).toHaveBeenCalledTimes(1);
+    expect(mintInstallationToken).toHaveBeenLastCalledWith('inst-1', 'provisioning');
+
+    stubHost({
+      repo: { status: 200, body: ALL_METHODS },
+      rules: QUEUE_RULES,
+      graphql: [ENQUEUED('MQE_2')],
+    });
+    await github.mergeChangeRequest!({ ...INPUT, owner: 'acme' });
+    expect(mintInstallationToken).toHaveBeenCalledTimes(2);
+    expect(mintInstallationToken).toHaveBeenLastCalledWith('inst-1', 'user-facing');
   });
 });

@@ -267,8 +267,8 @@ export interface GitProvider {
    * replaces capability-by-optional-method with a declared set and converts this
    * site.
    *
-   * ⚠️ EVERY ANSWER THE HOST GIVES IS A RESULT, NEVER A THROW: merged, or refused
-   * with the seam's own code. What throws is only what is not an answer — no
+   * ⚠️ EVERY ANSWER THE HOST GIVES IS A RESULT, NEVER A THROW: merged, enqueued onto
+   * the base branch's merge queue (MOTIR-5516), or refused with the seam's own code. What throws is only what is not an answer — no
    * response within {@link MERGE_CHANGE_REQUEST_TIMEOUT_MS}, an unreachable host, or
    * a status no refusal names (`MergeChangeRequestError`). Turning those into a
    * refusal would tell a person the host said no when the host said nothing.

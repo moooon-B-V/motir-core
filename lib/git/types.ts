@@ -429,7 +429,12 @@ export interface MergeRefusal {
   reason?: string;
 }
 
-/** A merge's answer: it merged, or the host refused with a named reason. */
+/**
+ * A merge's answer: it merged; it was handed to the base branch's merge QUEUE
+ * (MOTIR-5516 — `entryId` is the queue entry, and `done` still arrives only through the
+ * merge webhook when the queue lands it); or the host refused with a named reason.
+ */
 export type MergeChangeRequestResult =
   | { outcome: 'merged'; commitSha: string }
+  | { outcome: 'enqueued'; entryId: string }
   | { outcome: 'refused'; refusal: MergeRefusal };
