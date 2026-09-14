@@ -51,6 +51,7 @@ function source(over: Partial<DispatchPromptSource> = {}): DispatchPromptSource 
       '- `app/(authed)/ready/page.tsx`',
     ].join('\n'),
     blockerKeys: ['PROD-3', 'PROD-5'],
+    openDependentKeys: [],
     parent: { key: 'PROD-2', title: 'Ready surface' },
     projectName: 'Motir',
     projectKey: 'PROD',
@@ -250,36 +251,62 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
   // The failure MODE the old step existed for is unchanged and is why the
   // absence assertions below matter: a design card whose result never arrives
   // still looks exactly like one that succeeded.
-  describe('WHAT_TO_DO.design tells the agent to PUBLISH the result', () => {
-    const designPrompt = (): string =>
-      assembleDispatchPrompt(source({ type: 'design', executor: 'coding_agent' })).prompt;
+  describe('WHAT_TO_DO.design PUBLISHES the result only when work waits on it (MOTIR-5495)', () => {
+    /** The WHAT TO DO section alone, so an assertion cannot be met elsewhere. */
+    const whatToDo = (prompt: string): string =>
+      prompt.slice(prompt.indexOf('WHAT TO DO'), prompt.indexOf('ACCEPTANCE CRITERIA'));
+    const designPrompt = (openDependentKeys: string[] = ['X-2']): string =>
+      assembleDispatchPrompt(
+        source({ type: 'design', executor: 'coding_agent', openDependentKeys }),
+      ).prompt;
 
-    it('names the TOOL and its arguments — the register `linkingStep` set', () => {
-      const prompt = designPrompt();
-      expect(prompt).toContain('publish_design_result');
-      // Named arguments, not a description of a payload: this is the exact
-      // asymmetry MOTIR-3783 was filed about. The old step named three HTTP
-      // routes in prose and supplied no base URL, no credential and no request
-      // shape, so its "publish it yourself" fallback was uncallable.
-      for (const arg of ['mock', 'image', 'note_file', 'noteMd']) {
-        expect(prompt, `the design step omits the \`${arg}\` argument`).toContain(arg);
+    it('with a waiting dependent: names the TOOL, the key that waits, and the two kinds', () => {
+      const steps = whatToDo(designPrompt(['X-2']));
+      expect(steps).toContain('PUBLISH the design result');
+      expect(steps).toContain('publish_design_result');
+      expect(steps).toContain('X-2 is blocked_by this card');
+      for (const arg of ['"mock"', '"note_file"']) {
+        expect(steps, `the design step omits the ${arg} kind`).toContain(arg);
       }
     });
 
-    it('the publish is the STEP, not a fallback behind a conditional', () => {
-      const prompt = designPrompt();
-      expect(prompt).toContain('PUBLISH the design result');
-      // The old wording made the agent's own publish an exception reached by
-      // failing to find a log — which, in a repository with no lane, was the
-      // only path, arrived at by looking for something that was never coming.
-      expect(prompt).not.toContain('If it is not there');
-      expect(prompt).not.toContain('CONFIRM the design result reached the work item');
+    it('names the waiting keys in the plural too', () => {
+      expect(whatToDo(designPrompt(['X-2', 'X-9']))).toContain('X-2, X-9 are blocked_by this card');
+    });
+
+    it('⚠️ ABSENCE: neither render names a retired input — not even to forbid it', () => {
+      // AMENDMENT 4 retired the screenshot and the inline note. Naming either,
+      // even in a "do not send", is how an agent learns the argument exists.
+      for (const keys of [['X-2'], []]) {
+        const prompt = designPrompt(keys);
+        for (const retired of ['.png', 'image', 'noteMd']) {
+          expect(prompt, `keys=${keys.join()} still names \`${retired}\``).not.toContain(retired);
+        }
+      }
+    });
+
+    it('with NOTHING waiting: says not to publish, and carries no publish step', () => {
+      const steps = whatToDo(designPrompt([]));
+      expect(steps).toContain('Do NOT publish a design result');
+      expect(steps).toContain('its pull request is its review');
+      expect(steps).not.toContain('PUBLISH the design result');
+      expect(steps).not.toContain('"note_file"');
+      expect(steps).not.toContain('create_design_upload');
+    });
+
+    it('BOTH renders instruct the two-file set and the delta-mock rule', () => {
+      for (const keys of [['X-2'], []]) {
+        const steps = whatToDo(designPrompt(keys));
+        expect(steps).toContain('TWO files');
+        expect(steps).toContain('design-notes.md');
+        expect(steps).toContain('<surface>.mock.html');
+        expect(steps).toContain('<surface>--<change>.mock.html');
+        expect(steps).toContain('holding only the panels that change');
+        expect(steps).toContain('do not edit its mock');
+      }
     });
 
     it('⚠️ ABSENCE: no retired CI string can creep back in a later edit', () => {
-      // A guard on absence, not only on presence (MOTIR-3783 AC 5). Every string
-      // here names a mechanism that will not exist once the retirement story
-      // lands, and each would send an agent to look for something that is gone.
       const prompt = designPrompt();
       for (const retired of [
         'design-asset guards',
@@ -288,6 +315,8 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
         'upload-token',
         'design-evidence',
         'job log',
+        'If it is not there',
+        'CONFIRM the design result reached the work item',
       ]) {
         expect(prompt, `the design step still names the retired \`${retired}\``).not.toContain(
           retired,
@@ -296,52 +325,48 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     });
 
     it('still never routes a design asset through the general attach door', () => {
-      // ⚠️ Unchanged in force, and now with a second reason. The general door
-      // would put the .png in the ATTACHMENTS panel while this publishes to the
-      // Design result panel — one artifact, two surfaces
-      // (docs/decisions/attachment-api-door.md §3) — and `attach_file` refuses
-      // `text/html` outright, so the mock could not travel that way at all.
       expect(designPrompt()).not.toContain('attach_file');
-    });
-
-    it('says WHICH note sections to send, and why not the whole file', () => {
-      const prompt = designPrompt();
-      expect(prompt).toContain('SECTIONS');
-      expect(prompt).toContain('never the whole note');
+      expect(designPrompt([])).not.toContain('attach_file');
     });
 
     it('keeps the silent-failure warning, RETARGETED at the un-made call', () => {
-      // The most valuable sentence the old step carried, and the one most likely
-      // to be swept out as CI-era residue: the risk did not disappear with CI,
-      // it MOVED. An agent that simply forgets produces the identical symptom.
       const prompt = designPrompt();
       expect(prompt).toContain('looks exactly like one that succeeded');
       expect(prompt).toContain('card empty');
     });
 
-    it('keeps the repository the source of truth', () => {
+    it('keeps the repository the source of truth, and asks for the evidence id', () => {
       const prompt = designPrompt();
       expect(prompt).toContain('REPOSITORY stays the source of truth');
-      expect(prompt).toContain('never a replacement for committing the three files');
+      expect(prompt).toContain('never a replacement for committing the two files');
+      expect(prompt).toContain('evidence id');
     });
 
-    it('"Stop at the asset" SURVIVES as the stopping condition', () => {
-      // The new step must not read as permission to continue building. If step 5
-      // ever disappears, the agent gains a publish instruction and loses the
-      // gate that made the design reviewable first.
+    it('keeps the upload door for a large file', () => {
       const prompt = designPrompt();
-      expect(prompt).toContain('Stop at the asset. A design is reviewed before anything is built');
-      expect(prompt.indexOf('Stop at the asset')).toBeLessThan(
-        prompt.indexOf('PUBLISH the design result'),
-      );
+      expect(prompt).toContain('create_design_upload');
+      expect(prompt).toContain('One publish uses one form for all of its assets');
+    });
+
+    it('"Stop at the asset" SURVIVES as the stopping condition, before either step 7', () => {
+      for (const keys of [['X-2'], []]) {
+        const prompt = designPrompt(keys);
+        expect(prompt).toContain(
+          'Stop at the asset. A design is reviewed before anything is built',
+        );
+        expect(prompt.indexOf('Stop at the asset')).toBeLessThan(prompt.indexOf('7. '));
+      }
     });
 
     it('carries the step in BOTH workflow variants', () => {
-      // A step added to one dispatch path only is the classic half-shipped
-      // prompt change: it works when you test it and is missing where it runs.
       for (const sessionBranch of [null, 'session/MOTIR-1-lineage']) {
         const { prompt } = assembleDispatchPrompt(
-          source({ type: 'design', executor: 'coding_agent', sessionBranch }),
+          source({
+            type: 'design',
+            executor: 'coding_agent',
+            sessionBranch,
+            openDependentKeys: ['X-2'],
+          }),
         );
         expect(prompt).toContain('PUBLISH the design result');
       }
@@ -352,8 +377,11 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       // WHAT_TO_DO record would otherwise pass every marker test above.
       for (const type of Object.keys(MARKERS) as WorkItemTypeDto[]) {
         if (type === 'design') continue;
-        const { prompt } = assembleDispatchPrompt(source({ type, executor: 'coding_agent' }));
+        const { prompt } = assembleDispatchPrompt(
+          source({ type, executor: 'coding_agent', openDependentKeys: ['X-2'] }),
+        );
         expect(prompt).not.toContain('PUBLISH the design result');
+        expect(prompt).not.toContain('Do NOT publish a design result');
       }
     });
   });

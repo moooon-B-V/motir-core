@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ExternalLink,
+  FileImage,
   FileText,
   FileWarning,
   GitCommitHorizontal,
@@ -11,8 +12,7 @@ import {
   PanelsTopLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { MarkdownView } from '@/components/ui/MarkdownView';
-import { AttachmentPreview, type PreviewableAttachment } from './AttachmentPreview';
+import { Pill } from '@/components/ui/Pill';
 import { useReportPortRenderStatus } from '@/components/approvals/portRenderStatus';
 import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 
@@ -35,6 +35,14 @@ import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence
 // the provenance — and the verbs that decide it live one level up, BELOW the
 // port, because you decide after you look.
 //
+// ⚠️ SINCE AMENDMENT 4 IT SHOWS ONLY WHAT TO REVIEW (Story MOTIR-5488 · MOTIR-5498,
+// built to `design/work-items/design-result--what-to-review.mock.html`): the
+// mock frame(s) first, the note as ONE LINK under them, no inline Markdown and
+// no screenshot strip. An earlier-format result's note and screenshots are
+// listed as file links. And on a card whose open linked pull requests carry the
+// decision, it is the Development block's slot (`placement="development"`), not
+// a section (Q8).
+//
 // This component itself still writes nothing and still advances no status; the
 // sentence that used to stand here said that of the SECTION, which is no longer
 // true, and a careful present-tense comment asserting a boundary is exactly the
@@ -46,12 +54,8 @@ import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence
  * inside itself in BOTH axes… an unbounded frame would swallow a page that
  * already has eight sections").
  *
- * The mock frame and the rendered NOTE both carry it. That argument was written
- * about the frame and is at least as true of the note — a real `design-notes.md`
- * section runs 200–350 lines and renders thousands of pixels tall, and the
- * service's 64 KiB cap (`designEvidenceService.NOTE_MD_CAP_BYTES`) permits
- * several times that. ONE constant, referenced from both, so the two artifacts
- * cannot drift apart (MOTIR-3510).
+ * The mock frame carries it. (The rendered note carried it too until AMENDMENT 4
+ * made the note a link — MOTIR-5498.)
  */
 const FRAME_HEIGHT = 'h-[32rem]';
 
@@ -72,27 +76,23 @@ export interface DesignResultPanelProps {
   evidence: DesignEvidenceDTO | null;
   /** Shown in the empty state so a reader knows where a result comes from. */
   isDesignCard: boolean;
+  /**
+   * WHERE the result renders (`design-result.md` AMENDMENT 4 Q8; design
+   * `design-result--what-to-review.mock.html` states 7–8).
+   *
+   * - `section` — its own Design result section: frames, note row, provenance
+   *   chips. Every card without an open linked pull request.
+   * - `development` — the SLOT inside the Development block of a card whose pull
+   *   requests carry the decision: an `h4` heading with a one-line provenance, then
+   *   the same frames and note row, and no chips. The block draws How to test and
+   *   the rows below it.
+   */
+  placement?: 'section' | 'development';
 }
 
 /** The last path segment of a repo path — the display name for an artifact. */
 function basenameOf(sourcePath: string): string {
   return sourcePath.slice(sourcePath.lastIndexOf('/') + 1);
-}
-
-/**
- * The lightbox's contract, built from a design asset. `AttachmentDTO` is NOT
- * used: its `source` union deliberately excludes the lifecycle-owned sources,
- * and the lightbox never reads that field anyway (MOTIR-2670).
- */
-function toPreviewable(asset: DesignAssetDTO): PreviewableAttachment | null {
-  if (!asset.url) return null;
-  return {
-    filename: basenameOf(asset.sourcePath),
-    blobUrl: asset.url,
-    sizeBytes: asset.sizeBytes ?? 0,
-    isImage: true,
-    isPdf: false,
-  };
 }
 
 function Provenance({ evidence }: { evidence: DesignEvidenceDTO }) {
@@ -218,7 +218,7 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
         <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
         <span className="truncate font-mono">{asset.sourcePath}</span>
         <a
-          className="ml-auto inline-flex items-center gap-1 text-(--el-link) hover:underline"
+          className="ml-auto inline-flex items-center gap-1 text-(--el-text) hover:underline"
           href={url}
           target="_blank"
           rel="noopener noreferrer"
@@ -271,32 +271,85 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
   );
 }
 
-export function DesignResultPanel({ evidence, isDesignCard }: DesignResultPanelProps) {
+/**
+ * ONE file as a link row — the note, or (on an earlier-format result) a
+ * screenshot. On the page ground, not `--el-surface-soft`: `--el-link` is AA on
+ * the page and under it on the soft surface. A reclaimed file (`url` null) keeps
+ * its row and names what it was; its link becomes plain text, never a link that
+ * 404s.
+ */
+function FileRow({
+  asset,
+  icon: Icon,
+  label,
+  linkLabel,
+}: {
+  asset: DesignAssetDTO;
+  icon: typeof FileText;
+  label: string;
+  linkLabel: string;
+}) {
   const t = useTranslations('designResult');
-  const [preview, setPreview] = useState<PreviewableAttachment | null>(null);
+  return (
+    <div
+      className="flex min-w-0 items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-[13px] text-(--el-text-secondary)"
+      data-testid="design-result-file-row"
+    >
+      <Icon className="h-3.5 w-3.5 flex-none" aria-hidden />
+      <span className="flex-none font-medium text-(--el-text)">{label}</span>
+      <span className="min-w-0 truncate font-mono">{asset.sourcePath}</span>
+      {asset.url ? (
+        <a
+          className="ml-auto inline-flex flex-none items-center gap-1 whitespace-nowrap text-(--el-link) hover:underline"
+          href={asset.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {linkLabel}
+          <ExternalLink className="h-3 w-3" aria-hidden />
+        </a>
+      ) : (
+        <span className="ml-auto flex-none whitespace-nowrap">{t('noteGone')}</span>
+      )}
+    </div>
+  );
+}
+
+export function DesignResultPanel({
+  evidence,
+  isDesignCard,
+  placement = 'section',
+}: DesignResultPanelProps) {
+  const t = useTranslations('designResult');
+
+  const mocks = evidence ? evidence.assets.filter((a) => a.kind === 'mock' && a.url) : [];
+  const images = evidence ? evidence.assets.filter((a) => a.kind === 'image') : [];
+  // The note is read WITHOUT the `url` filter: a GC-reclaimed blob still knows
+  // which repo file it came from, and the row keeps naming it.
+  const noteFile = evidence?.assets.find((a) => a.kind === 'note_file') ?? null;
 
   // ⚠️ THE PANEL'S OWN REPORT TO THE APPROVAL FRAME — the "resolver returned the
   // subject as unavailable" arm of state `X` (MOTIR-5032). The `MockFrame`
   // report above answers for a subject that FAILED TO LOAD; this answers for one
   // that is not there to load.
   //
-  // Nothing published, or an evidence row with no note and not one asset
-  // carrying a URL, means there is NOTHING in band 2 to look at. As a read-only
-  // panel that is a perfectly good state and says so ("Nothing published yet").
-  // Under a gate it is the worst state to leave a live Approve button in, so the
-  // frame is told. Reported unconditionally and before the early return below,
-  // per the rules of hooks; a panel rendered OUTSIDE a frame has no listener and
-  // this is inert (`DesignResultSection`'s `if (!current) return port` path).
-  const hasSubject =
+  // What there is to REVIEW is the mock (AMENDMENT 4 Q1). So a mock with a URL is
+  // a subject; and an EARLIER-FORMAT result that carries no mock at all still has
+  // one when any of its screenshots or its note file is reachable — otherwise a
+  // decided gate on an old result would be reported as a failed port. The inline
+  // `noteMd` no longer counts: it is not rendered, so it is nothing to look at.
+  // Reported unconditionally and before the early return below, per the rules of
+  // hooks; outside a frame there is no listener and this is inert.
+  const hasMockSubject = evidence?.assets.some((a) => a.kind === 'mock' && a.url) ?? false;
+  const hasOlderSubject =
     evidence !== null &&
-    (Boolean(evidence.noteMd) || evidence.assets.some((asset) => Boolean(asset.url)));
-  useReportPortRenderStatus(hasSubject ? 'rendered' : 'failed');
+    !evidence.assets.some((a) => a.kind === 'mock') &&
+    evidence.assets.some((a) => (a.kind === 'image' || a.kind === 'note_file') && a.url);
+  useReportPortRenderStatus(hasMockSubject || hasOlderSubject ? 'rendered' : 'failed');
 
   // ── Nothing published yet ──────────────────────────────────────────────────
-  // The most-seen state for a long while: every design subtask that shipped
-  // before this feature has no result. It reads as "this predates the feature",
-  // never as an error, and says where a result comes from so nobody hunts for
-  // an upload control that does not exist.
+  // Since AMENDMENT 4 a result is published only when other work waits on the
+  // design, so an empty panel is often CORRECT; the design-card copy says so.
   if (!evidence) {
     return (
       <div className="flex gap-3.5 rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) p-4">
@@ -313,95 +366,112 @@ export function DesignResultPanel({ evidence, isDesignCard }: DesignResultPanelP
     );
   }
 
-  const mocks = evidence.assets.filter((a) => a.kind === 'mock' && a.url);
-  const images = evidence.assets.filter((a) => a.kind === 'image' && a.url);
-  const noteFile = evidence.assets.find((a) => a.kind === 'note_file' && a.url);
-  // The strip names the note's SOURCE, mirroring the frame strip. The asset
-  // is read WITHOUT the `url` filter above: a GC-reclaimed blob still knows
-  // which repo file it came from, and that is all the strip renders.
-  const noteSourcePath = evidence.assets.find((a) => a.kind === 'note_file')?.sourcePath;
+  // An EARLIER FORMAT result — published before AMENDMENT 4, with an inline note
+  // or screenshots. Nothing is migrated and nothing re-renders inline: its files
+  // are listed as links under the mock (design panel 4).
+  const earlierFormat = Boolean(evidence.noteMd) || images.length > 0;
 
-  return (
-    <div>
-      {evidence.noteMd ? (
-        // The note is a PUBLISHED ARTIFACT, so it gets the frame's treatment:
-        // a header strip naming its source over a BOUNDED, bordered body that
-        // scrolls inside itself. Same grammar, same tokens, same FRAME_HEIGHT
-        // — the two artifacts read as one result instead of a queue.
-        //
-        // It renders through MarkdownView — the shipped read surface for
-        // work-item Markdown (`wmde-markdown motir-prose`, the same styling
-        // the description and explanation get). `.motir-prose` is what supplies
-        // heading scale, list markers and table rules; it also sets the 14px
-        // body size, so no `text-sm` here. Wide tables scroll inside their own
-        // container, which `renderMarkdown` wraps them in (MOTIR-2039), so the
-        // page body never scrolls sideways.
-        <div>
-          <div className="flex items-center gap-2 rounded-t-(--radius-input) border border-b-0 border-(--el-border) bg-(--el-surface-soft) px-2.5 py-1.5 text-xs text-(--el-text-secondary)">
-            <FileText className="h-3.5 w-3.5" aria-hidden />
-            <span className="font-medium">{t('note')}</span>
-            {noteSourcePath ? <span className="truncate font-mono">{noteSourcePath}</span> : null}
-          </div>
-          <MarkdownView
-            value={evidence.noteMd}
-            className={`${FRAME_HEIGHT} overflow-x-auto overflow-y-auto rounded-b-(--radius-input) border border-(--el-border) bg-(--el-page-bg) p-4`}
-          />
+  const noteRow = noteFile ? (
+    <FileRow asset={noteFile} icon={FileText} label={t('note')} linkLabel={t('openNote')} />
+  ) : null;
+
+  const body = (
+    <>
+      {earlierFormat ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2.5 text-[13px] text-(--el-text-secondary)">
+          {/* The design's `--el-tint-yellow` + `--el-text-strong` chip, over the NEUTRAL
+              tone rather than `awaiting`: the same fill, but `awaiting` means a
+              decision is waiting, and this renders inside that frame's port. */}
+          <Pill
+            tone="neutral"
+            className="border-transparent bg-(--el-tint-yellow) text-(--el-text-strong)"
+          >
+            {t('earlierFormat')}
+          </Pill>
+          <span>{t('earlierFormatBody')}</span>
         </div>
       ) : null}
 
-      {evidence.noteTruncated ? (
-        <p className="mt-3 flex items-center gap-2 rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2 text-[13px] text-(--el-text-secondary)">
-          {t('noteTruncated')}
-          {noteFile?.url ? (
-            <a className="text-(--el-link) hover:underline" href={`${noteFile.url}?download=1`}>
-              {t('downloadNote')}
-            </a>
-          ) : null}
+      {/* The count line — only with SEVERAL mocks, so a reviewer does not stop
+          after the first frame. Nothing else sits above the first frame. */}
+      {mocks.length > 1 ? (
+        <p className="text-xs text-(--el-text-secondary)">
+          {t('mockCount', { count: mocks.length })}
         </p>
       ) : null}
 
-      {mocks.map((asset) => (
-        <div key={asset.id} className="mt-5">
+      {mocks.map((asset, index) => (
+        <div key={asset.id} className={index === 0 && mocks.length === 1 ? '' : 'mt-5'}>
           <MockFrame asset={asset} />
         </div>
       ))}
 
-      {images.length > 0 ? (
-        <div className="mt-5">
+      {/* THE NOTE IS ONE LINK AWAY, AND IT SITS AT THE BOTTOM (revised on review,
+          2026-09-14): the mock is what the approval is about; the note is written
+          for the agents that build to it. */}
+      {earlierFormat ? (
+        <div className={mocks.length > 0 ? 'mt-4' : ''}>
           <p className="mb-2 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-            {t('screenshots')}
+            {t('files')}
           </p>
-          <div className="flex flex-wrap gap-3">
-            {images.map((asset) => {
-              const previewable = toPreviewable(asset);
-              return (
-                <button
-                  key={asset.id}
-                  type="button"
-                  onClick={() => setPreview(previewable)}
-                  className="w-44 overflow-hidden rounded-(--radius-input) border border-(--el-border) bg-(--el-surface-soft) text-left"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- the
-                      authenticated content route 302s to a signed URL on the
-                      object store; next/image cannot optimise an opaque redirect. */}
-                  <img
-                    src={asset.url!}
-                    alt={basenameOf(asset.sourcePath)}
-                    className="h-26 w-full object-cover"
-                  />
-                  <span className="block truncate border-t border-(--el-border-soft) px-2 py-1.5 text-[11px] text-(--el-text-secondary)">
-                    {basenameOf(asset.sourcePath)}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="flex flex-col gap-2">
+            {noteRow}
+            {images.map((asset) => (
+              <FileRow
+                key={asset.id}
+                asset={asset}
+                icon={FileImage}
+                label={t('screenshot')}
+                linkLabel={t('openFile')}
+              />
+            ))}
           </div>
         </div>
+      ) : noteRow ? (
+        <div className={mocks.length > 0 ? 'mt-4' : ''}>{noteRow}</div>
       ) : null}
+    </>
+  );
 
+  if (placement === 'development') {
+    // THE SLOT inside the Development block (Q8, design states 7–8): FIRST in the
+    // block, under its own `h4` — the How to test part's heading grammar — with
+    // the provenance collapsed to one line. The block owns what follows it.
+    return (
+      <div
+        role="group"
+        aria-label={t('title')}
+        data-testid="development-design-result"
+        className="mt-1 flex min-w-0 flex-col gap-2.5"
+      >
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <h4 className="text-[13px] font-semibold text-(--el-text)">{t('title')}</h4>
+          {evidence.producedByKey || evidence.commitSha ? (
+            <span className="text-xs text-(--el-text-secondary)">
+              {evidence.producedByKey
+                ? t.rich('slotProvenance', {
+                    key: evidence.producedByKey,
+                    b: (chunks) => <b className="font-medium text-(--el-text)">{chunks}</b>,
+                  })
+                : null}
+              {evidence.producedByKey && evidence.commitSha ? ' · ' : null}
+              {evidence.commitSha ? (
+                <span className="font-mono text-(--el-text-identifier)">
+                  {evidence.commitSha.slice(0, 7)}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
+        <div className="min-w-0">{body}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {body}
       <Provenance evidence={evidence} />
-
-      <AttachmentPreview attachment={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }

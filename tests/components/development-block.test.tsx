@@ -159,3 +159,76 @@ describe('the NARROW row — pills wrap under the title below a 30rem column (MO
     expect(unconditional).toEqual(expect.arrayContaining(['flex', 'items-center', 'gap-2.5']));
   });
 });
+
+// ── THE DESIGN RESULT'S SLOT (Story MOTIR-5488 · MOTIR-5498) ────────────────
+// `design-result.md` AMENDMENT 4 Q8, design `design-result--what-to-review.mock.html`
+// states 7a–7c: on a card whose open linked pull requests carry the design's
+// decision, the result is the block's FIRST part — then How to test, then every
+// row — rendered once however many pull requests the card links.
+describe('the design result inside the Development block (Q8)', () => {
+  const SLOT = <div role="group" aria-label="Design result" data-testid="slot" />;
+  const PR_GROUP = messages.github.development.pullRequestsGroup;
+
+  function renderWithDesign(mergeGate: { gate: ApprovalGateDTO; canDecide: boolean } | null) {
+    return render(
+      <DevelopmentSectionBody
+        pullRequests={[CORE_PR, GATEWAY_PR]}
+        itemIdentifier="ACME-12"
+        manualLinkable
+        howToTest={TWO_REPO_STORY}
+        designResult={SLOT}
+        mergeGate={mergeGate ? { ...mergeGate, routedToLabel: 'Mara S.' } : null}
+      />,
+    );
+  }
+
+  const follows = (a: Node, b: Node) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('orders the block design → How to test → every pull-request row, the design ONCE', () => {
+    renderWithDesign(null);
+    const slots = screen.getAllByTestId('slot');
+    expect(slots).toHaveLength(1);
+    const part = screen.getByRole('group', { name: htt.title });
+    const prs = screen.getByRole('group', { name: PR_GROUP });
+    expect(follows(slots[0]!, part)).toBe(true);
+    expect(follows(part, prs)).toBe(true);
+    // Both repositories' rows sit in the pull-request group, below How to test.
+    expect(within(prs).getByText(CORE_PR.title)).toBeTruthy();
+    expect(within(prs).getByText(GATEWAY_PR.title)).toBeTruthy();
+    expect(within(prs).getByText(/Link pull request here/)).toBeTruthy();
+  });
+
+  it('wraps the slot, How to test and the rows in ONE frame while the merge gate awaits', () => {
+    renderWithDesign({ gate: AWAITING_MERGE_GATE, canDecide: true });
+    const ports = screen.getAllByRole('group', { name: PORT_LABEL });
+    expect(ports).toHaveLength(1);
+    expect(within(ports[0]!).getByTestId('slot')).toBeTruthy();
+    expect(within(ports[0]!).getByRole('group', { name: htt.title })).toBeTruthy();
+    expect(within(ports[0]!).getByText(GATEWAY_PR.title)).toBeTruthy();
+  });
+
+  it('a block WITHOUT a design result keeps rows, then How to test, and no pull-request group', () => {
+    renderBlock(null);
+    expect(screen.queryByRole('group', { name: PR_GROUP })).toBeNull();
+    const rows = screen.getAllByRole('listitem');
+    expect(follows(rows[0]!, screen.getByRole('group', { name: htt.title }))).toBe(true);
+  });
+});
+
+describe('hasOpenPullRequest — the condition the slot is shown on', () => {
+  it('is true for any open row, from either list, and false when every row is merged or closed', async () => {
+    const { hasOpenPullRequest } = await import('@/components/github/DevelopmentSection');
+    const merged = { ...CORE_PR, state: 'merged' as const };
+    const closed = { ...GATEWAY_PR, state: 'closed' as const };
+    expect(hasOpenPullRequest([merged, closed], [])).toBe(false);
+    expect(hasOpenPullRequest([], [])).toBe(false);
+    expect(hasOpenPullRequest([merged, GATEWAY_PR], [])).toBe(true);
+    expect(
+      hasOpenPullRequest(
+        [merged],
+        [{ pullRequest: GATEWAY_PR, baseRef: 'main', defaultBranch: 'main' }],
+      ),
+    ).toBe(true);
+  });
+});

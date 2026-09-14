@@ -1,3 +1,4 @@
+import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { IssueDetailDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { QuickViewData } from '@/lib/dto/quickView';
@@ -52,6 +53,9 @@ export function toQuickViewData(
   deliveries: WorkItemDeliveryDto[],
   /** The filed item's folder names, root first (MOTIR-5352); `[]` when unfiled. */
   folderPath: string[],
+  /** The current design result when a linked pull request is open (Q8); null
+   *  otherwise — the peek draws it only inside the Development block. */
+  designEvidence: DesignEvidenceDTO | null = null,
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -108,6 +112,7 @@ export function toQuickViewData(
     pullRequests,
     repoDelivery,
     deliveries,
+    designEvidence,
     // MOTIR-910: the peek header's Plan / Re-plan door. `hasChildren` rides the
     // detail aggregate already read above; `canPlan` is the project capability
     // the service resolves (this mapper stays pure).

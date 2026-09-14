@@ -1467,14 +1467,24 @@ interactive operator and not at all for the agent it was built for.)
 
 #### `publish_design_result`
 
-Put the **design result on a design work item** — the note sections you changed,
-the `*.mock.html` mock and the `.png` export, in ONE call. It is the last step of
-a design card and the deliverable a reviewer actually opens: the pull request is
-not it, and a card whose panel is empty reads as a design nobody did.
+Put the **design result on a design work item** — WHAT TO REVIEW: the
+`*.mock.html` mock(s) and the area's `design-notes.md` as the one `note_file`,
+which the result shows as a link, in ONE call. For a change to an existing design
+the mock is the NEW delta mock (`<surface>--<change>.mock.html`) only.
+**No `.png` and no `noteMd`** — both are retired and refused by name
+(`docs/decisions/design-result.md` AMENDMENT 4).
 
-⚠️ **Nothing else publishes it.** There is no CI lane, no check and no background
-job behind this call. A design card that commits its three files and never makes
-it looks _identical_ to one that succeeded — files written, commit landed, pull
+⚠️ **Publish ONLY when work waits on the design.** The call is refused
+(`DESIGN_EVIDENCE_NOTHING_WAITS`) unless at least one work item that is not
+archived and not in the `done` category is `blocked_by` the design card — read at
+`create_design_upload` and again inside the publish transaction. A publish raises
+an approval gate, and a gate is only worth a person's time when work is held up by
+its answer; a design nothing waits on is reviewed on its pull request.
+
+⚠️ **When work does wait, nothing else publishes it.** There is no CI lane, no
+check and no background job behind this call. A design card that something is
+`blocked_by`, that commits its two files and never makes it looks _identical_ to
+one that succeeded — files written, commit landed, pull
 request open, checks green, and an empty panel. **The confirmation is the
 evidence `id` this call returns.**
 
@@ -1498,21 +1508,21 @@ inferences are now three declarations, and the file is in no repository at all.
 | Input             | Type   | Required | Notes                                                                                                                       |
 | ----------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `key`             | string | yes      | The work item this result belongs to, e.g. `"ACME-7"`. A LEAF — see the refusals.                                           |
-| `assets`          | array  | yes      | The files, at least one. Normally three; each entry is the object below.                                                    |
-| `noteMd`          | string | no       | The `##` SECTIONS this work changed, as Markdown — never the whole area note.                                               |
+| `assets`          | array  | yes      | One or more `mock` and exactly one `note_file`; each entry is the object below.                                             |
+| `noteMd`          | string | no       | **RETIRED — refused if present** (`DESIGN_EVIDENCE_NOTE_MD_RETIRED`). Kept in the schema only so it is refused by name.     |
 | `commitSha`       | string | no       | The commit the assets were published from. Also the **idempotency key**.                                                    |
 | `producedByKey`   | string | no       | The work item whose pull request produced this result.                                                                      |
 | `withinParentKey` | string | no       | On a PARENT-RUN publish: the container whose branch this belongs to. Asserts the target is one of its children; not stored. |
 
 Each `assets[]` entry:
 
-| Field           | Type   | Required             | Notes                                                                                                                                       |
-| --------------- | ------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kind`          | string | yes                  | `"mock"` for the `*.mock.html`, `"image"` for the `.png`, `"note_file"` for the complete note text.                                         |
-| `sourcePath`    | string | yes                  | The path the file has IN THE REPOSITORY, e.g. `"design/work-items/detail.png"`.                                                             |
-| `contentType`   | string | with `contentBase64` | `text/html`, `image/png` or `text/markdown`. Anything else is refused. Omit it with `pathname` — the STORE's answer is authoritative there. |
-| `contentBase64` | string | one of two           | The file's bytes, base64-encoded — the INLINE form, for a small file.                                                                       |
-| `pathname`      | string | one of two           | The `pathname` of a `create_design_upload` grant you have already PUT this file to.                                                         |
+| Field           | Type   | Required             | Notes                                                                                                                          |
+| --------------- | ------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `kind`          | string | yes                  | `"mock"` for a `*.mock.html`, `"note_file"` for the area's notes file. `"image"` is RETIRED and refused.                       |
+| `sourcePath`    | string | yes                  | The path the file has IN THE REPOSITORY, e.g. `"design/work-items/detail.mock.html"`.                                          |
+| `contentType`   | string | with `contentBase64` | `text/html` or `text/markdown`. Anything else is refused. Omit it with `pathname` — the STORE's answer is authoritative there. |
+| `contentBase64` | string | one of two           | The file's bytes, base64-encoded — the INLINE form, for a small file.                                                          |
+| `pathname`      | string | one of two           | The `pathname` of a `create_design_upload` grant you have already PUT this file to.                                            |
 
 ⚠️ **Each asset carries `contentBase64` OR `pathname`, and one publish uses one
 form for ALL of its assets.** Both, neither, or a mix are refused by name
@@ -1521,11 +1531,12 @@ the two forms reach two different service methods, so reconciling them here
 would make the tool the one place that decides how a design result is assembled.
 Minting a grant for every asset is one extra call and costs nothing.
 
-**The three kinds are a closed set** (`mock` / `image` / `note_file`), mirroring
-the `design_asset_kind` column. `note_file` carries the COMPLETE note text as a
-file while `noteMd` carries only the sections you wrote — which is what makes the
-64 KiB cap on `noteMd` a rendering bound rather than a data-loss one. Over that
-size it is truncated at a `##` boundary for display and the result says so.
+**The schema still lists three kinds** (`mock` / `image` / `note_file`), mirroring
+the `design_asset_kind` column, because stored results published before
+AMENDMENT 4 carry `image` rows. A NEW publish uses two: `mock` (one or more) and
+`note_file` (exactly one). `image` stays in the schema so a caller still sending a
+`.png` is told `DESIGN_EVIDENCE_IMAGE_RETIRED` rather than a generic validation
+error.
 
 ⚠️ **`text/html` has exactly ONE entrance and this is it.** A design mock is HTML
 rendered to a signed-in user, so its safety rests on the design-asset allowlist
@@ -1538,10 +1549,11 @@ that is not valid base64 is **refused rather than salvaged**: `Buffer.from(s,
 'base64')` discards characters outside the alphabet instead of failing, so an
 unchecked decode would publish a corrupt mock under a real evidence id that only
 fails when a reviewer opens the panel. The refusal names WHICH asset, so a
-three-asset publish does not have to be bisected.
+several-asset publish does not have to be bisected.
 
 **Output** — `structuredContent`: `id` (the evidence id — quote it on the card),
-`workItemKey`, `assetCount`, `noteTruncated`, `createdAt`.
+`workItemKey`, `assetCount`, `noteTruncated` (always `false` for a new publish;
+kept so the payload shape does not change), `createdAt`.
 
 **Refusals** — every one comes from the shipped design-evidence service, so this
 tool and the HTTP publish route answer one rule:
@@ -1549,9 +1561,14 @@ tool and the HTTP publish route answer one rule:
 | Refusal                                                                   | When                                                                                                                                                                      |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `INVALID_BASE64`                                                          | An asset's `contentBase64` is not valid base64. Names the `sourcePath`.                                                                                                   |
+| `DESIGN_EVIDENCE_IMAGE_RETIRED` (422)                                     | An asset of kind `image`. A design result carries no screenshot. Names the `sourcePath`.                                                                                  |
+| `DESIGN_EVIDENCE_NOTE_MD_RETIRED` (422)                                   | `noteMd` is present, empty or not. Publish the notes file as the `note_file`; the result links to it.                                                                     |
+| `DESIGN_EVIDENCE_MOCK_REQUIRED` (422)                                     | No `mock` asset.                                                                                                                                                          |
+| `DESIGN_EVIDENCE_NOTE_FILE_REQUIRED` (422)                                | Zero, or more than one, `note_file` asset.                                                                                                                                |
+| `DESIGN_EVIDENCE_NOTHING_WAITS` (409)                                     | No open (not archived, not `done`-category) work item is `blocked_by` the card. Its pull request is its review.                                                           |
 | container target                                                          | `key` names an epic / story / task with children. A design result belongs to the LEAF that produced it.                                                                   |
 | not a child                                                               | `withinParentKey` is given and `key` is not one of that container's children. One transposed digit once addressed 126 artifacts to a manual billing task in another epic. |
-| disallowed media type                                                     | A `contentType` outside `text/html` / `image/png` / `text/markdown`.                                                                                                      |
+| disallowed media type                                                     | A `contentType` outside the design-asset allowlist.                                                                                                                       |
 | oversize file                                                             | An asset over the per-file upload cap.                                                                                                                                    |
 | `AMBIGUOUS_ASSET_SOURCE` · `MISSING_ASSET_SOURCE` · `MIXED_ASSET_SOURCES` | An asset carries both forms, neither, or the publish mixes them. Names the `sourcePath`.                                                                                  |
 | unknown / cross-workspace `key`                                           | A 404, indistinguishable from a work item the token cannot reach.                                                                                                         |
@@ -1570,14 +1587,17 @@ one media type; you PUT the bytes straight to the store and then name the
 `pathname` in `publish_design_result`. Same target rules as the publish (a LEAF,
 and `withinParentKey` asserts the child relationship), same design-asset
 allowlist, same per-file cap — it is the same service call the CI-authed HTTP
-mint route makes.
+mint route makes. It refuses an `image` grant (`DESIGN_EVIDENCE_IMAGE_RETIRED`)
+and a card no open work item is `blocked_by` (`DESIGN_EVIDENCE_NOTHING_WAITS`)
+**before** any bytes move; the mock / note-file count is a property of the whole
+publish and is checked there.
 
 **WHICH DOOR AT WHICH SIZE — and the second limit is the binding one.**
 
-| the asset                                   | the door                                               |
-| ------------------------------------------- | ------------------------------------------------------ |
-| a note file, a small mock — tens of KB      | inline `contentBase64`, one call                       |
-| anything a full-page `.png` export produces | `create_design_upload` → PUT → `publish_design_result` |
+| the asset                               | the door                                               |
+| --------------------------------------- | ------------------------------------------------------ |
+| a note file, a small mock — tens of KB  | inline `contentBase64`, one call                       |
+| a large mock or a very large notes file | `create_design_upload` → PUT → `publish_design_result` |
 
 ⚠️ **Two independent limits sit under an inline publish, and only the first one
 is about Motir** (bug MOTIR-4750). The MCP route is a serverless function whose
@@ -1604,7 +1624,7 @@ the org's per-file cap, told up front so an over-cap PUT is a decision rather
 than an opaque store error.
 
 **The PUT is yours and nothing about it goes through Motir** —
-`curl -X PUT --upload-file <file> -H 'Content-Type: image/png' "<uploadUrl>"`.
+`curl -X PUT --upload-file <file> -H 'Content-Type: text/html' "<uploadUrl>"`.
 The grant is bound to that exact object and that exact media type, so a PUT of
 anything else is refused by the store. Then `publish_design_result` HEADs each
 object for its authoritative size and type: a lying, absent or cross-tenant

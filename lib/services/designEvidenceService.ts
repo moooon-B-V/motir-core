@@ -5,6 +5,10 @@ import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { handlerFor } from '@/lib/approvalGates/registry';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -15,6 +19,11 @@ import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
   DesignEvidenceBlobMissingError,
   DesignEvidenceEmptyError,
+  DesignEvidenceImageRetiredError,
+  DesignEvidenceMockRequiredError,
+  DesignEvidenceNoteFileRequiredError,
+  DesignEvidenceNoteMdRetiredError,
+  DesignEvidenceNothingWaitsError,
   DesignEvidenceNotAChildError,
   DesignEvidenceNotALeafError,
   DesignEvidenceNoCurrentResultError,
@@ -46,10 +55,9 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
  * and they are enforced here.
  */
 
-/** The inline `noteMd` ceiling — a RENDERING bound, never a data-loss bound. */
-export const NOTE_MD_CAP_BYTES = 64 * 1024;
-
-/** The kinds a caller may publish, mirroring the `design_asset_kind` enum. */
+/** Every `design_asset_kind` the store knows. `image` stays readable for rows
+ *  published before AMENDMENT 4 and is refused for a new publish by
+ *  {@link assertResultShape} — a named refusal, not an unknown kind. */
 const ASSET_KINDS: readonly DesignAssetKindDTO[] = ['mock', 'image', 'note_file'];
 
 export interface DesignAssetInput {
@@ -240,64 +248,71 @@ async function resolveCostContext(
 }
 
 /**
- * Cap the inline note at {@link NOTE_MD_CAP_BYTES}, truncating **at a `##`
- * section boundary** so the stored copy is never half a section, and appending a
- * marker naming how many were dropped.
+ * The SHAPE a design result must have (MOTIR-5491; `docs/decisions/design-result.md`
+ * AMENDMENT 4 Q1): one or more `mock` assets plus exactly ONE `note_file`, and
+ * neither of the two retired inputs. Checked in this order so a caller still
+ * sending the old three-file shape is told WHICH input is retired, rather than
+ * something vaguer about a count.
  *
- * Nothing is lost: the publisher always ships the complete text as a `note_file`
- * asset, which is exactly what makes this a rendering bound (§1). The cap exists
- * because `design-notes.md` is written per AREA — the work-items file alone is
- * 303,395 bytes across 29 sections — so an unbounded column would ship a
- * 300 KB document to every page render.
+ * A retired input is REFUSED, never dropped: an agent cannot tell an ignored
+ * field from an accepted one, and a quietly-dropped `.png` would come back as a
+ * report that a screenshot was published.
  */
-export function capNoteMd(noteMd: string | null | undefined): {
-  noteMd: string | null;
-  noteTruncated: boolean;
-} {
-  if (noteMd == null || noteMd === '') return { noteMd: null, noteTruncated: false };
-  if (Buffer.byteLength(noteMd, 'utf8') <= NOTE_MD_CAP_BYTES) {
-    return { noteMd, noteTruncated: false };
-  }
+function assertResultShape(
+  assets: ReadonlyArray<{ kind: DesignAssetKindDTO; sourcePath: string }>,
+  noteMd: string | null | undefined,
+): void {
+  const image = assets.find((asset) => asset.kind === 'image');
+  if (image) throw new DesignEvidenceImageRetiredError(image.sourcePath);
+  if (noteMd != null) throw new DesignEvidenceNoteMdRetiredError();
+  if (!assets.some((asset) => asset.kind === 'mock')) throw new DesignEvidenceMockRequiredError();
+  const noteFiles = assets.filter((asset) => asset.kind === 'note_file').length;
+  if (noteFiles !== 1) throw new DesignEvidenceNoteFileRequiredError(noteFiles);
+}
 
-  // Split into `##` sections, keeping any preamble above the first heading as
-  // its own leading chunk so a note that starts mid-file is not mangled.
-  const lines = noteMd.split('\n');
-  const sections: string[] = [];
-  let current: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith('## ') && current.length > 0) {
-      sections.push(current.join('\n'));
-      current = [];
-    }
-    current.push(line);
-  }
-  if (current.length > 0) sections.push(current.join('\n'));
+/**
+ * The ids of every OPEN work item waiting on this one — not archived, carrying an
+ * `is_blocked_by` edge to it, and with a status outside its own project's `done`
+ * category. The done test is `isTerminalStatus`, the predicate readiness applies to
+ * the same edge from the other end, so "this dependent still waits" and "this
+ * blocker is still open" can never disagree about one status.
+ *
+ * Takes the caller's `tx` because at publish the answer GATES the write in that
+ * transaction: a dependent closed between the check and the insert must be seen.
+ */
+async function openDependentIds(
+  workItemId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  const dependents = await workItemLinkRepository.findDependentStates(workItemId, tx);
+  if (dependents.length === 0) return [];
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    dependents.map((dependent) => dependent.projectId),
+    workspaceId,
+    tx,
+  );
+  return dependents
+    .filter((dependent) => !isTerminalStatus(dependent, terminalByProject))
+    .map((dependent) => dependent.id);
+}
 
-  const kept: string[] = [];
-  let bytes = 0;
-  for (const section of sections) {
-    const size = Buffer.byteLength(section, 'utf8') + 1; // + the joining newline
-    if (bytes + size > NOTE_MD_CAP_BYTES) break;
-    kept.push(section);
-    bytes += size;
-  }
-
-  const dropped = sections.length - kept.length;
-  if (kept.length === 0) {
-    // A single section larger than the whole cap: keep a prefix of it rather
-    // than storing nothing, cut on a character boundary. `sections` always has
-    // at least one entry here — the split loop pushes whatever it accumulated.
-    const head = Buffer.from(sections[0]!, 'utf8').subarray(0, NOTE_MD_CAP_BYTES).toString('utf8');
-    return {
-      noteMd: `${head}\n\n---\n\n_Truncated for display — the complete note is published as the \`note_file\` asset._`,
-      noteTruncated: true,
-    };
-  }
-
-  return {
-    noteMd: `${kept.join('\n')}\n\n---\n\n_Truncated for display: ${dropped} of ${sections.length} section(s) omitted. The complete note is published as the \`note_file\` asset._`,
-    noteTruncated: true,
-  };
+/**
+ * Refuse a design result for a card nothing waits on (AMENDMENT 4 Q2). A publish
+ * raises an approval gate, and a gate is only worth a person's time when work is
+ * held up by its answer; a design nobody depends on is reviewed on its pull request.
+ */
+async function assertSomethingWaits(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  const open = tx
+    ? await openDependentIds(item.id, ctx.workspaceId, tx)
+    : await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (t) =>
+        openDependentIds(item.id, ctx.workspaceId, t),
+      );
+  if (open.length === 0) throw new DesignEvidenceNothingWaitsError(item.identifier);
 }
 
 /**
@@ -354,8 +369,6 @@ async function persistEvidence(
   args: {
     item: WorkItem;
     artifacts: ArtifactMeta[];
-    noteMd: string | null;
-    noteTruncated: boolean;
     commitSha: string | null;
     ciRunUrl: string | null;
     producedByKey: string | null;
@@ -363,6 +376,13 @@ async function persistEvidence(
   ctx: ServiceContext,
 ) {
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    // ⚠️ THE AUTHORITATIVE "DOES WORK WAIT ON THIS?" READ — INSIDE the write's own
+    // transaction (MOTIR-5491; AMENDMENT 4 Q2). The callers pre-check the same
+    // thing so a doomed publish uploads nothing, but only this read is taken where
+    // a dependent closing between the check and the insert can still be seen. A
+    // refusal here rolls the whole publish back: nothing superseded, no gate.
+    await assertSomethingWaits(args.item, ctx, tx);
+
     // ⚠️ RETIRE THE PRIOR VERSION'S AWAITING GATE **FIRST** — before the
     // `design_evidence` lock, and the ORDER is the contract (MOTIR-4913; ADR §6b).
     //
@@ -435,8 +455,11 @@ async function persistEvidence(
       {
         workspaceId: ctx.workspaceId,
         workItemId: args.item.id,
-        noteMd: args.noteMd,
-        noteTruncated: args.noteTruncated,
+        // AMENDMENT 4: the note is published as the `note_file` and SHOWN as a
+        // link, so a new row stores no inline copy. The columns stay for rows
+        // published before it.
+        noteMd: null,
+        noteTruncated: false,
         commitSha: args.commitSha,
         ciRunUrl: args.ciRunUrl,
         producedByKey: args.producedByKey,
@@ -510,6 +533,19 @@ async function persistEvidence(
     // This is `routeTo`'s FIRST caller. It had none because its parameter type
     // demanded the gate row, which does not exist at the moment routing must be
     // answered; `GateRoutingArgs` is that knot untied.
+    // ⚠️ NO DESIGN GATE WHILE A PULL REQUEST IS OPEN (MOTIR-5534; AMENDMENT 4 Q8).
+    // A design card that has opened one or more pull requests — in any number of
+    // repositories — is decided by the approve-to-merge gate over its whole
+    // delivery set, and approving that merges them. A `design_result` gate beside
+    // it would ask the same person a second question about the same change, and
+    // answering it would move nothing. The evidence above is still recorded and
+    // the prior version still superseded; only the question is not asked. It is
+    // the same read `designResultHandler.approve` makes, so the two ends of the
+    // rule agree on what "open" means.
+    if ((await workItemDeliveryRepository.countOpenByWorkItem(args.item.id, tx)) > 0) {
+      return (await designEvidenceRepository.findById(evidence.id, tx))!;
+    }
+
     const routedToId = handlerFor('design_result').routeTo({ item: args.item, ctx, tx });
 
     await approvalGateRepository.create(
@@ -533,6 +569,18 @@ async function persistEvidence(
 
 export const designEvidenceService = {
   /**
+   * The ids of the OPEN work items `blocked_by` this design card — the answer the
+   * publish gate refuses on when it is empty (AMENDMENT 4 Q2). Exported ONCE so
+   * the dispatch prompt decides whether to carry the publish step from the same
+   * read the server will enforce, rather than from a second rule.
+   */
+  async findWaitingDependentIds(workItemId: string, ctx: ServiceContext): Promise<string[]> {
+    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      openDependentIds(workItemId, ctx.workspaceId, tx),
+    );
+  },
+
+  /**
    * Mint scoped CLIENT upload grants so a trusted CI job PUTs each design
    * artifact DIRECTLY to the private store, never through the application. Each
    * grant is bound to one exact pathname (under this item's
@@ -555,6 +603,13 @@ export const designEvidenceService = {
   ): Promise<DesignUploadTokensDTO> {
     const item = await resolveTarget(input.workItemId, ctx, input.withinParentKey);
     if (!input.files || input.files.length === 0) throw new DesignEvidenceEmptyError();
+    // AMENDMENT 4, at the MINT as well as the publish: a grant for a retired kind,
+    // or for a card nothing waits on, is a publish that can never succeed — so no
+    // bytes get uploaded for it. The mock / note-file COUNT is a property of the
+    // whole publish and is checked there, not per grant.
+    const image = input.files.find((file) => file.kind === 'image');
+    if (image) throw new DesignEvidenceImageRetiredError(image.sourcePath);
+    await assertSomethingWaits(item, ctx);
 
     const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
     const prefix = designPrefix(ctx.workspaceId, item.id);
@@ -606,6 +661,10 @@ export const designEvidenceService = {
     const item = await resolveTarget(input.workItemId, ctx, input.withinParentKey);
 
     if (!input.assets || input.assets.length === 0) throw new DesignEvidenceEmptyError();
+    assertResultShape(input.assets, input.noteMd);
+    // Before idempotency, so a redelivery after the last dependent closed is
+    // refused like any other publish rather than handed the stale result.
+    await assertSomethingWaits(item, ctx);
 
     const idempotent = await findIdempotentExisting(
       item.id,
@@ -650,15 +709,11 @@ export const designEvidenceService = {
       });
     }
 
-    const { noteMd, noteTruncated } = capNoteMd(input.noteMd);
-
     try {
       const row = await persistEvidence(
         {
           item,
           artifacts,
-          noteMd,
-          noteTruncated,
           commitSha: input.commitSha ?? null,
           ciRunUrl: input.ciRunUrl ?? null,
           producedByKey: input.producedByKey ?? null,
@@ -681,8 +736,8 @@ export const designEvidenceService = {
    * the pathname is composed exactly as {@link createUploadTokens} composes it,
    * under the same `design/<ws>/<itemId>/` prefix with the same nonce-and-index
    * collision guard; and the whole register half — the prefix check, the
-   * authoritative `head`, the storage cap, `capNoteMd`, the `note_file`
-   * companion, supersede and idempotency — is {@link recordFromPathnames},
+   * authoritative `head`, the storage cap, the AMENDMENT 4 shape and waiting
+   * gates, supersede and idempotency — is {@link recordFromPathnames},
    * called at the end rather than reimplemented. What this method owns is the
    * upload, and nothing else.
    *
@@ -706,6 +761,11 @@ export const designEvidenceService = {
   ): Promise<DesignEvidenceDTO> {
     const item = await resolveTarget(input.workItemId, ctx, input.withinParentKey);
     if (!input.assets || input.assets.length === 0) throw new DesignEvidenceEmptyError();
+    // Refuse BEFORE the upload, so a doomed publish writes no orphan objects;
+    // `recordFromPathnames` re-asserts both, and the in-transaction read is the
+    // authoritative one.
+    assertResultShape(input.assets, input.noteMd);
+    await assertSomethingWaits(item, ctx);
 
     const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
     const prefix = designPrefix(ctx.workspaceId, item.id);

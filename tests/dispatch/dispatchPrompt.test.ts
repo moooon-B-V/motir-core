@@ -211,6 +211,47 @@ describe('dispatchPromptService.getDispatchPrompt — over real state', () => {
     expect(dto.prompt).toContain(`- Depends on (already landed): ${a.identifier}, ${b.identifier}`);
   });
 
+  it('a design card publishes only for its OPEN dependents — a `done` one is not named (MOTIR-5495)', async () => {
+    const fx = await makeWorkItemFixture();
+    const design = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Draw the rail', type: 'design' },
+      fx.ctx,
+    );
+    const open = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Build the rail' },
+      fx.ctx,
+    );
+    const shipped = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Already shipped' },
+      fx.ctx,
+    );
+    for (const dependent of [open, shipped]) {
+      await workItemsService.linkWorkItems(
+        { fromId: dependent.id, toId: design.id, kind: 'is_blocked_by' },
+        fx.ctx,
+      );
+    }
+    await adminDb.workItem.update({ where: { id: shipped.id }, data: { status: 'done' } });
+
+    const withWork = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      design.identifier,
+      fx.ctx,
+    );
+    expect(withWork.prompt).toContain(`${open.identifier} is blocked_by this card`);
+    expect(withWork.prompt).not.toContain(shipped.identifier);
+
+    // …and once the last open dependent closes, the same card is told NOT to publish.
+    await adminDb.workItem.update({ where: { id: open.id }, data: { status: 'done' } });
+    const withoutWork = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      design.identifier,
+      fx.ctx,
+    );
+    expect(withoutWork.prompt).toContain('Do NOT publish a design result');
+    expect(withoutWork.prompt).not.toContain('PUBLISH the design result');
+  });
+
   it('a manual / human item yields the human-instruction form with no git workflow', async () => {
     const fx = await makeWorkItemFixture();
     const item = await workItemsService.createWorkItem(

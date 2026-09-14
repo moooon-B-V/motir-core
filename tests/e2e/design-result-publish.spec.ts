@@ -7,14 +7,10 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
 import {
-  IMAGE_SOURCE_PATH,
   MOCK_HTML,
   MOCK_SOURCE_PATH,
-  NOTE_BODY,
-  NOTE_HEADING,
   NOTE_MD,
   NOTE_SOURCE_PATH,
-  PNG_BYTES,
   seedDesignPublish,
   type DesignPublishSeed,
 } from './_helpers/design-publish-seed';
@@ -90,21 +86,14 @@ function publish(client: Client, key: string): Promise<CallToolResult> {
           contentBase64: b64(Buffer.from(MOCK_HTML)),
         },
         {
-          kind: 'image',
-          sourcePath: IMAGE_SOURCE_PATH,
-          contentType: 'image/png',
-          contentBase64: b64(PNG_BYTES),
-        },
-        {
           kind: 'note_file',
           sourcePath: NOTE_SOURCE_PATH,
           contentType: 'text/markdown',
           contentBase64: b64(Buffer.from(NOTE_MD)),
         },
       ],
-      // The SECTIONS this card wrote — the responsibility the ADR's Q2 moved on
-      // to the agent, and the thing the prompt now names.
-      noteMd: NOTE_MD,
+      // No `.png` and no inline `noteMd` — both retired by design-result.md
+      // AMENDMENT 4 (MOTIR-5491), which refuses them by name.
       producedByKey: key,
     },
   }) as Promise<CallToolResult>;
@@ -179,7 +168,7 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       ).toBeFalsy();
       const payload = result.structuredContent as { assetCount?: number; workItemKey?: string };
       expect(payload.workItemKey).toBe(seed.publishedKey);
-      expect(payload.assetCount).toBe(3);
+      expect(payload.assetCount).toBe(2);
 
       await client.close();
       await beat();
@@ -193,27 +182,12 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // rolled up to its story.
       await expect(page.getByText('Design result', { exact: false }).first()).toBeVisible();
 
-      // The NOTE the agent chose to send. Its `##` arrives as a real heading,
-      // which is what makes "send the sections, not the file" a readable
-      // outcome rather than a size limit.
-      // `exact` because a heading name matches by SUBSTRING, and the belt to
-      // the seed's braces: the constant is already chosen to share no words
-      // with either card title.
-      await expect(page.getByRole('heading', { name: NOTE_HEADING, exact: true })).toBeVisible();
-      await expect(page.getByText(NOTE_BODY, { exact: false })).toBeVisible();
-      await beat();
-    });
-
-    await chapter('All three artifacts are on the card', async () => {
       // The mock, present as the sandboxed frame the sibling spec inspects in
       // depth — asserted here only as ARRIVED, since what is new is that a tool
-      // put it there.
+      // put it there. (Since AMENDMENT 4 a result carries no screenshot and no
+      // inline note; the note as a LINK is MOTIR-5498's panel and MOTIR-5500's
+      // walk.)
       await expect(page.locator('iframe').first()).toBeVisible();
-
-      // The screenshot, addressed by the accessible name the panel gives it —
-      // the asset's own basename — and fetched by the BROWSER through the
-      // content route's 302 to a signed URL the store would refuse unsigned.
-      await expect(page.getByRole('img', { name: 'readiness-rail.png' })).toBeVisible();
       await beat();
     });
 
