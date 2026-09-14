@@ -41,6 +41,30 @@ export interface StatusHeldLine {
   routedToLabel: string | null;
 }
 
+/**
+ * WHICH sentence a held line reads, and its values — the one statement of the
+ * choice, shared by this component (rich text) and the board's `aria-live`
+ * announcement (plain text), so the two can never say different things.
+ */
+export function heldSentence(
+  line: Pick<
+    StatusHeldLine,
+    'waitingOn' | 'gateRaised' | 'canDecide' | 'routedToLabel' | 'statusLabel'
+  >,
+  decision: string,
+): {
+  key: 'merge' | 'decisionNotRaised' | 'decisionSeeOnly' | 'decision';
+  values: Record<string, string>;
+} {
+  const status = line.statusLabel;
+  if (line.waitingOn === 'merge') return { key: 'merge', values: { status } };
+  if (!line.gateRaised) return { key: 'decisionNotRaised', values: { status, decision } };
+  if (!line.canDecide && line.routedToLabel) {
+    return { key: 'decisionSeeOnly', values: { status, decision, name: line.routedToLabel } };
+  }
+  return { key: 'decision', values: { status, decision } };
+}
+
 export interface StatusHeldNoticeProps {
   itemKey: string;
   lines: StatusHeldLine[];
@@ -82,18 +106,8 @@ export function StatusHeldNotice({ itemKey, lines }: StatusHeldNoticeProps) {
       className="flex w-full flex-col gap-2 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-tint-yellow) px-(--spacing-control-x) py-(--spacing-control-y)"
     >
       {lines.map((line, index) => {
-        const status = line.statusLabel;
-        const decision = t(`decisionNoun.${line.kind}`);
-        let text: ReactNode;
-        if (line.waitingOn === 'merge') {
-          text = t.rich('merge', { status, strong });
-        } else if (!line.gateRaised) {
-          text = t.rich('decisionNotRaised', { status, decision, strong });
-        } else if (!line.canDecide && line.routedToLabel) {
-          text = t.rich('decisionSeeOnly', { status, decision, name: line.routedToLabel, strong });
-        } else {
-          text = t.rich('decision', { status, decision, strong });
-        }
+        const { key, values } = heldSentence(line, t(`decisionNoun.${line.kind}`));
+        const text: ReactNode = t.rich(key, { ...values, strong });
         const withDoor = line.waitingOn === 'decision' && line.canDecide;
         const Glyph = line.waitingOn === 'merge' ? GitMerge : Lock;
         return (

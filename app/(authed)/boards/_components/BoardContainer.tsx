@@ -48,6 +48,10 @@ import { NoActiveSprintState } from './NoActiveSprintState';
 import { OverCapBanner } from './OverCapBanner';
 import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
+import { BoardHeldRefusalProvider, type BoardHeldRefusal } from './BoardHeldRefusal';
+import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
+import { heldSentence } from '@/components/issues/StatusHeldNotice';
+import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
   cardIndex,
@@ -495,6 +499,31 @@ function BoardDnd({
   // The lane currently under the drag (swimlane mode) — drives the target-lane
   // ring/tint (paired with the cell `isOver` outline; never colour-alone, #35).
   const [overLaneKey, setOverLaneKey] = useState<string | null>(null);
+  // A move an approval or a merge HOLDS (MOTIR-5529, design panel 2b): the card
+  // returns, and the held line renders ON it — never a toast. One at a time; the
+  // next drag, `Esc` or a click outside closes it.
+  const tHeld = useTranslations('approvalGate.statusHeld');
+  const [held, setHeld] = useState<BoardHeldRefusal | null>(null);
+  const [heldAnnouncement, setHeldAnnouncement] = useState('');
+  const closeHeld = useCallback(() => setHeld(null), []);
+  const showHeld = useCallback(
+    (card: BoardCardDto, statusLabel: string, gate: ApprovalGatePendingPayloadDTO) => {
+      const line = heldLineFromRefusal(statusLabel, statusLabel, gate);
+      setHeld({ workItemId: card.id, itemKey: gate.itemKey, line });
+      const { key, values } = heldSentence(line, tHeld(`decisionNoun.${line.kind}`));
+      const sentence = tHeld.markup(key, { ...values, strong: (chunks: string) => chunks });
+      setHeldAnnouncement(t('announcementHeld', { key: card.identifier, line: sentence }));
+    },
+    [t, tHeld],
+  );
+  // Focus lands on Review & approve when the line carries one, else stays on the
+  // returned card (design panel 2b, keyboard).
+  useEffect(() => {
+    if (!held) return;
+    const door = document.querySelector<HTMLElement>('[data-board-held] a');
+    const card = document.querySelector<HTMLElement>(`[data-testid="board-card-${held.itemKey}"]`);
+    (door ?? card)?.focus();
+  }, [held]);
 
   // The horizontal scroll region (the flat column row) + which column is centred
   // in it — drives the mobile pager (Subtask 3.2.6, design panel 7). On a narrow
@@ -661,6 +690,12 @@ function BoardDnd({
           return;
         }
         const key = args.card.identifier;
+        const heldGate = await readHeldRefusal(res);
+        if (heldGate) {
+          setColumns(args.snapshot);
+          showHeld(args.card, args.toColName, heldGate);
+          return;
+        }
         if (res.status === 409) {
           snapBack(
             args.snapshot,
@@ -675,7 +710,7 @@ function BoardDnd({
         snapBack(args.snapshot, t('moveErrorDescription', { key: args.card.identifier }));
       }
     },
-    [board.boardId, snapBack, t],
+    [board.boardId, snapBack, showHeld, t],
   );
 
   // SWIMLANE transition (column axis) — INDEPENDENT revert: on rejection, move
@@ -724,6 +759,11 @@ function BoardDnd({
         }
         const key = args.card.identifier;
         revert();
+        const heldGate = await readHeldRefusal(res);
+        if (heldGate) {
+          showHeld(args.card, args.toColName, heldGate);
+          return;
+        }
         const description =
           res.status === 409
             ? t('moveIllegalDescription', { from: args.fromColName, to: args.toColName, key })
@@ -740,7 +780,7 @@ function BoardDnd({
         });
       }
     },
-    [board.boardId, t, toast],
+    [board.boardId, showHeld, t, toast],
   );
 
   // SWIMLANE reassign (lane axis) — reuses the EXISTING 2.5 field-update action.
@@ -813,6 +853,8 @@ function BoardDnd({
   );
 
   const handleDragStart = useCallback((e: DragStartEvent) => {
+    // The start of the next drag closes a held line (design panel 2b).
+    setHeld(null);
     snapshotRef.current = columnsRef.current;
     setActiveCard(findCard(columnsRef.current, String(e.active.id)));
   }, []);
@@ -1085,89 +1127,96 @@ function BoardDnd({
   );
 
   return (
-    <DndContext
-      sensors={activeSensors}
-      collisionDetection={collisionDetectionStrategy}
-      // dnd-kit's built-in auto-scroll handles VERTICAL scrolling inside a tall
-      // column (drag a card to a column's top/bottom edge), but its default
-      // HORIZONTAL behaviour on the flat column row is too aggressive: its 20%
-      // edge threshold slams the row to its scroll boundary the instant the card
-      // enters it, overshooting past the intended column (Done) to the last one
-      // (Cancelled) — the bug-board-cannot-drag-from-in-review-to-done failure.
-      // So we take the flat row (`scrollRef`) off dnd-kit's auto-scroll and drive
-      // it ourselves (handleDragMove → updateAutoScroll: a narrow edge band, the
-      // real pointer, a gentle speed), while leaving every OTHER scrollable
-      // (column bodies, the swimlane grid) on dnd-kit's auto-scroll.
-      autoScroll={{ canScroll: (el) => el !== scrollRef.current }}
-      onDragStart={handleDragStart}
-      onDragMove={handleDragMove}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-      accessibility={{
-        announcements,
-        screenReaderInstructions: { draggable: t('dndInstructions') },
-      }}
-    >
-      {swimlaned ? (
-        <SwimlaneBoard
-          boardId={board.boardId}
-          columns={columns}
-          swimlanes={board.swimlanes}
-          assigneeNameById={assigneeNameById}
-          onOpenQuickView={openPeek}
-          onSetWipLimit={setColumnWip}
-          activeCardId={activeCard?.id ?? null}
-          overLaneKey={overLaneKey}
-          columnPoints={columnPoints}
-        />
-      ) : (
-        <div className="flex min-w-0 flex-col gap-2">
-          {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
+    <BoardHeldRefusalProvider value={{ held, close: closeHeld }}>
+      {/* The held refusal's announcement (design panel 2b) — beside dnd-kit's own
+        live region, which narrates the drag itself. */}
+      <div aria-live="polite" className="sr-only" data-testid="board-held-announcement">
+        {held ? heldAnnouncement : ''}
+      </div>
+      <DndContext
+        sensors={activeSensors}
+        collisionDetection={collisionDetectionStrategy}
+        // dnd-kit's built-in auto-scroll handles VERTICAL scrolling inside a tall
+        // column (drag a card to a column's top/bottom edge), but its default
+        // HORIZONTAL behaviour on the flat column row is too aggressive: its 20%
+        // edge threshold slams the row to its scroll boundary the instant the card
+        // enters it, overshooting past the intended column (Done) to the last one
+        // (Cancelled) — the bug-board-cannot-drag-from-in-review-to-done failure.
+        // So we take the flat row (`scrollRef`) off dnd-kit's auto-scroll and drive
+        // it ourselves (handleDragMove → updateAutoScroll: a narrow edge band, the
+        // real pointer, a gentle speed), while leaving every OTHER scrollable
+        // (column bodies, the swimlane grid) on dnd-kit's auto-scroll.
+        autoScroll={{ canScroll: (el) => el !== scrollRef.current }}
+        onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+        accessibility={{
+          announcements,
+          screenReaderInstructions: { draggable: t('dndInstructions') },
+        }}
+      >
+        {swimlaned ? (
+          <SwimlaneBoard
+            boardId={board.boardId}
+            columns={columns}
+            swimlanes={board.swimlanes}
+            assigneeNameById={assigneeNameById}
+            onOpenQuickView={openPeek}
+            onSetWipLimit={setColumnWip}
+            activeCardId={activeCard?.id ?? null}
+            overLaneKey={overLaneKey}
+            columnPoints={columnPoints}
+          />
+        ) : (
+          <div className="flex min-w-0 flex-col gap-2">
+            {/* The horizontally-scrolling column row. Scroll-snap (proximity, so it
               never fights a deliberate scroll) makes narrow viewports read as a
               single-column pager (3.2.6, panel 7); each column is wrapped with
               `data-board-column` so the pager hook can locate it. The wrapper is
               the snap target — BoardColumn keeps its own droppable ref + width. */}
-          <div
-            ref={scrollRef}
-            role="group"
-            aria-label={t('boardLabel')}
-            tabIndex={0}
-            // `data-board-scroll`: under the 3D / Immersive style this row widens
-            // its gap and adds bottom room so each column's float shadow shows
-            // (the `overflow-x-auto` here forces overflow-y to clip — see
-            // globals.css). Inert under every other style.
-            data-board-scroll=""
-            className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-            data-testid="board"
-          >
-            {columns.map((column) => (
-              <div key={column.id} data-board-column className="flex shrink-0 snap-start">
-                <BoardColumn
-                  column={column}
-                  boardId={board.boardId}
-                  assigneeNameById={assigneeNameById}
-                  onOpenQuickView={openPeek}
-                  activeCardId={activeCard?.id ?? null}
-                  onSetWipLimit={setColumnWip}
-                  points={columnPoints?.[column.id] ?? null}
-                />
-              </div>
-            ))}
+            <div
+              ref={scrollRef}
+              role="group"
+              aria-label={t('boardLabel')}
+              tabIndex={0}
+              // `data-board-scroll`: under the 3D / Immersive style this row widens
+              // its gap and adds bottom room so each column's float shadow shows
+              // (the `overflow-x-auto` here forces overflow-y to clip — see
+              // globals.css). Inert under every other style.
+              data-board-scroll=""
+              className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              data-testid="board"
+            >
+              {columns.map((column) => (
+                <div key={column.id} data-board-column className="flex shrink-0 snap-start">
+                  <BoardColumn
+                    column={column}
+                    boardId={board.boardId}
+                    assigneeNameById={assigneeNameById}
+                    onOpenQuickView={openPeek}
+                    activeCardId={activeCard?.id ?? null}
+                    onSetWipLimit={setColumnWip}
+                    points={columnPoints?.[column.id] ?? null}
+                  />
+                </div>
+              ))}
+            </div>
+            <BoardColumnPager columns={columns} activeIndex={activeColumn} />
           </div>
-          <BoardColumnPager columns={columns} activeIndex={activeColumn} />
-        </div>
-      )}
-      <DragOverlay>
-        {activeCard ? (
-          <BoardCardOverlay
-            card={activeCard}
-            assigneeName={
-              activeCard.assigneeId ? (assigneeNameById.get(activeCard.assigneeId) ?? null) : null
-            }
-          />
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+        )}
+        <DragOverlay>
+          {activeCard ? (
+            <BoardCardOverlay
+              card={activeCard}
+              assigneeName={
+                activeCard.assigneeId ? (assigneeNameById.get(activeCard.assigneeId) ?? null) : null
+              }
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </BoardHeldRefusalProvider>
   );
 }

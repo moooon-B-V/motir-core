@@ -3796,7 +3796,8 @@
     "sprintColumnPointsTitle": "{points} story points in this column",
     "noActiveSprintTitle": "No active sprint",
     "noActiveSprintDescription": "This board has no sprint in progress. Plan and start a sprint from the backlog, and its work items will appear here in workflow columns.",
-    "noActiveSprintCta": "Go to Backlog"
+    "noActiveSprintCta": "Go to Backlog",
+    "announcementHeld": "{key} returned. {line}"
   },
   "ready": {
     "heading": "Ready to start",

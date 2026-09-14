@@ -3796,7 +3796,8 @@
     "sprintColumnPointsTitle": "此列共 {points} 个故事点",
     "noActiveSprintTitle": "没有进行中的 Sprint",
     "noActiveSprintDescription": "此看板当前没有进行中的 Sprint。在待办列表中规划并开始一个 Sprint，其事项将在此处的工作流列中显示。",
-    "noActiveSprintCta": "前往待办列表"
+    "noActiveSprintCta": "前往待办列表",
+    "announcementHeld": "{key} 已退回。{line}"
   },
   "ready": {
     "heading": "可开始",
