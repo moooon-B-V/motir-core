@@ -352,3 +352,71 @@ describe('the frame, composed at full size', () => {
     ).toBeTruthy();
   });
 });
+
+describe('the overlay across a CHANGING address (MOTIR-5226)', () => {
+  it('a read superseded by a new address never lands on it', async () => {
+    let resolveFirst!: (read: ApprovalGateOverlayReadDTO) => void;
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveFirst = resolve)),
+    );
+    fetchApprovalGateOverlay.mockReturnValueOnce(new Promise(() => {}));
+    const { rerender } = await renderOverlay();
+
+    openAt('GATE-2', 'design_result');
+    rerender(<ApprovalOverlay />);
+    await act(async () => resolveFirst(readOf()));
+
+    // GATE-1's answer was for an address nobody is on any more.
+    expect(screen.queryByRole('dialog', { name: 'Design result for GATE-1' })).toBeNull();
+    expect(screen.getByRole('dialog').querySelector('[aria-busy="true"]')).toBeTruthy();
+  });
+
+  it('a FAILED read superseded by a new address does not draw "not available" over it', async () => {
+    let rejectFirst!: (err: Error) => void;
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (rejectFirst = reject)),
+    );
+    fetchApprovalGateOverlay.mockReturnValueOnce(new Promise(() => {}));
+    const { rerender } = await renderOverlay();
+
+    openAt('GATE-2', 'design_result');
+    rerender(<ApprovalOverlay />);
+    await act(async () => rejectFirst(new Error('Approval gate read failed (500)')));
+
+    expect(screen.queryByText(en.approvalOverlay.notAvailable.body)).toBeNull();
+    expect(screen.getByRole('dialog').querySelector('[aria-busy="true"]')).toBeTruthy();
+  });
+
+  it('returns focus to whatever opened it — a URL write is not Radix’s Trigger', async () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'the row';
+    document.body.appendChild(opener);
+    opener.focus();
+    params = new URLSearchParams('tab=approvals');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    const { rerender } = await renderOverlay();
+
+    openAt('GATE-1', 'design_result');
+    rerender(<ApprovalOverlay />);
+    await act(async () => {});
+    expect(screen.getByRole('dialog', { name: 'Design result for GATE-1' })).toBeTruthy();
+
+    params = new URLSearchParams('tab=approvals&page=2');
+    rerender(<ApprovalOverlay />);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  it('names the published design plainly when the gate carries no version', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf({ gate: { ...GATE, subjectVersion: null } }));
+    await renderOverlay();
+
+    const dialog = screen.getByRole('dialog', { name: 'Design result for GATE-1' });
+    expect(within(dialog).getByText(en.approvalGate.designResult.meta.plain)).toBeTruthy();
+  });
+});

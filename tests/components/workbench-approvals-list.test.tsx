@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
 import { announceGateDecided } from '@/lib/approvals/decidedGates';
-import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
+import type { ApprovalQueueRowDto, DesignResultSubjectSummaryDTO } from '@/lib/dto/approvalGate';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), RE-SCOPED by
 // Subtask MOTIR-5225 (Story MOTIR-5214): the row no longer discloses a frame, it
@@ -109,6 +109,27 @@ describe('the Approvals list — the row', () => {
 
     const rendered = screen.getAllByTestId(/^approval-row-/).map((el) => el.dataset['testid']);
     expect(rendered).toEqual(['approval-row-gate-old', 'approval-row-gate-new']);
+  });
+
+  it('reads a short wait in HOURS and a long one in DAYS', () => {
+    renderRows([
+      designRow({
+        gateId: 'gate-hours',
+        waitingSince: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+      }),
+      designRow({ gateId: 'gate-days' }),
+    ]);
+
+    const fmt = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'narrow' });
+    expect(screen.getByText(fmt.format(-3, 'hour'))).toBeTruthy();
+    expect(screen.getByText(fmt.format(-4, 'day'))).toBeTruthy();
+  });
+
+  it('says NO VERSION for a design published without a commit', () => {
+    const subject = { ...designRow().subject, commitSha: null } as DesignResultSubjectSummaryDTO;
+    renderRows([designRow({ subject })]);
+
+    expect(screen.getByText(/no version/)).toBeTruthy();
   });
 
   it('links the WORK ITEM — the one affordance that visibly leaves the queue', () => {
@@ -278,6 +299,15 @@ describe('the Approvals list — a gate decided in the OVERLAY settles its row',
     act(() => announceGateDecided('gate-settle-c', 'changes_requested'));
 
     expect(screen.getByText(en.approvalGate.state.changesRequested)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
+  });
+
+  it('draws a WITHDRAWN question colourless — `superseded` is the product’s write, not a person’s', () => {
+    renderRows([designRow({ gateId: 'gate-settle-f' })]);
+
+    act(() => announceGateDecided('gate-settle-f', 'superseded'));
+
+    expect(screen.getByText(en.approvalGate.state.withdrawn)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
   });
 

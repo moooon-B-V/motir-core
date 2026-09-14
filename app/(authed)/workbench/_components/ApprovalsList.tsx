@@ -144,6 +144,9 @@ function StatePill({ state }: { state: ApprovalGateStateDTO }) {
     // `tone="archived"` is the frame's own choice for the same row.
     case 'superseded':
       return <Pill tone="archived">{t('withdrawn')}</Pill>;
+    /* v8 ignore next 2 -- UNREACHABLE: `awaiting` is the one state left, and
+       `announceGateDecided` refuses it (`tests/approvals/decidedGates.test.tsx`,
+       "does not treat `awaiting` as a decision"). */
     default:
       return null;
   }
