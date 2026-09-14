@@ -197,14 +197,21 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
   const REPO = 'lib/repositories/approvalGateRepository.ts';
   const DOOR = 'lib/services/approvalGatesService.ts';
 
-  /** The two writes that are NOT decisions, each with the ONE production caller
-   *  it is allowed. Adding a row here is a deliberate act a reviewer sees. */
+  /** The two writes that are NOT decisions, each with the production callers it
+   *  is allowed. Adding a caller here is a deliberate act a reviewer sees. */
   const DECLARED_NON_DECISION_WRITERS = [
-    { method: 'create', writes: 'awaiting', caller: 'lib/services/designEvidenceService.ts' },
+    { method: 'create', writes: 'awaiting', callers: ['lib/services/designEvidenceService.ts'] },
     {
       method: 'supersedeAwaitingByWorkItem',
       writes: 'superseded',
-      caller: 'lib/services/designEvidenceService.ts',
+      // The second caller is DECLARED (MOTIR-5534, `design-result.md` AMENDMENT 4
+      // Q8): linking an OPEN pull request withdraws an awaiting design question,
+      // because that card's pull requests now carry the decision. It writes
+      // `superseded` — a withdrawal with no actor — never a decision.
+      callers: [
+        'lib/services/designEvidenceService.ts',
+        'lib/services/githubPullRequestService.ts',
+      ],
     },
   ] as const;
 
@@ -238,11 +245,11 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
   });
 
   it('keeps each DECLARED non-decision writer to its one caller', () => {
-    for (const { method, caller } of DECLARED_NON_DECISION_WRITERS) {
+    for (const { method, callers: declared } of DECLARED_NON_DECISION_WRITERS) {
       const callers = SOURCE_FILES.filter((f) =>
         codeOf(f).includes(`approvalGateRepository.${method}(`),
       );
-      expect(callers, `\`${method}\` grew a second caller`).toEqual([caller]);
+      expect(callers, `\`${method}\` grew an undeclared caller`).toEqual([...declared].sort());
     }
   });
 
