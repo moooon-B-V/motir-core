@@ -15,7 +15,6 @@ import {
   WorkItemNode,
   type WorkItemNodeData,
 } from '@/components/planning/WorkItemNode';
-import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // MOTIR-5459 — canvas card titles CLAMP. Plan and roadmap nodes have a fixed
 // height designed around a two-line title (one line for the ghost anchor's
@@ -51,59 +50,6 @@ const LONG_TITLE = Array.from(
   () => 'A long, descriptive work item title that keeps going past its line budget',
 ).join(' ');
 
-function planItem(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
-  return {
-    planItemId: 'pi_1',
-    op: 'add',
-    nodeId: 'pi_1',
-    parentNodeId: null,
-    parentIdentifier: null,
-    parentTitle: null,
-    parentKind: null,
-    parentTrail: [],
-    blockedByNodeIds: [],
-    blockedByRemovedNodeIds: [],
-    committedBlockedBy: [],
-    blockerStubs: [],
-    identifier: null,
-    title: 'A proposed item',
-    kind: 'task',
-    priority: null,
-    type: null,
-    descriptionMd: null,
-    explanationMd: null,
-    explanationSource: null,
-    storyPoints: null,
-    estimateMinutes: null,
-    targetRepo: null,
-    targetRepos: [],
-    targetRepositories: null,
-    targetRepositoryRef: null,
-    targetRepoRole: null,
-    executor: null,
-    planningProvenance: null,
-    subject: null,
-    status: null,
-    statusLabel: null,
-    statusCategory: null,
-    hasChildren: false,
-    changes: [],
-    stale: false,
-    staleReasons: [],
-    revised: false,
-    targetMissing: false,
-    todos: null,
-    proposal: {
-      op: 'add',
-      identifier: null,
-      changedFields: [],
-      settableRailFields: [],
-      todos: null,
-    },
-    ...over,
-  };
-}
-
 const workItem: WorkItemNodeData = {
   id: 'T1',
   identifier: 'MOTIR-1194',
@@ -115,7 +61,7 @@ const workItem: WorkItemNodeData = {
 
 describe('PlanItemNode — the title clamps at two lines', () => {
   it.each(['add', 'remove'] as const)('a long `%s` title is a two-line -webkit-box', (op) => {
-    renderWithIntl(<PlanItemNode item={planItem({ op, title: LONG_TITLE })} />);
+    renderWithIntl(<PlanItemNode item={planReviewItem({ op, title: LONG_TITLE })} />);
     expect(clampOf(screen.getByText(LONG_TITLE))).toEqual({ display: '-webkit-box', lines: '2' });
   });
 
