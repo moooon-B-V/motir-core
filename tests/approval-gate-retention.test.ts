@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { adminDb } from './helpers/adminDb';
+import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from './helpers/db';
 
 // RETENTION — an APPROVED design version's bytes are PINNED, and a SUPERSEDED
@@ -159,10 +160,22 @@ afterAll(async () => {
 async function publish(label: string) {
   const pathname = `${designPrefix(fx.workspaceId, card.id)}${label}.mock.html`;
   store.set(pathname, { contentType: 'text/html', size: 2048 });
+  const notePathname = `${designPrefix(fx.workspaceId, card.id)}${label}.design-notes.md`;
+  store.set(notePathname, { contentType: 'text/markdown', size: 512 });
+  // AMENDMENT 4: a result is the mock plus ONE note file, published only while
+  // an open work item is `blocked_by` the card.
+  await ensureWorkWaitsOn(card.id, fx);
   return designEvidenceService.recordFromPathnames(
     {
       workItemId: card.id,
-      assets: [{ kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname }],
+      assets: [
+        { kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname },
+        {
+          kind: 'note_file',
+          sourcePath: 'design/work-items/design-notes.md',
+          pathname: notePathname,
+        },
+      ],
       commitSha: `sha-${label}`,
     },
     fx.ctx,
@@ -233,10 +246,13 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     // IS the retention guarantee — read from the version's own row, after the
     // sweep that would have destroyed it.
     const pinned = await readBack(v1.id);
-    expect(pinned!.assets).toHaveLength(1);
-    expect(pinned!.assets[0]!.url).toMatch(/^\/api\/attachments\/.+\/content$/);
-    expect(pinned!.assets[0]!.mimeType).toBe('text/html');
-    expect(pinned!.assets[0]!.sizeBytes).toBe(2048);
+    // Two assets per version since AMENDMENT 4 — the mock and its note file.
+    expect(pinned!.assets).toHaveLength(2);
+    const pinnedMock = pinned!.assets.find((asset) => asset.kind === 'mock');
+    expect(pinnedMock!.url).toMatch(/^\/api\/attachments\/.+\/content$/);
+    expect(pinnedMock!.mimeType).toBe('text/html');
+    expect(pinnedMock!.sizeBytes).toBe(2048);
+    for (const asset of pinned!.assets) expect(asset.url).not.toBeNull();
     expect(summary.deleted).toBe(0);
     expect(deletedBlobs).toEqual([]);
 
@@ -333,16 +349,18 @@ describe('an UNAPPROVED version still lets its bytes go — the intended loss (A
     expect(beforeSweep.pinnedAt).toBeNull();
 
     const summary = await ageAndSweep();
-    expect(summary.deleted).toBe(1);
-    expect(deletedBlobs).toHaveLength(1);
+    expect(summary.deleted).toBe(2);
+    expect(deletedBlobs).toHaveLength(2);
 
     // The ROW survives — §6c keeps the record of what was published and who sent
     // it back; only the bytes go.
     const reclaimed = await readBack(v1.id);
     expect(reclaimed).not.toBeNull();
-    expect(reclaimed!.assets).toHaveLength(1);
-    expect(reclaimed!.assets[0]!.url).toBeNull();
-    expect(reclaimed!.assets[0]!.sizeBytes).toBeNull();
+    expect(reclaimed!.assets).toHaveLength(2);
+    for (const asset of reclaimed!.assets) {
+      expect(asset.url).toBeNull();
+      expect(asset.sizeBytes).toBeNull();
+    }
 
     // And the decision itself is kept in full.
     const gateRow = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: v1Gate.id } });
@@ -355,8 +373,8 @@ describe('an UNAPPROVED version still lets its bytes go — the intended loss (A
     await publish('v2');
 
     const summary = await ageAndSweep();
-    expect(summary.deleted).toBe(1);
-    expect((await readBack(v1.id))!.assets[0]!.url).toBeNull();
+    expect(summary.deleted).toBe(2);
+    expect((await readBack(v1.id))!.assets.every((asset) => asset.url === null)).toBe(true);
   });
 });
 

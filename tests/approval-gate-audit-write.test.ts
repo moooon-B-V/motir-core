@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
+import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from './helpers/db';
 
 // THE AUDIT SET IS WRITTEN (Story MOTIR-4778 · Bug MOTIR-5046; ADR
@@ -98,10 +99,22 @@ afterAll(async () => {
 async function publish(label: string, commitSha: string | null = `sha-${label}`) {
   const pathname = `${designPrefix(fx.workspaceId, card.id)}${label}.mock.html`;
   store.set(pathname, { contentType: 'text/html', size: 2048 });
+  const notePathname = `${designPrefix(fx.workspaceId, card.id)}${label}.design-notes.md`;
+  store.set(notePathname, { contentType: 'text/markdown', size: 512 });
+  // AMENDMENT 4: a result is the mock plus ONE note file, published only while
+  // an open work item is `blocked_by` the card.
+  await ensureWorkWaitsOn(card.id, fx);
   return designEvidenceService.recordFromPathnames(
     {
       workItemId: card.id,
-      assets: [{ kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname }],
+      assets: [
+        { kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname },
+        {
+          kind: 'note_file',
+          sourcePath: 'design/work-items/design-notes.md',
+          pathname: notePathname,
+        },
+      ],
       commitSha,
     },
     fx.ctx,

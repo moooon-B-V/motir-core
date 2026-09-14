@@ -167,6 +167,23 @@ export async function seedApprovalsTab(slug: string): Promise<ApprovalsTabSeed> 
   // `in_progress → done` is a legal edge and `todo → done` is not, so a card
   // has to be claimed before an approval can move it — see
   // `design-approval-seed.ts`'s header for the full reasoning.
+  // AMENDMENT 4 (MOTIR-5491): a design result publishes only while an open work
+  // item is `blocked_by` the design, so each design card gets the card that
+  // waits on it.
+  for (const [designCard, title] of [
+    [design, 'Build the queue row'],
+    [viewerDesign, 'Build what the viewer design draws'],
+  ] as const) {
+    const waiting = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'subtask', title, parentId: story.id, type: 'code' },
+      ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: waiting.id, toId: designCard.id, kind: 'is_blocked_by' },
+      ctx,
+    );
+  }
+
   await workItemsService.updateStatus(design.id, 'in_progress', ctx);
   await workItemsService.updateStatus(viewerDesign.id, 'in_progress', ctx);
 

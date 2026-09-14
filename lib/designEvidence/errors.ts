@@ -162,3 +162,89 @@ export class DesignEvidenceNoCurrentResultError extends DesignEvidenceError {
     this.name = 'DesignEvidenceNoCurrentResultError';
   }
 }
+
+// ── AMENDMENT 4 (MOTIR-5491): what a design result IS, and when it may exist ──
+//
+// `docs/decisions/design-result.md` AMENDMENT 4. A result is one or more `mock`
+// assets plus exactly one `note_file`; the `.png` export and the inline `noteMd`
+// are RETIRED, and a publish is accepted only while an open work item is
+// `blocked_by` the design card. A retired input is REFUSED, never silently
+// dropped: an agent cannot tell an ignored field from an accepted one, so a
+// quiet drop would come back as a report that a screenshot was published.
+
+/**
+ * An `image` asset — the `.png` export AMENDMENT 4 retired. The enum value stays
+ * so stored rows keep reading; a NEW publish (or grant) naming it is refused. → 422.
+ */
+export class DesignEvidenceImageRetiredError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_IMAGE_RETIRED' as const;
+  readonly status = 422;
+  constructor(sourcePath: string) {
+    super(
+      `"${sourcePath}" is an image asset, and a design result no longer carries a screenshot — ` +
+        'publish the mock(s) and the note file only (design-result.md AMENDMENT 4).',
+    );
+    this.name = 'DesignEvidenceImageRetiredError';
+  }
+}
+
+/**
+ * An inline `noteMd` — retired: the result shows the published `note_file` as a
+ * link instead. Refused whether empty or not, because its presence is the signal
+ * that the caller is still following the old contract. → 422.
+ */
+export class DesignEvidenceNoteMdRetiredError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_NOTE_MD_RETIRED' as const;
+  readonly status = 422;
+  constructor() {
+    super(
+      'A design result no longer takes `noteMd` — drop it and publish the notes file as the one ' +
+        '`note_file` asset; the result links to it (design-result.md AMENDMENT 4).',
+    );
+    this.name = 'DesignEvidenceNoteMdRetiredError';
+  }
+}
+
+/** A publish with no `mock` asset — the mock IS the result. → 422. */
+export class DesignEvidenceMockRequiredError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_MOCK_REQUIRED' as const;
+  readonly status = 422;
+  constructor() {
+    super(
+      'A design result must carry at least one `mock` asset (the `*.mock.html` — for a change, ' +
+        'the new delta mock).',
+    );
+    this.name = 'DesignEvidenceMockRequiredError';
+  }
+}
+
+/** A publish with zero, or more than one, `note_file` asset. → 422. */
+export class DesignEvidenceNoteFileRequiredError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_NOTE_FILE_REQUIRED' as const;
+  readonly status = 422;
+  constructor(count: number) {
+    super(
+      `A design result carries exactly ONE \`note_file\` asset (the area's design-notes.md); this ` +
+        `publish carries ${count}.`,
+    );
+    this.name = 'DesignEvidenceNoteFileRequiredError';
+  }
+}
+
+/**
+ * No open work item is `blocked_by` the design card, so a result would raise an
+ * approval nobody's work waits on. The request is well-formed; the TREE is in a
+ * state where the result has no one to serve. → 409.
+ */
+export class DesignEvidenceNothingWaitsError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_NOTHING_WAITS' as const;
+  readonly status = 409;
+  constructor(identifier: string) {
+    super(
+      `No open work item is blocked_by ${identifier}, so it publishes no design result — its pull ` +
+        'request is its review. Publish only when work waits on the design (design-result.md ' +
+        'AMENDMENT 4).',
+    );
+    this.name = 'DesignEvidenceNothingWaitsError';
+  }
+}
