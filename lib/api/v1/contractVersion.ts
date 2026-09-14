@@ -416,5 +416,20 @@
  *   was `1.29.0` on `parent/MOTIR-5310-agents-file-into-folders` at `7c5c00e74`,
  *   so this claims `1.30.0`. If a sibling has taken it since, RENUMBER this entry
  *   — it names the FIELDS.
+ *
+ * - `1.31.0` — MOTIR-5415 adds `folderId` and `folderPath` to `PlanProposal`
+ *   (`getPlan`, `GET /api/v1/plans/{planId}`, and the plan
+ *   `getWorkItemPlan` / `approveWorkItemPlan` return): the folder a proposal
+ *   NAMES as its placement (`parentRef` / `patch.parentRef` = `folder:<id>`) and
+ *   that folder's names, root first. `folderPath` is `null` for a folder deleted
+ *   after the plan was written. `parentKey` stays `null` for a folder ref, as it
+ *   is for every ref that names no work item.
+ *
+ *   Additive: two new nullable response fields (§8's allowed list). No
+ *   operation, no request shape and no existing field changed.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: this claims
+ *   `1.31.0` because sibling MOTIR-5412 claims `1.30.0` on the same parent
+ *   branch. If the numbering has moved, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.30.0';
+export const V1_CONTRACT_VERSION = '1.31.0';

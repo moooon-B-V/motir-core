@@ -1735,6 +1735,8 @@ export interface components {
                 } | null;
                 parentRef: string | null;
                 parentKey: string | null;
+                folderId: string | null;
+                folderPath: string[] | null;
                 blockedByRefs: string[];
             }[];
         };
@@ -8477,6 +8479,8 @@ export interface operations {
                                 } | null;
                                 parentRef: string | null;
                                 parentKey: string | null;
+                                folderId: string | null;
+                                folderPath: string[] | null;
                                 blockedByRefs: string[];
                             }[];
                         } | null;

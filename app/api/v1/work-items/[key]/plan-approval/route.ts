@@ -10,6 +10,7 @@ import {
 } from '@/lib/api/v1/workLoop/schema';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import { NoPlanForWorkItemError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
+import { planReviewService } from '@/lib/services/planReviewService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -189,5 +190,6 @@ async function presentResolvedPlan(
     plan.projectId,
     ctx.service,
   );
-  return presentPlan(plan, planTargetKeyResolver(refs));
+  const folders = await planReviewService.resolveProposalFolders(plan, ctx.service);
+  return presentPlan(plan, planTargetKeyResolver(refs), folders);
 }

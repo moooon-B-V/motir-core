@@ -328,6 +328,39 @@ export const folderRepository = {
     return rows.map((r) => r.name);
   },
 
+  /**
+   * The PATH of every folder in `ids`, ROOT FIRST, in ONE recursive read — the
+   * batched twin of {@link findPathNames} for a read model that places many
+   * rows at once (a plan's folder placements, MOTIR-5415). Workspace-scoped
+   * explicitly; the project comes back so the caller can refuse a folder in
+   * another project rather than name it. An id that no longer exists simply
+   * does not come back.
+   */
+  async findPathsByIds(
+    ids: string[],
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; projectId: string; path: string[] }>> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string; projectId: string; path: string[] }>>`
+      WITH RECURSIVE chain AS (
+        SELECT f."id" AS "leaf_id", f."project_id" AS "leaf_project_id",
+               f."parent_folder_id", f."name", 0 AS depth
+          FROM "folder" f
+         WHERE f."id" = ANY(${ids}::text[])
+           AND f."workspace_id" = ${workspaceId}
+        UNION ALL
+        SELECT c."leaf_id", c."leaf_project_id", f."parent_folder_id", f."name", c.depth + 1
+          FROM "folder" f
+          JOIN chain c ON f."id" = c."parent_folder_id"
+         WHERE c.depth < 1000
+      )
+      SELECT "leaf_id" AS "id", "leaf_project_id" AS "projectId",
+             array_agg("name" ORDER BY depth DESC) AS "path"
+        FROM chain
+       GROUP BY "leaf_id", "leaf_project_id"`;
+  },
+
   /** How many folders sit directly inside `folderId` — the set `deleteFolder` moves. */
   async countChildFolders(folderId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.folder.count({ where: { parentFolderId: folderId } });

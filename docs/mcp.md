@@ -2466,6 +2466,13 @@ plus `items[]`, one entry per proposal:
   tree and its dependency edges; the text block renders exactly that, indented.
   A `parentRef` may also be **`folder:<folderId>`** — the proposal is FILED into
   that folder rather than hung under a work item — and is returned verbatim.
+- **`folderId`** / **`folderPath`** — the folder a proposal NAMES as its placement
+  (an `add`'s `parentRef` or a `modify`'s `patch.parentRef` = `folder:<id>`) and
+  that folder's names, root first (`["Parked", "2025"]`). Both `null` for a
+  proposal that names no folder; `folderPath` alone is `null` when the folder was
+  deleted after the plan was written — approve refuses such a plan. The text block
+  groups folder-placed proposals under a `Folder: Parked ▸ 2025:` heading beside
+  the committed-parent groups, and marks a deleted one.
 
 A plan still `generating` returns the proposals that have arrived **so far**
 rather than erroring — proposals stream in, so a caller polling the content sees

@@ -135,6 +135,10 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         parentTitle: null,
         parentKind: null,
         parentTrail: [],
+        // The FOLDER placement (MOTIR-5415) — none by default.
+        folderId: null,
+        folderPath: null,
+        folderMissing: false,
         blockedByNodeIds: [],
         blockedByRemovedNodeIds: [],
         committedBlockedBy: [],

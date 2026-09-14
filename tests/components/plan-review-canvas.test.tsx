@@ -170,6 +170,10 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
       { id: EPIC_ID, identifier: 'MOTIR-2200', title: 'The Motir agent loop' },
       { id: BUG_ID, identifier: 'MOTIR-3070', title: 'The plan review surface is narrower' },
     ],
+    // The FOLDER placement (MOTIR-5415) — none by default.
+    folderId: null,
+    folderPath: null,
+    folderMissing: false,
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],
