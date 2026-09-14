@@ -408,6 +408,15 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
     // ADR §8's discriminator: a card with a linked OPEN pull request is approved
     // and moved by the MERGE, so this decision caused no transition. Recording
     // `done` here would put a status on the row that the card does not have.
+    //
+    // ⚠️ PUBLISHED FIRST, and the delivery written directly afterwards. Since
+    // MOTIR-5534 (design-result.md AMENDMENT 4 Q8) a publish onto a card that
+    // ALREADY has an open pull request raises no design gate, and a link through
+    // the service retires an awaiting one — so the arm under test is reached only
+    // by a delivery that appears after the publish without passing the link door,
+    // which is exactly the "a pull request can appear in between" case the
+    // handler's own comment keeps the arm for.
+    const gate = await gateFor((await publish('frame')).id);
     const installation = await adminDb.githubInstallation.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -448,7 +457,6 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
         repoId: repo.id,
       },
     });
-    const gate = await gateFor((await publish('frame')).id);
 
     const result = await approvalGatesService.decide(
       { gateId: gate.id, decision: 'approve', source: 'ui' },

@@ -6,6 +6,7 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { handlerFor } from '@/lib/approvalGates/registry';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -532,6 +533,19 @@ async function persistEvidence(
     // This is `routeTo`'s FIRST caller. It had none because its parameter type
     // demanded the gate row, which does not exist at the moment routing must be
     // answered; `GateRoutingArgs` is that knot untied.
+    // ⚠️ NO DESIGN GATE WHILE A PULL REQUEST IS OPEN (MOTIR-5534; AMENDMENT 4 Q8).
+    // A design card that has opened one or more pull requests — in any number of
+    // repositories — is decided by the approve-to-merge gate over its whole
+    // delivery set, and approving that merges them. A `design_result` gate beside
+    // it would ask the same person a second question about the same change, and
+    // answering it would move nothing. The evidence above is still recorded and
+    // the prior version still superseded; only the question is not asked. It is
+    // the same read `designResultHandler.approve` makes, so the two ends of the
+    // rule agree on what "open" means.
+    if ((await workItemDeliveryRepository.countOpenByWorkItem(args.item.id, tx)) > 0) {
+      return (await designEvidenceRepository.findById(evidence.id, tx))!;
+    }
+
     const routedToId = handlerFor('design_result').routeTo({ item: args.item, ctx, tx });
 
     await approvalGateRepository.create(

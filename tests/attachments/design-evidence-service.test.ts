@@ -1251,3 +1251,132 @@ describe('AMENDMENT 4 — a result is published only while OPEN work waits on th
     expect(await adminDb.approvalGate.count({ where: { state: 'awaiting' } })).toBe(1);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AMENDMENT 4 Q8 (MOTIR-5534) — no design gate while a pull request is open
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request raises no design gate', () => {
+  /** A connected repository per name, and a delivery of one pull request in it. */
+  async function deliver(
+    fx: WorkItemFixture,
+    workItemId: string,
+    opts: { repo: string; number: number; state: 'open' | 'closed'; merged?: boolean },
+  ) {
+    const installation = await adminDb.githubInstallation.upsert({
+      where: { installationId: `inst-${fx.workspaceId}` },
+      create: {
+        installationId: `inst-${fx.workspaceId}`,
+        workspaceId: fx.workspaceId,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+      update: {},
+    });
+    const repo =
+      (await adminDb.githubRepo.findFirst({
+        where: { workspaceId: fx.workspaceId, name: opts.repo },
+      })) ??
+      (await adminDb.githubRepo.create({
+        data: {
+          installationId: installation.id,
+          workspaceId: fx.workspaceId,
+          organizationId: fx.workspace.organizationId,
+          repoId: `repo-${fx.workspaceId}-${opts.repo}`,
+          owner: 'moooon',
+          name: opts.repo,
+          defaultBranch: 'main',
+          archived: false,
+          provider: 'github',
+        },
+      }));
+    const pr = await adminDb.githubPullRequest.create({
+      data: {
+        repoId: repo.id,
+        number: opts.number,
+        state: opts.state,
+        merged: opts.merged ?? false,
+        headRef: `design/${opts.number}`,
+        baseRef: 'main',
+      },
+    });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId,
+        githubPullRequestId: pr.id,
+        repoId: repo.id,
+      },
+    });
+  }
+
+  const publishOnto = (fx: WorkItemFixture, workItemId: string, name = 'q8.mock.html') =>
+    designEvidenceService.recordFromPathnames(
+      {
+        workItemId,
+        assets: [
+          seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' }),
+          note(fx, workItemId, name),
+        ],
+        commitSha: `sha-${name}`,
+      },
+      fx.ctx,
+    );
+
+  const designGates = (workItemId: string) =>
+    adminDb.approvalGate.count({ where: { workItemId, kind: 'design_result' } });
+
+  it('one open pull request: the evidence is recorded and NO design gate is raised', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await deliver(fx, card.id, { repo: 'core', number: 1, state: 'open' });
+
+    const evidence = await publishOnto(fx, card.id);
+
+    expect(evidence.id).toBeTruthy();
+    expect((await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx))!.id).toBe(
+      evidence.id,
+    );
+    expect(await designGates(card.id)).toBe(0);
+  });
+
+  it('TWO pull requests in two repositories, one open and one merged: still no design gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await deliver(fx, card.id, { repo: 'core', number: 2, state: 'open' });
+    await deliver(fx, card.id, { repo: 'marketing', number: 3, state: 'closed', merged: true });
+
+    await publishOnto(fx, card.id);
+
+    expect(await designGates(card.id)).toBe(0);
+  });
+
+  it('only MERGED or CLOSED pull requests: the design gate is raised as before', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await deliver(fx, card.id, { repo: 'core', number: 4, state: 'closed', merged: true });
+    await deliver(fx, card.id, { repo: 'marketing', number: 5, state: 'closed' });
+
+    await publishOnto(fx, card.id);
+
+    expect(await designGates(card.id)).toBe(1);
+  });
+
+  it('a republish while a pull request is open retires the earlier awaiting gate and raises none', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await publishOnto(fx, card.id, 'before.mock.html');
+    expect(
+      await adminDb.approvalGate.count({ where: { workItemId: card.id, state: 'awaiting' } }),
+    ).toBe(1);
+
+    await deliver(fx, card.id, { repo: 'core', number: 6, state: 'open' });
+    await publishOnto(fx, card.id, 'after.mock.html');
+
+    expect(
+      await adminDb.approvalGate.count({ where: { workItemId: card.id, state: 'awaiting' } }),
+    ).toBe(0);
+    expect(await designGates(card.id)).toBe(1);
+  });
+});
