@@ -191,8 +191,8 @@ test('a filed work item is placed correctly on its page, in a saved view and on 
     await page.getByRole('button', { name: 'Edit Folder', exact: true }).click();
     const folders = page.getByRole('listbox', { name: 'Folders' });
     await expect(folders).toBeVisible();
-    // The note sits in the Folder card, above its open picker. (Scoped to that card:
-    // the item page renders TWO `main` landmarks, so `main` alone is ambiguous.)
+    // The note sits in the Folder card, above its open picker — asserted on that card,
+    // not on the whole landmark, so it cannot be satisfied by text elsewhere on the page.
     const openFolderCard = page
       .getByRole('main')
       .locator('[data-surface="card"]')
