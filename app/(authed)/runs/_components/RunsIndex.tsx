@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { legSummary } from '@/lib/runs/legSummary';
+import { runsHref } from '@/lib/runs/runsAddress';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { RUN_STATUS_TONE } from '@/lib/runs/timeline';
 
@@ -31,19 +33,32 @@ import { RUN_STATUS_TONE } from '@/lib/runs/timeline';
 // growing list and it has a natural stopping point — "a reader looking for a run
 // from last week does not scroll, they page." 25 a page, CURSOR not offset, so a
 // run opened mid-read cannot shift a row across the boundary.
+//
+// ⚠️ UNDER `?scope=<KEY>` THE SAME LIST IS NARROWED (Story MOTIR-5363 · design
+// MOTIR-5402 panels 4–5). Every fetch this island makes — the poll, the past
+// re-read and *Show more* — carries the scope, the Scope column is dropped (every
+// row would repeat the header), and opening or closing a run KEEPS the narrowing.
 
 /** How often the page re-reads itself while it holds a live run. */
 const POLL_MS = 5_000;
 
 export interface RunsIndexProps {
   projectKey: string;
+  /** The work-item KEY this list is narrowed to, or null for the whole project. */
+  scopeKey?: string | null;
   /** `null` when the read FAILED — which is not the same as empty. */
   initialLive: DispatchRunListItemDto[] | null;
   initialPast: DispatchRunListItemDto[] | null;
   pageSize: number;
 }
 
-export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: RunsIndexProps) {
+export function RunsIndex({
+  projectKey,
+  scopeKey = null,
+  initialLive,
+  initialPast,
+  pageSize,
+}: RunsIndexProps) {
   const t = useTranslations('runs');
   // ⚠️ THE OPEN RUN IS DERIVED FROM THE URL, not held beside it. Next syncs
   // `useSearchParams` with `history.pushState`, so `shallowPush` is the ONLY
@@ -57,6 +72,9 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
   const [exhausted, setExhausted] = useState((initialPast?.length ?? 0) < pageSize);
 
   const base = `/api/projects/${encodeURIComponent(projectKey)}/dispatch-runs`;
+  // ⚠️ ON EVERY FETCH, never only the first. A poll that dropped the narrowing
+  // would refill a narrowed page with the whole project's runs.
+  const narrowing = scopeKey ? `&scope=${encodeURIComponent(scopeKey)}` : '';
 
   // ⚠️ THE POLL RUNS ONLY WHILE SOMETHING IS LIVE, and stops the moment nothing
   // is. A list that re-reads for ever is the N+1 mistake the archived `/ready`
@@ -72,7 +90,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
     const id = setInterval(() => {
       void (async () => {
         try {
-          const res = await fetch(`${base}?status=live&limit=${pageSize}`);
+          const res = await fetch(`${base}?status=live&limit=${pageSize}${narrowing}`);
           if (!res.ok || cancelled) return;
           const body = (await res.json()) as { runs: DispatchRunListItemDto[] };
           if (cancelled) return;
@@ -102,7 +120,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
           // the effect survives long enough to commit BOTH halves together.
           let settledPast: DispatchRunListItemDto[] | null = null;
           try {
-            const pastRes = await fetch(`${base}?status=past&limit=${pageSize}`);
+            const pastRes = await fetch(`${base}?status=past&limit=${pageSize}${narrowing}`);
             if (pastRes.ok) {
               settledPast = ((await pastRes.json()) as { runs: DispatchRunListItemDto[] }).runs;
             }
@@ -128,7 +146,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
       cancelled = true;
       clearInterval(id);
     };
-  }, [anyLive, base, pageSize]);
+  }, [anyLive, base, narrowing, pageSize]);
 
   const loadMore = useCallback(async () => {
     const rows = past;
@@ -137,7 +155,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
     try {
       const cursor = rows[rows.length - 1]!.id;
       const res = await fetch(
-        `${base}?status=past&limit=${pageSize}&cursor=${encodeURIComponent(cursor)}`,
+        `${base}?status=past&limit=${pageSize}&cursor=${encodeURIComponent(cursor)}${narrowing}`,
       );
       if (!res.ok) return;
       const body = (await res.json()) as { runs: DispatchRunListItemDto[] };
@@ -148,7 +166,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
     } finally {
       setLoadingMore(false);
     }
-  }, [base, exhausted, loadingMore, pageSize, past]);
+  }, [base, exhausted, loadingMore, narrowing, pageSize, past]);
 
   // OPEN / CLOSE. Both are `shallowPush`es (CLAUDE.md's discriminator): the
   // modal's body is fetched client-side, so the server has nothing to answer and
@@ -158,12 +176,19 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
   // looking at. The list stays MOUNTED behind it, which is the whole reason this
   // is an overlay: closing returns to the same scroll position and the same
   // current/past partition.
-  const onOpenRun = useCallback((id: string) => {
-    shallowPush(`/runs?run=${encodeURIComponent(id)}`);
-  }, []);
+  //
+  // ⚠️ AND BOTH KEEP THE NARROWING (design MOTIR-5402 panel 5). `?run=` composes
+  // with `?scope=`; writing `/runs?run=<id>` and `/runs` literally dropped it on
+  // the first click.
+  const onOpenRun = useCallback(
+    (id: string) => {
+      shallowPush(runsHref({ scope: scopeKey, run: id }));
+    },
+    [scopeKey],
+  );
   const onCloseRun = useCallback(() => {
-    shallowPush('/runs');
-  }, []);
+    shallowPush(runsHref({ scope: scopeKey }));
+  }, [scopeKey]);
 
   // ⚠️ RENDERED IN BOTH BRANCHES, and it must be. The empty-state return below
   // used to sit ABOVE the modal, so a list that went empty UNMOUNTED an open run
@@ -176,16 +201,26 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
     ) : null;
 
   // Nothing at all has ever run — the ONE case that replaces both sections,
-  // because two empty headings would be chrome around an absence.
+  // because two empty headings would be chrome around an absence. Under a
+  // narrowing it is a different fact (this work item was never a run's scope),
+  // said with the command that changes it and where its children's runs are.
   if (live?.length === 0 && past?.length === 0) {
     return (
       <>
-        <EmptyState title={t('indexEmptyTitle')} description={t('indexEmptyBody')} />
+        {scopeKey ? (
+          <EmptyState
+            title={t('scopeIndex.emptyTitle', { key: scopeKey })}
+            description={t('scopeIndex.emptyBody', { key: scopeKey })}
+          />
+        ) : (
+          <EmptyState title={t('indexEmptyTitle')} description={t('indexEmptyBody')} />
+        )}
         {modal}
       </>
     );
   }
 
+  const showScope = scopeKey === null;
   return (
     <div className="flex flex-col gap-6">
       <Section
@@ -193,6 +228,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
         rows={live}
         emptyLine={t('noneRunning')}
         t={t}
+        showScope={showScope}
         onOpen={onOpenRun}
       />
       <Section
@@ -200,6 +236,7 @@ export function RunsIndex({ projectKey, initialLive, initialPast, pageSize }: Ru
         rows={past}
         emptyLine={t('nonePast')}
         t={t}
+        showScope={showScope}
         onOpen={onOpenRun}
         footer={
           past && past.length > 0 && !exhausted ? (
@@ -234,6 +271,7 @@ function Section({
   rows,
   emptyLine,
   t,
+  showScope,
   footer,
   onOpen,
 }: {
@@ -241,9 +279,14 @@ function Section({
   rows: DispatchRunListItemDto[] | null;
   emptyLine: string;
   t: ReturnType<typeof useTranslations>;
+  /** False under a narrowing, where every row would repeat the header's scope. */
+  showScope: boolean;
   onOpen: (id: string) => void;
   footer?: React.ReactNode;
 }) {
+  const columns = (
+    ['colCommand', 'colScope', 'colAgent', 'colStarted', 'colStatus', 'colItems'] as const
+  ).filter((k) => showScope || k !== 'colScope');
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
@@ -264,16 +307,7 @@ function Section({
           <table className="w-full border-collapse">
             <thead className="border-b border-(--el-border) bg-(--el-surface)">
               <tr>
-                {(
-                  [
-                    'colCommand',
-                    'colScope',
-                    'colAgent',
-                    'colStarted',
-                    'colStatus',
-                    'colItems',
-                  ] as const
-                ).map((k) => (
+                {columns.map((k) => (
                   <th
                     key={k}
                     scope="col"
@@ -286,7 +320,7 @@ function Section({
             </thead>
             <tbody>
               {rows.map((run) => (
-                <RunRow key={run.id} run={run} t={t} onOpen={onOpen} />
+                <RunRow key={run.id} run={run} t={t} showScope={showScope} onOpen={onOpen} />
               ))}
             </tbody>
           </table>
@@ -311,10 +345,12 @@ function Section({
 function RunRow({
   run,
   t,
+  showScope,
   onOpen,
 }: {
   run: DispatchRunListItemDto;
   t: ReturnType<typeof useTranslations>;
+  showScope: boolean;
   onOpen: (id: string) => void;
 }) {
   const tone = RUN_STATUS_TONE[run.status];
@@ -335,9 +371,11 @@ function RunRow({
           {run.command}
         </button>
       </td>
-      <td className="px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-secondary)">
-        {run.scopeLabel ?? t('scopeNone')}
-      </td>
+      {showScope ? (
+        <td className="px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-secondary)">
+          {run.scopeLabel ?? t('scopeNone')}
+        </td>
+      ) : null}
       <td className="px-(--spacing-control-x) py-(--spacing-control-y) text-xs whitespace-nowrap text-(--el-text-secondary)">
         {agent || '—'}
       </td>
@@ -352,22 +390,6 @@ function RunRow({
       </td>
     </tr>
   );
-}
-
-/**
- * "9 of 11 implemented, 1 skipped" — the run's outcome in one cell, read off
- * counts the page already has. A run that took NO work items says so: zero is a
- * real answer (a scoped run whose every member was skipped), not an error.
- */
-function legSummary(run: DispatchRunListItemDto, t: ReturnType<typeof useTranslations>): string {
-  if (run.cardCount === 0) return t('tookNone');
-  const done = run.legs.implemented + run.legs.integrated;
-  const parts = [t('summaryDone', { done, total: run.cardCount })];
-  if (run.legs.skipped > 0) parts.push(t('summarySkipped', { n: run.legs.skipped }));
-  if (run.legs.failed > 0) parts.push(t('summaryFailed', { n: run.legs.failed }));
-  if (run.legs.not_reached > 0) parts.push(t('summaryNotReached', { n: run.legs.not_reached }));
-  if (run.legs.replanned > 0) parts.push(t('summaryReplanned', { n: run.legs.replanned }));
-  return parts.join(' · ');
 }
 
 /**

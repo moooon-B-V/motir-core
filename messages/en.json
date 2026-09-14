@@ -8088,6 +8088,22 @@
       "materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
       "bugFiled": "Bug filed",
       "open": "Open →"
+    },
+    "scope": {
+      "heading": "Run as a scope",
+      "lineLive": "An agent is working this work item’s children as one run.",
+      "linePast": "An agent worked this work item’s children as one run.",
+      "door": "See every run of {key} →"
+    },
+    "scopeIndex": {
+      "allRuns": "All runs",
+      "subtitle": "Runs of <item>{key}</item> · {title}",
+      "subtitleMissing": "Runs of {key}",
+      "archived": "Archived",
+      "emptyTitle": "{key} has not been run as a scope yet",
+      "emptyBody": "Run the whole work item with motir run {key}. A run that worked one of its children on its own shows on that child’s page.",
+      "notFoundTitle": "No work item {key} in this project",
+      "notFoundBody": "It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label."
     }
   },
   "repositoryPicker": {

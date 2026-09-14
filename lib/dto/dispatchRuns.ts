@@ -202,6 +202,21 @@ export interface DispatchRunListItemDto {
 }
 
 /**
+ * The WORK ITEM a narrowed runs index is scoped to (Story MOTIR-5363 · design
+ * MOTIR-5402) — what `/runs?scope=<KEY>`'s header names.
+ *
+ * Three fields and no more: the page links back to the work item for everything
+ * else, and the header needs only to say WHICH item and whether it is archived —
+ * an archived scope still resolves (its runs are still its runs), and the header
+ * says so rather than surprising a reader who arrived from an old link.
+ */
+export interface DispatchRunScopeDto {
+  key: string;
+  title: string;
+  archived: boolean;
+}
+
+/**
  * One LIVE run in a project, keyed by LEG.
  *
  * Deliberately NARROWER than the detail shape: it carries each leg's KEY and

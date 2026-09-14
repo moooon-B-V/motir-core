@@ -28,12 +28,14 @@ import type {
   DispatchRunEventDto,
   DispatchRunListItemDto,
   DispatchRunOpenedDto,
+  DispatchRunScopeDto,
 } from '@/lib/dto/dispatchRuns';
 import {
   toDispatchRunCardDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
   toDispatchRunListItemDto,
+  toDispatchRunScopeDto,
 } from '@/lib/mappers/dispatchRunMappers';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
@@ -857,6 +859,42 @@ export const dispatchRunService = {
         })();
 
         return runs.map(toDispatchRunListItemDto);
+      },
+    );
+  },
+
+  /**
+   * THE WORK ITEM A NARROWED RUNS INDEX NAMES (Story MOTIR-5363 · design
+   * MOTIR-5402) — its key, title and archived flag, for `/runs?scope=<KEY>`'s
+   * header. The design's ONE new read.
+   *
+   * ⚠️ A SEPARATE READ, NOT A WIDER RETURN FROM {@link listRunsForProject}. That
+   * method also answers the index's poll and its *Show more*, and every one of
+   * those calls would carry a header the browser already has. The page asks for
+   * the scope once, on first paint.
+   *
+   * Resolved exactly as the narrowing resolves it — inside the project, under the
+   * same browse gate and workspace binding — so the two cannot disagree about
+   * whether a key names a scope: an unresolvable key throws
+   * `WorkItemNotFoundError` here exactly as it does there. An ARCHIVED work item
+   * still resolves, because `findByIdentifier` carries no archive filter and its
+   * runs are still its runs.
+   */
+  async getRunScope(
+    projectKey: string,
+    scopeWorkItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<DispatchRunScopeDto> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertCanBrowse(project.id, ctx);
+    const identifier = scopeWorkItemKey.trim().toUpperCase();
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+      async (tx) => {
+        const item = await workItemRepository.findByIdentifier(project.id, identifier, tx);
+        if (!item) throw new WorkItemNotFoundError(identifier);
+        return toDispatchRunScopeDto(item);
       },
     );
   },

@@ -3,6 +3,7 @@ import type {
   DispatchRun,
   DispatchRunCard,
   DispatchRunEvent,
+  WorkItem,
 } from '@/generated/prisma/client';
 import type {
   DispatchRunCardDto,
@@ -10,6 +11,7 @@ import type {
   DispatchRunEventDto,
   DispatchRunLegCountsDto,
   DispatchRunListItemDto,
+  DispatchRunScopeDto,
 } from '@/lib/dto/dispatchRuns';
 
 // Prisma rows → DISPATCH RUN DTOs (Story MOTIR-1789 · MOTIR-1792).
@@ -136,4 +138,15 @@ export function toDispatchRunListItemDto(
     cardCount: row.cards.length,
     legs: toDispatchRunLegCounts(row.cards),
   };
+}
+
+/**
+ * The header of a NARROWED runs index (MOTIR-5363): the scope work item's key,
+ * title and whether it is archived. `archivedAt` becomes a flag, because the
+ * header draws a pill and has no use for the instant.
+ */
+export function toDispatchRunScopeDto(
+  row: Pick<WorkItem, 'identifier' | 'title' | 'archivedAt'>,
+): DispatchRunScopeDto {
+  return { key: row.identifier, title: row.title, archived: row.archivedAt !== null };
 }
