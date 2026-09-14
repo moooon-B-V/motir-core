@@ -1,4 +1,5 @@
 import { resolveServiceProjectByKey } from '@/lib/ai/serviceAuth';
+import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
   isPlannerBugHomeMarker,
@@ -45,7 +46,7 @@ export interface FileServiceBugInput {
    *  drift-proof `PLANNER_BUG_HOME_MARKER` sentinel (`@planner-bug-home`), which
    *  resolves to the planner-bug home STORY by TITLE — the reseed-durable handle
    *  the self-learning loop targets instead of a volatile numeric key
-   *  (MOTIR-1466; MOTIR-2201). When omitted, the bug is filed at project-root (a
+   *  (MOTIR-1466; MOTIR-2201). When omitted, the bug is filed into the project's BUG DESTINATION — its folder, or the project root (a
    *  top-level `bug` is matrix-legal). */
   parentKey?: string | null;
 }
@@ -97,12 +98,26 @@ export const aiWorkItemsService = {
       }
     }
 
+    // No parent named ⇒ the project's BUG DESTINATION (Story MOTIR-4927 ·
+    // MOTIR-4937): its folder, or the project root when it deliberately names
+    // none. A named parent — the marker or a key — is kept exactly as before, and
+    // never also filed (`parentId` and `folderId` are exclusive).
+    const folderId =
+      parentId === null
+        ? (
+            await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+              bugDestinationService.resolve(project.id, tx),
+            )
+          ).folderId
+        : null;
+
     return workItemsService.createWorkItem(
       {
         projectId: project.id,
         kind: 'bug',
         title: input.title,
         parentId,
+        folderId,
         descriptionMd: input.descriptionMd ?? null,
       },
       ctx,
@@ -196,12 +211,19 @@ export const aiWorkItemsService = {
           throw new PlannerBugCapExceededError(plan.id, PLANNER_BUGS_PER_JOB, filed);
         }
 
+        // A planner bug that names no parent is one Motir files on its own, so it
+        // goes where the project files those (MOTIR-4937) — read in this
+        // transaction, under the same binding as the cap it is counted against.
+        const folderId =
+          parentId === null ? (await bugDestinationService.resolve(projectId, tx)).folderId : null;
+
         const dto = await workItemsService.createWorkItem(
           {
             projectId,
             kind: 'bug',
             title: input.title,
             parentId,
+            folderId,
             descriptionMd: input.descriptionMd ?? null,
             provenance: {
               planning: { source: 'native', harness: actor.harness, model: actor.model },
@@ -236,7 +258,8 @@ export interface FilePlannerBugInput {
   jobId: string;
   title: string;
   descriptionMd?: string | null;
-  /** Optional parent key (`MOTIR-<n>`), resolved INSIDE the token's project; omitted → project root. */
+  /** Optional parent key (`MOTIR-<n>`), resolved INSIDE the token's project; omitted → the project's
+   *  BUG DESTINATION, its folder or the project root (MOTIR-4937). */
   parentKey?: string | null;
   /** The run's planner model, for the item's provenance triple and the trail row. */
   model?: string | null;

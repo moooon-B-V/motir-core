@@ -501,6 +501,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'board-scrum.spec.ts': 14.0,
   'board-swimlanes.spec.ts': 16.9,
   'board-ui.spec.ts': 43.5,
+  // MOTIR-4940 — new file, so no green `main` run to read `result.duration` from:
+  // a floor estimated from its six steps (two room visits with a save and a reload,
+  // a folder create, two filed bugs read back in /items). Re-measure from the
+  // artifacts on the next green run, as this file's header prescribes.
+  'bug-destination.spec.ts': 30.0,
   'canvas-detail.spec.ts': 6.1,
   'cascade-under-load.spec.ts': 3.7,
   'charts.spec.ts': 9.7,

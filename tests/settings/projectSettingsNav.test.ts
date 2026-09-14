@@ -343,6 +343,9 @@ describe('projectSettingsNav registry — grouping', () => {
       'estimation',
       'fields',
       'components',
+      // MOTIR-4938 — `bugs` last in `work`, under `components`: where in the tree a
+      // kind of work item is created (design/projects/design-notes.md § Bugs §3).
+      'bugs',
     ]);
   });
 
@@ -520,6 +523,11 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     permission: 'component:manage',
     source: 'lib/services/componentsService.ts',
     gate: 'assertCanManage',
+  },
+  bugs: {
+    permission: 'project:administer',
+    source: 'lib/services/bugDestinationService.ts',
+    gate: 'assertPermission',
   },
   'ai-planning': {
     permission: 'ai:configure',

@@ -1307,7 +1307,9 @@ describe('the detail reads a call site had to bind', () => {
     );
 
     expect(level.rows.map((r) => r.id)).toContain(root.id);
-    expect(level.total).toBe(1);
+    // The level also carries the project's seeded Bugs folder (MOTIR-4935).
+    expect(level.rows.filter((r) => r.kind !== 'folder').map((r) => r.id)).toEqual([root.id]);
+    expect(level.total).toBe(2);
   });
 
   it('workItemsService.getDeletePreview COUNTS the descendant it would delete', async () => {

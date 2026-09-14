@@ -12,6 +12,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { removeSeededBugsFolder } from '../fixtures/projectFixtures';
 
 // `skeleton` (Story MOTIR-3098 · Subtask MOTIR-3100) over real Postgres — the
 // ORIENTING read, the whole project's tree shape in one call.
@@ -106,6 +107,7 @@ afterAll(async () => {
 describe('skeleton — the whole project tree in one read', () => {
   it('returns every live item with its parent KEY, so the tree is rebuildable without a second read', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'The epic' });
     const story = await createTestWorkItem(fx, {
       kind: 'story',
@@ -147,6 +149,7 @@ describe('skeleton — the whole project tree in one read', () => {
   // half names where the filed row sits.
   it('carries folder PLACEMENT — a filed epic’s folderId, every folder with its path, and the path in the text', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const parked = await foldersService.createFolder(
       { projectId: fx.projectId, parentFolderId: null, name: 'Parked' },
       fx.ctx,
@@ -194,6 +197,7 @@ describe('skeleton — the whole project tree in one read', () => {
 
   it('a project with no folders reports an EMPTY folder list, not an absent one', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     await createTestWorkItem(fx, { kind: 'task', title: 'only' });
 
     const res = await callSkeleton(fx.ctx, { projectKey: 'ACME' });
@@ -207,6 +211,7 @@ describe('skeleton — the whole project tree in one read', () => {
 
   it('a bounded answer reports the TRUNCATION FLAG — not merely a shorter list', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     for (const title of ['one', 'two', 'three']) {
       await createTestWorkItem(fx, { kind: 'task', title });
     }
@@ -228,6 +233,7 @@ describe('skeleton — the whole project tree in one read', () => {
 
   it('an EMPTY project is a well-formed whole answer, not an error', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
 
     const payload = payloadOf(await callSkeleton(fx.ctx, { projectKey: 'acme' }));
 

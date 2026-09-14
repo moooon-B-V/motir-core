@@ -1,4 +1,5 @@
 import { Prisma, type Project } from '@/generated/prisma/client';
+import { folderRepository } from '@/lib/repositories/folderRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectKeyAliasRepository } from '@/lib/repositories/projectKeyAliasRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -41,6 +42,8 @@ import {
   PUBLIC_TAG_MAX_LENGTH,
 } from '@/lib/publicProjects/limits';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
+import { DEFAULT_BUG_FOLDER_NAME } from '@/lib/projects/bugDestination';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
@@ -213,7 +216,7 @@ async function recordLastActiveProjectBestEffort(userId: string, projectId: stri
 }
 
 /**
- * INSERT one project + its two seeds, inside a caller-supplied transaction.
+ * INSERT one project + its three seeds, inside a caller-supplied transaction.
  *
  * Extracted from `createProject` (MOTIR-4870) so `ensureDefaultProject` can
  * create a project WITHOUT nesting a second `withWorkspaceContext` inside the
@@ -232,7 +235,14 @@ async function recordLastActiveProjectBestEffort(userId: string, projectId: stri
  * outside itself.
  */
 async function insertProjectWithSeedsInTx(
-  input: { workspaceId: string; name: string; slug: string; identifier: string },
+  input: {
+    workspaceId: string;
+    name: string;
+    slug: string;
+    identifier: string;
+    /** The member creating the project — the seeded Bugs folder's creator. */
+    actorUserId: string;
+  },
   tx: Prisma.TransactionClient,
 ): Promise<Project> {
   // §4 project cap (8.1.11): block before any work when the org is at
@@ -271,7 +281,25 @@ async function insertProjectWithSeedsInTx(
   // one column per status, so it MUST run after the workflow seed and
   // within the same tx (the statuses aren't visible outside it yet).
   await boardsService.seedDefaultBoard(created.id, input.workspaceId, tx);
-  return created;
+  // And the BUGS FOLDER (Story MOTIR-4927 · MOTIR-4935), in the SAME
+  // transaction: a project either has its bug destination or doesn't exist, so
+  // a retried identifier collision leaves no orphan folder behind. A FOLDER, not
+  // a work item — MOTIR-5296 decided the holder carries no status, no edges and
+  // no rollup, so no board, report, ready list or onboarding read ever sees it.
+  // The name is a LABEL; the pointer below is what makes it the destination.
+  const bugsFolder = await folderRepository.create(
+    {
+      workspaceId: input.workspaceId,
+      projectId: created.id,
+      parentFolderId: null,
+      name: DEFAULT_BUG_FOLDER_NAME,
+      // A brand-new project has no root folders yet, so this is the first key.
+      position: keyForAppend(null),
+      createdById: input.actorUserId,
+    },
+    tx,
+  );
+  return projectRepository.setBugDestinationFolder(created.id, bugsFolder.id, tx);
 }
 
 /**
@@ -398,7 +426,13 @@ export const projectsService = {
           { userId: input.actorUserId, workspaceId: input.workspaceId },
           (tx) =>
             insertProjectWithSeedsInTx(
-              { workspaceId: input.workspaceId, name: trimmedName, slug, identifier },
+              {
+                workspaceId: input.workspaceId,
+                name: trimmedName,
+                slug,
+                identifier,
+                actorUserId: input.actorUserId,
+              },
               tx,
             ),
         );
@@ -503,7 +537,13 @@ export const projectsService = {
             if (first) return first;
 
             return insertProjectWithSeedsInTx(
-              { workspaceId: input.workspaceId, name, slug, identifier },
+              {
+                workspaceId: input.workspaceId,
+                name,
+                slug,
+                identifier,
+                actorUserId: input.actorUserId,
+              },
               tx,
             );
           },

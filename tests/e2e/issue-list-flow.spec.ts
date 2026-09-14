@@ -266,6 +266,11 @@ test('@smoke a project with no work items renders the empty state', async ({ pag
   await page.goto('/items');
   await expect(page.getByRole('heading', { name: 'No work items yet' })).toBeVisible();
   await expect(page.getByText('Create your first work item to start tracking work.')).toBeVisible();
+  // Every project is born with a Bugs folder (MOTIR-4935). Its root holds a folder
+  // and no work items, so the tree draws the folder row ABOVE the same empty state
+  // (MOTIR-5541, design/work-items/items-first-run.mock.html panel 1).
+  const grid = page.getByRole('treegrid', { name: 'Work Items', exact: true });
+  await expect(grid.getByText('Bugs', { exact: true })).toBeVisible();
 });
 
 // ───────────── create refreshes the list without a reload (regression) ─────────

@@ -1034,10 +1034,22 @@ export type ProjectTreeRowDto = FolderTreeRowDto | WorkItemTreeRowDto;
  * 128" affordance.
  */
 export interface TreeLevelDto {
-  /** Folders first (by position), then work items (by the active sort). */
+  /**
+   * Inside a folder: its folders (by position), then its work items (by the
+   * active sort). At the project root: its epics, then its folders, then its
+   * other work items (MOTIR-5550).
+   */
   rows: ProjectTreeRowDto[];
   hasMore: boolean;
   total: number;
+  /**
+   * The level's WORK-ITEM count, its folders excluded — set on a level that can
+   * hold folders (the project root, or one folder) and absent on a work item's
+   * children, which hold none. The /items first-run rule reads the root's: the
+   * unfiltered Tree shows its empty state when it is zero, whatever folders the
+   * root holds (MOTIR-5541, `design/work-items/design-notes.md` § `/items` first run).
+   */
+  workItemTotal?: number;
 }
 
 /**

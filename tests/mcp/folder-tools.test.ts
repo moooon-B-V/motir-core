@@ -18,6 +18,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { spyOnJobDispatch } from '../helpers/jobs';
+import { removeSeededBugsFolder } from '../fixtures/projectFixtures';
 
 // MCP FOLDER TOOLS (Story MOTIR-5310 · MOTIR-5409) over real Postgres, driven
 // through `buildMcpServer` + an in-memory client — the `move-to-parent.test.ts`
@@ -116,6 +117,7 @@ function secondProject(fx: WorkItemFixture) {
 describe('folder tools — round-trip', () => {
   it('creates, lists with paths, renames, moves, reorders and deletes a folder tree', async () => {
     const fx = await makeWorkItemFixture();
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const client = await connectClient(fx.ctx);
 
     // An empty project says so.
@@ -228,6 +230,7 @@ describe('folder tools — round-trip', () => {
 
   it('delete into a parent folder names the destination', async () => {
     const fx = await makeWorkItemFixture();
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const client = await connectClient(fx.ctx);
     const outer = await create(client, 'Outer');
     const inner = await create(client, 'Inner', outer.id);
@@ -242,6 +245,7 @@ describe('folder tools — round-trip', () => {
 
   it('says a truncated tree is truncated', async () => {
     const fx = await makeWorkItemFixture();
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const client = await connectClient(fx.ctx);
     await create(client, 'Only');
     vi.spyOn(foldersService, 'listProjectFolders').mockResolvedValueOnce({
@@ -258,6 +262,7 @@ describe('folder tools — round-trip', () => {
 describe('folder tools — typed refusals', () => {
   it('surfaces every folder code as a typed tool error', async () => {
     const fx = await makeWorkItemFixture();
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const client = await connectClient(fx.ctx);
     const parked = await create(client, 'Parked');
     const child = await create(client, 'Child', parked.id);
@@ -365,6 +370,7 @@ describe('folder tools — typed refusals', () => {
 
   it('refuses a rename and a placement in one call, changing nothing', async () => {
     const fx = await makeWorkItemFixture();
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const client = await connectClient(fx.ctx);
     const target = await create(client, 'Target');
     const folder = await create(client, 'Folder');
@@ -420,6 +426,7 @@ describe('renderFolderTree', () => {
 describe('folder tools — permissions', () => {
   it('a CLI-grant token calls all four tools', async () => {
     const fx = await makeWorkItemFixture();
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const client = await connectClient(fx.ctx, CLI_TOKEN_GRANT as TokenGrant);
     const folder = await create(client, 'CLI folder');
     expect((await listRows(client)).folders).toHaveLength(1);
@@ -438,6 +445,7 @@ describe('folder tools — permissions', () => {
 
   it('a browse-only token reads folders and is refused the three writes', async () => {
     const fx = await makeWorkItemFixture();
+    await removeSeededBugsFolder(fx.projectId); // these specs control the folder set
     const existing = await foldersService.createFolder(
       { projectId: fx.projectId, parentFolderId: null, name: 'Existing' },
       fx.ctx,
