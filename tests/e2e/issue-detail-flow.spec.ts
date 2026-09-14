@@ -137,6 +137,10 @@ test('@smoke renders the canonical detail page (header · rendered Markdown · c
 
   // Header: identifier + title h1.
   await expect(page.getByRole('heading', { name: 'Wire the dashboard', level: 1 })).toBeVisible();
+  // ONE main landmark — the shell's. The content column rendered a second
+  // `<main>` inside `AppLayout`'s until MOTIR-5432, so assistive tech had two
+  // main regions and `page.getByRole('main')` resolved to two elements.
+  await expect(page.getByRole('main')).toHaveCount(1);
   // Header identifier via testid — the bare key text is no longer unique on
   // the detail page (the Development empty-state copy names it, MOTIR-1579).
   await expect(page.getByTestId('item-identifier')).toHaveText(item.identifier);

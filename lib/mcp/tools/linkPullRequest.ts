@@ -214,8 +214,10 @@ export function registerLinkPullRequest(
         'that is the case it exists for — writing the row from the `headRef` / `baseRef` / ' +
         '`title` you supply; a later delivery refreshes those and leaves the links alone. ' +
         'Putting the key in the branch is still worth doing for a human reading a branch list, ' +
-        'but it is a label now, not the mechanism. Honors the same access checks as the UI: an ' +
-        'unknown or cross-workspace repository, and an unknown item key, are both refused.',
+        'but it is a label now, not the mechanism. The repository is resolved across your ' +
+        'ORGANISATION, so any of its workspaces can link a pull request on a repository it ' +
+        'connected. Honors the same access checks as the UI: an unknown repository, another ' +
+        'organisation’s repository, and an unknown item key are all refused.',
       inputSchema,
     },
     async (args, extra) => runLinkPullRequest(args, resolveContext(extra)),

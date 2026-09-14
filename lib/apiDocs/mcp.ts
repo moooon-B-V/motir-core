@@ -467,6 +467,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '8fd1253a91cf',
   },
+  publish_test_instructions: {
+    summary:
+      'Put a RUN\u2019s HOW TO TEST onto its run target \u2014 once per run, before the run ' +
+      'finishes: rich-text Markdown with sections and every command in a fenced code block ' +
+      '(click-to-copy), plus the commit of each repository it pushed to.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: 'a660c7e6f790',
+  },
   link_pull_request: {
     summary:
       'Declare which work item a pull request delivers — call it right after opening one, once ' +
@@ -478,7 +486,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned again for MOTIR-3757, and the SUMMARY changed with it: the description said
     // the link a work item carries is SINGULAR and MOVES, which stopped being true when the
     // column it described was dropped.
-    descriptionFingerprint: '97a9ab212c18',
+    // Re-pinned for MOTIR-5188: the description said a "cross-workspace repository" is
+    // refused, which stopped being true when the repository read moved to the ORGANISATION.
+    // The summary names no tier, so it stands.
+    descriptionFingerprint: '120f83a21d3e',
   },
   unlink_pull_request: {
     summary:

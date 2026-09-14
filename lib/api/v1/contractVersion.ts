@@ -355,5 +355,27 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.25.0` at `d4981d354`, so this claims `1.26.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION rather than a position.
+ *
+ * - `1.27.0` — MOTIR-5357 adds `getDispatchRunCloseOutPrompt`
+ *   (`GET /api/v1/dispatch-runs/{id}/close-out-prompt`): the prompt a scoped run
+ *   hands ONE agent before marking its pull requests ready, so HOW TO TEST is
+ *   written once onto the run target (`docs/decisions/approval-gates.md` §9's
+ *   2026-09-13 amendment). The target and the landed cards come from the run's
+ *   own record; a run with no scope is `NO_RUN_TARGET` (422).
+ *
+ *   Additive: ONE new operation (§8's first allowed change). No declared shape
+ *   changed and nothing was removed. Gated on `work_item:edit`, which
+ *   `CLI_TOKEN_GRANT` already carries.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.26.0` at the branch point, so this claims `1.27.0`. If a sibling has
+ *   taken it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.28.0` — MOTIR-5358 adds `getWorkItemHowToTest`
+ *   (`GET /api/v1/work-items/{key}/how-to-test`): a run target's CURRENT
+ *   How-to-test record, each repository section named `owner/name`, so the CLI
+ *   renders the `## How to test` section of a session pull request body from the
+ *   same record the item page shows. Additive: ONE new operation; gated on
+ *   `project:browse`. Same re-read-before-merge rule as `1.27.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.26.0';
+export const V1_CONTRACT_VERSION = '1.28.0';

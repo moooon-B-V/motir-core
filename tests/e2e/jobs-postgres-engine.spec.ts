@@ -41,6 +41,7 @@ import { adminDb, resetDatabase, truncateJobTables } from './_helpers/db-reset';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // ⚠️ EVERY DIRECT-DB CALL HERE IS `adminDb`, THE OWNER CLIENT — not the runtime
 // singleton, which is what `jobs-flow.spec.ts` and most of this lane still use.
@@ -89,7 +90,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   // helper keeps its contract by settling there and navigating on.
   await page.waitForURL('**/onboarding', { timeout: 30_000 });
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench', { timeout: 30_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
 }
 
 async function workspaceIdFor(email: string): Promise<string> {

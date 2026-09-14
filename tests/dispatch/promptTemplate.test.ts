@@ -4,11 +4,15 @@ import {
   branchSlug,
   FINDINGS_POLICY_TOKENS,
   FULL_FINDINGS_POLICY,
+  HOW_TO_TEST_TOOL_NAME,
   LINKING_RATIONALE,
   NO_INJECTIONS,
   parseFindingsPolicy,
+  RENDERED_SURFACE_TRIGGER,
   type DispatchPromptSource,
 } from '@/lib/dispatch/promptTemplate';
+import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
+import { PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME } from '@/lib/mcp/tools/publishTestInstructions';
 import { splitPlanBody } from '@/lib/markdown/planBody';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type { WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -1723,5 +1727,103 @@ describe('the acceptance-receipt steps are conditional on the card recording one
       }),
     );
     expect(prompt).not.toContain('create_acceptance_upload');
+  });
+});
+
+describe('assembleDispatchPrompt — HOW TO TEST is per RUN, on the run target (MOTIR-5334)', () => {
+  const GRAMMARS = [
+    ['per_item_pr', null],
+    ['session_lineage', 'motir/auto-20260913-120000'],
+  ] as const;
+  const flat = (prompt: string) => prompt.replace(/\n\s+/g, ' ');
+
+  it.each(GRAMMARS)(
+    'the %s grammar, with the item as its own run target, renders step 4b between the link and the transition',
+    (_mode, sessionBranch) => {
+      const { prompt } = assembleDispatchPrompt(source({ sessionBranch }));
+      const order = prompt.slice(prompt.indexOf('IN THIS ORDER'));
+      const link = order.indexOf('4. link it with the link_pull_request tool');
+      const publish = order.indexOf(
+        `4b. publish this run's HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool`,
+      );
+      const transition = order.indexOf('5. move PROD-7 to Implemented');
+      expect(link).toBeGreaterThan(-1);
+      expect(publish).toBeGreaterThan(link);
+      expect(transition).toBeGreaterThan(publish);
+    },
+  );
+
+  it('an UNSCOPED session lineage (runTargetKey null) still renders the step, on the card', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ sessionBranch: 'motir/auto-20260913-120000', runTargetKey: null }),
+    );
+    expect(flat(prompt)).toContain(`ONCE, on PROD-7 (this item is the run's target)`);
+  });
+
+  it('a run targeting the item ITSELF renders the step, on the card', () => {
+    const { prompt } = assembleDispatchPrompt(source({ runTargetKey: 'PROD-7' }));
+    expect(prompt).toContain(HOW_TO_TEST_TOOL_NAME);
+  });
+
+  it('a SCOPED run on another item renders NO publish, and names the run target the close-out writes to', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ sessionBranch: 'motir/run-20260913-120000', runTargetKey: 'PROD-1' }),
+    );
+    expect(prompt).not.toContain(HOW_TO_TEST_TOOL_NAME);
+    const text = flat(prompt);
+    expect(text).toContain('4b. do NOT publish How to test for PROD-7.');
+    expect(text).toContain("written once, onto PROD-1, by the run's close-out step");
+  });
+
+  it('interpolates the runbook trigger, byte for byte', () => {
+    // The scope sentence of motir-meta `prompts/run.md` § "The how-to-test rule —
+    // every UI-touching feature PR states how to test it". Re-typed here ON
+    // PURPOSE: the constant is what the prompt says, this literal is what the
+    // runbook says, and the test is the only thing that holds the two together.
+    expect(RENDERED_SURFACE_TRIGGER).toBe(
+      'creates or changes any rendered surface (a UI `type: code` subtask, or any subtask adding/editing a page, component, route-rendered view, modal, or interactive control)',
+    );
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(flat(prompt)).toContain(`If this change ${RENDERED_SURFACE_TRIGGER}`);
+  });
+
+  it('tells the agent: ONE call on the card, a rich-text body with sections and fenced commands, a repos entry per repository, no branch fetch', () => {
+    const text = flat(assembleDispatchPrompt(source()).prompt);
+    expect(text).toContain('ONCE, on PROD-7');
+    expect(text).toContain('"bodyMd" is RICH TEXT (Markdown) with sections');
+    expect(text).toContain('Put EVERY command in its own fenced code block');
+    expect(text).toContain('one "repos" entry per repository you pushed to');
+    expect(text).toContain('commitSha = its pushed head');
+    expect(text).toContain('Motir fills in the branch fetch itself — do not include it.');
+    expect(text).toContain('Otherwise say in the body why there is none');
+  });
+
+  it('tells the agent a refused publish is reported and does not block the transition', () => {
+    const text = flat(assembleDispatchPrompt(source()).prompt);
+    expect(text).toContain('If the publish is refused, say so in your FINISHED report');
+    expect(text).toContain('a refused publish does not prevent the transition');
+  });
+
+  it('the per-item lane requires a "## How to test" section in the pull request body it opens', () => {
+    const text = flat(assembleDispatchPrompt(source({ sessionBranch: null })).prompt);
+    expect(text).toContain('3. open the pull request. Its body carries a "## How to test" section');
+    expect(text).toContain('the SAME Markdown step 4b publishes on the run target');
+  });
+
+  it('the session lineage opens no pull request of its own, so it carries no body section instruction', () => {
+    const text = flat(
+      assembleDispatchPrompt(source({ sessionBranch: 'motir/auto-20260913-120000' })).prompt,
+    );
+    expect(text).not.toContain('"## How to test" section');
+  });
+
+  it('a MANUAL item — the lane that opens no pull request — renders no publish step', () => {
+    const { prompt } = assembleDispatchPrompt(source({ type: 'manual' }));
+    expect(prompt).not.toContain(HOW_TO_TEST_TOOL_NAME);
+  });
+
+  it('names the REGISTERED tool, so a rename fails here', () => {
+    expect(HOW_TO_TEST_TOOL_NAME).toBe(PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(HOW_TO_TEST_TOOL_NAME);
   });
 });

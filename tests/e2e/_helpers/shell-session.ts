@@ -9,6 +9,7 @@
 import './job-registry';
 import { expect, type Page } from '@playwright/test';
 import { AUTHED_LANDING_PATH, ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
+import { isLandedWorkbenchUrl } from './workbench-landing';
 
 export const SHELL_PASSWORD = 'shell-a11y-spec-pass-123';
 
@@ -104,12 +105,18 @@ async function settleOnWorkbench(page: Page): Promise<void> {
   // wait below would hang on `/re-consent` exactly as it did before this fix.
   // Waiting on the SET of settled destinations is the authoritative signal, and
   // it is still never a sleep (CLAUDE.md § E2E).
+  //
+  // ⚠️ AND THE LANDING IS SETTLED ONLY ONCE IT NAMES A TAB (MOTIR-5221). The bare
+  // `/workbench` is a resolver that forwards to To approve, else In progress, else
+  // To do, so a URL reading `/workbench` is the entrance, not the arrival. Both
+  // waits ask for the RESOLVED address (`isLandedWorkbenchUrl`), and then for the
+  // rendered page — still an authoritative signal, never a sleep.
   await page.waitForURL(
-    (url) => url.pathname.startsWith(RECONSENT_PATH) || url.pathname.endsWith(POST_AUTH_LANDING),
+    (url) => url.pathname.startsWith(RECONSENT_PATH) || isLandedWorkbenchUrl(url),
     { timeout: 30_000 },
   );
   await clearReconsentHold(page);
-  await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
   await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 }
 
@@ -225,7 +232,10 @@ export async function startSignedOut(page: Page): Promise<void> {
  */
 export async function signUp(page: Page, email: string): Promise<void> {
   await signUpToOnboarding(page, email);
+  // `goto` follows the resolver's redirect inside the one navigation, so it
+  // resolves on the landed tab; the URL wait says so rather than assuming it.
   await page.goto(POST_AUTH_LANDING);
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
   await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 }
 

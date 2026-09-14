@@ -38,6 +38,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { waitForEmail, extractInviteUrl } from './_helpers/email-capture';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'org-admin-flow-pass-123';
 
@@ -85,7 +86,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   // helper keeps its contract by settling there and navigating on.
   await page.waitForURL('**/onboarding', { timeout: 30_000 });
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench', { timeout: 30_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
 }
 
 // Navigate to an authed route, tolerating the rare post-sign-up race where the
@@ -394,7 +395,7 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // (MOTIR-5132): it calls the same server action the workspace switcher does,
   // so it is a context switch and resolves its destination through the same
   // owner instead of naming a route of its own.
-  await pageC.waitForURL('**/workbench');
+  await pageC.waitForURL(isLandedWorkbenchUrl);
 
   // C is now a member of WA and of org A (verify the auto-join wrote the row).
   const cInWa = await db.workspaceMembership.findFirst({

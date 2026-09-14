@@ -20,6 +20,8 @@ import type {
   NormalizedStatusEvent,
   RepoFileReadResult,
   CommitComparison,
+  DeploymentState,
+  NormalizedDeploymentStatus,
 } from '../types';
 
 // The GitLab implementation of the GitProvider seam (Story 7.23 · MOTIR-1474) —
@@ -30,6 +32,36 @@ import type {
 // consumer (MOTIR-1475 status sync, MOTIR-1476 code-graph feed) dispatches through
 // the `GitProvider` interface by the stored `provider` discriminator and holds NO
 // GitLab-specific types — exactly as it does for GitHub.
+
+/**
+ * GitLab `deployment` hook `status` → the shared deployment-state union (Story
+ * MOTIR-4906 · MOTIR-5332). TOTAL over the five statuses GitLab documents; any
+ * other value normalizes to null — the hook is refused rather than stored under a
+ * plausible member nobody reported.
+ */
+const GITLAB_DEPLOYMENT_STATUS: Readonly<Record<string, DeploymentState>> = {
+  created: 'pending',
+  running: 'in_progress',
+  success: 'success',
+  failed: 'failure',
+  canceled: 'canceled',
+};
+
+/**
+ * Parse GitLab's hook timestamp. GitLab sends `status_changed_at` as
+ * `2021-04-28 21:50:00 +0200` — not ISO 8601 — so it is rewritten to
+ * `2021-04-28T21:50:00+02:00` before parsing; an ISO value passes through.
+ */
+function parseGitlabTimestamp(value: unknown): Date | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const m =
+    /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?:\.\d+)? ?(?:([+-])(\d{2}):?(\d{2})|UTC)?$/.exec(
+      value.trim(),
+    );
+  const iso = m ? `${m[1]}T${m[2]}${m[3] ? `${m[3]}${m[4]}:${m[5]}` : 'Z'}` : value;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 /** Narrow an `unknown` to a plain object without asserting `any`. */
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -413,6 +445,51 @@ export const gitlabProvider: GitProvider = {
       // pipeline reports under `context: 'pipeline'`, so a later pipeline at the
       // same commit shares that name and retires the one it replaced.
       suiteId: idToString(attrs['id']),
+    };
+  },
+
+  /**
+   * A `deployment` hook → the normalized preview record (Story MOTIR-4906 ·
+   * MOTIR-5332), the same shape GitHub's `deployment_status` produces:
+   * `sha` → `commitSha`, `ref` → `ref`, `environment` → `environment`,
+   * `environment_external_url` → `environmentUrl`, `deployment_id` →
+   * `providerDeploymentId`, `status_changed_at` → `occurredAt`, `project.id` → the
+   * provider repo id, and `status` through {@link GITLAB_DEPLOYMENT_STATUS}.
+   */
+  parseDeploymentStatusEvent(rawPayload: unknown): NormalizedDeploymentStatus | null {
+    const payload = asRecord(rawPayload);
+    if (!payload || payload['object_kind'] !== 'deployment') return null;
+    const providerRepoId = idToString(asRecord(payload['project'])?.['id']);
+    const providerDeploymentId = idToString(payload['deployment_id']);
+    const commitSha = typeof payload['sha'] === 'string' ? payload['sha'] : '';
+    const ref = typeof payload['ref'] === 'string' ? payload['ref'] : '';
+    const environment = typeof payload['environment'] === 'string' ? payload['environment'] : '';
+    const rawStatus = typeof payload['status'] === 'string' ? payload['status'] : '';
+    const state = Object.hasOwn(GITLAB_DEPLOYMENT_STATUS, rawStatus)
+      ? GITLAB_DEPLOYMENT_STATUS[rawStatus]!
+      : null;
+    const occurredAt = parseGitlabTimestamp(payload['status_changed_at']);
+    if (
+      !providerRepoId ||
+      !providerDeploymentId ||
+      !commitSha ||
+      !ref ||
+      !environment ||
+      !state ||
+      !occurredAt
+    ) {
+      return null;
+    }
+    const url = payload['environment_external_url'];
+    return {
+      providerRepoId,
+      providerDeploymentId,
+      commitSha,
+      ref,
+      environment,
+      state,
+      environmentUrl: typeof url === 'string' && url.length > 0 ? url : null,
+      occurredAt,
     };
   },
 

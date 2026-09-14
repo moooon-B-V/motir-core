@@ -5,12 +5,19 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // how it is spelled in a URL.
 //
 // The selection lives in the URL (`design/workbench/design-notes.md` §"The tab
-// strip"): the Workbench itself is To do, and every other tab carries `?tab=`.
-// **To do is the DEFAULT and is therefore spelled as the ABSENCE of the param**
-// rather than as `?tab=todo` — one canonical URL per tab, so a link to the
-// Workbench and a link to To do are the same link. That rule is inherited from
-// the two-tab strip this replaces and is the reason the union's first member is
-// not addressable.
+// strip", amended by § 21). The rule is ONE CANONICAL URL PER TAB, and since
+// MOTIR-5218 it is TOTAL: every tab — To do and To approve included — is
+// spelled `?tab=<slug>`, and no tab is spelled as the bare path.
+//
+// ⚠️ IT USED TO BE SPECIAL-CASED, AND WHY THAT HAD TO GO. The default tab (To
+// do) was spelled as the ABSENCE of the param, so a link to the Workbench and a
+// link to To do were the same link. That implementation assumed the default was
+// FIXED. The landing now CASCADES (§ 21) — a bare `/workbench` resolves to
+// To approve, else In progress, else To do, per reader and per day — so the bare
+// path cannot be any one tab's spelling: it would name a different view for
+// every reader, the very ambiguity the one-URL rule forbids. So the rule is kept
+// by making it total, and the bare path is an ENTRANCE, not a view: it resolves
+// (`lib/workbench/landing.ts`, MOTIR-5221) and forwards to a tab's address.
 //
 // ⚠️ THE LABEL AND THE SLUG ARE DIFFERENT WORDS ON PURPOSE, on two of the five.
 // A slug names the SET and a label says what the tab is FOR: `finished` is
@@ -23,48 +30,69 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 export type WorkbenchTab = 'todo' | 'in-progress' | 'finished' | 'watching' | 'approvals';
 
-/** Every tab, in strip order. To do leads because it is the default. */
+/**
+ * Every tab, in strip order — the DESIGN's order (`design-notes.md` § 21,
+ * MOTIR-5216): what is waiting on you, what is moving, what to start, what just
+ * landed, what you follow.
+ *
+ * ⚠️ The order says NOTHING about which tab a bare `/workbench` shows. Nothing
+ * reads the first member as a default: `BY_PARAM` is built order-independently,
+ * and what a paramless request gets is the landing cascade's decision
+ * (`lib/workbench/landing.ts`). The first three are that cascade's rungs, which
+ * is why the strip reads as an explanation of where the reader just landed.
+ */
 export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
-  'todo',
+  'approvals',
   'in-progress',
+  'todo',
   'finished',
   'watching',
-  'approvals',
 ];
 
-/** The `?tab=` spelling of each tab; `null` for the default, which has none. */
-const TAB_PARAM: Readonly<Record<WorkbenchTab, string | null>> = {
-  todo: null,
+/**
+ * The `?tab=` spelling of each tab. ⚠️ `string`, never `string | null`: the type
+ * is what refuses a future paramless tab — a sixth tab added without a slug is a
+ * compile error, not a test failure somebody has to notice.
+ */
+const TAB_PARAM: Readonly<Record<WorkbenchTab, string>> = {
+  approvals: 'approvals',
   'in-progress': 'in-progress',
+  todo: 'todo',
   finished: 'finished',
   watching: 'watching',
-  approvals: 'approvals',
 };
 
 const BY_PARAM = new Map<string, WorkbenchTab>(
-  WORKBENCH_TABS.flatMap((tab) => {
-    const param = TAB_PARAM[tab];
-    return param === null ? [] : [[param, tab] as const];
-  }),
+  WORKBENCH_TABS.map((tab) => [TAB_PARAM[tab], tab] as const),
 );
 
 /**
- * Narrow an untrusted `?tab=` value. Anything that is not a known slug —
- * absent, misspelled, hand-edited, a stale bookmark — is To do, because a
- * landing page should land rather than 404 on a typo in a query param.
+ * Narrow an untrusted `?tab=` value to a tab — or to `null` when it names none.
+ *
+ * ⚠️ STRICT, and the strictness is the whole trick (MOTIR-5221). This used to
+ * answer a tab for EVERYTHING — absent, empty, misspelled, an array — so the page
+ * could not tell *nobody asked* from *they asked for garbage*. Both must now land
+ * on the CASCADE (`lib/workbench/landing.ts`), so both come back `null` and the
+ * page branches once. The land-rather-than-404 promise is kept by the cascade
+ * rather than by a hardcoded tab, and there is no second fallback here to drift
+ * from it.
  */
-export function parseWorkbenchTab(raw: string | string[] | undefined): WorkbenchTab {
+export function parseWorkbenchTab(raw: string | string[] | undefined): WorkbenchTab | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return (value !== undefined && BY_PARAM.get(value)) || 'todo';
+  return (value !== undefined && BY_PARAM.get(value)) || null;
 }
 
 /**
  * The canonical URL for a tab, optionally at a given PAGE.
  *
- * ⚠️ PAGE 1 EMITS NO PARAM, for the same reason To do emits no `?tab=`: one
- * canonical URL per view (MOTIR-4853). A link to a tab and a link to its first
- * page are the same link, so nothing has to decide which of two spellings to
- * share, and the pager's own `1` button navigates to the tab's plain href.
+ * Every tab carries its `?tab=` (MOTIR-5218), so this is the ONE builder of a
+ * Workbench tab link: code that wants a tab reaches for this, never for the
+ * bare landing path, which names no tab.
+ *
+ * ⚠️ PAGE 1 EMITS NO PARAM: one canonical URL per view (MOTIR-4853). A link to
+ * a tab and a link to its first page are the same link, so nothing has to decide
+ * which of two spellings to share, and the pager's own `1` button navigates to
+ * the tab's plain href.
  *
  * ⚠️ It took a `cursor` until MOTIR-4852 retired the keyset. The shape is the
  * same and the meaning is not: a cursor was an opaque POSITION that only the
@@ -73,9 +101,7 @@ export function parseWorkbenchTab(raw: string | string[] | undefined): Workbench
  */
 export function workbenchTabHref(tab: WorkbenchTab, page?: number | null): string {
   const params = new URLSearchParams();
-  const param = TAB_PARAM[tab];
-  if (param !== null) params.set('tab', param);
+  params.set('tab', TAB_PARAM[tab]);
   if (page !== null && page !== undefined && page > 1) params.set('page', String(page));
-  const query = params.toString();
-  return query ? `${AUTHED_LANDING_PATH}?${query}` : AUTHED_LANDING_PATH;
+  return `${AUTHED_LANDING_PATH}?${params.toString()}`;
 }

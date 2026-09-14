@@ -6205,7 +6205,75 @@
     },
     "development": {
       "title": "开发",
-      "gloss": "已关联的拉取请求 · 实时 PR 与 CI 状态",
+      "gloss": "拉取请求及其测试方法 · 实时 PR 与 CI 状态",
+      "howToTest": {
+        "title": "如何测试",
+        "writtenBy": "由 <b>{run}</b> 编写 · {time}",
+        "code": {
+          "copy": "复制",
+          "copyAria": "复制代码",
+          "copied": "已复制",
+          "copyFailed": "无法复制——请手动选择文本"
+        },
+        "stale": {
+          "title": "针对 <sha>{recordSha}</sha> 编写——{repo} 现在位于 <sha>{headSha}</sha>。",
+          "body": "以下说明可能已过时。预览和 CI 跟随最新提交。",
+          "pill": "已过时"
+        },
+        "preview": {
+          "title": "在预览环境中",
+          "state": {
+            "success": "就绪",
+            "queued": "排队中",
+            "pending": "等待中",
+            "in_progress": "部署中",
+            "failure": "部署失败",
+            "error": "部署出错",
+            "inactive": "已停用",
+            "canceled": "已取消"
+          },
+          "notReady": "此提交的 {environment} 部署状态为{state}。部署成功后，链接会显示在这里。",
+          "failed": "此提交的 {environment} 部署未成功，因此没有可打开的预览。请在本地测试，或等待下一次推送。",
+          "inactive": "此提交的 {environment} 部署已不再活跃——已被更新的部署取代。",
+          "canceled": "此提交的 {environment} 部署在完成前已被取消。",
+          "none": "未报告预览",
+          "noneBody": "此仓库的 CI 未为此提交报告任何部署。Motir 不会创建预览。"
+        },
+        "local": {
+          "title": "在本地",
+          "noBranch": "没有可获取的分支",
+          "noBranchBody": "尚无拉取请求包含此仓库的分支，因此没有可获取的内容。"
+        },
+        "ci": {
+          "title": "CI 已验证的内容",
+          "summary": "{total} 项检查中 {passed} 项通过",
+          "conclusion": {
+            "success": "通过",
+            "failure": "失败",
+            "pending": "运行中",
+            "neutral": "中性"
+          },
+          "none": "未报告检查",
+          "noneBody": "此提交尚未报告任何检查，因此 CI 尚未验证任何内容。"
+        },
+        "noSection": {
+          "title": "不在本次运行的记录中",
+          "pill": "无对应部分",
+          "body": "{run} 未为此仓库编写对应部分，因此上方说明不涵盖其拉取请求。其行仍显示 PR 与 CI 状态。"
+        },
+        "missing": {
+          "title": "尚无运行为此工作项编写测试说明。",
+          "owedByRun": "应由 {run} 编写。上方的拉取请求仍显示各自的状态。",
+          "noRun": "此工作项没有记录的运行。"
+        },
+        "earlier": {
+          "toggle": "更早的运行（{count}）"
+        },
+        "child": {
+          "pointer": "作为 <link>{key}</link> 的一部分进行测试"
+        },
+        "unknownState": "无法识别的测试说明状态：{value}"
+      },
       "emptyTitle": "暂无关联的拉取请求",
       "emptyDescription": "使用此处的“+关联拉取请求”，或通过 MCP 调用 <mono>link_pull_request</mono> 来添加 PR，并显示实时 PR 与 CI 状态。",
       "autoLinkCaption": "通过 MCP 调用 <mono>link_pull_request</mono> 或使用 <mono>motir auto</mono> 会话分支进行关联。",
@@ -6940,7 +7008,7 @@
       "title": "项目",
       "caption": "Motir 正在同步的 GitLab 项目。连接一个项目后，Motir 即可读取其合并请求和流水线。",
       "empty": "尚未连接任何项目。连接一个项目即可开始同步合并请求和流水线。",
-      "foot": "连接项目会为合并请求和流水线事件添加一个 Webhook。Motir 不会为 GitLab 项目建立代码索引，因此 AI 规划无法读取其源代码。",
+      "foot": "连接项目会为合并请求、流水线、推送和部署事件添加一个 Webhook。Motir 不会为 GitLab 项目建立代码索引，因此 AI 规划无法读取其源代码。",
       "synced": "同步中",
       "syncLabel": "同步 {project}",
       "connectProject": "连接项目",
@@ -6952,7 +7020,9 @@
       "error": {
         "not_connected": "GitLab 尚未连接。请重新连接以选择项目。",
         "not_found": "该项目已不在你的 GitLab 成员项目中。",
-        "unavailable": "无法连接到 GitLab——你的授权可能已被撤销。请重新连接 GitLab 后再试。"
+        "unavailable": "无法连接到 GitLab——你的授权可能已被撤销。请重新连接 GitLab 后再试。",
+        "webhook_not_configured": "此 Motir 服务器未配置 GitLab Webhook 密钥，因此无法接收项目事件。请联系服务器管理员设置 GITLAB_WEBHOOK_SECRET。",
+        "webhook_failed": "无法为该项目添加 Motir 的 Webhook。在 GitLab 中添加 Webhook 需要该项目的 Maintainer 角色。"
       }
     }
   },
@@ -8182,6 +8252,10 @@
       "off": "已关闭",
       "onWhat": "任何带有验收视频的故事都会等待批准——无论由谁发布。",
       "offWhat": "该项目不接受任何验收视频，也不会保留任何故事。",
+      "unavailable": "不可用",
+      "unavailableWhat": "你的组织没有付费的 Motir AI 套餐，因此无法发布任何验收视频。",
+      "orgPlanNote": "套餐按组织购买一次，而非按项目购买。",
+      "upgrade": "升级",
       "saved": "已保存",
       "saveError": "保存失败，请重试。"
     }

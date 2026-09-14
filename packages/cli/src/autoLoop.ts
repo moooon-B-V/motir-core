@@ -1,3 +1,4 @@
+import type { HowToTestRecord } from './client.js';
 import { formatTable, truncate } from './render.js';
 import type { SessionCommit } from './git.js';
 
@@ -498,6 +499,13 @@ export function renderSessionPrBody(
   branch: string,
   records: DispatchRecord[],
   commits: SessionCommit[] = [],
+  /**
+   * The run's HOW TO TEST (MOTIR-5358) — the run target and its current record,
+   * rendered as this body's `## How to test` section for THIS repository. Omitted
+   * for a run with no run target (`motir auto`), whose cards each published their
+   * own and whose body keeps its old shape.
+   */
+  howToTest?: { targetKey: string; record: HowToTestRecord | null; repoName: string | null },
 ): string {
   const carried = records.filter(landedWork);
   const failed = records.filter((r) => r.outcome === 'failed');
@@ -523,6 +531,8 @@ export function renderSessionPrBody(
     }
   }
 
+  if (howToTest) lines.push('', ...renderHowToTestSection(howToTest, branch));
+
   if (failed.length > 0) {
     lines.push(
       '',
@@ -546,6 +556,44 @@ export function renderSessionPrBody(
     'Review — flip them back or re-dispatch them.',
   );
   return lines.join('\n');
+}
+
+/**
+ * The `## How to test` section of a session pull request body (Story MOTIR-4906 ·
+ * MOTIR-5358), rendered from the run target's CURRENT record — its rich-text body
+ * verbatim, the same record the item page shows, so the two cannot disagree. §9's 2026-09-13 amendment
+ * keeps this section in the body; the record is what Motir renders, the body is
+ * what a reviewer on the host reads.
+ *
+ * Every body carries the whole run's text, followed by THIS repository's fetch.
+ */
+export function renderHowToTestSection(
+  howToTest: { targetKey: string; record: HowToTestRecord | null; repoName: string | null },
+  branch: string,
+): string[] {
+  const { targetKey, record } = howToTest;
+  if (!record) {
+    return [
+      '## How to test',
+      '',
+      `No run has written How to test onto ${targetKey} — nothing to follow here yet.`,
+    ];
+  }
+  // The agent's rich text VERBATIM — its own sections and fenced commands — so the
+  // body and the item page render one record. Its `##` headings sit under this
+  // section's; GitHub renders them as written. Then THIS repository's branch fetch,
+  // which Motir composes and the agent was told not to write.
+  return [
+    '## How to test',
+    '',
+    `Written onto ${targetKey} by the run.`,
+    '',
+    record.bodyMd,
+    '',
+    '```sh',
+    `git fetch origin ${branch} && git checkout ${branch}`,
+    '```',
+  ];
 }
 
 const SUMMARY_HEADERS = ['ITEM', 'OUTCOME', 'TIME', 'BRANCH', 'TITLE'];

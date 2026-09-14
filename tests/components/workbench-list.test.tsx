@@ -286,10 +286,10 @@ describe('the Workbench tab strip', () => {
     renderRaw(await WorkbenchTabs({ active: 'todo', counts }));
 
     // The selection is a URL, not component state — which is what makes it
-    // linkable, reload-safe and cheap to assert. To do is the DEFAULT and is
-    // therefore spelled as the ABSENCE of the param.
+    // linkable, reload-safe and cheap to assert. EVERY tab carries its own
+    // `?tab=`, To do included: the bare path names no tab (MOTIR-5218).
     const href = (key: string) => screen.getByTestId(`workbench-tab-${key}`).getAttribute('href');
-    expect(href('todo')).toBe('/workbench');
+    expect(href('todo')).toBe('/workbench?tab=todo');
     expect(href('in-progress')).toBe('/workbench?tab=in-progress');
     expect(href('finished')).toBe('/workbench?tab=finished');
     expect(href('watching')).toBe('/workbench?tab=watching');
@@ -302,16 +302,38 @@ describe('the Workbench tab strip', () => {
   it('reads the design s labels — and the fifth names an ACTION, not a set', async () => {
     renderRaw(await WorkbenchTabs({ active: 'todo', counts }));
     expect(screen.getAllByRole('link').map((l) => l.textContent?.replace(/\d+$/, ''))).toEqual([
-      'To do',
-      'In progress',
-      'Recently finished',
-      'Watching',
-      // ⚠️ The LABEL and the SLUG differ on purpose: the four above name a state
+      // ⚠️ The LABEL and the SLUG differ on purpose: the other four name a state
       // a work item is IN, and this one names something the READER must do,
-      // which is the whole reason it sits apart from them. Its href is asserted
-      // as `?tab=approvals` above; the two spellings are checked together so
+      // which is the whole reason it leads the strip. Its href is asserted as
+      // `?tab=approvals` above; the two spellings are checked together so
       // neither can be "fixed" into agreement.
       'To approve',
+      'In progress',
+      'To do',
+      'Recently finished',
+      'Watching',
+    ]);
+  });
+
+  it('RENDERS the design order, each tab keeping its own glyph (MOTIR-5217)', async () => {
+    const { container } = renderRaw(await WorkbenchTabs({ active: 'todo', counts }));
+    // Asserted on the rendered anchors in DOCUMENT order, not on the constant: a
+    // strip that re-ordered `WORKBENCH_TABS` but not its own specs would pass a
+    // constant check and still render the old order.
+    const anchors = [...container.querySelectorAll('[data-testid^="workbench-tab-"]')];
+    expect(anchors.map((a) => a.getAttribute('data-testid'))).toEqual([
+      'workbench-tab-approvals',
+      'workbench-tab-in-progress',
+      'workbench-tab-todo',
+      'workbench-tab-finished',
+      'workbench-tab-watching',
+    ]);
+    expect(anchors.map((a) => a.querySelector('svg')?.getAttribute('class'))).toEqual([
+      expect.stringContaining('lucide-inbox'),
+      expect.stringContaining('lucide-circle-dot'),
+      expect.stringMatching(/lucide-circle(?!-)/),
+      expect.stringContaining('lucide-circle-check'),
+      expect.stringContaining('lucide-star'),
     ]);
   });
 

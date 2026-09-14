@@ -40,6 +40,14 @@ import {
 // shipped `deliveries[]`. A second CI verdict on one page is how a person ends
 // up with two answers to *is it green*.
 
+/**
+ * Where a run opens: the run MODAL over the runs index, addressed by `?run=`.
+ * There is no `/runs/<id>` route — `design/runs/design-notes.md` § The DEEP LINK
+ * is `/runs?run=<id>` names this section as one of the three files that must
+ * agree on it, with `RunsIndex` (which writes it) and `RunModal` (which reads it).
+ */
+const runHref = (runId: string): string => `/runs?run=${encodeURIComponent(runId)}`;
+
 export interface RunSectionProps {
   /** This card's runs, newest first. The FIRST row is the current run. */
   initialRuns: DispatchRunDto[];
@@ -214,7 +222,7 @@ export function RunSection({
               position: current.cards.findIndex((c) => c.key === itemKey) + 1,
               total: otherCards,
             })}{' '}
-            <Link className="text-(--el-link) underline" href={`/runs/${current.id}`}>
+            <Link className="text-(--el-link) underline" href={runHref(current.id)}>
               {t('seeWholeRun')}
             </Link>
           </span>
@@ -266,10 +274,7 @@ export function RunSection({
               <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
                 {t(`runStatus.${run.status}`)}
               </RunTonePill>
-              <Link
-                className="min-w-0 truncate text-(--el-link) underline"
-                href={`/runs/${run.id}`}
-              >
+              <Link className="min-w-0 truncate text-(--el-link) underline" href={runHref(run.id)}>
                 {t(`command.${run.command}`)}
               </Link>
               <span className="ml-auto shrink-0 font-sans text-xs text-(--el-text-secondary)">

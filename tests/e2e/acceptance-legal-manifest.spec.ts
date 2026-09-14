@@ -12,6 +12,7 @@ import {
   readLegalHealth,
   setLegalManifest,
 } from './_helpers/legal-manifest';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // THE LEGAL MANIFEST, END TO END — AND THE ACCEPTANCE RECEIPT FOR IT
 // (Story MOTIR-3909 · Subtask MOTIR-4015).
@@ -258,7 +259,7 @@ test('the legal documents come from configuration — absent when none is set, l
 
     // ── THE TERMINAL ACT ────────────────────────────────────────────────────
     await agree.click();
-    await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
+    await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
     await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
     // ⚠️ READ THE RECORD BACK, not just the redirect. Being let through proves

@@ -1407,6 +1407,53 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  publish_test_instructions: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The RUN TARGET — the work item the run was launched against (e.g. "ACME-7"): the story for a story or scoped run, the card itself for a single-card run. Case-insensitive.',
+      },
+      bodyMd: {
+        type: 'string',
+        description:
+          'How to test this run, as Markdown. Use SECTIONS — e.g. "## Precondition" (the sign-in, role or data the surface needs), "## Locally" (setup after checking out the branch: install, migrate, seed, run) and "## Click-path" (what to open, click and expect to SEE) when the run creates or changes a rendered surface; otherwise say why there is none. Put EVERY command in its own fenced code block — the page renders each with a click-to-copy control. Do NOT include the branch fetch: Motir composes it from each pull request. At most 32 KiB.',
+      },
+      repos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            repo: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The repository — its name ("web") or "owner/name" ("acme/web"). It must be one of the work item’s project repositories, and appear once.',
+            },
+            commitSha: {
+              type: 'string',
+              minLength: 1,
+              description: 'The head commit the run pushed to this repository.',
+            },
+          },
+          required: ['repo', 'commitSha'],
+          additionalProperties: false,
+        },
+        description:
+          'One entry per repository the run pushed to, at most 8, each with its pushed head commit.',
+      },
+      previewPath: {
+        type: 'string',
+        description:
+          'The path to open on the preview deployment, starting with "/" — e.g. "/items/ACME-7". A path, never a URL: Motir joins it onto the preview the host reported. At most 500 characters.',
+      },
+    },
+    required: ['key', 'bodyMd', 'repos'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   reinforce_lesson: {
     type: 'object',
     properties: {

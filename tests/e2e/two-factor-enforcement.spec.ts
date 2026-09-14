@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { createTestPerson } from './_helpers/testPerson';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // Story MOTIR-1215 · Subtask MOTIR-3650 — THE STORY'S WALK, in a real browser
 // against a real database. It is the story's `verification_recipe`, automated.
@@ -66,7 +67,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   // there and navigating on.
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 /**
@@ -306,7 +307,7 @@ test.describe('2FA enforcement', () => {
 
     // The rest of the product is open again.
     await page.goto('/workbench');
-    await page.waitForURL('**/workbench');
+    await page.waitForURL(isLandedWorkbenchUrl);
   });
 
   // ══════════════════════════════════════════════════════════════════════════

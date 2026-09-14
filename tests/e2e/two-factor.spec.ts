@@ -18,6 +18,7 @@ import { waitForEmail } from './_helpers/email-capture';
 import { secondsLeftInWindow, totpFromSetupKey } from './_helpers/totp';
 import { POST_AUTH_LANDING } from './_helpers/shell-session';
 import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 /**
  * WHERE A VERIFIED SIGN-IN LANDS — either post-auth destination, composed from
@@ -60,7 +61,7 @@ async function signUp(page: Page): Promise<void> {
   // there and navigating on.
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 /** Password step only — stops wherever the sign-in lands it. */

@@ -41,6 +41,11 @@ export default defineConfig({
         'src/ciWatch.ts': { branches: 90, functions: 90, lines: 90 },
         'src/dispatchLeg.ts': { branches: 90, functions: 90, lines: 90 },
         'src/autoLoop.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-4906 · Subtask MOTIR-5337 (the story gate) — the scoped run's
+        // HOW TO TEST close-out step. MEASURED FIRST, then pinned: 100 / 96.15 / 100
+        // / 100 (stmts / branches / funcs / lines) over its own suite plus the
+        // gate's CLI seam (`test/howToTestStoryGate.test.ts`).
+        'src/closeOutHowToTest.ts': { branches: 90, functions: 90, lines: 90 },
         'src/batchPlan.ts': { branches: 90, functions: 90, lines: 90 },
         'src/browser.ts': { branches: 90, functions: 90, lines: 90 },
         'src/deviceAuth.ts': { branches: 90, functions: 90, lines: 90 },

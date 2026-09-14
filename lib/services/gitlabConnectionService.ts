@@ -14,6 +14,7 @@ import {
 import { getGitProvider } from '@/lib/git';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
 import { GitlabConnectionNotFoundError, GitlabProjectNotFoundError } from '@/lib/gitlab/errors';
+import { ensureProjectWebhook, removeProjectWebhook } from '@/lib/gitlab/projectWebhook';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import type { GitlabSelectableProjectDTO } from '@/lib/dto/gitlab';
 import type { InstallationToken } from '@/lib/git/types';
@@ -42,6 +43,34 @@ const EXPIRY_SKEW_MS = 60_000;
  *  the same row rather than creating a duplicate). */
 function connectionId(workspaceId: string): string {
   return `gitlab-ws-${workspaceId}`;
+}
+
+/**
+ * Remove Motir's webhook from each project, BEST-EFFORT (MOTIR-5349). A disconnect
+ * is the user saying "stop"; a revoked authorization, a project deleted in GitLab
+ * or a role the user no longer holds must not keep the project connected in Motir.
+ * A hook left behind only posts deliveries the webhook route answers for a project
+ * it no longer knows, so a failure is logged, never thrown.
+ */
+async function removeProjectWebhooksBestEffort(
+  installationId: string,
+  projectIds: string[],
+): Promise<void> {
+  if (projectIds.length === 0) return;
+  let token: string;
+  try {
+    ({ token } = await gitlabConnectionService.getAccessToken(installationId));
+  } catch (err) {
+    console.error('[gitlab] webhook removal skipped: no usable token', err);
+    return;
+  }
+  for (const projectId of projectIds) {
+    try {
+      await removeProjectWebhook(token, projectId);
+    } catch (err) {
+      console.error(`[gitlab] webhook removal failed for project ${projectId}`, err);
+    }
+  }
 }
 
 export const gitlabConnectionService = {
@@ -215,9 +244,16 @@ export const gitlabConnectionService = {
    * the client's payload), so a stale picker row or an id the user has no access
    * to is rejected (GitlabProjectNotFoundError) rather than stored as an
    * unreachable row. Idempotent (upsert). Throws GitlabConnectionNotFoundError
-   * when the workspace is unconnected. (The MR/pipeline webhook that makes the
-   * project's events flow is registered by MOTIR-1475; this card owns the
-   * selection.)
+   * when the workspace is unconnected.
+   *
+   * PROJECT WEBHOOK (MOTIR-5349): the hook that makes the project's merge-request,
+   * pipeline, push and deployment events reach `/api/gitlab/webhook` is registered
+   * HERE, through `ensureProjectWebhook` (MOTIR-1475 built only the receiving
+   * route). It runs BEFORE the row is written and its failure FAILS the connect
+   * (GitlabWebhookNotConfiguredError / GitlabWebhookRegistrationError): a project
+   * persisted without a hook is exactly the silently-dead connection the connect
+   * screen promises it is not. It is idempotent on GitLab's side — a re-connect
+   * updates the one hook at Motir's URL rather than adding another.
    *
    * CODE-GRAPH FEED — "full on first connect" (MOTIR-1476): a NEWLY-connected
    * project (no `github_repo` row existed yet) kicks a full `system.code-graph-index`
@@ -244,6 +280,11 @@ export const gitlabConnectionService = {
     const projects = await getGitProvider('gitlab').fetchInstallationRepos(conn.installationId);
     const match = projects.find((p) => p.providerRepoId === repoId);
     if (!match) throw new GitlabProjectNotFoundError();
+
+    // Register (or refresh) the project webhook FIRST — see the header. No DB
+    // transaction is open, so a GitLab refusal leaves nothing half-written.
+    const { token } = await gitlabConnectionService.getAccessToken(conn.installationId);
+    await ensureProjectWebhook(token, match.providerRepoId);
 
     // Persist the selection, reporting whether this was a NEWLY-added repo (no row
     // before) so only a first connect — not a re-connect — triggers a full index.
@@ -335,9 +376,17 @@ export const gitlabConnectionService = {
         if (!conn) return null;
         const repo = await githubRepoRepository.findByInstallationAndRepoId(conn.id, repoId, tx);
         await githubRepoRepository.deleteByInstallationAndRepoId(conn.id, repoId, tx);
-        return repo;
+        return repo ? { repo, installationId: conn.installationId } : null;
       },
     );
+
+    // POST-COMMIT, BEST-EFFORT — take Motir's webhook off the project (MOTIR-5349).
+    // The connection (and so its token) survives a single-project disconnect.
+    if (disconnected) {
+      await removeProjectWebhooksBestEffort(disconnected.installationId, [
+        disconnected.repo.repoId,
+      ]);
+    }
 
     // POST-COMMIT, BEST-EFFORT — enqueue this repo's derived code graph for
     // removal after the retention window (§14.3, the per-repo arm). Windowed, and
@@ -350,7 +399,7 @@ export const gitlabConnectionService = {
     if (disconnected) {
       await codeGraphOffboardingService.enqueueForRepos(
         ctx.workspaceId,
-        [`${disconnected.owner}/${disconnected.name}`],
+        [`${disconnected.repo.owner}/${disconnected.repo.name}`],
         'repo_disconnected',
       );
     }
@@ -362,6 +411,26 @@ export const gitlabConnectionService = {
    * FK `onDelete: Cascade`.
    */
   async disconnect(ctx: { userId: string; workspaceId: string }): Promise<void> {
+    // Take Motir's webhook off every connected project FIRST, best-effort
+    // (MOTIR-5349): the delete below removes the connection's stored token, and
+    // with it the only credential that can reach the hooks API.
+    const before = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
+          ctx.workspaceId,
+          'gitlab',
+          tx,
+        );
+        if (!conn) return null;
+        const repos = await githubRepoRepository.listByInstallation(conn.id, tx);
+        return { installationId: conn.installationId, projectIds: repos.map((r) => r.repoId) };
+      },
+    );
+    if (before) {
+      await removeProjectWebhooksBestEffort(before.installationId, before.projectIds);
+    }
+
     // Enumerate the connection's repos BEFORE the cascade removes them — the same
     // ordering trap as the workspace-delete arm (MOTIR-2166 · §14.3). The
     // `github_repo` rows cascade off the installation, so after this transaction

@@ -15,7 +15,8 @@
 
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
-import { signUp, POST_AUTH_LANDING } from './_helpers/shell-session';
+import { signUp } from './_helpers/shell-session';
+import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
 const EMAIL = 'signed-in-bounce@example.com';
 
@@ -31,11 +32,11 @@ test.describe('credential surfaces, signed in (MOTIR-3372)', () => {
 
     // The bare arrivals: a bookmark, an old link, the auth card's own wordmark.
     await page.goto('/sign-in');
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
     await expect(page.getByTestId('workbench-page')).toBeVisible();
 
     await page.goto('/sign-up');
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
 
     // The hand-off arrival: the destination is followed WITHOUT a second
     // authentication. This is the CLI-connect shape (`?next=/device?user_code=…`),
@@ -46,7 +47,7 @@ test.describe('credential surfaces, signed in (MOTIR-3372)', () => {
     // And an off-origin `next` is refused rather than followed — the shell is
     // not an open redirect.
     await page.goto('/sign-in?next=https%3A%2F%2Fevil.example%2Fsteal');
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
   });
 
   test('a reader with no session still gets the form on both surfaces', async ({ page }) => {

@@ -40,7 +40,7 @@ import type { WorkItemPendingProposalDto } from '@/lib/dto/plans';
 // `plansService.listPendingProposalsForWorkItem`, so it goes back to meaning what
 // the string says.
 //
-// SLOT: the first element of `<main>`, above Description — the slot
+// SLOT: the first element of the page's content column, above Description — the slot
 // `ArchivedBanner` holds, for the same reason: a whole-item state announcement
 // belongs at the top of the page body. On an archived item carrying a `remove`
 // proposal BOTH render, archived first (what this card IS, then what a plan
