@@ -452,6 +452,8 @@ The key is **`workflow:manage`**, on BOTH verbs, asserted in `approvalGateSettin
 
 ⚠️ **The READ is gated on the same key as the WRITE, and that is the rule in force: the room is MANAGE-ONLY** (`design/projects/design-notes.md` § ⭐ Approvals §6, amended 2026-09-13). The sibling settings rooms split their verbs (`/api/projects/[key]/estimation-config` and `/api/projects/[key]/status-automation` both read on `project:browse`). This one does not, because the room is offered to and reachable by exactly the actor who may write it: a member who cannot manage the project gets no rail row, no settings door and no read, so a member's GET is a `403`. A NON-browser is still answered `404` on either verb, before any key is consulted.
 
+**The MERGE MODE is this row's second switch** (Story MOTIR-4880 · MOTIR-5181). `PATCH /api/projects/[key]/pr-merge-mode` changes `Project.prMergeMode`, where `manual` raises a `pull_request_merge` gate and `auto` raises none (`docs/decisions/approval-gates.md` §7). It is the same question as the acceptance-video switch — does this gate exist for this project — so it takes the same key, `workflow:manage`, asserted in `projectPrMergeModeService.setPrMergeMode`. There is no GET route: the room's page reads the value server-side through `getPrMergeMode`, which is also `workflow:manage`.
+
 _Reverted 2026-09-13, manage-only._ [MOTIR-5190](motir:cmtx85ynp00y6i0tx2lmi7cez) decided on 2026-09-11 that the room is shown READ-ONLY to a member who cannot manage it. [MOTIR-5193](motir:cmtx9wctp013uhvoil4s80ykf) built the settings-registry VIEW key that made that expressible, and [MOTIR-5278](motir:cmtys0kdg00elhvoi3nesxn3w) (PR #2843) moved this row's GET onto `project:browse`. The 2026-09-13 amendment withdrew the read-only view, and [MOTIR-5394](motir:cmu09oxzx00a6hwtxme79ckyj) returned the GET to `workflow:manage`. The view-key MECHANISM stays shipped, with no room declaring it.
 
 **R66.** Connect / list / disconnect a third-party MONITOR credential, and choose which of its projects a Motir project is bound to (Story MOTIR-4926 · MOTIR-5260). Its own key — `integration:manage` — rather than `repository:manage`, which governs which REPOSITORIES a project uses and is a different resource; and rather than `project:administer`, which would silently widen a project-admin key into credential management, a grant nobody chose. One key per manageable domain is the catalog's own pattern. The OAuth START leg carries the gate: it resolves the project from `?project=`, asserts the key there, and puts the project id in an httpOnly cookie, so the CALLBACK — which a provider redirect reaches and which therefore cannot be trusted with a project id — resolves nothing from its query string and stores nothing without that cookie.
@@ -926,18 +928,19 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `workflow`
 
-| Operation                                                  | Verbs            | Gate today                                                    | Permission          | Decision | Why |
-| ---------------------------------------------------------- | ---------------- | ------------------------------------------------------------- | ------------------- | -------- | --- |
-| `/api/board/columns/[columnId]/statuses`                   | PUT              | `assertPermission(workflow:manage)` — was ws OWNER only       | `workflow:manage`   | existing | R10 |
-| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | `assertPermission(workflow:manage)` — was ws OWNER only       | `workflow:manage`   | existing | R10 |
-| `/api/projects/[key]/approval-gates`                       | GET              | `assertPermission(workflow:manage)` in the service            | `workflow:manage`   | existing | R65 |
-| `/api/projects/[key]/approval-gates`                       | PATCH            | `assertPermission(workflow:manage)` in the service            | `workflow:manage`   | existing | R65 |
-| `/api/projects/[key]/automation-rules`                     | GET/POST         | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
-| `/api/projects/[key]/status-automation`                    | GET              | `assertCanBrowse`                                             | `project:browse`    | existing | R28 |
-| `/api/projects/[key]/status-automation`                    | PATCH            | `assertPermission(automation:manage)`                         | `automation:manage` | existing | R28 |
+| Operation                                                  | Verbs            | Gate today                                                         | Permission          | Decision | Why |
+| ---------------------------------------------------------- | ---------------- | ------------------------------------------------------------------ | ------------------- | -------- | --- |
+| `/api/board/columns/[columnId]/statuses`                   | PUT              | `assertPermission(workflow:manage)` — was ws OWNER only            | `workflow:manage`   | existing | R10 |
+| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | `assertPermission(workflow:manage)` — was ws OWNER only            | `workflow:manage`   | existing | R10 |
+| `/api/projects/[key]/approval-gates`                       | GET              | `assertPermission(workflow:manage)` in the service                 | `workflow:manage`   | existing | R65 |
+| `/api/projects/[key]/approval-gates`                       | PATCH            | `assertPermission(workflow:manage)` in the service                 | `workflow:manage`   | existing | R65 |
+| `/api/projects/[key]/pr-merge-mode`                        | PATCH            | `assertPermission(workflow:manage)` in `projectPrMergeModeService` | `workflow:manage`   | new      | R65 |
+| `/api/projects/[key]/automation-rules`                     | GET/POST         | `assertPermission(automation:manage)` — was `assertCanManage`      | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | `assertPermission(automation:manage)` — was `assertCanManage`      | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | `assertPermission(automation:manage)` — was `assertCanManage`      | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | `assertPermission(automation:manage)` — was `assertCanManage`      | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/status-automation`                    | GET              | `assertCanBrowse`                                                  | `project:browse`    | existing | R28 |
+| `/api/projects/[key]/status-automation`                    | PATCH            | `assertPermission(automation:manage)`                              | `automation:manage` | existing | R28 |
 
 ### `workspace`
 

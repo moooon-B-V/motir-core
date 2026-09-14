@@ -1044,17 +1044,24 @@ model OrganizationMembership {
 /// Tenant boundary. Every workspace-scoped row (projects, work items, …)
 /// FKs against Workspace.id with onDelete: Cascade. The slug column is a
 /// URL-safe handle; it's unique globally (not per-user) so workspace URLs
-/// are sharable. subtaskPrMergeMode is consumed by Story 1.4 + Epic 4 —
-/// see Story 1.4 § Merge modes. `organizationId` (Story 6.10) nests the
+/// are sharable. `organizationId` (Story 6.10) nests the
 /// workspace under its parent `Organization` — non-nullable after the backfill
 /// (every existing workspace got its own default org); Cascade so deleting an
 /// org takes its workspaces with it (the whole tenant goes).
 model Workspace {
-  id                 String             @id @default(cuid())
+  id                 String      @id @default(cuid())
   organizationId     String
   name               String
-  slug               String             @unique
-  subtaskPrMergeMode SubtaskPrMergeMode @default(manual)
+  slug               String      @unique
+  /// ⚠️ BEING RETIRED — read `Project.prMergeMode` (MOTIR-4880). The merge policy
+  /// moved to the PROJECT, the tier its reader (the merge gate) is scoped to, and
+  /// nothing reads this column any more. It is NOT removed with its readers: the
+  /// declaration itself is a reader (a `Workspace` fetched without a `select`
+  /// asks for every declared field), so removing it takes three releases —
+  /// Story MOTIR-5175 (`docs/decisions/approval-gates.md` §7's 2026-09-13
+  /// amendment). Its value was copied onto every project by the migration that
+  /// added `Project.prMergeMode`.
+  subtaskPrMergeMode PrMergeMode @default(manual)
 
   /// Whether every member of this workspace must hold a second factor
   /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
@@ -1305,6 +1312,24 @@ model Project {
   /// organisation's value, because an org that had deliberately turned acceptance
   /// video OFF must not find every project under it turned back on.
   acceptanceVideoEnabled           Boolean               @default(true) @map("acceptance_video_enabled")
+  /// How this project's pull requests are merged (MOTIR-4880 ·
+  /// `docs/decisions/approval-gates.md` §7). PROJECT-scoped because a merge
+  /// policy is a property of a codebase and its team, and the merge gate that
+  /// reads it is scoped to a project.
+  ///
+  /// ⚠️ The column DEFAULT is a FLOOR, not the product default. A project row
+  /// exists before it has any repositories, so the provenance-derived default
+  /// (all Motir-hosted ⇒ `auto`; imported, MIXED or empty ⇒ `manual`) cannot be
+  /// a column default: it is written at ESTABLISHMENT by
+  /// `projectPrMergeModeService` (MOTIR-5178). Existing rows were backfilled
+  /// from their workspace's `subtaskPrMergeMode`.
+  prMergeMode                      PrMergeMode           @default(manual) @map("pr_merge_mode")
+  /// When `prMergeMode` was last DECIDED — by the establishment default or by a
+  /// person. NULL means nothing has decided it and the floor stands, which is
+  /// the only state in which the establishment default may write. Without it a
+  /// floor `manual` and a chosen `manual` are the same bytes, and a default
+  /// would overwrite a person's choice (§7's 2026-09-13 amendment).
+  prMergeModeDecidedAt             DateTime?             @map("pr_merge_mode_decided_at")
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the
@@ -1945,16 +1970,19 @@ enum ProjectAccessLevel {
   @@map("project_access_level")
 }
 
-/// Workspace-level setting controlling whether Subtask PRs auto-merge into
-/// the Story branch. Defaults to `manual` (developer-friendly review flow).
-/// `review_on_fail` is reserved for a later Story that ships the CI-driven
-/// gate; shipping the enum value now avoids a Postgres enum ALTER later.
-enum SubtaskPrMergeMode {
+/// How a project's pull requests are merged (`docs/decisions/approval-gates.md`
+/// §7). `manual` — a person approves a GREEN pull request before it merges;
+/// `auto` — Motir merges a green pull request with no gate. A red pull request is
+/// never a merge candidate in either mode. Renamed in place from the
+/// `subtask_pr_merge_mode` type, because a pull request is no longer a subtask's.
+/// The reserved `review_on_fail` value was RETIRED (MOTIR-4880, 2026-09-13): no
+/// meaning survives the rule that only a green pull request is merged, and adding
+/// an enum value later is a cheap `ADD VALUE` while removing one is not.
+enum PrMergeMode {
   auto
   manual
-  review_on_fail
 
-  @@map("subtask_pr_merge_mode")
+  @@map("pr_merge_mode")
 }
 
 /// Which value is THE planning estimate a project's surfaces display + the

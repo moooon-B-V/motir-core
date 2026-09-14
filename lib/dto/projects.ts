@@ -62,6 +62,18 @@ export interface ProjectDTO {
    */
   aiGenerateExplanations: boolean;
   /**
+   * How this project's pull requests are merged (Story MOTIR-4880 ·
+   * `docs/decisions/approval-gates.md` §7). Rides the BASE DTO (a single
+   * project-row column, like `accessLevel`) so the settings room and, later, the
+   * merge gate read it off the active-project context WITHOUT a second round-trip.
+   *
+   * - `manual` — a person approves each green pull request before it merges.
+   * - `auto` — Motir merges a green pull request with no approval asked.
+   *
+   * It REPLACED the workspace-tier merge field, which no DTO carries any more.
+   */
+  prMergeMode: PrMergeModeValue;
+  /**
    * ISO timestamp the project was created — the Details surface's "Created" row
    * (Story 6.5.3). OPTIONAL and loaded ONLY on the details-surface read path
    * (alongside `previousKeys`), so the hot reads (switcher list, active-project
@@ -87,3 +99,9 @@ export interface PreviousKeyDTO {
   identifier: string;
   retiredAt: string;
 }
+
+/** The two merge modes (`approval-gates.md` §7), as they cross the DTO boundary. */
+export type PrMergeModeValue = 'auto' | 'manual';
+
+/** Every merge mode, in the order a surface lists them. */
+export const PR_MERGE_MODE_VALUES: readonly PrMergeModeValue[] = ['manual', 'auto'];

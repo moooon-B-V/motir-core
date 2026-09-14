@@ -16,7 +16,6 @@ export function toWorkspaceDTO(workspace: Workspace): WorkspaceDTO {
     id: workspace.id,
     name: workspace.name,
     slug: workspace.slug,
-    subtaskPrMergeMode: workspace.subtaskPrMergeMode,
   };
 }
 

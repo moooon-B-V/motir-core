@@ -8,7 +8,6 @@ export interface WorkspaceDTO {
   id: string;
   name: string;
   slug: string;
-  subtaskPrMergeMode: string;
 }
 
 export interface MembershipDTO {

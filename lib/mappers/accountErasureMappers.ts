@@ -12,7 +12,7 @@ import type {
 // exist for the rows it names. Both project to the narrowest shape the ledger
 // renders, which is the point rather than a formality: an erasure ledger is
 // rendered to somebody who is about to lose the rows it lists, and returning the
-// whole Prisma model would put a workspace's `subtaskPrMergeMode` and an
+// whole Prisma model would put a workspace's `requiresTwoFactor` and an
 // organization's billing columns on a confirmation screen that has no use for
 // them.
 

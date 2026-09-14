@@ -161,8 +161,10 @@ export function bodyReferenceSeverities(
 // exist yet". It shares only the AC span with the reference scan, which is why
 // it lives in the same module and not in a new one.
 //
-// A card's own boundary ends at **PR opened** — `subtask_pr_merge_mode` is
-// `manual`, `motir run` stops at the PR, and the merge is Yue's. So an
+// A card's own boundary ends at **PR opened** — `Project.prMergeMode` is
+// `manual`, `motir run` stops at the PR, and the merge is Yue's. (That premise
+// holds until something merges on the setting's say-so: Story MOTIR-4882, the
+// merge gate, is what changes it.) So an
 // acceptance criterion whose truth requires the merge belongs to a DIFFERENT
 // card, and gate 14's remedy is to cut the card at that line. The 1-based index
 // of the offending criterion is therefore the actionable half of the finding:

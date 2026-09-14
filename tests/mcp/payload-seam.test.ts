@@ -796,6 +796,7 @@ describe('presentMcpProjectRow', () => {
     image: null,
     onboardingRanAt: null,
     aiGenerateExplanations: false,
+    prMergeMode: 'manual' as const,
   };
 
   it('is a pure WIDENING — it validates against v1’s `Project`', () => {

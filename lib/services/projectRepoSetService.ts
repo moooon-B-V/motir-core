@@ -12,6 +12,7 @@ import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository'
 import { projectRepoCollaboratorRepository } from '@/lib/repositories/projectRepoCollaboratorRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import {
   toProjectRepoDto,
@@ -533,7 +534,15 @@ export const projectRepoSetService = {
     await projectAccessService.assertCanEdit(existing.projectId, ctx);
     await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
-      (tx) => projectRepoRepository.deleteById(rowId, tx),
+      async (tx) => {
+        await projectRepoRepository.deleteById(rowId, tx);
+        // Removing the last UNSETTLED row can be what establishes the set (MOTIR-5178).
+        await projectPrMergeModeService.seedAtEstablishment(
+          existing.projectId,
+          ctx.workspaceId,
+          tx,
+        );
+      },
     );
 
     // POST-COMMIT, BEST-EFFORT — the removed row's repository must LEAVE the
@@ -733,6 +742,8 @@ export const projectRepoSetService = {
         );
       }
       const updated = await projectRepoRepository.update(rowId, { state, failureReason }, tx);
+      // A hop to a settled state may be what ESTABLISHES the set (MOTIR-5178).
+      await projectPrMergeModeService.seedAtEstablishment(row.projectId, ctx.workspaceId, tx);
       return toProjectRepoDto({
         ...updated,
         githubRepo: row.githubRepo,
@@ -982,6 +993,8 @@ export const projectRepoSetService = {
           { githubRepoId, state: target, failureReason: null },
           tx,
         );
+        // The `created` / `connected` hop may be what ESTABLISHES the set (MOTIR-5178).
+        await projectPrMergeModeService.seedAtEstablishment(row.projectId, ctx.workspaceId, tx);
         const realized = await projectRepoRepository.findById(rowId, ctx.workspaceId, tx);
         return toProjectRepoDto(realized ?? { ...updated, githubRepo: null, collaborators: [] });
       } catch (err) {

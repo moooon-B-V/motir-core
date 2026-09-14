@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { AlreadyMemberError, LastMemberError } from '@/lib/workspaces/errors';
+import { toProjectDTO } from '@/lib/mappers/projectMappers';
+import { toWorkspaceDTO } from '@/lib/mappers/workspaceMappers';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
@@ -53,7 +55,19 @@ describe('createWorkspace', () => {
 
     expect(workspace.name).toBe("Alice's Workspace");
     expect(workspace.slug).toBe('alice-s-workspace');
-    expect(workspace.subtaskPrMergeMode).toBe('manual');
+    // The merge mode moved to the PROJECT (MOTIR-4880): a fresh tenant's first
+    // project starts at the `manual` floor, and the workspace DTO carries no merge
+    // field at all.
+    expect(toWorkspaceDTO(workspace)).not.toHaveProperty('subtaskPrMergeMode');
+    const firstProject = await adminDb.project.create({
+      data: {
+        name: 'First',
+        slug: 'first',
+        identifier: 'FIRST',
+        workspaceId: workspace.id,
+      },
+    });
+    expect(toProjectDTO(firstProject).prMergeMode).toBe('manual');
     expect(membership.userId).toBe(owner.id);
     expect(membership.workspaceId).toBe(workspace.id);
     // The workspace creator is its owner (Subtask 1.6.5 — replay gate tier).
