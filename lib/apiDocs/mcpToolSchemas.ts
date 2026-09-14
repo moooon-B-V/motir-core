@@ -1635,7 +1635,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 field: {
                   type: 'string',
                   description:
-                    'Field id: a built-in (kind, status, priority, type, assignee, reporter, sprint, text, created, updated, due, storyPoints, estimate), a label/component (lbl, cmp), or a custom field (cf:<fieldId>).',
+                    'Field id: a built-in (kind, status, priority, type, assignee, reporter, sprint, text, created, updated, due, storyPoints, estimate), a label/component (lbl, cmp), a folder (folder — matches the item’s own folder, else its root ancestor’s, including folders inside the chosen ones), or a custom field (cf:<fieldId>).',
                 },
                 operator: {
                   type: 'string',

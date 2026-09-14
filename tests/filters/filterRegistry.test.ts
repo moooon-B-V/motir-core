@@ -233,6 +233,7 @@ describe('compiled fragments are parameterized-only (the injection AC)', () => {
       ]),
       labelIds: new Set<string>(),
       componentIds: new Set<string>(),
+      folderIds: new Set<string>(),
     };
 
     const compile = (field: FilterFieldId, operator: FilterOperatorId): string =>

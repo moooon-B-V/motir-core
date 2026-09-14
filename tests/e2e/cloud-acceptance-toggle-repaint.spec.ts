@@ -62,12 +62,12 @@ import {
 // **So a green run of this file means "no repaint regression", never "the race
 // cannot happen" — and a RED one is not automatically your diff.**
 //
-// ⚠️ AND AS OF 2026-09-12 THIS SPEC IS `test.fixme` FOR A THIRD, UNRELATED
-// REASON — MOTIR-4925 moved the switch's READ to the project tier and left the
-// WRITE on the organisation tier, so the press is a no-op and the panel cannot
-// leave State B (4/4 red, deterministic). The full disposition is on the test
-// itself; the measurements above were all taken BEFORE that merge, against a
-// coherent single-tier path, and they stand.
+// ⚠️ FROM 2026-09-12 UNTIL MOTIR-5172 THIS SPEC WAS `test.fixme` FOR A THIRD,
+// UNRELATED REASON — MOTIR-4925 moved the switch's READ to the project tier and
+// left the WRITE on the organisation tier, so the press was a no-op (4/4 red,
+// deterministic). MOTIR-5172 put the write on the project tier; the note on the
+// test carries the rest. The measurements above were all taken BEFORE that
+// merge, against a coherent single-tier path, and they stand.
 //
 // ⚠️ THE MECHANISM, for the reader who meets a green run and wonders what is
 // being guarded. `turnOnAcceptanceVideoAction` called one service and returned
@@ -138,43 +138,32 @@ test.describe('turning the acceptance video on repaints the panel in place', () 
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FIXME(MOTIR-5172): this cannot pass on `main` today, for a reason that has
-  // nothing to do with the repaint it was written to guard.
+  // ⚠️ THIS WAS `test.fixme` FROM 2026-09-12 UNTIL MOTIR-5172, and why is worth
+  // keeping beside the test that it no longer describes.
   //
   // MOTIR-4925 moved the acceptance-video switch from the ORGANISATION to the
-  // PROJECT tier while this card was in flight, and it moved the READ without
-  // the WRITE. `acceptanceVideoEligibilityService.resolve` now reads
-  // `project.acceptanceVideoEnabled`; `turnOnAcceptanceVideoAction` still calls
-  // `organizationsService.setAcceptanceVideoEnabled`, which writes
-  // `organization.acceptanceVideoEnabled`. Two different columns — so pressing
-  // Turn on flips a flag nothing reads, and the panel can never leave State B.
-  // Measured against the merged base: **4/4 red**, deterministic, where the same
-  // spec was 1/16 red before the merge.
+  // PROJECT tier and moved the READ without the WRITE: the eligibility service
+  // read `project.acceptanceVideoEnabled` while `turnOnAcceptanceVideoAction`
+  // still wrote `organization.acceptanceVideoEnabled`. Pressing Turn on flipped a
+  // flag nothing read, and the panel could never leave State B — **4/4 red,
+  // deterministic**, against 1/16 before the tier moved.
   //
-  // MOTIR-5172 criterion 4 is the fix ("`turnOnAcceptanceVideoAction` is
-  // project-scoped"). It is not folded in here: it is a nine-criterion card with
-  // its own blocker, and absorbing it would be the exact drive-by all three
-  // cards in this family were filed to avoid.
+  // MOTIR-5172 made the action project-scoped (it writes through
+  // `approvalGateSettingsService`, the Approvals room's own door), which is what
+  // makes this body runnable again. The body and every assertion are UNCHANGED.
   //
-  // Marked `fixme` rather than relaxed, so CI stays green without dropping the
-  // requirement (`motir-core/CLAUDE.md`: a pre-existing bug in shipped code
-  // surfaced by a test is LOGGED, not absorbed into the test PR) — the same
-  // disposition `roadmap-refresh-scope.spec.ts` carries for MOTIR-1549. The body
-  // and every assertion below are UNCHANGED and were verified end-to-end before
-  // the tier moved: 2/8 red against the unfixed action, 1/8 then 1/16 against the
-  // fixed one, with the shipped sibling guard 0/16 twice as a control.
-  //
-  // ⚠️ REMOVING THE `fixme` IS A DELIVERABLE OF TWO CARDS, NOT A TIDY-UP.
-  // MOTIR-5172 makes it runnable; MOTIR-5255 is the intermittent repaint failure
-  // this spec measured before the tier moved and is the reason the assertion may
-  // NOT be relaxed — it is that bug's only detector.
+  // ⚠️ THE ASSERTION MAY STILL NOT BE RELAXED. MOTIR-5255 — the intermittent
+  // ~1-in-16 repaint failure this spec measured before the tier moved — is still
+  // open, and this test is its only detector. A red run here is that bug's
+  // signal, not a reason to add a `reload()`.
   // ─────────────────────────────────────────────────────────────────────────
-  test.fixme('the admin presses Turn on and State A arrives, with no reload', async ({ page }) => {
+  test('the admin presses Turn on and State A arrives, with no reload', async ({ page }) => {
     const seed = await seedBillingOwner(page, 'toggle-repaint@example.com');
     setOrgBillingState(seed.organizationId, paidOrgState());
-    // PAID + TOGGLE OFF, with an org admin — the one seed that renders State B
-    // with a pressable switch. `canManageToggle` is `orgAccess.isOrgAdmin`
-    // (`acceptanceVideoEligibilityService`), which the billing OWNER satisfies;
+    // PAID + TOGGLE OFF, with a project manager — the one seed that renders State
+    // B with a pressable switch. `canManageToggle` is `workflow:manage` on the
+    // story's project since MOTIR-5172 (`acceptanceVideoEligibilityService`),
+    // which the billing OWNER — the workspace owner — holds;
     // `cloud-video.spec.ts`'s "paid + toggle OFF (admin)" test is the standing
     // evidence that this seed reaches the admin arm.
     await setProjectAcceptanceVideo(seed.projectId, false);

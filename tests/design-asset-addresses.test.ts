@@ -170,9 +170,13 @@ function toPageAddress(raw: string): string | null {
   if (/[<>{}…\\^$|]/.test(raw)) return null;
 
   let address = raw.split('?')[0]!.split('#')[0]!;
-  // A prose glob — `/docs*`, `/settings/project*` — names the family, so check
-  // its prefix.
-  address = address.replace(/\*+$/, '');
+  // A prose glob. With a slash before the star — `/settings/*` — it names a
+  // page UNDER the path, so the star becomes a dynamic segment (`[*]`, which
+  // `isDynamic` matches): `/settings/*` resolves when any child page exists,
+  // whether or not `/settings` itself does (MOTIR-5447). Without the slash —
+  // `/docs*`, `/settings/project*` — it names the family by prefix, so check
+  // the prefix.
+  address = address.replace(/\/\*+$/, '/[*]').replace(/\*+$/, '');
   if (address.length > 1) address = address.replace(/\/+$/, '');
   if (address === '') return null;
 
@@ -190,11 +194,16 @@ type Verdict = 'redirects-away' | 'resolves-to-nothing';
 
 function classify(address: string): Verdict | null {
   const segments = address === '/' ? [] : address.replace(/^\//, '').split('/');
-  // A redirect source is checked FIRST: the address resolves, but only by
-  // 308ing somewhere else, which is exactly the drift this guards.
+  const serves = APP_ROUTES.some((pattern) => matchesPattern(pattern, segments));
+  // A glob (`/settings/workspace/[*]`) claims only that SOME page under the
+  // path serves, so one live member is enough — even where a sibling member
+  // (`/settings/workspace/github`) is a redirect source (MOTIR-5447).
+  if (segments.includes('[*]') && serves) return null;
+  // Otherwise a redirect source is checked FIRST: the address resolves, but
+  // only by 308ing somewhere else, which is exactly the drift this guards.
   if (REDIRECT_SOURCES.some((pattern) => matchesPattern(pattern, segments)))
     return 'redirects-away';
-  if (APP_ROUTES.some((pattern) => matchesPattern(pattern, segments))) return null;
+  if (serves) return null;
   return 'resolves-to-nothing';
 }
 
@@ -778,6 +787,11 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
   },
   {
+    file: 'design/cli-guide/design-notes.md',
+    address: '/docs/cli/[*]',
+    why: 'The `/docs/cli/*` prefix the notes say a second CLI page would create. The public reading surface moved to motir-marketing (MOTIR-3932), so no page under it serves here — read as a family since MOTIR-5447, where it used to borrow the `/docs/cli` row above.',
+  },
+  {
     file: 'design/workbench/workbench.mock.html',
     address: '/docs',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
@@ -806,6 +820,11 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/mcp-server/design-notes.md',
     address: '/docs/sandbox',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs/mcp/[*]',
+    why: 'The MCP sub-area the tier-2 rail is drawn inside. The public reading surface moved to motir-marketing (MOTIR-3932), so no page under it serves here — read as a family since MOTIR-5447, where it used to borrow the `/docs/mcp` row.',
   },
   {
     file: 'design/mcp-server/mcp-server.mock.html',
@@ -916,6 +935,11 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/public-site/public-site.mock.html',
     address: '/docs',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/legal/[*]',
+    why: "The footer's legal rows, named as a family in a comment on the motir.co chrome. Resolves on the brand host; MOTIR-4103 removed `app/(public)/legal/` from this one — read as a family since MOTIR-5447, where it used to borrow the `/legal` row.",
   },
   {
     file: 'design/public-site/public-site.mock.html',
@@ -1256,6 +1280,45 @@ describe('the sweep catches the drift it was written for', () => {
       '/api-docs/stability redirects-away',
     ]);
   });
+
+  // MOTIR-5447. A glob written with a slash — `/settings/*`, "a page under
+  // /settings" — used to lose its star and then its slash, and was ruled on as
+  // the PARENT page `/settings`, which does not exist. Eight families in `app/`
+  // have child pages and no parent page (`/settings`, `/sprints`,
+  // `/sprints/[id]`, `/invite`, `/follow`, `/unsubscribe`, `/direction`,
+  // `/onboarding/direction`), and an asset globbing any of them went red.
+  describe('a trailing `/*` names a page UNDER the path, not the path itself', () => {
+    it('resolves a family with child pages and no parent page', () => {
+      expect(verdicts('`/settings/*`')).toEqual(['/settings/[*] ok']);
+      expect(verdicts('`/sprints/[id]/*`')).toEqual(['/sprints/[id]/[*] ok']);
+    });
+
+    it('resolves a family some of whose members redirect, while others still serve', () => {
+      // `/settings/workspace/github` and `/gitlab` are redirect sources, and
+      // `/settings/workspace/security` is a page. The glob claims a live page
+      // exists under the path — which is true — so a member that redirects
+      // does not turn the whole family into `redirects-away`.
+      expect(verdicts('`/settings/workspace/*`')).toEqual(['/settings/workspace/[*] ok']);
+    });
+
+    it('still reports a family with no page at any depth', () => {
+      // The fixture that stops the glob arm becoming a pass-everything: a
+      // dynamic segment only matches where a route has a segment to match.
+      expect(verdicts('`/no-such-family/*`')).toEqual(['/no-such-family/[*] resolves-to-nothing']);
+      expect(verdicts('`/settings/no-such-tier/*`')).toEqual([
+        '/settings/no-such-tier/[*] resolves-to-nothing',
+      ]);
+    });
+
+    it('reports a glob over a family that only redirects away', () => {
+      expect(verdicts('`/api-docs/*`')).toEqual(['/api-docs/[*] redirects-away']);
+    });
+
+    it('keeps reading a star with no slash before it as a prefix', () => {
+      expect(toPageAddress('/settings/project*')).toBe('/settings/project');
+      expect(toPageAddress('/docs*')).toBe('/docs');
+    });
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1523,6 +1586,17 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/ai-settings/design-notes.md',
     path: 'app/(public)/legal',
     why: "The same deletion, cited from the other side (MOTIR-3666 §D3). The Planner card's promise links to `/legal/model-providers`, and the note names BOTH halves of what left — `content/legal/` and the route that served it — because the implementing card has to resolve that href through motir-core's public-site origin rather than as a same-origin path. Naming the absent directory is the point of the sentence, so the citation is deliberate and permanent.",
+  },
+  // ── The org-tier ACCEPTANCE-VIDEO card, deleted (MOTIR-5172) ────────────
+  // A deletion, the same shape as the rows above. The switch moved to
+  // `Project settings ▸ Approvals`, and MOTIR-5172 deleted the org-tier control.
+  // The approvals mock's header says the room was drawn against SHIPPED REALITY —
+  // that the old card was rendered from its own source first — and that sentence
+  // is history that stays true. The file is not coming back; the row is permanent.
+  {
+    file: 'design/projects/approvals.mock.html',
+    path: 'app/(authed)/settings/organization/_components/AcceptanceVideoCard.tsx',
+    why: "A point-in-time record in the mock's header comment: the org-tier control MOTIR-4942 rendered from its own source before drawing the room that replaces it. MOTIR-5172 deleted that card when the switch left the organisation tier; the sentence is about what was rendered, and it is still true.",
   },
   // ── The `(planning)` ROUTE GROUP, deleted (MOTIR-4732, under MOTIR-4725) ──
   // The same shape as the `app/(public)/legal` rows above — a deletion, not a

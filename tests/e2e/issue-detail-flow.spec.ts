@@ -27,6 +27,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
+import { actionWrite } from './_helpers/authoritative-signal';
 import { projectsService } from '@/lib/services/projectsService';
 
 test.beforeEach(async () => {
@@ -193,6 +194,55 @@ test('@smoke tree navigation: breadcrumb walks up, child list walks down', async
   await childRow.click({ modifiers: ['Meta'] });
   await page.waitForURL(`**/items/${sub.identifier}`);
   await expect(page.getByRole('heading', { name: 'The Subtask', level: 1 })).toBeVisible();
+});
+
+// Story MOTIR-5309 · MOTIR-5381: re-parenting from the rail moves the item, and the
+// breadcrumb — a separate island — repaints from the page's placement channel
+// WITHOUT a reload. Two Server Actions answer in sequence: the write (its body
+// carries the new parent's id) and then the placement re-read (its body carries
+// only the item's id). Both are awaited before the breadcrumb is asserted.
+test('@smoke re-parenting from the rail repaints the breadcrumb in place', async ({ page }) => {
+  const email = 'e2e-detail-reparent@example.com';
+  await signUp(page, email);
+  const projectId = await seedActiveProject(email, 'RPT');
+  const oldStory = await mk(page, projectId, { kind: 'story', title: 'Old Story' });
+  const newStory = await mk(page, projectId, { kind: 'story', title: 'New Story' });
+  const task = await mk(page, projectId, {
+    kind: 'task',
+    title: 'The Moving Task',
+    parentId: oldStory.id,
+  });
+
+  const pathname = `/items/${task.identifier}`;
+  await page.goto(pathname);
+  const breadcrumb = page.getByRole('navigation', { name: 'Parent work items' });
+  await expect(breadcrumb.getByRole('link', { name: /Old Story/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit Parent' }).click();
+  await page.getByRole('combobox', { name: 'Parent' }).click();
+  const option = page.getByRole('option', { name: /New Story/ });
+  await expect(option).toBeVisible();
+
+  const write = actionWrite(page, pathname, newStory.id);
+  const reread = page.waitForResponse((res) => {
+    const req = res.request();
+    const body = req.postData() ?? '';
+    return (
+      req.method() === 'POST' &&
+      req.headers()['next-action'] !== undefined &&
+      new URL(res.url()).pathname === pathname &&
+      body.includes(task.id) &&
+      !body.includes(newStory.id)
+    );
+  });
+  await option.click();
+  expect((await write).status(), 'parent write').toBe(200);
+  expect((await reread).status(), 'placement re-read').toBe(200);
+
+  await expect(breadcrumb.getByRole('link', { name: /New Story/ })).toBeVisible();
+  await expect(breadcrumb.getByRole('link', { name: /Old Story/ })).toHaveCount(0);
+  // No reload happened: the URL is untouched and the page was never re-navigated.
+  expect(new URL(page.url()).pathname).toBe(pathname);
 });
 
 // Regression: `bug-issue-detail-eyebrow-overflows-viewport` (epics.ts, Epic 6).

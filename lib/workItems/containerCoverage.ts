@@ -18,6 +18,16 @@ import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 // the scope is exact rather than a noise filter — and it is what keeps the firing
 // rate low enough to be read (the measurement is recorded on MOTIR-5362).
 
+/**
+ * The filing instant of a card that does not exist yet — a PLAN proposal
+ * (MOTIR-5403). A proposal is filed when its plan is approved, which is after
+ * every row already stored, so it takes the latest representable instant rather
+ * than a guessed date. The one comparison in {@link containerCoverageFinding}
+ * then states the whole projected rule: a proposed child is never adopted, under
+ * any container, and a stored child of a proposed container is.
+ */
+export const NOT_YET_FILED = new Date(8_640_000_000_000_000);
+
 /** One direct child, reduced to what the check reads. */
 export interface CoverageChild {
   /** The child's identifier (e.g. `MOTIR-7`) — reported when it is adopted. */

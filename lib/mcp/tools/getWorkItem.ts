@@ -201,13 +201,15 @@ export async function runGetWorkItem(
   const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx);
   // The item's OWN folder placement (Story MOTIR-5310 · MOTIR-5413), DECLARED on
   // the payload as `folderId` + `folderPath` — the `/api/v1` detail's vocabulary.
-  // It used to reach the agent only by accident, as a bare id riding the
-  // aggregate spread. The path is the one read the quick view and `/api/v1`
-  // share; an unfiled item makes no read and carries two nulls.
+  // The path is the one read the quick view and `/api/v1` share; an unfiled item
+  // makes no read and carries two nulls. `placementFolder` (MOTIR-5375) is the
+  // work item PAGE's EFFECTIVE placement and is deliberately NOT published —
+  // agents see the item's own placement only.
+  const { placementFolder: _pagePlacementOnly, ...publishedDetail } = detail;
   const folderPath =
     detail.folderId === null ? null : await workItemsService.getFolderPath(detail.folderId, ctx);
   const structured = {
-    ...detail,
+    ...publishedDetail,
     folderId: detail.folderId,
     folderPath,
     item,

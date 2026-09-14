@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RunsIndex } from '@/app/(authed)/runs/_components/RunsIndex';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
@@ -23,7 +23,13 @@ vi.mock('next/navigation', () => ({
 // stands in for itself so the assertions are about the INDEX's decision to
 // mount it at all.
 vi.mock('@/app/(authed)/runs/_components/RunModal', () => ({
-  RunModal: ({ runId }: { runId: string }) => <div data-testid="run-modal">{runId}</div>,
+  // The close control carries no TEXT, so `textContent` still reads the run id.
+  RunModal: ({ runId, onClose }: { runId: string; onClose: () => void }) => (
+    <div data-testid="run-modal">
+      {runId}
+      <button type="button" aria-label="close-modal" onClick={onClose} />
+    </div>
+  ),
 }));
 
 const fetchMock = vi.fn();
@@ -212,5 +218,105 @@ describe('⚠️ the close-out — what the list does when the run it is showing
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ── `?scope=<KEY>` (Story MOTIR-5363 · design MOTIR-5402 panels 4–6) ─────────
+//
+// ⚠️ THE SAME LIST, NARROWED — and every way it could silently STOP being
+// narrowed is asserted here: a fetch that drops the scope refills the page with
+// the whole project, and an open or close that writes a literal address drops the
+// narrowing on the first click.
+
+const mountScoped = (
+  live: DispatchRunListItemDto[] | null,
+  past: DispatchRunListItemDto[] | null,
+) =>
+  render(
+    <RunsIndex
+      projectKey="PROD"
+      scopeKey="PROD-7"
+      initialLive={live}
+      initialPast={past}
+      pageSize={25}
+    />,
+  );
+
+const calls = (): string[] => fetchMock.mock.calls.map((c) => String(c[0]));
+
+describe('⚠️ a NARROWED list stays narrowed', () => {
+  it('drops the Scope column — every row would repeat the header', () => {
+    mountScoped([], [run()]);
+    expect(screen.queryByRole('columnheader', { name: 'Scope' })).toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Command' })).toBeTruthy();
+    // The unnarrowed list keeps it.
+    cleanup();
+    mount([], [run()]);
+    expect(screen.getByRole('columnheader', { name: 'Scope' })).toBeTruthy();
+  });
+
+  it('carries `scope=` on the live poll AND on the past re-read it triggers', async () => {
+    vi.useFakeTimers();
+    try {
+      mountScoped([run({ id: 'r_live', status: 'running' })], []);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000 + 50);
+      });
+      const live = calls().filter((u) => u.includes('status=live'));
+      const past = calls().filter((u) => u.includes('status=past'));
+      expect(live.length).toBeGreaterThan(0);
+      expect(past.length).toBeGreaterThan(0);
+      expect([...live, ...past].every((u) => u.includes('scope=PROD-7'))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('carries `scope=` on Show more', async () => {
+    const page = Array.from({ length: 25 }, (_, i) => run({ id: `r_${i}` }));
+    mountScoped([], page);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show older runs' }));
+    });
+    const more = calls().filter((u) => u.includes('cursor='));
+    expect(more).toHaveLength(1);
+    expect(more[0]).toContain('scope=PROD-7');
+  });
+
+  it('opening a run KEEPS the narrowing, and closing it returns to the narrowed list', async () => {
+    const push = vi.spyOn(window.history, 'pushState');
+    try {
+      mountScoped([], [run()]);
+      fireEvent.click(screen.getByRole('button', { name: 'run' }));
+      expect(push).toHaveBeenLastCalledWith(null, '', '/runs?scope=PROD-7&run=run_1');
+
+      cleanup();
+      params = new URLSearchParams('scope=PROD-7&run=run_1');
+      mountScoped([], [run()]);
+      fireEvent.click(screen.getByRole('button', { name: 'close-modal' }));
+      expect(push).toHaveBeenLastCalledWith(null, '', '/runs?scope=PROD-7');
+    } finally {
+      push.mockRestore();
+    }
+  });
+
+  it('the unnarrowed list still writes the plain addresses', () => {
+    const push = vi.spyOn(window.history, 'pushState');
+    try {
+      mount([], [run()]);
+      fireEvent.click(screen.getByRole('button', { name: 'run' }));
+      expect(push).toHaveBeenLastCalledWith(null, '', '/runs?run=run_1');
+    } finally {
+      push.mockRestore();
+    }
+  });
+
+  it('an EMPTY narrowing is its own fact — never run as a scope, with the command', () => {
+    mountScoped([], []);
+    expect(screen.getByText('PROD-7 has not been run as a scope yet')).toBeTruthy();
+    expect(screen.getByText(/motir run PROD-7/)).toBeTruthy();
+    // Not the project-wide sentence, and not an error.
+    expect(screen.queryByText('Nothing has run yet')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

@@ -364,17 +364,17 @@ describe('describePlacement', () => {
   });
 });
 
-describe('workItemsService.getWorkItemPlacement', () => {
+describe('workItemsService.getWorkItemOwnPlacement', () => {
   it('is 404-not-403 on an unknown id and across workspaces', async () => {
     const a = await makeWorkItemFixture();
     const item = await make(a, 'task', 'A task');
     await expect(
-      workItemsService.getWorkItemPlacement('cm-no-such-item', a.ctx),
+      workItemsService.getWorkItemOwnPlacement('cm-no-such-item', a.ctx),
     ).rejects.toMatchObject({
       code: 'WORK_ITEM_NOT_FOUND',
     });
     const b = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTHER' });
-    await expect(workItemsService.getWorkItemPlacement(item.id, b.ctx)).rejects.toMatchObject({
+    await expect(workItemsService.getWorkItemOwnPlacement(item.id, b.ctx)).rejects.toMatchObject({
       code: 'WORK_ITEM_NOT_FOUND',
     });
   });

@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import type { WorkItemDto } from '@/lib/dto/workItems';
+import type { WorkItemDto, WorkItemPlacementDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -10,16 +10,32 @@ import type { SprintDto } from '@/lib/dto/sprints';
 // The inline rail commits through the edit Server Actions + refreshes the route;
 // stub those, the parent-candidates fetch, the router, and the toast so the
 // panel drives in isolation.
-const { updateSpy, statusSpy, refreshSpy, toastSpy, setSprintSpy } = vi.hoisted(() => ({
+const {
+  updateSpy,
+  statusSpy,
+  refreshSpy,
+  toastSpy,
+  setSprintSpy,
+  placementSpy,
+  candidatesSpy,
+  fileSpy,
+  foldersSpy,
+} = vi.hoisted(() => ({
   updateSpy: vi.fn(),
   statusSpy: vi.fn(),
   refreshSpy: vi.fn(),
   toastSpy: vi.fn(),
   setSprintSpy: vi.fn(),
+  placementSpy: vi.fn(),
+  candidatesSpy: vi.fn(),
+  fileSpy: vi.fn(),
+  foldersSpy: vi.fn(),
 }));
 vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: updateSpy,
   changeStatusAction: statusSpy,
+  getWorkItemPlacementAction: placementSpy,
+  fileWorkItemAction: fileSpy,
 }));
 // The Sprint field commits through the assign route via this client helper
 // (2.4.14) — stub the fetch so the panel drives in isolation.
@@ -27,7 +43,8 @@ vi.mock('@/components/issues/actions/workItemActionsClient', () => ({
   setWorkItemSprint: setSprintSpy,
 }));
 vi.mock('@/app/(authed)/items/actions', () => ({
-  listCandidateParentsAction: vi.fn().mockResolvedValue({ ok: true, candidates: [] }),
+  listCandidateParentsAction: candidatesSpy,
+  listProjectFoldersAction: foldersSpy,
 }));
 // CoreFieldsPanel composes CustomFieldsSection (5.3.7), whose Server Action
 // would pull the real db module into this unit suite — stub it out (its own
@@ -49,6 +66,13 @@ vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) 
 
 import { CoreFieldsPanel } from '@/app/(authed)/items/[key]/_components/CoreFieldsPanel';
 import { IssueExplanation } from '@/app/(authed)/items/[key]/_components/IssueExplanation';
+import { PlacementProvider } from '@/app/(authed)/items/[key]/_components/PlacementProvider';
+import { PlacementBreadcrumb } from '@/app/(authed)/items/[key]/_components/PlacementBreadcrumb';
+import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
+
+beforeEach(() => {
+  candidatesSpy.mockResolvedValue({ ok: true, candidates: [] });
+});
 
 afterEach(() => {
   cleanup();
@@ -241,6 +265,387 @@ describe('CoreFieldsPanel (inline rail)', () => {
     // The action above resolves asynchronously; flush that pass so its
     // state update lands inside the test rather than after it.
     await act(async () => {});
+  });
+});
+
+// A parent change MOVES the item, and the breadcrumb that draws where it sits is a
+// different island (Story MOTIR-5309 · MOTIR-5381). The rail reports a SUCCESSFUL
+// parent change to the page's placement channel; the channel re-reads and the
+// breadcrumb repaints — no whole-page refresh.
+describe('CoreFieldsPanel → placement channel', () => {
+  const oldEpic = {
+    id: 'wi_old',
+    parentId: null,
+    kind: 'epic',
+    key: 1,
+    identifier: 'PROD-1',
+    title: 'Old epic',
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    position: 'a0',
+    estimateMinutes: null,
+    storyPoints: null,
+    archivedAt: null,
+  } as unknown as WorkItemSummaryDto;
+  const newEpic = {
+    ...oldEpic,
+    id: 'wi_new',
+    key: 2,
+    identifier: 'PROD-2',
+    title: 'New epic',
+  } as WorkItemSummaryDto;
+
+  function renderOnPage() {
+    candidatesSpy.mockResolvedValue({ ok: true, candidates: [oldEpic, newEpic] });
+    return render(
+      <PlacementProvider
+        serverPlacement={{
+          folderId: null,
+          parent: oldEpic,
+          ancestors: [oldEpic],
+          placementFolder: null,
+        }}
+      >
+        <PlacementBreadcrumb />
+        <CoreFieldsPanel
+          item={makeItem({ parentId: oldEpic.id })}
+          members={members}
+          workflow={workflow}
+          parent={oldEpic}
+          reporterIsSelf
+        />
+      </PlacementProvider>,
+    );
+  }
+
+  async function pickNewParent() {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Parent' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Parent' }));
+    fireEvent.click(await screen.findByRole('option', { name: /New epic/ }));
+    await act(async () => {});
+  }
+
+  it('repaints the breadcrumb from the re-read after a successful parent change', async () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    placementSpy.mockResolvedValue({
+      ok: true,
+      placement: { folderId: null, parent: newEpic, ancestors: [newEpic], placementFolder: null },
+    });
+    renderOnPage();
+    const crumbs = screen.getByRole('navigation', { name: 'Parent work items' });
+    expect(within(crumbs).getByRole('link', { name: /Old epic/ })).toBeTruthy();
+
+    await pickNewParent();
+
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'wi_new' }));
+    expect(placementSpy).toHaveBeenCalledTimes(1);
+    expect(placementSpy).toHaveBeenCalledWith('wi_1');
+    const repainted = screen.getByRole('navigation', { name: 'Parent work items' });
+    expect(within(repainted).getByRole('link', { name: /New epic/ })).toBeTruthy();
+    expect(within(repainted).queryByRole('link', { name: /Old epic/ })).toBeNull();
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not report a refused parent change', async () => {
+    updateSpy.mockResolvedValue({ ok: false, error: 'Nope', field: 'parent' });
+    renderOnPage();
+
+    await pickNewParent();
+
+    expect(updateSpy).toHaveBeenCalled();
+    expect(placementSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not report a stale parent change (the refresh re-reads instead)', async () => {
+    updateSpy.mockResolvedValue({ ok: false, error: 'Changed', stale: true });
+    renderOnPage();
+
+    await pickNewParent();
+
+    expect(placementSpy).not.toHaveBeenCalled();
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report a change to a field that cannot move the item', async () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    renderOnPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Priority' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Priority' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Low' }));
+    await act(async () => {});
+
+    expect(updateSpy).toHaveBeenCalled();
+    expect(placementSpy).not.toHaveBeenCalled();
+  });
+});
+
+// The page's FOLDER field (Story MOTIR-5309 · MOTIR-5377): below Parent, reading
+// the placement channel, filing through the quick view's control and
+// `fileWorkItemAction`, reverting both cards on a refusal, and reporting a
+// successful filing so the breadcrumb follows.
+describe('CoreFieldsPanel · Folder field', () => {
+  const epic = {
+    id: 'wi_epic',
+    parentId: null,
+    kind: 'epic',
+    key: 12,
+    identifier: 'PROD-12',
+    title: 'Old import',
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    position: 'a0',
+    estimateMinutes: null,
+    storyPoints: null,
+    archivedAt: null,
+  } as unknown as WorkItemSummaryDto;
+  const otherEpic = {
+    ...epic,
+    id: 'wi_other',
+    key: 40,
+    identifier: 'PROD-40',
+    title: 'Q3 launch',
+  } as WorkItemSummaryDto;
+
+  const FOLDERS = {
+    ok: true,
+    data: {
+      truncated: false,
+      folders: [
+        { id: 'parked', parentFolderId: null, name: 'Parked', position: 'a0', path: ['Parked'] },
+        {
+          id: 'y2025',
+          parentFolderId: 'parked',
+          name: '2025',
+          position: 'a0',
+          path: ['Parked', '2025'],
+        },
+      ],
+    },
+  };
+
+  const filedDirectly: WorkItemPlacementDto = {
+    folderId: 'y2025',
+    parent: null,
+    ancestors: [],
+    placementFolder: { folderId: 'y2025', path: ['Parked', '2025'], via: null },
+  };
+  const inherited: WorkItemPlacementDto = {
+    folderId: null,
+    parent: epic,
+    ancestors: [epic],
+    placementFolder: { folderId: 'y2025', path: ['Parked', '2025'], via: epic },
+  };
+  const unfiled: WorkItemPlacementDto = {
+    folderId: null,
+    parent: otherEpic,
+    ancestors: [otherEpic],
+    placementFolder: null,
+  };
+
+  beforeEach(() => {
+    foldersSpy.mockResolvedValue(FOLDERS);
+    placementSpy.mockResolvedValue({ ok: false, error: 'not read' });
+  });
+
+  function renderFolder(placement: WorkItemPlacementDto, { readOnly = false } = {}) {
+    const tree = (
+      <PlacementProvider serverPlacement={placement}>
+        <CoreFieldsPanel
+          item={makeItem({ parentId: placement.parent?.id ?? null })}
+          members={members}
+          workflow={workflow}
+          parent={placement.parent}
+          reporterIsSelf
+        />
+      </PlacementProvider>
+    );
+    return render(
+      readOnly ? <ProjectAccessProvider permissions={[]}>{tree}</ProjectAccessProvider> : tree,
+    );
+  }
+
+  /** The rail card whose caption is `label` (caption div → header row → card). */
+  function card(label: string) {
+    return screen.getAllByText(label, { selector: 'div' })[0]!.parentElement!
+      .parentElement as HTMLElement;
+  }
+
+  async function openFolder() {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Folder' }));
+    });
+    return screen.findByRole('listbox', { name: 'Folders' });
+  }
+
+  it('reads the path when filed directly, the path through its root when inherited, and No folder otherwise', () => {
+    renderFolder(filedDirectly);
+    expect(within(card('Folder')).getByText('Parked ▸ 2025')).toBeTruthy();
+    expect(within(card('Folder')).queryByText(/^Through/)).toBeNull();
+    expect(within(card('Parent')).getByText('None')).toBeTruthy();
+    cleanup();
+
+    renderFolder(inherited);
+    expect(within(card('Folder')).getByText('Parked ▸ 2025')).toBeTruthy();
+    expect(within(card('Folder')).getByText('Through PROD-12 Old import')).toBeTruthy();
+    cleanup();
+
+    renderFolder(unfiled);
+    expect(within(card('Folder')).getByText('No folder')).toBeTruthy();
+  });
+
+  it('says, before any save, that filing removes the item from its parent', async () => {
+    renderFolder(inherited);
+
+    await openFolder();
+
+    expect(
+      within(card('Folder')).getByText('Filing it removes it from PROD-12 Old import.'),
+    ).toBeTruthy();
+    expect(fileSpy).not.toHaveBeenCalled();
+  });
+
+  it('filing writes once, shows the path and Parent None while it saves, then reports the placement', async () => {
+    let resolveFile!: (v: unknown) => void;
+    fileSpy.mockReturnValue(new Promise((r) => (resolveFile = r)));
+    placementSpy.mockResolvedValue({
+      ok: true,
+      placement: {
+        folderId: 'parked',
+        parent: null,
+        ancestors: [],
+        placementFolder: { folderId: 'parked', path: ['Parked'], via: null },
+      },
+    });
+    renderFolder(inherited);
+
+    const listbox = await openFolder();
+    await act(async () => {
+      fireEvent.click(within(listbox).getByRole('option', { name: 'Parked' }));
+    });
+
+    expect(fileSpy).toHaveBeenCalledTimes(1);
+    expect(fileSpy).toHaveBeenCalledWith({ workItemId: 'wi_1', folderId: 'parked' });
+    expect(within(card('Folder')).getByText('Parked')).toBeTruthy();
+    expect(within(card('Parent')).getByText('None')).toBeTruthy();
+    expect(placementSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveFile({ ok: true, updatedAt: '2026-06-04T00:00:00.000Z' });
+    });
+
+    expect(placementSpy).toHaveBeenCalledTimes(1);
+    expect(placementSpy).toHaveBeenCalledWith('wi_1');
+    expect(within(card('Folder')).getByText('Parked')).toBeTruthy();
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('the next inline edit after a filing sends the filing’s updatedAt', async () => {
+    fileSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-04T00:00:00.000Z' });
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-05T00:00:00.000Z' });
+    renderFolder(filedDirectly);
+
+    const listbox = await openFolder();
+    await act(async () => {
+      fireEvent.click(within(listbox).getByRole('option', { name: 'Parked' }));
+    });
+
+    // Status goes through the un-tokened transition path, so the proof is the
+    // next token-carrying edit.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Priority' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Priority' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Low' }));
+    await act(async () => {});
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 'low', expectedUpdatedAt: '2026-06-04T00:00:00.000Z' }),
+    );
+  });
+
+  it('picking the folder the item is already in writes nothing', async () => {
+    renderFolder(filedDirectly);
+
+    const listbox = await openFolder();
+    const current = within(listbox)
+      .getAllByRole('option')
+      .find((o) => o.getAttribute('aria-selected') === 'true')!;
+    expect(current.textContent).toContain('2025');
+    await act(async () => {
+      fireEvent.click(current);
+    });
+
+    // The invariant the rail's own same-folder guard rests on: the picker DISMISSES
+    // on its current option rather than handing it back (CoreFieldsPanel's v8 ignore).
+    expect(screen.queryByRole('listbox', { name: 'Folders' })).toBeNull();
+    expect(fileSpy).not.toHaveBeenCalled();
+    expect(placementSpy).not.toHaveBeenCalled();
+  });
+
+  it('un-filing reads No folder while it saves, and leaves Parent as it is', async () => {
+    let resolveFile!: (v: unknown) => void;
+    fileSpy.mockReturnValue(new Promise((r) => (resolveFile = r)));
+    renderFolder(filedDirectly);
+
+    const listbox = await openFolder();
+    await act(async () => {
+      fireEvent.click(within(listbox).getByRole('option', { name: 'No folder' }));
+    });
+
+    expect(fileSpy).toHaveBeenCalledWith({ workItemId: 'wi_1', folderId: null });
+    expect(within(card('Folder')).getByText('No folder')).toBeTruthy();
+    expect(within(card('Parent')).getByText('None')).toBeTruthy();
+
+    await act(async () => {
+      resolveFile({ ok: true, updatedAt: '2026-06-04T00:00:00.000Z' });
+    });
+    expect(placementSpy).toHaveBeenCalledWith('wi_1');
+  });
+
+  it('a refused filing reverts Folder AND Parent, toasts the reason, and reports nothing', async () => {
+    const reason = 'That folder belongs to another project, so this work item stayed where it was.';
+    fileSpy.mockResolvedValue({ ok: false, error: reason });
+    renderFolder(inherited);
+
+    const listbox = await openFolder();
+    await act(async () => {
+      fireEvent.click(within(listbox).getByRole('option', { name: 'Parked' }));
+    });
+
+    expect(toastSpy).toHaveBeenCalledWith({ variant: 'error', title: reason });
+    expect(within(card('Folder')).getByText('Parked ▸ 2025')).toBeTruthy();
+    expect(within(card('Folder')).getByText('Through PROD-12 Old import')).toBeTruthy();
+    expect(within(card('Parent')).getByText('Old import')).toBeTruthy();
+    expect(placementSpy).not.toHaveBeenCalled();
+  });
+
+  it('a Parent change reported through the channel makes the Folder read No folder', async () => {
+    candidatesSpy.mockResolvedValue({ ok: true, candidates: [epic, otherEpic] });
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-04T00:00:00.000Z' });
+    placementSpy.mockResolvedValue({ ok: true, placement: unfiled });
+    renderFolder(inherited);
+    expect(within(card('Folder')).getByText('Parked ▸ 2025')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Parent' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Parent' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Q3 launch/ }));
+    await act(async () => {});
+
+    expect(fileSpy).not.toHaveBeenCalled();
+    expect(within(card('Folder')).getByText('No folder')).toBeTruthy();
+  });
+
+  it('a viewer without work_item:edit sees the value with no edit chevron', () => {
+    renderFolder(filedDirectly, { readOnly: true });
+
+    expect(within(card('Folder')).getByText('Parked ▸ 2025')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit Folder' })).toBeNull();
+  });
+
+  it('renders no Folder card outside the page’s placement channel', () => {
+    renderPanel();
+    expect(screen.queryByText('Folder', { selector: 'div' })).toBeNull();
   });
 });
 

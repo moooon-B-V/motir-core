@@ -36,6 +36,7 @@ describe('advancedFieldGroup', () => {
     expect(advancedFieldGroup(FILTER_FIELDS.find((f) => f.id === 'status')!)).toBe('fields');
     expect(advancedFieldGroup(FILTER_FIELDS.find((f) => f.id === 'lbl')!)).toBe('other');
     expect(advancedFieldGroup(FILTER_FIELDS.find((f) => f.id === 'cmp')!)).toBe('other');
+    expect(advancedFieldGroup(FILTER_FIELDS.find((f) => f.id === 'folder')!)).toBe('other');
     expect(advancedFieldGroup(customFieldFilterDef('x', 'select'))).toBe('customFields');
   });
 });
@@ -81,6 +82,16 @@ describe('computeAdvancedFilterStale (the client mirror of the server stale rule
       conditions: [{ field: 'cf:cf-qa', operator: 'is_any_of', value: ['u-deleted'] }],
     };
     expect(computeAdvancedFilterStale(ast, withUser).staleValueIds.size).toBe(0);
+  });
+
+  it('flags a deleted FOLDER against a complete folder list, and nothing without one (MOTIR-5378)', () => {
+    const ast: FilterAst = {
+      combinator: 'and',
+      conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-keep', 'f-gone'] }],
+    };
+    const withFolders: AdvancedFilterReferents = { ...referents, folderIds: new Set(['f-keep']) };
+    expect([...computeAdvancedFilterStale(ast, withFolders).staleValueIds]).toEqual(['f-gone']);
+    expect(computeAdvancedFilterStale(ast, referents).staleValueIds.size).toBe(0);
   });
 });
 

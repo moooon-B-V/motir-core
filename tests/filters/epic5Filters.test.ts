@@ -43,6 +43,7 @@ function referentsFor(fieldType: CustomFieldFilterType): ProjectFilterReferents 
     customFields: new Map([[FIELD_ID, { fieldType, optionIds: new Set(['opt-1', 'opt-2']) }]]),
     labelIds: new Set(['label-1', 'label-2']),
     componentIds: new Set(['component-1']),
+    folderIds: new Set(['folder-1']),
   };
 }
 
@@ -311,6 +312,7 @@ describe('the injection fuzz, extended over the dynamic ids (the 6.1.2 AC)', () 
         customFields: new Map([[payload, { fieldType: 'select', optionIds: new Set([payload]) }]]),
         labelIds: new Set([payload]),
         componentIds: new Set(),
+        folderIds: new Set(),
       };
       const fragment = compileFilterConditionsSql(
         {

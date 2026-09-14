@@ -157,9 +157,12 @@ beforeEach(async () => {
 
 /** The organisation's own switch, asserted ON so no verdict can come from it. */
 async function assertOrgSwitchStillOn() {
-  const org = await adminDb.organization.findUniqueOrThrow({ where: { id: orgId } });
+  // By SQL, not the generated client: the column has no application reader after
+  // MOTIR-5172, and MOTIR-5173 takes the field out of the client entirely.
+  const [org] = await adminDb.$queryRaw<{ acceptance_video_enabled: boolean }[]>`
+    SELECT acceptance_video_enabled FROM organization WHERE id = ${orgId}`;
   expect(
-    org.acceptanceVideoEnabled,
+    org!.acceptance_video_enabled,
     'the fixture leaves the ORGANISATION switch ON: a gate reading it would admit both stories',
   ).toBe(true);
 }

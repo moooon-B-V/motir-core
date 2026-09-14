@@ -2,16 +2,6 @@
   "acceptance": {
     "title": "验收",
     "gloss": "查看端到端测试视频",
-    "card": {
-      "title": "验收视频",
-      "desc": "当故事的端到端测试通过时录制一段短视频，并附于故事以供审阅与批准。",
-      "on": "已开启",
-      "off": "已关闭",
-      "requiresPlan": "需要付费的 Motir AI 方案",
-      "upgrade": "升级",
-      "saved": "已保存",
-      "saveError": "保存失败，请重试。"
-    },
     "pending": {
       "title": "正在等待验收视频",
       "body": "该故事的端到端测试将在下次通过时把录制视频发布到此处。"
@@ -38,9 +28,10 @@
     },
     "off": {
       "title": "验收视频已关闭",
-      "adminBody": "开启后，当该故事的端到端测试通过时将录制并附上视频凭证。",
-      "memberBody": "请联系组织管理员在组织设置中开启验收视频。",
+      "adminBody": "开启后，为该故事发布的任何验收视频都将等待审批。",
+      "memberBody": "请联系项目管理员在项目设置中开启验收视频。",
       "turnOn": "开启",
+      "turnOnForbidden": "只有项目管理员可以开启验收视频。",
       "goToSettings": "前往设置",
       "viewSettings": "查看设置"
     },
@@ -1261,6 +1252,7 @@
     "noExplanation": "还没有说明。",
     "childIssues": "子工作项",
     "parentIssuesAria": "父级工作项",
+    "placementBreadcrumbAria": "文件夹和父级工作项",
     "relationships": "关联",
     "relationshipsGloss": "依赖与关联",
     "noLinkedIssues": "还没有关联工作项。",
@@ -1375,6 +1367,9 @@
     "advancedFieldEstimate": "预估工时",
     "advancedFieldLabel": "标签",
     "advancedFieldComponent": "模块",
+    "advancedFieldFolder": "文件夹",
+    "advancedFolderIncludesInside": "所选文件夹内的文件夹也包含在内。",
+    "advancedFolderNone": "此项目还没有文件夹。",
     "advancedOpIsAnyOf": "为其中任一",
     "advancedOpIsNoneOf": "不为其中任一",
     "advancedOpIsEmpty": "为空",
@@ -8089,6 +8084,22 @@
       "materialized": "已落地 {count, plural, other {# 条提案}}",
       "bugFiled": "已提交缺陷",
       "open": "打开 →"
+    },
+    "scope": {
+      "heading": "作为范围运行",
+      "lineLive": "代理正在把此工作项的子项作为一次运行来处理。",
+      "linePast": "代理已把此工作项的子项作为一次运行处理完毕。",
+      "door": "查看 {key} 的全部运行 →"
+    },
+    "scopeIndex": {
+      "allRuns": "全部运行",
+      "subtitle": "<item>{key}</item> 的运行 · {title}",
+      "subtitleMissing": "{key} 的运行",
+      "archived": "已归档",
+      "emptyTitle": "{key} 尚未作为范围运行过",
+      "emptyBody": "用 motir run {key} 运行整个工作项。单独处理其某个子项的运行，会显示在该子项的页面上。",
+      "notFoundTitle": "此项目中没有工作项 {key}",
+      "notFoundBody": "它可能已被删除，或你没有访问权限。已删除工作项的运行仍在“全部运行”中，按其标签列出。"
     }
   },
   "repositoryPicker": {
@@ -8249,6 +8260,22 @@
       }
     }
   },
+  "approvalOverlay": {
+    "escKey": "Esc",
+    "dialogTitle": "{key} 的{kind}",
+    "openWorkItem": "打开工作项",
+    "loading": "正在加载审批",
+    "notAvailable": {
+      "title": "此审批不可用",
+      "body": "它可能已不存在，或你没有访问权限。后面的页面没有变化。"
+    },
+    "notRenderable": {
+      "body": "这是一项{kind}审批。Motir 支持展示此类型后，它会在这里打开——这不是你造成的。"
+    },
+    "subjectGone": {
+      "body": "此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。"
+    }
+  },
   "approvals": {
     "acceptanceVideo": {
       "title": "验收视频审批",
@@ -8309,6 +8336,8 @@
     "folderGone": "该文件夹已不存在。",
     "noFolder": "无文件夹",
     "fieldLabel": "文件夹",
+    "breadcrumbFolderLabel": "文件夹：",
+    "placedThrough": "经由 {key} {title}",
     "removesFromParent": "归档后，它将不再属于 {key} {title}。",
     "fileRefused": "该文件夹属于另一个项目，因此此工作项保持原位。",
     "delete": "删除…",

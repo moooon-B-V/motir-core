@@ -240,6 +240,9 @@ describe('advancedBuilderFields (the registry-driven field menu)', () => {
       'estimate',
       'lbl',
       'cmp',
+      // Story MOTIR-5309 · MOTIR-5378: the Folder field, last in the registry, admitted by
+      // the `folder-select` editor kind.
+      'folder',
     ]);
   });
 

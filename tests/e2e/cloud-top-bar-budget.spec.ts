@@ -39,13 +39,20 @@
 // it contributes zero width to the geometry measured here. Between the two files
 // the crowded state is covered in full; neither covers it alone.
 //
+// ⚠️ STALE SINCE THE MOVE BELOW, and kept as the record of why that component
+// file exists (MOTIR-4897): this file now runs in the CLOUD lane, whose webServer
+// DOES set MOTIR_AI_URL + MOTIR_AI_SERVICE_TOKEN — so the pill mounts here, and
+// the `xl` describe at the bottom asserts it is visible before measuring. The
+// below-`md` tests are unaffected: the pill is `display: none` there either way.
+//
 // Per the E2E discipline (CLAUDE.md), nothing here waits on a timeout: the
 // hit-test runs only after the shell is proven rendered, and the drawer legs
 // wait on the dialog's own role state.
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { pinContextCookies } from './_helpers/billing';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -275,5 +282,190 @@ test.describe('the top bar’s four-slot budget below md', () => {
     await expect(theme).toBeVisible();
     await theme.click();
     await expect(drawer.getByRole('button', { name: /^Theme: Light/ })).toBeVisible();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE `xl` BAND — the context path's truncation budget (MOTIR-4897 · design/shell
+// design-notes.md § *The context path's truncation budget*).
+//
+// The describe above owns the budget BELOW `md`, where the thing covered was the
+// hamburger. This is the same defect one band up, and it was invisible to every
+// guard that existed: at `xl` (1280px is exactly Tailwind's `xl`) the path
+// renders all THREE tiers, the right cluster is labelled and `flex-none`, and the
+// ancestor tiers could not shrink below their names at all. With names of the
+// length a new tenant is actually given, the row overflowed and the project tier
+// — LAST in it — passed under the right cluster. Playwright saw a button that was
+// "visible, enabled and stable" and retried a click 638 times: the intruder it
+// named was the Plan-with-AI label.
+//
+// Three conditions at once, and this seed supplies all three:
+//   1. LONG NAMES. A first workspace mints an org of the same name, and a seeded
+//      default project is named after its workspace (MOTIR-4870) — so one string
+//      is what a brand-new cloud tenant renders at every tier.
+//   2. TWO WORKSPACES, so the workspace tier is live (`isWorkspaceTierRevealed`).
+//   3. The WIDEST right cluster: this lane configures motir-ai (MOTIR_AI_URL +
+//      MOTIR_AI_SERVICE_TOKEN), so the Plan-with-AI pill mounts, and a public
+//      project fills the build-in-public slot with its labelled indicator.
+//
+// It asserts the OUTCOME — each tier is the element at its own centre, and ends
+// before the right cluster begins — rather than the mechanism, so it keeps holding
+// whichever way the path is laid out next.
+
+const XL_EMAIL = 'e2e-top-bar-xl@example.com';
+const LONG_NAME = 'Acceptance workspace';
+const TIERS = ['Organization menu', 'Switch workspace', 'Switch project'] as const;
+/** A truncated tier must still say something: below this a tier is a chevron in a
+ *  box, which the context row's design rejected outright (§ *The ladder*). */
+const LEGIBLE_LABEL_PX = 40;
+
+async function seedLongContextPath(page: Page): Promise<void> {
+  const owner = await usersService.createUser({
+    email: XL_EMAIL,
+    password: PASSWORD,
+    name: 'Zhu Yue',
+  });
+  const { workspace } = await workspacesService.createWorkspace({
+    name: LONG_NAME,
+    ownerUserId: owner.id,
+  });
+  const project = await projectsService.createProject({
+    name: LONG_NAME,
+    identifier: 'ACC',
+    workspaceId: workspace.id,
+    actorUserId: owner.id,
+  });
+  await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+  await adminDb.workspaceMembership.update({
+    where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
+    data: { activeProjectId: project.id },
+  });
+  // This lane is CLOUD-ON, and the free plan caps an organisation at ONE
+  // workspace — the create below is REFUSED without this. Set on the org row, the
+  // same remedy `acceptance-workspace-settings-area.spec.ts` documents: a paid AI
+  // plan bundles a seat, which resolves the tier to `scaled` (no workspace cap).
+  await adminDb.organization.update({
+    where: { id: workspace.organizationId },
+    data: { aiIncludedSeat: true },
+  });
+  await workspacesService.createWorkspace({
+    name: `Second ${LONG_NAME}`,
+    ownerUserId: owner.id,
+    organizationId: workspace.organizationId,
+  });
+  await adminDb.notification.createMany({
+    data: [1, 2, 3].map((n) => ({
+      workspaceId: workspace.id,
+      recipientUserId: owner.id,
+      type: 'work_item.mentioned',
+      category: 'direct' as const,
+      data: {},
+      dedupeKey: `top-bar-xl-${n}`,
+    })),
+  });
+  // Two workspaces means the landing has a choice to make; pin the one that
+  // holds the project rather than depending on which it makes.
+  await pinContextCookies(page, {
+    workspaceId: workspace.id,
+    organizationId: workspace.organizationId,
+  });
+}
+
+/** Per tier: is it the element at its own centre (and if not, WHAT is), does it
+ *  end before the right cluster begins, and how much of its name is showing. */
+async function measureContextPath(page: Page, tiers: readonly string[]) {
+  return page.evaluate((names) => {
+    const nav = document.querySelector('header nav[aria-label]');
+    const rightCluster = nav?.children[1];
+    const rightClusterLeft = rightCluster?.getBoundingClientRect().left ?? 0;
+    return names.map((name) => {
+      const button = nav?.querySelector<HTMLElement>(`button[aria-label="${name}"]`);
+      if (!button)
+        return { name, found: false, hitsSelf: false, intruder: '', overlap: 0, label: 0 };
+      const box = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      const intruder = hit
+        ? `<${hit.tagName.toLowerCase()} class="${hit.getAttribute('class') ?? ''}">${(hit.textContent ?? '').trim().slice(0, 40)}`
+        : 'nothing at that point';
+      return {
+        name,
+        found: true,
+        hitsSelf: Boolean(hit && (hit === button || button.contains(hit))),
+        intruder,
+        overlap: Math.round(box.right - rightClusterLeft),
+        // The laid-out box, not `clientWidth`: an INLINE span reports 0 there
+        // whatever it shows — which is also the tell that `truncate` is not
+        // applying to it.
+        label: Math.round(
+          button.querySelector<HTMLElement>('span.truncate')?.getBoundingClientRect().width ?? 0,
+        ),
+      };
+    });
+  }, tiers);
+}
+
+test.describe('the context path’s truncation budget at xl', () => {
+  test.beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  test.afterAll(async () => {
+    await db.$disconnect();
+  });
+
+  test('every tier is clickable at 1280px with long names, two workspaces and AI on', async ({
+    page,
+  }) => {
+    await seedLongContextPath(page);
+    await signIn(page, XL_EMAIL, PASSWORD);
+
+    for (const width of [1280, 1440]) {
+      await page.setViewportSize({ width, height: 720 });
+
+      // The crowded state is real before anything is measured — a hit-test on a
+      // bar that never grew its widest controls passes vacuously.
+      const bar = page.getByRole('navigation', { name: 'Global' });
+      await expect(bar.getByText('Plan with AI', { exact: true })).toBeVisible();
+      await expect(bar.getByRole('link', { name: 'Building in public — manage' })).toBeVisible();
+      for (const name of TIERS) {
+        await expect(bar.getByRole('button', { name }), `${name} at ${width}px`).toBeVisible();
+      }
+      await expect(bar.getByRole('button', { name: 'Switch project' })).toContainText('Acceptance');
+
+      // One read, then the three claims in order of what they mean: CLICKABLE
+      // first (the defect as reported), then CLEAR of the right cluster, then
+      // LEGIBLE — so a failure names the worst thing that is wrong.
+      const tiers = await measureContextPath(page, TIERS);
+      // The widths ride on the report, so a red run — or a design pass re-taking
+      // the budget — reads the numbers instead of re-deriving them.
+      await test.info().attach(`context-path-${width}px`, {
+        body: JSON.stringify(tiers, null, 2),
+        contentType: 'application/json',
+      });
+      for (const tier of tiers) {
+        expect(
+          tier.hitsSelf,
+          `at ${width}px the element at the centre of “${tier.name}” is: ${tier.intruder}`,
+        ).toBe(true);
+      }
+      for (const tier of tiers) {
+        expect(
+          tier.overlap,
+          `at ${width}px “${tier.name}” runs ${tier.overlap}px under the right cluster`,
+        ).toBeLessThanOrEqual(0);
+      }
+      for (const tier of tiers) {
+        expect(
+          tier.label,
+          `at ${width}px “${tier.name}” shows ${tier.label}px of its name`,
+        ).toBeGreaterThanOrEqual(LEGIBLE_LABEL_PX);
+      }
+    }
+
+    // And the defect as it was reported: the click lands. `aria-expanded` is the
+    // trigger's own state, written by the popover it opened.
+    const switcher = page.getByRole('button', { name: 'Switch project' });
+    await switcher.click();
+    await expect(switcher).toHaveAttribute('aria-expanded', 'true');
   });
 });

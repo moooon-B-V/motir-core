@@ -55,7 +55,9 @@ describe('the org Settings home gates per SECTION, not per page', () => {
   it('still refuses the ORG-SCOPED cards to a non-admin', () => {
     // The other half: per-section must not become no-section. Each org-scoped
     // card is named inside an `isAdmin` branch.
-    for (const card of ['OrgGeneralCard', 'BillingCard', 'AcceptanceVideoCard']) {
+    // `AcceptanceVideoCard` left this list with the card itself (MOTIR-5172): the
+    // switch is a PROJECT setting now, and the org page draws no trace of it.
+    for (const card of ['OrgGeneralCard', 'BillingCard']) {
       expect(src.includes(card), `${card} is no longer rendered by ${PAGE}`).toBe(true);
     }
     expect(

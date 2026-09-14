@@ -45,7 +45,7 @@ export function buildAdvancedFilterFieldDefs(
  * else (the core columns) under "Fields". */
 export function advancedFieldGroup(def: FilterFieldDef): AdvancedFieldGroup {
   if (def.customField) return 'customFields';
-  if (def.id === 'lbl' || def.id === 'cmp') return 'other';
+  if (def.id === 'lbl' || def.id === 'cmp' || def.id === 'folder') return 'other';
   return 'fields';
 }
 
@@ -66,6 +66,10 @@ export interface AdvancedFilterReferents {
   >;
   labelIds: ReadonlySet<string>;
   componentIds: ReadonlySet<string>;
+  /** The project's folder ids (Story MOTIR-5309 · MOTIR-5378). Absent when the
+   * host loaded none, or only a truncated window — then no folder is flagged,
+   * because only a complete list can say a folder is gone. */
+  folderIds?: ReadonlySet<string>;
 }
 
 /** What the builder renders as stale: the value ids that no longer resolve
@@ -110,6 +114,9 @@ export function computeAdvancedFilterStale(
       for (const v of values) if (!referents.labelIds.has(v)) staleValueIds.add(v);
     } else if (field === 'cmp') {
       for (const v of values) if (!referents.componentIds.has(v)) staleValueIds.add(v);
+    } else if (field === 'folder' && referents.folderIds !== undefined) {
+      const folderIds = referents.folderIds;
+      for (const v of values) if (!folderIds.has(v)) staleValueIds.add(v);
     }
   }
   return { staleValueIds, staleFields };

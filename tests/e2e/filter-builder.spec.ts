@@ -27,10 +27,12 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, signIn, SHELL_PASSWORD } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { escapeRegExp } from '@/lib/utils/regexp';
+import { pageRefresh } from './_helpers/authoritative-signal';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
@@ -468,4 +470,47 @@ test('the facet state upgrades losslessly into builder rows (one-way "Edit in Ad
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('main').getByLabel('Managed in Advanced')).toBeVisible();
+});
+
+// Story MOTIR-5309 · MOTIR-5378 — the builder's Folder row leaves a folder's work
+// out. The value pick live-applies through a `router.push`, so the list the rows
+// are asserted against is the RSC read of `/items` that push makes: armed before
+// the pick, and its 200 awaited before any row is asserted.
+test('Folder is none of a folder leaves the work filed in it out of the list', async ({ page }) => {
+  const seed = await seedProject(page, 'builder-folder@e2e.test', 'FDR');
+  await mk(seed, 'task', 'Loose task');
+  const filed = await mk(seed, 'task', 'Parked task');
+  const parked = await foldersService.createFolder(
+    { projectId: seed.projectId, parentFolderId: null, name: 'Parked' },
+    seed.ctx,
+  );
+  await foldersService.fileWorkItem(filed.id, { folderId: parked.id }, seed.ctx);
+
+  await page.goto('/items?view=list');
+  await expect(page.getByRole('row').filter({ hasText: 'Parked task' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Advanced' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Add condition' }).click();
+  const row = await setField(dialog, 1, 'Folder');
+  await row.getByRole('combobox', { name: 'Operator' }).click();
+  await page.getByRole('option', { name: 'is none of' }).click();
+  await row.getByRole('combobox', { name: 'Folder values' }).click();
+
+  const listRead = pageRefresh(page, '/items');
+  await page.getByRole('option', { name: 'Parked', exact: true }).click();
+  expect((await listRead).status(), 'the filtered list read').toBe(200);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+
+  const expectedAst: FilterAst = {
+    combinator: 'and',
+    conditions: [{ field: 'folder', operator: 'is_none_of', value: [parked.id] }],
+  };
+  await expect(page).toHaveURL(
+    new RegExp(escapeRegExp(encodeURIComponent(encodeFilterParam(expectedAst)))),
+  );
+  await expect(page.getByRole('row').filter({ hasText: 'Loose task' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Parked task' })).toHaveCount(0);
 });

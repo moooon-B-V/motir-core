@@ -206,6 +206,7 @@ import type {
   WorkItemProseAdvisoryDto,
   WorkItemImplementationProvenanceInput,
   WorkItemRepositoryDto,
+  WorkItemPlacementDto,
 } from '@/lib/dto/workItems';
 import { buildProseVsGraphAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import { containerCoverageFinding } from '@/lib/workItems/containerCoverage';
@@ -842,9 +843,9 @@ export async function loadFilterReferents(
 ): Promise<ProjectFilterReferents | undefined> {
   if (!astHasEpic5Conditions(ast)) return undefined;
   const ids = collectFilterReferentIds(ast);
-  // Four reads of four policy-gated tables, resolved together to decorate ONE
-  // filter — so they share one bound transaction rather than four.
-  const { definitions, options, labels, components } = await withWorkspaceServiceContext(
+  // Five reads of five policy-gated tables, resolved together to decorate ONE
+  // filter — so they share one bound transaction rather than five.
+  const { definitions, options, labels, components, folders } = await withWorkspaceServiceContext(
     workspaceId,
     async (tx) => ({
       definitions:
@@ -859,6 +860,9 @@ export async function loadFilterReferents(
       ),
       labels: await labelRepository.findByIds(ids.labelIds, projectId, tx),
       components: await componentRepository.findByIds(ids.componentIds, tx),
+      // The Folder field's value ids (MOTIR-5376) — bounded by the ids the
+      // filter names (empty input reads nothing).
+      folders: await folderRepository.findByIds(ids.folderIds, tx),
     }),
   );
 
@@ -878,6 +882,66 @@ export async function loadFilterReferents(
         .filter((c) => c.projectId === projectId && c.workspaceId === workspaceId)
         .map((c) => c.id),
     ),
+    // A folder of another project — or a deleted one — is absent, so its
+    // condition reads as a stale value and matches nothing.
+    folderIds: new Set(
+      folders
+        .filter((f) => f.projectId === projectId && f.workspaceId === workspaceId)
+        .map((f) => f.id),
+    ),
+  };
+}
+
+/**
+ * Where a work item's EFFECTIVE folder comes from (Story MOTIR-5309 · MOTIR-5375):
+ * its own `folderId`, else its ROOT ancestor's. Only a root can carry a folder —
+ * the CHECK `work_item_parent_xor_folder` keeps `parentId` and `folderId` apart —
+ * so at most one of the two is non-null and no deeper ancestor is consulted.
+ * `ancestorRows` is `findAncestors`' ROOT→self chain (item excluded), whose
+ * `SELECT w.*` already carries the root's `folderId`.
+ */
+function effectivePlacementSource(
+  itemFolderId: string | null,
+  ancestorRows: readonly WorkItem[],
+): { folderId: string; via: WorkItem | null } | null {
+  if (itemFolderId !== null) return { folderId: itemFolderId, via: null };
+  const root = ancestorRows[0];
+  return root?.folderId ? { folderId: root.folderId, via: root } : null;
+}
+
+/** The effective folder's name path, root first — no read at all when no folder applies. */
+async function readPlacementPath(
+  itemFolderId: string | null,
+  ancestorRows: readonly WorkItem[],
+  tx: Prisma.TransactionClient,
+): Promise<string[] | null> {
+  const source = effectivePlacementSource(itemFolderId, ancestorRows);
+  return source === null ? null : folderRepository.findPathNames(source.folderId, tx);
+}
+
+/**
+ * The ONE placement mapper `getIssueDetail` and `getWorkItemPlacement` share, so
+ * the page's first render and its re-read after a move cannot disagree.
+ */
+function toWorkItemPlacementDto(
+  itemFolderId: string | null,
+  ancestorRows: readonly WorkItem[],
+  placementPath: string[] | null,
+): WorkItemPlacementDto {
+  const ancestors = ancestorRows.map(toWorkItemSummaryDto);
+  const source = effectivePlacementSource(itemFolderId, ancestorRows);
+  return {
+    folderId: itemFolderId,
+    parent: ancestors.at(-1) ?? null,
+    ancestors,
+    placementFolder:
+      source === null || placementPath === null
+        ? null
+        : {
+            folderId: source.folderId,
+            path: placementPath,
+            via: source.via === null ? null : toWorkItemSummaryDto(source.via),
+          },
   };
 }
 
@@ -5241,7 +5305,7 @@ export const workItemsService = {
     // bound transaction (the 5-wide fan-out MOTIR-2799 measured); `getReadiness`
     // is a service call and opens its own, per the call-into-another-service
     // clause in the transaction-shape ADR.
-    const { targetRows, archivedActor } = await withWorkspaceServiceContext(
+    const { targetRows, archivedActor, placementPath } = await withWorkspaceServiceContext(
       ctx.workspaceId,
       async (tx) => ({
         targetRows: await resolveRelationshipTargetRows(linkRows, tx),
@@ -5251,11 +5315,16 @@ export const workItemsService = {
         archivedActor: item.archivedAt
           ? await workItemRevisionRepository.findLatestArchivedActor(item.id, tx)
           : null,
+        // The EFFECTIVE folder's name path (MOTIR-5375) — one bounded chain read
+        // when a folder applies, none otherwise; the root ancestor's `folderId`
+        // already rode `findAncestors`' `SELECT w.*`.
+        placementPath: await readPlacementPath(item.folderId, ancestorRows, tx),
       }),
     );
     const readiness = await this.getReadiness(item.id, ctx);
 
-    const ancestors = ancestorRows.map(toWorkItemSummaryDto);
+    const placement = toWorkItemPlacementDto(item.folderId, ancestorRows, placementPath);
+    const ancestors = placement.ancestors;
     const linkGroups = toRelationshipGroups(linkRows, targetRows);
     const blockedBy = linkGroups.blockedBy;
     const openBlockers = blockedBy
@@ -5278,9 +5347,10 @@ export const workItemsService = {
       // which is the read that can guarantee the join — the same place
       // `repoDelivery` already lives, and for the same reason.
       item: toWorkItemDto(item, itemRepositories),
-      folderId: item.folderId,
+      folderId: placement.folderId,
+      placementFolder: placement.placementFolder,
       ancestors,
-      parent: ancestors.at(-1) ?? null,
+      parent: placement.parent,
       children: childRows.map(toWorkItemSummaryDto),
       ...linkGroups,
       readiness: { ready: readiness.ready, openBlockers, blockedByAncestor },
@@ -5317,7 +5387,7 @@ export const workItemsService = {
    * write tools read it back after a create or a move, so the placement they
    * report is the row's, not a value re-derived from their own arguments.
    */
-  async getWorkItemPlacement(
+  async getWorkItemOwnPlacement(
     id: string,
     ctx: ServiceContext,
   ): Promise<{ folderId: string | null; folderPath: string[] | null }> {
@@ -5326,6 +5396,33 @@ export const workItemsService = {
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     if (row.folderId === null) return { folderId: null, folderPath: null };
     return { folderId: row.folderId, folderPath: await this.getFolderPath(row.folderId, ctx) };
+  },
+
+  /**
+   * Where ONE work item sits right now (Story MOTIR-5309 · MOTIR-5375) — the
+   * placement slice of {@link getIssueDetail}, computed by the SAME mapper, for a
+   * page that has just moved the item (its Parent or Folder field) and must
+   * re-ask without buying the detail aggregate's thirteen reads. Same workspace
+   * binding, same not-found for a foreign / unknown / other-project id, same
+   * browse gate.
+   */
+  async getWorkItemPlacement(
+    projectId: string,
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemPlacementDto> {
+    const item = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findById(workItemId, tx),
+    );
+    if (!item || item.workspaceId !== ctx.workspaceId || item.projectId !== projectId) {
+      throw new WorkItemNotFoundError(workItemId);
+    }
+    await projectAccessService.assertCanBrowse(item.projectId, ctx);
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const ancestorRows = await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx);
+      const placementPath = await readPlacementPath(item.folderId, ancestorRows, tx);
+      return toWorkItemPlacementDto(item.folderId, ancestorRows, placementPath);
+    });
   },
 
   /**

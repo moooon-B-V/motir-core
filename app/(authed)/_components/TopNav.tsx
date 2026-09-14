@@ -273,7 +273,12 @@ export async function TopNav({
         {/* `flex-none`: the right cluster may no longer take width from the
             left one. Its children are fixed-size boxes, so as a shrinkable flex
             item it squeezed its `min-w-0` sibling to ZERO and painted over the
-            hamburger — the defect this budget closes. */}
+            hamburger — the defect this budget closes.
+            The price is that the LEFT cluster absorbs every shortfall itself, at
+            every width — including `xl`, where all three tiers are live and the
+            labels are on. That is why every tier of `ShellTierNav` truncates
+            (MOTIR-4897); a left-cluster child that cannot shrink re-opens this
+            defect one band up, over the project switcher instead. */}
         <div className="flex flex-none items-center gap-2">
           {/* The "Plan with AI" hero launcher (MOTIR-1299) — the universal
               entrance to the AI planning workspace, present on every screen as

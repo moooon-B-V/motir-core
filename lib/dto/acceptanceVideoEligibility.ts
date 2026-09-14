@@ -1,8 +1,9 @@
 // The story-acceptance-video eligibility verdict (Story MOTIR-1627 · Subtask
 // MOTIR-1630) — the single computed source the acceptance panel, the publish
-// endpoint, and the org settings card all read, so they never disagree. Encodes
-// the ADR decision-1 table: eligible IFF the org holds a paid AI plan (Axis A)
-// AND the org toggle is ON; off-cloud / meta orgs are `applicable:false`.
+// endpoint, and the project's Approvals room all read, so they never disagree.
+// Encodes the ADR decision-1 table: eligible IFF the org holds a paid AI plan
+// (Axis A) AND the PROJECT's switch is ON (MOTIR-4925); off-cloud / meta orgs are
+// `applicable:false`.
 
 /**
  * Why the org is (in)eligible — drives the panel's THREE states:
@@ -27,7 +28,9 @@ export interface AcceptanceVideoEligibilityDTO {
   toggleEnabled: boolean;
   /** Org OWNER — the Upgrade CTA acts for them (mirrors AiAccess.canManageBilling). */
   canManageBilling: boolean;
-  /** Org owner/admin — may flip the toggle (the panel's admin-vs-non-admin OFF split). */
+  /** Holds `workflow:manage` on the story's project — may flip the switch (the
+   *  panel's admin-vs-non-admin OFF split). Was org owner/admin until MOTIR-5172
+   *  moved the switch's write to the project tier. */
   canManageToggle: boolean;
   organizationId: string | null;
 }

@@ -2,16 +2,6 @@
   "acceptance": {
     "title": "Acceptance",
     "gloss": "review the E2E video",
-    "card": {
-      "title": "Acceptance video",
-      "desc": "Record a short video when a story's E2E passes and attach it to the story for review & approval.",
-      "on": "On",
-      "off": "Off",
-      "requiresPlan": "Requires a paid Motir AI plan",
-      "upgrade": "Upgrade",
-      "saved": "Saved",
-      "saveError": "Couldn't save — try again."
-    },
     "pending": {
       "title": "Waiting for the acceptance video",
       "body": "The story's E2E publishes its recording here on the next green run."
@@ -38,9 +28,10 @@
     },
     "off": {
       "title": "Acceptance video is off",
-      "adminBody": "Turn it on to record and attach a video receipt when this story's E2E passes.",
-      "memberBody": "Ask an org admin to turn on acceptance video in the organization settings.",
+      "adminBody": "Turn it on and any acceptance video published for this story will be held for approval.",
+      "memberBody": "Ask a project admin to turn on acceptance video in the project settings.",
       "turnOn": "Turn on",
+      "turnOnForbidden": "Only a project admin can turn on acceptance video.",
       "goToSettings": "Go to settings",
       "viewSettings": "View settings"
     },
@@ -1261,6 +1252,7 @@
     "noExplanation": "No explanation yet.",
     "childIssues": "Child work items",
     "parentIssuesAria": "Parent work items",
+    "placementBreadcrumbAria": "Folder and parent work items",
     "relationships": "Relationships",
     "relationshipsGloss": "dependencies & links",
     "noLinkedIssues": "No linked work items yet.",
@@ -1375,6 +1367,9 @@
     "advancedFieldEstimate": "Estimate",
     "advancedFieldLabel": "Label",
     "advancedFieldComponent": "Component",
+    "advancedFieldFolder": "Folder",
+    "advancedFolderIncludesInside": "Folders inside a chosen folder are included.",
+    "advancedFolderNone": "This project has no folders yet.",
     "advancedOpIsAnyOf": "is any of",
     "advancedOpIsNoneOf": "is none of",
     "advancedOpIsEmpty": "is empty",
@@ -8093,6 +8088,22 @@
       "materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
       "bugFiled": "Bug filed",
       "open": "Open →"
+    },
+    "scope": {
+      "heading": "Run as a scope",
+      "lineLive": "An agent is working this work item’s children as one run.",
+      "linePast": "An agent worked this work item’s children as one run.",
+      "door": "See every run of {key} →"
+    },
+    "scopeIndex": {
+      "allRuns": "All runs",
+      "subtitle": "Runs of <item>{key}</item> · {title}",
+      "subtitleMissing": "Runs of {key}",
+      "archived": "Archived",
+      "emptyTitle": "{key} has not been run as a scope yet",
+      "emptyBody": "Run the whole work item with motir run {key}. A run that worked one of its children on its own shows on that child’s page.",
+      "notFoundTitle": "No work item {key} in this project",
+      "notFoundBody": "It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label."
     }
   },
   "repositoryPicker": {
@@ -8253,6 +8264,22 @@
       }
     }
   },
+  "approvalOverlay": {
+    "escKey": "Esc",
+    "dialogTitle": "{kind} for {key}",
+    "openWorkItem": "Open work item",
+    "loading": "Loading the approval",
+    "notAvailable": {
+      "title": "This approval is not available",
+      "body": "It may no longer exist, or you may not have access to it. The page behind this is unchanged."
+    },
+    "notRenderable": {
+      "body": "This is a {kind} approval. It will open here once Motir can show that kind — nothing you did caused this."
+    },
+    "subjectGone": {
+      "body": "The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now."
+    }
+  },
   "approvals": {
     "acceptanceVideo": {
       "title": "Acceptance video approval",
@@ -8313,6 +8340,8 @@
     "folderGone": "That folder no longer exists.",
     "noFolder": "No folder",
     "fieldLabel": "Folder",
+    "breadcrumbFolderLabel": "Folder:",
+    "placedThrough": "Through {key} {title}",
     "removesFromParent": "Filing it removes it from {key} {title}.",
     "fileRefused": "That folder belongs to another project, so this work item stayed where it was.",
     "delete": "Delete…",

@@ -57,10 +57,14 @@ function reads(): LateReads {
     acceptanceEligibility: null,
     acceptanceEvidence: null,
     canDecideAcceptance: false,
+    projectId: 'proj-acme',
     designEvidence: null,
     isDesignCard: false,
     designGate: { gate: null, canDecide: false, routedToLabel: null, subject: null },
     runs: [],
+    // No scoped run on this fixture's item (MOTIR-5363) — the Run section is
+    // mocked here, and `null` is what the read answers for such an item.
+    scopeRun: null,
     howToTest: recordDto({ repos: [coreRepo(), gatewayRepo()] }),
     mergeGate: { gate: null, canDecide: false, routedToLabel: null },
   };

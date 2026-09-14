@@ -42,6 +42,7 @@ import { BuildInPublicButton } from './_components/build-in-public/BuildInPublic
 import { BuildingInPublicHeaderLink } from './_components/build-in-public/BuildingInPublicHeaderLink';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
 import { PlanningWorkspaceOverlay } from '@/components/planning/PlanningWorkspaceOverlay';
+import { ApprovalOverlay } from '@/components/approvals/ApprovalOverlay';
 import { AccountDeletionBanner } from './_components/AccountDeletionBanner';
 import {
   isWorkspaceTierRevealed,
@@ -594,13 +595,26 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   // route's build at once. `null` is the right fallback: an
                   // overlay that has not resolved its address yet is a closed
                   // overlay, which is what the reader should see.
-                  <Suspense fallback={null}>
-                    <PlanningWorkspaceOverlay
-                      projectKey={activeProject.identifier}
-                      projectName={activeProject.name}
-                      substrate={planningSubstrate}
-                    />
-                  </Suspense>
+                  <>
+                    <Suspense fallback={null}>
+                      <PlanningWorkspaceOverlay
+                        projectKey={activeProject.identifier}
+                        projectName={activeProject.name}
+                        substrate={planningSubstrate}
+                      />
+                    </Suspense>
+                    {/* THE APPROVAL OVERLAY (Story MOTIR-5214 · Subtask MOTIR-5224) —
+                        mounted ONCE, beside the planning overlay and for the same
+                        reasons: it opens over ANY authed page from its address, so
+                        the Workbench's row (MOTIR-5225) and the item page's control
+                        (MOTIR-5215) are two doors into ONE room rather than two
+                        rooms. Behind `activeProject` because its one read resolves a
+                        key against the active project; in its own `<Suspense>`
+                        because it reads `useSearchParams()` too. */}
+                    <Suspense fallback={null}>
+                      <ApprovalOverlay />
+                    </Suspense>
+                  </>
                 ) : null}
               </OnboardingResumeProvider>
             </ReportProvider>

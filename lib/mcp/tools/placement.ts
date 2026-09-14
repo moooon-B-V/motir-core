@@ -19,7 +19,7 @@ export async function readPlacement(
   parentKey: string | null,
   ctx: ServiceContext,
 ): Promise<WorkItemPlacement> {
-  const { folderId, folderPath } = await workItemsService.getWorkItemPlacement(workItemId, ctx);
+  const { folderId, folderPath } = await workItemsService.getWorkItemOwnPlacement(workItemId, ctx);
   return { parentKey, folderId, folderPath };
 }
 

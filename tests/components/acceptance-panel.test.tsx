@@ -72,8 +72,10 @@ const baseProps = {
   // revalidates `/items/<identifier>`, and passing the id would build a path
   // that 404s while every assertion here still passed (Bug MOTIR-5160).
   itemIdentifier: 'MOTIR-1',
-  organizationId: 'org_1',
-  settingsHref: '/settings/organization',
+  // The STORY'S project — what Turn on flips since MOTIR-5172. Deliberately NOT
+  // the eligibility DTO's `organizationId`, so a panel that went back to passing
+  // the organisation fails the call assertion below rather than coinciding.
+  projectId: 'proj_1',
 };
 
 afterEach(cleanup);
@@ -161,11 +163,51 @@ describe('AcceptancePanel', () => {
     // the half a browser test cannot name.
     await waitFor(() =>
       expect(turnOnAcceptanceVideoAction).toHaveBeenCalledWith({
-        organizationId: 'org_1',
+        projectId: 'proj_1',
         itemIdentifier: 'MOTIR-1',
       }),
     );
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it('toggle_off + admin → the copy promises a HOLD, not a recording, and the link names the project room', () => {
+    renderPanel({
+      ...baseProps,
+      eligibility: eligibility({ eligible: false, reason: 'toggle_off', toggleEnabled: false }),
+      initialEvidence: null,
+      canDecide: false,
+    });
+    // MOTIR-5172 · `design/projects/design-notes.md` § Approvals §4: the switch
+    // never controlled a camera, so the sentence may not say it records anything.
+    expect(
+      screen.getByText(
+        'Turn it on and any acceptance video published for this story will be held for approval.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Go to settings' }).getAttribute('href')).toBe(
+      '/settings/project/approvals#acceptance-video',
+    );
+  });
+
+  it('toggle_off + non-manager → asks a PROJECT admin, in project settings, and links there', () => {
+    renderPanel({
+      ...baseProps,
+      eligibility: eligibility({
+        eligible: false,
+        reason: 'toggle_off',
+        toggleEnabled: false,
+        canManageToggle: false,
+      }),
+      initialEvidence: null,
+      canDecide: false,
+    });
+    expect(
+      screen.getByText('Ask a project admin to turn on acceptance video in the project settings.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.getByRole('link', { name: 'View settings' }).getAttribute('href')).toBe(
+      '/settings/project/approvals#acceptance-video',
+    );
   });
 
   it('no_plan + owner → the Upgrade CTA linking to billing', () => {

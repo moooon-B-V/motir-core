@@ -151,6 +151,50 @@ describe('the shell’s context path (MOTIR-2556)', () => {
     });
   });
 
+  // MOTIR-4897 — the ladder decides WHICH tiers are present at a width; it
+  // cannot decide how WIDE they are, because a name is data. At `xl` all three
+  // tiers are live, the right cluster is labelled and `flex-none`, and the row
+  // leaves ~267px for three names capped at 20ch / 24ch / 22ch. The ancestors
+  // could not shrink at all — a flex child's automatic minimum is its content,
+  // and an `inline-flex` Button's content is its whole (capped) name — so the
+  // row overflowed and the project tier, LAST in it, passed UNDER the right
+  // cluster: visible, enabled, and unclickable.
+  //
+  // The pixel half is `tests/e2e/cloud-top-bar-budget.spec.ts` at 1280px. What
+  // happy-dom can pin is the contract the geometry follows from
+  // (design/shell/design-notes.md § *The context path's truncation budget*).
+  describe('the TRUNCATION budget — every tier shrinks, the ancestors first', () => {
+    it('lets each ANCESTOR tier go below its name, three times as readily as the project', () => {
+      render();
+      for (const name of ['Organization menu', 'Switch workspace']) {
+        const trigger = screen.getByRole('button', { name });
+        expect(has(trigger, 'min-w-0'), `${name}: may go below its content width`).toBe(true);
+        expect(has(trigger, 'shrink-3'), `${name}: yields width before the project`).toBe(true);
+        // The Button wraps its children in a bare <span>, which is itself a flex
+        // item with an automatic minimum — without this the trigger shrinks and
+        // its label overflows it instead of ellipsizing. The chevron's span is
+        // `aria-hidden` and deliberately keeps its minimum.
+        expect(has(trigger, '[&>span:not([aria-hidden])]:min-w-0'), name).toBe(true);
+        const label = trigger.querySelector('span.truncate')!;
+        expect(has(label, 'min-w-0'), `${name}: the name itself ellipsizes`).toBe(true);
+        // `text-overflow` applies only to a BLOCK container; an inline span
+        // ignores `truncate` and spills. A flex parent blockifies its child.
+        expect(
+          has(label, 'block') || has(label.parentElement!, 'flex'),
+          `${name}: the name is a box truncation can apply to`,
+        ).toBe(true);
+      }
+    });
+
+    it('keeps the PROJECT the slowest to shrink — the most specific tier stays the most legible', () => {
+      render();
+      const trigger = screen.getByRole('button', { name: 'Switch project' });
+      expect(has(trigger, 'min-w-0')).toBe(true);
+      expect(has(trigger, 'shrink')).toBe(true);
+      expect(has(trigger, 'shrink-3')).toBe(false);
+    });
+  });
+
   it('orders the path org › workspace › project', () => {
     const { container } = render();
     const labels = Array.from(container.querySelectorAll('button[aria-label]')).map((b) =>

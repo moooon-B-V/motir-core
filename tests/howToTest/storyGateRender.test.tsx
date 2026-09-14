@@ -104,6 +104,10 @@ async function renderStoryPage() {
     activityTab: 'comments',
     canEdit: true,
     itemIdentifier: s.story.identifier,
+    // A story run as a scope HAS children, so the page makes the scoped-run read
+    // for it (MOTIR-5363); the real page passes exactly these two.
+    projectKey: s.fx.projectIdentifier,
+    hasChildren: true,
   });
   const ui = await LateUpperSections({
     reads: Promise.resolve(reads),
