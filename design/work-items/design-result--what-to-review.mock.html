@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The Design result panel as WHAT TO REVIEW — MOTIR-5494 (a delta of
+      design-result.mock.html)
+    </title>
+    <!--
+      DELTA MOCK — Subtask MOTIR-5494 (Story MOTIR-5488), the design the panel code
+      card MOTIR-5498 is blocked_by. The FIRST asset drawn under the two-file set
+      (docs/decisions/design-result.md AMENDMENT 4): notes + this mock, no export.
+
+      It AMENDS design/work-items/design-result.mock.html and design-notes.md
+      § "⭐ Design result panel". That mock is NOT edited — it is the record of the
+      panel as first drawn. This file draws ONLY the panels that change.
+
+      RENDERED FIRST, NOT RECALLED. The shipped DesignResultPanel was bundled from
+      its own source (esbuild over the real component, the real theme.css and
+      globals.css, headless chromium) and fed three DTOs: an older result (noteMd +
+      mock + image + note_file), a new-format result (mock + note_file, no noteMd)
+      and none. The finding that shapes panel 1: fed a new-format result, the
+      SHIPPED panel shows the mock frame and NO note at all — the note_file asset is
+      invisible, because the only note it draws is the inline noteMd. The strips,
+      frame, provenance chips and empty state below mirror that render.
+
+      PANELS (review EACH):
+        1 · A current result, one mock — the note as a LINK row above the frame.
+        2 · Several delta mocks — how the frames stack and are named.
+        3 · The note file reclaimed — the link's absent state.
+        4 · An older stored result — its note and screenshot as FILE links.
+        5 · Empty — the copy now says when a result is published.
+        6 · Inside the approval overlay — the same port in band 2.
+
+      Tokens copied 1:1 from design-result.mock.html's block (itself 1:1 with
+      app/globals.css); colour ONLY via --el-*, shape via element-semantic tokens.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bb1;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-success: var(--color-success);
+        --el-info: var(--color-info);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+      }
+
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .board-title {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      .board-sub {
+        margin: 0 0 28px;
+        max-width: 58rem;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        margin-bottom: 40px;
+      }
+      .panel > h2 {
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+      .panel > .why {
+        margin: 0 0 14px;
+        max-width: 58rem;
+        color: var(--el-text-secondary);
+      }
+      code,
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .card {
+        max-width: 44rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-subtle);
+      }
+      .card-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .card-title {
+        font-weight: 600;
+        font-size: 15px;
+      }
+      .card-gloss {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .ic-sm {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      /* NEW — the note as a LINK row. On the page ground, not --el-surface-soft:
+         --el-link is AA on the page and under AA on the soft surface. */
+      .note-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .note-row + .note-row {
+        margin-top: 8px;
+      }
+      .row-label {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .row-path {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+      }
+      .row-link {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--el-link);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .row-gone {
+        margin-left: auto;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      /* SHIPPED — MockFrame's strip + frame, unchanged */
+      .frame-strip {
+        margin-top: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--el-border);
+        border-bottom: 0;
+        border-radius: var(--radius-input) var(--radius-input) 0 0;
+        background: var(--el-surface-soft);
+        padding: 6px 10px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .strip-path {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .strip-link {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--el-text);
+        white-space: nowrap;
+      }
+      .frame {
+        height: 12rem;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: 0 0 var(--radius-input) var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 14px;
+      }
+      .frame p {
+        margin: 0 0 10px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .swatch {
+        height: 3.5rem;
+        border-radius: var(--radius-input);
+        margin-top: 8px;
+      }
+      .stack-cap {
+        margin: 16px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .prov {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 14px;
+        font-size: 12px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        color: var(--el-text-secondary);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill-yellow {
+        background: var(--el-tint-yellow);
+      }
+      .earlier {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .files-cap {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      /* SHIPPED — the empty state */
+      .empty {
+        display: flex;
+        gap: 14px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+        padding: 16px;
+      }
+      .empty .lead {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+      }
+      .empty h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .empty p {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      /* SHIPPED — the universal approval frame (approval-control.mock.html), bands 1–3 */
+      .gate {
+        max-width: 44rem;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .frameHead {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .frameKind {
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .frameMeta {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .port {
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+        padding: 14px;
+      }
+      .port .frame-strip {
+        margin-top: 10px;
+      }
+      .frameFoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+      }
+      .footWhy {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+        color: var(--el-text);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        border: 1px solid var(--el-accent);
+        color: var(--el-accent-text);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol
+        id="i-file-text"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+        />
+        <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+        <path d="M10 9H8" />
+        <path d="M16 13H8" />
+        <path d="M16 17H8" />
+      </symbol>
+      <symbol
+        id="i-file-image"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+        />
+        <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+        <circle cx="10" cy="12" r="2" />
+        <path d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22" />
+      </symbol>
+      <symbol
+        id="i-panels"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M9 21V9" />
+      </symbol>
+      <symbol
+        id="i-external"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </symbol>
+      <symbol
+        id="i-image-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="2" x2="22" y1="2" y2="22" />
+        <path d="M10.41 10.41a2 2 0 1 1-2.83-2.83" />
+        <line x1="13.5" x2="6" y1="13.5" y2="21" />
+        <line x1="18" x2="21" y1="12" y2="15" />
+        <path d="M3.59 3.59A1.99 1.99 0 0 0 3 5v14a2 2 0 0 0 2 2h14c.55 0 1.052-.22 1.41-.59" />
+        <path d="M21 15V5a2 2 0 0 0-2-2H9" />
+      </symbol>
+      <symbol
+        id="i-commit"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <line x1="3" x2="9" y1="12" y2="12" />
+        <line x1="15" x2="21" y1="12" y2="12" />
+      </symbol>
+    </svg>
+
+    <h1 class="board-title">Design result — what to review (a delta)</h1>
+    <p class="board-sub">
+      Story MOTIR-5488 · Subtask MOTIR-5494. Amends
+      <code>design/work-items/design-result.mock.html</code> and <code>design-notes.md</code> § ⭐
+      Design result panel. A result is the changed mock(s) with the note one link away — no inline
+      note, no screenshot strip. Only the panels that change are drawn; everything unlabelled is the
+      shipped panel as it stands.
+    </p>
+    <section class="panel">
+      <h2>1 · A current result, one mock — the note is a LINK, above the frame</h2>
+      <p class="why">
+        The link row leads, so a reviewer knows the note exists before scrolling past a 32rem frame.
+        It opens the published <code>note_file</code> attachment in a new tab. The frame, its strip
+        and the provenance line are the shipped ones, unchanged.
+      </p>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Design result</span
+          ><span class="card-gloss">— what this work item produced</span>
+        </div>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+          ><span class="row-label">Design note</span
+          ><span class="mono row-path">design/work-items/design-notes.md</span
+          ><a class="row-link" href="#note"
+            >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <div class="frame-strip">
+          <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+          ><span class="mono strip-path"
+            >design/work-items/design-result--what-to-review.mock.html</span
+          ><span class="strip-link"
+            >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></span>
+        </div>
+        <div class="frame">
+          <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+          <div class="swatch" style="background: var(--el-tint-sky)"></div>
+          <div class="swatch" style="background: var(--el-tint-mint)"></div>
+        </div>
+        <div class="prov">
+          <span class="chip"
+            ><svg class="ic-sm" aria-hidden="true"><use href="#i-commit" /></svg
+            ><span class="mono">c0389f2</span></span
+          ><span class="chip">published by <span class="mono">MOTIR-5494</span></span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>2 · Several delta mocks — one frame each, in publish order</h2>
+      <p class="why">
+        A change that touches more than one surface publishes more than one delta mock. Each keeps
+        the shipped frame, and its strip names the source path; a count line says how many there
+        are, so a reviewer does not stop after the first frame. Still ONE note link.
+      </p>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Design result</span
+          ><span class="card-gloss">— what this work item produced</span>
+        </div>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+          ><span class="row-label">Design note</span
+          ><span class="mono row-path">design/work-items/design-notes.md</span
+          ><a class="row-link" href="#note"
+            >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <p class="stack-cap">2 mocks — the panels that changed</p>
+        <div class="frame-strip">
+          <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+          ><span class="mono strip-path"
+            >design/work-items/design-result--what-to-review.mock.html</span
+          ><span class="strip-link"
+            >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></span>
+        </div>
+        <div class="frame">
+          <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+          <div class="swatch" style="background: var(--el-tint-sky)"></div>
+          <div class="swatch" style="background: var(--el-tint-mint)"></div>
+        </div>
+        <div class="frame-strip">
+          <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+          ><span class="mono strip-path">design/workbench/approval-overlay.mock.html</span
+          ><span class="strip-link"
+            >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></span>
+        </div>
+        <div class="frame">
+          <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+          <div class="swatch" style="background: var(--el-tint-sky)"></div>
+          <div class="swatch" style="background: var(--el-tint-mint)"></div>
+        </div>
+        <div class="prov">
+          <span class="chip"
+            ><svg class="ic-sm" aria-hidden="true"><use href="#i-commit" /></svg
+            ><span class="mono">c0389f2</span></span
+          ><span class="chip">published by <span class="mono">MOTIR-5494</span></span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>3 · The note file reclaimed — the row stays, the link goes</h2>
+      <p class="why">
+        A superseded, unapproved version&#39;s files are reclaimed by the orphan sweep, so the asset
+        row survives with no <code>url</code>. The row still names the note it was; the link is
+        replaced by a plain statement, never a link that 404s.
+      </p>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Design result</span
+          ><span class="card-gloss">— what this work item produced</span>
+        </div>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+          ><span class="row-label">Design note</span
+          ><span class="mono row-path">design/work-items/design-notes.md</span
+          ><span class="row-gone">No longer stored</span>
+        </div>
+        <div class="frame-strip">
+          <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+          ><span class="mono strip-path"
+            >design/work-items/design-result--what-to-review.mock.html</span
+          ><span class="strip-link"
+            >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></span>
+        </div>
+        <div class="frame">
+          <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+          <div class="swatch" style="background: var(--el-tint-sky)"></div>
+          <div class="swatch" style="background: var(--el-tint-mint)"></div>
+        </div>
+        <div class="prov">
+          <span class="chip"
+            ><svg class="ic-sm" aria-hidden="true"><use href="#i-commit" /></svg
+            ><span class="mono">c0389f2</span></span
+          ><span class="chip">published by <span class="mono">MOTIR-5494</span></span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>4 · An older stored result — its note and screenshot as FILE links</h2>
+      <p class="why">
+        A result published before AMENDMENT 4 carries an inline note and <code>image</code> assets.
+        Nothing is migrated and nothing re-renders inline: no Markdown, no thumbnails, no lightbox.
+        An <em>Earlier format</em> pill says why it looks different, and every file is one link
+        away. Its mock still renders in the frame.
+      </p>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Design result</span
+          ><span class="card-gloss">— what this work item produced</span>
+        </div>
+        <div class="earlier">
+          <span class="pill pill-yellow">Earlier format</span
+          ><span
+            >Published before results became what to review — its note and screenshot are kept as
+            files.</span
+          >
+        </div>
+        <p class="files-cap">Files</p>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+          ><span class="row-label">Design note</span
+          ><span class="mono row-path">design/work-items/design-notes.md</span
+          ><a class="row-link" href="#note"
+            >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-image" /></svg
+          ><span class="row-label">Screenshot</span
+          ><span class="mono row-path">design/work-items/design-result.png</span
+          ><a class="row-link" href="#png"
+            >Open file <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <div class="frame-strip">
+          <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+          ><span class="mono strip-path">design/work-items/design-result.mock.html</span
+          ><span class="strip-link"
+            >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></span>
+        </div>
+        <div class="frame">
+          <p>The earlier result&#39;s mock, rendered as before.</p>
+          <div class="swatch" style="background: var(--el-tint-sky)"></div>
+          <div class="swatch" style="background: var(--el-tint-mint)"></div>
+        </div>
+        <div class="prov">
+          <span class="chip"
+            ><svg class="ic-sm" aria-hidden="true"><use href="#i-commit" /></svg
+            ><span class="mono">c0389f2</span></span
+          ><span class="chip">published by <span class="mono">MOTIR-5494</span></span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>5 · Empty — the copy says when a result is published</h2>
+      <p class="why">
+        Shape unchanged. The body on a design work item no longer promises a note, a mock and a
+        screenshot from every design: a result exists only when other work waits on the design.
+      </p>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Design result</span
+          ><span class="card-gloss">— what this work item produced</span>
+        </div>
+        <div class="empty">
+          <span class="lead"
+            ><svg class="ic" aria-hidden="true"><use href="#i-image-off" /></svg
+          ></span>
+          <div>
+            <h3>No design result published yet</h3>
+            <p>
+              A design result is published only when other work waits on this design — its agent
+              then publishes the mock and the note. With nothing waiting, the pull request is where
+              the design is reviewed.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>6 · Inside the approval overlay — the same port, in band 2</h2>
+      <p class="why">
+        The frame is not redesigned. Band 2 holds exactly panel 1 (or 2, 3, 4): the note link row,
+        then the frame(s). A reviewer deciding a design sees the mock first and reaches the note in
+        one click; the verbs stay below the port.
+      </p>
+      <div class="gate">
+        <div class="frameHead">
+          <div>
+            <div class="frameKind">Design result</div>
+            <div class="frameMeta">version 2 · <span class="mono">MOTIR-5494</span></div>
+          </div>
+        </div>
+        <div class="port">
+          <div class="note-row">
+            <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+            ><span class="row-label">Design note</span
+            ><span class="mono row-path">design/work-items/design-notes.md</span
+            ><a class="row-link" href="#note"
+              >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+          <div class="frame-strip">
+            <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+            ><span class="mono strip-path"
+              >design/work-items/design-result--what-to-review.mock.html</span
+            ><span class="strip-link"
+              >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+            ></span>
+          </div>
+          <div class="frame">
+            <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+            <div class="swatch" style="background: var(--el-tint-sky)"></div>
+            <div class="swatch" style="background: var(--el-tint-mint)"></div>
+          </div>
+        </div>
+        <div class="frameFoot">
+          <span class="footWhy">Approving moves MOTIR-5494 to Done.</span
+          ><span style="display: inline-flex; gap: 8px"
+            ><button class="btn btn-secondary">Request changes</button
+            ><button class="btn btn-primary">Approve</button></span
+          >
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

@@ -4526,21 +4526,21 @@ is how a UI code card's implementer arrives.
 
 ### Anatomy
 
-| Element                | Primitive composed                                                                                       | Colour token                                           | Shape token                               |
-| ---------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
-| Section                | `ContentSectionCard` (`Card` + header grammar)                                                           | `--el-page-bg` on `--el-border`                        | `--radius-card`, `--spacing-card-padding` |
-| Title / gloss          | header grammar                                                                                           | `--el-text` / `--el-text-secondary`                    | —                                         |
-| `Current` chip         | `Pill`                                                                                                   | `--el-tint-mint` bg + `--el-text-strong` (finding #35) | `--radius-badge`, `--spacing-chip-*`      |
-| Note strip             | —                                                                                                        | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
-| Rendered note          | `MarkdownView` — `wmde-markdown motir-prose` over `lib/markdown/render.tsx`, the SINGLE shipped renderer | `--el-text` / `--el-text-secondary`                    | `--radius-input` (bottom corners)         |
-| Wide table in the note | scroll container                                                                                         | `--el-border-soft`                                     | `--radius-input`                          |
-| Frame strip            | —                                                                                                        | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
-| Mock frame             | `<iframe sandbox>`                                                                                       | `--el-border`                                          | `--radius-input`                          |
-| Open in new tab        | `Button` secondary                                                                                       | `--el-page-bg` / `--el-border`                         | `--radius-btn`, `--height-btn-sm`         |
-| Screenshot thumb       | `AttachmentPreview` (lightbox reused as-is)                                                              | `--el-border` / `--el-surface-soft`                    | `--radius-input`                          |
-| Provenance chips       | `provenance.mock.html` chip grammar                                                                      | `--el-muted` + `--el-text-secondary`                   | `--radius-badge`                          |
-| Empty state            | —                                                                                                        | `--el-surface-soft` on `--el-border-soft`              | `--radius-input`                          |
-| Failed-to-load state   | —                                                                                                        | `--el-tint-peach` + `--el-text-strong`                 | `--radius-input`                          |
+| Element                                                | Primitive composed                                                                                       | Colour token                                           | Shape token                               |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| Section                                                | `ContentSectionCard` (`Card` + header grammar)                                                           | `--el-page-bg` on `--el-border`                        | `--radius-card`, `--spacing-card-padding` |
+| Title / gloss                                          | header grammar                                                                                           | `--el-text` / `--el-text-secondary`                    | —                                         |
+| `Current` chip                                         | `Pill`                                                                                                   | `--el-tint-mint` bg + `--el-text-strong` (finding #35) | `--radius-badge`, `--spacing-chip-*`      |
+| Note strip                                             | —                                                                                                        | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
+| Rendered note _(earlier format — MOTIR-5494)_          | `MarkdownView` — `wmde-markdown motir-prose` over `lib/markdown/render.tsx`, the SINGLE shipped renderer | `--el-text` / `--el-text-secondary`                    | `--radius-input` (bottom corners)         |
+| Wide table in the note _(earlier format — MOTIR-5494)_ | scroll container                                                                                         | `--el-border-soft`                                     | `--radius-input`                          |
+| Frame strip                                            | —                                                                                                        | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
+| Mock frame                                             | `<iframe sandbox>`                                                                                       | `--el-border`                                          | `--radius-input`                          |
+| Open in new tab                                        | `Button` secondary                                                                                       | `--el-page-bg` / `--el-border`                         | `--radius-btn`, `--height-btn-sm`         |
+| Screenshot thumb _(earlier format — MOTIR-5494)_       | `AttachmentPreview` (lightbox reused as-is)                                                              | `--el-border` / `--el-surface-soft`                    | `--radius-input`                          |
+| Provenance chips                                       | `provenance.mock.html` chip grammar                                                                      | `--el-muted` + `--el-text-secondary`                   | `--radius-badge`                          |
+| Empty state                                            | —                                                                                                        | `--el-surface-soft` on `--el-border-soft`              | `--radius-input`                          |
+| Failed-to-load state                                   | —                                                                                                        | `--el-tint-peach` + `--el-text-strong`                 | `--radius-input`                          |
 
 ### ⚠️ The mock frame — the measurement this asset exists to pin
 
@@ -4668,6 +4668,93 @@ panel never renders a 300 KB per-area document, and nothing is lost.
 - **The quick view.** Unchanged, matching the acceptance panel's precedent.
 
 ---
+
+## ⭐ Design result panel — WHAT TO REVIEW (Story MOTIR-5488 · MOTIR-5494 — `design-result--what-to-review.mock.html`)
+
+**A delta, and the first asset drawn under the two-file set.** This section AMENDS
+§ _⭐ Design result panel_ above and draws its change in
+`design/work-items/design-result--what-to-review.mock.html`, beside the
+unchanged `design/work-items/design-result.mock.html`. Neither the earlier mock
+nor the earlier section is edited — they record the panel as first drawn. No
+image export ships with this asset (`docs/decisions/design-result.md`
+AMENDMENT 4).
+
+**The rule it draws.** A result is the changed mock(s) with the note ONE LINK
+away: no inline note, no screenshot strip (AMENDMENT 4 Q1, Q5, Q6). The earlier
+anatomy rows _Rendered note_, _Wide table in the note_ and _Screenshot thumb_ are
+marked _earlier format_ above.
+
+**Rendered first.** The shipped `DesignResultPanel` was bundled from its own
+source (the real component, `packages/design-system/theme.css`, `app/globals.css`,
+headless chromium) with three DTOs — an older result, a new-format result
+(`mock` + `note_file`, no `noteMd`) and none. **Fed a new-format result, the
+shipped panel draws the mock frame and NO note at all**: its only note is the
+inline `noteMd`, so the `note_file` asset a new publish carries is invisible.
+That is the gap panel 1 closes. The frame strip, the frame, the provenance chips
+and the empty state are composed from that render, unchanged except where named.
+
+### The panels
+
+| #   | State                                                  | What changes                                                                                                                                                                                                |
+| --- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | A current result, one mock                             | A **note link row** leads, above the frame. Nothing inline.                                                                                                                                                 |
+| 2   | Several delta mocks                                    | One shipped frame per `mock`, in publish (`position`) order, 20px apart; a **count line** above the first frame; still ONE note row.                                                                        |
+| 3   | The note file reclaimed (`url` null)                   | The row stays and names the note; its link is replaced by _No longer stored_ — never a link that 404s.                                                                                                      |
+| 4   | An older stored result (inline `noteMd`, `image` rows) | An **Earlier format** pill + a one-line reason, then a **Files** list: the note row and one row per screenshot, each a file link. No rendered Markdown, no thumbnails, no lightbox. The mock frame renders. |
+| 5   | Empty, on a design work item                           | Shape unchanged; the body copy says a result exists only when other work waits on the design.                                                                                                               |
+| 6   | Inside the approval overlay                            | The frame is not redesigned: band 2 holds panel 1 (or 2, 3, 4) — the note row, then the frame(s). Verbs stay below the port.                                                                                |
+
+A result with BOTH an inline `noteMd` and no `note_file` cannot come from a
+publish (§1 always shipped the companion); if one exists it renders panel 4 with
+the note row in its panel-3 state.
+
+### Anatomy — the new elements
+
+| Element             | Primitive composed                                                 | Colour token                                                                                                     | Shape token                                                     |
+| ------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Note link row       | a bordered row (the frame strip's grammar), `FileText`             | `--el-page-bg` on `--el-border`; label `--el-text`; path `--el-text-secondary`                                   | `--radius-input`, `--spacing-control-x` / `--spacing-control-y` |
+| Open note link      | anchor, `ExternalLink` 12px, `target="_blank"`                     | `--el-link` — on `--el-page-bg`, which is why the row is NOT `--el-surface-soft`                                 | —                                                               |
+| No longer stored    | text                                                               | `--el-text-secondary`                                                                                            | —                                                               |
+| Count line          | text, 12px                                                         | `--el-text-secondary`                                                                                            | —                                                               |
+| Earlier format pill | `Pill`                                                             | `--el-tint-yellow` + `--el-text-strong`                                                                          | `--radius-badge`, `--spacing-chip-x` / `--spacing-chip-y`       |
+| Files caption       | section label (uppercase 12px, the old _Screenshot_ label's style) | `--el-text-secondary`                                                                                            | —                                                               |
+| Screenshot file row | the note link row, `FileImage`                                     | as the note link row                                                                                             | as the note link row                                            |
+| Frame strip link    | the shipped anchor                                                 | **`--el-text`**, not the shipped `--el-link`: `--el-link` on `--el-surface-soft` is 4.37:1, under AA (MOTIR-453) | unchanged                                                       |
+
+The note link's `href` is the `note_file` asset's own `url` — the authenticated
+`/api/attachments/<id>/content` route — opened in a new tab (AMENDMENT 4 Q5). A
+screenshot row does the same with its `image` asset's `url`.
+
+### Copy
+
+| Key (`designResult.*`) | `en`                                                                                                                                                                                             | `zh`                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `note`                 | Design note                                                                                                                                                                                      | 设计说明                                                                                                          |
+| `openNote`             | Open note                                                                                                                                                                                        | 打开说明                                                                                                          |
+| `noteGone`             | No longer stored                                                                                                                                                                                 | 已不再保存                                                                                                        |
+| `mockCount`            | {count, plural, other {# mocks — the panels that changed}}                                                                                                                                       | {count} 个稿件 — 发生变更的面板                                                                                   |
+| `earlierFormat`        | Earlier format                                                                                                                                                                                   | 旧格式                                                                                                            |
+| `earlierFormatBody`    | Published before results became what to review — its note and screenshot are kept as files.                                                                                                      | 发布于结果改为只展示待审内容之前 — 其说明和截图以文件形式保留。                                                   |
+| `files`                | Files                                                                                                                                                                                            | 文件                                                                                                              |
+| `screenshot`           | Screenshot                                                                                                                                                                                       | 截图                                                                                                              |
+| `openFile`             | Open file                                                                                                                                                                                        | 打开文件                                                                                                          |
+| `empty.bodyDesign`     | A design result is published only when other work waits on this design — its agent then publishes the mock and the note. With nothing waiting, the pull request is where the design is reviewed. | 只有当其他工作等待此设计时才会发布设计结果 — 届时由其代理发布稿件和说明。若没有等待的工作，设计在拉取请求中评审。 |
+
+The count line renders only when there are two or more mocks. `noteTruncated` and
+`downloadNote` are no longer drawn for a new result (a new row has no inline
+note); `screenshots` is replaced by `files` + `screenshot`.
+
+### GIVES / TAKES
+
+- **GIVES [MOTIR-5498](motir:cmu1hrmyh0020hutxio6hqh30)** (the panel) exactly
+  panels 1–6, the copy table above in both locales, and ONE change to a shipped
+  element — the frame strip link's ink. It TAKES nothing that card names; its
+  title already scopes states 1–6, so its size stands (the copy is nine keys, the
+  ink is one class).
+- **GIVES [MOTIR-5500](motir:cmu1hrn2z0024hutxrpnl8kns)** (the E2E) the accessible
+  names to assert: the link _Open note_, and no `img` in the port.
+- **TAKES nothing** from the publish contract, the dispatch prompt or the approval
+  frame: none of them draws the port.
 
 ## ⭐ The repository SET on the work-item DETAIL page (Story MOTIR-2725 · MOTIR-2413 — `repository-set.mock.html`)
 
