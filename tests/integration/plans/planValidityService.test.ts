@@ -7,6 +7,7 @@ import { buildProjection, projectedWorkItem } from '@/lib/services/planProjectio
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
+import { isCoverageAdvisory, type WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { ProposalInput } from '@/lib/dto/plans';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
@@ -1955,5 +1956,293 @@ describe("a `modify`'s `patch.parentRef` moves the card in the PROJECTION (MOTIR
     // And the projection is untouched by the refused append.
     const proj = await buildProjection(planId, fx.ctx);
     expect(proj.nodes.get(card.id)!.parentId).toBe(story.id);
+  });
+});
+
+// ── The CONTAINER-COVERAGE advisory over the PROJECTED tree (MOTIR-5403) ──────
+//
+// The projected twin of MOTIR-5362's committed check, and the one that fires at
+// the moment adoption actually happens: an author re-parents an existing card
+// under a story while writing a plan. Adoption over a projection compares FILING
+// instants, with a proposal filed at approve — the pure half pins that instant in
+// `tests/workItems/containerCoverage.test.ts`; this half asserts the rows the
+// projection feeds it and that the verdict never moves.
+
+describe('planValidityService.validateProjectedWorkItem — the CONTAINER-COVERAGE advisory (MOTIR-5403)', () => {
+  /** Criterion 1 names a seam no card below owns; criterion 2 the refusal copy `GATE_TITLE` carries. */
+  const COVERAGE_BODY = [
+    '## Acceptance criteria',
+    '',
+    '- `GitProvider` declares `mergeChangeRequest` and the provider returns a typed result.',
+    '- Every refusal renders in the merge control.',
+  ].join('\n');
+  const GATE_TITLE = 'The merge gate — every refusal renders in the control';
+  const WIDENED_TITLE =
+    'The `GitProvider.mergeChangeRequest` seam and every refusal in the control';
+
+  const storyWithCriteria = (fx: WorkItemFixture, title: string, parentId?: string) =>
+    workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title, descriptionMd: COVERAGE_BODY, parentId },
+      fx.ctx,
+    );
+
+  /** Move a row's filing instant relative to another's. */
+  const fileRelativeTo = (id: string, other: string | Date, offsetMs: number) =>
+    adminDb.workItem.update({
+      where: { id },
+      data: { createdAt: new Date(new Date(other).getTime() + offsetMs) },
+    });
+
+  /** A card filed under ANOTHER story a minute before `story` existed — the adoption shape. */
+  async function olderCard(
+    fx: WorkItemFixture,
+    story: { createdAt: string | Date },
+    title: string = GATE_TITLE,
+  ) {
+    const home = await mk(fx, 'Where the card was first filed', 'story');
+    const card = await mk(fx, title, 'subtask', home.id);
+    await fileRelativeTo(card.id, story.createdAt, -60_000);
+    return card;
+  }
+
+  const reparent = (
+    fx: WorkItemFixture,
+    planId: string,
+    workItemId: string,
+    parentRef: string,
+    title?: string,
+  ) =>
+    plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'modify',
+          workItemId,
+          patch: title === undefined ? { parentRef } : { parentRef, title },
+        },
+      ],
+      fx.ctx,
+    );
+
+  const coverageOf = (res: WorkItemValidityDto) => res.advisories.filter(isCoverageAdvisory);
+
+  it('a plan that re-parents an OLDER card under a story reports the criterion that card does not own — still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await storyWithCriteria(fx, 'Motir merges the pull request');
+    const gate = await olderCard(fx, story);
+
+    // The control: the committed tree has no such child, so the committed check
+    // is structurally blind to the adoption the plan is about to make.
+    const committed = await workItemsService.validateWorkItem(
+      fx.projectId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(committed)).toEqual([]);
+
+    const planId = await freshPlan(fx);
+    await reparent(fx, planId, gate.id, story.id);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    expect(res.blockers).toEqual([]);
+    expect(coverageOf(res)).toEqual([
+      {
+        kind: 'coverage',
+        item: story.identifier,
+        severity: 'likely-unowned-criterion',
+        criterionIndex: 1,
+        adoptedChildren: [gate.identifier],
+      },
+    ]);
+  });
+
+  it("widening the adopted card's TITLE in the same plan clears the finding", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await storyWithCriteria(fx, 'Motir merges the pull request');
+    const gate = await olderCard(fx, story);
+    const planId = await freshPlan(fx);
+    const plan = await reparent(fx, planId, gate.id, story.id);
+    const before = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(before)).toHaveLength(1);
+
+    // One `modify` per target, so the correction REPLACES the proposal: withdraw
+    // it (which releases the target) and append the re-parent with the wider title.
+    const modifyId = plan.items.find((i) => i.op === 'modify' && i.workItemId === gate.id)!.id;
+    await plansService.withdrawProposal(planId, modifyId, fx.ctx);
+    await reparent(fx, planId, gate.id, story.id, WIDENED_TITLE);
+
+    const after = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(after)).toEqual([]);
+  });
+
+  it('the criteria are the PROJECTED body — a plan that writes them onto a story makes its adopted child answerable', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Motir merges the pull request', 'story'); // no body stored
+    const gate = await mk(fx, GATE_TITLE, 'subtask', story.id);
+    await fileRelativeTo(gate.id, story.createdAt, -60_000);
+
+    const planId = await freshPlan(fx);
+    // No criteria stored and none proposed: an adopted child has nothing to own.
+    const unwritten = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(unwritten)).toEqual([]);
+
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: story.id, patch: { descriptionMd: COVERAGE_BODY } }],
+      fx.ctx,
+    );
+    const written = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(written)).toEqual([
+      expect.objectContaining({
+        item: story.identifier,
+        criterionIndex: 1,
+        adoptedChildren: [gate.identifier],
+      }),
+    ]);
+  });
+
+  it('a card the plan PROPOSES is never adopted — under a proposed story with criteria, or one laid with no body', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    const stories = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Motir merges the pull request',
+            kind: 'story',
+            descriptionMd: COVERAGE_BODY,
+          },
+        },
+        { op: 'add', proposedFields: { title: 'A story laid without a body', kind: 'story' } },
+      ],
+      fx.ctx,
+    );
+    const authored = `${TEMP_REF_PREFIX}${itemIdByTitle(stories, 'Motir merges the pull request')}`;
+    const laid = `${TEMP_REF_PREFIX}${itemIdByTitle(stories, 'A story laid without a body')}`;
+    await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          parentRef: authored,
+          proposedFields: { title: 'Unrelated billing work', kind: 'subtask' },
+        },
+        {
+          op: 'add',
+          parentRef: laid,
+          proposedFields: { title: 'More unrelated billing work', kind: 'subtask' },
+        },
+      ],
+      fx.ctx,
+    );
+
+    for (const ref of [authored, laid]) {
+      const res = await planValidityService.validateProjectedWorkItem(planId, ref, fx.ctx);
+      expect(coverageOf(res)).toEqual([]);
+    }
+  });
+
+  it('a stored card filed AFTER the story compares the two stored instants — it is not adopted', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await storyWithCriteria(fx, 'Motir merges the pull request');
+    const home = await mk(fx, 'Where the card was first filed', 'story');
+    const gate = await mk(fx, GATE_TITLE, 'subtask', home.id);
+    await fileRelativeTo(gate.id, story.createdAt, 60_000);
+
+    const planId = await freshPlan(fx);
+    await reparent(fx, planId, gate.id, story.id);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(res)).toEqual([]);
+  });
+
+  it('⚠️ `valid` and `blockers` are BYTE-IDENTICAL with and without the finding', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await storyWithCriteria(fx, 'Motir merges the pull request');
+    const gate = await olderCard(fx, story);
+    const external = await mk(fx, 'Work outside the subtree', 'task');
+    await link(fx, gate.id, external.id);
+
+    const planId = await freshPlan(fx);
+    const plan = await reparent(fx, planId, gate.id, story.id);
+    const withFinding = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(withFinding)).toHaveLength(1);
+
+    const modifyId = plan.items.find((i) => i.op === 'modify' && i.workItemId === gate.id)!.id;
+    await plansService.withdrawProposal(planId, modifyId, fx.ctx);
+    await reparent(fx, planId, gate.id, story.id, WIDENED_TITLE);
+    const without = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(coverageOf(without)).toEqual([]);
+    expect(without.valid).toBe(false);
+    expect(without.valid).toBe(withFinding.valid);
+    expect(without.blockers).toEqual(withFinding.blockers);
+  });
+
+  it("scans the whole PROJECTED subtree — validating the EPIC reports each story's criteria, in wire order", async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Approval gates', 'epic');
+    const first = await storyWithCriteria(fx, 'Motir merges the pull request', epic.id);
+    const second = await storyWithCriteria(fx, 'Motir closes the pull request', epic.id);
+    const firstCard = await olderCard(fx, first, 'Unrelated billing work');
+    const secondCard = await olderCard(fx, second, 'More unrelated billing work');
+
+    const planId = await freshPlan(fx);
+    await plansService.addProposals(
+      planId,
+      [
+        { op: 'modify', workItemId: firstCard.id, patch: { parentRef: first.id } },
+        { op: 'modify', workItemId: secondCard.id, patch: { parentRef: second.id } },
+      ],
+      fx.ctx,
+    );
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      epic.identifier,
+      fx.ctx,
+    );
+    // Neither title owns either criterion, so each story reports both — by
+    // container, then by criterion, the committed path's wire order.
+    expect(coverageOf(res).map((a) => [a.item, a.criterionIndex])).toEqual([
+      [first.identifier, 1],
+      [first.identifier, 2],
+      [second.identifier, 1],
+      [second.identifier, 2],
+    ]);
   });
 });

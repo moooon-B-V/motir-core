@@ -2144,6 +2144,16 @@ owned. So its false-positive class is a child whose body delivers a criterion
 under a title that does not name it. It rides this tool only — the dispatch
 surfaces hand out leaves, which have no children.
 
+It answers on both paths. With `planId` it runs over the PROJECTED subtree
+(MOTIR-5403): a container's criteria are the plan's body where the plan sets
+one, a child's title is its proposal's or a `modify`'s patched `title`, and
+adoption compares filing instants with a proposal filed at approve, after every
+stored row. So a proposed child is never adopted, and an existing work item a
+`modify` re-parents under a container (`patch.parentRef`) is adopted exactly
+when it predates that container. That is the moment the check exists for: an
+author re-parenting an existing card under a story sees the criterion that card
+does not own before sealing the plan, not after approve.
+
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it
 does not depend on (out-of-scope sections, context refs, contrast references, a
