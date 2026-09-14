@@ -556,6 +556,14 @@ export const PLAN_REF_GRAPH_VIOLATIONS = Object.keys(
 /**
  * The plan's intra-plan ref graph is not materializable — a dangling ref, a
  * duplicate blocker, or a cycle. Raised BEFORE any write. → 400
+ *
+ * ⚠️ ONE CASE THE PLAN REVIEW MAPS TO COPY, SO ITS SHAPE IS STABLE (Story
+ * MOTIR-5310 · MOTIR-5423): a `folder:<id>` placement whose folder was DELETED
+ * after the append refuses the whole approve with `code: 'INVALID_PLAN_REF_GRAPH'`,
+ * `reason: 'dangling'`, `planItemId` = the proposal, and a message naming the
+ * ref (the folder's id — its name went with the row). A folder MOVED to another
+ * project is {@link PlanGrammarError} `illegal_parent` instead. Nothing is
+ * materialized and the plan stays `planned`.
  */
 export class PlanRefGraphError extends Error {
   readonly code = 'INVALID_PLAN_REF_GRAPH' as const;

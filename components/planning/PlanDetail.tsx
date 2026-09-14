@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
+import { FOLDER_REF_PREFIX } from '@/lib/plans/refs';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
 import { Segmented } from '@/components/ui/Segmented';
 import {
@@ -131,6 +132,9 @@ export function PlanDetail({
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  // The proposal a refusal names (MOTIR-5418) — today only the approve refused by a
+  // folder deleted since the plan was written, whose alert names that proposal.
+  const [errorPlanItemId, setErrorPlanItemId] = useState<string | null>(null);
   // ── THE REVISION (Subtask MOTIR-3601) ────────────────────────────────────
   // The DRAFT and the local in-flight window live here rather than in the rail:
   // the island is what submits, and the rail is presentational, exactly as the
@@ -239,6 +243,7 @@ export function PlanDetail({
     ) => {
       setBusy(true);
       setErrorCode(null);
+      setErrorPlanItemId(null);
       try {
         await action(planId);
         await refetch();
@@ -263,6 +268,15 @@ export function PlanDetail({
         if (err instanceof PlanRequestError && err.status === 409) {
           await refetch().catch(() => {});
           if (refreshServerSurfaces) router.refresh();
+        } else if (isFolderMissingRefusal(err)) {
+          // THE DELETED FOLDER (Part XVII §17.5, 4b) — keyed on the refusal, not
+          // the generic action error: approve re-checks every `folder:<id>` a plan
+          // names and refuses the WHOLE approve for one deleted since the append
+          // (MOTIR-5423). Refetch, so the card, the summary and the disabled
+          // Approve settle into the planned-state treatment under the alert.
+          setErrorCode(FOLDER_MISSING_REFUSAL);
+          setErrorPlanItemId(err.detail.planItemId);
+          await refetch().catch(() => {});
         } else {
           setErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
         }
@@ -482,6 +496,7 @@ export function PlanDetail({
             onDecline={onDecline}
             busy={busy}
             errorCode={errorCode}
+            errorPlanItemId={errorPlanItemId}
             codeOutcome={codeOutcome}
             onRevise={onRevise}
             reviseDraft={reviseDraft}
@@ -587,4 +602,21 @@ function codeOutcomeOf(view: ProjectRepoEstablishViewDto | null): PlanCodeOutcom
   // claiming it is ready. A `connected` row is the user's own repository and a
   // `skipped` row has none, so neither raises the question.
   return view.set.rows.every(rowIsReachable) ? 'ready' : 'needs_access';
+}
+
+/** The rail's error code for an approve refused by a deleted folder (MOTIR-5418). */
+export const FOLDER_MISSING_REFUSAL = 'PLAN_FOLDER_MISSING';
+
+/**
+ * An approve refused because a proposal names a folder that no longer exists
+ * (MOTIR-5423): `INVALID_PLAN_REF_GRAPH` whose sentence names a `folder:<id>` ref.
+ * The code alone is shared with every other dangling ref, so the ref's PREFIX is
+ * what tells this refusal apart.
+ */
+function isFolderMissingRefusal(err: unknown): err is PlanRequestError {
+  return (
+    err instanceof PlanRequestError &&
+    err.code === 'INVALID_PLAN_REF_GRAPH' &&
+    (err.detail.message ?? '').includes(FOLDER_REF_PREFIX)
+  );
 }

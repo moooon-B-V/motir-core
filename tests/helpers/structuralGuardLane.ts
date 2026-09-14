@@ -93,6 +93,9 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `bareTransactionScan` through the same compiler API, opens no database and
   // imports nothing from `lib/` or `app/` — the lane's shape exactly.
   'tests/work-items/status-write-guard.test.ts',
+  // MOTIR-5420 — every folder error mapped on both agent-facing doors, and no
+  // folder field on a list row: read from four named source files as data.
+  'tests/folders/folder-surface-guard.test.ts',
   // ── tests/workbench/ — the status-KEY-literal guard (MOTIR-4784) ──────────
   // The write guard's twin, on the READ side. The Workbench partitions on
   // `workflow_status.CATEGORY`, and a predicate written against a status KEY is
@@ -364,6 +367,16 @@ export const STRUCTURAL_GUARD_SPECS = [
   // database, nothing rendered, and it imports only `node:fs`, `node:path` and
   // `typescript`, so it carries no coverage into the merged report.
   'tests/navigation/shell-single-main-landmark.test.ts',
+  // ── tests/theme/ — the clamp-overridden-by-display guard (MOTIR-5459) ─────
+  // Its own `readdirSync` over `app/`, `components/` and the design system's
+  // `src/`, reading every `.ts`/`.tsx` for class lists that pair a
+  // `line-clamp-*` with a display utility emitted after it — hence the
+  // `SELF_WALKING_MEMBERS` entry in `tests/ci-structural-guards-lane.test.ts`.
+  // It compiles `app/globals.css` once through `tailwindcss` to decide which
+  // neighbours override the clamp; it opens no database, renders nothing, and
+  // imports only `node:*`, `importGraph`'s `stripComments` and
+  // `tailwindCascade`, so it carries no coverage into the merged report.
+  'tests/theme/lineClampDisplayOverride.test.ts',
 ] as const;
 
 /**

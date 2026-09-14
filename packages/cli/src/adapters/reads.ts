@@ -313,6 +313,11 @@ export function toWorkItemDetail(body: DetailBody): WorkItemDetail {
       sprintId: body.sprintId,
       descriptionMd: body.descriptionMd,
     },
+    // The item's OWN folder placement (MOTIR-5412): the name path, root first, or
+    // `null` when the item is not filed. `?? null` because an older Motir sends no
+    // such field, and "not filed" is the honest reading of silence for a line that
+    // is simply not printed.
+    folderPath: body.folderPath ?? null,
     // The DELIVERY SET (MOTIR-3697). Mapped field by field like everything else
     // here, and OMITTED rather than defaulted to `[]` when the server did not
     // send it: an older Motir saying nothing and a current one saying "no

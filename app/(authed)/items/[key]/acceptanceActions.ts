@@ -141,13 +141,14 @@ export type TurnOnAcceptanceVideoResult = { ok: true } | { ok: false; error: str
  * and the refresh `GET …?_rsc=…` returned **200**, so the MOTIR-5118 race —
  * a fresh tree arriving on a second apply that goes missing — is EXCLUDED by
  * the trace: both halves fired and succeeded and the panel did not move. The
- * residual is filed as its own bug, with that spec as its reproduction, and the
- * difference worth chasing is that this panel renders inside the item page's
- * late `<Suspense>` stack (MOTIR-3436) while the sibling's status rail does not.
+ * residual was filed as its own bug, MOTIR-5255.
  *
- * So this `revalidatePath` is shipped as a MEASURED IMPROVEMENT, not as a
- * closure: it is the same server half two sibling surfaces already carry, and it
- * lowers the failure rate, and it is not the whole story here.
+ * ⚠️ AND THE RESIDUAL WAS NOT IN THIS FILE AT ALL. The React `next@16.2.6`
+ * vendors drops a Suspense ping that lands during render, so the late section
+ * this panel lives in (MOTIR-3436) could receive State A and never paint it.
+ * `patches/next@16.2.6.patch` carries React's upstream fix. Measured before it:
+ * dropping THIS `revalidatePath` left the rate unchanged (2/24), so it stays as
+ * the same server half two sibling surfaces carry — not as the repaint's fix.
  *
  * ⚠️ AND `router.refresh()` STAYS IN THE CALLER. Removing it is a SEPARATE claim
  * nobody has tested, and on the design gate one tier over it was measured

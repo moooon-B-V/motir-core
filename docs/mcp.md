@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **62 tools**.
+`initialize` handshake and registers **66 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -792,6 +792,18 @@ so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
 paid when there is something to read. The child rows do **not** carry it: this
 aggregate answers for one card, and the list reads answer per row.
 
+The aggregate **declares** the item's OWN folder placement (MOTIR-5413) —
+`folderId` (the folder it is filed in) and `folderPath` (that folder's names,
+root-first) — the same two fields `/api/v1`'s work-item detail
+publishes. Both are `null` for an unfiled item **and** for a child of a filed
+item: only a root is ever filed, and a child's ancestry already travels as keys.
+They are the ONLY folder fields on the payload, and the text summary prints a
+`Folder: Parked ▸ 2025` line beside `Parent:` when one is set.
+
+```jsonc
+{ "folderId": "cm9…", "folderPath": ["Parked", "2025"], "item": { "identifier": "ACME-7", … } }
+```
+
 Each **CHILD** row additionally carries the same
 [`dependencies` block](#the-dependencies-block-list-reads) the list reads attach
 — identical shape, identical guarantees — so the children's build ORDER is
@@ -901,7 +913,7 @@ Read-scoped, and access-gated exactly like the UI: an item in another workspace
 #### `create_work_item`
 
 Create a work item (epic / story / task / bug / subtask) under a project,
-optionally parented. The reporter is pinned to the token owner. Use
+optionally parented **or filed into a folder**. The reporter is pinned to the token owner. Use
 `kind: "epic"` with no `parentKey` to create a **top-level capability area**;
 `kind: "bug"` under a story/epic to **log a bug** (the bug-logging protocol). An
 epic is **root-only** — the kind-parent matrix admits no parent for it, so
@@ -914,7 +926,8 @@ epics included, so the agent surface can create one).
 | `projectKey`         | string                                              | yes      | The project the item is created in, e.g. `"ACME"`.                                                                                                                                                                                                                  |
 | `kind`               | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                                                                                                           |
 | `title`              | string                                              | yes      | The title (one line).                                                                                                                                                                                                                                               |
-| `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                                                                                                      |
+| `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent. Mutually exclusive with `folderId`.                                                                                                                                                                  |
+| `folderId`           | string                                              | no       | A folder id (from [`list_folders`](#list_folders)) to FILE the new item into. Any kind may be filed, a subtask included. With `parentKey` → `PLACEMENT_CONFLICT`; unknown → `FOLDER_NOT_FOUND`; another project's → `CROSS_PROJECT_FOLDER`.                         |
 | `descriptionMd`      | string                                              | no       | Markdown description body.                                                                                                                                                                                                                                          |
 | `priority`           | priority enum                                       | no       | Omit for the project default.                                                                                                                                                                                                                                       |
 | `storyPoints`        | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                                                                                                            |
@@ -927,7 +940,11 @@ epics included, so the agent surface can create one).
 | `plannedWithHarness` | string                                              | no       | Self-reported planning **harness** (e.g. `"Claude Code"`, `"Codex"`). Recorded as planning provenance alongside the server-set source `mcp`. Omit → unrecorded.                                                                                                     |
 | `plannedWithModel`   | string                                              | no       | Self-reported planning **model** (e.g. `"claude-opus-4-8"`, `"deepseek-chat"`). Recorded as planning provenance. Omit → unrecorded.                                                                                                                                 |
 
-**Output** — `structuredContent`: the created `WorkItemDto`.
+**Output** — `structuredContent`: the created `WorkItemDto`, plus a
+**`placement`** field — `{ parentKey, folderId, folderPath }` — saying where the
+item landed, read back off the row. At most one side is set; both null means the
+top level. The text summary says the same in words (`Placed in folder Parked ▸
+2025`).
 
 Every item created through this tool is stamped with planning provenance
 `source = mcp` (server-set — a caller cannot claim `manual`/`native`); the
@@ -1906,8 +1923,8 @@ is `totalCount − 1`, and `byKind` is the per-kind breakdown of the descendants
 
 #### `move_to_parent`
 
-**Re-parent** a work item: move it under a different parent, or promote it to a
-top-level root. This is the structural move `create_work_item` (parent is
+**Re-place** a work item: move it under a different parent, promote it to a
+top-level root, or file it into — or out of — a folder. This is the structural move `create_work_item` (parent is
 set only at create) and `update_work_item` (a field patch, not a structural
 move) deliberately leave out — so an agent can re-home a card **without** the
 delete-and-recreate hack that would lose its identifier, history, comments, and
@@ -1922,13 +1939,116 @@ be a **kind-legal** parent in the **same project**, and the move may not create 
 each returns a typed error naming the violation. Same Story-6.4 edit gate as the
 UI; a missing / cross-tenant key is an indistinguishable 404.
 
-| Input       | Type           | Required | Notes                                                                                     |
-| ----------- | -------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `key`       | string         | yes      | The work item to move, e.g. `"ACME-7"`.                                                   |
-| `parentKey` | string \| null | yes      | The new parent's identifier, or `null` to promote to a top-level root. Same-project only. |
+A work item sits under a work-item parent **or** in a folder, never both, so the
+tool takes **exactly one** of `parentKey` and `folderId` (MOTIR-5413):
 
-**Output** — `structuredContent`: the re-parented `WorkItemDto` (its `parentId`
-now the new parent, or `null` at the top level).
+- **`{ key, parentKey }`** — the re-parent above. Setting a work-item parent on a
+  filed item also takes it out of its folder. `parentKey: null` on a filed item
+  promotes it to the root and **keeps** its folder.
+- **`{ key, folderId: "<id>" }`** — file the item into that folder (an id from
+  [`list_folders`](#list_folders)), appended last at the folder's level. Its
+  work-item parent is cleared; its own children travel with it.
+- **`{ key, folderId: null }`** — take the item out of its folder, to the root. A
+  subtask cannot go there: `SUBTASK_NEEDS_PLACEMENT`.
+- **both, or neither** — refused before any read: both is `PLACEMENT_CONFLICT`,
+  neither is `INVALID_REQUEST`, and the message names the rule.
+
+| Input       | Type           | Required   | Notes                                                                                                                                                |
+| ----------- | -------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`       | string         | yes        | The work item to move, e.g. `"ACME-7"`.                                                                                                              |
+| `parentKey` | string \| null | one of two | The new parent's identifier, or `null` to promote to a top-level root. Same-project only.                                                            |
+| `folderId`  | string \| null | one of two | A folder id to file the item into, or `null` to take it out of its folder. Unknown → `FOLDER_NOT_FOUND`; another project's → `CROSS_PROJECT_FOLDER`. |
+
+**Output** — `structuredContent`: the moved `WorkItemDto`, plus a **`placement`**
+field — `{ parentKey, folderId, folderPath }` — read back off the row, so it
+agrees with a following [`get_work_item`](#get_work_item).
+
+### Folders
+
+A **folder** is a named, nestable place in a project's tree that holds work items
+and other folders and carries **no workflow** of its own. These four tools see and
+tidy a project's folders over the same folder service the `/items` tree uses.
+Placing a _work item_ into a folder is the work-item tools' job, not these.
+Every refusal is the folder service's own, returned as a typed tool error
+carrying its code:
+
+| Code                      | Meaning                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `FOLDER_NOT_FOUND`        | No such folder in your workspace (also a retried delete on a folder already gone).         |
+| `INVALID_FOLDER_NAME`     | The name is empty or over the length cap.                                                  |
+| `FOLDER_NAME_TAKEN`       | A folder with that name already sits at that level; the message names it.                  |
+| `FOLDER_CYCLE`            | The move would put a folder inside itself or one of its own folders.                       |
+| `CROSS_PROJECT_FOLDER`    | The folder belongs to another project.                                                     |
+| `SUBTASK_NEEDS_PLACEMENT` | The change would leave a subtask with neither a parent nor a folder.                       |
+| `PLACEMENT_CONFLICT`      | A work item was given a parent and a folder at once (reached through the work-item tools). |
+
+#### `list_folders`
+
+Every folder of a project in **one read**, in tree order — so an agent resolving
+"the Backlog ideas folder" gets every path at once, the way `skeleton` hands it
+the whole work-item tree. The read is capped (the Move to… picker's cap), and
+`truncated` is always reported. Gated on `project:browse`.
+
+| Input        | Type   | Required | Notes                       |
+| ------------ | ------ | -------- | --------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`. |
+
+**Output** — `structuredContent`: `{ projectKey, folders, truncated }`, where each
+row of `folders` is `{ id, parentFolderId, name, path }` and `path` is the
+folder's name and every ancestor's, root first (`["Parked", "2025"]`). The text
+summary is the indented tree.
+
+#### `create_folder`
+
+Create a folder at the project root, or inside another folder. Names are unique
+among the folders at one level. **Re-delivery:** a retried create meets
+`FOLDER_NAME_TAKEN` naming the folder the first call made — call `list_folders`
+to find it rather than creating again. Gated on `work_item:edit`.
+
+| Input            | Type           | Required | Notes                                                        |
+| ---------------- | -------------- | -------- | ------------------------------------------------------------ |
+| `projectKey`     | string         | yes      | Project key.                                                 |
+| `name`           | string         | yes      | The folder's name.                                           |
+| `parentFolderId` | string \| null | no       | The folder to create it inside; omit or `null` for the root. |
+
+**Output** — `structuredContent`: the folder, exactly as `/api/v1` publishes it —
+`{ id, projectKey, parentFolderId, name, path, position, createdAt, updatedAt }`.
+
+#### `update_folder`
+
+**Rename** a folder, **or place** it — move it into another folder and/or reorder
+it among its siblings. A rename and a placement in **one call is refused**
+(`INVALID_REQUEST`) and changes nothing: the service performs them as separate
+writes, so a combined call could half-apply. Make two calls. A call carrying
+neither is refused the same way. The split is the one `PATCH /api/v1/folders/{folderId}`
+uses, so the two doors agree. Gated on `work_item:edit`.
+
+| Input            | Type           | Required | Notes                                                                                            |
+| ---------------- | -------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `projectKey`     | string         | yes      | Project key.                                                                                     |
+| `folderId`       | string         | yes      | The folder to change, from `list_folders`.                                                       |
+| `name`           | string         | no       | RENAME: the new name. Not with a placement.                                                      |
+| `parentFolderId` | string \| null | no       | PLACE: the destination folder, or `null` for the root. Omit to keep the parent and only reorder. |
+| `beforeId`       | string \| null | no       | PLACE: the sibling folder this one sorts AFTER.                                                  |
+| `afterId`        | string \| null | no       | PLACE: the sibling folder this one sorts BEFORE.                                                 |
+
+**Output** — `structuredContent`: the folder, in `create_folder`'s shape.
+
+#### `delete_folder`
+
+Delete a folder. **Nothing inside it is deleted**: its folders and filed work
+items move up to the deleted folder's parent, or to the project root, and the
+result names every id that moved. A retried delete returns `FOLDER_NOT_FOUND`.
+Gated on `work_item:edit`.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key.                               |
+| `folderId`   | string | yes      | The folder to delete, from `list_folders`. |
+
+**Output** — `structuredContent`: `{ deletedFolderId, destinationFolderId,
+movedFolderIds, movedWorkItemIds }` — `destinationFolderId` is `null` when the
+contents moved to the root.
 
 ### Search
 
@@ -2407,6 +2527,15 @@ plus `items[]`, one entry per proposal:
   intra-plan temp-ref `planItem:<planItemId>` pointing at another `add` in the
   same plan. Resolve the temp-refs against `items[].id` to rebuild the proposed
   tree and its dependency edges; the text block renders exactly that, indented.
+  A `parentRef` may also be **`folder:<folderId>`** — the proposal is FILED into
+  that folder rather than hung under a work item — and is returned verbatim.
+- **`folderId`** / **`folderPath`** — the folder a proposal NAMES as its placement
+  (an `add`'s `parentRef` or a `modify`'s `patch.parentRef` = `folder:<id>`) and
+  that folder's names, root first (`["Parked", "2025"]`). Both `null` for a
+  proposal that names no folder; `folderPath` alone is `null` when the folder was
+  deleted after the plan was written — approve refuses such a plan. The text block
+  groups folder-placed proposals under a `Folder: Parked ▸ 2025:` heading beside
+  the committed-parent groups, and marks a deleted one.
 
 A plan still `generating` returns the proposals that have arrived **so far**
 rather than erroring — proposals stream in, so a caller polling the content sees
@@ -2524,8 +2653,19 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   ```
 
 - **`workItemId`** / **`patch`** / **`baseRevision`** — for a `modify` / `remove`.
-- **`parentRef`** / **`blockedByRefs`** — a real `work_item.id`, **or** an
-  intra-plan temp-ref `planItem:<id>`.
+- **`parentRef`** / **`blockedByRefs`** — a work-item **key** (`ACME-7`, resolved
+  to its id at the append — keys are accepted, not refused), a real
+  `work_item.id`, **or** an intra-plan temp-ref `planItem:<id>`.
+- **`parentRef` may instead be `folder:<folderId>`** — FILE the proposal into a
+  folder of the plan's project rather than under a work item (MOTIR-5414). A filed
+  card is a root, and a folder admits **any** kind, `subtask` included. The same
+  form is accepted on a `modify`'s `patch.parentRef` (file a committed item into
+  a folder) and on `update_plan_proposal`'s `parentRef`. It is judged **at the
+  append**: a folder id naming nothing in this workspace is refused as
+  `INVALID_PLAN_REF_GRAPH` (`dangling`), another project's folder as
+  `PLAN_GRAMMAR_VIOLATION` (`illegal_parent`), and a `folder:` ref in
+  `blockedByRefs` / `patch.blockedByAdd` / `patch.blockedByRemove` as
+  `INVALID_PLAN_REF_GRAPH` — a folder is a placement and blocks nothing.
 
 **Output** — `structuredContent`: the plan and its `items[]`, plus
 **`planItemIds`** — the ids of the proposals **this call** created, **in the order
@@ -2712,18 +2852,18 @@ returns a proposal's id only when its own call returns, so an intra-plan ref wri
 in the same batch as its target names nothing — and until this tool existed the only
 remedy was to author a whole second plan and ask a person to decline the first.
 
-| Input                                | Type           | Required | Notes                                                             |
-| ------------------------------------ | -------------- | -------- | ----------------------------------------------------------------- |
-| `planId`                             | string         | yes      | The id `create_plan` returned.                                    |
-| `planItemId`                         | string         | yes      | The proposal to correct.                                          |
-| every field `update_plan_item` takes | —              | no       | Same sparse semantics.                                            |
-| `parentRef`                          | string \| null | no       | `add` only. Re-parent it; `null` makes it top-level.              |
-| `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it. |
-| `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                       |
-| `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins. |
-| `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                   |
-| `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.   |
-| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                |
+| Input                                | Type           | Required | Notes                                                                                                                                                                |
+| ------------------------------------ | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `planId`                             | string         | yes      | The id `create_plan` returned.                                                                                                                                       |
+| `planItemId`                         | string         | yes      | The proposal to correct.                                                                                                                                             |
+| every field `update_plan_item` takes | —              | no       | Same sparse semantics.                                                                                                                                               |
+| `parentRef`                          | string \| null | no       | `add` only. Re-parent it — a key, an id, `planItem:<id>`, or `folder:<folderId>` to file it into a folder; `null` makes it top-level. Re-validated as at the append. |
+| `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it.                                                                                                    |
+| `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                                                                                                                          |
+| `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins.                                                                                                    |
+| `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                                                                                                                      |
+| `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.                                                                                                      |
+| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                                                                                                                   |
 
 **It reaches the five things the deepen cannot, and that is the whole point.** The
 field that is wrong is very often `patch.blockedByAdd` on a `modify` — the op no
@@ -3226,21 +3366,34 @@ thing on the other.
 
 **Output** — `structuredContent`:
 
-| Field       | Type             | Notes                                                                |
-| ----------- | ---------------- | -------------------------------------------------------------------- |
-| `project`   | object           | `{ projectId, projectKey }`.                                         |
-| `items`     | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision }` — see below. |
-| `total`     | integer          | Live work items in the project, **before** the bound is applied.     |
-| `returned`  | integer          | Rows in `items`.                                                     |
-| `truncated` | boolean          | Whether the bound bit.                                               |
-| `limit`     | integer          | The bound actually applied.                                          |
+| Field              | Type             | Notes                                                                          |
+| ------------------ | ---------------- | ------------------------------------------------------------------------------ |
+| `project`          | object           | `{ projectId, projectKey }`.                                                   |
+| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId }` — see below. |
+| `total`            | integer          | Live work items in the project, **before** the bound is applied.               |
+| `returned`         | integer          | Rows in `items`.                                                               |
+| `truncated`        | boolean          | Whether the bound bit.                                                         |
+| `limit`            | integer          | The bound actually applied.                                                    |
+| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below. |
+| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                   |
 
 `parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
 makes the response a TREE rather than a list — the hierarchy is rebuildable from
 this one call. `id` is the real work-item cuid `add_plan_items` takes for
-`parentRef` / `blockedByRefs` (it refuses a `<KEY>-<n>` key), and `revision` is
+`parentRef` / `blockedByRefs` (it also accepts the `<KEY>-<n>` key), and `revision` is
 the `baseRevision` a `modify` / `remove` proposal anchors on — both ride the row
 so orienting and proposing do not cost a `get_work_item` per target.
+
+**Folders.** `folderId` is the folder an item is **filed** in — its OWN placement,
+null for everything else. Only a root can be filed (an item has a parent OR a
+folder, never both), so a story under a filed epic reads `folderId: null`; its
+placement follows from its ancestors' keys. `folders` lists every folder of the
+project in tree order, each with `path` — its name and every ancestor's, root
+first (`["Parked", "2025"]`) — so a `folderId` resolves to a name without a
+second read. Folders travel **beside** the rows, never as rows of `items`, and
+`total` / `returned` / `truncated` / `limit` count work items only; the folder list
+has its own bound, reported by `foldersTruncated`. The text summary names each
+returned filed row with its folder path (`Parked ▸ 2025`) and lists the folders.
 
 **The bound announces itself, always.** `total` / `returned` / `truncated` /
 `limit` are on every response, not only a truncated one. A skeleton that quietly

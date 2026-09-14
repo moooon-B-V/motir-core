@@ -68,6 +68,8 @@ import {
   PlanNotEditableError,
   PlanProposalReferencedError,
   PlanPersistenceError,
+  PlanGrammarError,
+  PlanRefGraphError,
 } from '@/lib/plans/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -90,6 +92,15 @@ import {
   GithubRepoNotFoundError,
 } from '@/lib/github/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
+import {
+  CrossProjectFolderError,
+  FolderCycleError,
+  FolderNameTakenError,
+  FolderNotFoundError,
+  InvalidFolderNameError,
+  PlacementConflictError,
+  SubtaskNeedsPlacementError,
+} from '@/lib/folders/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
@@ -471,7 +482,15 @@ export function toToolError(err: unknown): CallToolResult {
     // caller rather than a JSON-RPC internal error.
     err instanceof PlanNotEditableError ||
     err instanceof PlanProposalReferencedError ||
-    err instanceof PlanPersistenceError
+    err instanceof PlanPersistenceError ||
+    // INVALID_PLAN_REF_GRAPH / PLAN_GRAMMAR_VIOLATION AT THE APPEND (MOTIR-5414).
+    // The append now judges a `folder:<id>` placement where it is written — an
+    // unknown folder is `dangling`, another project's is `illegal_parent` — and
+    // the self-consistency and re-parent gates already threw these two there.
+    // Unmapped, every one reached the agent without its code; mapped, the agent
+    // reads the same code approve's route returns for the same verdict.
+    err instanceof PlanRefGraphError ||
+    err instanceof PlanGrammarError
   ) {
     return toolError(err.code, err.message);
   }
@@ -502,6 +521,25 @@ export function toToolError(err: unknown): CallToolResult {
   // this is only reachable in the race where it was revoked mid-request — map it
   // to a clean tool error so an agent reads NOT_A_MEMBER and stops, rather than
   // an opaque JSON-RPC internal error.
+  // The folder family (MOTIR-5409). Enumerated rather than matched on a base,
+  // because `lib/folders/errors.ts` has none — each class is its own. Every one
+  // is something an agent can act on: a folder id that is gone (a retried
+  // delete), a name already taken at that level (a retried create — the message
+  // names it), a move into its own subtree, another project's folder, a subtask
+  // that would be left with no parent and no folder, and a work item given a
+  // parent AND a folder at once (MOTIR-5407's placement rule, which the work-item
+  // tools reach through the same service).
+  if (
+    err instanceof FolderNotFoundError ||
+    err instanceof InvalidFolderNameError ||
+    err instanceof FolderNameTakenError ||
+    err instanceof FolderCycleError ||
+    err instanceof CrossProjectFolderError ||
+    err instanceof SubtaskNeedsPlacementError ||
+    err instanceof PlacementConflictError
+  ) {
+    return toolError(err.code, err.message);
+  }
   if (err instanceof NotAMemberError) {
     return toolError(err.code, err.message);
   }

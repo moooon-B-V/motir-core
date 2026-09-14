@@ -1,6 +1,7 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { Folder, Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { folderRepository } from '@/lib/repositories/folderRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -25,10 +26,14 @@ import type {
   FileWorkItemResultDto,
   FolderDeletionPreviewDto,
   FolderDto,
+  FolderLevelPageDto,
+  FolderResourceDto,
+  ListFolderLevelInput,
   ListProjectFoldersInput,
   MoveFolderInput,
   ProjectFoldersDto,
   RenameFolderInput,
+  UpdateFolderInput,
 } from '@/lib/dto/folders';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -109,6 +114,46 @@ async function lockDestination(
   const locked = await folderRepository.lockById(folderId, tx);
   if (!locked) throw new FolderNotFoundError(folderId);
   if (locked.projectId !== projectId) throw new CrossProjectFolderError();
+}
+
+/**
+ * Resolve an ID-ADDRESSED folder and the project it belongs to (Story MOTIR-5310 ·
+ * MOTIR-5408) — the `/api/v1/folders/{folderId}` doors name no project, so the
+ * folder has to say which gate applies.
+ *
+ * A folder in another workspace, and a folder in a project the acting token is
+ * NOT bound to, are both NOT FOUND: the same answer `/api/v1/sprints/{sprintId}`
+ * gives, and the one `projectAccessService`'s own token binding gives a project,
+ * so a narrowed credential cannot enumerate folders it may not reach. The
+ * project gate itself runs in the method that consumes the answer.
+ */
+async function resolveAddressedFolder(
+  folderId: string,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<Folder> {
+  const folder = await folderRepository.findById(folderId, tx);
+  if (!folder || folder.workspaceId !== ctx.workspaceId) throw new FolderNotFoundError(folderId);
+  if (ctx.tokenProjectId !== undefined && ctx.tokenProjectId !== folder.projectId) {
+    throw new FolderNotFoundError(folderId);
+  }
+  return folder;
+}
+
+/** A folder row → the id-addressed resource: its project key and name path. */
+async function toFolderResource(
+  folder: Folder,
+  tx: Prisma.TransactionClient,
+  parentPath?: string[],
+): Promise<FolderResourceDto> {
+  const project = await projectRepository.findById(folder.projectId, tx);
+  /* istanbul ignore next -- defensive: `folder.project_id` is a cascading FK, so the project exists */
+  if (!project) throw new FolderNotFoundError(folder.id);
+  const path =
+    parentPath === undefined
+      ? await folderRepository.findPathNames(folder.id, tx)
+      : [...parentPath, folder.name];
+  return { ...toFolderDto(folder), projectKey: project.identifier, path };
 }
 
 export const foldersService = {
@@ -382,6 +427,98 @@ export const foldersService = {
         movedWorkItemIds: filed.map((i) => i.id),
       };
     });
+  },
+
+  // ── The ID-ADDRESSED doors (Story MOTIR-5310 · MOTIR-5408) ─────────────────
+  // What `/api/v1` and the MCP serve. Each resolves the folder's project first
+  // (`resolveAddressedFolder`) and then asks the SAME rule the tree's actions
+  // ask — no folder rule is re-implemented here.
+
+  /**
+   * One KEYSET page of a level's child folders, each with its path — the
+   * `/api/v1` folder list. Browse-gated, like every read. A `parentFolderId`
+   * that is not a folder of this project is NOT FOUND.
+   */
+  async listFolderLevel(
+    input: ListFolderLevelInput,
+    ctx: ServiceContext,
+  ): Promise<FolderLevelPageDto> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      await projectAccessService.assertCanBrowse(input.projectId, ctx, tx);
+      let parentPath: string[] = [];
+      if (input.parentFolderId !== null) {
+        const parent = await folderRepository.findById(input.parentFolderId, tx);
+        if (!parent || parent.projectId !== input.projectId) {
+          throw new FolderNotFoundError(input.parentFolderId);
+        }
+        // A level shares one parent path, so it is read once, not per row.
+        parentPath = await folderRepository.findPathNames(parent.id, tx);
+      }
+      const rows = await folderRepository.findLevelAfter(
+        input.projectId,
+        ctx.workspaceId,
+        input.parentFolderId,
+        input.after,
+        input.limit + 1,
+        tx,
+      );
+      const page = rows.slice(0, input.limit);
+      const folders: FolderResourceDto[] = [];
+      for (const row of page) folders.push(await toFolderResource(row, tx, parentPath));
+      return { folders, hasMore: rows.length > input.limit };
+    });
+  },
+
+  /** One folder by id, with its project key and path. Browse-gated. */
+  async getFolder(folderId: string, ctx: ServiceContext): Promise<FolderResourceDto> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const folder = await resolveAddressedFolder(folderId, ctx, tx);
+      await projectAccessService.assertCanBrowse(folder.projectId, ctx, tx);
+      return toFolderResource(folder, tx);
+    });
+  },
+
+  /**
+   * Rename a folder OR place it (move, reorder, or both) — never both in one
+   * call, because `renameFolder` and `moveFolder` are separate transactions and
+   * a combined request could half-apply. A placement with no `parentFolderId`
+   * keeps the folder's current parent: a pure reorder.
+   */
+  async updateFolder(
+    folderId: string,
+    input: UpdateFolderInput,
+    ctx: ServiceContext,
+  ): Promise<FolderResourceDto> {
+    const folder = await withWorkspaceContext(ctx, (tx) =>
+      resolveAddressedFolder(folderId, ctx, tx),
+    );
+    if ('name' in input) {
+      await foldersService.renameFolder(
+        { projectId: folder.projectId, folderId, name: input.name },
+        ctx,
+      );
+    } else {
+      await foldersService.moveFolder(
+        {
+          projectId: folder.projectId,
+          folderId,
+          targetParentFolderId:
+            input.parentFolderId === undefined ? folder.parentFolderId : input.parentFolderId,
+          ...(input.beforeId !== undefined ? { beforeId: input.beforeId } : {}),
+          ...(input.afterId !== undefined ? { afterId: input.afterId } : {}),
+        },
+        ctx,
+      );
+    }
+    return foldersService.getFolder(folderId, ctx);
+  },
+
+  /** Delete a folder by id, moving its contents up — `deleteFolder`'s rule. */
+  async deleteFolderById(folderId: string, ctx: ServiceContext): Promise<DeleteFolderResultDto> {
+    const folder = await withWorkspaceContext(ctx, (tx) =>
+      resolveAddressedFolder(folderId, ctx, tx),
+    );
+    return foldersService.deleteFolder({ projectId: folder.projectId, folderId }, ctx);
   },
 
   /**

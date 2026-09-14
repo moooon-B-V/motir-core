@@ -14,6 +14,8 @@
 //   CrossProjectFolderError     → 422 (a target folder in another project)
 //   SubtaskNeedsPlacementError  → 409 (deleting a ROOT folder would leave a
 //                                      subtask with neither a parent nor a folder)
+//   PlacementConflictError      → 422 (a work-item parent AND a folder named for
+//                                      one item — MOTIR-5407)
 //
 // There is deliberately no `FolderForbiddenError`: every folder write is gated
 // on `work_item:edit` for the project, so the refusal is the project's own
@@ -85,5 +87,22 @@ export class SubtaskNeedsPlacementError extends Error {
       `Deleting this folder would leave ${workItemIds.length} subtask(s) with neither a parent nor a folder. Move them first.`,
     );
     this.name = 'SubtaskNeedsPlacementError';
+  }
+}
+
+/**
+ * A single write named BOTH a work-item parent and a folder for one item
+ * (Story MOTIR-5310 · MOTIR-5407). An item hangs under a work item OR is filed
+ * in a folder, never both — the `work_item_parent_xor_folder` CHECK — so the
+ * request is ambiguous rather than merely illegal, and it is refused before
+ * anything is written.
+ */
+export class PlacementConflictError extends Error {
+  readonly code = 'PLACEMENT_CONFLICT' as const;
+  constructor(
+    message = 'A work item is placed under a parent or filed in a folder, not both — name only one.',
+  ) {
+    super(message);
+    this.name = 'PlacementConflictError';
   }
 }

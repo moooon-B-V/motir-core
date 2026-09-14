@@ -272,6 +272,7 @@ export const V1_COLLECTIONS = [
   'workItemActivityAll',
   'workItemActivityComments',
   'workItemActivityHistory',
+  'folders',
 ] as const;
 
 /** The name a cursor carries so it can only be replayed at its own collection. */

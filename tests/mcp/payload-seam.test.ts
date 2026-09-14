@@ -175,6 +175,11 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   // `{ key, title, score }` ranking is not a work-item representation and ADR §2
   // forbids it from becoming one.
   skeleton: true,
+  // MOTIR-5409 — the folder tools.
+  list_folders: true,
+  create_folder: true,
+  update_folder: true,
+  delete_folder: true,
 };
 
 /** The runtime view the assertions below walk. */
@@ -422,6 +427,22 @@ describe('get_work_item derives its CHILD rows from v1’s schema', () => {
     });
     expect(built.watcherCount).toBe(3);
     expect(built.workflow).toEqual({ statuses: [] });
+  });
+
+  it('DECLARES the item’s own folder placement — `folderId` + `folderPath` — and refuses a mistyped one (MOTIR-5413)', () => {
+    const row = presentMcpWorkItemChild(child, undefined, () => undefined);
+    const built = derived(getWorkItemPayload, {
+      item: { identifier: 'PROD-1856' },
+      folderId: 'folder-1',
+      folderPath: ['Parked', '2025'],
+      children: [row],
+    });
+    expect([built.folderId, built.folderPath]).toEqual(['folder-1', ['Parked', '2025']]);
+    // Declared, not merely passed through the catch-all: a path that is not a
+    // list of names fails at the tool.
+    expect(() =>
+      derived(getWorkItemPayload, { children: [row], folderPath: 'Parked ▸ 2025' as never }),
+    ).toThrow();
   });
 
   it('`derived` REFUSES a payload whose children do not match the declared shape', () => {

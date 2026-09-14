@@ -134,3 +134,54 @@ export interface FolderDeletionPreviewDto {
   /** The deleted folder's parent; both fields `null` for the project root. */
   destination: { folderId: string | null; name: string | null };
 }
+
+/**
+ * A folder as the id-addressed doors serve it (Story MOTIR-5310 · MOTIR-5408) —
+ * the `/api/v1` folder resource and its MCP twin. `projectKey` names the project
+ * a caller holding only the folder id cannot otherwise see, and `path` is the
+ * folder's name and every ancestor's, ROOT FIRST (*Parked ▸ 2025*).
+ */
+export interface FolderResourceDto extends FolderDto {
+  projectKey: string;
+  path: string[];
+}
+
+/** Where a keyset page of one folder level resumes: strictly after this row. */
+export interface FolderLevelPosition {
+  position: string;
+  id: string;
+}
+
+export interface ListFolderLevelInput {
+  projectId: string;
+  /** The folder whose CHILD folders are listed, or `null` for the project root. */
+  parentFolderId: string | null;
+  /** Resume strictly after this `(position, id)`; omit for the first page. */
+  after?: FolderLevelPosition;
+  /** Rows per page — the caller clamps it. */
+  limit: number;
+}
+
+/** One keyset page of a folder level, in `(position, id)` order. */
+export interface FolderLevelPageDto {
+  folders: FolderResourceDto[];
+  /** More rows follow the last one on this page. */
+  hasMore: boolean;
+}
+
+/**
+ * An id-addressed folder edit: a RENAME or a PLACEMENT, never both. The service
+ * renames and moves in two separate transactions, so a request carrying both
+ * could half-apply — the doors refuse it before it reaches here.
+ */
+export type UpdateFolderInput =
+  | { name: string }
+  | {
+      /**
+       * The destination folder, `null` for the project root, or ABSENT to stay
+       * in the current parent (a pure reorder).
+       */
+      parentFolderId?: string | null;
+      beforeId?: string | null;
+      afterId?: string | null;
+    };

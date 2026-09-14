@@ -25,12 +25,25 @@
 // ATOMICITY is the point of doing all of it up front: a rejection must leave the
 // tree byte-identical, so every check completes before the first write.
 
-import { assertValidParent, isIssueType, type IssueType } from '@/lib/issues/parentRules';
+import {
+  assertValidParent,
+  assertValidPlacement,
+  isIssueType,
+  type IssueType,
+} from '@/lib/issues/parentRules';
 import { isWorkItemType, WORK_ITEM_TYPES, TYPEABLE_KINDS } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
-import { isTempRef, tempRefId, TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import {
+  FOLDER_REF_PREFIX,
+  folderRefId,
+  isFolderRef,
+  isTempRef,
+  isWorkItemRef,
+  tempRefId,
+  TEMP_REF_PREFIX,
+} from '@/lib/plans/refs';
 import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
 
 /** The kind `materialize` falls back to when an `add` proposes none. */
@@ -46,7 +59,10 @@ export interface ProposalNode {
   op: 'add' | 'modify' | 'remove';
   /** The existing target of a `modify`/`remove` (null on an un-materialized `add`). */
   workItemId: string | null;
-  /** A real work-item id, an intra-plan `planItem:<id>` temp-ref, or null. */
+  /**
+   * A real work-item id, an intra-plan `planItem:<id>` temp-ref, a
+   * `folder:<id>` placement (MOTIR-5414), or null.
+   */
   parentRef: string | null;
   blockedByRefs: string[];
   /**
@@ -98,6 +114,18 @@ export interface LiveWorkItemState {
    * dependency edge is supported (MOTIR-3581).
    */
   projectId: string;
+}
+
+/**
+ * A live FOLDER a proposal files into (MOTIR-5414) — `folder:<id>` at a parent
+ * site. Only its PROJECT is judged: a folder admits any kind, sits at no depth a
+ * work item counts, and cannot close a cycle through the work-item tree.
+ */
+export interface LiveFolderState {
+  id: string;
+  projectId: string;
+  /** The folder's name — the identity a refusal names, as a work item's key is. */
+  name: string;
 }
 
 export interface ValidatePlanProposalsInput {
@@ -157,6 +185,18 @@ export interface ValidatePlanProposalsInput {
    * cycle silently.
    */
   existingBlockedByEdges: readonly BlockedByEdge[];
+  /**
+   * The live FOLDERS every `folder:<id>` ref names, by id (MOTIR-5414) — resolved
+   * by the service in one batched, workspace-scoped read with the project
+   * narrowing lifted, so a folder in ANOTHER project is visible to be refused
+   * for the right reason.
+   *
+   * OPTIONAL, unlike the two inputs above, because its absence fails in the SAFE
+   * direction: a folder ref missing from the map is refused as naming no folder,
+   * so a caller that forgot to resolve folders refuses a plan rather than passing
+   * one. The two inputs above would, missing, pass a cycle silently.
+   */
+  folderById?: ReadonlyMap<string, LiveFolderState>;
 }
 
 /** One committed `is_blocked_by` edge: `blockedId` is blocked BY `blockerId`. */
@@ -268,7 +308,7 @@ function assertProposedSubjectValid(item: ProposalNode): void {
 export function collectReferencedWorkItemIds(items: readonly ProposalNode[]): string[] {
   const ids = new Set<string>();
   const addReal = (ref: string | null | undefined): void => {
-    if (ref && !isTempRef(ref)) ids.add(ref);
+    if (ref && isWorkItemRef(ref)) ids.add(ref);
   };
   for (const item of items) {
     addReal(item.parentRef);
@@ -280,6 +320,22 @@ export function collectReferencedWorkItemIds(items: readonly ProposalNode[]): st
     if (item.op === 'modify' && item.patch?.parentRef) addReal(item.patch.parentRef);
     for (const ref of item.patch?.blockedByAdd ?? []) addReal(ref);
     for (const ref of item.patch?.blockedByRemove ?? []) addReal(ref);
+  }
+  return [...ids];
+}
+
+/**
+ * Every FOLDER id a plan names at a parent site (MOTIR-5414) — an `add`'s
+ * `parentRef` and a `modify`'s `patch.parentRef`. The service resolves exactly
+ * this set into `folderById`. A folder ref at a BLOCKER site is not collected:
+ * the self-consistency pass refuses it before anything resolves.
+ */
+export function collectReferencedFolderIds(items: readonly ProposalNode[]): string[] {
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (item.parentRef && isFolderRef(item.parentRef)) ids.add(folderRefId(item.parentRef));
+    const patchParent = item.op === 'modify' ? item.patch?.parentRef : null;
+    if (patchParent && isFolderRef(patchParent)) ids.add(folderRefId(patchParent));
   }
   return [...ids];
 }
@@ -333,6 +389,19 @@ function assertRefsSelfConsistent(
     }
     seen.add(ref);
 
+    // A folder is a PLACEMENT, never an edge (MOTIR-5414): it blocks nothing and
+    // nothing blocks it, so at a blocker site it can only be a mistake — most
+    // likely a placement written into the wrong field. A fact about the proposal
+    // alone, so it is refused here, at the append.
+    if (isFolderRef(ref) && where !== 'parentRef' && where !== 'patch.parentRef') {
+      throw new PlanRefGraphError(
+        'dangling',
+        item.id,
+        `Proposal ${item.id}'s ${where} "${ref}" names a folder. A folder is a place a card is FILED, ` +
+          `not a dependency — it blocks nothing. Put \`${FOLDER_REF_PREFIX}<id>\` in \`parentRef\` to file the card there.`,
+      );
+    }
+
     if (isTempRef(ref) && tempRefId(ref) === item.id) {
       throw new PlanRefGraphError(
         'cycle',
@@ -355,9 +424,12 @@ function assertRefsResolvable(
   liveById: ValidatePlanProposalsInput['liveById'],
   addIds: ReadonlySet<string>,
   where: RefSite,
+  folderById: ReadonlyMap<string, LiveFolderState>,
 ): void {
   for (const ref of refs) {
-    if (isTempRef(ref)) {
+    if (isFolderRef(ref)) {
+      assertFolderRefResolvable(item, ref, where, liveById, folderById);
+    } else if (isTempRef(ref)) {
       const targetId = tempRefId(ref);
       if (!addIds.has(targetId)) {
         throw new PlanRefGraphError(
@@ -373,6 +445,80 @@ function assertRefsResolvable(
         `${describeSubject(item, liveById)}'s ${where} "${ref}" names no work item in this workspace. ` +
           `A ref names a work item's ID (a \`cm…\` cuid) or a \`${TEMP_REF_PREFIX}<id>\` proposal in this plan — never a \`<PREFIX>-<n>\` key.`,
       );
+    }
+  }
+}
+
+/**
+ * A `folder:<id>` ref names a folder that exists in this workspace (MOTIR-5414).
+ * Shared by the gate's resolution step, the re-parent gate and the append, so
+ * all three name an unknown folder in the same words.
+ */
+function assertFolderRefResolvable(
+  item: ProposalNode,
+  ref: string,
+  where: RefSite,
+  liveById: ValidatePlanProposalsInput['liveById'],
+  folderById: ReadonlyMap<string, LiveFolderState>,
+): LiveFolderState {
+  const folder = folderById.get(folderRefId(ref));
+  if (!folder) {
+    throw new PlanRefGraphError(
+      'dangling',
+      item.id,
+      `${describeSubject(item, liveById)}'s ${where} "${ref}" names no folder in this workspace. ` +
+        `A \`${FOLDER_REF_PREFIX}<id>\` ref names a folder's id — the folder may have been deleted, or the id mistyped.`,
+    );
+  }
+  return folder;
+}
+
+/**
+ * A resolved folder ref files the proposal into a folder of the PLAN's own
+ * project (MOTIR-5414). A work item's folder must live in its own project — the
+ * `trg_work_item_cotenancy_folder` trigger and `CrossProjectFolderError` enforce
+ * it for every direct write — so a plan cannot be the door that admits another
+ * project's folder.
+ */
+function assertFolderInPlanProject(
+  item: ProposalNode,
+  ref: string,
+  where: RefSite,
+  folder: LiveFolderState,
+  planProjectId: string,
+  liveById: ValidatePlanProposalsInput['liveById'],
+): void {
+  if (folder.projectId !== planProjectId) {
+    throw new PlanGrammarError(
+      'illegal_parent',
+      item.id,
+      `${describeSubject(item, liveById)}'s ${where} "${ref}" (folder "${folder.name}") names a folder in a DIFFERENT project of this workspace. ` +
+        `A work item can only be filed into a folder of its own project.`,
+    );
+  }
+}
+
+/**
+ * Assert every `folder:` placement in `items` resolves to a folder of the plan's
+ * project (MOTIR-5414) — resolution, then tenancy. Exported for the APPEND, which
+ * judges folder refs where they are written: an unknown folder cannot become
+ * known by a later call, so deferring the refusal to the close buys nothing.
+ * `validatePlanProposals` asks the same two questions through its own ordered
+ * steps.
+ */
+export function assertFolderPlacementsLegal(
+  items: readonly ProposalNode[],
+  folderById: ReadonlyMap<string, LiveFolderState>,
+  planProjectId: string,
+): void {
+  const noLive: ValidatePlanProposalsInput['liveById'] = new Map();
+  for (const item of items) {
+    const sites: Array<[RefSite, string | null | undefined]> = [['parentRef', item.parentRef]];
+    if (item.op === 'modify') sites.push(['patch.parentRef', item.patch?.parentRef]);
+    for (const [where, ref] of sites) {
+      if (!ref || !isFolderRef(ref)) continue;
+      const folder = assertFolderRefResolvable(item, ref, where, noLive, folderById);
+      assertFolderInPlanProject(item, ref, where, folder, planProjectId, noLive);
     }
   }
 }
@@ -447,7 +593,9 @@ function effectiveParentKind(
   liveById: ValidatePlanProposalsInput['liveById'],
 ): IssueType | null {
   const ref = item.parentRef;
-  if (!ref) return null;
+  // A FOLDER is not a work-item parent (MOTIR-5414): a filed card is a root, so
+  // it has no parent KIND. The caller reads the filing itself off the ref.
+  if (!ref || isFolderRef(ref)) return null;
 
   if (isTempRef(ref)) {
     // Resolution is guaranteed by `assertRefsResolvable`.
@@ -525,6 +673,7 @@ export function assertReparentLegal(
   ancestorIdsById: ValidatePlanProposalsInput['ancestorIdsById'],
   terminalStatusKeys: ReadonlySet<string>,
   planProjectId: string,
+  folderById: ReadonlyMap<string, LiveFolderState> = new Map(),
 ): void {
   if (item.op !== 'modify') return;
   const ref = item.patch?.parentRef;
@@ -548,6 +697,18 @@ export function assertReparentLegal(
   // placement — and `assertValidParent` is the arm that says so.
   if (ref === null) {
     assertParentKindLegal(item, null, target.kind, liveById);
+    return;
+  }
+
+  // 0. FILING into a folder (MOTIR-5414). None of the tree's five questions
+  //    applies: a filed card is a ROOT (depth 1), no cycle can run through a
+  //    folder, and a folder admits ANY kind, `subtask` included — the placement
+  //    rule `assertValidPlacement` states, asked here rather than restated. What
+  //    remains is that the folder exists and is in this project.
+  if (isFolderRef(ref)) {
+    const folder = assertFolderRefResolvable(item, ref, 'patch.parentRef', liveById, folderById);
+    assertFolderInPlanProject(item, ref, 'patch.parentRef', folder, planProjectId, liveById);
+    assertValidPlacement({ parentKind: null, filed: true }, target.kind);
     return;
   }
 
@@ -901,6 +1062,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     ancestorIdsById,
     existingBlockedByEdges,
   } = input;
+  const folderById = input.folderById ?? new Map<string, LiveFolderState>();
 
   const adds = items.filter((i) => i.op === 'add');
   const addsById = new Map(adds.map((a) => [a.id, a]));
@@ -914,7 +1076,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   // 2. Every ref resolves — the arm that needs the batched workspace read.
   for (const item of items) {
     for (const [where, refs] of refSitesOf(item)) {
-      assertRefsResolvable(item, refs, liveById, addIds, where);
+      assertRefsResolvable(item, refs, liveById, addIds, where, folderById);
     }
   }
 
@@ -941,8 +1103,13 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     assertProposedSubjectValid(item);
     const childKind = issueKindOf(item);
     const parentKind = effectiveParentKind(item, addsById, liveById);
+    // A `folder:` parent FILES the card (MOTIR-5414), and a folder admits any
+    // kind — so a `subtask` filed into a folder is legal while the same subtask
+    // at the project root is still refused. `assertValidPlacement` is the
+    // folder-aware twin of `assertValidParent`, from the same module.
+    const filed = item.parentRef !== null && isFolderRef(item.parentRef);
     try {
-      assertValidParent(parentKind, childKind);
+      assertValidPlacement({ parentKind, filed }, childKind);
     } catch (err) {
       if (err instanceof IllegalParentTypeError) {
         throw new PlanGrammarError(
@@ -983,6 +1150,18 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   for (const item of adds) {
     const ref = item.parentRef;
     if (!ref || isTempRef(ref)) continue;
+    // A FOLDER's tenancy is the same rule over a different table (MOTIR-5414).
+    if (isFolderRef(ref)) {
+      assertFolderInPlanProject(
+        item,
+        ref,
+        'parentRef',
+        folderById.get(folderRefId(ref))!,
+        planProjectId,
+        liveById,
+      );
+      continue;
+    }
     // Resolution is guaranteed by `assertRefsResolvable`.
     const parent = liveById.get(ref)!;
     if (parent.projectId !== planProjectId) {
@@ -1005,7 +1184,14 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //     `addProposals` runs the same function at the APPEND, which is where the
   //     author still has the plan to fix.
   for (const item of items) {
-    assertReparentLegal(item, liveById, ancestorIdsById, terminalStatusKeys, planProjectId);
+    assertReparentLegal(
+      item,
+      liveById,
+      ancestorIdsById,
+      terminalStatusKeys,
+      planProjectId,
+      folderById,
+    );
   }
 
   // 4. Done-work immutability. A `modify`/`remove` never rewrites completed work.

@@ -235,7 +235,27 @@ export interface PlanItemChangeDto {
   from: string | null;
   /** The proposed NEW value, or null when the change removes it. */
   to: string | null;
+  /**
+   * Both sides of a `parent` change, TYPED (MOTIR-5415) — present on the
+   * `parent` row only. `from` / `to` above stay the reader's words (a key, a
+   * folder path joined `▸`, or null for the root) so an older client keeps
+   * rendering; a surface that must tell a FOLDER from a WORK ITEM from the
+   * PROJECT ROOT — the glyph, the `Placement` label — reads these instead
+   * (`design/ai-planning/design-notes.md` Part XVII §17.8).
+   */
+  placement?: { from: PlanPlacementSideDto; to: PlanPlacementSideDto };
 }
+
+/**
+ * One side of a proposal's placement (MOTIR-5415): the project root, a
+ * committed work item, or a folder. A folder side carries its path ROOT FIRST,
+ * and `folderMissing` when the folder no longer exists in the plan's project —
+ * then `folderPath` is null, because the name went with the row.
+ */
+export type PlanPlacementSideDto =
+  | { kind: 'root' }
+  | { kind: 'workItem'; id: string; identifier: string | null }
+  | { kind: 'folder'; folderId: string; folderPath: string[] | null; folderMissing: boolean };
 
 /**
  * One crumb on the COMMITTED ancestor path a proposal's parent sits on — the
@@ -348,6 +368,25 @@ export interface PlanReviewItemDto {
    * last degrading to the root rendering rather than failing the read.
    */
   parentTrail: PlanParentCrumbDto[];
+  /**
+   * The FOLDER this proposal will sit in, when its effective placement is one
+   * (MOTIR-5415): an `add`'s `parentRef` or a `modify`'s `patch.parentRef`
+   * naming `folder:<id>`, else — for a `modify` / `remove` that does not move
+   * its target — the target's own folder. Null otherwise.
+   *
+   * A folder-placed proposal is a ROOT: `parentNodeId` and the four parent
+   * fields above are null / `[]` for it, exactly as for an unfiled root.
+   */
+  folderId: string | null;
+  /** That folder's names, ROOT FIRST — null when there is no folder, or when
+   *  it no longer exists (see {@link folderMissing}). */
+  folderPath: string[] | null;
+  /**
+   * The folder named by {@link folderId} no longer exists in the plan's
+   * project — deleted after the plan was written. Approve refuses such a plan
+   * (MOTIR-5423); the review surface draws the stale state (MOTIR-5406).
+   */
+  folderMissing: boolean;
   /** Resolved blocked-by node ids (within the proposed forest). */
   blockedByNodeIds: string[];
   /**

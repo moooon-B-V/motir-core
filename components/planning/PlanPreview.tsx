@@ -51,7 +51,7 @@ export function PlanPreview({ epics }: { epics: RoadmapLevelItem[] }) {
                 {e.identifier}
               </span>
             </div>
-            <span className="mt-1 line-clamp-2 block text-xs font-semibold text-(--el-text)">
+            <span className="mt-1 line-clamp-2 text-xs font-semibold text-(--el-text)">
               {e.title}
             </span>
           </div>

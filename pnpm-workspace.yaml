@@ -40,3 +40,14 @@ allowBuilds:
   # upload path does and asserts it exists on disk.
   '@sentry/cli': false
   inngest-cli: set this to true or false
+
+# ⚠️ `next` VENDORS the React the App Router renders with, and 16.2.6's copy
+# drops a Suspense ping that lands during render — a late section whose data has
+# arrived never paints and its transition never settles (MOTIR-5255). The patch
+# is React's own upstream fix (shipped in react-dom 19.3.0 / vendored by next
+# 16.3.x) on the four client builds. When `next` is bumped, pnpm refuses the
+# stale entry: delete it only if `tests/react-dom-ping-patch.test.ts` still
+# passes on the unpatched install. A patch change always moves pnpm-lock.yaml's
+# patch_hash, so CI's install-input lanes see it without a path of its own.
+patchedDependencies:
+  next@16.2.6: patches/next@16.2.6.patch

@@ -216,6 +216,18 @@ export function PlanReviewCanvas({
   // have changed and the reader is asking the same thing.
   const decided = outcome !== null;
   const arrival = useMemo(() => arrivalLevel(items, tPlan('proposedCrumb')), [items, tPlan]);
+  // THE FOLDER CRUMB SEGMENT (Part XVII §17.2): a drilled chain whose ROOT-MOST
+  // crumb is a proposal FILED into a folder shows that folder ahead of it. It reads
+  // the proposal's OWN placement — a committed filed ancestor adds no segment, the
+  // story's decision for this surface.
+  const crumbFolderPath = useCallback(
+    (id: string): readonly string[] | null => {
+      const proposal = items.find((item) => item.nodeId === id);
+      if (!proposal || proposal.parentNodeId !== null) return null;
+      return proposal.folderPath && proposal.folderPath.length > 0 ? proposal.folderPath : null;
+    },
+    [items],
+  );
   const initialTrail = useMemo<CanvasCrumb[] | undefined>(
     () => arrival?.trail ?? undefined,
     [arrival],
@@ -525,6 +537,7 @@ export function PlanReviewCanvas({
         // approve, rather than being left addressed by an id that has stopped
         // naming anything (bug MOTIR-3439).
         resolveHeldNode={resolveHeldNode}
+        crumbFolderPath={crumbFolderPath}
         // Part IX §1.4's caption, on the one level that needs it. The foundation
         // owns the slot and knows only that it has nodes; which KIND of nodes
         // they are is this consumer's to say.

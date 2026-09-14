@@ -368,8 +368,13 @@ describe('GUARD 3 — the wire-facing layer casts only where it says it does', (
  * has nothing to do with the property. The cost is that a legitimate edit must
  * update this constant — which is the point. `render.ts` changing is exactly the
  * event that deserves a deliberate line in a diff and a sentence in a review.
+ *
+ * MOTIR-5412 (Story MOTIR-5310) changed it deliberately: `renderFolderLine` prints
+ * a `Folder: Parked ▸ 2025` line under LINEAGE when `motir show` reads a filed
+ * item. It reads the view model's `folderPath` (a `string[] | null` the adapter
+ * maps), not a wire shape.
  */
-const RENDER_TS_SHA256 = '01dfe48e3ab71766434704f064e5191d4706902fc6da8219680f753a5320dd12';
+const RENDER_TS_SHA256 = '9683ce7547c06ce86ac36680e01a4110611be790c09f13b4d2ce21a0aacfe71a';
 
 describe('GUARD 4 — render.ts is pinned', () => {
   it('matches the recorded hash', () => {

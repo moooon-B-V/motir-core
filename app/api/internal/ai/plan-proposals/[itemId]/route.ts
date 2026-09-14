@@ -12,7 +12,9 @@ import {
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
+  PlanGrammarError,
   PlanProposalReferencedError,
+  PlanRefGraphError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
@@ -220,6 +222,17 @@ export async function PATCH(
       err instanceof PlanItemUnknownTargetRepoRoleError
     ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    // A proposal set the plan gate refuses where it is written (MOTIR-5414) — an
+    // unknown `folder:<id>` (`dangling`), another project's folder
+    // (`illegal_parent`), a folder in a blocker list, and the self-consistency and
+    // re-parent verdicts that already threw here. 422 with the SAME code the MCP
+    // door returns, and `reason` as data, instead of an unmapped 500.
+    if (err instanceof PlanRefGraphError || err instanceof PlanGrammarError) {
+      return NextResponse.json(
+        { code: err.code, reason: err.reason, error: err.message },
+        { status: 422 },
+      );
     }
     if (err instanceof ProjectAccessDeniedError) {
       return NextResponse.json(
