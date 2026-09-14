@@ -156,6 +156,31 @@ describe('the decide door is let through by NAME, and nothing else is', () => {
   });
 });
 
+describe('the MCP door lets every non-owned move through', () => {
+  it.each(['in_progress', 'blocked', 'cancelled'])(
+    '`transition_status → %s` succeeds',
+    async (to) => {
+      const { itemId, identifier } = await gatedItem();
+      const res = await runTransitionStatus({ key: identifier, status: to }, fx.ctx);
+      expect(res.isError).toBeFalsy();
+      expect(await statusOf(itemId)).toBe(to);
+    },
+  );
+});
+
+describe('the seam: approve, then reopen by hand', () => {
+  it('approving writes Done through the deciding gate’s exemption, and a hand reopen `done → in_progress` then moves', async () => {
+    const { itemId, gateId } = await gatedItem();
+
+    await approvalGatesService.decide({ gateId, decision: 'approve', source: 'ui' }, fx.ctx);
+    expect(await statusOf(itemId)).toBe('done');
+
+    // The gate is `approved` now, so it holds nothing — §6d's reopen path.
+    await workItemsService.updateStatus(itemId, 'in_progress', fx.ctx);
+    expect(await statusOf(itemId)).toBe('in_progress');
+  });
+});
+
 describe('a gate that owns NOTHING refuses nothing', () => {
   it('a project whose workflow resolves the intent to no status is not refused', async () => {
     const { itemId } = await gatedItem();

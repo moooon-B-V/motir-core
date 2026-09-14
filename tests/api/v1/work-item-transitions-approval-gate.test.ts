@@ -81,9 +81,15 @@ describe('the transitions door refuses a move an approval holds', () => {
     );
   });
 
-  it('`→ in_progress` on the same item is still a 200', async () => {
-    const item = await gatedItem();
-    const res = await post(item.identifier, caller, 'in_progress');
-    expect(res.status).toBe(200);
-  });
+  it.each(['in_progress', 'blocked', 'cancelled'])(
+    'the non-owned move `→ %s` on the same item is still a 200',
+    async (to) => {
+      const item = await gatedItem();
+      const res = await post(item.identifier, caller, to);
+      expect(res.status).toBe(200);
+      expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
+        to,
+      );
+    },
+  );
 });

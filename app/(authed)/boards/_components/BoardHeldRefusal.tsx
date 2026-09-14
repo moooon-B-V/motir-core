@@ -19,15 +19,18 @@ export interface BoardHeldRefusal {
   line: StatusHeldLine;
 }
 
-interface BoardHeldRefusalContextValue {
+export interface BoardHeldRefusalContextValue {
   held: BoardHeldRefusal | null;
   close: () => void;
 }
 
-const BoardHeldRefusalContext = createContext<BoardHeldRefusalContextValue>({
+/** Outside a board (a card rendered on its own): nothing held, nothing to close. */
+export const NO_BOARD_HELD_REFUSAL: BoardHeldRefusalContextValue = {
   held: null,
   close: () => {},
-});
+};
+
+const BoardHeldRefusalContext = createContext<BoardHeldRefusalContextValue>(NO_BOARD_HELD_REFUSAL);
 
 export const BoardHeldRefusalProvider = BoardHeldRefusalContext.Provider;
 

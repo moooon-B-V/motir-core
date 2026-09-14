@@ -35,6 +35,16 @@ function toLines(held: HeldTransitionDTO[]): StatusHeldLine[] {
   }));
 }
 
+function seedSignature(held: HeldTransitionDTO[]): string {
+  return held
+    .map((h) =>
+      [h.statusKey, h.waitingOn, h.kind, h.gateId ?? '', h.canDecide, h.routedToLabel ?? ''].join(
+        '\u0000',
+      ),
+    )
+    .join('\u0001');
+}
+
 export function useStatusHeld(
   initial: HeldTransitionDTO[] | undefined,
   statuses: WorkflowStatusDto[],
@@ -46,9 +56,14 @@ export function useStatusHeld(
   // ignored by a `useState` initializer that only ran once (the client-island
   // rule in CLAUDE.md § Page state after a mutation). Adjusted during render,
   // the React-sanctioned way to derive state from a changed prop.
-  const [seenSeed, setSeenSeed] = useState(seed);
-  if (seenSeed !== seed) {
-    setSeenSeed(seed);
+  //
+  // ⚠️ Keyed on the read's CONTENT, never its identity: a caller passing a fresh
+  // array each render (an inline `[]`, a default parameter) would otherwise reset
+  // on every render and loop.
+  const signature = seedSignature(seed);
+  const [seenSignature, setSeenSignature] = useState(signature);
+  if (seenSignature !== signature) {
+    setSeenSignature(signature);
     setLines(toLines(seed));
   }
 

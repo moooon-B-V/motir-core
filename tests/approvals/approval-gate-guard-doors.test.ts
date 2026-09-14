@@ -149,17 +149,20 @@ describe('POST /api/board/move', () => {
     );
   });
 
-  it('a drop on any other column still moves the card', async () => {
-    const item = await gatedItem();
-    const { boardId, columns } = await boardWithDoneColumn();
+  it.each(['in_progress', 'blocked', 'cancelled'])(
+    'a drop on any other column still moves the card — `→ %s`',
+    async (to) => {
+      const item = await gatedItem();
+      const { boardId, columns } = await boardWithDoneColumn();
 
-    const res = await move({ boardId, workItemId: item.id, toColumnId: columns.blocked });
+      const res = await move({ boardId, workItemId: item.id, toColumnId: columns[to] });
 
-    expect(res.status).toBe(200);
-    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
-      'blocked',
-    );
-  });
+      expect(res.status).toBe(200);
+      expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
+        to,
+      );
+    },
+  );
 });
 
 describe('changeStatusAction', () => {
@@ -176,6 +179,18 @@ describe('changeStatusAction', () => {
     });
     expect(result.ok === false && result.error.length).toBeGreaterThan(0);
   });
+
+  it.each(['in_progress', 'blocked', 'cancelled'])(
+    'the non-owned move `→ %s` succeeds through the action',
+    async (to) => {
+      const item = await gatedItem();
+      const result = await changeStatusAction({ id: item.id, toStatusKey: to });
+      expect(result.ok).toBe(true);
+      expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
+        to,
+      );
+    },
+  );
 
   it('every other failure keeps the plain `{ ok: false, error }` shape', async () => {
     const item = await workItemsService.createWorkItem(

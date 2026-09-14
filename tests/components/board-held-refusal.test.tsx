@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({
 import {
   BoardCardHeldRefusal,
   BoardHeldRefusalProvider,
+  NO_BOARD_HELD_REFUSAL,
   type BoardHeldRefusal,
 } from '@/app/(authed)/boards/_components/BoardHeldRefusal';
 import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
@@ -130,5 +131,14 @@ describe('BoardCardHeldRefusal — on the returned card', () => {
     expect(close).toHaveBeenCalledTimes(1);
     fireEvent.mouseDown(document.body);
     expect(close).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('a card outside any board', () => {
+  it('draws nothing, and the default context has nothing to close', () => {
+    render(<BoardCardHeldRefusal workItemId="wi_a" />);
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+    expect(NO_BOARD_HELD_REFUSAL.held).toBeNull();
+    expect(() => NO_BOARD_HELD_REFUSAL.close()).not.toThrow();
   });
 });
