@@ -19,10 +19,14 @@
           VERBATIM, so the two assets of this tier cannot drift apart;
         · the three-way choice reuses the shipped `choice-card` grammar from
           design/projects/components.mock.html (the delete-with-reassign dialog);
-        · the container picker is the shipped Combobox, drawn the way
-          components/issues/ParentPicker composes it — kind glyph, title, key.
-      What it ADDS is this room's content: the three choices, the fallback when a
-      chosen container has gone, the save states, and the rail entry.
+        · the folder picker is the shipped FolderPicker panel
+          (app/(authed)/items/_components/FolderPicker.tsx) — a title, the search
+          Input, a listbox indented per level, the current location tagged.
+      What it ADDS is this room's content: the three choices, the folder picker,
+      the save states, and the rail entry.
+      AMENDED by MOTIR-5536 (2026-09-14): the destination is a FOLDER, not a work
+      item, and the archived-container fallback panel is gone — deleting the
+      destination folder carries the destination to its parent (MOTIR-5537).
 
       ── THE THIRD CHOICE IS A CHOICE ──
       "Project root" is drawn as a NAMED option with its own description, never as
@@ -958,7 +962,7 @@
         margin-top: 8px;
         position: relative;
       }
-      /* The destination a choice names — kind glyph · key · title · Open */
+      /* The destination a choice names — folder glyph · name · Open (amended, MOTIR-5536) */
       .dest {
         display: flex;
         align-items: center;
@@ -1040,6 +1044,65 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 12px;
         color: var(--el-text-identifier);
+      }
+      /* The FOLDER PICKER — app/(authed)/items/_components/FolderPicker.tsx's panel:
+         a title, the search Input, and a listbox indented 22px per level, the
+         current location tagged. Drawn in flow, like the menu it replaces. */
+      .dest .fg {
+        color: var(--el-text-secondary);
+      }
+      .fpanel {
+        display: flex;
+        flex-direction: column;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .fp-title {
+        padding: 8px 10px 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .fp-search {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .fp-list {
+        display: flex;
+        flex-direction: column;
+        margin-top: 4px;
+      }
+      .fp-opt {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .fp-opt.active {
+        background: var(--el-surface);
+      }
+      .fp-opt.d1 {
+        padding-left: calc(var(--spacing-control-x) + 22px);
+      }
+      .fp-opt.d2 {
+        padding-left: calc(var(--spacing-control-x) + 44px);
+      }
+      .fp-opt .cur {
+        margin-left: auto;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
       }
       /* Saving + saved */
       .btn .spin {
@@ -1262,6 +1325,12 @@
           <path d="M15 13v2" />
           <path d="M9 13v2" />
         </symbol>
+        <!-- lucide `folder` — the glyph the /items tree draws for a folder (design/work-items/folders.mock.html) -->
+        <symbol id="i-folder" viewBox="0 0 24 24">
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </symbol>
         <!-- lucide `bug` — EXTRACTED from the installed `lucide-react@1.16.0` -->
         <symbol id="i-bug" viewBox="0 0 24 24">
           <path d="M12 20v-9" />
@@ -1349,32 +1418,32 @@
       <header>
         <h1>Bugs &mdash; where a project&rsquo;s filed bugs land</h1>
         <p>
-          The project-settings room that chooses the container Motir files new bugs under &mdash;
-          the seeded one, any other epic, story or task, or the project root &mdash; and the rail
-          entry that opens it. Story MOTIR-4927 &middot; Subtask MOTIR-4933; implemented by
-          MOTIR-4938.
+          The project-settings room that chooses the folder Motir files new bugs into &mdash; the
+          seeded Bugs folder, any other folder, or the project root &mdash; and the rail entry that
+          opens it. Story MOTIR-4927 &middot; Subtask MOTIR-4933, amended by MOTIR-5536; implemented
+          by MOTIR-4938.
         </p>
         <p>
           It COMPOSES the settings-area chrome and the monitoring room&rsquo;s layers, re-specifying
-          neither, and reuses the shipped choice-card and Combobox grammars. What it decides is this
-          room&rsquo;s content: the three choices, the fallback when a chosen container has gone,
-          the save states, and the door.
+          neither, and reuses the shipped choice-card grammar and the shipped folder picker. What it
+          decides is this room&rsquo;s content: the three choices, the shipped folder picker, the
+          save states, and the door.
         </p>
       </header>
 
       <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 0 — the DEFAULT: the seeded container is the destination
+           PANEL 0 — the DEFAULT: the seeded Bugs folder is the destination
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 0 &middot; <b>The room as a project first finds it</b> &mdash; the seeded container is
-        the destination
+        Panel 0 &middot; <b>The room as a project first finds it</b> &mdash; the seeded Bugs folder
+        is the destination
       </div>
       <p class="panel-note">
-        Every project is born with a <b>task</b> titled <b>Bugs</b> and a destination pointing at it
-        (MOTIR-4935). So the room opens on the first choice, <b>naming</b> the container it points
-        at and linking to it &mdash; a destination a person cannot open is a destination they cannot
-        check. Nothing is dirty, so <b>Save changes</b> is disabled, exactly as the Estimation card
-        renders it.
+        Every project is born with a root <b>folder</b> named <b>Bugs</b> and a destination pointing
+        at it (MOTIR-4935). So the room opens on the first choice, <b>naming</b> the folder with the
+        tree&rsquo;s folder glyph and linking to it &mdash; a destination a person cannot open is a
+        destination they cannot check. Nothing is dirty, so <b>Save changes</b> is disabled, exactly
+        as the Estimation card renders it.
       </p>
       <div class="panel">
         <div class="settings">
@@ -1474,8 +1543,9 @@
               <div class="gcard-head">
                 <span class="gtitle">Bug destination</span>
                 <p class="gdesc">
-                  New bugs are created under this container. Changing it does not move bugs that are
-                  already filed.
+                  New bugs are filed into this folder. Changing it does not move bugs that are
+                  already filed. Deleting the folder moves its bugs, and this destination, to its
+                  parent.
                 </p>
               </div>
               <div class="gcard-body">
@@ -1483,15 +1553,14 @@
                   <label class="choice-card sel" role="radio" aria-checked="true">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">This project&rsquo;s bug container</span>
+                      <span class="ch">This project&rsquo;s Bugs folder</span>
                       <span class="cd"
                         >Created with the project. Rename it or move it and it stays the
                         destination.</span
                       >
                       <span class="slot">
                         <span class="dest">
-                          <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                          <span class="key">RENDE-1</span>
+                          <svg class="i fg" aria-hidden="true"><use href="#i-folder" /></svg>
                           <span class="ttl">Bugs</span>
                           <span class="link"
                             >Open <svg class="i sm"><use href="#i-external-link" /></svg
@@ -1503,8 +1572,8 @@
                   <label class="choice-card" role="radio" aria-checked="false">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">Another container</span>
-                      <span class="cd">Any epic, story or task in this project.</span>
+                      <span class="ch">Another folder</span>
+                      <span class="cd">Any folder in this project.</span>
                     </span>
                   </label>
                   <label class="choice-card" role="radio" aria-checked="false">
@@ -1529,17 +1598,19 @@
       </div>
 
       <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 1 — choosing ANOTHER container: the picker, open
+           PANEL 1 — choosing ANOTHER folder: the shipped folder picker, open
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 1 &middot; <b>Choosing another container</b> &mdash; the picker, open and filtered
+        Panel 1 &middot; <b>Choosing another folder</b> &mdash; the shipped folder picker, open
       </div>
       <p class="panel-note">
-        The second choice reveals the shipped <b>Combobox</b>, composed the way
-        <code class="k">ParentPicker</code> composes it: searchable, each row a kind glyph, a title
-        and the key. <b>It offers only what can hold a bug</b> &mdash; epics, stories and tasks, per
-        the kind-parent matrix &mdash; and only from this project, grouped by kind so a project with
-        hundreds of containers is still scannable. Picking one makes the card dirty.
+        The second choice reveals the shipped <b>folder picker</b> &mdash;
+        <code class="k">FolderPicker.tsx</code>&rsquo;s panel, the one
+        <code class="k">/items</code> already uses: a title, the search field, every folder of this
+        project indented 22px per level, and the stored destination tagged <b>Current location</b>.
+        Its root option reads <b>Project root</b>; picking it selects the third choice. Picking a
+        folder makes the card dirty. It offers only this project&rsquo;s folders, and never a work
+        item.
       </p>
       <div class="panel">
         <div class="settings">
@@ -1639,8 +1710,9 @@
               <div class="gcard-head">
                 <span class="gtitle">Bug destination</span>
                 <p class="gdesc">
-                  New bugs are created under this container. Changing it does not move bugs that are
-                  already filed.
+                  New bugs are filed into this folder. Changing it does not move bugs that are
+                  already filed. Deleting the folder moves its bugs, and this destination, to its
+                  parent.
                 </p>
               </div>
               <div class="gcard-body">
@@ -1648,15 +1720,14 @@
                   <label class="choice-card" role="radio" aria-checked="false">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">This project&rsquo;s bug container</span>
+                      <span class="ch">This project&rsquo;s Bugs folder</span>
                       <span class="cd"
                         >Created with the project. Rename it or move it and it stays the
                         destination.</span
                       >
                       <span class="slot">
                         <span class="dest">
-                          <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                          <span class="key">RENDE-1</span>
+                          <svg class="i fg" aria-hidden="true"><use href="#i-folder" /></svg>
                           <span class="ttl">Bugs</span>
                           <span class="link"
                             >Open <svg class="i sm"><use href="#i-external-link" /></svg
@@ -1668,41 +1739,33 @@
                   <label class="choice-card sel" role="radio" aria-checked="true">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">Another container</span>
-                      <span class="cd">Any epic, story or task in this project.</span>
+                      <span class="ch">Another folder</span>
+                      <span class="cd">Any folder in this project.</span>
                       <span class="slot">
-                        <span class="combo" role="combobox" aria-expanded="true">
-                          <span class="ph">Choose a container&hellip;</span>
-                          <svg class="i chev"><use href="#i-chevrons-up-down" /></svg>
-                        </span>
                         <span class="menu-anchor">
-                          <span class="listbox" role="listbox" aria-label="Bug destination">
-                            <span class="search">
-                              <svg class="i sm"><use href="#i-search" /></svg>
-                              tri
-                            </span>
-                            <span class="grp">Tasks</span>
-                            <span class="opt active" role="option" aria-selected="false">
-                              <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                              Triage &mdash; incoming defects
-                              <span class="key">RENDE-12</span>
-                            </span>
-                            <span class="opt" role="option" aria-selected="false">
-                              <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                              Triage backlog (Q3)
-                              <span class="key">RENDE-87</span>
-                            </span>
-                            <span class="grp">Stories</span>
-                            <span class="opt" role="option" aria-selected="false">
-                              <svg class="i t-story"><use href="#i-kind-story" /></svg>
-                              Sentry triage rotation
-                              <span class="key">RENDE-40</span>
-                            </span>
-                            <span class="grp">Epics</span>
-                            <span class="opt" role="option" aria-selected="false">
-                              <svg class="i t-epic"><use href="#i-kind-epic" /></svg>
-                              Stability &amp; triage
-                              <span class="key">RENDE-3</span>
+                          <span class="fpanel">
+                            <span class="fp-title">Bug destination</span>
+                            <span
+                              class="fp-search"
+                              role="combobox"
+                              aria-expanded="true"
+                              aria-label="Search folders"
+                              >Search folders</span
+                            >
+                            <span class="fp-list" role="listbox" aria-label="Folders">
+                              <span class="fp-opt" role="option" aria-selected="false"
+                                >Project root</span
+                              >
+                              <span class="fp-opt" role="option" aria-selected="true"
+                                >Bugs <span class="cur">Current location</span></span
+                              >
+                              <span class="fp-opt d1 active" role="option" aria-selected="false"
+                                >Triage</span
+                              >
+                              <span class="fp-opt d2" role="option" aria-selected="false"
+                                >Incoming</span
+                              >
+                              <span class="fp-opt" role="option" aria-selected="false">Later</span>
                             </span>
                           </span>
                         </span>
@@ -1840,8 +1903,9 @@
               <div class="gcard-head">
                 <span class="gtitle">Bug destination</span>
                 <p class="gdesc">
-                  New bugs are created under this container. Changing it does not move bugs that are
-                  already filed.
+                  New bugs are filed into this folder. Changing it does not move bugs that are
+                  already filed. Deleting the folder moves its bugs, and this destination, to its
+                  parent.
                 </p>
               </div>
               <div class="gcard-body">
@@ -1849,15 +1913,14 @@
                   <label class="choice-card" role="radio" aria-checked="false">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">This project&rsquo;s bug container</span>
+                      <span class="ch">This project&rsquo;s Bugs folder</span>
                       <span class="cd"
                         >Created with the project. Rename it or move it and it stays the
                         destination.</span
                       >
                       <span class="slot">
                         <span class="dest">
-                          <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                          <span class="key">RENDE-1</span>
+                          <svg class="i fg" aria-hidden="true"><use href="#i-folder" /></svg>
                           <span class="ttl">Bugs</span>
                           <span class="link"
                             >Open <svg class="i sm"><use href="#i-external-link" /></svg
@@ -1869,8 +1932,8 @@
                   <label class="choice-card" role="radio" aria-checked="false">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">Another container</span>
-                      <span class="cd">Any epic, story or task in this project.</span>
+                      <span class="ch">Another folder</span>
+                      <span class="cd">Any folder in this project.</span>
                     </span>
                   </label>
                   <label class="choice-card sel" role="radio" aria-checked="true">
@@ -2007,8 +2070,9 @@
               <div class="gcard-head">
                 <span class="gtitle">Bug destination</span>
                 <p class="gdesc">
-                  New bugs are created under this container. Changing it does not move bugs that are
-                  already filed.
+                  New bugs are filed into this folder. Changing it does not move bugs that are
+                  already filed. Deleting the folder moves its bugs, and this destination, to its
+                  parent.
                 </p>
               </div>
               <div class="gcard-body">
@@ -2016,15 +2080,14 @@
                   <label class="choice-card" role="radio" aria-checked="false">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">This project&rsquo;s bug container</span>
+                      <span class="ch">This project&rsquo;s Bugs folder</span>
                       <span class="cd"
                         >Created with the project. Rename it or move it and it stays the
                         destination.</span
                       >
                       <span class="slot">
                         <span class="dest">
-                          <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                          <span class="key">RENDE-1</span>
+                          <svg class="i fg" aria-hidden="true"><use href="#i-folder" /></svg>
                           <span class="ttl">Bugs</span>
                           <span class="link"
                             >Open <svg class="i sm"><use href="#i-external-link" /></svg
@@ -2036,8 +2099,8 @@
                   <label class="choice-card" role="radio" aria-checked="false">
                     <span class="radio"></span>
                     <span class="ct">
-                      <span class="ch">Another container</span>
-                      <span class="cd">Any epic, story or task in this project.</span>
+                      <span class="ch">Another folder</span>
+                      <span class="cd">Any folder in this project.</span>
                     </span>
                   </label>
                   <label class="choice-card sel" role="radio" aria-checked="true">
@@ -2073,199 +2136,10 @@
       </div>
 
       <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 4 — the CHOSEN container has gone: the fallback, stated
+           PANEL 4 — the ACCESS PATH: the door, drawn rather than described
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 4 &middot; <b>The chosen container was archived</b> &mdash; the fallback, stated
-        rather than hidden
-      </div>
-      <p class="panel-note">
-        The resolver files at the root when its container has gone (MOTIR-4937) &mdash; right, and
-        invisible unless the room says so. So the room does not keep showing a live-looking name:
-        the banner states <b>what is happening now</b>, and the stored choice is drawn struck
-        through with an <b>Archived</b> pill, so a person can see both what they chose and why it is
-        not in force. <b>A DELETED container cannot draw this panel</b>: its foreign key nulls the
-        pointer, so the room reads <b>Project root</b> with nothing to explain &mdash; the notes
-        record that limit.
-      </p>
-      <div class="panel">
-        <div class="settings">
-          <div class="set-rail">
-            <div class="grp">
-              <div class="h">General</div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
-                Details
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-folder-git-2" /></svg>
-                Repositories
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-activity" /></svg>
-                Monitoring
-              </div>
-            </div>
-            <div class="grp">
-              <div class="h">Access</div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-users" /></svg>
-                Members &amp; access
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-globe" /></svg>
-                Public page
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-link-2" /></svg>
-                Public address
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-shield" /></svg>
-                Roles &amp; permissions
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-key-round" /></svg>
-                Code access
-              </div>
-            </div>
-            <div class="grp">
-              <div class="h">Work</div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-workflow" /></svg>
-                Workflow
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-shield-check" /></svg>
-                Approvals
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-columns-3" /></svg>
-                Boards
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-gauge" /></svg>
-                Estimation
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-tag" /></svg>
-                Fields
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-box" /></svg>
-                Components
-              </div>
-              <div class="rail-row active">
-                <svg class="i"><use href="#i-bug" /></svg>
-                Bugs
-              </div>
-            </div>
-            <div class="grp">
-              <div class="h">Automation</div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-sparkles" /></svg>
-                AI planning
-              </div>
-              <div class="rail-row">
-                <svg class="i"><use href="#i-bot" /></svg>
-                Rules
-              </div>
-            </div>
-          </div>
-          <div class="set-pane">
-            <div class="pane-head">
-              <div class="eyebrow">Project settings</div>
-              <h3>Bugs</h3>
-              <p>
-                Where Motir files the bugs it creates on its own for this project &mdash; issues
-                arriving from a connected monitor, for one. A bug a person files keeps the parent
-                they choose.
-              </p>
-            </div>
-            <div class="gcard">
-              <div class="gcard-head">
-                <span class="gtitle">Bug destination</span>
-                <p class="gdesc">
-                  New bugs are created under this container. Changing it does not move bugs that are
-                  already filed.
-                </p>
-              </div>
-              <div class="gcard-body">
-                <div class="banner warn">
-                  <svg class="i"><use href="#i-triangle-alert" /></svg>
-                  <span>
-                    <b>RENDE-12 &middot; Triage was archived.</b> New bugs are being filed at the
-                    project root until you choose a destination again.
-                  </span>
-                </div>
-                <div class="choice-grid" role="radiogroup" aria-label="Bug destination">
-                  <label class="choice-card" role="radio" aria-checked="false">
-                    <span class="radio"></span>
-                    <span class="ct">
-                      <span class="ch">This project&rsquo;s bug container</span>
-                      <span class="cd"
-                        >Created with the project. Rename it or move it and it stays the
-                        destination.</span
-                      >
-                      <span class="slot">
-                        <span class="dest">
-                          <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                          <span class="key">RENDE-1</span>
-                          <span class="ttl">Bugs</span>
-                          <span class="link"
-                            >Open <svg class="i sm"><use href="#i-external-link" /></svg
-                          ></span>
-                        </span>
-                      </span>
-                    </span>
-                  </label>
-                  <label class="choice-card sel" role="radio" aria-checked="true">
-                    <span class="radio"></span>
-                    <span class="ct">
-                      <span class="ch">Another container</span>
-                      <span class="cd">Any epic, story or task in this project.</span>
-                      <span class="slot">
-                        <span class="combo" role="combobox" aria-expanded="false">
-                          <svg class="i t-task"><use href="#i-kind-task" /></svg>
-                          <span class="dest"
-                            ><span class="ttl gone">Triage &mdash; incoming defects</span></span
-                          >
-                          <span class="key">RENDE-12</span>
-                          <svg class="i sm chev"><use href="#i-chevrons-up-down" /></svg>
-                        </span>
-                        <span class="pill pill-warning">
-                          <svg class="i sm"><use href="#i-archive" /></svg>
-                          Archived
-                        </span>
-                      </span>
-                    </span>
-                  </label>
-                  <label class="choice-card" role="radio" aria-checked="false">
-                    <span class="radio"></span>
-                    <span class="ct">
-                      <span class="ch">Project root</span>
-                      <span class="cd"
-                        >Bugs are filed at the top of the project with no parent &mdash; nothing
-                        sits between a new bug and the backlog.</span
-                      >
-                    </span>
-                  </label>
-                </div>
-              </div>
-              <div class="gcard-foot">
-                <button class="btn btn-secondary" type="button">Cancel</button>
-                <button class="btn btn-primary" type="button" disabled>Save changes</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 5 — the ACCESS PATH: the door, drawn rather than described
-           ══════════════════════════════════════════════════════════════════ -->
-      <div class="panel-label">
-        Panel 5 &middot; <b>The access path</b> &mdash; the door, drawn rather than described
+        Panel 4 &middot; <b>The access path</b> &mdash; the door, drawn rather than described
       </div>
       <p class="panel-note">
         <b>Naming the route in prose is not drawing the entrance.</b> The row below is the whole
@@ -2375,34 +2249,28 @@
             <table class="statetable">
               <thead>
                 <tr>
-                  <th>stored &rarr; reason</th>
+                  <th>stored pointer</th>
                   <th>what the room shows</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>configured</td>
+                  <td>a folder</td>
                   <td>
-                    The choice that names the container &mdash; the seeded one or another &mdash;
-                    with its kind glyph, key and title, and an Open link.
+                    The choice that names the folder &mdash; the seeded Bugs folder or another
+                    &mdash; with the folder glyph, its name, and an Open link.
                   </td>
                 </tr>
                 <tr>
-                  <td>root_selected</td>
+                  <td>null</td>
                   <td><b>Project root</b>, selected, with its sentence. Never an empty control.</td>
                 </tr>
                 <tr>
-                  <td>container_archived</td>
+                  <td>its folder deleted</td>
                   <td>
-                    The warning banner saying bugs are going to the root, and the stored choice
-                    struck through with an Archived pill.
-                  </td>
-                </tr>
-                <tr>
-                  <td>legacy_title_home</td>
-                  <td>
-                    Not a state a project in this room can show: the backfill gives every project a
-                    pointer before this room ships, so the transitional branch is never rendered.
+                    Not a state the room can show: the delete carries the pointer to the
+                    folder&rsquo;s parent in the same transaction (MOTIR-5537), so the room shows
+                    that parent, or <b>Project root</b>.
                   </td>
                 </tr>
               </tbody>
