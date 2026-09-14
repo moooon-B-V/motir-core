@@ -21,15 +21,16 @@
 
       RENDERED FIRST. The shipped DesignResultSection inside ContentSectionCard was
       rendered through the repo's vitest + RTL setup (renderWithIntl, the real en and
-      zh catalogues) in eight states. The section card, the frame chrome, band 1
-      (FrameHeader), band 3's row, the record strip, the dead port and the empty
-      state below are transcribed from that render's emitted markup and classes;
-      the band adds one meta clause, one sentence and one control.
+      zh catalogues) in every state, on origin/main after MOTIR-5488 merged. The
+      section card, the frame chrome, band 1 (FrameHeader), band 3's row, the port's
+      frame strip and note row, the record strip, the dead port and the empty state
+      below are transcribed from that render's emitted markup and classes; the band
+      adds one meta clause, one sentence and one control.
 
       CITES, NEVER REDRAWS: approval-control.mock.html (the frame, nine states),
-      design-result.mock.html (the port's contents), the workbench notes' section 22
-      (the overlay), status-held-by-decision.mock.html (the same control's string
-      and glyph).
+      design-result--what-to-review.mock.html (the port's contents), the workbench
+      notes' section 22 (the overlay), status-held-by-decision.mock.html (the same
+      control's string and glyph).
 
       See design-notes.md section "The item page HANDS THE DECISION OVER".
     -->
@@ -72,6 +73,8 @@
         --spacing-btn-x-sm: 12px;
         --spacing-chip-x: 10px;
         --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
         --spacing-md: 16px;
         --height-btn-sm: 32px;
 
@@ -452,15 +455,11 @@
         flex: none;
       }
 
-      /* ── band 2 — the port, shown in the kept states (shipped, abbreviated) ── */
+      /* ── band 2 — the port, in the kept states (shipped DesignResultPanel, after MOTIR-5488) ── */
       .port {
-        position: relative;
-        min-height: 196px;
-        max-height: 260px;
-        overflow: hidden;
         padding: 16px;
       }
-      .portStrip {
+      .strip {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -470,24 +469,63 @@
         background: var(--el-surface-soft);
         padding: 6px 10px;
         font-size: 12px;
-        font-weight: 500;
         color: var(--el-text-secondary);
       }
-      .portNote {
+      .stripPath {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .stripLink {
+        margin-left: auto;
+        color: var(--el-text);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .mockBox {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 150px;
         border: 1px solid var(--el-border);
         border-radius: 0 0 var(--radius-input) var(--radius-input);
-        background: var(--el-page-bg);
-        padding: 16px;
+        background: var(--el-muted);
         font-size: 13px;
-        min-height: 72px;
-      }
-      .portNote h4 {
-        margin: 0 0 4px;
-        font-size: 14px;
-      }
-      .portNote p {
-        margin: 0;
         color: var(--el-text-secondary);
+        text-align: center;
+      }
+      .noteRow {
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .noteLabel {
+        flex: none;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .notePath {
+        min-width: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .noteLink {
+        margin-left: auto;
+        flex: none;
+        color: var(--el-link);
+        text-decoration: none;
+        white-space: nowrap;
       }
       .chips {
         margin-top: 20px;
@@ -692,8 +730,10 @@
           <strong>The rule the code card is closed against:</strong> the band replaces the frame
           ONLY for <code>awaiting</code> + <code>canDecide</code>; every other state renders as
           today. Every class is transcribed from a render of the shipped
-          <code>DesignResultSection</code>; the frame and its nine states stay
-          <code>approval-control.mock.html</code>'s.
+          <code>DesignResultSection</code>. The frame and its nine states stay
+          <code>approval-control.mock.html</code>'s. A <code>design_result</code> gate exists only
+          on a design card with no open linked pull request (<code>design-result.md</code> AMENDMENT
+          4 Q8), so that is the only card this band appears on.
         </p>
       </header>
 
@@ -952,8 +992,8 @@
         <p class="panelNote">
           C (confirming), D (in flight), H (refused) and X (port failed) no longer occur on the item
           page, because they exist only between a press and its answer, and the only press left is
-          in the overlay. The ports below are abbreviated; their contents are
-          <code>design-result.mock.html</code>'s.
+          in the overlay. The ports below are the shipped panel as MOTIR-5488 left it, with the mock
+          frame shortened for the board.
         </p>
         <div class="grid2">
           <div class="spec">
@@ -970,15 +1010,19 @@
                   <span class="pillSlot"><span class="pill pill-await">Awaiting</span></span>
                 </div>
                 <div class="port">
-                  <div class="portStrip">
+                  <div class="strip">
                     <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-file-text" />
-                    </svg>
-                    Design note
+                      <use href="#i-file-text" /></svg
+                    ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                    ><a class="stripLink" href="#b-mock">Open in new tab</a>
                   </div>
-                  <div class="portNote">
-                    <h4>The approvals room</h4>
-                    <p>Prose the reviewer reads.</p>
+                  <div class="mockBox">the sandboxed mock, at its 32rem height</div>
+                  <div class="noteRow">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-file-text" /></svg
+                    ><span class="noteLabel">Design note</span
+                    ><span class="notePath">design/work-items/design-notes.md</span
+                    ><a class="noteLink" href="#b-note">Open note</a>
                   </div>
                   <div class="chips">
                     <span class="chip"
@@ -1014,15 +1058,21 @@
                   <span class="pillSlot"><span class="pill pill-ok">Approved</span></span>
                 </div>
                 <div class="port">
-                  <div class="portStrip">
+                  <div class="strip">
                     <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-file-text" />
-                    </svg>
-                    Design note
+                      <use href="#i-file-text" /></svg
+                    ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                    ><a class="stripLink" href="#e-mock">Open in new tab</a>
                   </div>
-                  <div class="portNote">
-                    <h4>The approvals room</h4>
-                    <p>The version that was approved — pinned, not the current one.</p>
+                  <div class="mockBox">
+                    the version that was approved — pinned, not the current one
+                  </div>
+                  <div class="noteRow">
+                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-file-text" /></svg
+                    ><span class="noteLabel">Design note</span
+                    ><span class="notePath">design/work-items/design-notes.md</span
+                    ><a class="noteLink" href="#e-note">Open note</a>
                   </div>
                   <div class="chips">
                     <span class="chip"
@@ -1063,17 +1113,20 @@
                     ><span class="pill pill-changes">Changes requested</span></span
                   >
                 </div>
-                <div class="empty" style="margin: 16px">
-                  <span class="emptyIc"
-                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-image-off" /></svg
-                  ></span>
-                  <div>
-                    <p class="emptyTitle">No design result published yet</p>
-                    <p class="emptyBody">
-                      The version sent back is not pinned, so its bytes go on the ordinary sweep,
-                      and the port shows its own nothing-published state.
-                    </p>
+                <div class="port">
+                  <div class="empty">
+                    <span class="emptyIc"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-image-off" /></svg
+                    ></span>
+                    <div>
+                      <p class="emptyTitle">No design result published yet</p>
+                      <p class="emptyBody">
+                        A design result is published only when other work waits on this design — its
+                        agent then publishes the mock and the note. With nothing waiting, the pull
+                        request is where the design is reviewed.
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div class="rec">
@@ -1084,6 +1137,13 @@
                 </div>
               </div>
             </div>
+            <p class="panelNote" style="margin-top: 8px">
+              The version that was sent back is not pinned, so once its bytes are reclaimed the port
+              shows the panel's own empty state. <strong>Drawn as the target:</strong> the shipped
+              frame also shows state X's <em>You cannot approve what cannot be shown.</em> under
+              this decided record. That is a defect, filed separately, and not something to
+              preserve.
+            </p>
           </div>
 
           <div class="spec">
@@ -1123,8 +1183,8 @@
         <div class="panelLabel">4 · No gate at all — the shipped DesignResultPanel, unchanged</div>
         <p class="panelNote">
           The no-gate path is untouched: nothing here changes until there is something to decide.
-          The panel's own contents are <code>design-result.mock.html</code>'s, and open PR #2894
-          (MOTIR-5488) is reshaping them. Whatever ships there renders here.
+          The panel is as MOTIR-5488 shipped it: the mock frame first, the note one link away
+          (<code>design-result--what-to-review.mock.html</code>).
         </p>
         <div class="grid2">
           <div class="spec">
@@ -1134,15 +1194,19 @@
                 <h2 class="scTitle">Design result</h2>
                 <span class="scGloss">— what this work item produced</span>
               </div>
-              <div class="portStrip">
+              <div class="strip">
                 <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-file-text" />
-                </svg>
-                Design note
+                  <use href="#i-file-text" /></svg
+                ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                ><a class="stripLink" href="#n-mock">Open in new tab</a>
               </div>
-              <div class="portNote">
-                <h4>The approvals room</h4>
-                <p>Prose the reviewer reads.</p>
+              <div class="mockBox">the sandboxed mock, at its 32rem height</div>
+              <div class="noteRow">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="noteLabel">Design note</span
+                ><span class="notePath">design/work-items/design-notes.md</span
+                ><a class="noteLink" href="#n-note">Open note</a>
               </div>
               <div class="chips">
                 <span class="chip"
@@ -1169,9 +1233,9 @@
                 <div>
                   <p class="emptyTitle">No design result published yet</p>
                   <p class="emptyBody">
-                    A design result appears here once this work item’s agent publishes it with
-                    publish_design_result — the note, the page/view mock and the screenshot, in one
-                    call. Nothing else publishes it, so an empty panel means the call was not made.
+                    A design result is published only when other work waits on this design — its
+                    agent then publishes the mock and the note. With nothing waiting, the pull
+                    request is where the design is reviewed.
                   </p>
                 </div>
               </div>
