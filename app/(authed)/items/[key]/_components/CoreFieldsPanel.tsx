@@ -52,6 +52,7 @@ import { ComponentsCard } from './ComponentsCard';
 import { ProvenanceSection } from './ProvenanceSection';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { useDisplayedStatus } from './OptimisticStatusProvider';
+import { usePlacementReporter } from './PlacementProvider';
 
 // The issue detail metadata rail (Story 2.4 · Subtasks 2.4.2 + 2.4.4). Per the
 // mockup `design/work-items/detail.png`: a stack of field cards that DISPLAY the
@@ -240,6 +241,11 @@ export function CoreFieldsPanel({
 
   const toggle = (key: EditableKey) => setEditing((cur) => (cur === key ? null : key));
 
+  // THE PAGE'S PLACEMENT CHANNEL (MOTIR-5381). A parent change moves the item, and
+  // the breadcrumb that draws where it sits is another island; reporting asks the
+  // server where the item now is. A no-op outside the page (unit call sites).
+  const reportPlacementChange = usePlacementReporter();
+
   function patch(input: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>) {
     setEditing(null);
     setOverrides((o) => ({ ...o, ...input }));
@@ -248,6 +254,8 @@ export function CoreFieldsPanel({
       if (res.ok) {
         // The 200 IS the confirmation — keep the optimistic value, no refresh.
         setUpdatedAt(res.updatedAt);
+        // Only after a SUCCESSFUL parent change: a failed or stale save moved nothing.
+        if (input.parentId !== undefined) reportPlacementChange(item.id);
       } else if (res.stale) {
         // A genuine conflict (someone else edited): drop our optimistic value
         // and re-read the server's newer state — the one place a refresh is right.

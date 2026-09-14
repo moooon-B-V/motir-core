@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import type { WorkItemDto } from '@/lib/dto/workItems';
+import type { WorkItemDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -10,16 +10,20 @@ import type { SprintDto } from '@/lib/dto/sprints';
 // The inline rail commits through the edit Server Actions + refreshes the route;
 // stub those, the parent-candidates fetch, the router, and the toast so the
 // panel drives in isolation.
-const { updateSpy, statusSpy, refreshSpy, toastSpy, setSprintSpy } = vi.hoisted(() => ({
-  updateSpy: vi.fn(),
-  statusSpy: vi.fn(),
-  refreshSpy: vi.fn(),
-  toastSpy: vi.fn(),
-  setSprintSpy: vi.fn(),
-}));
+const { updateSpy, statusSpy, refreshSpy, toastSpy, setSprintSpy, placementSpy, candidatesSpy } =
+  vi.hoisted(() => ({
+    updateSpy: vi.fn(),
+    statusSpy: vi.fn(),
+    refreshSpy: vi.fn(),
+    toastSpy: vi.fn(),
+    setSprintSpy: vi.fn(),
+    placementSpy: vi.fn(),
+    candidatesSpy: vi.fn(),
+  }));
 vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: updateSpy,
   changeStatusAction: statusSpy,
+  getWorkItemPlacementAction: placementSpy,
 }));
 // The Sprint field commits through the assign route via this client helper
 // (2.4.14) — stub the fetch so the panel drives in isolation.
@@ -27,7 +31,7 @@ vi.mock('@/components/issues/actions/workItemActionsClient', () => ({
   setWorkItemSprint: setSprintSpy,
 }));
 vi.mock('@/app/(authed)/items/actions', () => ({
-  listCandidateParentsAction: vi.fn().mockResolvedValue({ ok: true, candidates: [] }),
+  listCandidateParentsAction: candidatesSpy,
 }));
 // CoreFieldsPanel composes CustomFieldsSection (5.3.7), whose Server Action
 // would pull the real db module into this unit suite — stub it out (its own
@@ -49,6 +53,12 @@ vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) 
 
 import { CoreFieldsPanel } from '@/app/(authed)/items/[key]/_components/CoreFieldsPanel';
 import { IssueExplanation } from '@/app/(authed)/items/[key]/_components/IssueExplanation';
+import { PlacementProvider } from '@/app/(authed)/items/[key]/_components/PlacementProvider';
+import { PlacementBreadcrumb } from '@/app/(authed)/items/[key]/_components/PlacementBreadcrumb';
+
+beforeEach(() => {
+  candidatesSpy.mockResolvedValue({ ok: true, candidates: [] });
+});
 
 afterEach(() => {
   cleanup();
@@ -241,6 +251,119 @@ describe('CoreFieldsPanel (inline rail)', () => {
     // The action above resolves asynchronously; flush that pass so its
     // state update lands inside the test rather than after it.
     await act(async () => {});
+  });
+});
+
+// A parent change MOVES the item, and the breadcrumb that draws where it sits is a
+// different island (Story MOTIR-5309 · MOTIR-5381). The rail reports a SUCCESSFUL
+// parent change to the page's placement channel; the channel re-reads and the
+// breadcrumb repaints — no whole-page refresh.
+describe('CoreFieldsPanel → placement channel', () => {
+  const oldEpic = {
+    id: 'wi_old',
+    parentId: null,
+    kind: 'epic',
+    key: 1,
+    identifier: 'PROD-1',
+    title: 'Old epic',
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    position: 'a0',
+    estimateMinutes: null,
+    storyPoints: null,
+    archivedAt: null,
+  } as unknown as WorkItemSummaryDto;
+  const newEpic = {
+    ...oldEpic,
+    id: 'wi_new',
+    key: 2,
+    identifier: 'PROD-2',
+    title: 'New epic',
+  } as WorkItemSummaryDto;
+
+  function renderOnPage() {
+    candidatesSpy.mockResolvedValue({ ok: true, candidates: [oldEpic, newEpic] });
+    return render(
+      <PlacementProvider
+        serverPlacement={{
+          folderId: null,
+          parent: oldEpic,
+          ancestors: [oldEpic],
+          placementFolder: null,
+        }}
+      >
+        <PlacementBreadcrumb />
+        <CoreFieldsPanel
+          item={makeItem({ parentId: oldEpic.id })}
+          members={members}
+          workflow={workflow}
+          parent={oldEpic}
+          reporterIsSelf
+        />
+      </PlacementProvider>,
+    );
+  }
+
+  async function pickNewParent() {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Parent' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Parent' }));
+    fireEvent.click(await screen.findByRole('option', { name: /New epic/ }));
+    await act(async () => {});
+  }
+
+  it('repaints the breadcrumb from the re-read after a successful parent change', async () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    placementSpy.mockResolvedValue({
+      ok: true,
+      placement: { folderId: null, parent: newEpic, ancestors: [newEpic], placementFolder: null },
+    });
+    renderOnPage();
+    const crumbs = screen.getByRole('navigation', { name: 'Parent work items' });
+    expect(within(crumbs).getByRole('link', { name: /Old epic/ })).toBeTruthy();
+
+    await pickNewParent();
+
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'wi_new' }));
+    expect(placementSpy).toHaveBeenCalledTimes(1);
+    expect(placementSpy).toHaveBeenCalledWith('wi_1');
+    const repainted = screen.getByRole('navigation', { name: 'Parent work items' });
+    expect(within(repainted).getByRole('link', { name: /New epic/ })).toBeTruthy();
+    expect(within(repainted).queryByRole('link', { name: /Old epic/ })).toBeNull();
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not report a refused parent change', async () => {
+    updateSpy.mockResolvedValue({ ok: false, error: 'Nope', field: 'parent' });
+    renderOnPage();
+
+    await pickNewParent();
+
+    expect(updateSpy).toHaveBeenCalled();
+    expect(placementSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not report a stale parent change (the refresh re-reads instead)', async () => {
+    updateSpy.mockResolvedValue({ ok: false, error: 'Changed', stale: true });
+    renderOnPage();
+
+    await pickNewParent();
+
+    expect(placementSpy).not.toHaveBeenCalled();
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report a change to a field that cannot move the item', async () => {
+    updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
+    renderOnPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Priority' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Priority' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Low' }));
+    await act(async () => {});
+
+    expect(updateSpy).toHaveBeenCalled();
+    expect(placementSpy).not.toHaveBeenCalled();
   });
 });
 
