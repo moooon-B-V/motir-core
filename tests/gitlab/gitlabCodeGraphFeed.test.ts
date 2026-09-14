@@ -35,6 +35,9 @@ beforeEach(async () => {
   vi.stubEnv('GITLAB_APP_CLIENT_ID', 'client-id');
   vi.stubEnv('GITLAB_APP_CLIENT_SECRET', 'client-secret');
   vi.stubEnv('GITLAB_TOKEN_ENCRYPTION_KEY', KEY);
+  // Connecting registers the project webhook (MOTIR-5349), which needs the secret;
+  // the `fetch` stub below answers the hooks calls too.
+  vi.stubEnv('GITLAB_WEBHOOK_SECRET', 'webhook-secret');
 });
 afterEach(() => {
   // `vi.spyOn` returns the SAME accumulating mock when re-spied and the global

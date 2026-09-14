@@ -90,6 +90,24 @@ export class GitlabWebhookNotConfiguredError extends Error {
 }
 
 /**
+ * GitLab refused — or could not be reached for — adding, updating or removing the
+ * project webhook Motir registers on connect (MOTIR-5349). `status` is GitLab's
+ * HTTP status, or null when no response arrived; a 403 almost always means the
+ * user lacks the Maintainer role the hooks API requires. Connecting a project
+ * FAILS on this rather than persisting a project that would receive no events.
+ */
+export class GitlabWebhookRegistrationError extends Error {
+  readonly code = 'GITLAB_WEBHOOK_REGISTRATION_FAILED' as const;
+  constructor(
+    readonly status: number | null,
+    detail: string,
+  ) {
+    super(`GitLab project webhook ${detail} failed${status === null ? '' : ` (${status})`}.`);
+    this.name = 'GitlabWebhookRegistrationError';
+  }
+}
+
+/**
  * A webhook delivery's `X-Gitlab-Token` is missing or does not match the
  * configured `GITLAB_WEBHOOK_SECRET` (Story 7.23 · MOTIR-1475). GitLab signs a
  * project webhook with a per-hook SECRET TOKEN it echoes verbatim in this header
