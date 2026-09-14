@@ -1,4 +1,4 @@
-import type { ApprovalGateState, Prisma } from '@/generated/prisma/client';
+import type { ApprovalGateState, Prisma, WorkItem } from '@/generated/prisma/client';
 import type {
   ApprovalGateAuthorityDTO,
   ApprovalGateDTO,
@@ -12,7 +12,12 @@ import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ApprovalGatePendingError } from '@/lib/workItems/errors';
-import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
+import {
+  APPROVAL_GATE_HANDLERS,
+  handlerFor,
+  isRegisteredGateKind,
+  type RegisteredGateKind,
+} from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import {
   ApprovalGateAlreadyDecidedError,
@@ -443,6 +448,59 @@ export const approvalGatesService = {
         routedToLabel: routedToDisplayName(routedTo),
       };
     });
+  },
+
+  /**
+   * ENTERING REVIEW ASKS AGAIN (Story MOTIR-4887 · Subtask MOTIR-5532; ADR
+   * `approval-gates.md` §6d AMENDMENT, rule 7). Called by `applyStatusTransition`
+   * when an item moves into `in_review`, IN that transaction, after the funnel has
+   * taken the item's gate locks — so it never opens a transaction of its own.
+   *
+   * For every REGISTERED kind: ask the kind for its CURRENT subject; when there is
+   * one and no gate on that subject is `awaiting` or `approved`, raise a fresh
+   * `awaiting` gate routed the way the kind routes, the same row the publish path
+   * writes. Returns how many were raised.
+   *
+   * ⚠️ WHY THIS EXISTS. Pulling work back withdraws the question (rule 6). Without
+   * a re-ask, withdraw-then-return leaves a card in review with no gate, which the
+   * guard then has nothing to hold — a quiet way around every approval.
+   *
+   * ⚠️ SYSTEM MOVES INCLUDED, unlike the guard and the withdraw. The CI-green
+   * promotion into `in_review` is exactly the return to review that must ask
+   * again. The importer and the rollup reach cards with no current subject, so
+   * they raise nothing on their own.
+   *
+   * ⚠️ A CONCURRENT DOUBLE RAISE IS "ALREADY RAISED", not an error — resolved in
+   * the insert itself (`createAwaitingIfAbsent`), because a caught unique
+   * violation would have aborted the transition's transaction.
+   */
+  async raiseOnReviewEntry(
+    item: WorkItem,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    let raised = 0;
+    for (const kind of Object.keys(APPROVAL_GATE_HANDLERS) as RegisteredGateKind[]) {
+      const handler = handlerFor(kind);
+      const subjectId = await handler.currentSubject({ item, ctx, tx });
+      if (!subjectId) continue;
+      if (await approvalGateRepository.hasLiveGateForSubject(item.id, kind, subjectId, tx)) {
+        continue;
+      }
+      const inserted = await approvalGateRepository.createAwaitingIfAbsent(
+        {
+          workspaceId: item.workspaceId,
+          projectId: item.projectId,
+          workItemId: item.id,
+          kind,
+          subjectId,
+          routedToId: handler.routeTo({ item, ctx, tx }),
+        },
+        tx,
+      );
+      if (inserted) raised += 1;
+    }
+    return raised;
   },
 
   /**

@@ -236,6 +236,25 @@ export interface GateHandler<TSubject = unknown> {
   routeTo(args: GateRoutingArgs): string | null;
 
   /**
+   * The subject a FRESH gate of this kind would ask about, right now — or null
+   * when there is nothing to ask (Story MOTIR-4887 · Subtask MOTIR-5532; ADR
+   * `approval-gates.md` §6d AMENDMENT, rule 7).
+   *
+   * ⚠️ REQUIRED, and deliberately so. Entering review ASKS AGAIN: a card whose
+   * question was withdrawn by pulling it back must be asked again when it comes
+   * back, or withdraw-then-return is a quiet way around every gate. The raise is
+   * generic (`approvalGatesService.raiseOnReviewEntry`) and only the KIND knows
+   * what its current subject is, so every registered kind must answer — and a
+   * kind promoted into the registry without an answer fails to compile, rather
+   * than silently never being asked again.
+   *
+   * Takes {@link GateRoutingArgs} for the same reason `routeTo` does: it is
+   * answered at CREATION, before any gate row exists. Read in the transitioning
+   * transaction, so the subject is the one current at the move.
+   */
+  currentSubject(args: GateRoutingArgs): Promise<string | null>;
+
+  /**
    * The PERMISSION floor this kind's decision sits on, checked before the
    * relationship test rather than instead of it (ADR §2's amendment: *"The
    * design gate keeps `work_item:edit` as its floor; the relationship test is

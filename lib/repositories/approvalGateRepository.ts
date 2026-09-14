@@ -427,6 +427,59 @@ export const approvalGateRepository = {
   },
 
   /**
+   * Whether a subject already has a LIVE question — a gate on
+   * `(workItemId, kind, subjectId)` that is `awaiting` or `approved` (MOTIR-5532).
+   *
+   * The re-ask's precondition (ADR §6d AMENDMENT, rule 7): an awaiting gate is
+   * already asking, and an approved one has been answered for THESE bytes, so
+   * neither is asked again. `changes_requested` and `superseded` do not count —
+   * the first sent the work back, the second was withdrawn.
+   */
+  async hasLiveGateForSubject(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    subjectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const count = await tx.approvalGate.count({
+      where: { workItemId, kind, subjectId, state: { in: ['awaiting', 'approved'] } },
+    });
+    return count > 0;
+  },
+
+  /**
+   * RAISE an `awaiting` gate, or do nothing when one is already awaiting on the
+   * same subject (Story MOTIR-4887 · Subtask MOTIR-5532; ADR §6d AMENDMENT,
+   * rule 7). Returns whether a row was inserted.
+   *
+   * ⚠️ NOT {@link create}, and the difference is transactional, not cosmetic.
+   * `create` translates the partial unique index's `P2002` into a typed error —
+   * right at publish, where a collision is impossible by construction. The re-ask
+   * runs INSIDE a status transition, where a concurrent double raise is a normal
+   * outcome and must count as "already raised". A caught `P2002` cannot express
+   * that: Postgres has already ABORTED the transaction, so the status write that
+   * follows would fail. `ON CONFLICT DO NOTHING` (`skipDuplicates`) resolves the
+   * race inside the statement, and the transition carries on.
+   */
+  async createAwaitingIfAbsent(
+    data: {
+      workspaceId: string;
+      projectId: string;
+      workItemId: string;
+      kind: ApprovalGateKind;
+      subjectId: string;
+      routedToId: string | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.approvalGate.createMany({
+      data: [{ ...data, state: 'awaiting' }],
+      skipDuplicates: true,
+    });
+    return result.count > 0;
+  },
+
+  /**
    * THE ROUTING READ — one project's `awaiting` gates that are routed to ONE
    * person, oldest-waiting first, as a WINDOW (Story MOTIR-4879 · Subtask
    * MOTIR-4791; ADR docs/decisions/approval-gates.md §2).

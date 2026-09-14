@@ -54,6 +54,7 @@ import {
 } from '@/lib/workItems/statusLadder';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -1047,6 +1048,9 @@ function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkI
  * is not implemented, so neither counts a cancelled card as finished work.
  */
 const ROADMAP_CANCELLED_KEY = 'cancelled';
+/** The status an item enters to be reviewed — the one whose entry re-asks its
+ *  pending questions (ADR `approval-gates.md` §6d AMENDMENT, rule 7). */
+const REVIEW_STATUS_KEY = 'in_review';
 
 /** The status keys that count as DONE on a roadmap meter: every `done`-category
  *  status except `cancelled`. */
@@ -3043,6 +3047,18 @@ export const workItemsService = {
       },
       tx,
     );
+
+    // ENTERING REVIEW ASKS AGAIN (ADR `approval-gates.md` §6d AMENDMENT, rule 7 ·
+    // MOTIR-5532). The mirror of the withdraw above: a card coming back into
+    // review has its question raised again over its CURRENT subject, unless that
+    // subject already has an awaiting or approved gate. Without it, pulling the
+    // work back and returning it would leave a gate-less card the guard cannot
+    // hold. SYSTEM moves are included — the CI-green promotion is the ordinary
+    // return to review — and the gate locks were taken at the top of this method.
+    if (toStatusKey === REVIEW_STATUS_KEY) {
+      await approvalGatesService.raiseOnReviewEntry(row, ctx, tx);
+    }
+
     return {
       dto: toWorkItemDto(row),
       transition: { fromStatusKey: fromKey, toStatusKey, revisionId },

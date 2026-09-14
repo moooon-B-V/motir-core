@@ -90,6 +90,9 @@ const stubbedPullRequestApprovalHandler: GateHandler = {
   routeTo() {
     return null;
   },
+  async currentSubject() {
+    return null;
+  },
   permission: 'work_item:edit',
   statusIntent: null,
   async approve(): Promise<GateEffect> {

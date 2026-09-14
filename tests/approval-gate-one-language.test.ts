@@ -214,6 +214,19 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     // a sibling method rather than a second caller of the one above, because it
     // retires EVERY kind at once, and its one caller is the status funnel
     // (`applyStatusTransition`), which every status door already passes through.
+    // AMENDED ON THE RECORD — MOTIR-5532, 2026-09-14 (ADR §6d AMENDMENT, rule 7).
+    // Entering review ASKS AGAIN: a card returning to `in_review` whose current
+    // subject has no awaiting or approved gate gets a fresh `awaiting` one. That
+    // is a product-written question, like the publish path's `create` — never a
+    // decision — raised by the review-entry seam in `approvalGatesService`. A
+    // sibling method rather than a second `create` caller, because it must absorb
+    // a concurrent double raise INSIDE a status transition, which a caught unique
+    // violation cannot do without aborting that transaction.
+    {
+      method: 'createAwaitingIfAbsent',
+      writes: 'awaiting',
+      caller: 'lib/services/approvalGatesService.ts',
+    },
     {
       method: 'supersedeAllAwaitingByWorkItem',
       writes: 'superseded',
