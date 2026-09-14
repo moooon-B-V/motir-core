@@ -64,13 +64,14 @@ async function seedTenant(tag: string, mode: PrMergeMode) {
     data: { name: `Org ${tag}`, slug: `pmm-org-${tag}-${n}` },
   });
   const workspace = await adminDb.workspace.create({
-    data: {
-      name: `WS ${tag}`,
-      slug: `pmm-ws-${tag}-${n}`,
-      organizationId: org.id,
-      subtaskPrMergeMode: mode,
-    },
+    data: { name: `WS ${tag}`, slug: `pmm-ws-${tag}-${n}`, organizationId: org.id },
   });
+  // The workspace's value is written by SQL rather than through the generated
+  // client: the column has no application writer after MOTIR-4880, and MOTIR-5505
+  // `@ignore`s the field — while this file, which executes the migration's
+  // copy-forward FROM that column, still needs it set.
+  await adminDb.$executeRaw`
+    UPDATE workspace SET "subtaskPrMergeMode" = ${mode}::pr_merge_mode WHERE id = ${workspace.id}`;
   const project = await seedProject(workspace.id, `${tag}${n}`);
   return { workspace, project };
 }
