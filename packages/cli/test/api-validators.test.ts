@@ -39,6 +39,11 @@ const WORK_ITEM_DETAIL = {
   updatedAt: '2026-08-05T12:00:00Z',
   descriptionMd: '# Body',
   parentKey: 'MOTIR-2',
+  // Story MOTIR-5310 · MOTIR-5412 — the item's OWN folder placement. A subtask
+  // under a parent is never filed, so both are null here; the filed shape is
+  // driven by `tests/api/v1/work-item-folder-placement-route.test.ts`.
+  folderId: null,
+  folderPath: null,
   ancestorKeys: ['MOTIR-2'],
   children: [],
   links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },

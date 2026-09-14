@@ -342,6 +342,8 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     updatedAt: '2026-01-01T00:00:00.000Z',
     descriptionMd: null,
     parentKey: null,
+    folderId: null,
+    folderPath: null,
     ancestorKeys: [],
     children: [],
     links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },
@@ -571,6 +573,10 @@ export function v1Proposal(id: string, over: Record<string, unknown> = {}) {
     // COMMITTED work item; `null` for a `planItem:` temp-ref and for a proposal
     // that names no parent, which is what the default here is.
     parentKey: null,
+    // MOTIR-5415 — the folder a `folder:<id>` `parentRef` names, and its names
+    // root-first; both `null` for every proposal that names no folder.
+    folderId: null,
+    folderPath: null,
     blockedByRefs: [],
     ...over,
   };

@@ -2,6 +2,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import { planReviewItem } from '../helpers/planReview';
 import {
   compileGlobals,
   resolveDeclarations,
@@ -116,6 +117,24 @@ describe('PlanItemNode — the title clamps at two lines', () => {
   it.each(['add', 'remove'] as const)('a long `%s` title is a two-line -webkit-box', (op) => {
     renderWithIntl(<PlanItemNode item={planItem({ op, title: LONG_TITLE })} />);
     expect(clampOf(screen.getByText(LONG_TITLE))).toEqual({ display: '-webkit-box', lines: '2' });
+  });
+
+  // MOTIR-5310 spends the bottom slot on a folder placement and drops the title
+  // to ONE line with `truncate`, which needs the block box `.block` gives it — so
+  // `block` rides with `truncate` on that branch and never beside the clamp.
+  it('a FILED title (the slot is spent) is a one-line block ellipsis, not a clamp', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={planReviewItem({ title: LONG_TITLE, folderId: 'fold_1', folderPath: ['Parked'] })}
+      />,
+    );
+    const el = screen.getByText(LONG_TITLE);
+    const tokens = (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
+    const resolved = resolveDeclarations(compiler.build(tokens), tokens);
+    expect(resolved.get('display')).toBe('block');
+    expect(resolved.get('white-space')).toBe('nowrap');
+    expect(resolved.get('text-overflow')).toBe('ellipsis');
+    expect(resolved.has('-webkit-line-clamp')).toBe(false);
   });
 });
 

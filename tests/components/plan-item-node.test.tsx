@@ -31,6 +31,10 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     parentTitle: null,
     parentKind: null,
     parentTrail: [],
+    // The FOLDER placement (MOTIR-5415) — none by default.
+    folderId: null,
+    folderPath: null,
+    folderMissing: false,
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],

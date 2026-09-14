@@ -1023,6 +1023,12 @@ export interface WorkItemDetail {
     sprintId: string | null;
     descriptionMd: string | null;
   };
+  /** The folder the item is FILED in, as its name path root-first
+   *  (`["Parked", "2025"]`), or `null` when it is not filed (MOTIR-5412). Only a
+   *  root can be filed; a child's placement travels as its ancestors' keys.
+   *  OPTIONAL on the view model, like `deliveries`, so a detail built by hand
+   *  (a test, an older adapter) reads as unfiled rather than failing to type. */
+  folderPath?: string[] | null;
   /** The full parent chain, ordered root→self and EXCLUDING the item itself. */
   ancestors: AncestorRef[];
   children: WorkItemChild[];

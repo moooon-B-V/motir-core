@@ -99,6 +99,25 @@ export const folderRepository = {
   },
 
   /**
+   * The placement state of the folders a plan's `folder:<id>` refs name
+   * (MOTIR-5414) — id, project and name, workspace-scoped explicitly so the
+   * answer does not rest on the connection's RLS role. The caller lifts the
+   * project narrowing, so a folder in another project comes back to be refused
+   * for the right reason rather than read as missing.
+   */
+  async findPlacementStateByIds(
+    ids: string[],
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; projectId: string; name: string }>> {
+    if (ids.length === 0) return [];
+    return tx.folder.findMany({
+      where: { id: { in: ids }, workspaceId },
+      select: { id: true, projectId: true, name: true },
+    });
+  },
+
+  /**
    * A sibling folder already holding `name`, case-insensitively — the same
    * predicate the `folder_sibling_name_key` expression index enforces, so the
    * friendly check and the race backstop can never disagree about what a
@@ -187,6 +206,51 @@ export const folderRepository = {
        LIMIT ${page.take} OFFSET ${page.offset}`;
   },
 
+  /**
+   * One KEYSET page of a level's folders (Story MOTIR-5310 · MOTIR-5408) — the
+   * `/api/v1` folder list. Ordered by `(position, id)`, a TOTAL order, and seeks
+   * strictly after `after`, so a folder created or moved between two pages never
+   * shifts a page boundary the way `findLevel`'s offset would. Reads `take` rows;
+   * the caller asks for one more than it serves to learn whether a page follows.
+   *
+   * The same explicit `workspace_id` + `project_id` gate as `findLevel`.
+   */
+  async findLevelAfter(
+    projectId: string,
+    workspaceId: string,
+    parentFolderId: string | null,
+    after: { position: string; id: string } | undefined,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Folder[]> {
+    const parentPred =
+      parentFolderId === null
+        ? Prisma.sql`"parent_folder_id" IS NULL`
+        : Prisma.sql`"parent_folder_id" = ${parentFolderId}`;
+    const seek = after
+      ? Prisma.sql`AND ("position", "id") > (${after.position}, ${after.id})`
+      : Prisma.empty;
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "folder"
+       WHERE "project_id" = ${projectId}
+         AND "workspace_id" = ${workspaceId}
+         AND ${parentPred}
+         ${seek}
+       ORDER BY "position" ASC, "id" ASC
+       LIMIT ${take}`;
+    if (rows.length === 0) return [];
+    const byId = new Map(
+      (await tx.folder.findMany({ where: { id: { in: rows.map((r) => r.id) } } })).map((f) => [
+        f.id,
+        f,
+      ]),
+    );
+    return rows.flatMap((r) => {
+      const folder = byId.get(r.id);
+      return folder ? [folder] : [];
+    });
+  },
+
   /** The FULL folder count of one lazy tree level — the predicate `findLevel` reads. */
   async countLevel(
     projectId: string,
@@ -262,6 +326,39 @@ export const folderRepository = {
       )
       SELECT "name" FROM chain ORDER BY depth DESC`;
     return rows.map((r) => r.name);
+  },
+
+  /**
+   * The PATH of every folder in `ids`, ROOT FIRST, in ONE recursive read — the
+   * batched twin of {@link findPathNames} for a read model that places many
+   * rows at once (a plan's folder placements, MOTIR-5415). Workspace-scoped
+   * explicitly; the project comes back so the caller can refuse a folder in
+   * another project rather than name it. An id that no longer exists simply
+   * does not come back.
+   */
+  async findPathsByIds(
+    ids: string[],
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; projectId: string; path: string[] }>> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string; projectId: string; path: string[] }>>`
+      WITH RECURSIVE chain AS (
+        SELECT f."id" AS "leaf_id", f."project_id" AS "leaf_project_id",
+               f."parent_folder_id", f."name", 0 AS depth
+          FROM "folder" f
+         WHERE f."id" = ANY(${ids}::text[])
+           AND f."workspace_id" = ${workspaceId}
+        UNION ALL
+        SELECT c."leaf_id", c."leaf_project_id", f."parent_folder_id", f."name", c.depth + 1
+          FROM "folder" f
+          JOIN chain c ON f."id" = c."parent_folder_id"
+         WHERE c.depth < 1000
+      )
+      SELECT "leaf_id" AS "id", "leaf_project_id" AS "projectId",
+             array_agg("name" ORDER BY depth DESC) AS "path"
+        FROM chain
+       GROUP BY "leaf_id", "leaf_project_id"`;
   },
 
   /** How many folders sit directly inside `folderId` — the set `deleteFolder` moves. */

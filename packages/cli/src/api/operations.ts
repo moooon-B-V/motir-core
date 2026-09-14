@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.28.0";
+export const GENERATED_AGAINST = "1.31.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -128,6 +128,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "WorkItemCount",
   },
+  "createFolder": {
+    method: "POST",
+    path: "/api/v1/projects/{projectKey}/folders",
+    permission: "work_item:edit",
+    successStatus: 201,
+    responseComponent: "Folder",
+  },
   "createSprint": {
     method: "POST",
     path: "/api/v1/projects/{projectKey}/sprints",
@@ -156,6 +163,13 @@ export const V1_OPERATIONS = {
     successStatus: 201,
     responseComponent: undefined,
   },
+  "deleteFolder": {
+    method: "DELETE",
+    path: "/api/v1/folders/{folderId}",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "FolderDeletion",
+  },
   "deleteWorkItemLink": {
     method: "DELETE",
     path: "/api/v1/work-items/{key}/links",
@@ -169,6 +183,13 @@ export const V1_OPERATIONS = {
     permission: "project:browse",
     successStatus: 200,
     responseComponent: "DispatchRunCloseOutPrompt",
+  },
+  "getFolder": {
+    method: "GET",
+    path: "/api/v1/folders/{folderId}",
+    permission: "project:browse",
+    successStatus: 200,
+    responseComponent: "Folder",
   },
   "getMe": {
     method: "GET",
@@ -258,6 +279,13 @@ export const V1_OPERATIONS = {
     method: "POST",
     path: "/api/v1/work-items/{key}/pull-requests",
     permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: undefined,
+  },
+  "listFolders": {
+    method: "GET",
+    path: "/api/v1/projects/{projectKey}/folders",
+    permission: "project:browse",
     successStatus: 200,
     responseComponent: undefined,
   },
@@ -400,6 +428,13 @@ export const V1_OPERATIONS = {
     permission: "work_item:edit",
     successStatus: 200,
     responseComponent: "WorkItemDetail",
+  },
+  "updateFolder": {
+    method: "PATCH",
+    path: "/api/v1/folders/{folderId}",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "Folder",
   },
   "updateSprint": {
     method: "PATCH",

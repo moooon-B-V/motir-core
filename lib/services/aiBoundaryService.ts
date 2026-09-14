@@ -7,7 +7,10 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { plansService } from '@/lib/services/plansService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
+import { foldersService } from '@/lib/services/foldersService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
+  toPlanTreeFolders,
   toPlanTreeSkeleton,
   toSkeletonRows,
   toSearchResultRows,
@@ -52,6 +55,21 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 // and a real work-item tree appears only on APPROVE/materialize. There is no
 // buffered atomic-persist path.
 
+// The two per-row anchors every skeleton projection carries, read in ONE
+// workspace context and each as ONE batched query: the latest revision id
+// (MOTIR-1531 — the `baseRevision` a modify/remove anchors on) and the folder a
+// filed item sits in (MOTIR-5410). Shared by every read in the skeleton family, so
+// a row can never carry one anchor on one read and miss it on another.
+async function readRowAnchors(
+  workItemIds: string[],
+  ctx: ServiceContext,
+): Promise<{ revisionByItemId: Map<string, string>; folderIdByItemId: Map<string, string> }> {
+  return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+    revisionByItemId: await workItemRevisionRepository.findLatestIdsByWorkItemIds(workItemIds, tx),
+    folderIdByItemId: await workItemRepository.findFolderIdsByWorkItemIds(workItemIds, tx),
+  }));
+}
+
 export const aiBoundaryService = {
   // GET /api/internal/ai/plan-tree — the project's work-item skeleton. The
   // listWorkItems gate raises ProjectNotFoundError (404, never 403) for a
@@ -64,16 +82,21 @@ export const aiBoundaryService = {
       throw new ProjectNotFoundError(projectId);
     }
     // ONE batched latest-revision lookup for the whole read (MOTIR-1531) — the
-    // `baseRevision` anchor each row carries; never a per-row (N+1) fetch.
-    const revisionByItemId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRevisionRepository.findLatestIdsByWorkItemIds(
-        items.map((i) => i.id),
-        tx,
-      ),
+    // `baseRevision` anchor each row carries; never a per-row (N+1) fetch — and,
+    // in the same context, ONE batched filed-placement lookup (MOTIR-5410).
+    const { revisionByItemId, folderIdByItemId } = await readRowAnchors(
+      items.map((i) => i.id),
+      ctx,
     );
+    // The project's folders ride BESIDE the rows, through the folder picker's own
+    // browse-gated read and its own bound — so the tree read and the Move to…
+    // picker can never disagree about which folders a project has.
+    const folderList = await foldersService.listProjectFolders({ projectId }, ctx);
     return {
       project: { projectId, projectKey: project.identifier },
-      items: toPlanTreeSkeleton(items, revisionByItemId),
+      items: toPlanTreeSkeleton(items, revisionByItemId, folderIdByItemId),
+      folders: toPlanTreeFolders(folderList.folders),
+      foldersTruncated: folderList.truncated,
     };
   },
 
@@ -270,17 +293,15 @@ export const aiBoundaryService = {
       ctx,
       depth,
     );
-    const revisionByItemId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRevisionRepository.findLatestIdsByWorkItemIds(
-        nodes.map((n) => n.id),
-        tx,
-      ),
+    const { revisionByItemId, folderIdByItemId } = await readRowAnchors(
+      nodes.map((n) => n.id),
+      ctx,
     );
     return {
       project: { projectId, projectKey: project.identifier },
       root: root.identifier,
       depth: effectiveDepth,
-      nodes: toSkeletonRows(nodes, revisionByItemId),
+      nodes: toSkeletonRows(nodes, revisionByItemId, folderIdByItemId),
     };
   },
 
@@ -299,15 +320,13 @@ export const aiBoundaryService = {
     const closure = await workItemsService.getBlockingClosure(root.id, ctx, opts);
     const idToKey = new Map<string, string>([[root.id, root.identifier]]);
     for (const n of closure.nodes) idToKey.set(n.id, n.identifier);
-    const revisionByItemId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRevisionRepository.findLatestIdsByWorkItemIds(
-        closure.nodes.map((n) => n.id),
-        tx,
-      ),
+    const { revisionByItemId, folderIdByItemId } = await readRowAnchors(
+      closure.nodes.map((n) => n.id),
+      ctx,
     );
     return {
       root: root.identifier,
-      nodes: toSkeletonRows(closure.nodes, revisionByItemId),
+      nodes: toSkeletonRows(closure.nodes, revisionByItemId, folderIdByItemId),
       edges: toBlockingEdges(closure.edges, idToKey),
       truncated: closure.truncated,
     };

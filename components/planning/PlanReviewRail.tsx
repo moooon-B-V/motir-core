@@ -87,6 +87,8 @@ export interface PlanReviewRailProps {
   onDecline: () => void;
   busy: boolean;
   errorCode: string | null;
+  /** The proposal the refusal names, when it names one (MOTIR-5418). */
+  errorPlanItemId?: string | null;
   codeOutcome?: PlanCodeOutcome | null;
   /**
    * ASK MOTIR TO CHANGE THIS PLAN (Story MOTIR-3595 · Subtask MOTIR-3601;
@@ -113,6 +115,7 @@ export function PlanReviewRail({
   onDecline,
   busy,
   errorCode,
+  errorPlanItemId = null,
   codeOutcome,
   onRevise,
   reviseDraft = '',
@@ -171,7 +174,16 @@ export function PlanReviewRail({
   // this card exists to delete. So the count decides, not the status: a
   // `generating` plan that HAS proposals keeps the shipped shape untouched.
   const empty = review.itemCount === 0;
-  const staleItems = review.items.filter((i) => i.stale);
+  const staleItems = review.items.filter((i) => i.stale || i.folderMissing);
+  // ⚠️ A PROPOSAL FILED INTO A DELETED FOLDER MAKES APPROVE A DEAD CONTROL (Part
+  // XVII §17.5). The server refuses the WHOLE approve for it (MOTIR-5423) and no
+  // retry clears it — the name went with the folder — so the control is disabled
+  // and the hint names the two real exits. Decline stays live.
+  const folderMissingCount = review.items.filter((i) => i.folderMissing).length;
+  const refusedTitle =
+    errorPlanItemId !== null
+      ? (review.items.find((i) => i.planItemId === errorPlanItemId)?.title ?? null)
+      : null;
 
   // ── THE REVISION (Part XII §A/§C) ────────────────────────────────────────
   // HELD is the server's fact, read off the plan's own trail; `revising` is the
@@ -318,14 +330,18 @@ export function PlanReviewRail({
         </section>
 
         {/* STALENESS summary */}
-        {review.stale ? (
+        {review.stale || folderMissingCount > 0 ? (
           <section
             data-testid="stale-summary"
             className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-yellow)/40 p-3"
           >
             <p className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
               <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-              {t('staleSummary', { n: review.staleCount })}
+              {t('staleSummary', {
+                n:
+                  review.staleCount +
+                  review.items.filter((i) => i.folderMissing && !i.stale).length,
+              })}
             </p>
             <ul className="flex flex-col gap-1">
               {/* Each row is guarded for the same reason as the summary
@@ -344,7 +360,10 @@ export function PlanReviewRail({
                 >
                   <span className="font-medium text-(--el-text)">{item.title}</span>
                   {' — '}
-                  {item.staleReasons.map((r) => staleReasonLabel(r, t)).join(', ')}
+                  {[
+                    ...item.staleReasons.map((r) => staleReasonLabel(r, t)),
+                    ...(item.folderMissing ? [t('staleFolderRemoved')] : []),
+                  ].join(', ')}
                 </li>
               ))}
             </ul>
@@ -416,7 +435,11 @@ export function PlanReviewRail({
                 click, so the disabled state is a courtesy and the server's answer
                 is the guarantee — two mechanisms, because the client cannot know
                 and the server can. */}
-            {errorCode === 'PLAN_REVISION_IN_FLIGHT' ? t('reviseRefused') : t('actionError')}
+            {errorCode === 'PLAN_REVISION_IN_FLIGHT'
+              ? t('reviseRefused')
+              : errorCode === 'PLAN_FOLDER_MISSING'
+                ? t('approveFolderMissingRefused', { title: refusedTitle ?? '' })
+                : t('actionError')}
           </p>
         ) : null}
         {decided ? (
@@ -427,7 +450,7 @@ export function PlanReviewRail({
               <Button
                 variant="primary"
                 onClick={onApprove}
-                disabled={!planned || busy || held}
+                disabled={!planned || busy || held || folderMissingCount > 0}
                 loading={busy}
                 leftIcon={<Check className="size-4" aria-hidden="true" />}
               >
@@ -518,9 +541,11 @@ export function PlanReviewRail({
                   empty && !generating
                   ? t('emptyHint')
                   : planned
-                    ? review.stale
-                      ? t('approveHintStale', { n: review.staleCount })
-                      : t('approveHint')
+                    ? folderMissingCount > 0
+                      ? t('approveHintFolderMissing', { n: folderMissingCount })
+                      : review.stale
+                        ? t('approveHintStale', { n: review.staleCount })
+                        : t('approveHint')
                     : generating
                       ? t('discardHint')
                       : stalePlan

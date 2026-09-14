@@ -87,9 +87,25 @@ export type McpWorkItemChild = z.infer<typeof mcpWorkItemChildSchema>;
  */
 export const getWorkItemPayload = definePayload({
   schema: z
-    .object({ children: z.array(mcpWorkItemChildSchema) })
+    .object({
+      children: z.array(mcpWorkItemChildSchema),
+      /**
+       * The item's OWN folder placement (Story MOTIR-5310 · MOTIR-5413): the
+       * folder it is filed in and that folder's path, names root-first — both
+       * `null` for an unfiled item. The same vocabulary `/api/v1`'s detail read
+       * publishes (MOTIR-5412). DECLARED here rather than left to the aggregate
+       * spread, which used to leak the bare id with no path, and optional only
+       * because the projected answer (`planId`) has no committed row to place.
+       */
+      folderId: z.string().nullable().optional(),
+      folderPath: z.array(z.string()).nullable().optional(),
+    })
     .catchall(z.unknown()) as unknown as z.ZodType<
-    { children: McpWorkItemChild[] } & Record<string, unknown>
+    {
+      children: McpWorkItemChild[];
+      folderId?: string | null;
+      folderPath?: string[] | null;
+    } & Record<string, unknown>
   >,
   probes: [
     // The child rows, against v1's `WorkItemRef`. This is the comparison whose
@@ -270,6 +286,33 @@ export function presentMcpWorkItem(dto: WorkItemDto): McpWorkItem {
     archivedAt: dto.archivedAt,
   };
 }
+
+/**
+ * Where a work item sits after a PLACING write (Story MOTIR-5310 · MOTIR-5413):
+ * its work-item parent by key, or the folder it is filed in with that folder's
+ * path. At most one side is set — a filed item is a root.
+ */
+export const workItemPlacementSchema = z.object({
+  parentKey: workItemKeySchema.nullable(),
+  folderId: z.string().nullable(),
+  folderPath: z.array(z.string()).nullable(),
+});
+export type WorkItemPlacement = z.infer<typeof workItemPlacementSchema>;
+
+/**
+ * The write confirmation for the two tools that PLACE an item —
+ * `create_work_item` and `move_to_parent`. The shared {@link McpWorkItem} plus a
+ * `placement` field on THIS payload only: `McpWorkItem` is returned by a dozen
+ * other tools, and widening it would put a folder read on every one of them.
+ */
+export const workItemPlacementWritePayload = definePayload({
+  schema: mcpWorkItemSchema.extend({ placement: workItemPlacementSchema }) as unknown as z.ZodType<
+    McpWorkItem & { placement: WorkItemPlacement } & Record<string, unknown>
+  >,
+  // No probe, for the reason `workItemWritePayload` gives: a narrowing of the
+  // summary row cannot satisfy `WorkItemSummary`.
+  probes: [],
+});
 
 /** The bare write-confirmation payload — fourteen tools share it. */
 export const workItemWritePayload = definePayload({
@@ -573,6 +616,11 @@ export const mcpSkeletonRowSchema = workItemRefSchema
   .extend({
     id: z.string(),
     revision: z.string().nullable(),
+    // The folder the item is FILED in — its OWN placement, set only on a root
+    // (Story MOTIR-5310 · MOTIR-5410). Without it a filed item reads as an
+    // ordinary root and no agent orienting over the tree can tell where the team
+    // put it. Resolve the id against the payload's `folders` for its name path.
+    folderId: z.string().nullable(),
   });
 export type McpSkeletonRow = z.infer<typeof mcpSkeletonRowSchema>;
 
@@ -586,8 +634,21 @@ export function presentMcpSkeletonRow(item: PlanTreeSkeletonItem): McpSkeletonRo
     parentKey: item.parentKey,
     id: item.id,
     revision: item.revision,
+    folderId: item.folderId,
   };
 }
+
+/**
+ * One folder of the project as `skeleton` carries it (MOTIR-5410) — the same
+ * four fields the internal tree read serves, `path` being the names ROOT FIRST.
+ */
+export const mcpSkeletonFolderSchema = z.object({
+  id: z.string(),
+  parentFolderId: z.string().nullable(),
+  name: z.string(),
+  path: z.array(z.string()),
+});
+export type McpSkeletonFolder = z.infer<typeof mcpSkeletonFolderSchema>;
 
 /**
  * The `skeleton` response — the whole project's tree shape, plus the four
@@ -607,6 +668,11 @@ export const skeletonPayload = definePayload({
       returned: z.number().int(),
       truncated: z.boolean(),
       limit: z.number().int(),
+      // The project's folders, BESIDE the rows and never among them. The four
+      // numbers above count WORK ITEMS only; the folder list has its own bound
+      // and says so in `foldersTruncated`.
+      folders: z.array(mcpSkeletonFolderSchema),
+      foldersTruncated: z.boolean(),
     })
     .catchall(z.unknown()) as unknown as z.ZodType<
     {
@@ -616,6 +682,8 @@ export const skeletonPayload = definePayload({
       returned: number;
       truncated: boolean;
       limit: number;
+      folders: McpSkeletonFolder[];
+      foldersTruncated: boolean;
     } & Record<string, unknown>
   >,
   // No probe: the row is a NARROWING of `WorkItemRef` (see above), so it cannot

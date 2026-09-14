@@ -14,6 +14,7 @@ import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import { derived } from '../payloads/define';
 import { getWorkItemPayload, presentMcpWorkItemChild } from '../payloads/workItems';
 import { TEMP_REF_HELP, normalizeProjectedTarget, planIdField } from './planRef';
+import { renderFolderPath } from './placement';
 import {
   attachCommentCounts,
   commentCountMarker,
@@ -69,7 +70,11 @@ function projectKeyOf(identifier: string): string {
 }
 
 /** Compact human-readable summary of an issue-detail aggregate. */
-function summarize(detail: IssueDetailDto, commentCount: number): string {
+function summarize(
+  detail: IssueDetailDto,
+  commentCount: number,
+  folderPath: string[] | null,
+): string {
   const it = detail.item;
   const lines = [
     `${it.identifier} [${it.kind}${it.type ? `/${it.type}` : ''}] ${it.title}`,
@@ -77,6 +82,7 @@ function summarize(detail: IssueDetailDto, commentCount: number): string {
       commentCountMarker(commentCount),
   ];
   if (detail.parent) lines.push(`Parent: ${detail.parent.identifier} ${detail.parent.title}`);
+  if (folderPath !== null) lines.push(`Folder: ${renderFolderPath(folderPath)}`);
   lines.push(
     detail.readiness.ready
       ? 'Readiness: ready'
@@ -193,19 +199,29 @@ export async function runGetWorkItem(
   // is the ordinary answer and means nothing is recorded, never that nothing has
   // landed. It rides the `catchall`-open envelope, so no payload schema widens.
   const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx);
-  // `placementFolder` (MOTIR-5375) is the work item PAGE's placement read and is
-  // deliberately NOT published: which folder vocabulary agents see is Story
-  // MOTIR-5310's to design, and the spread below would hand it a half-contract.
+  // The item's OWN folder placement (Story MOTIR-5310 · MOTIR-5413), DECLARED on
+  // the payload as `folderId` + `folderPath` — the `/api/v1` detail's vocabulary.
+  // The path is the one read the quick view and `/api/v1` share; an unfiled item
+  // makes no read and carries two nulls. `placementFolder` (MOTIR-5375) is the
+  // work item PAGE's EFFECTIVE placement and is deliberately NOT published —
+  // agents see the item's own placement only.
   const { placementFolder: _pagePlacementOnly, ...publishedDetail } = detail;
+  const folderPath =
+    detail.folderId === null ? null : await workItemsService.getFolderPath(detail.folderId, ctx);
   const structured = {
     ...publishedDetail,
+    folderId: detail.folderId,
+    folderPath,
     item,
     children: detail.children.map((child) =>
       presentMcpWorkItemChild(child, edges[child.id], (id) => keyById.get(id)),
     ),
     deliveries,
   };
-  return toolOk(summarize(detail, item.commentCount), derived(getWorkItemPayload, structured));
+  return toolOk(
+    summarize(detail, item.commentCount, folderPath),
+    derived(getWorkItemPayload, structured),
+  );
 }
 
 export function registerGetWorkItem(server: McpServer, resolveContext: McpContextResolver): void {
@@ -216,7 +232,9 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
       description:
         'Read a single work item by its identifier (e.g. "ACME-7"): full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
-        'readiness verdict. Honors the same access checks as the UI. ' +
+        'readiness verdict. Honors the same access checks as the UI. The payload declares the ' +
+        "item's OWN folder placement as `folderId` + `folderPath` (names root-first) — both null " +
+        'for an unfiled item, and for a child of a filed item, whose ancestry travels as keys. ' +
         CHILD_EDGE_BLOCK_DESCRIPTION +
         ' ' +
         COMMENT_COUNT_DESCRIPTION +

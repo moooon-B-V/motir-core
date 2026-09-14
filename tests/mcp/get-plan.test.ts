@@ -122,8 +122,17 @@ describe('get_plan — the transport contract', () => {
     // Deep equality against the service itself — no re-mapping, no dropped
     // field, no invented one. (JSON round-trips the DTO, which is already all
     // strings/numbers/nulls, so the comparison is exact.)
+    //
+    // ⚠️ WITH ONE DECLARED WIDENING (MOTIR-5415): every proposal also carries
+    // `folderId` / `folderPath`, the folder it names — `null` on this folder-free
+    // proposal. The property this test exists for still holds field for field:
+    // every DTO key arrives unchanged, and the only keys added are those two.
     const fromService = await plansService.getPlan(plan.id, fx.ctx);
-    expect(struct(res)).toEqual(JSON.parse(JSON.stringify(fromService)));
+    const expected = JSON.parse(JSON.stringify(fromService)) as {
+      items: Record<string, unknown>[];
+    };
+    expected.items = expected.items.map((item) => ({ ...item, folderId: null, folderPath: null }));
+    expect(struct(res)).toEqual(expected);
     await client.close();
   });
 

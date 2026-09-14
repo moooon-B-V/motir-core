@@ -22,6 +22,47 @@ export function tempRefId(ref: string): string {
   return ref.slice(TEMP_REF_PREFIX.length);
 }
 
+// ── The FOLDER placement ref (Story MOTIR-5310 · Subtask MOTIR-5414) ─────────
+//
+// A proposal may be FILED into a folder rather than hung under a work item. The
+// folder travels in the same field a work-item parent does — `parentRef` — as
+// `folder:<folderId>`, a PREFIX so it can never be mistaken for a `<KEY>-<n>`
+// key, a `cm…` work-item id or a `planItem:` temp-ref.
+//
+// It is a PLACEMENT, never an edge: a folder blocks nothing and nothing blocks
+// it. So the prefix is legal at exactly the PARENT sites of the table below and
+// refused at every blocker site.
+//
+//   site                    | work-item id | `planItem:` | `folder:`
+//   ------------------------+--------------+-------------+----------
+//   parentRef (add)         | yes          | yes         | yes
+//   patch.parentRef (modify)| yes          | REFUSED     | yes
+//   blockedByRefs (add)     | yes          | yes         | REFUSED
+//   patch.blockedByAdd      | yes          | yes         | REFUSED
+//   patch.blockedByRemove   | yes          | yes         | REFUSED
+//
+// A folder ref is decidable with one read (does the folder exist, and in which
+// project), and nothing a later call does can make an unknown folder known, so it
+// is judged at the APPEND as well as at the close and at approve.
+
+/** The folder placement prefix: `folder:<folderId>`. */
+export const FOLDER_REF_PREFIX = 'folder:';
+
+/** True when `ref` files the proposal into a folder (not a work item). */
+export function isFolderRef(ref: string): boolean {
+  return ref.startsWith(FOLDER_REF_PREFIX);
+}
+
+/** The folder id inside a folder ref (`folder:abc` → `abc`). */
+export function folderRefId(ref: string): string {
+  return ref.slice(FOLDER_REF_PREFIX.length);
+}
+
+/** True when `ref` is neither a temp-ref nor a folder ref — a real work-item id. */
+export function isWorkItemRef(ref: string): boolean {
+  return !isTempRef(ref) && !isFolderRef(ref);
+}
+
 // ── The APPEND-time resolvability check (Story MOTIR-3533 · Subtask MOTIR-3539) ─
 //
 // A temp-ref is decidable the instant it arrives. The contract above fixes what
@@ -70,6 +111,21 @@ export interface ProposalRefCarrier {
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
   } | null;
+}
+
+/**
+ * Every folder ref a proposal carries at a PARENT site — `parentRef` and
+ * `patch.parentRef` — the only two a folder is legal on. A folder ref at a
+ * blocker site is not returned here; `validateProposals`' self-consistency pass
+ * refuses it.
+ */
+export function folderRefsOf(p: ProposalRefCarrier): Array<{ ref: string; where: PlanRefSite }> {
+  const out: Array<{ ref: string; where: PlanRefSite }> = [];
+  if (p.parentRef && isFolderRef(p.parentRef)) out.push({ ref: p.parentRef, where: 'parentRef' });
+  if (p.patch?.parentRef && isFolderRef(p.patch.parentRef)) {
+    out.push({ ref: p.patch.parentRef, where: 'patch.parentRef' });
+  }
+  return out;
 }
 
 /** Every temp-ref a proposal carries, with the field it was carried on. */

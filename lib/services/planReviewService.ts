@@ -24,6 +24,7 @@ import type {
   PlanItemDto,
   PlanItemPatch,
   PlanItemProposedFields,
+  PlanWithItemsDto,
   StaleReason,
 } from '@/lib/dto/plans';
 import type { PlanRevision } from '@/generated/prisma/client';
@@ -35,11 +36,14 @@ import type {
   PlanItemChangeDto,
   PlanItemChangeField,
   PlanParentCrumbDto,
+  PlanPlacementSideDto,
   PlanReviewDto,
   PlanReviewItemDto,
   PlanReviewTodoDto,
 } from '@/lib/dto/planReview';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { folderRepository } from '@/lib/repositories/folderRepository';
+import { folderRefId, isFolderRef } from '@/lib/plans/refs';
 
 // The plan-detail READ assembly (Story 7.21 · Subtask 7.4.5 / MOTIR-847). A pure
 // READ orchestrator: it composes the substrate's own reads — `getPlan`
@@ -58,6 +62,22 @@ const TEMP_REF_PREFIX = 'planItem:';
  *  (`planItem:<id>`) → the referenced add's node id; a real work-item id → itself. */
 function resolveRef(ref: string): string {
   return ref.startsWith(TEMP_REF_PREFIX) ? ref.slice(TEMP_REF_PREFIX.length) : ref;
+}
+
+/**
+ * The folder a proposal NAMES as its placement (MOTIR-5415): the id inside an
+ * `add`'s `parentRef` or a `modify`'s `patch.parentRef` when that ref is
+ * `folder:<id>`; `null` when the proposal names a NON-folder placement (a work
+ * item, a temp-ref, or the root); `undefined` when it names no placement at
+ * all — a `remove`, or a `modify` that leaves its target where it is.
+ */
+function namedFolderIdOf(item: PlanItemDto): string | null | undefined {
+  if (item.parentRef) return isFolderRef(item.parentRef) ? folderRefId(item.parentRef) : null;
+  if (item.op === 'modify' && item.patch?.parentRef !== undefined) {
+    const ref = item.patch.parentRef;
+    return ref !== null && isFolderRef(ref) ? folderRefId(ref) : null;
+  }
+  return undefined;
 }
 
 /**
@@ -207,6 +227,7 @@ function buildChanges(
   target: WorkItem | undefined,
   nameParent: (id: string | null) => string | null,
   statusByKey: ReadonlyMap<string, WorkflowStatusDto>,
+  placementSides: PlacementSides,
 ): PlanItemChangeDto[] {
   if (!patch) return [];
   // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
@@ -285,10 +306,28 @@ function buildChanges(
   // all if the surface the approver reads does not show the move. An explicit
   // `null` renders as an empty NEW side, which is what "the project root" looks
   // like in a diff cell.
+  //
+  // A FOLDER can sit on either side now (MOTIR-5415): `patch.parentRef` may name
+  // `folder:<id>`, and the target may be filed. So each side is resolved TYPED —
+  // root / work item / folder — and the row carries both in `placement`, which
+  // is what lets the surface label it `Placement` and draw the folder glyph
+  // (`design-notes.md` Part XVII §17.4). The `from` / `to` words keep their old
+  // meaning for a work-item → work-item move, byte for byte. A move that
+  // involves a folder LEADS the list, so a card's one diff line is spent on it.
+  let leadingPlacement: PlanItemChangeDto | null = null;
   if (patch.parentRef !== undefined) {
-    const from = nameParent(target?.parentId ?? null);
-    const to = nameParent(patch.parentRef ?? null);
-    if (from !== to) changes.push({ field: 'parent', from, to });
+    const fromSide = placementSides.current(target);
+    const toSide = placementSides.proposed(patch.parentRef ?? null);
+    if (placementKey(fromSide) !== placementKey(toSide)) {
+      const row: PlanItemChangeDto & { field: PlanItemChangeField } = {
+        field: 'parent',
+        from: placementWord(fromSide, nameParent),
+        to: placementWord(toSide, nameParent),
+        placement: { from: fromSide, to: toSide },
+      };
+      if (fromSide.kind === 'folder' || toSide.kind === 'folder') leadingPlacement = row;
+      else changes.push(row);
+    }
   }
   // WHERE THE CARD SHIPS (MOTIR-1884 / MOTIR-1912, surfaced by bug MOTIR-3868) —
   // the SHIPS half of the pair `parent` above completes. Both keys reached
@@ -392,7 +431,33 @@ function buildChanges(
       });
     }
   }
-  return changes;
+  return leadingPlacement ? [leadingPlacement, ...changes] : changes;
+}
+
+/** Resolves a proposal's placement SIDES — built once per review read, over
+ *  the batched folder paths (MOTIR-5415). */
+interface PlacementSides {
+  /** Where the live target sits TODAY: its parent, else its folder, else root. */
+  current(target: WorkItem | undefined): PlanPlacementSideDto;
+  /** Where a `parentRef` puts it: `null` root, `folder:<id>`, or a work item. */
+  proposed(ref: string | null): PlanPlacementSideDto;
+}
+
+/** Identity of a side, for "did the placement change?". */
+function placementKey(side: PlanPlacementSideDto): string {
+  if (side.kind === 'root') return 'root';
+  return side.kind === 'folder' ? `folder:${side.folderId}` : `item:${side.id}`;
+}
+
+/** A side as the reader's word: a key, a folder path, or null for the root. A
+ *  deleted folder has no name left, so its cell names the ref instead. */
+function placementWord(
+  side: PlanPlacementSideDto,
+  nameParent: (id: string | null) => string | null,
+): string | null {
+  if (side.kind === 'root') return null;
+  if (side.kind === 'workItem') return nameParent(side.id);
+  return side.folderPath ? side.folderPath.join(' ▸ ') : `folder:${side.folderId}`;
 }
 
 /**
@@ -442,6 +507,44 @@ export const planReviewService = {
    * is enforced by `getPlan` (it asserts `canBrowse` on the plan's project, and a
    * missing/cross-tenant plan throws `PlanNotFoundError`).
    */
+  /**
+   * The folder each proposal NAMES, with its path (MOTIR-5415) — keyed by plan
+   * item id, for the proposals whose `parentRef` / `patch.parentRef` is
+   * `folder:<id>` and for no others.
+   *
+   * This is the proposal's OWN placement, the same register as `parentRef` /
+   * `parentKey` on `/api/v1` and `get_plan`'s structured payload: what the plan
+   * SAYS. {@link getPlanReview} additionally reads a target's current folder,
+   * because the canvas draws where a card will SIT; a wire payload carrying
+   * refs does not. `folderPath` is `null` for a folder that no longer exists in
+   * the plan's project. ONE read for the whole plan.
+   */
+  async resolveProposalFolders(
+    plan: PlanWithItemsDto,
+    ctx: ServiceContext,
+  ): Promise<Map<string, { folderId: string; folderPath: string[] | null }>> {
+    const named = plan.items
+      .map((item) => ({ item, folderId: namedFolderIdOf(item) }))
+      .filter((n): n is { item: PlanItemDto; folderId: string } => !!n.folderId);
+    if (named.length === 0) return new Map();
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      folderRepository.findPathsByIds(
+        Array.from(new Set(named.map((n) => n.folderId))),
+        ctx.workspaceId,
+        tx,
+      ),
+    );
+    const pathById = new Map(
+      rows.filter((f) => f.projectId === plan.projectId).map((f) => [f.id, f.path]),
+    );
+    return new Map(
+      named.map(({ item, folderId }) => [
+        item.id,
+        { folderId, folderPath: pathById.get(folderId) ?? null },
+      ]),
+    );
+  },
+
   async getPlanReview(planId: string, ctx: ServiceContext): Promise<PlanReviewDto> {
     const plan = await plansService.getPlan(planId, ctx);
     const staleness = await planStalenessService.computePlanStaleness(planId, ctx);
@@ -487,16 +590,23 @@ export const planReviewService = {
     // canvas has to open a LEVEL at and the breadcrumb has to name. It rides the
     // SAME batched read rather than a per-item query: a plan of thirty proposals
     // under one parent must still cost one round trip.
+    //
+    // A `folder:<id>` ref (MOTIR-5415) names no work item, so it joins neither
+    // this list nor the re-parent one below — it is resolved by the folder read.
     const committedParentIds = plan.items
       .map((i) => i.parentRef)
-      .filter((ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX));
+      .filter(
+        (ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX) && !isFolderRef(ref),
+      );
     // …AND the parent a `modify` proposes to MOVE its target to (MOTIR-3859).
     // It is a committed work item like any other parent — the append refuses a
     // temp-ref there — so it rides the same batched read, and both the diff cell
     // and the canvas placement below need its row.
     const reparentIds = plan.items
       .map((i) => (i.op === 'modify' ? (i.patch?.parentRef ?? null) : null))
-      .filter((ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX));
+      .filter(
+        (ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX) && !isFolderRef(ref),
+      );
     // …AND the COMMITTED `blocked_by` EDGES of every target (bug MOTIR-4951).
     //
     // The canvas builds a level from the roadmap read of that level's CURRENT
@@ -653,6 +763,55 @@ export const planReviewService = {
       return row?.identifier ?? id;
     };
 
+    // ── FOLDER PLACEMENTS (MOTIR-5415) ────────────────────────────────────────
+    // Every folder the review has to name: the ones a proposal NAMES
+    // (`parentRef` / `patch.parentRef` = `folder:<id>`) and the ones a target is
+    // filed in TODAY (a `modify` / `remove` that does not move it sits there, and
+    // a move OUT of a folder needs it as its `from` side). ONE recursive read for
+    // the whole plan, however many proposals are folder-placed — the same "never
+    // an N+1" rule the target read above states. A folder that no longer exists,
+    // or that sits in another project, does not resolve and reads as MISSING:
+    // the stale state the design draws and approve refuses.
+    const folderIds = Array.from(
+      new Set([
+        ...plan.items.map(namedFolderIdOf).filter((id): id is string => !!id),
+        ...plan.items
+          .map((i) => (i.workItemId ? (targetById.get(i.workItemId)?.folderId ?? null) : null))
+          .filter((id): id is string => !!id),
+      ]),
+    );
+    const folderRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      folderRepository.findPathsByIds(folderIds, ctx.workspaceId, tx),
+    );
+    const folderPathById = new Map(
+      folderRows.filter((f) => f.projectId === plan.projectId).map((f) => [f.id, f.path]),
+    );
+    const folderSide = (folderId: string): PlanPlacementSideDto => {
+      const path = folderPathById.get(folderId) ?? null;
+      return { kind: 'folder', folderId, folderPath: path, folderMissing: path === null };
+    };
+    const placementSides: PlacementSides = {
+      current: (target) => {
+        if (target?.parentId) {
+          return { kind: 'workItem', id: target.parentId, identifier: nameParent(target.parentId) };
+        }
+        return target?.folderId ? folderSide(target.folderId) : { kind: 'root' };
+      },
+      proposed: (ref) => {
+        if (ref === null) return { kind: 'root' };
+        if (isFolderRef(ref)) return folderSide(folderRefId(ref));
+        return { kind: 'workItem', id: ref, identifier: nameParent(ref) };
+      },
+    };
+    /** The folder a proposal will SIT in: the one it names, else — when it names
+     *  no placement at all — its target's current folder. */
+    const effectiveFolderIdOf = (item: PlanItemDto): string | null => {
+      const named = namedFolderIdOf(item);
+      if (named !== undefined) return named;
+      const target = item.workItemId ? targetById.get(item.workItemId) : undefined;
+      return target?.parentId ? null : (target?.folderId ?? null);
+    };
+
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));
 
     // The project's WORKFLOW, so a target's status can carry its own identity —
@@ -796,9 +955,13 @@ export const planReviewService = {
      * A materialized `add` has both; `parentRef` wins, and the two agree.
      */
     const parentNodeIdOf = (item: PlanItemDto): string | null => {
-      if (item.parentRef) return resolveNodeRef(item.parentRef);
+      // A folder is not a node on the canvas: a folder-placed proposal is a ROOT
+      // there, and says where it is filed through `folderPath` (MOTIR-5415).
+      if (item.parentRef)
+        return isFolderRef(item.parentRef) ? null : resolveNodeRef(item.parentRef);
       if (item.op === 'modify' && item.patch?.parentRef !== undefined) {
-        return item.patch.parentRef === null ? null : resolveNodeRef(item.patch.parentRef);
+        const ref = item.patch.parentRef;
+        return ref === null || isFolderRef(ref) ? null : resolveNodeRef(ref);
       }
       const target = item.workItemId ? targetById.get(item.workItemId) : undefined;
       return target?.parentId ?? null;
@@ -818,7 +981,9 @@ export const planReviewService = {
       // old→new overlay and `proposal.changedFields` is its key set. Computing
       // them separately is the drift this card exists to make impossible.
       const changes =
-        item.op === 'modify' ? buildChanges(item.patch, target, nameParent, statusByKey) : [];
+        item.op === 'modify'
+          ? buildChanges(item.patch, target, nameParent, statusByKey, placementSides)
+          : [];
 
       // THE PROPOSED STEPS, resolved for READING (MOTIR-4622 · AMENDMENT 14 D5,
       // D6; `design/ai-planning/design-notes.md` Part XV).
@@ -867,10 +1032,12 @@ export const planReviewService = {
       // degrade, never throw (MOTIR-3083 AC 5).
       const parentNodeId = parentNodeIdOf(item);
       const committedParentId = item.parentRef
-        ? item.parentRef.startsWith(TEMP_REF_PREFIX)
+        ? item.parentRef.startsWith(TEMP_REF_PREFIX) || isFolderRef(item.parentRef)
           ? null
           : item.parentRef
         : parentNodeId;
+      const folderId = effectiveFolderIdOf(item);
+      const folderPath = folderId ? (folderPathById.get(folderId) ?? null) : null;
       // `parentNodeIdOf` already prefers a `modify`'s `patch.parentRef`
       // (MOTIR-3859), so the breadcrumb and the level follow the PROPOSED
       // placement rather than the one the card is leaving.
@@ -888,6 +1055,9 @@ export const planReviewService = {
         parentKind: committedParent?.kind ?? null,
         // MOTIR-3152's committed ancestor trail — unchanged by this merge.
         parentTrail: committedParent ? trailFor(committedParent.id) : [],
+        folderId,
+        folderPath,
+        folderMissing: folderId !== null && folderPath === null,
         blockedByNodeIds: blockedByNodeIdsOf(item),
         blockedByRemovedNodeIds: blockedByRemovedNodeIdsOf(item),
         committedBlockedBy: committedBlockedByOf(item),

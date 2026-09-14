@@ -26,6 +26,7 @@
 // module (per the planner's "no complexity for nothing" / justified-deviation
 // discipline — the deviation from "one module" earns its keep).
 
+import { PlacementConflictError } from '@/lib/folders/errors';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 
 /**
@@ -130,4 +131,38 @@ export function assertValidParent(parentType: IssueType | null, childType: Issue
   if (!canParent(parentType, childType)) {
     throw new IllegalParentTypeError(`A ${childType} may not be parented to a ${parentType}.`);
   }
+}
+
+/**
+ * Where a work item is being PLACED: under a work-item parent of `parentKind`,
+ * filed into a folder, or at the project root (Epic MOTIR-5307 · Story
+ * MOTIR-5310 · MOTIR-5407). `parentKind` null and `filed` false is the root.
+ */
+export interface WorkItemPlacement {
+  /** The kind of the work-item parent, or `null` when the item has none. */
+  parentKind: IssueType | null;
+  /** True when the item is filed in a folder. */
+  filed: boolean;
+}
+
+/**
+ * The FOLDER-AWARE placement gate — {@link assertValidParent} extended by the
+ * one rule folders add, and the gate every service write that may place an
+ * item into a folder calls instead of it.
+ *
+ * It mirrors `enforce_work_item_kind_parent()` as the folder migration
+ * re-created it (`prisma/migrations/20260913090000_folder/migration.sql`):
+ *   - a work-item parent AND a folder together is refused — the
+ *     `work_item_parent_xor_folder` CHECK's rule — as {@link PlacementConflictError};
+ *   - a FOLDER admits ANY kind, `subtask` included: a folder satisfies the
+ *     must-have-a-parent rule, and the trigger's root arm only refuses a subtask
+ *     whose `folderId` is also null;
+ *   - otherwise the kind-parent matrix decides, unchanged.
+ */
+export function assertValidPlacement(placement: WorkItemPlacement, childType: IssueType): void {
+  if (placement.parentKind !== null && placement.filed) {
+    throw new PlacementConflictError();
+  }
+  if (placement.filed) return;
+  assertValidParent(placement.parentKind, childType);
 }

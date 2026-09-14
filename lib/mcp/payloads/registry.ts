@@ -16,6 +16,7 @@ import {
   nextReadyPayload,
   searchWorkItemsPayload,
   skeletonPayload,
+  workItemPlacementWritePayload,
   workItemWritePayload,
 } from './workItems';
 import {
@@ -37,6 +38,7 @@ import {
   planSubmitPayload,
   sessionCloseOutPayload,
 } from './workLoop';
+import { folderDeletionPayload, folderWritePayload, listFoldersPayload } from './folders';
 
 // The TOOL → PAYLOAD map (Story 11.6 · Subtask 11.6.6 — MOTIR-2232).
 //
@@ -74,13 +76,14 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // MOTIR-2961 — the KEYED claim. Its payload IS v1's `WorkItemClaim`, so it
   // probes that resource whole rather than a part of it.
   claim_work_item: claimWorkItemPayload as unknown as PayloadDefinition<never>,
-  create_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
+  // MOTIR-5413 — the two PLACING writes report where the item now sits.
+  create_work_item: workItemPlacementWritePayload as unknown as PayloadDefinition<never>,
   update_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   transition_status: workItemWritePayload as unknown as PayloadDefinition<never>,
   archive_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   unarchive_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   change_kind: workItemWritePayload as unknown as PayloadDefinition<never>,
-  move_to_parent: workItemWritePayload as unknown as PayloadDefinition<never>,
+  move_to_parent: workItemPlacementWritePayload as unknown as PayloadDefinition<never>,
   add_comment: addCommentPayload as unknown as PayloadDefinition<never>,
   // MOTIR-5295 — an edit returns the comment it changed, the same shape the
   // add returns, so it derives through the same definition.
@@ -89,6 +92,13 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // NARROWING of `WorkItemRef`, so it derives (and carries no probe) for the
   // same reason the search row does.
   skeleton: skeletonPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-5409 — the folder tools. The two writes return v1's `Folder` /
+  // `FolderDeletion` resources whole and PROBE them; the tree read is a declared
+  // narrowing of `Folder` and carries no probe, like the search row.
+  list_folders: listFoldersPayload as unknown as PayloadDefinition<never>,
+  create_folder: folderWritePayload as unknown as PayloadDefinition<never>,
+  update_folder: folderWritePayload as unknown as PayloadDefinition<never>,
+  delete_folder: folderDeletionPayload as unknown as PayloadDefinition<never>,
   attach_file: attachFilePayload as unknown as PayloadDefinition<never>,
   // 11.6.4 — project / sprint / backlog / identity
   list_projects: listProjectsPayload as unknown as PayloadDefinition<never>,

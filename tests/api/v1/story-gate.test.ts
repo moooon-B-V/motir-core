@@ -15,6 +15,7 @@ import {
 } from '../../helpers/v1RouteAudit';
 import { createV1Caller, createV1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { createTestWorkItem } from '../../fixtures';
+import { foldersService } from '@/lib/services/foldersService';
 import { plansService } from '@/lib/services/plansService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { truncateAuthTables } from '../../helpers/db';
@@ -455,6 +456,17 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
     const myRun = await scopedRun(mine, myItem);
     const theirRun = await scopedRun(theirs, theirItem);
 
+    // MOTIR-5408's folder routes need a `[folderId]` the caller owns, and a
+    // foreign folder whose id must never appear.
+    const myFolder = await foldersService.createFolder(
+      { projectId: mine.fixture.projectId, parentFolderId: null, name: 'Mine' },
+      mine.ctx,
+    );
+    const theirFolder = await foldersService.createFolder(
+      { projectId: theirs.fixture.projectId, parentFolderId: null, name: 'Theirs' },
+      theirs.ctx,
+    );
+
     const foreign = [
       theirs.workspace.id,
       theirs.user.id,
@@ -465,6 +477,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       theirSprint.id,
       theirPlan.id,
       theirRun.id,
+      theirFolder.id,
     ];
 
     /** Fill one `[slug]` segment with a value the CALLER legitimately owns. */
@@ -474,6 +487,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       if (slug === 'sprintId') return mySprint.id;
       if (slug === 'planId') return myPlan.id;
       if (slug === 'id') return myRun.id;
+      if (slug === 'folderId') return myFolder.id;
       throw new Error(
         `the cross-tenant sweep has no value for the dynamic segment [${slug}] — ` +
           'add one rather than letting the route be skipped',

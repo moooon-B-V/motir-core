@@ -1075,6 +1075,15 @@ export interface WorkItemProvenanceInput {
 export interface CreateWorkItemInput {
   projectId: string;
   parentId?: string | null;
+  /**
+   * File the new item straight into a folder of the SAME project (Story
+   * MOTIR-5310 · MOTIR-5407) — it is created with `parentId` null, appended
+   * last at that folder's level. Any kind may be filed, `subtask` included.
+   * Supplying it together with `parentId` is `PlacementConflictError` (422); an
+   * unknown or other-workspace folder is `FolderNotFoundError` (404), another
+   * project's is `CrossProjectFolderError` (422). Omitted / null → not filed.
+   */
+  folderId?: string | null;
   kind: WorkItemKindDto;
   title: string;
   descriptionMd?: string | null;
@@ -1252,6 +1261,15 @@ export interface CreateWorkItemLinkInput {
  */
 export interface UpdateWorkItemInput {
   parentId?: string | null;
+  /**
+   * Change the item's FOLDER placement in the same transaction as every other
+   * field in the patch (Story MOTIR-5310 · MOTIR-5407), with the semantics of
+   * `workItemsService.fileWorkItem`: a folder id files the item (clearing its
+   * work-item parent and appending it last at that folder's level); `null`
+   * takes it out of its folder to the root, which a subtask may not occupy.
+   * Supplying it together with `parentId` is `PlacementConflictError` (422).
+   */
+  folderId?: string | null;
   // `kind` is now mutable (user directive): changing an issue's type is
   // re-validated against its CURRENT parent and ALL its children via the
   // kind-parent matrix (`assertValidParent`), so a change that would orphan an
