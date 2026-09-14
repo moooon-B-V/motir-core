@@ -235,6 +235,32 @@ describe('H · refused — every member of the union renders in place, with a ne
     { refusal: { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }, expect: /cannot decide this kind/ },
     { refusal: { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }, expect: /already waiting/ },
     { refusal: { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }, expect: /cannot be changed/ },
+    // The MERGE refusals (MOTIR-5512) — each asserted by its title AND its next
+    // action, because the next action is the half that differs per refusal.
+    {
+      refusal: { tag: 'MERGE_CHECKS_NOT_GREEN' },
+      expect: /checks are not green\..*Wait for the checks to finish/,
+    },
+    {
+      refusal: { tag: 'MERGE_CONFLICT' },
+      expect: /conflicts with its base branch\..*Resolve the conflict on the branch/,
+    },
+    {
+      refusal: { tag: 'MERGE_BRANCH_PROTECTED', reason: 'At least 1 approving review is required' },
+      expect: /protection rules do not allow this merge yet\..*Satisfy the rule on GitHub/,
+    },
+    {
+      refusal: { tag: 'MERGE_ALREADY_MERGED' },
+      expect: /already merged\..*Nothing is left to do/,
+    },
+    {
+      refusal: { tag: 'MERGE_APP_PERMISSION_MISSING', permission: 'contents: write' },
+      expect: /not allowed to merge here\..*grants contents: write to Motir's GitHub App/,
+    },
+    {
+      refusal: { tag: 'MERGE_APP_PERMISSION_MISSING', permission: null },
+      expect: /not allowed to merge here\..*the permission GitHub asked for/,
+    },
     { refusal: { tag: 'UNEXPECTED' }, expect: /could not be recorded/ },
   ];
 

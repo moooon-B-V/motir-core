@@ -130,6 +130,13 @@ export async function POST(
  * was supposed to. Sharing a status would make a defect indistinguishable from
  * an ordinary race on every surface anybody looks at — so it is a `500`, which
  * is what it is.
+ *
+ * The MERGE refusals (MOTIR-5512) are the HOST saying no to the merge an
+ * approval performs. The four about the pull request's own state are `409`, for
+ * the same reason as the terminal-state refusals above. The missing App
+ * permission is `424` and deliberately NOT `403`: `403` already means THIS actor
+ * lacks the authority, and here the person is entitled — it is Motir's App the
+ * host refused, a dependency failing rather than a caller being turned away.
  */
 const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_NOT_FOUND: 404,
@@ -139,4 +146,9 @@ const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_ALREADY_AWAITING: 409,
   APPROVAL_GATE_KIND_UNREGISTERED: 501,
   APPROVAL_GATE_DECIDED_IMMUTABLE: 500,
+  MERGE_CHECKS_NOT_GREEN: 409,
+  MERGE_CONFLICT: 409,
+  MERGE_BRANCH_PROTECTED: 409,
+  MERGE_ALREADY_MERGED: 409,
+  MERGE_APP_PERMISSION_MISSING: 424,
 };

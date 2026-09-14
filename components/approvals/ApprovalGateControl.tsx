@@ -378,6 +378,22 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       headline = t('decidedImmutable.title');
       break;
+    case 'MERGE_CHECKS_NOT_GREEN':
+      headline = t('mergeChecksNotGreen.title');
+      break;
+    case 'MERGE_CONFLICT':
+      headline = t('mergeConflict.title');
+      break;
+    case 'MERGE_BRANCH_PROTECTED':
+      // `refusal.reason` is the host's sentence and is NOT drawn — see the union.
+      headline = t('mergeBranchProtected.title');
+      break;
+    case 'MERGE_ALREADY_MERGED':
+      headline = t('mergeAlreadyMerged.title');
+      break;
+    case 'MERGE_APP_PERMISSION_MISSING':
+      headline = t('mergeAppPermissionMissing.title');
+      break;
     case 'UNEXPECTED':
       headline = t('unexpected.title');
       break;
@@ -406,6 +422,14 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
   }
 
   const nextActionKey = refusal.tag === 'UNEXPECTED' ? 'unexpected' : refusalKeyOf(refusal.tag);
+  // The one next action that names something: the permission the host asked for.
+  // Unnamed when the host did not say, so the sentence never carries a blank.
+  const nextAction =
+    refusal.tag === 'MERGE_APP_PERMISSION_MISSING'
+      ? refusal.permission
+        ? t('mergeAppPermissionMissing.next', { permission: refusal.permission })
+        : t('mergeAppPermissionMissing.nextUnnamed')
+      : t(`${nextActionKey}.next`);
 
   return (
     <div
@@ -417,8 +441,7 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
         aria-hidden
       />
       <p className="text-[13px] leading-snug text-(--el-text-strong)">
-        <b>{headline}</b>{' '}
-        <span className="text-(--el-text-secondary)">{t(`${nextActionKey}.next`)}</span>
+        <b>{headline}</b> <span className="text-(--el-text-secondary)">{nextAction}</span>
       </p>
     </div>
   );
@@ -483,6 +506,16 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'alreadyAwaiting';
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       return 'decidedImmutable';
+    case 'MERGE_CHECKS_NOT_GREEN':
+      return 'mergeChecksNotGreen';
+    case 'MERGE_CONFLICT':
+      return 'mergeConflict';
+    case 'MERGE_BRANCH_PROTECTED':
+      return 'mergeBranchProtected';
+    case 'MERGE_ALREADY_MERGED':
+      return 'mergeAlreadyMerged';
+    case 'MERGE_APP_PERMISSION_MISSING':
+      return 'mergeAppPermissionMissing';
   }
 }
 

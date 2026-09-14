@@ -8249,6 +8249,27 @@
         "title": "该决定已记录，无法更改。",
         "next": "请重新加载页面。若反复出现，这是一个值得上报的缺陷。"
       },
+      "mergeChecksNotGreen": {
+        "title": "该拉取请求的检查尚未全部通过。",
+        "next": "请等待检查完成，或打开拉取请求查看失败原因。"
+      },
+      "mergeConflict": {
+        "title": "该拉取请求与其目标分支存在冲突。",
+        "next": "请在分支上解决冲突。检查通过后，Motir 会再次请求审批。"
+      },
+      "mergeBranchProtected": {
+        "title": "分支保护规则暂不允许此次合并。",
+        "next": "请先在 GitHub 上满足该规则（例如必需的审查），然后再次批准。"
+      },
+      "mergeAlreadyMerged": {
+        "title": "该拉取请求已经合并。",
+        "next": "无需再做任何操作。合并送达后，工作项会自动推进。"
+      },
+      "mergeAppPermissionMissing": {
+        "title": "Motir 的 GitHub App 无权在此合并。",
+        "next": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 {permission} 权限，然后再次批准。",
+        "nextUnnamed": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 GitHub 所要求的权限，然后再次批准。"
+      },
       "unexpected": {
         "title": "无法记录你的决定。",
         "next": "请检查网络连接后重试。"

@@ -45,6 +45,31 @@ export type GateRefusal =
   | { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }
   | { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }
   | { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }
+  // ── THE MERGE REFUSALS (MOTIR-5512; `approval-gates.md` §4, second amendment
+  // decision 8) — the host said no to the merge an approval performs.
+  | { tag: 'MERGE_CHECKS_NOT_GREEN' }
+  | { tag: 'MERGE_CONFLICT' }
+  | {
+      tag: 'MERGE_BRANCH_PROTECTED';
+      /**
+       * The host's own account of WHICH rule, when it gave one. Carried for the
+       * record and deliberately NOT drawn: it is a host sentence, and a server
+       * string on a decision surface is what this union exists to prevent. The
+       * drawn copy names the next action without it.
+       */
+      reason?: string;
+    }
+  | { tag: 'MERGE_ALREADY_MERGED' }
+  | {
+      tag: 'MERGE_APP_PERMISSION_MISSING';
+      /**
+       * The permission GitHub said it needed (`X-Accepted-GitHub-Permissions`).
+       * Null is a real answer — the header is not guaranteed — so the copy has an
+       * unnamed arm rather than a blank in the sentence, the same disposition
+       * `APPROVAL_GATE_ALREADY_DECIDED` gives a decider who left no label.
+       */
+      permission: string | null;
+    }
   | { tag: 'UNEXPECTED' };
 
 /** Every tag the frame handles. */
@@ -71,7 +96,7 @@ export const REFUSAL_TAGS_ARE_TOTAL: UnhandledGateRefusalTags extends never ? tr
  */
 export function toGateRefusal(
   code: unknown,
-  extra?: { decidedByLabel?: string | null },
+  extra?: { decidedByLabel?: string | null; permission?: string | null; reason?: string | null },
 ): GateRefusal {
   switch (code) {
     case 'APPROVAL_GATE_ALREADY_DECIDED':
@@ -85,7 +110,14 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
     case 'APPROVAL_GATE_ALREADY_AWAITING':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
+    case 'MERGE_CHECKS_NOT_GREEN':
+    case 'MERGE_CONFLICT':
+    case 'MERGE_ALREADY_MERGED':
       return { tag: code };
+    case 'MERGE_BRANCH_PROTECTED':
+      return extra?.reason ? { tag: code, reason: extra.reason } : { tag: code };
+    case 'MERGE_APP_PERMISSION_MISSING':
+      return { tag: code, permission: extra?.permission || null };
     default:
       return { tag: 'UNEXPECTED' };
   }
