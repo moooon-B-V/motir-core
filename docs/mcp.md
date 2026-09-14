@@ -2377,6 +2377,8 @@ plus `items[]`, one entry per proposal:
   intra-plan temp-ref `planItem:<planItemId>` pointing at another `add` in the
   same plan. Resolve the temp-refs against `items[].id` to rebuild the proposed
   tree and its dependency edges; the text block renders exactly that, indented.
+  A `parentRef` may also be **`folder:<folderId>`** — the proposal is FILED into
+  that folder rather than hung under a work item — and is returned verbatim.
 
 A plan still `generating` returns the proposals that have arrived **so far**
 rather than erroring — proposals stream in, so a caller polling the content sees
@@ -2494,8 +2496,19 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   ```
 
 - **`workItemId`** / **`patch`** / **`baseRevision`** — for a `modify` / `remove`.
-- **`parentRef`** / **`blockedByRefs`** — a real `work_item.id`, **or** an
-  intra-plan temp-ref `planItem:<id>`.
+- **`parentRef`** / **`blockedByRefs`** — a work-item **key** (`ACME-7`, resolved
+  to its id at the append — keys are accepted, not refused), a real
+  `work_item.id`, **or** an intra-plan temp-ref `planItem:<id>`.
+- **`parentRef` may instead be `folder:<folderId>`** — FILE the proposal into a
+  folder of the plan's project rather than under a work item (MOTIR-5414). A filed
+  card is a root, and a folder admits **any** kind, `subtask` included. The same
+  form is accepted on a `modify`'s `patch.parentRef` (file a committed item into
+  a folder) and on `update_plan_proposal`'s `parentRef`. It is judged **at the
+  append**: a folder id naming nothing in this workspace is refused as
+  `INVALID_PLAN_REF_GRAPH` (`dangling`), another project's folder as
+  `PLAN_GRAMMAR_VIOLATION` (`illegal_parent`), and a `folder:` ref in
+  `blockedByRefs` / `patch.blockedByAdd` / `patch.blockedByRemove` as
+  `INVALID_PLAN_REF_GRAPH` — a folder is a placement and blocks nothing.
 
 **Output** — `structuredContent`: the plan and its `items[]`, plus
 **`planItemIds`** — the ids of the proposals **this call** created, **in the order
@@ -2682,18 +2695,18 @@ returns a proposal's id only when its own call returns, so an intra-plan ref wri
 in the same batch as its target names nothing — and until this tool existed the only
 remedy was to author a whole second plan and ask a person to decline the first.
 
-| Input                                | Type           | Required | Notes                                                             |
-| ------------------------------------ | -------------- | -------- | ----------------------------------------------------------------- |
-| `planId`                             | string         | yes      | The id `create_plan` returned.                                    |
-| `planItemId`                         | string         | yes      | The proposal to correct.                                          |
-| every field `update_plan_item` takes | —              | no       | Same sparse semantics.                                            |
-| `parentRef`                          | string \| null | no       | `add` only. Re-parent it; `null` makes it top-level.              |
-| `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it. |
-| `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                       |
-| `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins. |
-| `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                   |
-| `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.   |
-| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                |
+| Input                                | Type           | Required | Notes                                                                                                                                                                |
+| ------------------------------------ | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `planId`                             | string         | yes      | The id `create_plan` returned.                                                                                                                                       |
+| `planItemId`                         | string         | yes      | The proposal to correct.                                                                                                                                             |
+| every field `update_plan_item` takes | —              | no       | Same sparse semantics.                                                                                                                                               |
+| `parentRef`                          | string \| null | no       | `add` only. Re-parent it — a key, an id, `planItem:<id>`, or `folder:<folderId>` to file it into a folder; `null` makes it top-level. Re-validated as at the append. |
+| `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it.                                                                                                    |
+| `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                                                                                                                          |
+| `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins.                                                                                                    |
+| `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                                                                                                                      |
+| `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.                                                                                                      |
+| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                                                                                                                   |
 
 **It reaches the five things the deepen cannot, and that is the whole point.** The
 field that is wrong is very often `patch.blockedByAdd` on a `modify` — the op no
@@ -3208,7 +3221,7 @@ thing on the other.
 `parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
 makes the response a TREE rather than a list — the hierarchy is rebuildable from
 this one call. `id` is the real work-item cuid `add_plan_items` takes for
-`parentRef` / `blockedByRefs` (it refuses a `<KEY>-<n>` key), and `revision` is
+`parentRef` / `blockedByRefs` (it also accepts the `<KEY>-<n>` key), and `revision` is
 the `baseRevision` a `modify` / `remove` proposal anchors on — both ride the row
 so orienting and proposing do not cost a `get_work_item` per target.
 

@@ -99,6 +99,25 @@ export const folderRepository = {
   },
 
   /**
+   * The placement state of the folders a plan's `folder:<id>` refs name
+   * (MOTIR-5414) — id, project and name, workspace-scoped explicitly so the
+   * answer does not rest on the connection's RLS role. The caller lifts the
+   * project narrowing, so a folder in another project comes back to be refused
+   * for the right reason rather than read as missing.
+   */
+  async findPlacementStateByIds(
+    ids: string[],
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; projectId: string; name: string }>> {
+    if (ids.length === 0) return [];
+    return tx.folder.findMany({
+      where: { id: { in: ids }, workspaceId },
+      select: { id: true, projectId: true, name: true },
+    });
+  },
+
+  /**
    * A sibling folder already holding `name`, case-insensitively — the same
    * predicate the `folder_sibling_name_key` expression index enforces, so the
    * friendly check and the race backstop can never disagree about what a

@@ -349,7 +349,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 parentRef: {
                   type: ['string', 'null'],
                   description:
-                    'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead.',
+                    'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
                 },
                 blockedByAdd: {
                   type: 'array',
@@ -371,13 +371,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
             parentRef: {
               type: 'string',
               description:
-                'Where the proposed item hangs, in any of THREE forms: a work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or `planItem:<id>` naming another `add` in THIS plan — an id this tool returned in `planItemIds` on an earlier call. A key is resolved to its id when the proposal is appended, so the three are interchangeable; a key that names no work item in this workspace is refused HERE, not at approve.',
+                'Where the proposed item hangs, in any of THREE forms: a work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or `planItem:<id>` naming another `add` in THIS plan — an id this tool returned in `planItemIds` on an earlier call. A key is resolved to its id when the proposal is appended, so the three are interchangeable; a key that names no work item in this workspace is refused HERE, not at approve. OR, instead of a work-item parent, `folder:<folderId>` FILES the item into a folder of this project: it is then a root, any kind may be filed (`subtask` included), and an unknown folder or another project’s is refused HERE.',
             },
             blockedByRefs: {
               type: 'array',
               items: { type: 'string' },
               description:
-                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan.',
+                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is refused here — a folder is a placement, it blocks nothing.',
             },
             baseRevision: {
               type: 'string',
@@ -2114,7 +2114,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       parentRef: {
         type: ['string', 'null'],
         description:
-          '`add` only: re-parent the proposal. A work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming another `add` on THIS plan; `null` makes it top-level. Re-validated by the same checks the append runs, so a key or a ref naming nothing is refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
+          '`add` only: re-parent the proposal. A work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming another `add` on THIS plan; `folder:<folderId>` to file it into a folder of this project instead; `null` makes it top-level. Re-validated by the same checks the append runs, so a key or a ref naming nothing is refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
       },
       blockedByRefs: {
         type: 'array',
@@ -2241,7 +2241,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               parentRef: {
                 type: ['string', 'null'],
                 description:
-                  'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead.',
+                  'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
               },
               blockedByAdd: {
                 type: 'array',

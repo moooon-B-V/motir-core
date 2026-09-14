@@ -53,21 +53,28 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
 import {
+  FOLDER_REF_PREFIX,
   TEMP_REF_PREFIX,
   assertTempRefsResolvable,
+  folderRefId,
+  isFolderRef,
   isTempRef,
   tempRefsOf,
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
 import {
+  assertFolderPlacementsLegal,
   assertProposalSetSelfConsistent,
   assertReparentLegal,
+  collectReferencedFolderIds,
   collectReferencedWorkItemIds,
   DEFAULT_PROPOSED_KIND,
   validatePlanProposals,
+  type LiveFolderState,
   type LiveWorkItemState,
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
+import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { patchRescopes, resetsOnRescope } from '@/lib/plans/rescopeReset';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
@@ -251,7 +258,36 @@ function assertKnownPlanningSource(pf: PlanItemProposedFields, label: string): v
   }
 }
 
+/**
+ * A `folder:` ref with nothing after the prefix names no folder and never could
+ * (MOTIR-5414). Refused in the pure per-proposal pass, where a blank
+ * `patch.parentRef` is refused, rather than read as an unknown id later.
+ */
+function assertFolderRefNotBlank(
+  ref: string | null | undefined,
+  site: string,
+  label: string,
+): void {
+  if (typeof ref === 'string' && isFolderRef(ref) && folderRefId(ref).trim().length === 0) {
+    throw new InvalidProposalError(
+      `${label}: \`${site}\` is "${ref}", which names no folder. Send \`${FOLDER_REF_PREFIX}<folderId>\`.`,
+    );
+  }
+}
+
 function validateProposal(p: ProposalInput): void {
+  assertFolderRefNotBlank(
+    p.parentRef,
+    'parentRef',
+    proposalLabel({ op: p.op, workItemId: p.workItemId, title: p.proposedFields?.title }),
+  );
+  if (p.op === 'modify') {
+    assertFolderRefNotBlank(
+      p.patch?.parentRef,
+      'patch.parentRef',
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
+  }
   if (p.op === 'add') {
     if (!p.proposedFields || !p.proposedFields.title?.trim()) {
       throw new InvalidProposalError('An `add` proposal requires proposedFields.title.');
@@ -665,6 +701,9 @@ async function runPersistGate(
   // (MOTIR-3936) — skipped entirely when the plan writes no edge, so a plan that
   // wires nothing costs exactly what it cost before.
   const existingBlockedByEdges = await resolveBlockedByClosure(nodes, ctx, tx);
+  // The FOLDERS its `folder:` placements name (MOTIR-5414) — skipped entirely
+  // when the plan files nothing. Bound the same way the row read above is.
+  const folderById = await resolveFolderById(nodes, ctx, tx);
   validatePlanProposals({
     items: nodes,
     liveById,
@@ -672,7 +711,33 @@ async function runPersistGate(
     planProjectId,
     ancestorIdsById,
     existingBlockedByEdges,
+    folderById,
   });
+}
+
+/**
+ * The live state of every folder a plan's `folder:<id>` placements name
+ * (MOTIR-5414), in one workspace-scoped read. An empty map, with no read, when
+ * the plan files nothing.
+ *
+ * ⚠️ A `tx` MUST ALREADY HAVE THE PROJECT NARROWING LIFTED, for the reason the
+ * work-item read beside it does: `folder_project_narrow` is a RESTRICTIVE select
+ * policy, and a narrowed read reports another project's folder as MISSING — a
+ * refusal whose stated reason the caller can observe to be false.
+ */
+async function resolveFolderById(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<Map<string, LiveFolderState>> {
+  const ids = collectReferencedFolderIds(nodes);
+  if (ids.length === 0) return new Map();
+  const rows = tx
+    ? await folderRepository.findPlacementStateByIds(ids, ctx.workspaceId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        folderRepository.findPlacementStateByIds(ids, ctx.workspaceId, t),
+      );
+  return new Map(rows.map((r) => [r.id, r]));
 }
 
 /**
@@ -828,7 +893,9 @@ function proposedParentIds(nodes: readonly ProposalNode[]): string[] {
       nodes
         .filter((n) => n.op === 'modify')
         .map((n) => n.patch?.parentRef)
-        .filter((ref): ref is string => typeof ref === 'string' && !isTempRef(ref)),
+        .filter(
+          (ref): ref is string => typeof ref === 'string' && !isTempRef(ref) && !isFolderRef(ref),
+        ),
     ),
   ];
 }
@@ -2695,21 +2762,54 @@ async function assertReparentsLegalAtAppend(
       ]),
     );
     const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
+    const folderById = await resolveFolderById(nodes, ctx, tx);
     for (const node of nodes) {
       // The ref must RESOLVE before the gate can judge it — the same
       // precondition `validatePlanProposals` gives `assertReparentLegal` through
       // its step 2, restated here because this path runs the one check rather
       // than the whole ordered gate.
       const ref = node.op === 'modify' ? node.patch?.parentRef : undefined;
-      if (typeof ref === 'string' && !isTempRef(ref) && !liveById.has(ref)) {
+      if (typeof ref === 'string' && !isTempRef(ref) && !isFolderRef(ref) && !liveById.has(ref)) {
         throw new PlanRefGraphError(
           'dangling',
           node.id,
           `Proposal ${node.id}'s patch.parentRef "${ref}" names no work item in this workspace.`,
         );
       }
-      assertReparentLegal(node, liveById, ancestorIdsById, terminalStatusKeys, planProjectId);
+      assertReparentLegal(
+        node,
+        liveById,
+        ancestorIdsById,
+        terminalStatusKeys,
+        planProjectId,
+        folderById,
+      );
     }
+  });
+}
+
+/**
+ * Judge every `folder:` placement at the APPEND (MOTIR-5414): the folder exists
+ * and belongs to the plan's project.
+ *
+ * Here rather than left to the close, by `assertTempRefsResolvable`'s own
+ * argument: nothing a later call does can make an unknown folder known, and the
+ * author writing the plan is the right person to hear it. Unlike a work-item
+ * parent — which a plan may legitimately name before it is created — a folder is
+ * never created by a plan, so there is no "created between the append and the
+ * close" to wait for.
+ *
+ * Suspended project narrowing, for the reason `resolveFolderById` states.
+ */
+async function assertFolderPlacementsLegalAtAppend(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const folderById = await resolveFolderById(nodes, ctx, tx);
+    assertFolderPlacementsLegal(nodes, folderById, planProjectId);
   });
 }
 
@@ -3329,6 +3429,13 @@ export const plansService = {
           ];
           if (proposedParentIds(withIncoming).length > 0) {
             await assertReparentsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
+          }
+
+          // ⚠️ THE FOLDER GATE, AT THE APPEND (MOTIR-5414) — the second check on
+          // this path that costs a read, and skipped entirely unless some
+          // proposal on the plan files into a folder.
+          if (collectReferencedFolderIds(withIncoming).length > 0) {
+            await assertFolderPlacementsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
 
           for (const p of proposals) {
@@ -4283,6 +4390,22 @@ export const plansService = {
           new Set(all.filter((i) => i.op === 'add' && i.id !== item.id).map((i) => i.id)),
           (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
         );
+
+        // The append's FOLDER gate on the corrected shape (MOTIR-5414), run
+        // unconditionally rather than left to the before/after verdict below —
+        // that verdict ADMITS a correction to a plan that was already
+        // unapprovable, and an unknown folder is a mistake this write
+        // introduces, not a repair of one it inherits.
+        const correctedNode: ProposalNode = {
+          ...toProposalNode(item),
+          parentRef: corrected.parentRef ?? null,
+          blockedByRefs: [...(corrected.blockedByRefs ?? [])],
+          patch: (corrected.patch ?? null) as ProposalNode['patch'],
+        };
+        assertProposalSetSelfConsistent([correctedNode]);
+        if (collectReferencedFolderIds([correctedNode]).length > 0) {
+          await assertFolderPlacementsLegalAtAppend([correctedNode], ctx, plan.projectId, tx);
+        }
 
         await planItemRepository.update(planItemId, data, tx);
 

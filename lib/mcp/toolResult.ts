@@ -68,6 +68,8 @@ import {
   PlanNotEditableError,
   PlanProposalReferencedError,
   PlanPersistenceError,
+  PlanGrammarError,
+  PlanRefGraphError,
 } from '@/lib/plans/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -471,7 +473,15 @@ export function toToolError(err: unknown): CallToolResult {
     // caller rather than a JSON-RPC internal error.
     err instanceof PlanNotEditableError ||
     err instanceof PlanProposalReferencedError ||
-    err instanceof PlanPersistenceError
+    err instanceof PlanPersistenceError ||
+    // INVALID_PLAN_REF_GRAPH / PLAN_GRAMMAR_VIOLATION AT THE APPEND (MOTIR-5414).
+    // The append now judges a `folder:<id>` placement where it is written — an
+    // unknown folder is `dangling`, another project's is `illegal_parent` — and
+    // the self-consistency and re-parent gates already threw these two there.
+    // Unmapped, every one reached the agent without its code; mapped, the agent
+    // reads the same code approve's route returns for the same verdict.
+    err instanceof PlanRefGraphError ||
+    err instanceof PlanGrammarError
   ) {
     return toolError(err.code, err.message);
   }
