@@ -195,6 +195,8 @@ function markWorkItemHasChildren(
 interface LevelState {
   rows: ProjectTreeRowDto[];
   total: number;
+  /** The level's work-item count without its folders, where the read reports one (MOTIR-5541). */
+  workItemTotal?: number | undefined;
   hasMore: boolean;
   loading: boolean;
 }
@@ -254,6 +256,7 @@ export function IssueTreeTable({
     [ROOTS]: {
       rows: initialLevel.rows,
       total: initialLevel.total,
+      workItemTotal: initialLevel.workItemTotal,
       hasMore: initialLevel.hasMore,
       loading: false,
     },
@@ -300,6 +303,7 @@ export function IssueTreeTable({
         [parentId]: {
           rows: prev[parentId]?.rows ?? [],
           total: prev[parentId]?.total ?? 0,
+          workItemTotal: prev[parentId]?.workItemTotal,
           hasMore: prev[parentId]?.hasMore ?? false,
           loading: true,
         },
@@ -328,6 +332,7 @@ export function IssueTreeTable({
             [parentId]: {
               rows,
               total: result.level.total,
+              workItemTotal: result.level.workItemTotal,
               hasMore: result.level.hasMore,
               loading: false,
             },
@@ -648,7 +653,14 @@ export function IssueTreeTable({
           (r): r is WorkItemTreeRowDto => r.kind !== 'folder' && r.id === workItemId,
         );
         const rows = from.rows.filter((r) => !(r.kind !== 'folder' && r.id === workItemId));
-        next[fromLevelKey] = { ...from, rows, total: Math.max(0, from.total - 1), loading: false };
+        next[fromLevelKey] = {
+          ...from,
+          rows,
+          total: Math.max(0, from.total - 1),
+          workItemTotal:
+            from.workItemTotal === undefined ? undefined : Math.max(0, from.workItemTotal - 1),
+          loading: false,
+        };
         // The old container is childless only when its WHOLE level was loaded and is now empty.
         if (fromLevelKey !== ROOTS && rows.length === 0 && !from.hasMore) {
           if (fromLevelKey.startsWith(FOLDER_PREFIX)) {
@@ -664,6 +676,7 @@ export function IssueTreeTable({
           ...to,
           rows: [...to.rows, { ...moved, parentId }],
           total: to.total + 1,
+          workItemTotal: to.workItemTotal === undefined ? undefined : to.workItemTotal + 1,
           loading: false,
         };
       }
@@ -1260,9 +1273,17 @@ export function IssueTreeTable({
     ],
   );
 
-  // An empty project draws the section's empty state — unless a new root folder
-  // is being named, which is a row to draw.
-  if (emptyState && rows.length === 0) return <>{emptyState}</>;
+  // The /items FIRST RUN (MOTIR-5541, design/work-items/items-first-run.mock.html):
+  // the empty state shows when the ROOT holds no work items, whatever folders it
+  // holds — the count the level read reports, never inferred from the rows drawn.
+  // With nothing to draw it stands alone; with folder rows, or a new root folder
+  // being named, the tree draws them and the empty state sits below. A level that
+  // reports no count falls back to "nothing is drawn".
+  const rootLevel = levels[ROOTS];
+  const rootHoldsNoWorkItems =
+    rootLevel?.workItemTotal !== undefined ? rootLevel.workItemTotal === 0 : rows.length === 0;
+  const firstRun = emptyState && rootHoldsNoWorkItems ? emptyState : null;
+  if (firstRun && rows.length === 0) return <>{firstRun}</>;
 
   return (
     <IssueInlineEditProvider workflow={workflow} members={members}>
@@ -1291,6 +1312,7 @@ export function IssueTreeTable({
                 : undefined
         }
       />
+      {firstRun ? <div className="mt-4">{firstRun}</div> : null}
       {deleting ? (
         <FolderDeleteDialog
           folderName={deleting.name}

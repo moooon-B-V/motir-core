@@ -117,6 +117,7 @@ describe('a level', () => {
       rows: [],
       hasMore: false,
       total: 0,
+      workItemTotal: 0,
     });
     const children = await workItemsService.listChildIssues(epic.id, { sort: sort() }, fx.ctx);
     expect(children.rows.map((r) => r.id)).toEqual([story.id]);
@@ -163,7 +164,7 @@ describe('the project root', () => {
       bug.id,
       story.id,
     ]);
-    expect(byKey).toMatchObject({ total: 8, hasMore: false });
+    expect(byKey).toMatchObject({ total: 8, workItemTotal: 5, hasMore: false });
 
     const byTitle = await workItemsService.listRootIssues(
       fx.projectId,
@@ -178,7 +179,32 @@ describe('the project root', () => {
       story.id,
       bug.id,
     ]);
-    expect(byTitle).toMatchObject({ total: 8, hasMore: false });
+    expect(byTitle).toMatchObject({ total: 8, workItemTotal: 5, hasMore: false });
+  });
+
+  it('counts its work items apart from its folders — a new project holds one folder and none (MOTIR-5541)', async () => {
+    const fx = await makeFixture();
+    const bugs = await seededBugsFolderId(fx.projectId);
+    const root = () => workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
+
+    expect(await root()).toEqual({
+      rows: [expect.objectContaining({ kind: 'folder', id: bugs })],
+      hasMore: false,
+      total: 1,
+      workItemTotal: 0,
+    });
+
+    // An item filed into a folder is that folder's, not the root's.
+    const task = await createWorkItem(fx, { kind: 'task', title: 'Filed task' });
+    await file(fx, task.id, bugs);
+    expect(await root()).toMatchObject({ total: 1, workItemTotal: 0 });
+    expect(await workItemsService.listFolderLevel(bugs, { sort: sort() }, fx.ctx)).toMatchObject({
+      total: 1,
+      workItemTotal: 1,
+    });
+
+    await createWorkItem(fx, { kind: 'story', title: 'Root story' });
+    expect(await root()).toMatchObject({ total: 2, workItemTotal: 1 });
   });
 });
 
@@ -303,7 +329,7 @@ describe('exclusions', () => {
     await adminDb.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
 
     const level = await workItemsService.listFolderLevel(holder.id, { sort: sort() }, fx.ctx);
-    expect(level).toEqual({ rows: [], hasMore: false, total: 0 });
+    expect(level).toEqual({ rows: [], hasMore: false, total: 0, workItemTotal: 0 });
 
     const root = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
     expect(root.rows.find((r) => r.id === holder.id)?.hasChildren).toBe(false);

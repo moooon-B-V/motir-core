@@ -1136,7 +1136,8 @@ async function pageAcrossBands(
  * the root, offset `o` is epic `o` while `o < E`, folder `o − E` while
  * `o < E + F`, and work item `o − E − F` after. `total` is the sum of the bands'
  * counts, each taken under the SAME predicate as its read, and `hasMore` follows
- * from it.
+ * from it. `workItemTotal` is that sum without the folders — the input to the
+ * /items first-run rule (MOTIR-5541).
  */
 async function readFolderLevel(
   projectId: string,
@@ -1177,18 +1178,20 @@ async function readFolderLevel(
           )
         ).map(toWorkItemTreeRowDto),
     });
+    const folders = folderBand();
     const bands = await Promise.all(
       folderId === null
         ? [
             itemBand({ kind: 'excludeFiled', band: 'epics' }),
-            folderBand(),
+            folders,
             itemBand({ kind: 'excludeFiled', band: 'others' }),
           ]
-        : [folderBand(), itemBand({ kind: 'folder', folderId })],
+        : [folders, itemBand({ kind: 'folder', folderId })],
     );
     const rows = await pageAcrossBands(bands, take, offset);
     const total = bands.reduce((sum, band) => sum + band.total, 0);
-    return { rows, hasMore: offset + rows.length < total, total };
+    const workItemTotal = total - (await folders).total;
+    return { rows, hasMore: offset + rows.length < total, total, workItemTotal };
   });
 }
 

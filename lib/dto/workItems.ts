@@ -1042,6 +1042,14 @@ export interface TreeLevelDto {
   rows: ProjectTreeRowDto[];
   hasMore: boolean;
   total: number;
+  /**
+   * The level's WORK-ITEM count, its folders excluded — set on a level that can
+   * hold folders (the project root, or one folder) and absent on a work item's
+   * children, which hold none. The /items first-run rule reads the root's: the
+   * unfiltered Tree shows its empty state when it is zero, whatever folders the
+   * root holds (MOTIR-5541, `design/work-items/design-notes.md` § `/items` first run).
+   */
+  workItemTotal?: number;
 }
 
 /**
