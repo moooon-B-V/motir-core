@@ -1329,10 +1329,13 @@ this call wrote it), and `pullRequest` — the same `LinkedPullRequestDto` the i
 page's Development section renders. (`movedFrom` was removed by MOTIR-3757 along
 with the column whose move it reported; a link adds, so there is no move.)
 
-An unknown or cross-workspace **repository** (`GITHUB_REPO_NOT_FOUND`) and an
-unknown item key are both refused with no existence leak — the repository is
-resolved from the repo row's own workspace, never through its installation
-(MOTIR-1931), so a repository Motir created resolves like any other.
+An unknown **repository** or another organisation's (`GITHUB_REPO_NOT_FOUND`)
+and an unknown item key are all refused with no existence leak. The repository
+is resolved from the repo row, never through its installation (MOTIR-1931), so a
+repository Motir created resolves like any other — and across the caller's
+ORGANISATION, not its workspace (MOTIR-5188): a repository is connected once, to
+the organisation, so every workspace of it can link a pull request on it. The
+same resolution backs `unlink_pull_request`.
 
 Requires the work-item edit permission (`work_item:edit`) — linking a pull
 request to a card is editing that card. It is already in the CLI's fixed grant,

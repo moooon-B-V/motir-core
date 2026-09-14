@@ -648,7 +648,17 @@ export const githubRepoRepository = {
    *  provisioning installation belongs to no workspace). Includes the parent
    *  installation (its provider + numeric `installationId` drive the token mint).
    *  Null when the repo isn't connected in this workspace. Read inside a context
-   *  transaction, so it takes `tx`. */
+   *  transaction, so it takes `tx`.
+   *
+   *  ⚠️ NO PRODUCTION CALLER IS LEFT, FOR THE SAME REASON AS `listByWorkspace`
+   *  (MOTIR-5188). Its four callers — `link_pull_request` and
+   *  `unlink_pull_request` by coordinates, the repo file read, the code-scanning
+   *  proxy — asked the tier a repository is connected FROM, so in every other
+   *  workspace of the organisation the first two raised and the last two
+   *  answered "not connected" about a connected repository. They now call
+   *  {@link findConnectedByOrganizationAndName}. This method keeps answering the
+   *  narrow, still-true question (MOTIR-1931); if you are about to add a caller,
+   *  check first that you do not mean the organisation. */
   async findConnectedByWorkspaceAndName(
     workspaceId: string,
     owner: string,
@@ -662,6 +672,43 @@ export const githubRepoRepository = {
         workspaceId,
       },
       include: { installation: true },
+    });
+  },
+
+  /** One connected repo by `(owner, name)` within an ORGANISATION (Story
+   *  MOTIR-4669 · MOTIR-5188) — the coordinate resolution every workspace of the
+   *  organisation shares: `link_pull_request` / `unlink_pull_request` by
+   *  coordinates, the repo file read, the code-scanning proxy. A repository is
+   *  connected once, to the organisation, so the workspace asking is not the
+   *  workspace that connected it. Owner/name match case-insensitively. Includes
+   *  the parent installation (its provider + numeric `installationId` drive the
+   *  token mint).
+   *
+   *  ⚠️ `organizationId` MUST BE RESOLVED OFF THE WORKSPACE ROW
+   *  (`resolveOrganizationId`), never taken from request input. What admits the
+   *  row is `github_repo_org_read`, which resolves the caller's organisation from
+   *  the bound WORKSPACE, so a plain `withWorkspaceContext` suffices and no
+   *  `app.organization_id` needs binding (MOTIR-5152's measurement). The `where`
+   *  on `organizationId` is the defense-in-depth half.
+   *
+   *  One organisation can hold the same coordinate twice — the uniqueness is
+   *  `(installationId, repoId)` — so the OLDEST connection wins, deterministically,
+   *  the same tie-break `findByRepoIdAndProvider` uses. Null when the organisation
+   *  has no such repository. */
+  async findConnectedByOrganizationAndName(
+    organizationId: string,
+    owner: string,
+    name: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<(GithubRepo & { installation: GithubInstallation }) | null> {
+    return tx.githubRepo.findFirst({
+      where: {
+        owner: { equals: owner, mode: 'insensitive' },
+        name: { equals: name, mode: 'insensitive' },
+        organizationId,
+      },
+      include: { installation: true },
+      orderBy: { createdAt: 'asc' },
     });
   },
 
