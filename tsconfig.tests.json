@@ -44,7 +44,15 @@
   // The e2e project owns the Playwright specs (above). Excluded rather than
   // narrowed out of the glob so `tests/**` keeps meaning "every test source",
   // and so the one line that moves the boundary is legible in a diff.
-  "exclude": ["node_modules", "packages", ".tsout", "tests/e2e/**/*.spec.ts"],
+  // `tests/components/**` is `tsconfig.components.json` (MOTIR-5433), which
+  // references this project — the render suites import `tests/helpers/**`.
+  "exclude": [
+    "node_modules",
+    "packages",
+    ".tsout",
+    "tests/e2e/**/*.spec.ts",
+    "tests/components/**"
+  ],
   // BOTH, because a test importing `@/scripts/plan-seed/…` (the seed fixtures) or
   // `../../scripts/deployFreshness.mjs` must redirect into the scripts project
   // rather than pull those files into this program as sources of its own — a file

@@ -1,4 +1,4 @@
-import { render, type RenderOptions } from '@testing-library/react';
+import { render, type RenderOptions, type RenderResult } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactElement, ReactNode } from 'react';
 import enMessages from '@/messages/en.json';
@@ -25,7 +25,7 @@ export function renderWithIntl(
      * to the environment clock). Mirrors `i18n/request.ts`'s per-request `now`. */
     now?: Date;
   } = {},
-) {
+): RenderResult {
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <NextIntlClientProvider locale={locale} messages={messages} now={now}>
