@@ -247,3 +247,50 @@
 .motir-prose .wi-chip.is-noaccess .wi-key {
   color: var(--el-text-muted);
 }
+
+/* THE COPYABLE CODE BLOCK inside prose (MOTIR-5336, design/github §20). The
+   block owns its own frame — border, radius, fill, padding — through Tailwind
+   utilities on `CopyableCodeBlock`; the unlayered `.motir-prose pre` / `code`
+   rules above would otherwise win over those layered utilities and paint a
+   second box inside the first. So the prose rules stand down inside it. */
+.motir-prose .motir-code-block pre {
+  background: transparent;
+  border-radius: 0;
+  margin: 0;
+  padding: var(--spacing-input-y) var(--spacing-input-x);
+}
+.motir-prose .motir-code-block pre code {
+  font-size: inherit;
+  color: inherit;
+}
+
+/* THE HOW TO TEST BODY (MOTIR-5336, design/github §20 `.dvb-md`). The agent's
+   `##` sections are SUB-headings of the Development card, not page headings, so
+   they scale down to uppercase 12px secondary ink; the body runs at 13px; inline
+   code takes the code tokens so it reads on the card AND on the frame's
+   `--el-surface` port. Scoped to the block's own class — no other prose moves. */
+.motir-prose.motir-how-to-test {
+  font-size: 13px;
+}
+.motir-prose.motir-how-to-test h1,
+.motir-prose.motir-how-to-test h2,
+.motir-prose.motir-how-to-test h3 {
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--el-text-secondary);
+}
+.motir-prose.motir-how-to-test > :first-child {
+  margin-top: 0;
+}
+.motir-prose.motir-how-to-test li + li {
+  margin-top: 2px;
+}
+.motir-prose.motir-how-to-test :not(pre) > code {
+  background: var(--el-code-bg);
+  color: var(--el-code-text);
+  border-radius: var(--radius-control);
+}

@@ -12,6 +12,7 @@ import type {
 import {
   DispatchRunEventBodyTooLargeError,
   DispatchRunEventLimitError,
+  DispatchRunNoTargetError,
   DispatchRunNotFoundError,
   DispatchRunTerminalError,
   DuplicateDispatchRunError,
@@ -21,6 +22,7 @@ import type {
   ActiveDispatchRunDto,
   DispatchRunAppendedDto,
   DispatchRunCardDto,
+  DispatchRunCloseOutPromptDto,
   DispatchRunDetailDto,
   DispatchRunDto,
   DispatchRunEventDto,
@@ -33,6 +35,7 @@ import {
   toDispatchRunEventDto,
   toDispatchRunListItemDto,
 } from '@/lib/mappers/dispatchRunMappers';
+import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
@@ -629,6 +632,80 @@ export const dispatchRunService = {
         return toDispatchRunDto(run, seq);
       },
     );
+  },
+
+  /**
+   * The run's CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) — resolved from
+   * the run's OWN record: its scope is the run target, and its legs that landed
+   * (`integrated` / `implemented`) are what the prompt names. The caller passes
+   * only the run id, never a card list, so a stale or partial list cannot aim a
+   * How-to-test record at the wrong work.
+   *
+   * Refuses a run with no scope ({@link DispatchRunNoTargetError}): an unscoped
+   * batch's cards were each their own target and published in their own prompts.
+   * Requires `project:browse` on the run's project, like every run read; the
+   * route adds `work_item:edit` at its gate because the agent it is for writes.
+   */
+  async getCloseOutPrompt(
+    runId: string,
+    ctx: ServiceContext,
+  ): Promise<DispatchRunCloseOutPromptDto> {
+    const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+    const run = await withWorkspaceContext(binding, (tx) =>
+      dispatchRunRepository.findByIdWithCards(runId, tx),
+    );
+    if (!run) throw new DispatchRunNotFoundError(runId);
+    await projectAccessService.assertPermission(run.projectId, ctx, 'project:browse');
+    if (!run.scopeWorkItemId) throw new DispatchRunNoTargetError(runId);
+
+    const landed = run.cards.filter(
+      (card) =>
+        card.workItemId !== null &&
+        (card.disposition === 'integrated' || card.disposition === 'implemented'),
+    );
+    const [target, items] = await withWorkspaceContext(binding, (tx) =>
+      Promise.all([
+        workItemRepository.findById(run.scopeWorkItemId as string, tx),
+        workItemRepository.findByIds(
+          landed.map((card) => card.workItemId as string),
+          tx,
+        ),
+      ]),
+    );
+    // A scope deleted after the run opened is SET NULL on the run — so a target
+    // that reads back missing is the archived/invisible case, not a race.
+    if (!target) throw new DispatchRunNoTargetError(runId);
+    const byId = new Map(items.map((item) => [item.id, item]));
+
+    const cards = landed.flatMap((card) => {
+      const item = byId.get(card.workItemId as string);
+      return item
+        ? [
+            {
+              key: item.identifier,
+              title: item.title,
+              type: item.type,
+              sessionBranch: card.sessionBranch,
+            },
+          ]
+        : [];
+    });
+
+    return {
+      runId: run.id,
+      targetKey: target.identifier,
+      prompt: assembleRunCloseOutPrompt({
+        runId: run.id,
+        target: {
+          key: target.identifier,
+          kind: target.kind,
+          title: target.title,
+          descriptionMd: target.descriptionMd,
+        },
+        cards,
+      }),
+      landedKeys: cards.map((card) => card.key),
+    };
   },
 
   /**

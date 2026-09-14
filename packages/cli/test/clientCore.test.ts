@@ -634,6 +634,55 @@ describe('typed wrappers — each names its operation and forwards its arguments
     });
   });
 
+  it('the close-out prompt is a GET on the RUN, and names only the run (MOTIR-5357)', async () => {
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/dispatch-runs/{id}/close-out-prompt': {
+        body: {
+          runId: 'run-1',
+          targetKey: 'PROD-1',
+          prompt: 'write how to test\n',
+          landedKeys: ['PROD-2', 'PROD-3'],
+        },
+      },
+    });
+
+    const out = await client.dispatchRunCloseOutPrompt('run-1');
+
+    expect(out).toEqual({
+      targetKey: 'PROD-1',
+      prompt: 'write how to test\n',
+      landedKeys: ['PROD-2', 'PROD-3'],
+    });
+    expect(server.v1Calls.map((c) => [c.method, c.path])).toEqual([
+      ['GET', '/api/v1/dispatch-runs/run-1/close-out-prompt'],
+    ]);
+  });
+
+  it('the How to test read returns the record, or null when no run wrote one (MOTIR-5358)', async () => {
+    const client = connected();
+    const record = {
+      dispatchRunId: 'run-1',
+      createdAt: '2026-09-13T12:00:00.000Z',
+      bodyMd: '## Run it\n\n```sh\npnpm dev\n```\n',
+      previewPath: '/items/PROD-1',
+      repos: [{ repo: 'motir-core', commitSha: 'abc1234' }],
+    };
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}/how-to-test': { body: { key: 'PROD-1', record } },
+    });
+    expect(await client.workItemHowToTest('PROD-1')).toEqual(record);
+
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}/how-to-test': { body: { key: 'PROD-1', record: null } },
+    });
+    expect(await client.workItemHowToTest('PROD-1')).toBeNull();
+    expect(server.v1Calls.map((c) => c.path)).toEqual([
+      '/api/v1/work-items/PROD-1/how-to-test',
+      '/api/v1/work-items/PROD-1/how-to-test',
+    ]);
+  });
+
   it('the dispatch prompt is a GET, and seeds the session branch only when there is one', async () => {
     const client = connected();
     server.scriptV1({

@@ -467,6 +467,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '8fd1253a91cf',
   },
+  publish_test_instructions: {
+    summary:
+      'Put a RUN\u2019s HOW TO TEST onto its run target \u2014 once per run, before the run ' +
+      'finishes: rich-text Markdown with sections and every command in a fenced code block ' +
+      '(click-to-copy), plus the commit of each repository it pushed to.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: 'a660c7e6f790',
+  },
   link_pull_request: {
     summary:
       'Declare which work item a pull request delivers — call it right after opening one, once ' +

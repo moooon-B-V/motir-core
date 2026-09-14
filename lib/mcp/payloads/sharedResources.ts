@@ -58,6 +58,16 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'would let the thing being observed write its own account of what it did. The reporter is ' +
     'the process AROUND the agent, which speaks `/api/v1`. There is therefore no MCP payload to ' +
     'compare — not a narrowing, an absence, and one that must not be closed by adding a tool.',
+  DispatchRunCloseOutPrompt:
+    'The CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) is assembled for the process AROUND ' +
+    'the agent: the CLI fetches it over `/api/v1` and hands it to one agent before the run marks ' +
+    'its pull requests ready. It is a run read, so it shares `DispatchRun`’s reason — no MCP ' +
+    'tool returns a run, and the agent receives this text as its prompt rather than calling for it.',
+  CurrentTestInstructions:
+    'The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5358) serves the CLI’s close-out summary over ' +
+    '`/api/v1`. The agent WRITES the record through `publish_test_instructions`, whose result is ' +
+    'its own receipt (`{ id, bodyBytes, … }`), not this read; an agent that just wrote the ' +
+    'instructions has no use for reading them back, so no MCP payload returns this shape.',
   DispatchRunCard:
     'The run’s LEG rides on `DispatchRun` and shares its reason: no MCP tool returns a run at ' +
     'all, so no payload carries a leg. Listed separately because the guard reads RESOURCES ' +

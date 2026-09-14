@@ -69,7 +69,7 @@ async function designSubtaskWithGate(
   opts: {
     assigneeId?: string | null;
     reporterId?: string;
-    kind?: 'design_result' | 'pull_request_merge';
+    kind?: 'design_result' | 'pull_request_merge' | 'pull_request_approval';
   } = {},
 ) {
   const story = await workItemsService.createWorkItem(
@@ -148,6 +148,21 @@ describe('approvalGatesService.getAwaitingForWorkItem', () => {
 
     expect(read.gate).toBeNull();
     expect(read.canDecide).toBe(false);
+  });
+
+  it('reads an awaiting gate of an UNREGISTERED kind without refusing, routed by the shared rule (MOTIR-4906)', async () => {
+    // The pull-request gate is unregistered until MOTIR-4909, and the item page's
+    // Development block still draws its frame over such a row. `handlerFor` refuses
+    // an unregistered kind — correct for the decide door, wrong for this read.
+    const { item, gate } = await designSubtaskWithGate({ kind: 'pull_request_approval' });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_approval' },
+      fx.ctx,
+    );
+
+    expect(read.gate?.id).toBe(gate.id);
+    expect(read.gate?.kind).toBe('pull_request_approval');
   });
 
   it('returns nothing when the card has no gate at all — the ordinary case', async () => {

@@ -19,6 +19,10 @@ import {
   type CiFeedbackContextResolution,
   type CiFeedbackResult,
 } from './changeRequestCiFeedback';
+import {
+  repoDeploymentService,
+  type RecordDeploymentOutcome,
+} from '@/lib/services/repoDeploymentService';
 
 // gitlabWebhookService (Story 7.23 · MOTIR-1475) — the inbound GitLab webhook
 // logic layer, the GitLab mirror of `githubWebhookService`'s status sync. The HTTP
@@ -116,6 +120,13 @@ export type GitlabWebhookResult =
   | ChangeRequestSyncResult
   | CiFeedbackResult
   | {
+      // Preview deployments (Story MOTIR-4906 · MOTIR-5332) — the same outcome set
+      // GitHub's `deployment_status` returns, minus the installation arm GitLab's
+      // connection-less hook cannot have.
+      event: 'deployment_status';
+      outcome: RecordDeploymentOutcome | 'malformed';
+    }
+  | {
       event: 'push';
       outcome:
         | 'refresh_enqueued' // a default-branch push → the incremental refresh job is queued
@@ -138,6 +149,7 @@ export const gitlabWebhookService = {
     if (body['object_kind'] === 'merge_request') return this.handleMergeRequest(body);
     if (body['object_kind'] === 'pipeline') return this.handlePipeline(body);
     if (body['object_kind'] === 'push') return this.handlePush(body);
+    if (body['object_kind'] === 'deployment') return this.handleDeployment(body);
     const kind = typeof body['object_kind'] === 'string' ? body['object_kind'] : eventType;
     return { event: 'ignored', reason: `unhandled_event:${kind || 'unknown'}` };
   },
@@ -194,6 +206,26 @@ export const gitlabWebhookService = {
     const event = provider.parseCiStatusEvent(body);
     if (!event) return { event: 'ci', outcome: 'malformed' };
     return applyCiStatusFeedback(event, (tx) => resolveGitlabCiContext(event, tx));
+  },
+
+  /**
+   * Handle a `deployment` hook — the PREVIEW URL a GitLab project's CI reported
+   * (Story MOTIR-4906 · MOTIR-5332). Normalized through the same seam method
+   * GitHub implements and written by the SAME `repoDeploymentService.record`, so
+   * the out-of-order guard, the re-delivery rule and the http(s)-only URL rule are
+   * one implementation for both hosts. The project resolves by
+   * `(providerRepoId, 'gitlab')`, as the MR / pipeline / push handlers do.
+   *
+   * ⚠️ READ-ONLY TOWARD THE HOST: no GitLab API call is made on this path.
+   */
+  async handleDeployment(body: Record<string, unknown>): Promise<GitlabWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    const event = provider.parseDeploymentStatusEvent?.(body) ?? null;
+    if (!event) return { event: 'deployment_status', outcome: 'malformed' };
+    const outcome = await repoDeploymentService.record(PROVIDER, event, (tx) =>
+      githubRepoRepository.findByRepoIdAndProvider(event.providerRepoId, PROVIDER, tx),
+    );
+    return { event: 'deployment_status', outcome };
   },
 
   /**

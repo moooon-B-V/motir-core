@@ -421,15 +421,13 @@ export const approvalGatesService = {
       // not add. `routeTo` reads the item already in hand and resolves no row of
       // its own.
       //
-      // ⚠️ A KIND THIS BUILD DOES NOT REGISTER STILL HAS A ROW TO DRAW
-      // (MOTIR-5223). The approval overlay is addressed by (work item, kind)
-      // from a URL, so it asks this read about `pull_request_merge` as readily
-      // as `design_result` — and `handlerFor` THROWS for a kind with no
-      // handler, which is right at the decide door and wrong on a render read,
-      // whose honest answer is the row plus the not-built-yet arm. Such a kind
-      // has no `routeTo` of its own to consult, so it takes §2's shared
-      // expression (`routingTargetId`) — the rule every registered handler
-      // implements, not a second copy of it.
+      // ⚠️ A READ MUST NOT REFUSE AN UNREGISTERED KIND (MOTIR-4906 · MOTIR-5223).
+      // `handlerFor` throws for a kind with no handler — right for the decide
+      // door, which cannot act on it — but this read only NAMES whom a row is
+      // waiting on, and a row of a not-yet-registered kind must still render its
+      // frame: the Development block's pull-request gate, and the approval
+      // overlay, which is addressed by (work item, kind) from a URL. Such a kind
+      // has no `routeTo` of its own, so it routes by §2's shared rule.
       const routedToId = isRegisteredGateKind(input.kind)
         ? handlerFor(input.kind).routeTo({ item, ctx, tx })
         : routingTargetId(item);

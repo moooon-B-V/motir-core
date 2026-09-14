@@ -1,5 +1,18 @@
 # `design/agent-sandbox` — the agent sandbox guide
 
+> **⚠️ SUPERSEDED AS THE DESIGN OF RECORD — read this first.** `/docs/sandbox`
+> is no longer served by motir-core: the public reading surface moved to
+> motir-marketing (MOTIR-3932, MOTIR-3951), and the live asset for the whole
+> `/docs` surface, `/docs/sandbox` included, is
+> **`motir-marketing/design/docs/`** (MOTIR-4393; the sandbox guide's
+> setup-steps design is MOTIR-4975's, in that folder). This folder is a
+> point-in-time record of the route as it was on app.motir.co — the same reason
+> `tests/design-asset-addresses.test.ts` carries `KNOWN` rows for it. Design
+> changes to the sandbox guide go THERE, not here. Its `docker run` literals were
+> corrected to the disposable recipe by MOTIR-4981 so that a reader who ignores
+> this banner is not taught a retired command; nothing else in it is maintained
+> against the shipped guide.
+
 **Story MOTIR-2268 · Subtask MOTIR-2270.** The published guide for adopting the
 confined container an unattended `motir auto` run executes in. Route:
 **`/docs/sandbox`**. One area, one three-file asset:
@@ -106,14 +119,31 @@ first. Two consequences the drawing must carry:
 - **The step-2 command mounts no `~/.config/motir`.** A read-only bind over it
   leaves `motir login` nowhere to write — the README says it "cannot persist over
   a `:ro` bind, and says so in one sentence rather than dying on an `EROFS`".
-- **⚠️ There is no `--rm`, and the container is named.** _"the login persists for
-  the container's life (and dies with `--rm`, like the rest of the ephemeral
-  layer)"_ — so a `--rm` run throws the sign-in away on exit, and a setup guide
-  whose central step is a sign-in cannot use one. The drawing says
-  `--name motir-sandbox` and tells the reader to come back with
-  `docker start -ai motir-sandbox`. This is the one place the page departs from
-  the README's own `docker run --rm` examples, and it departs deliberately: those
-  examples are one-shot runs, and this is a setup.
+- **The container is disposable — `--rm --pull=always` — and the sign-in lives
+  on a named volume.** The step-2 command mounts `-v motir-auth:/home/node/.config/motir`,
+  the CLI's own config dir, so `motir login` writes OUTSIDE the container's
+  writable layer: the container is deleted on exit, the sign-in is not, and the
+  same command is correct for a first run and for a reader coming back a month
+  later. `--pull=always` is what makes the moving `:<profile>` tag reach that
+  returning reader. Signing out for good is `docker volume rm motir-auth`. The
+  literal is transcribed from `sandboxRunCommand` in `lib/apiDocs/sandbox.ts`
+  (with `SANDBOX_AUTH_VOLUME` / `SANDBOX_CONFIG_DIR`), never re-derived here.
+
+  > **History — superseded 2026-09-10 by MOTIR-4972 (MOTIR-4981 corrected this
+  > asset).** Until then this bullet read _"There is no `--rm`, and the container
+  > is named"_: the drawing said `--name motir-sandbox` and sent a returning
+  > reader to `docker start -ai motir-sandbox`, departing deliberately from the
+  > README's `docker run --rm` examples. The reasoning was sound for its input —
+  > the login then persisted _"for the container's life (and dies with `--rm`,
+  > like the rest of the ephemeral layer)"_, so a `--rm` run threw the sign-in
+  > away. MOTIR-4972 removed that input by moving the credential onto a named
+  > volume at the CLI's config dir, which the image already creates node-owned
+  > (`packages/cli/sandbox/Dockerfile`), so a fresh volume there is writable by
+  > `motir login`. The named
+  > container also had a cost the old argument never priced: `docker start`
+  > never revisits the registry, so a kept container ran a CLI as old as the day
+  > it was created (MOTIR-4970). **Do not re-derive the named container from the
+  > sign-in argument** — its premise no longer holds.
 
 The two remaining preconditions are **Docker** and **the agent's own sign-in on
 the host** — and the page now says explicitly that the Motir CLI is not among

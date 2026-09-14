@@ -62,13 +62,15 @@ describe('every production mount of the approval frame NAMES who it is waiting o
   it('finds the mount sites at all — the guard must not pass vacuously', () => {
     // A rename of the component or of its module path would empty the list
     // above, and an empty `forEach` is a green test asserting nothing. This is
-    // the assertion that turns that into a failure instead. Two sites today:
-    // the item page's design-result section and the approval OVERLAY — which
+    // the assertion that turns that into a failure instead. Three sites today:
+    // the item page's design-result section, the approval OVERLAY — which
     // replaced the Approvals tab's in-list frame when the row began opening it
-    // (Story MOTIR-5214 · MOTIR-5225).
+    // (Story MOTIR-5214 · MOTIR-5225) — and the Development block's
+    // approve-and-merge frame (MOTIR-5336).
     expect(MOUNT_SITES.map((s) => s.file).sort()).toEqual([
       'app/(authed)/items/[key]/_components/DesignResultSection.tsx',
       'components/approvals/ApprovalOverlay.tsx',
+      'components/github/DevelopmentGateFrame.tsx',
     ]);
   });
 
