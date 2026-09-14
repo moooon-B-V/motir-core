@@ -3856,7 +3856,34 @@ offered for merging; it stays with the run that is fixing it.
 
 ---
 
-# Bugs — where a project's filed bugs land (Story MOTIR-4927 · Subtask MOTIR-4933 output)
+# Bugs — where a project's filed bugs land (Story MOTIR-4927 · Subtask MOTIR-4933 output, amended by MOTIR-5536)
+
+## ⚠️ AMENDMENT 2026-09-14 (MOTIR-5536) — the destination is a FOLDER
+
+**The room picks a folder, not a work item.** MOTIR-4927 was re-planned after
+MOTIR-5296 decided the bug holder must not be a work item. Every project is now
+born with a root folder named **Bugs** (MOTIR-4935), and the stored value is a
+nullable pointer to a `folder` (MOTIR-4934). Everything below this block that
+speaks of a _container_, a kind glyph or a work-item key is superseded where this
+block says so. The room's entrance, its place in `Work`, its permission and its
+three-choice shape are unchanged.
+
+| What changed                    | Before (MOTIR-4933)                                     | Now                                                                                                                                                                                                             |
+| ------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The first choice's named target | kind glyph · `RENDE-1` · `Bugs` · Open                  | the lucide `folder` glyph (`--el-text-secondary`, as the `/items` tree draws it) · the folder name · Open                                                                                                       |
+| The second choice's control     | the shipped `Combobox` over epics, stories and tasks    | the shipped **folder picker** — `app/(authed)/items/_components/FolderPicker.tsx`'s panel: a title, the search `Input`, a listbox indented 22px per level, `Current location` tagged                            |
+| The picker's root option        | —                                                       | labelled **Project root**; picking it selects the third choice                                                                                                                                                  |
+| The card description            | "…created under this container…"                        | adds one sentence: deleting the folder moves its bugs, and this destination, to its parent (MOTIR-5537)                                                                                                         |
+| Panel 4 — the archived fallback | the warning banner and the struck-through stored choice | **deleted.** A folder has no archived state, and deleting the destination folder carries the destination to the folder's parent in the same transaction, so the room can never hold a destination that has gone |
+| Panel numbering                 | 0–5                                                     | 0–4 — the access path is now panel 4                                                                                                                                                                            |
+
+**Why a folder, in one sentence:** a seeded work item was work — it sat on every
+board, report, ready list and Home list — while a folder is a placement that no
+workflow read ever sees, and deleting one already moves its contents up, which
+the destination now simply follows.
+
+The copy strings changed by this amendment are in §5, marked **(amended)**; the
+reason table in §5 is replaced by the pointer table below it.
 
 **A new project-settings ROOM, `Project settings → Work → Bugs`, holding the one
 setting that decides where Motir creates the bugs it files for this project.**
@@ -3906,20 +3933,26 @@ rail differs per BUILD: `Public page` and `Public address` are absent off-cloud,
 
 ## 2. The panels
 
-| Panel | State                          | What it draws                                                                           |
-| ----- | ------------------------------ | --------------------------------------------------------------------------------------- |
-| **0** | default (`configured`, seeded) | The seeded `RENDE-1 · Bugs` container selected and named; Save disabled.                |
-| **1** | choosing another container     | The picker OPEN and filtered, rows grouped **Tasks / Stories / Epics**; the card dirty. |
-| **2** | root chosen, saving            | `Project root` selected; both actions disabled; the primary carries the spinner.        |
-| **3** | saved (`root_selected`)        | Clean card with `Project root` selected, plus the success toast.                        |
-| **4** | `container_archived`           | The warning banner; the stored choice struck through with an `Archived` pill.           |
-| **5** | the ACCESS PATH                | The rail with `Work ▸ Bugs` active, the group argument, and the reason → state table.   |
+| Panel | State (amended, MOTIR-5536)      | What it draws                                                                                                                 |
+| ----- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **0** | default — the seeded Bugs folder | The first choice selected, naming the **Bugs** folder with the tree's folder glyph and Open; Save disabled.                   |
+| **1** | choosing another folder          | The shipped folder picker OPEN: `Project root`, `Bugs` tagged `Current location`, nested `Triage ▸ Incoming`, `Later`; dirty. |
+| **2** | root chosen, saving              | `Project root` selected; both actions disabled; the primary carries the spinner.                                              |
+| **3** | saved — the pointer is null      | Clean card with `Project root` selected, plus the success toast.                                                              |
+| **4** | the ACCESS PATH                  | The rail with `Work ▸ Bugs` active, the group argument, and the stored-pointer → what-the-room-shows table.                   |
 
-**The picker's population is a CONTRACT, not an illustration.** It lists only work
-items that can legally parent a `bug` — `epic`, `story`, `task`, per the kind-parent
-matrix (`lib/issues/parentRules.ts`, enforced by the `work_item` kind trigger) — and
-only from this project. Grouping by kind is what keeps a project with hundreds of
-containers scannable; the Combobox's `group` field already renders the headers.
+The former panel 4 (`container_archived` — a warning banner and a struck-through
+stored choice) is **deleted**: a folder has no archived state, and deleting the
+destination folder carries the destination to its parent in the same transaction
+(MOTIR-5537), so the room never holds a destination that has gone.
+
+**The picker's population is a CONTRACT, not an illustration (amended).** It is the
+shipped `FolderPicker` panel over **this project's folders only** — never a work
+item, never another project's folder — in tree order, indented 22px per level, with
+the stored destination tagged `Current location` (`folders.currentLocation`). Its
+root option is `Project root` (`folders.projectRoot`), and picking it selects the
+third choice rather than being a fourth. The room composes the component; it adds no
+second folder chooser, so the settings picker and the `/items` picker cannot drift.
 
 ## 3. WHERE it lives — decided from readers and writers
 
@@ -3974,23 +4007,24 @@ panel because no reader without the key reaches the room.
 | Page title                          | `Bugs`                                                                                                                                                                      | `缺陷`                                                                                                     |
 | Page description                    | `Where Motir files the bugs it creates on its own for this project — issues arriving from a connected monitor, for one. A bug a person files keeps the parent they choose.` | `Motir 为此项目自动创建缺陷时的存放位置——例如来自已连接监控服务的问题。由人工提交的缺陷保留其选定的父项。` |
 | Card title                          | `Bug destination`                                                                                                                                                           | `缺陷去向`                                                                                                 |
-| Card description                    | `New bugs are created under this container. Changing it does not move bugs that are already filed.`                                                                         | `新缺陷将创建在此容器下。更改设置不会移动已提交的缺陷。`                                                   |
-| Choice 1 title · desc               | `This project's bug container` · `Created with the project. Rename it or move it and it stays the destination.`                                                             | `本项目的缺陷容器` · `随项目一同创建。重命名或移动后，它仍是缺陷去向。`                                    |
-| Container link                      | `Open`                                                                                                                                                                      | `打开`                                                                                                     |
-| Choice 2 title · desc               | `Another container` · `Any epic, story or task in this project.`                                                                                                            | `其他容器` · `本项目中的任意史诗、故事或任务。`                                                            |
-| Picker placeholder · search · empty | `Choose a container…` · `Search epics, stories and tasks…` · `No container matches.`                                                                                        | `选择容器…` · `搜索史诗、故事和任务…` · `没有匹配的容器。`                                                 |
-| Picker group headers                | `Tasks` · `Stories` · `Epics`                                                                                                                                               | `任务` · `故事` · `史诗`                                                                                   |
+| Card description **(amended)**      | `New bugs are filed into this folder. Changing it does not move bugs that are already filed. Deleting the folder moves its bugs, and this destination, to its parent.`      | `新缺陷将归档到此文件夹。更改设置不会移动已提交的缺陷。删除该文件夹会将其中的缺陷和此去向一并移到其上级。` |
+| Choice 1 title · desc **(amended)** | `This project's Bugs folder` · `Created with the project. Rename it or move it and it stays the destination.`                                                               | `本项目的缺陷文件夹` · `随项目一同创建。重命名或移动后，它仍是缺陷去向。`                                  |
+| Folder link                         | `Open`                                                                                                                                                                      | `打开`                                                                                                     |
+| Choice 2 title · desc **(amended)** | `Another folder` · `Any folder in this project.`                                                                                                                            | `其他文件夹` · `本项目中的任意文件夹。`                                                                    |
+| Folder picker **(amended)**         | the shipped `folders.*` strings — title `Bug destination` · search `folders.pickerSearch` · root `folders.projectRoot` · tag `folders.currentLocation` — no new keys        | 同上，沿用 `folders.*` 已有译文                                                                            |
 | Choice 3 title · desc               | `Project root` · `Bugs are filed at the top of the project with no parent — nothing sits between a new bug and the backlog.`                                                | `项目根级` · `缺陷直接提交到项目顶层，不设父项——新缺陷与待办列表之间没有任何中间层。`                      |
 | Footer                              | `Cancel` · `Save changes` · `Saving…`                                                                                                                                       | `取消` · `保存更改` · `正在保存…`                                                                          |
-| Toast                               | `Bug destination saved` · `New bugs will be filed at the project root.` (root) · `New bugs will be filed under {key} · {title}.` (container)                                | `缺陷去向已保存` · `新缺陷将提交到项目根级。` · `新缺陷将提交到 {key} · {title} 下。`                      |
-| Archived banner                     | `{key} · {title} was archived. New bugs are being filed at the project root until you choose a destination again.`                                                          | `{key} · {title} 已归档。在你重新选择去向之前，新缺陷将提交到项目根级。`                                   |
-| Archived pill                       | `Archived`                                                                                                                                                                  | `已归档`                                                                                                   |
+| Toast **(amended)**                 | `Bug destination saved` · `New bugs will be filed at the project root.` (root) · `New bugs will be filed into {path}.` (folder)                                             | `缺陷去向已保存` · `新缺陷将提交到项目根级。` · `新缺陷将归档到 {path}。`                                  |
 
-**Reason → what the room renders** (the resolver's `BugDestinationReason`):
-`configured` → the naming choice · `root_selected` → `Project root`, selected ·
-`container_archived` → the banner + the struck-through stored choice ·
-`legacy_title_home` → **never rendered**: the backfill migration gives every project
-a pointer before this room ships, so the transitional branch cannot reach it.
+~~Archived banner~~ · ~~Archived pill~~ · ~~Picker group headers~~ — **removed by the
+amendment**: a folder has no archived state, and the folder picker has no kind groups.
+
+**Stored pointer → what the room renders** (replaces the resolver-reason table —
+`bugDestinationService.resolve` returns only `{ folderId }`, MOTIR-4937):
+a folder id → the naming choice, with the folder glyph and Open · `null` →
+`Project root`, selected · the pointed folder deleted → **never rendered**: the
+delete carries the pointer to the folder's parent in the same transaction
+(MOTIR-5537), so the room shows that parent or `Project root`.
 
 ## 6. Findings this design pass surfaced — each one is a card, not a paragraph
 
