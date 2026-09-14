@@ -75,7 +75,10 @@ async function openBugsRoom(page: Page) {
   await expect(page.getByRole('heading', { name: 'Bugs', level: 1 })).toBeVisible();
 }
 
-const card = (page: Page) => page.getByTestId('bug-destination-card');
+// Rooted at the ROLE the card's three choices carry, never at a test id or text on `page`:
+// a streamed or outgoing subtree cannot match a role (MOTIR-5037). The folder picker
+// and every folder name the card shows render inside the radiogroup.
+const card = (page: Page) => page.getByRole('radiogroup', { name: 'Bug destination' });
 const choice = (page: Page, name: RegExp) => card(page).getByRole('radio', { name });
 
 /** Arm a wait for the destination PATCH before the click that sends it, then save. */
@@ -85,7 +88,7 @@ async function save(page: Page) {
       res.request().method() === 'PATCH' &&
       new URL(res.url()).pathname.endsWith('/bug-destination'),
   );
-  await card(page).getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   expect((await write).status()).toBe(200);
 }
 
