@@ -31,6 +31,9 @@
         (1) DRAG in progress — lifted card (DragOverlay) + insertion indicator +
             target-column highlight + the aria-live announcement
         (2) illegal-move SNAP-BACK — the card returning + a danger toast (409)
+        (2b) ADDED 2026-09-14 (MOTIR-5525 · story MOTIR-4887) — a move HELD by an
+            approval or a merge (409 APPROVAL_GATE_PENDING): the card returns and the
+            status-control design's held line + door is anchored ON the card
         (3) KEYBOARD DnD — a "picked up" card + the keyboard model + announcement
         (4) SCALE — a tall column: count + auto scroll-to-load (spinner only) + virtualization
         (5) UNMAPPED-statuses tray — statuses with no column (the Jira behaviour)
@@ -869,6 +872,110 @@
         color: var(--el-text-secondary);
         padding-left: 2px;
       }
+
+      /* ── PANEL 2b — ADDED 2026-09-14 (MOTIR-5525): a move HELD by an approval or a
+         merge. Composes design/work-items/status-held-by-decision.mock.html's held
+         line and its Button primary · sm. Tokens it needs that this asset did not yet
+         declare, mapped as app/globals.css maps them. ── */
+      :root {
+        --color-hairline-soft: #ede9e4;
+        --el-border-soft: var(--color-hairline-soft);
+        --height-btn-sm: 32px;
+      }
+      [data-theme='dark'] {
+        --color-hairline-soft: #1f1f1f;
+      }
+      .held-specs {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(580px, 1fr));
+        gap: 16px;
+        padding: 16px;
+      }
+      .held-spec .cap {
+        margin: 0 0 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .held-spec .cap code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      .held-spec .board {
+        padding: 0;
+      }
+      .held-spec .col {
+        flex: 0 0 288px;
+        width: 288px;
+        min-height: 0;
+        height: auto;
+      }
+      .held-spec .col-body {
+        overflow: visible;
+      }
+      /* the returned card + the held line anchored to it (never a corner toast) */
+      .bcard-anchor {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .held {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-tint-yellow);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+      }
+      .held-glyph {
+        flex: none;
+        display: inline-flex;
+        margin-top: 2px;
+        color: var(--el-text-strong);
+      }
+      .held-glyph svg {
+        width: 14px;
+        height: 14px;
+      }
+      .held-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+      }
+      .held-text {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .held-text strong {
+        font-weight: 600;
+      }
+      /* Button primary · sm — Button.tsx's emitted classes */
+      .held-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .held-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .held-spec .live {
+        margin: 8px 0 0;
+      }
     </style>
   </head>
   <body>
@@ -1092,6 +1199,43 @@
           <rect width="18" height="18" x="3" y="3" rx="2" />
           <path d="M9 3v18" />
           <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-merge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M6 21V9a9 9 0 0 0 9 9" />
+        </g>
+        <g
+          id="i-scan-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+          <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+          <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+          <circle cx="12" cy="12" r="1" />
         </g>
       </defs>
     </svg>
@@ -1592,6 +1736,309 @@
         409 → the optimistic move is reverted (card animates back to origin) and a danger Toast
         names the rejected transition. 422 (UnmappedColumnTarget) and network errors snap back the
         same way. The card never stays in a rejected position; the issue status is unchanged.
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 2b — ADDED 2026-09-14 (MOTIR-5525) — a move HELD ════════════════ -->
+    <div class="panel-label">
+      2b · ADDED 2026-09-14 — a move HELD by an approval or a merge → the card returns with the held
+      line ON it (POST …/move → 409 APPROVAL_GATE_PENDING)
+    </div>
+    <div class="panel">
+      <div class="held-specs">
+        <div class="held-spec">
+          <p class="cap">
+            ① No pull request · <code>waitingOn: decision</code> · may decide — dropped on Done
+          </p>
+          <div class="stage">
+            <div class="board" style="padding: 10px">
+              <section class="col" aria-label="In Review">
+                <div class="col-head"><span class="nm">In Review</span></div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a class="bcard focus-ring" href="#">
+                      <div class="bc-top">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="bc-id">MOTIR-812</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Design — the status control</div>
+                    </a>
+                    <div class="held" role="alert">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">
+                          Status can't be moved to <strong>Done</strong> directly — a
+                          <strong>design approval</strong> is waiting.
+                        </p>
+                        <a
+                          class="held-btn"
+                          href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-scan-eye" /></svg
+                          >Review &amp; approve</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="col" aria-label="Done, the held drop">
+                <div class="col-head"><span class="nm">Done</span></div>
+                <div class="col-body"></div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-812 returned. Status can't be moved to Done directly — a design approval is
+              waiting.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <p class="cap">
+            ② No pull request · <code>waitingOn: decision</code> · look-only reader — no button
+          </p>
+          <div class="stage">
+            <div class="board" style="padding: 10px">
+              <section class="col" aria-label="In Review">
+                <div class="col-head"><span class="nm">In Review</span></div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a class="bcard focus-ring" href="#">
+                      <div class="bc-top">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="bc-id">MOTIR-812</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Design — the status control</div>
+                    </a>
+                    <div class="held" role="alert">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">
+                          Status can't be moved to <strong>Done</strong> directly — a
+                          <strong>design approval</strong> is waiting on <strong>Mara S.</strong>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="col" aria-label="Done, the held drop">
+                <div class="col-head"><span class="nm">Done</span></div>
+                <div class="col-body"></div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-812 returned. Status can't be moved to Done directly — a design approval is
+              waiting on Mara S.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <p class="cap">
+            ③ Open pull request · <code>waitingOn: decision</code> · may decide — dropped on
+            Approved
+          </p>
+          <div class="stage">
+            <div class="board" style="padding: 10px">
+              <section class="col" aria-label="In Review">
+                <div class="col-head"><span class="nm">In Review</span></div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a class="bcard focus-ring" href="#">
+                      <div class="bc-top">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="bc-id">MOTIR-813</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Design — the status control</div>
+                    </a>
+                    <div class="held" role="alert">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">
+                          Status can't be moved to <strong>Approved</strong> directly — a
+                          <strong>pull-request approval</strong> is waiting.
+                        </p>
+                        <a
+                          class="held-btn"
+                          href="?approval=MOTIR-813&amp;approvalKind=pull_request_approval"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-scan-eye" /></svg
+                          >Review &amp; approve</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="col" aria-label="Approved, the held drop">
+                <div class="col-head"><span class="nm">Approved</span></div>
+                <div class="col-body"></div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-813 returned. Status can't be moved to Approved directly — a pull-request
+              approval is waiting.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <p class="cap">
+            ④ Open pull request · <code>waitingOn: merge</code> — dropped on Done · NEVER a button
+          </p>
+          <div class="stage">
+            <div class="board" style="padding: 10px">
+              <section class="col" aria-label="Approved">
+                <div class="col-head"><span class="nm">Approved</span></div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a class="bcard focus-ring" href="#">
+                      <div class="bc-top">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="bc-id">MOTIR-813</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Design — the status control</div>
+                    </a>
+                    <div class="held" role="alert">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">
+                          Status can't be moved to <strong>Done</strong> directly — merging the pull
+                          request moves it.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="col" aria-label="Done, the held drop">
+                <div class="col-head"><span class="nm">Done</span></div>
+                <div class="col-body"></div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-813 returned. Status can't be moved to Done directly — merging the pull request
+              moves it.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <p class="cap">⑤ zh · <code>waitingOn: decision</code>（中文）</p>
+          <div class="stage">
+            <div class="board" style="padding: 10px">
+              <section class="col" aria-label="审阅中">
+                <div class="col-head"><span class="nm">审阅中</span></div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a class="bcard focus-ring" href="#">
+                      <div class="bc-top">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="bc-id">MOTIR-812</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Design — the status control</div>
+                    </a>
+                    <div class="held" role="alert">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">
+                          无法直接将状态改为<strong>已完成</strong>——<strong>设计审批</strong>正在等待。
+                        </p>
+                        <a
+                          class="held-btn"
+                          href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-scan-eye" /></svg
+                          >审阅并批准</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="col" aria-label="已完成, the held drop">
+                <div class="col-head"><span class="nm">已完成</span></div>
+                <div class="col-body"></div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span>MOTIR-812 已退回。无法直接将状态改为已完成——设计审批正在等待。</span>
+          </div>
+        </div>
+        <div class="held-spec">
+          <p class="cap">⑥ Mobile — the same line under the returned card, full column width</p>
+          <div class="phone" style="max-width: 340px; margin: 0">
+            <div class="board" style="padding: 12px">
+              <section
+                class="col"
+                aria-label="In Review"
+                style="flex: 0 0 300px; width: 300px; min-height: 0"
+              >
+                <div class="col-head"><span class="nm">In Review</span></div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a class="bcard focus-ring" href="#">
+                      <div class="bc-top">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="bc-id">MOTIR-813</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Design — the status control</div>
+                    </a>
+                    <div class="held" role="alert">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-merge" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">
+                          Status can't be moved to <strong>Done</strong> directly — merging the pull
+                          request moves it.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        Only <code>code: 'APPROVAL_GATE_PENDING'</code> takes this branch, rendered from
+        <code>gate.waitingOn</code>: the card returns to its origin and the status-control design's
+        held line is anchored ON it, with Review &amp; approve only on a <code>decision</code> line
+        when <code>canDecide</code> — never on a <code>merge</code> line. It stays until Esc, a
+        click outside, or the next drag, and never blocks another card's drag. Focus moves to the
+        button when there is one, else stays on the returned card. The four other refusals — the
+        illegal edge (409), missing artifact evidence (409), open children (409) and the unmapped
+        column (422) — keep panel 2's toast, unchanged.
       </p>
     </div>
 
