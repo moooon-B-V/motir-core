@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { AttachmentDTO, AttachmentsPageDTO } from '@/lib/dto/attachments';
 import { MAX_UPLOAD_BYTES } from '@/lib/blob/allowlist';
+import enMessages from '@/messages/en.json';
+import zhMessages from '@/messages/zh.json';
 
 // AttachmentsPanel (Subtask 5.2.5) — the detail page's attachments surface.
 // Covers the role-matrix rendering (viewer / uploader-own / delete-all), the
@@ -316,6 +318,71 @@ describe('upload', () => {
       ),
     );
   });
+});
+
+describe('upload — a 402 cap refusal (MOTIR-5444)', () => {
+  const SERVER_ENGLISH = 'SERVER-SIDE ENGLISH — must never reach a reader';
+
+  function stubXHR() {
+    const instances: FakeXHR[] = [];
+    class FakeXHR {
+      upload = { onprogress: null as null | ((e: ProgressEvent) => void) };
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      onabort: null | (() => void) = null;
+      status = 0;
+      responseText = '';
+      open = vi.fn();
+      send = vi.fn(() => {
+        instances.push(this);
+      });
+      abort = vi.fn();
+    }
+    vi.stubGlobal('XMLHttpRequest', FakeXHR);
+    return instances;
+  }
+
+  it.each([
+    { locale: 'en', messages: enMessages, entitlement: 'storage' },
+    { locale: 'zh', messages: zhMessages, entitlement: 'storage' },
+    { locale: 'en', messages: enMessages, entitlement: 'file_size' },
+    { locale: 'zh', messages: zhMessages, entitlement: 'file_size' },
+  ] as const)(
+    '$locale: renders the translated refusal for $entitlement, never `error` and never upload.failed',
+    async ({ locale, messages, entitlement }) => {
+      const instances = stubXHR();
+      const { container } = render(
+        <AttachmentsPanel
+          workItemId="wi-1"
+          canCreate
+          canDeleteAll={false}
+          currentUserId={ME.id}
+          initialPage={page([])}
+        />,
+        { locale, messages },
+      );
+      fireEvent.change(fileInput(container), {
+        target: { files: [makeFile('full.png', 'image/png', 2048)] },
+      });
+      await waitFor(() => expect(instances).toHaveLength(1));
+
+      instances[0]!.status = 402;
+      instances[0]!.responseText = JSON.stringify({
+        code: 'ENTITLEMENT_EXCEEDED',
+        error: SERVER_ENGLISH,
+        entitlement,
+        detail: { limit: 1 },
+      });
+      await act(async () => {
+        instances[0]!.onload?.();
+      });
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toContain(messages.errors.entitlementExceeded[entitlement]);
+      expect(alert.textContent).not.toContain(SERVER_ENGLISH);
+      expect(alert.textContent).not.toContain(messages.errors.upload.failed);
+    },
+  );
 });
 
 describe('states', () => {
