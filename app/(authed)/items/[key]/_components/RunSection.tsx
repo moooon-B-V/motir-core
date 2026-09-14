@@ -11,7 +11,10 @@ import type {
   DispatchRunCardDto,
   DispatchRunDto,
   DispatchRunEventDto,
+  DispatchRunListItemDto,
 } from '@/lib/dto/dispatchRuns';
+import { legSummary } from '@/lib/runs/legSummary';
+import { runsHref } from '@/lib/runs/runsAddress';
 import {
   CARD_STEPS,
   DISPOSITION_TONE,
@@ -45,8 +48,9 @@ import {
  * There is no `/runs/<id>` route — `design/runs/design-notes.md` § The DEEP LINK
  * is `/runs?run=<id>` names this section as one of the three files that must
  * agree on it, with `RunsIndex` (which writes it) and `RunModal` (which reads it).
+ * Spelled by `lib/runs/runsAddress.ts`, which also carries the `?scope=` half.
  */
-const runHref = (runId: string): string => `/runs?run=${encodeURIComponent(runId)}`;
+const runHref = (runId: string): string => runsHref({ run: runId });
 
 export interface RunSectionProps {
   /** This card's runs, newest first. The FIRST row is the current run. */
@@ -56,6 +60,14 @@ export interface RunSectionProps {
   itemKey: string;
   /** Rendered on the server so a relative time never disagrees on first paint. */
   formattedTimes: Record<string, string>;
+  /**
+   * The LATEST run this work item was the SCOPE of, or `null` (MOTIR-5363). A
+   * scoped run's legs are the container's children, so it never appears in
+   * `initialRuns` above — this is the only way the section learns of it.
+   */
+  scopeRun?: DispatchRunListItemDto | null;
+  /** `scopeRun`'s start, formatted on the server for the same reason. */
+  scopeRunTime?: string | null;
 }
 
 export function RunSection({
@@ -63,6 +75,8 @@ export function RunSection({
   initialCursor,
   itemKey,
   formattedTimes,
+  scopeRun = null,
+  scopeRunTime = null,
 }: RunSectionProps) {
   const t = useTranslations('runs');
   const [runs, setRuns] = useState(initialRuns);
@@ -166,6 +180,14 @@ export function RunSection({
       setLoadingMore(false);
     }
   }, [cursor, itemKey, loadingMore]);
+
+  // ⚠️ A CONTAINER THAT WAS RUN AS A SCOPE IS NOT "NOTHING HAS RUN" (design
+  // MOTIR-5402 panel 1). It has no leg of its own, so the leg history is empty —
+  // and the empty state used to say the opposite of what happened. The scope
+  // block takes its place; there is no step timeline, because steps are a LEG's.
+  if (runs.length === 0 && scopeRun) {
+    return <ScopeBlock run={scopeRun} itemKey={itemKey} time={scopeRunTime} t={t} />;
+  }
 
   if (runs.length === 0) {
     return (
@@ -291,7 +313,72 @@ export function RunSection({
           </div>
         ) : null}
       </div>
+
+      {/* BOTH (design MOTIR-5402 panel 2) — the leg content above is this item's
+          own run and keeps the header pill; the scope block follows, divided. */}
+      {scopeRun ? (
+        <ScopeBlock run={scopeRun} itemKey={itemKey} time={scopeRunTime} t={t} divided />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * THE SCOPE BLOCK — *Run as a scope* (Story MOTIR-5363 · design MOTIR-5402
+ * panels 1–2): the latest run over this work item's children as ONE row, and the
+ * door to all of them at `/runs?scope=<KEY>`.
+ *
+ * ⚠️ STATIC AT PAGE LOAD, and it opens no stream. The section's connection rule
+ * is about THIS item's leg and is unchanged; watching a scoped run live is the
+ * run modal's job, one click away through the row. No count is shown either —
+ * no count read exists, and the narrowed index is where the rest is.
+ */
+function ScopeBlock({
+  run,
+  itemKey,
+  time,
+  t,
+  divided = false,
+}: {
+  run: DispatchRunListItemDto;
+  itemKey: string;
+  time: string | null;
+  t: ReturnType<typeof useTranslations>;
+  divided?: boolean;
+}) {
+  const agent = [run.agent, run.model].filter(Boolean).join(' · ');
+  const detail = [agent, legSummary(run, t)].filter(Boolean).join(' · ');
+  return (
+    <section
+      aria-label={t('scope.heading')}
+      className={`flex flex-col gap-2${divided ? ' border-t border-(--el-border-soft) pt-4' : ''}`}
+    >
+      <h3 className="font-sans text-sm font-semibold text-(--el-text)">{t('scope.heading')}</h3>
+      <p className="font-sans text-sm text-(--el-text)">
+        {t(isLiveRun(run.status) ? 'scope.lineLive' : 'scope.linePast')}
+      </p>
+      <div className="flex min-w-0 items-center gap-2 py-(--spacing-control-y)">
+        <RunTonePill tone={RUN_STATUS_TONE[run.status]}>{t(`runStatus.${run.status}`)}</RunTonePill>
+        <Link
+          className="shrink-0 text-(--el-link) underline"
+          href={runsHref({ scope: itemKey, run: run.id })}
+        >
+          {t(`command.${run.command}`)}
+        </Link>
+        <span className="min-w-0 truncate font-sans text-xs text-(--el-text-secondary)">
+          {detail}
+        </span>
+        <span className="ml-auto shrink-0 font-sans text-xs text-(--el-text-secondary)">
+          {time ?? ''}
+        </span>
+      </div>
+      <Link
+        className="self-start font-sans text-sm text-(--el-link) underline"
+        href={runsHref({ scope: itemKey })}
+      >
+        {t('scope.door', { key: itemKey })}
+      </Link>
+    </section>
   );
 }
 

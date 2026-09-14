@@ -38,9 +38,10 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 //     would have frozen as public API. MOTIR-2680 dropped both columns with the
 //     picker and the renderer that were their only readers, so the omission is
 //     now simply that there is nothing left to omit.)
-//   • `onboardingRanAt` / `aiGenerateExplanations` — internal product
-//     configuration (which planning flow the project entered, whether the AI
-//     planner drafts explanations), not project identity. Exposing configuration
+//   • `onboardingRanAt` / `aiGenerateExplanations` / `prMergeMode` — internal
+//     product configuration (which planning flow the project entered, whether the
+//     AI planner drafts explanations, how its pull requests merge), not project
+//     identity. Exposing configuration
 //     invites clients to branch on it, and the AI toggle sits behind the
 //     open-core boundary this story does not reach across.
 //   • `createdAt` / `previousKeys` — NOT AVAILABLE on the read these endpoints

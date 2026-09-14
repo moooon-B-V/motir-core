@@ -2,16 +2,6 @@
   "acceptance": {
     "title": "Acceptance",
     "gloss": "review the E2E video",
-    "card": {
-      "title": "Acceptance video",
-      "desc": "Record a short video when a story's E2E passes and attach it to the story for review & approval.",
-      "on": "On",
-      "off": "Off",
-      "requiresPlan": "Requires a paid Motir AI plan",
-      "upgrade": "Upgrade",
-      "saved": "Saved",
-      "saveError": "Couldn't save — try again."
-    },
     "pending": {
       "title": "Waiting for the acceptance video",
       "body": "The story's E2E publishes its recording here on the next green run."
@@ -38,9 +28,10 @@
     },
     "off": {
       "title": "Acceptance video is off",
-      "adminBody": "Turn it on to record and attach a video receipt when this story's E2E passes.",
-      "memberBody": "Ask an org admin to turn on acceptance video in the organization settings.",
+      "adminBody": "Turn it on and any acceptance video published for this story will be held for approval.",
+      "memberBody": "Ask a project admin to turn on acceptance video in the project settings.",
       "turnOn": "Turn on",
+      "turnOnForbidden": "Only a project admin can turn on acceptance video.",
       "goToSettings": "Go to settings",
       "viewSettings": "View settings"
     },
@@ -692,6 +683,15 @@
       "RATE_LIMITED": "Too many uploads — please wait a moment and try again.",
       "failed": "Upload failed — please try again."
     },
+    "entitlementExceeded": {
+      "work_items": "Your plan's work items limit has been reached.",
+      "projects": "Your plan's projects limit has been reached.",
+      "workspaces": "Your plan's workspaces limit has been reached.",
+      "organizations": "Your plan's organizations limit has been reached.",
+      "file_size": "Your plan's file size limit has been reached.",
+      "storage": "Your plan's storage limit has been reached.",
+      "custom_domains": "Your plan's custom domains limit has been reached."
+    },
     "customFields": {
       "CUSTOM_FIELD_NOT_FOUND": "Custom field not found.",
       "VALUE_TYPE_MISMATCH": "The value does not match the field's type.",
@@ -1252,6 +1252,7 @@
     "noExplanation": "No explanation yet.",
     "childIssues": "Child work items",
     "parentIssuesAria": "Parent work items",
+    "placementBreadcrumbAria": "Folder and parent work items",
     "relationships": "Relationships",
     "relationshipsGloss": "dependencies & links",
     "noLinkedIssues": "No linked work items yet.",
@@ -1366,6 +1367,9 @@
     "advancedFieldEstimate": "Estimate",
     "advancedFieldLabel": "Label",
     "advancedFieldComponent": "Component",
+    "advancedFieldFolder": "Folder",
+    "advancedFolderIncludesInside": "Folders inside a chosen folder are included.",
+    "advancedFolderNone": "This project has no folders yet.",
     "advancedOpIsAnyOf": "is any of",
     "advancedOpIsNoneOf": "is none of",
     "advancedOpIsEmpty": "is empty",
@@ -6205,7 +6209,75 @@
     },
     "development": {
       "title": "Development",
-      "gloss": "Linked pull requests · live PR and CI status",
+      "gloss": "Pull requests and how to test them · live PR and CI status",
+      "howToTest": {
+        "title": "How to test",
+        "writtenBy": "Written by <b>{run}</b> · {time}",
+        "code": {
+          "copy": "Copy",
+          "copyAria": "Copy code",
+          "copied": "Copied",
+          "copyFailed": "Couldn't copy — select the text instead"
+        },
+        "stale": {
+          "title": "Written for <sha>{recordSha}</sha> — {repo} is now at <sha>{headSha}</sha>.",
+          "body": "The instructions below may be out of date. The preview and CI follow the new head.",
+          "pill": "Stale"
+        },
+        "preview": {
+          "title": "In the preview",
+          "state": {
+            "success": "Ready",
+            "queued": "Queued",
+            "pending": "Pending",
+            "in_progress": "Deploying",
+            "failure": "Deploy failed",
+            "error": "Deploy errored",
+            "inactive": "Inactive",
+            "canceled": "Canceled"
+          },
+          "notReady": "The {environment} deployment for this head is {state}. Its link appears here when it succeeds.",
+          "failed": "The {environment} deployment for this head did not succeed, so there is no preview to open. Test it locally, or wait for the next push.",
+          "inactive": "The {environment} deployment for this head is no longer active — a newer deployment replaced it.",
+          "canceled": "The {environment} deployment for this head was canceled before it finished.",
+          "none": "No preview reported",
+          "noneBody": "This repository's CI reported no deployment for this head. Motir does not create previews."
+        },
+        "local": {
+          "title": "Locally",
+          "noBranch": "No branch to fetch",
+          "noBranchBody": "No pull request carries this repository's branch yet, so there is nothing to fetch."
+        },
+        "ci": {
+          "title": "What CI proved",
+          "summary": "{passed} of {total} checks passed",
+          "conclusion": {
+            "success": "Passed",
+            "failure": "Failed",
+            "pending": "Running",
+            "neutral": "Neutral"
+          },
+          "none": "No checks reported",
+          "noneBody": "No checks have reported for this head yet, so CI has proven nothing here."
+        },
+        "noSection": {
+          "title": "Not in this run's record",
+          "pill": "No section",
+          "body": "{run} wrote no section for this repository, so its pull request is not covered by the instructions above. Its row still carries its PR and CI status."
+        },
+        "missing": {
+          "title": "No run has written how to test this item.",
+          "owedByRun": "Owed by {run}. The pull requests above still carry their own status.",
+          "noRun": "No run is recorded for this item."
+        },
+        "earlier": {
+          "toggle": "Earlier runs ({count})"
+        },
+        "child": {
+          "pointer": "Tested as part of <link>{key}</link>"
+        },
+        "unknownState": "Unrecognised How to test state: {value}"
+      },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
       "autoLinkCaption": "Linked by <mono>link_pull_request</mono> over the MCP or a <mono>motir auto</mono> session branch.",
@@ -6940,7 +7012,7 @@
       "title": "Projects",
       "caption": "The GitLab projects Motir syncs. Connecting a project lets Motir read its merge requests and pipelines.",
       "empty": "No projects connected yet. Connect a project to start syncing merge requests and pipelines.",
-      "foot": "Connecting a project adds a webhook for merge-request and pipeline events. Motir does not build a code index for GitLab projects, so AI planning cannot read their source.",
+      "foot": "Connecting a project adds a webhook for merge-request, pipeline, push and deployment events. Motir does not build a code index for GitLab projects, so AI planning cannot read their source.",
       "synced": "Synced",
       "syncLabel": "Sync {project}",
       "connectProject": "Connect a project",
@@ -6952,7 +7024,9 @@
       "error": {
         "not_connected": "GitLab isn't connected. Reconnect to choose projects.",
         "not_found": "That project isn't among your GitLab memberships anymore.",
-        "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again."
+        "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again.",
+        "webhook_not_configured": "This Motir server has no GitLab webhook secret configured, so it can't receive project events. Ask whoever runs it to set GITLAB_WEBHOOK_SECRET.",
+        "webhook_failed": "Couldn't add Motir's webhook to that project. Adding a webhook needs the Maintainer role on the project in GitLab."
       }
     }
   },
@@ -8014,6 +8088,22 @@
       "materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
       "bugFiled": "Bug filed",
       "open": "Open →"
+    },
+    "scope": {
+      "heading": "Run as a scope",
+      "lineLive": "An agent is working this work item’s children as one run.",
+      "linePast": "An agent worked this work item’s children as one run.",
+      "door": "See every run of {key} →"
+    },
+    "scopeIndex": {
+      "allRuns": "All runs",
+      "subtitle": "Runs of <item>{key}</item> · {title}",
+      "subtitleMissing": "Runs of {key}",
+      "archived": "Archived",
+      "emptyTitle": "{key} has not been run as a scope yet",
+      "emptyBody": "Run the whole work item with motir run {key}. A run that worked one of its children on its own shows on that child’s page.",
+      "notFoundTitle": "No work item {key} in this project",
+      "notFoundBody": "It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label."
     }
   },
   "repositoryPicker": {
@@ -8174,6 +8264,22 @@
       }
     }
   },
+  "approvalOverlay": {
+    "escKey": "Esc",
+    "dialogTitle": "{kind} for {key}",
+    "openWorkItem": "Open work item",
+    "loading": "Loading the approval",
+    "notAvailable": {
+      "title": "This approval is not available",
+      "body": "It may no longer exist, or you may not have access to it. The page behind this is unchanged."
+    },
+    "notRenderable": {
+      "body": "This is a {kind} approval. It will open here once Motir can show that kind — nothing you did caused this."
+    },
+    "subjectGone": {
+      "body": "The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now."
+    }
+  },
   "approvals": {
     "acceptanceVideo": {
       "title": "Acceptance video approval",
@@ -8186,6 +8292,21 @@
       "unavailableWhat": "Your organisation has no paid Motir AI plan, so no acceptance video can be published.",
       "orgPlanNote": "The plan is bought once, for the organisation — not per project.",
       "upgrade": "Upgrade",
+      "saved": "Saved",
+      "saveError": "Couldn't save — try again."
+    },
+    "mergeMode": {
+      "title": "Merging pull requests",
+      "desc": "What happens when a pull request for this project’s work is ready to merge. A project whose repositories Motir hosts starts at <strong>Merge automatically</strong>; a project holding any repository of your own starts at <strong>Ask before merging</strong>.",
+      "notYet": "Motir does not merge pull requests yet. Until it does, every pull request is merged on your git host by a person, whichever option is chosen here.",
+      "manual": {
+        "label": "Ask before merging",
+        "hint": "When its checks pass, a person approves the pull request in Motir before it is merged. Nothing reaches your default branch without that yes."
+      },
+      "auto": {
+        "label": "Merge automatically",
+        "hint": "When its checks pass, Motir merges the pull request without asking anyone. The record says this setting allowed it — not that a person approved it."
+      },
       "saved": "Saved",
       "saveError": "Couldn't save — try again."
     }
@@ -8219,6 +8340,8 @@
     "folderGone": "That folder no longer exists.",
     "noFolder": "No folder",
     "fieldLabel": "Folder",
+    "breadcrumbFolderLabel": "Folder:",
+    "placedThrough": "Through {key} {title}",
     "removesFromParent": "Filing it removes it from {key} {title}.",
     "fileRefused": "That folder belongs to another project, so this work item stayed where it was.",
     "delete": "Delete…",

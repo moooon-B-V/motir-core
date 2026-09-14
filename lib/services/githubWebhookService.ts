@@ -36,6 +36,7 @@ import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
+import { repoDeploymentService } from './repoDeploymentService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -164,6 +165,12 @@ export type GithubWebhookResult =
         // repository Motir does not mirror, exactly as it does for `transferred`.
         | 'archived_applied';
     }
+  | {
+      // Preview deployments (Story MOTIR-4906 · MOTIR-5329). `stale` is an older
+      // status arriving after a newer one — a correct no-op, not a failure.
+      event: 'deployment_status';
+      outcome: 'recorded' | 'stale' | 'unknown_installation' | 'unknown_repo' | 'malformed';
+    }
   | ChangeRequestSyncResult
   | CiFeedbackResult;
 
@@ -198,6 +205,8 @@ export const githubWebhookService = {
         return this.handleWorkflowJob(body);
       case 'repository':
         return this.handleRepository(body);
+      case 'deployment_status':
+        return this.handleDeploymentStatus(body);
       default:
         // `ping` and every event we don't sync land here — a fast 2xx no-op.
         return { event: 'ignored', reason: `unhandled_event:${eventType}` };
@@ -483,6 +492,46 @@ export const githubWebhookService = {
     if (!event) return { event: 'ci', outcome: 'malformed' };
 
     return applyCiStatusFeedback(event, (tx) => resolveGithubCiContext(body, event, tx));
+  },
+
+  /**
+   * Handle a `deployment_status` delivery — the PREVIEW URL a repository's own
+   * CI reported for a commit (Story MOTIR-4906 · MOTIR-5329). Normalize through
+   * the seam, resolve installation → repo exactly as {@link handleCiStatus}'s
+   * resolver does, and hand the rest to `repoDeploymentService.record`, the one
+   * writer GitLab's hook shares.
+   *
+   * ⚠️ READ-ONLY TOWARD THE HOST: no GitHub API call is made on this path. An
+   * installation or repository nobody connected is a quiet `unknown_*`, never an
+   * error — GitHub delivers for every repository an installation can see.
+   */
+  async handleDeploymentStatus(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    const event = provider.parseDeploymentStatusEvent?.(body) ?? null;
+    if (!event) return { event: 'deployment_status', outcome: 'malformed' };
+    const installationId = readInstallationId(body);
+    if (!installationId) return { event: 'deployment_status', outcome: 'unknown_installation' };
+
+    let installationKnown = true;
+    const outcome = await repoDeploymentService.record(PROVIDER, event, async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) {
+        installationKnown = false;
+        return null;
+      }
+      return githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        event.providerRepoId,
+        tx,
+      );
+    });
+    if (outcome === 'unknown_repo' && !installationKnown) {
+      return { event: 'deployment_status', outcome: 'unknown_installation' };
+    }
+    return { event: 'deployment_status', outcome };
   },
 
   /**

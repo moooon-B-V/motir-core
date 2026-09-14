@@ -48,6 +48,7 @@ const projectDto = {
   image: null,
   onboardingRanAt: null,
   aiGenerateExplanations: false,
+  prMergeMode: 'manual' as const,
 };
 
 describe('the guard BITES — a one-sided field fails, in both directions', () => {

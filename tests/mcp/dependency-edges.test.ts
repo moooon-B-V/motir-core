@@ -589,6 +589,12 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
     // the reason each attaches at the transport rather than widening the DTO,
     // and the reason this list is allowed to grow while the assertion stays
     // exact.
+    //
+    // One difference runs the OTHER way: the DTO carries `placementFolder`, the
+    // work item PAGE's placement read (MOTIR-5375), which the tool deliberately
+    // WITHHOLDS — which folder vocabulary agents see is Story MOTIR-5310's. So it
+    // is removed from the DTO side here, and its absence from the tool is pinned.
+    expect(structured).not.toHaveProperty('placementFolder');
     const {
       children: _ignored,
       item: toolItem,
@@ -598,6 +604,7 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
     const {
       children: _alsoIgnored,
       item: dtoItem,
+      placementFolder: _pageOnly,
       ...restOfDto
     } = detail as unknown as Record<string, unknown>;
     const { commentCount: _count, ...toolItemRest } = toolItem as Record<string, unknown>;

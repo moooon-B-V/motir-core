@@ -12,6 +12,7 @@ import type {
 import {
   DispatchRunEventBodyTooLargeError,
   DispatchRunEventLimitError,
+  DispatchRunNoTargetError,
   DispatchRunNotFoundError,
   DispatchRunTerminalError,
   DuplicateDispatchRunError,
@@ -21,18 +22,22 @@ import type {
   ActiveDispatchRunDto,
   DispatchRunAppendedDto,
   DispatchRunCardDto,
+  DispatchRunCloseOutPromptDto,
   DispatchRunDetailDto,
   DispatchRunDto,
   DispatchRunEventDto,
   DispatchRunListItemDto,
   DispatchRunOpenedDto,
+  DispatchRunScopeDto,
 } from '@/lib/dto/dispatchRuns';
 import {
   toDispatchRunCardDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
   toDispatchRunListItemDto,
+  toDispatchRunScopeDto,
 } from '@/lib/mappers/dispatchRunMappers';
+import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
@@ -632,6 +637,80 @@ export const dispatchRunService = {
   },
 
   /**
+   * The run's CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) — resolved from
+   * the run's OWN record: its scope is the run target, and its legs that landed
+   * (`integrated` / `implemented`) are what the prompt names. The caller passes
+   * only the run id, never a card list, so a stale or partial list cannot aim a
+   * How-to-test record at the wrong work.
+   *
+   * Refuses a run with no scope ({@link DispatchRunNoTargetError}): an unscoped
+   * batch's cards were each their own target and published in their own prompts.
+   * Requires `project:browse` on the run's project, like every run read; the
+   * route adds `work_item:edit` at its gate because the agent it is for writes.
+   */
+  async getCloseOutPrompt(
+    runId: string,
+    ctx: ServiceContext,
+  ): Promise<DispatchRunCloseOutPromptDto> {
+    const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+    const run = await withWorkspaceContext(binding, (tx) =>
+      dispatchRunRepository.findByIdWithCards(runId, tx),
+    );
+    if (!run) throw new DispatchRunNotFoundError(runId);
+    await projectAccessService.assertPermission(run.projectId, ctx, 'project:browse');
+    if (!run.scopeWorkItemId) throw new DispatchRunNoTargetError(runId);
+
+    const landed = run.cards.filter(
+      (card) =>
+        card.workItemId !== null &&
+        (card.disposition === 'integrated' || card.disposition === 'implemented'),
+    );
+    const [target, items] = await withWorkspaceContext(binding, (tx) =>
+      Promise.all([
+        workItemRepository.findById(run.scopeWorkItemId as string, tx),
+        workItemRepository.findByIds(
+          landed.map((card) => card.workItemId as string),
+          tx,
+        ),
+      ]),
+    );
+    // A scope deleted after the run opened is SET NULL on the run — so a target
+    // that reads back missing is the archived/invisible case, not a race.
+    if (!target) throw new DispatchRunNoTargetError(runId);
+    const byId = new Map(items.map((item) => [item.id, item]));
+
+    const cards = landed.flatMap((card) => {
+      const item = byId.get(card.workItemId as string);
+      return item
+        ? [
+            {
+              key: item.identifier,
+              title: item.title,
+              type: item.type,
+              sessionBranch: card.sessionBranch,
+            },
+          ]
+        : [];
+    });
+
+    return {
+      runId: run.id,
+      targetKey: target.identifier,
+      prompt: assembleRunCloseOutPrompt({
+        runId: run.id,
+        target: {
+          key: target.identifier,
+          kind: target.kind,
+          title: target.title,
+          descriptionMd: target.descriptionMd,
+        },
+        cards,
+      }),
+      landedKeys: cards.map((card) => card.key),
+    };
+  },
+
+  /**
    * THE RUN AS THE BROWSER READS IT — the header, its set, and what each leg
    * SHIPPED (MOTIR-1793).
    *
@@ -780,6 +859,42 @@ export const dispatchRunService = {
         })();
 
         return runs.map(toDispatchRunListItemDto);
+      },
+    );
+  },
+
+  /**
+   * THE WORK ITEM A NARROWED RUNS INDEX NAMES (Story MOTIR-5363 · design
+   * MOTIR-5402) — its key, title and archived flag, for `/runs?scope=<KEY>`'s
+   * header. The design's ONE new read.
+   *
+   * ⚠️ A SEPARATE READ, NOT A WIDER RETURN FROM {@link listRunsForProject}. That
+   * method also answers the index's poll and its *Show more*, and every one of
+   * those calls would carry a header the browser already has. The page asks for
+   * the scope once, on first paint.
+   *
+   * Resolved exactly as the narrowing resolves it — inside the project, under the
+   * same browse gate and workspace binding — so the two cannot disagree about
+   * whether a key names a scope: an unresolvable key throws
+   * `WorkItemNotFoundError` here exactly as it does there. An ARCHIVED work item
+   * still resolves, because `findByIdentifier` carries no archive filter and its
+   * runs are still its runs.
+   */
+  async getRunScope(
+    projectKey: string,
+    scopeWorkItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<DispatchRunScopeDto> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertCanBrowse(project.id, ctx);
+    const identifier = scopeWorkItemKey.trim().toUpperCase();
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+      async (tx) => {
+        const item = await workItemRepository.findByIdentifier(project.id, identifier, tx);
+        if (!item) throw new WorkItemNotFoundError(identifier);
+        return toDispatchRunScopeDto(item);
       },
     );
   },

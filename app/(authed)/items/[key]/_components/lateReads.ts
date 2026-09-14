@@ -9,11 +9,14 @@ import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVide
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { howToTestService } from '@/lib/services/howToTestService';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
 import type { DesignGateSubjectDTO } from '@/lib/dto/designEvidence';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { ActivityTab } from '@/lib/activity/tab';
+import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 
 // The item page's LATE-TIER reads, as ONE promise (Subtask MOTIR-3436).
 //
@@ -57,6 +60,9 @@ export interface LateReads {
     ReturnType<typeof acceptanceEvidenceService.getCurrentForStory>
   > | null;
   canDecideAcceptance: boolean;
+  /** The item's own project — the acceptance panel's Turn on flips THIS project's
+   *  switch (MOTIR-5172). Already resolved for the page; carried, never re-read. */
+  projectId: string;
   designEvidence: Awaited<ReturnType<typeof designEvidenceService.getCurrentForWorkItem>>;
   isDesignCard: boolean;
   /**
@@ -86,6 +92,35 @@ export interface LateReads {
    * opens no connection at all.
    */
   runs: Awaited<ReturnType<typeof dispatchRunService.listRunsForWorkItemKey>> | null;
+  /**
+   * The LATEST run this work item was the SCOPE of (Story MOTIR-5363 · design
+   * MOTIR-5402 panels 1–2) — what the Run section's *Run as a scope* block shows.
+   *
+   * ⚠️ A DIFFERENT QUESTION FROM `runs` ABOVE. `runs` is every run that had a LEG
+   * on this item; a scoped run's legs are the container's CHILDREN, so a story
+   * that was run as a scope has no row there and used to read *No runs yet*.
+   *
+   * `null` when the item has never been a scope, when the read failed (the block
+   * is simply absent — the leg history still renders), and WITHOUT A QUERY for an
+   * item with no children, because only a container can be a scope.
+   */
+  scopeRun: DispatchRunListItemDto | null;
+  /**
+   * The run's HOW TO TEST for this card (Story MOTIR-4906 · MOTIR-5336) — the
+   * Development block's second part, rendered inside the same card below the
+   * rows. `null` on a failed read: the block then renders the rows alone, which
+   * is what the card rendered before, rather than an error in a card whose rows
+   * still read fine.
+   */
+  howToTest: HowToTestDto | null;
+  /**
+   * The card's AWAITING approve-to-merge gate (`pull_request_approval`), or
+   * `gate: null`. Read exactly as `designGate` is — the same service, the same
+   * containment — and only its awaiting answer, because only an awaiting gate
+   * draws the frame (design §20). The kind is unregistered until MOTIR-4909, so
+   * on a live tenant this is always `gate: null`.
+   */
+  mergeGate: Awaited<ReturnType<typeof approvalGatesService.getAwaitingForWorkItem>>;
 }
 
 export interface LateReadsInput {
@@ -101,6 +136,14 @@ export interface LateReadsInput {
   canEdit: boolean;
   /** The card's `MOTIR-<n>`, which the run history is keyed by. */
   itemIdentifier: string;
+  /** The project's key — the scoped run read is addressed by it. */
+  projectKey: string;
+  /**
+   * Whether the item has children. Only a container can be a run's scope — the
+   * CLI records one only on its `run_scope` path, which claims a container — so a
+   * leaf makes no scope read at all.
+   */
+  hasChildren: boolean;
 }
 
 /** One page of a card's run history — the same default the route serves. */
@@ -125,6 +168,9 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       designEvidence,
       designGate,
       runs,
+      scopeRun,
+      howToTest,
+      mergeGate,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -213,6 +259,40 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return null;
         }
       })(),
+      // ⚠️ ONE ROW, AND ONLY FOR A CONTAINER. The block shows the latest scoped
+      // run and a door to the rest, so a page is one row; a leaf — the item
+      // page's commonest case — cannot be a scope and makes no query here.
+      input.hasChildren
+        ? (async () => {
+            try {
+              const [latest] = await dispatchRunService.listRunsForProject(
+                input.projectKey,
+                { take: 1, scopeWorkItemKey: input.itemIdentifier },
+                ctx,
+              );
+              return latest ?? null;
+            } catch {
+              return null;
+            }
+          })()
+        : null,
+      (async () => {
+        try {
+          return await howToTestService.getForWorkItem(itemId, ctx);
+        } catch {
+          return null;
+        }
+      })(),
+      (async () => {
+        try {
+          return await approvalGatesService.getAwaitingForWorkItem(
+            { workItemId: itemId, kind: 'pull_request_approval' },
+            ctx,
+          );
+        } catch {
+          return { gate: null, canDecide: false, routedToLabel: null };
+        }
+      })(),
     ]);
 
     return {
@@ -226,10 +306,14 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       acceptanceEligibility,
       acceptanceEvidence,
       canDecideAcceptance: input.canEdit && input.itemStatus === 'in_review',
+      projectId,
       designEvidence,
       isDesignCard: input.itemType === 'design',
       designGate,
       runs,
+      scopeRun,
+      howToTest,
+      mergeGate,
     };
   })();
 }

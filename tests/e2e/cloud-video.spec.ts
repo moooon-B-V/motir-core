@@ -11,7 +11,6 @@ import {
 import {
   seedInReviewStory,
   seedPendingEvidence,
-  setOrgAcceptanceVideo,
   setProjectAcceptanceVideo,
 } from './_helpers/acceptance-seed';
 
@@ -186,16 +185,17 @@ test('paid + on, no evidence yet → the pending "waiting for the video" state',
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 });
 
-test('paid + toggle OFF (admin) → the Turn-on switch + Go to settings', async ({ page }) => {
+test('paid + toggle OFF (admin) → the Turn-on switch, and Go to settings lands ON the switch', async ({
+  page,
+}) => {
   const seed = await seedBillingOwner(page, 'toggleoff@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
-  // ⚠️ THE TWO TIERS DISAGREE ON PURPOSE (MOTIR-4925 · MOTIR-5168). The switch is
-  // a PROJECT setting now, so this seeds the organisation's own column ON and the
-  // project's OFF: the panel may only reach its off state by reading the project.
-  // Setting both OFF would pass whichever tier it read, which is what this spec
-  // asserted before the switch moved — and what made it the one E2E leg the tier
-  // change broke.
-  await setOrgAcceptanceVideo(seed.organizationId, true);
+  // ⚠️ THE TWO TIERS STILL DISAGREE, AND NOW NOTHING CAN MAKE THEM AGREE
+  // (MOTIR-4925 · MOTIR-5168 · MOTIR-5172). The switch is a PROJECT setting, so
+  // this seeds the project OFF while the organisation's retired column keeps its
+  // `@default(true)`: the panel may only reach its off state by reading the
+  // project. This used to set the org column ON explicitly; MOTIR-5172 removed
+  // every application writer of that column, and its seed helper with them.
   await setProjectAcceptanceVideo(seed.projectId, false);
   const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
   const story = await seedInReviewStory(ctx, seed.projectId, 'Toggle off');
@@ -204,10 +204,19 @@ test('paid + toggle OFF (admin) → the Turn-on switch + Go to settings', async 
   // BY ROLE — the panel's `<h3>` (MOTIR-4822, as above).
   await expect(page.getByRole('heading', { name: 'Acceptance video is off' })).toBeVisible();
   await expect(page.getByRole('switch')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Go to settings' })).toHaveAttribute(
-    'href',
-    /\/settings\/organization/,
-  );
+  // ⚠️ FOLLOWED, NOT COMPARED (MOTIR-5172 criterion 5). This asserted the href
+  // matched `/settings/organization` — and after the switch moved, that string
+  // comparison would have kept passing against a page that no longer held the
+  // control. A link is right when it LANDS on the thing it names, so the walk
+  // clicks it and asserts the switch is rendered inside the element the anchor
+  // targets.
+  await acceptance(page).getByRole('link', { name: 'Go to settings' }).click();
+  await expect(page).toHaveURL(/\/settings\/project\/approvals#acceptance-video$/);
+  await expect(
+    acceptance(page)
+      .locator('#acceptance-video')
+      .getByRole('switch', { name: 'Acceptance video approval' }),
+  ).toBeVisible();
 });
 
 test('no plan → the Upgrade CTA (no player)', async ({ page }) => {

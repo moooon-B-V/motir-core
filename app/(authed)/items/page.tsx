@@ -14,6 +14,7 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import { sprintsService } from '@/lib/services/sprintsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { labelsService } from '@/lib/services/labelsService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AdvancedFilterProvider } from './_components/AdvancedFilterContext';
@@ -122,29 +123,40 @@ export default async function IssuesPage({
   // no label condition. The page calls services only (never Prisma).
   const referencedLabelIds = ast ? collectFilterReferentIds(ast).labelIds : [];
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const [workflow, members, sprints, customFields, components, referencedLabels, archivedCount] =
-    await Promise.all([
-      workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
-      // Assignable users scoped by access level (6.4.6): private → project members.
-      assignableMembersService.list({
-        projectId: ctx.projectId,
-        accessLevel: ctx.project.accessLevel,
-        ctx: wsCtx,
-      }),
-      // The builder's sprint value editor (6.1.4) — a project's sprint list is
-      // small by nature (the bounded read its owner ships).
-      sprintsService.listByProject(ctx.projectId, wsCtx),
-      customFieldsService.listFields({
-        key: ctx.project.identifier,
-        actorUserId: ctx.userId,
-        ctx: wsCtx,
-      }),
-      componentsService.listComponents(ctx.project.identifier, wsCtx),
-      labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
-      // The [Archived] entry-point's count badge (Story 2.9 · Subtask 2.9.3) —
-      // a cheap COUNT(*) of the project's archived items.
-      workItemsService.countArchivedWorkItems(ctx.projectId, wsCtx),
-    ]);
+  const [
+    workflow,
+    members,
+    sprints,
+    customFields,
+    components,
+    folders,
+    referencedLabels,
+    archivedCount,
+  ] = await Promise.all([
+    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
+    // Assignable users scoped by access level (6.4.6): private → project members.
+    assignableMembersService.list({
+      projectId: ctx.projectId,
+      accessLevel: ctx.project.accessLevel,
+      ctx: wsCtx,
+    }),
+    // The builder's sprint value editor (6.1.4) — a project's sprint list is
+    // small by nature (the bounded read its owner ships).
+    sprintsService.listByProject(ctx.projectId, wsCtx),
+    customFieldsService.listFields({
+      key: ctx.project.identifier,
+      actorUserId: ctx.userId,
+      ctx: wsCtx,
+    }),
+    componentsService.listComponents(ctx.project.identifier, wsCtx),
+    // The builder's Folder field (Story MOTIR-5309 · MOTIR-5378) — the same
+    // browse-gated read the folder picker uses, bounded at FOLDER_PICKER_MAX.
+    foldersService.listProjectFolders({ projectId: ctx.projectId }, wsCtx),
+    labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
+    // The [Archived] entry-point's count badge (Story 2.9 · Subtask 2.9.3) —
+    // a cheap COUNT(*) of the project's archived items.
+    workItemsService.countArchivedWorkItems(ctx.projectId, wsCtx),
+  ]);
 
   // The actor's saved-filter tier (Subtask 6.2.3) — passed to the toolbar's
   // [Saved] dropdown + the applied-filter bar's save dialog.
@@ -174,6 +186,7 @@ export default async function IssuesPage({
                 sprints={sprints}
                 customFields={customFields}
                 components={components}
+                folders={folders}
                 referencedLabels={referencedLabels}
                 projectKey={ctx.project.identifier}
                 viewer={viewer}
@@ -208,6 +221,7 @@ export default async function IssuesPage({
                   sprints={sprints}
                   customFields={customFields}
                   components={components}
+                  folders={folders}
                   referencedLabels={referencedLabels}
                 />
               ) : null}

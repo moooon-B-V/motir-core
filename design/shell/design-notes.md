@@ -132,6 +132,63 @@ slack at the narrowest `lg` viewport.
 Gating the label without the chip is not a half-measure, it is a defect: an icon beside a bare `⌘K`
 chip has no label for the chip to attach to, and the chip overflows the square box it no longer fits.
 
+### The context path's truncation budget — the `xl` band (MOTIR-4897)
+
+**This budget made the right cluster `flex-none`, and that moved every shortfall onto the LEFT
+cluster at every width — including the top of the range, which the table above never measured.** At
+`xl` (1280px is exactly the breakpoint) the context path renders all three tiers, the right cluster
+is labelled, and the row's room is set by the NAMES, which are data. The ladder in § _The context
+row_ decides which tiers are PRESENT; it cannot decide how wide they are.
+
+**What was observed, in a real run.** The acceptance lane timed out retrying one click on
+`Switch project` 638 times at 1280×720; the element Playwright named in its place was the Plan-with-AI
+label. Reproduced on `origin/main` with the shape a new cloud tenant is actually given — an org and a
+workspace minted with one name, a project named after its workspace (MOTIR-4870), two workspaces, AI
+configured and a public project: at 1280px the element at the centre of the project switcher is the
+pill's sparkles glyph. The button stays visible, enabled and stable throughout, so no visibility check
+sees it.
+
+**The mechanism.** `ProjectSwitcher`'s trigger was already elastic (`min-w-0 shrink`). The two
+ANCESTOR triggers were not: `OrgControl` and `WorkspaceSwitcher` are `inline-flex` `Button`s, a flex
+child's automatic minimum is its content, and their content is the whole name up to its cap (20ch /
+24ch). So the row overflowed, and the tier LAST in it — the project — passed under the right cluster.
+
+**The rule.**
+
+| tier                 | shrinks            | name                                          |
+| -------------------- | ------------------ | --------------------------------------------- |
+| org (ancestor)       | `min-w-0 shrink-3` | truncates inside `max-w-[20ch]`               |
+| workspace (ancestor) | `min-w-0 shrink-3` | truncates inside `max-w-[24ch]`, as a `block` |
+| project              | `min-w-0 shrink`   | truncates inside `max-w-[22ch]` — unchanged   |
+
+1. **Every tier is elastic.** No left-cluster child may hold a minimum wider than its chrome; one that
+   does re-opens this defect over whichever tier follows it.
+2. **The ancestors yield first.** `flex-shrink` is weighted by basis, so a 3 : 1 weight takes most of
+   the shortfall from the org and workspace and leaves the most specific tier the most legible — the
+   breadcrumb convention § _The ladder_ already follows for which tiers LEAVE, applied to how they
+   SHRINK. No tier leaves: the path still reads org › workspace › project.
+3. **A truncating name is a box.** `text-overflow` ignores an inline element, and the workspace name
+   sits directly in the `Button`'s own label span rather than in a flex row — so it is `block`, or it
+   spills instead of ellipsizing. The `Button`'s label span takes `min-w-0` too; its `aria-hidden`
+   chevron span keeps its minimum.
+
+**Measured after the change**, in Chromium against the production build, in the seed above (the
+widest right cluster, and one long name at all three tiers):
+
+| viewport | org name | workspace name | project name | project tier ends      | each tier at its own centre |
+| -------- | -------- | -------------- | ------------ | ---------------------- | --------------------------- |
+| 1280px   | 55px     | 56px           | 120px        | 8px before the cluster | yes                         |
+| 1440px   | 123px    | 125px          | 143px        | 8px before the cluster | yes                         |
+
+The 8px is the bar's own `gap-2` between the clusters — the row now fits exactly. Every name shows
+at least 40px, the floor the guard holds so a squeezed ancestor never becomes a chevron in a box.
+
+**The guards.** `tests/e2e/cloud-top-bar-budget.spec.ts` carries the pixel half at 1280 and 1440px,
+in the cloud lane, because that is the only lane where the Plan-with-AI pill mounts;
+`tests/components/shell-tier-nav.test.tsx` pins the class contract the geometry follows from. Neither
+older guard could see this: the component budget test stubs `ShellTierNav` outright, and the E2E
+budget stopped at 700px.
+
 ### Every control's disposition below `md`
 
 | Control                                         | `< md`                     | Where it goes instead                                                                                                                                                        | Why that is safe                                                                                                                                                                            |
@@ -830,11 +887,27 @@ the door in the same place a person now looks for project context.
 > somebody with nothing — which was always a workspace-tier act being performed
 > on a route that only exists inside a project.
 >
-> **⚠️ THE MOCK IS NOT REDRAWN BY THIS CARD, deliberately.** Panel C still draws
-> three columns and Panel E still draws the rail head, so the asset and this
-> section disagree until a design pass reconciles them — which is a design act
-> wanting Yue's eye on a seven-panel board, not a side effect of a code change.
-> It is filed rather than left as a sentence.
+> **The mock now agrees with this section (MOTIR-4884, 2026-09-14).** MOTIR-4873
+> left the board drawing the no-project state as a current one, deliberately, for
+> a design pass to reconcile. That pass chose to **mark the state RETIRED IN
+> PLACE** — Panel C's two no-project renders (1280px and 375px) and Panel E's
+> _no project_ rail column each carry a `Retired · MOTIR-4873` tag in their
+> caption and a dashed frame, and both panels' intros say in the past tense what
+> the door was for.
+>
+> **Why in place, and not the two alternatives.** _Dropping the renders_ would
+> leave this row and the paragraph under it arguing for a drawing nobody can
+> see — the record the row is kept for would lose its picture. _Moving them into
+> a separate "what this replaced" band_ would split one comparison across two
+> panels: the no-project column is only legible beside the active and archived
+> columns it was designed to sit with. Panel A already sets the precedent —
+> it is captioned _"what ships today"_ and kept as a before-state rather than
+> erased.
+>
+> **The drawing keeps its full ink.** A retired frame is not dimmed, because
+> dimming would take its text below AA and a board's annotations owe contrast
+> too (`docs/decisions/design-board-chrome-aa.md`); the dashed edge and the tag
+> carry the status instead.
 
 ### The rail head, after the project leaves
 

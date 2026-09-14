@@ -9,6 +9,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'shell-spec-pass-123';
 const USER_EMAIL = 'e2e-shell@example.com';
@@ -47,7 +48,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   }
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 async function createFirstProject(page: Page, name: string): Promise<void> {

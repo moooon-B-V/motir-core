@@ -5,12 +5,12 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { redirect } from 'next/navigation';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
-import { organizationsService } from '@/lib/services/organizationsService';
-import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
+import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
+import { getErrorsTranslator, getServerTranslator } from '@/lib/i18n/errorsTranslator';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { WorkItemError } from '@/lib/workItems/errors';
 import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
-import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 
 // Server Actions for the acceptance panel (Story MOTIR-1627 · Subtask
@@ -102,7 +102,20 @@ export async function decideAcceptanceAction(input: {
 
 export type TurnOnAcceptanceVideoResult = { ok: true } | { ok: false; error: string };
 
-/** Turn acceptance video ON for the org from the panel (the toggle-off admin path).
+/** Turn acceptance video ON for the STORY'S PROJECT from the panel (the toggle-off
+ * admin path).
+ *
+ * ⚠️ PROJECT-SCOPED SINCE MOTIR-5172, AND THE TIER IS THE WHOLE POINT. MOTIR-4925
+ * moved the switch's READ to `Project.acceptanceVideoEnabled` and left this action
+ * writing `Organization.acceptanceVideoEnabled` — two columns, so pressing Turn on
+ * flipped a flag nothing read and the panel could never leave State B (4/4 red in
+ * `tests/e2e/cloud-acceptance-toggle-repaint.spec.ts`, deterministic). It now
+ * writes through `approvalGateSettingsService.updateSettings`, the SAME door the
+ * `Project settings ▸ Approvals` room writes through, so the panel and the room
+ * cannot disagree about which column the switch is, or who may flip it: that
+ * service asserts `workflow:manage` on the project, and its two refusals are the
+ * project's (`ProjectNotFoundError`, `PermissionDeniedError`), not the
+ * organisation's.
  *
  * ⚠️ WHAT MOTIR-5196 MEASURED HERE, AND WHAT IT DID NOT — the note this replaces
  * recorded the defect as known-and-deferred, and the replacement owes the reader
@@ -141,22 +154,25 @@ export type TurnOnAcceptanceVideoResult = { ok: true } | { ok: false; error: str
  * NECESSARY. It is also what this card's guard breaks to prove itself red-able,
  * so deleting it would take the detector with it. */
 export async function turnOnAcceptanceVideoAction(input: {
-  organizationId: string;
+  /** The STORY'S OWN project — the gate whose switch this press flips. Never the
+   *  actor's active project: the panel is on a story, and the story answers for
+   *  its own project (MOTIR-5168). `LateSections` holds it from the page read. */
+  projectId: string;
   /** The card whose page the panel is on — the path revalidated on success.
    *  A PARAMETER rather than a lookup, the shape `decideAcceptanceAction` and
-   *  `approvalGateActions.ts` both settled on: the action knows an organisation
-   *  id, the path is the CARD's identifier, and `AcceptancePanel` already holds
-   *  it (MOTIR-5160 threaded it through `AcceptancePanelProps`). */
+   *  `approvalGateActions.ts` both settled on: the action knows a project id, the
+   *  path is the CARD's identifier, and `AcceptancePanel` already holds it
+   *  (MOTIR-5160 threaded it through `AcceptancePanelProps`). */
   itemIdentifier: string;
 }): Promise<TurnOnAcceptanceVideoResult> {
-  const { organizationId, itemIdentifier } = input;
+  const { projectId, itemIdentifier } = input;
   const ctx = await requireContext();
   try {
-    await organizationsService.setAcceptanceVideoEnabled({
-      organizationId,
-      actorUserId: ctx.userId,
-      enabled: true,
-    });
+    await approvalGateSettingsService.updateSettings(
+      projectId,
+      { acceptanceVideoEnabled: true },
+      ctx,
+    );
     // The server half, on the action's own response. A REFUSAL revalidates
     // nothing — the toggle did not move, so no surface did, and re-rendering the
     // page under a reader about to be shown why their press did not land helps
@@ -165,8 +181,16 @@ export async function turnOnAcceptanceVideoAction(input: {
     revalidatePath(`/items/${itemIdentifier}`);
     return { ok: true };
   } catch (err) {
-    if (err instanceof OrganizationNotFoundError || err instanceof OrgForbiddenError) {
-      return { ok: false, error: err.message };
+    // The project gate's two refusals, in the posture the room's route takes: a
+    // non-browser reads as a project that is not there, and a browser without
+    // `workflow:manage` is told who may do this.
+    if (err instanceof ProjectNotFoundError) {
+      const t = await getErrorsTranslator();
+      return { ok: false, error: t('actions.projectGone') };
+    }
+    if (err instanceof PermissionDeniedError) {
+      const t = await getServerTranslator('acceptance');
+      return { ok: false, error: t('off.turnOnForbidden') };
     }
     throw err;
   }

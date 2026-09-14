@@ -56,9 +56,9 @@ export async function switchWorkspaceAction(workspaceId: string): Promise<void> 
  * the same shape `items/actions.ts` `createIssueAction` already returns for the
  * §4.1 work-item cap. `entitlement` is the discriminator
  * `lib/billing/entitlements.ts` calls "the field on `EntitlementExceededError`
- * the UI keys its upgrade" prompt from; it is carried across the boundary so the
- * prompt (8.1.7/8.1.8) has something to key on, even though today's callers only
- * render `error`.
+ * the UI keys its upgrade" prompt from, and the key both callers (OrgControl,
+ * WorkspaceSwitcher) select the TRANSLATED refusal by (MOTIR-5133). `error` is
+ * the server's English string and is not what a reader is shown.
  */
 export type CreateWorkspaceResult =
   | { ok: true; workspace: WorkspaceSummaryDTO }

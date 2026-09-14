@@ -175,6 +175,52 @@ describe('the narrowings are applied by the QUERY, never to the page', () => {
   });
 });
 
+// ── The NARROWED INDEX's header read (Story MOTIR-5363 · design MOTIR-5402) ──
+//
+// ⚠️ IT MUST AGREE WITH THE NARROWING about what a key names — resolved the same
+// way, under the same gate — or the header and the list could describe two
+// different things.
+describe('getRunScope — the work item a narrowed index names', () => {
+  const scopeOf = (key: string, fx: WorkItemFixture = fixture) =>
+    dispatchRunService.getRunScope(fx.projectIdentifier, key, fx.ctx);
+
+  it('names the key and title, case-insensitively, and is not archived', async () => {
+    const { storyKey } = await seedStory(fixture, 1);
+    expect(await scopeOf(storyKey.toLowerCase())).toEqual({
+      key: storyKey,
+      title: 'A story a run works',
+      archived: false,
+    });
+  });
+
+  it('⚠️ an ARCHIVED scope still resolves — its runs are still its runs — and says so', async () => {
+    const { storyKey, keys } = await seedStory(fixture, 1);
+    const scopedRun = await openRun(fixture, { keys, scopeKey: storyKey, command: 'run' });
+    await adminDb.workItem.updateMany({
+      where: { identifier: storyKey },
+      data: { archivedAt: new Date() },
+    });
+
+    expect(await scopeOf(storyKey)).toMatchObject({ key: storyKey, archived: true });
+    // And the narrowing agrees: the archived scope's run is still listed.
+    expect((await list({ take: 10, scopeWorkItemKey: storyKey })).map((r) => r.id)).toEqual([
+      scopedRun,
+    ]);
+  });
+
+  it('an unresolvable key throws exactly what the narrowing throws', async () => {
+    await expect(scopeOf('PROD-999999')).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+
+  it('another workspace’s project is not a way in', async () => {
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    const theirs = await seedStory(other, 1);
+    await expect(
+      dispatchRunService.getRunScope(other.projectIdentifier, theirs.storyKey, fixture.ctx),
+    ).rejects.toBeTruthy();
+  });
+});
+
 describe('bounded, and the cursor is total', () => {
   it('clamps an over-large limit rather than honouring it', async () => {
     const { keys } = await seedStory(fixture, 1);

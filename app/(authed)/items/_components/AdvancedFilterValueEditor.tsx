@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useTranslations } from 'next-intl';
-import { Component as ComponentIcon, TriangleAlert, UserX } from 'lucide-react';
+import {
+  Component as ComponentIcon,
+  Folder as FolderIcon,
+  TriangleAlert,
+  UserX,
+} from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { MultiSelectPicker, type MultiSelectOption } from '@/components/ui/MultiSelectPicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -20,6 +25,7 @@ import type { SprintDto } from '@/lib/dto/sprints';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import { cn } from '@/lib/utils/cn';
 
@@ -38,6 +44,9 @@ import { cn } from '@/lib/utils/cn';
 //     chips (the 5.4 less-enterprise deviation);
 //   component-select → MultiSelectPicker over the project's components
 //     (preloaded — bounded), neutral chips + the component glyph;
+//   folder-select → MultiSelectPicker over the project's folders, labelled by
+//     PATH (two teams can both keep a "2025"), the design's empty state and the
+//     truncated-list note (Story MOTIR-5309 · MOTIR-5378);
 //   cf-option-select → the custom field's managed options, archived ones kept
 //     for historical matching with the 5.3.5 "(archived)" mark;
 //   text / number / days → the input grammar (`--height-input`), days with
@@ -110,6 +119,10 @@ function UnassignedGlyph({ className }: { className?: string }) {
 
 function ComponentGlyph({ className }: { className?: string }) {
   return <ComponentIcon className={className} aria-hidden />;
+}
+
+function FolderGlyph({ className }: { className?: string }) {
+  return <FolderIcon className={className} aria-hidden />;
 }
 
 function StaleGlyph({ className }: { className?: string }) {
@@ -212,6 +225,9 @@ export interface AdvancedFilterValueEditorProps {
   customFields: CustomFieldDefinitionDTO[];
   /** The project's components (the `component-select` editor's bounded set). */
   components: ComponentDto[];
+  /** The project's folders (the `folder-select` editor's bounded set) — absent on
+   * a host that offers no Folder field. */
+  folders?: ProjectFoldersDto;
   /** The active filter's referenced labels, resolved to names server-side —
    * seeds the `label-select` chips on first paint (the autocomplete window
    * fills in the rest as the user types). */
@@ -336,6 +352,7 @@ export function AdvancedFilterValueEditor({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   projectKey,
   staleValueIds,
@@ -347,6 +364,7 @@ export function AdvancedFilterValueEditor({
   const tStatus = useTranslations('labels.defaultStatus');
   const tPriority = useTranslations('labels.priority');
   const tWorkType = useTranslations('labels.workItemType');
+  const tFolders = useTranslations('folders');
   const [query, setQuery] = useState('');
 
   // The custom field this row filters on (for cf-option-select) — resolved
@@ -404,6 +422,12 @@ export function AdvancedFilterValueEditor({
       }
       case 'component-select':
         return components.map((c) => ({ id: c.id, label: c.name, glyph: ComponentGlyph }));
+      case 'folder-select':
+        return (folders?.folders ?? []).map((f) => ({
+          id: f.id,
+          label: f.path.join(' ▸ '),
+          glyph: FolderGlyph,
+        }));
       case 'cf-option-select':
         // Managed options, archived kept for historical matching (5.3.5 mark).
         return (customFieldDef?.options ?? []).map((o) => ({
@@ -420,6 +444,7 @@ export function AdvancedFilterValueEditor({
     members,
     sprints,
     components,
+    folders,
     customFieldDef,
     t,
     tType,
@@ -457,6 +482,7 @@ export function AdvancedFilterValueEditor({
     case 'member-select':
     case 'sprint-select':
     case 'component-select':
+    case 'folder-select':
     case 'cf-option-select': {
       const ids = Array.isArray(value) ? value : [];
       const optionsById = new Map(enumOptions.map((o) => [o.id, o]));
@@ -478,7 +504,16 @@ export function AdvancedFilterValueEditor({
           label={valuesAria}
           placeholder={t('advancedAddValuePlaceholder')}
           removeLabel={(label) => t('advancedRemoveValue', { value: label })}
-          emptyText={t('advancedNoMatches')}
+          emptyText={
+            editorKind === 'folder-select' && enumOptions.length === 0
+              ? t('advancedFolderNone')
+              : t('advancedNoMatches')
+          }
+          hint={
+            editorKind === 'folder-select' && folders?.truncated
+              ? tFolders('pickerTruncated', { count: folders.folders.length })
+              : undefined
+          }
           disabled={disabled}
           className={className}
         />

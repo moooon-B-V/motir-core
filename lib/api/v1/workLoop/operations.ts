@@ -26,6 +26,8 @@ import {
   dispatchRunAppendedSchema,
   dispatchRunCardSchema,
   dispatchRunCloseBodySchema,
+  dispatchRunCloseOutPromptSchema,
+  currentTestInstructionsSchema,
   dispatchRunOpenBodySchema,
   dispatchRunOpenedSchema,
   dispatchRunSchema,
@@ -802,6 +804,68 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // 422 for a malformed body.
     errorStatuses: [404, 409, 422],
   }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/dispatch-runs/{id}/close-out-prompt',
+    operationId: 'getDispatchRunCloseOutPrompt',
+    summary: 'Get the prompt that writes a run’s How to test onto its run target',
+    description:
+      'The CLOSE-OUT prompt for a run launched against a work item (a scoped run): the text ' +
+      'a CLI hands ONE agent after the run’s last card lands and BEFORE it marks the run’s ' +
+      'pull requests ready, so HOW TO TEST is written once onto the run target by an agent ' +
+      'that sees every card the run landed. ' +
+      'The target and the landed cards are read from the run’s own record — the caller names ' +
+      'only the run. A run with no scope (an unscoped batch, whose every card was its own ' +
+      'target) is refused with `NO_RUN_TARGET` rather than answered with a defaulted target. ' +
+      'A read: it writes nothing and moves no status.',
+    permission: 'project:browse',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunCloseOutPromptSchema },
+      description: 'The run target, the landed cards, and the prompt text.',
+    },
+    // 404 for an unknown or cross-workspace run; 422 for a run with no run target.
+    errorStatuses: [404, 422],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/how-to-test',
+    operationId: 'getWorkItemHowToTest',
+    summary: 'Get a run target’s current How to test',
+    description:
+      'The CURRENT How-to-test record on a work item — the one the newest run published onto ' +
+      'its run target: its rich-text Markdown body (sections, commands in fenced code blocks), ' +
+      'the preview path, and a section per repository with its commit. `record` is ' +
+      '`null` when no run has written one. A CLI renders it into the `## How to test` section ' +
+      'of each session pull request body, so the body and the item page show one record. ' +
+      'A read.',
+    permission: 'project:browse',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: currentTestInstructionsSchema },
+      description: 'The current record, or `record: null`.',
+    },
+    // 404 for an unknown or unreachable item; 422 for a malformed key.
+    errorStatuses: [404, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -820,4 +884,6 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchRunCard: dispatchRunCardSchema,
   DispatchRunOpened: dispatchRunOpenedSchema,
   DispatchRunAppended: dispatchRunAppendedSchema,
+  DispatchRunCloseOutPrompt: dispatchRunCloseOutPromptSchema,
+  CurrentTestInstructions: currentTestInstructionsSchema,
 };

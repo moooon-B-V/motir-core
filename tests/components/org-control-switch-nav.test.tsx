@@ -36,13 +36,11 @@ const ACME: OrganizationDTO = {
   id: 'org_acme',
   name: 'Acme',
   slug: 'acme',
-  acceptanceVideoEnabled: true,
 };
 const BEACON: OrganizationDTO = {
   id: 'org_beacon',
   name: 'Beacon',
   slug: 'beacon',
-  acceptanceVideoEnabled: true,
 };
 
 function renderOrgControl() {

@@ -8,6 +8,7 @@ import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import { RunSection } from './RunSection';
 import { formatRunTimes } from './runTimes';
+import { formatRunInstant } from '@/lib/runs/runClock';
 import {
   DevelopmentLinkProvider,
   LinkPullRequestDoor,
@@ -158,7 +159,10 @@ export async function LateUpperSections({
     <>
       {/* THE RUN — above Development, because the run is what produced it. It
           renders even with no runs: its empty state reads *nothing has run yet*,
-          and an absent section would be a third thing for a reader to interpret. */}
+          and an absent section would be a third thing for a reader to interpret.
+          A container that was run as a SCOPE shows its scope block instead of that
+          empty state (MOTIR-5363) — the time is formatted here, on the server, for
+          the same first-paint reason `formatRunTimes` exists. */}
       <ContentSectionCard title={tRuns('title')} subtitle={tRuns('gloss')}>
         <RunSection
           initialRuns={r.runs ?? []}
@@ -167,6 +171,8 @@ export async function LateUpperSections({
           }
           itemKey={itemIdentifier}
           formattedTimes={formatRunTimes(r.runs ?? [])}
+          scopeRun={r.scopeRun}
+          scopeRunTime={r.scopeRun ? formatRunInstant(r.scopeRun.startedAt) : null}
         />
       </ContentSectionCard>
       <DevelopmentLinkProvider currentItemId={itemId} identifier={itemIdentifier}>
@@ -202,6 +208,20 @@ export async function LateUpperSections({
             // quick view disagree (MOTIR-3036).
             repoDelivery={repoDelivery}
             deliveries={deliveries}
+            // THE DEVELOPMENT BLOCK (MOTIR-5336, design §20): How to test renders
+            // INSIDE this card, below the rows — never a second section in this
+            // stack — and an awaiting approve-to-merge gate makes the rows plus
+            // How to test the port of ONE frame, as Design result's gate does.
+            howToTest={r.howToTest}
+            mergeGate={
+              r.mergeGate.gate
+                ? {
+                    gate: r.mergeGate.gate,
+                    canDecide: r.mergeGate.canDecide,
+                    routedToLabel: r.mergeGate.routedToLabel,
+                  }
+                : null
+            }
           />
         </ContentSectionCard>
       </DevelopmentLinkProvider>
@@ -210,11 +230,10 @@ export async function LateUpperSections({
           <AcceptancePanel
             workItemId={itemId}
             itemIdentifier={itemIdentifier}
-            organizationId={r.acceptanceEligibility.organizationId}
+            projectId={r.projectId}
             eligibility={r.acceptanceEligibility}
             initialEvidence={r.acceptanceEvidence}
             canDecide={r.canDecideAcceptance}
-            settingsHref="/settings/organization"
           />
         </ContentSectionCard>
       ) : null}

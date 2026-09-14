@@ -57,6 +57,8 @@ export async function POST(req: Request): Promise<Response> {
     }
     // §4 entitlement cap (8.1.11): the per-file size OVERAGE an upgrade lifts, or
     // the total-storage cap → 402 Payment Required + the upgrade-prompt payload.
+    // `lib/blob/uploadClient.ts` renders the translated sentence selected by
+    // `entitlement`, not `error` (MOTIR-5133).
     if (err instanceof EntitlementExceededError) {
       return NextResponse.json(
         { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },

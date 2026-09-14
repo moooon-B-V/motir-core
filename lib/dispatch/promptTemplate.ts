@@ -68,6 +68,27 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 const RULE = '═'.repeat(60);
 
 /**
+ * WHEN a How-to-test record needs a CLICK-PATH (Story MOTIR-4906 · MOTIR-5334).
+ *
+ * ⚠️ THESE ARE THE RUNBOOK'S OWN WORDS, BYTE FOR BYTE — the scope sentence of
+ * `motir-meta` `prompts/run.md` § *The how-to-test rule*. A person running the
+ * runbook and a dispatched agent must agree on which cards owe a walk-through,
+ * so the trigger has one text in two homes, and a test pins this constant to it.
+ * Re-word it here and the runbook stops matching; re-word it there and the test
+ * says so.
+ */
+export const RENDERED_SURFACE_TRIGGER =
+  'creates or changes any rendered surface (a UI `type: code` subtask, or any subtask ' +
+  'adding/editing a page, component, route-rendered view, modal, or interactive control)';
+
+/**
+ * The tool the FINISHED order's step 4b names. A literal, because this module is
+ * a leaf that imports nothing from `lib/mcp/`; `tests/dispatch/promptTemplate.test.ts`
+ * asserts it equals the REGISTERED tool name, so a rename fails there.
+ */
+export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
+
+/**
  * Named slots the Epic-9 enrichment cards fill — the ONE extension point this
  * assembly exposes. Each is a list of already-rendered Markdown blocks appended
  * to the CONTEXT section in a fixed order; empty (the only value this repo ever
@@ -261,6 +282,14 @@ export interface DispatchPromptSource {
   targetRepos?: { name: string; defaultBranch: string | null }[];
   /** The inherited session branch, or null for the per-item-PR workflow. */
   sessionBranch: string | null;
+  /**
+   * The RUN TARGET's key when this item is dispatched as part of a run launched
+   * against ANOTHER item — a scoped run's scope (Story MOTIR-4906 · MOTIR-5334).
+   * Omitted, null, or equal to {@link key} means this item IS its own run target,
+   * so its agent publishes How to test on it. Otherwise the run's close-out step
+   * publishes on the target and this agent is told not to.
+   */
+  runTargetKey?: string | null;
   /**
    * The `likely-missing-edge` PROSE-vs-GRAPH advisories for this item
    * (MOTIR-2079) — items the card's ACCEPTANCE CRITERIA name but that it carries
@@ -1228,7 +1257,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
         `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
         '       you are the first item to reach this point in it',
       ]
-    : ['    3. open the pull request'];
+    : openPullRequestStep();
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
@@ -1249,6 +1278,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '       pull request) — once per repository if this item ships in more than',
     '       one. The link is the only association a pull request has; the key in',
     '       the branch and the title is a label Motir does not parse.',
+    ...howToTestStep(src),
     `    5. move ${src.key} to Implemented with the transition_status tool`,
     `       (key ${src.key}, status implemented)`,
     '',
@@ -1276,6 +1306,71 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '     which you might otherwise have committed a half-change.',
     ...cardIsWrongSteps(src, policy),
     ...foundADefect(src, policy),
+  ];
+}
+
+/**
+ * Step 4b of the FINISHED order — publish the RUN's HOW TO TEST onto the RUN
+ * TARGET (Story MOTIR-4906 · MOTIR-5334; `docs/decisions/approval-gates.md` §9
+ * and its 2026-09-13 amendment: per RUN, on the run target, before the run
+ * finishes; the pull-request body keeps its own section).
+ *
+ * ⚠️ WHO PUBLISHES DEPENDS ON WHAT THE RUN WAS LAUNCHED AGAINST. A card dispatched
+ * on its own — or as one card of an unscoped batch — IS its run target, so its
+ * agent publishes on its own key. A card dispatched inside a SCOPED run is one
+ * child of a target this agent cannot see whole, so it does NOT publish: the run's
+ * close-out step does, once, for the target (MOTIR-5357). Asking every child as
+ * well would produce fragments on the wrong cards.
+ *
+ * ⚠️ THE STEP IS UNCONDITIONAL ON A RUN TARGET THAT OPENS A PULL REQUEST; ONLY THE
+ * CLICK-PATH IS GATED by {@link RENDERED_SURFACE_TRIGGER}. "Run it locally" and
+ * "what CI proved" apply to every change; only a visible change has a click-path.
+ *
+ * ⚠️ BEFORE `implemented`, AND A REFUSAL DOES NOT BLOCK IT. The reviewer's
+ * evidence should exist when the card says it is ready for them; but a card stuck
+ * in progress over a missing note is worse than the honest *record missing* state
+ * the item page renders, naming this run.
+ *
+ * Rendered only where the outcome protocol renders — a MANUAL item opens no pull
+ * request and gets no protocol at all, so it gets no step.
+ */
+function howToTestStep(src: DispatchPromptSource): string[] {
+  if (src.runTargetKey && src.runTargetKey !== src.key) {
+    return [
+      `    4b. do NOT publish How to test for ${src.key}. This item is part of a run`,
+      `        launched against ${src.runTargetKey}; How to test for that run is written`,
+      `        once, onto ${src.runTargetKey}, by the run's close-out step.`,
+    ];
+  }
+  return [
+    `    4b. publish this run's HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool —`,
+    `        ONCE, on ${src.key} (this item is the run's target). "bodyMd" is RICH TEXT`,
+    '        (Markdown) with sections: the precondition (the sign-in, role, or data',
+    '        the surface needs), local setup after checking out the branch (install,',
+    '        migrate, seed, run), and the click-path. Put EVERY command in its own',
+    '        fenced code block — the reviewer copies it with one click. Motir fills in',
+    '        the branch fetch itself — do not include it. Give one "repos" entry per',
+    '        repository you pushed to (that repository, commitSha = its pushed head),',
+    '        and a previewPath when there is one.',
+    `        If this change ${RENDERED_SURFACE_TRIGGER},`,
+    '        include the click-path section. Otherwise say in the body why there is',
+    '        none, e.g. "no rendered surface changed: a service and its tests".',
+    '        If the publish is refused, say so in your FINISHED report and still do',
+    '        step 5 — a refused publish does not prevent the transition.',
+  ];
+}
+
+/**
+ * Step 3 in the per-item lane — the pull request this agent OPENS carries a
+ * `## How to test` section in its body (Story MOTIR-4906 · MOTIR-5334). The
+ * record on the work item is what Motir renders; the body is what a reviewer on
+ * the host reads, and §9's amendment keeps both.
+ */
+function openPullRequestStep(): string[] {
+  return [
+    '    3. open the pull request. Its body carries a "## How to test" section with',
+    '       the SAME Markdown step 4b publishes on the run target — its sections and',
+    '       its fenced commands. Write both.',
   ];
 }
 

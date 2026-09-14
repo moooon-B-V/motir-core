@@ -9,6 +9,7 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import { sprintsService } from '@/lib/services/sprintsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { labelsService } from '@/lib/services/labelsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { collectFilterReferentIds } from '@/lib/filters/registry';
@@ -125,13 +126,15 @@ async function AutomationPaneBody({
     ),
   ];
 
-  const [workflow, members, sprints, customFields, components, referencedLabels] =
+  const [workflow, members, sprints, customFields, components, folders, referencedLabels] =
     await allSettledOrThrow([
       workflowsService.getWorkflow(projectId, wsCtx.workspaceId),
       assignableMembersService.list({ projectId, accessLevel, ctx: wsCtx }),
       sprintsService.listByProject(projectId, wsCtx),
       customFieldsService.listFields({ key: projectKey, actorUserId: userId, ctx: wsCtx }),
       componentsService.listComponents(projectKey, wsCtx),
+      // The rule condition's Folder field (Story MOTIR-5309 · MOTIR-5378).
+      foldersService.listProjectFolders({ projectId }, wsCtx),
       labelsService.resolveByIds(projectKey, referencedLabelIds, wsCtx),
     ]);
 
@@ -145,6 +148,7 @@ async function AutomationPaneBody({
       sprints={sprints}
       customFields={customFields}
       components={components}
+      folders={folders}
       referencedLabels={referencedLabels}
     />
   );

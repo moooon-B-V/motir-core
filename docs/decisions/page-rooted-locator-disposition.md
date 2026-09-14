@@ -58,16 +58,17 @@ held production deploys for hours.
 Read by opening each fix commit, not by reading each card's title — the title is
 what got this wrong the first time (see [Provenance](#provenance--what-this-record-replaces)).
 
-| incident   | fix commit          | date       | the locator that THREW                    | arm        | priority    |
-| ---------- | ------------------- | ---------- | ----------------------------------------- | ---------- | ----------- |
-| MOTIR-2033 | `f9e7c1ced` (#1850) | 2026-08-05 | `getByText('<org name>')`                 | text       | medium      |
-| MOTIR-3692 | `3dd63c87e` (#2358) | 2026-08-27 | **`getByTestId('ai-planning-settings')`** | **testid** | **highest** |
-| MOTIR-3725 | `e18a50a3b` (#2389) | 2026-08-28 | `getByLabel('Organization name')`         | label      | medium      |
-| MOTIR-3737 | `4b67a68c1` (#2405) | 2026-08-28 | `getByLabel(…)` + `getByPlaceholder(…)`   | label      | medium      |
-| MOTIR-3929 | `cf3226dfa` (#2458) | 2026-08-29 | **`getByTestId('ai-planning-save')`**     | **testid** | **highest** |
-| MOTIR-4822 | `300d0ab43` (#2691) | 2026-09-07 | `getByText('Nothing has run yet')`        | text       | high        |
+| incident   | fix commit               | date       | the locator that THREW                             | arm        | priority    |
+| ---------- | ------------------------ | ---------- | -------------------------------------------------- | ---------- | ----------- |
+| MOTIR-2033 | `f9e7c1ced` (#1850)      | 2026-08-05 | `getByText('<org name>')`                          | text       | medium      |
+| MOTIR-3692 | `3dd63c87e` (#2358)      | 2026-08-27 | **`getByTestId('ai-planning-settings')`**          | **testid** | **highest** |
+| MOTIR-3725 | `e18a50a3b` (#2389)      | 2026-08-28 | `getByLabel('Organization name')`                  | label      | medium      |
+| MOTIR-3737 | `4b67a68c1` (#2405)      | 2026-08-28 | `getByLabel(…)` + `getByPlaceholder(…)`            | label      | medium      |
+| MOTIR-3929 | `cf3226dfa` (#2458)      | 2026-08-29 | **`getByTestId('ai-planning-save')`**              | **testid** | **highest** |
+| MOTIR-4822 | `300d0ab43` (#2691)      | 2026-09-07 | `getByText('Nothing has run yet')`                 | text       | high        |
+| MOTIR-5386 | this record's ADDENDUM 3 | 2026-09-13 | `getByText('Nothing is waiting on your approval')` | text       | high        |
 
-**2 testid / 2 label / 2 text.** Both `highest` incidents — the two that took
+**2 testid / 2 label / 2 text** across the six this record was decided on; the seventh (MOTIR-5386, [ADDENDUM 3](#addendum-3-2026-09-14--the-workbench-approvals-tab-threw-and-a-permitted-surface-became-an-incident-surface)) is a third `text`, on a PERMITTED surface. Both `highest` incidents — the two that took
 `main` red and held production deploys — were `getByTestId`.
 
 ### The predicate of record
@@ -153,12 +154,13 @@ remaining 1157 under MOTIR-5037's allow-list, which may only SHRINK.**
 The conversion is complete. Four cards took it, and the set of files they touched
 IS the definition of "converted" — there is no second list to keep in sync:
 
-| card       | surface                                                            | files | sites taken on the 29 |
-| ---------- | ------------------------------------------------------------------ | ----- | --------------------- |
-| MOTIR-5056 | the `getByLabel` arm, suite-wide                                   | 37    | 8 (of 11)             |
-| MOTIR-5115 | org / workspace settings — MOTIR-3725's and MOTIR-3737's own files | 10    | 33                    |
-| MOTIR-5114 | AI-planning settings — the surface that took production down twice | 7     | 57                    |
-| MOTIR-5116 | cloud plan / roadmap / run — the largest incident-adjacent arm     | 12    | 87                    |
+| card       | surface                                                                                             | files | sites taken on the 29 |
+| ---------- | --------------------------------------------------------------------------------------------------- | ----- | --------------------- |
+| MOTIR-5056 | the `getByLabel` arm, suite-wide                                                                    | 37    | 8 (of 11)             |
+| MOTIR-5115 | org / workspace settings — MOTIR-3725's and MOTIR-3737's own files                                  | 10    | 33                    |
+| MOTIR-5114 | AI-planning settings — the surface that took production down twice                                  | 7     | 57                    |
+| MOTIR-5116 | cloud plan / roadmap / run — the largest incident-adjacent arm                                      | 12    | 87                    |
+| MOTIR-5386 | the workbench approvals tab — incident 7, `tests/e2e/acceptance-approvals-tab.spec.ts` (ADDENDUM 3) | 1     | 6 (not on the 29)     |
 
 The three surface cards touch **29 files**, exactly — that is where the number in
 this record's title comes from, and it is a measurement rather than a target:
@@ -422,6 +424,50 @@ TAIL, so a locator bound to a `const` and counted several lines below is still
 ruled. That is the safe direction — over-reporting costs a reader, under-reporting
 costs a merge-queue slot — and it is the same limit `usageOf` already records.
 
+### ADDENDUM 3 (2026-09-14) — the workbench approvals tab threw, and a permitted surface became an incident surface
+
+Appended, like the two above, rather than woven in. **The disposition is not
+re-opened by this**: the PERMITTED set was defined as the surfaces that had never
+thrown, and `tests/e2e/acceptance-approvals-tab.spec.ts` now has. That is new
+evidence about one file, not a re-litigation of the 1157.
+
+**Two merge-queue ejections in one day, with app code unchanged and `main` green
+on either side of both** (Acceptance runs `34751068933` and `34767444605`):
+
+| when (2026-09-13) | queue entry        | run / job                      | failing line                                  | locator                                            |
+| ----------------- | ------------------ | ------------------------------ | --------------------------------------------- | -------------------------------------------------- |
+| 10:16             | #2838 (MOTIR-5295) | `34751432408` / `103708974792` | `:245`, after the `zh` `NEXT_LOCALE` re-visit | `getByText('没有等待你审批的工作')`                |
+| 16:05             | #2851 (MOTIR-5359) | `34767524499` / `103751564771` | `:231`, the first `goto` after `signIn`       | `getByText('Nothing is waiting on your approval')` |
+
+Both report `strict mode violation … resolved to 2 elements`. **The mechanism is
+read from Playwright's own failure text, not deduced** — the 16:05 run printed:
+
+```
+1) <h2 class="font-serif text-xl text-(--el-text)">Nothing is waiting on your approval</h2> aka getByRole('heading', { name: 'Nothing is waiting on your' })
+2) <h2 class="font-serif text-xl text-(--el-text)">Nothing is waiting on your approval</h2> aka getByText('Nothing is waiting on your').nth(1)
+```
+
+Copy 1 carries a role alias; copy 2 carries none, so **copy 2 is not in the
+accessibility tree** — a hidden copy. `app/(authed)/workbench/page.tsx` wraps
+`<ApprovalsTab>` in an in-page `<Suspense>`, so it is either React's streamed
+staging block or the outgoing subtree; which one does not change the remedy,
+because `getByRole` excludes both.
+
+**Converted, all six rows** (1019 → 1013 on the allow-list, nothing added):
+
+- the empty-state `<h2>` → `getByRole('heading', { name })`, in `en` and `zh`;
+- its body `<p>` and the confirm band's `Approving this will:` `<p>` →
+  `getByRole('paragraph').filter({ hasText })` — the `paragraph` role carries no
+  accessible name, and the filter narrows a locator already rooted in the
+  accessibility tree;
+- the `approval-row-*` test id → scoped to the live
+  `getByRole('table', { name: 'To approve' })` rather than converted to the `row`
+  role, which would also count the header row and each open disclosure.
+
+The two `toHaveCount` sites in the file (`approval-frame-*`, and the English
+literal's absence on the `zh` page) stay page-rooted: they are exempt by the
+predicate (ADDENDUM 2) and were never on the list.
+
 ### What a future reader should do, by case
 
 | you are…                                        | do this                                                                                                                                                                                                                                                                                                                     |
@@ -499,4 +545,4 @@ a confident wrong answer.
   MOTIR-5115 / MOTIR-5116 (the three surfaces) · MOTIR-5037 (the guard) ·
   MOTIR-5109 (the planning bug) · MOTIR-5057 (this record)
 - Incidents: MOTIR-2033 · MOTIR-3692 · MOTIR-3725 · MOTIR-3737 · MOTIR-3929 ·
-  MOTIR-4822
+  MOTIR-4822 · MOTIR-5386 (ADDENDUM 3)

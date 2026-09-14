@@ -141,6 +141,7 @@ async function seed(utcToday: string): Promise<Seeded> {
       customFields: new Map([[golive.id, { fieldType: 'date' as const, optionIds: new Set() }]]),
       labelIds: new Set(),
       componentIds: new Set(),
+      folderIds: new Set(),
     },
     utcToday,
   };

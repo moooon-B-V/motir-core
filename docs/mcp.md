@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **61 tools**.
+`initialize` handshake and registers **62 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1669,6 +1669,58 @@ the same one `publish_design_result` asserts and one `CLI_TOKEN_GRANT` already
 carries — so a dispatched run can call these the day they ship, with no new
 credential and no widened grant.
 
+#### `publish_test_instructions`
+
+Put a **RUN's HOW TO TEST** onto its **run target** — the work item the run was
+launched against: the story for a story or scoped run, the card itself for a
+single-card run (Story MOTIR-4906 · MOTIR-5331; `docs/decisions/approval-gates.md`
+§9 and its 2026-09-13 amendment). Its content is **rich text**: a Markdown
+`bodyMd` with sections — the precondition, local setup, and the click-path when
+the run creates or changes a rendered surface — with **every command in its own
+fenced code block**, which the page renders click-to-copy. It is written the way
+`publish_design_result` takes a design note. It renders on the run target's item
+page inside the **Development block**, with its pull requests — the evidence of
+the one approve-to-merge decision — beside the preview each repository reported
+and the checks CI ran. **Nothing else writes it.** It does **not** replace the
+`## How to test` section of a pull-request body — both are written.
+
+Call it **once per run, before the run finishes** — before a single card moves
+to `implemented`, or before a story/scoped run's pull requests are marked ready.
+Do **not** include the branch fetch — Motir composes it from each pull request's
+own `headRef`.
+
+| Input               | Type   | Required | Notes                                                                                     |
+| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------- |
+| `key`               | string | yes      | The run target's identifier, e.g. `ACME-7`.                                               |
+| `bodyMd`            | string | yes      | Markdown, not blank, at most 32 KiB (UTF-8 bytes). Stored as written, trimmed.            |
+| `repos`             | array  | yes      | One `{ repo, commitSha }` per repository the run pushed to; at most 8.                    |
+| `repos[].repo`      | string | yes      | `name` or `owner/name`; one of the item's project repositories, and each at most once.    |
+| `repos[].commitSha` | string | yes      | That repository's pushed head commit (7–64 hex).                                          |
+| `previewPath`       | string | no       | A PATH on the preview host starting with a single `/`, e.g. `/items/ACME-7`; never a URL. |
+
+**Behaviour.** A run target holds ONE current record — the newest run's — and
+keeps every earlier run's as history. The owing dispatch run is resolved
+server-side — the newest RUNNING run whose scope target is the item or that
+holds a leg for it — and is never an argument. The same content from the same
+run twice writes nothing and answers `created: false`; different content from the
+same run, or any publish from another run, becomes the new current record.
+
+**Output** — `structuredContent`: `{ id, workItemKey, repos: [{ repoId,
+commitSha }], bodyBytes, created, isCurrent, dispatchRunId, createdAt }`.
+
+**Refusals** — each a typed code whose message names what to fix:
+
+| Refusal                                 | When                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT` | A `repos[].repo` is not one of the project's repositories (or a bare name is ambiguous). Lists the valid set.       |
+| `TEST_INSTRUCTIONS_CAP_EXCEEDED`        | A field is over its limit — the message names the field and the limit. Never truncated.                             |
+| `TEST_INSTRUCTIONS_INVALID_FIELD`       | A malformed field: a blank `bodyMd`, no `repos`, a repository twice, a non-hex `commitSha`, a URL as `previewPath`. |
+| `PERMISSION_DENIED`                     | The token or the member's role lacks `work_item:edit`.                                                              |
+| unknown / cross-workspace `key`         | A 404, indistinguishable from a work item the token cannot reach.                                                   |
+
+**Permission** — `work_item:edit`, the key the evidence publishers above assert
+and one `CLI_TOKEN_GRANT` already carries. The grant is **not** widened.
+
 #### `link_work_items`
 
 Create a relationship between two work items — the primitive for the **dependency
@@ -2091,6 +2143,16 @@ explicit non-scope, which read every unowned criterion on the live tree as
 owned. So its false-positive class is a child whose body delivers a criterion
 under a title that does not name it. It rides this tool only — the dispatch
 surfaces hand out leaves, which have no children.
+
+It answers on both paths. With `planId` it runs over the PROJECTED subtree
+(MOTIR-5403): a container's criteria are the plan's body where the plan sets
+one, a child's title is its proposal's or a `modify`'s patched `title`, and
+adoption compares filing instants with a proposal filed at approve, after every
+stored row. So a proposed child is never adopted, and an existing work item a
+`modify` re-parents under a container (`patch.parentRef`) is adopted exactly
+when it predates that container. That is the moment the check exists for: an
+author re-parenting an existing card under a story sees the criterion that card
+does not own before sealing the plan, not after approve.
 
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it

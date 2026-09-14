@@ -31,6 +31,7 @@ export function toProjectDTO(project: Project, aliases?: ProjectKeyAlias[]): Pro
     image: storedAssetUrl(project.image),
     onboardingRanAt: project.onboardingRanAt ? project.onboardingRanAt.toISOString() : null,
     aiGenerateExplanations: project.aiGenerateExplanations,
+    prMergeMode: project.prMergeMode,
     ...(aliases
       ? {
           createdAt: project.createdAt.toISOString(),

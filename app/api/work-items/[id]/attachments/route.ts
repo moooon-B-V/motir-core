@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { AttachmentError } from '@/lib/blob/errors';
+import { EntitlementExceededError } from '@/lib/billing/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
@@ -18,6 +19,11 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 //   AttachmentError                              → its own status: 403 role /
 //     404 not-found / 409 editor-sourced / the 2.3.7 upload trio passed
 //     through untouched (413 too large / 415 unsupported type / 429 rate)
+//   EntitlementExceededError                     → 402 + the upgrade-prompt
+//     payload (the §4 storage cap / per-file overage, POST only) — the same
+//     body `app/api/upload/issue-attachment/route.ts` returns; the panel renders
+//     the translated sentence selected by `entitlement`, never `error`
+//     (MOTIR-5444)
 
 function mapAttachmentError(err: unknown): NextResponse | null {
   if (err instanceof WorkItemNotFoundError || err instanceof ProjectNotFoundError) {
@@ -25,6 +31,12 @@ function mapAttachmentError(err: unknown): NextResponse | null {
   }
   if (err instanceof AttachmentError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
+  }
+  if (err instanceof EntitlementExceededError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },
+      { status: 402 },
+    );
   }
   return null;
 }

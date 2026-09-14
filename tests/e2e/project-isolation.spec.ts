@@ -49,6 +49,7 @@
 import { expect, test, type BrowserContext, type Page, type Request } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'project-isolation-pass-123';
 const USER_A_EMAIL = 'e2e-project-tenant-a@example.com';
@@ -84,7 +85,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   // there and navigating on.
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 // Drive the production create-project modal end-to-end so we exercise

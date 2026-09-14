@@ -4,6 +4,7 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import { WORKITEM_HREF_RE } from '@/lib/mentions/workItemRefs';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
+import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // Mention tokens (Story 5.1 · Subtask 5.1.4) are stored as Markdown links with
@@ -75,8 +76,29 @@ function urlTransform(url: string): string {
 // surfaces that never load that stylesheet (`ConventionPanel`,
 // `FeatureCatalogView`, `DirectionDocView`), and a table must not escape its
 // column on any of them.
-function buildComponents(workItemRefs?: WorkItemRefMap): Components {
+//
+// A fenced code block gains a CLICK-TO-COPY bar ONLY when the surface opts in
+// (`copyableCode`, Story MOTIR-4906 · MOTIR-5336, `design/github/design-notes.md`
+// §20). The HOW TO TEST body is where a reader copies commands; a description
+// or a comment did not ask for a control, so without the option nothing about
+// their render changes. It is a `pre` override here — inside the ONE pipeline —
+// rather than a second renderer, so the sanitize and highlight passes still run
+// over the code first.
+function buildComponents(workItemRefs?: WorkItemRefMap, copyableCode = false): Components {
   return {
+    ...(copyableCode
+      ? {
+          // The block draws its own `<pre>`; the highlighted `<code>` is its child.
+          pre: ({ node, children }) => {
+            const code = codeChildOf(node);
+            return (
+              <CopyableCodeBlock language={code.language} code={code.text}>
+                {children}
+              </CopyableCodeBlock>
+            );
+          },
+        }
+      : {}),
     table: ({ node: _node, children, ...props }) => (
       <div className="motir-table-wrap" style={{ maxWidth: '100%', overflowX: 'auto' }}>
         <table {...props}>{children}</table>
@@ -120,6 +142,40 @@ function buildComponents(workItemRefs?: WorkItemRefMap): Components {
 // generated <span class="hljs-*"> markup is added to already-sanitized
 // content and isn't stripped. The editor itself (live-preview Markdown source
 // editor) is Epic 2's issue-detail Subtask; this Story ships the render path.
+/** A hast node, as far as the copy control reads one. */
+interface HastLike {
+  type: string;
+  value?: string;
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: HastLike[];
+}
+
+function hastText(node: HastLike): string {
+  if (node.type === 'text') return node.value ?? '';
+  return (node.children ?? []).map(hastText).join('');
+}
+
+/**
+ * The fenced block's language AS WRITTEN (`language-nushell` → `nushell`, known
+ * to the highlighter or not) and its text EXACTLY — read off the hast tree, so
+ * the highlighter's `hljs-*` spans cannot change what is copied. The one
+ * trailing newline mdast adds to every fenced block is not part of what the
+ * author wrote, so it is dropped.
+ */
+function codeChildOf(node: unknown): { language: string | null; text: string } {
+  const pre = node as HastLike | undefined;
+  const code = pre?.children?.find((c) => c.type === 'element' && c.tagName === 'code');
+  if (!code) return { language: null, text: pre ? hastText(pre).replace(/\n$/, '') : '' };
+  const classes = code.properties?.className;
+  const list = Array.isArray(classes) ? classes.map(String) : [];
+  const lang = list.find((c) => c.startsWith('language-'));
+  return {
+    language: lang ? lang.slice('language-'.length) : null,
+    text: hastText(code).replace(/\n$/, ''),
+  };
+}
+
 export interface RenderMarkdownOptions {
   /**
    * Resolved work-item reference summaries (Subtask 5.8.6), keyed by id, that
@@ -128,6 +184,13 @@ export interface RenderMarkdownOptions {
    * omitted, a `motir:` token still degrades safely (a struck-through bare key).
    */
   workItemRefs?: WorkItemRefMap;
+  /**
+   * OPT-IN click-to-copy on every fenced code block (MOTIR-5336): a bar above
+   * the code with the fence's language and a Copy control. Off by default, so
+   * descriptions and comments render exactly as before. Inline `code` never
+   * gets a control.
+   */
+  copyableCode?: boolean;
 }
 
 export function renderMarkdown(md: string, opts: RenderMarkdownOptions = {}) {
@@ -135,7 +198,7 @@ export function renderMarkdown(md: string, opts: RenderMarkdownOptions = {}) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
-      components={buildComponents(opts.workItemRefs)}
+      components={buildComponents(opts.workItemRefs, opts.copyableCode)}
       urlTransform={urlTransform}
     >
       {md}

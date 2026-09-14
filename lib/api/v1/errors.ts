@@ -136,6 +136,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // (it returns the existing run); this is the narrow window in which the unique
   // index is the arbiter, and it exists so a `P2002` never escapes as a bare 500.
   DUPLICATE_DISPATCH_RUN: 409,
+  // 422 — a close-out prompt asked for a run with no run target (an unscoped
+  // batch). Refused rather than defaulted (MOTIR-5357).
+  NO_RUN_TARGET: 422,
   // 422 — an event names a card the run does not own. A client bug rather than a
   // card to add: the SET is the plan the run published, and letting it grow
   // behind that plan would defeat the record.

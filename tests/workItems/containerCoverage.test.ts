@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  NOT_YET_FILED,
   containerCoverageFinding,
   criterionTokens,
   quantifiesOverChildren,
@@ -172,5 +173,39 @@ describe('unownedCriteria — what counts as ownership', () => {
   it('returns nothing for a container with no children or no criteria', () => {
     expect(unownedCriteria(container(['A thing about widgets and gadgets.']), [])).toEqual([]);
     expect(unownedCriteria('No heading here.', [{ title: 'x' }])).toEqual([]);
+  });
+});
+
+describe('NOT_YET_FILED — the filing instant of a PLAN proposal (MOTIR-5403)', () => {
+  const BODY = [
+    '## Acceptance criteria',
+    '',
+    '- `GitProvider` declares `mergeChangeRequest`.',
+  ].join('\n');
+  const storedChild: CoverageChild = {
+    identifier: 'MOTIR-7',
+    title: 'Unrelated billing work',
+    createdAt: at('2026-09-01T00:00:00.000Z'),
+  };
+  const proposedChild: CoverageChild = {
+    identifier: 'planItem:p1',
+    title: 'Unrelated billing work',
+    createdAt: NOT_YET_FILED,
+  };
+
+  it('is later than every stored row — a stored child of a PROPOSED container reads as adopted', () => {
+    // No plan can produce this shape (the append refuses a `planItem:` re-parent),
+    // so this is where the definition is pinned: it holds by the instant alone.
+    expect(
+      containerCoverageFinding({ descriptionMd: BODY, createdAt: NOT_YET_FILED }, [storedChild]),
+    ).toEqual({ unownedCriterionIndices: [1], adoptedChildren: ['MOTIR-7'] });
+  });
+
+  it('a PROPOSED child is never adopted — under a stored container or a proposed one', () => {
+    const storedContainer = { descriptionMd: BODY, createdAt: at('2026-09-02T00:00:00.000Z') };
+    expect(containerCoverageFinding(storedContainer, [proposedChild])).toBeNull();
+    expect(
+      containerCoverageFinding({ descriptionMd: BODY, createdAt: NOT_YET_FILED }, [proposedChild]),
+    ).toBeNull();
   });
 });

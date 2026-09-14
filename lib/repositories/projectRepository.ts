@@ -2,6 +2,7 @@ import {
   Prisma,
   type EstimationStatistic,
   type PointScale,
+  type PrMergeMode,
   type Project,
   type ProjectAccessLevel,
   type ProjectRepoOwnership,
@@ -934,6 +935,65 @@ export const projectRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
     return tx.project.update({ where: { id }, data });
+  },
+
+  // --- Merge mode (Story MOTIR-4880 · Subtask MOTIR-5177) -------------------
+  // `prMergeMode` + its `prMergeModeDecidedAt` stamp (`approval-gates.md` §7 and
+  // its 2026-09-13 amendment). The stamp is what separates the column's FLOOR
+  // from a decided value, so both are read and written together.
+
+  /**
+   * Read just a project's merge mode and whether it has been decided. Returns
+   * null when the project doesn't exist; the caller owns the tenant gate + the
+   * not-found error. Optional `tx` — same contract as `findStatusAutomation`.
+   */
+  async findPrMergeMode(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ prMergeMode: PrMergeMode; prMergeModeDecidedAt: Date | null } | null> {
+    const client = tx ?? dbRead;
+    return client.project.findUnique({
+      where: { id },
+      select: { prMergeMode: true, prMergeModeDecidedAt: true },
+    });
+  },
+
+  /**
+   * Write a DECIDED merge mode — a person's choice — and stamp it. Unconditional:
+   * a person may change their own decision as often as they like. `tx` REQUIRED;
+   * the caller has already resolved the project and asserted the permission.
+   */
+  async setPrMergeMode(
+    id: string,
+    mode: PrMergeMode,
+    decidedAt: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({
+      where: { id },
+      data: { prMergeMode: mode, prMergeModeDecidedAt: decidedAt },
+    });
+  },
+
+  /**
+   * Write the ESTABLISHMENT default and stamp it — SET-ONCE at the database level
+   * (MOTIR-5178). The NULL-guarded `updateMany` writes only a row whose
+   * `prMergeModeDecidedAt` is still null, so a value a person already decided is
+   * never overwritten, whatever the caller read. Returns the rows written: 1 when
+   * the default landed, 0 when something had already decided the value. Same
+   * shape as `markOnboardingRan`.
+   */
+  async seedPrMergeModeIfUndecided(
+    id: string,
+    mode: PrMergeMode,
+    decidedAt: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.project.updateMany({
+      where: { id, prMergeModeDecidedAt: null },
+      data: { prMergeMode: mode, prMergeModeDecidedAt: decidedAt },
+    });
+    return r.count;
   },
 
   /**

@@ -20,6 +20,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'shell-empty-pass-123';
 const USER_EMAIL = 'e2e-shell-empty@example.com';
@@ -54,7 +55,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   }
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 }
 
 test('@smoke shell: a fresh account has a project — the switcher, the project nav, Settings/Git', async ({

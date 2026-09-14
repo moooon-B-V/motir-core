@@ -82,6 +82,7 @@ import { MotirAiError } from '@/lib/ai/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
+import { TestInstructionsError } from '@/lib/testInstructions/errors';
 import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
 import {
   GithubNotConnectedError,
@@ -323,6 +324,15 @@ export function toToolError(err: unknown): CallToolResult {
   // the agent as an opaque JSON-RPC internal error at the last step of a run,
   // holding a recording it cannot re-make.
   if (err instanceof AcceptanceEvidenceError) {
+    return toolError(err.code, err.message);
+  }
+  // The HOW TO TEST door's typed refusals (MOTIR-5331) — on the ABSTRACT BASE for
+  // the reason the arms above give. A repository outside the project (the message
+  // names the valid set), a cap exceeded (naming the field and the limit), a
+  // click-path that is both or neither, and a malformed field are each fixable in
+  // one hop, and an agent refused with an opaque internal error instead carries on
+  // as though its instructions landed.
+  if (err instanceof TestInstructionsError) {
     return toolError(err.code, err.message);
   }
   // The organization's storage cap. Not an AttachmentError (it is a billing

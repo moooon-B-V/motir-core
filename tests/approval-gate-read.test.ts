@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { ApprovalGateNotAuthorisedError } from '@/lib/approvalGates/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
@@ -68,7 +69,7 @@ async function designSubtaskWithGate(
   opts: {
     assigneeId?: string | null;
     reporterId?: string;
-    kind?: 'design_result' | 'pull_request_merge';
+    kind?: 'design_result' | 'pull_request_merge' | 'pull_request_approval';
   } = {},
 ) {
   const story = await workItemsService.createWorkItem(
@@ -147,6 +148,21 @@ describe('approvalGatesService.getAwaitingForWorkItem', () => {
 
     expect(read.gate).toBeNull();
     expect(read.canDecide).toBe(false);
+  });
+
+  it('reads an awaiting gate of an UNREGISTERED kind without refusing, routed by the shared rule (MOTIR-4906)', async () => {
+    // The pull-request gate is unregistered until MOTIR-4909, and the item page's
+    // Development block still draws its frame over such a row. `handlerFor` refuses
+    // an unregistered kind — correct for the decide door, wrong for this read.
+    const { item, gate } = await designSubtaskWithGate({ kind: 'pull_request_approval' });
+
+    const read = await approvalGatesService.getAwaitingForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_approval' },
+      fx.ctx,
+    );
+
+    expect(read.gate?.id).toBe(gate.id);
+    expect(read.gate?.kind).toBe('pull_request_approval');
   });
 
   it('returns nothing when the card has no gate at all — the ordinary case', async () => {
@@ -484,5 +500,104 @@ describe('routedToLabel — the *waiting on* line NAMES somebody (MOTIR-5191)', 
     // reason it exists — asserted here so the two can never be collapsed.
     const frozen = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
     expect(frozen.routedToId).toBe(first.id);
+  });
+});
+
+describe('getForWorkItem is TOTAL over ApprovalGateKind (MOTIR-5223)', () => {
+  it('an UNREGISTERED kind with a row returns the gate instead of throwing', async () => {
+    // The approval overlay asks this read about any kind its URL names, and
+    // `handlerFor` refuses a kind with no handler. A render read must still
+    // draw the row: the routed-to name falls back to §2's shared rule.
+    const { item, gate } = await designSubtaskWithGate({ kind: 'pull_request_merge' });
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_merge' },
+      fx.ctx,
+    );
+
+    expect(read.gate?.id).toBe(gate.id);
+    expect(read.gate?.kind).toBe('pull_request_merge');
+    expect(read.routedToLabel).not.toBeNull();
+  });
+});
+
+describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR-5445)', () => {
+  // ⚠️ THE MATRIX ABOVE CANNOT SEE THIS, because every actor in it holds the
+  // floor: a plain workspace member can edit work items. The relationship arms
+  // were the whole of `canDecide`, and the one shape that separates them from
+  // the door is a reader who IS the assignee and may NOT edit — a project
+  // `viewer`. The queue read held the floor; this read did not.
+
+  /** A project `viewer`: a workspace member whose ONLY project membership is `viewer`. */
+  async function projectViewer() {
+    const user = await plainMember();
+    await adminDb.projectMembership.deleteMany({
+      where: { userId: user.id, projectId: fx.projectId },
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        userId: user.id,
+        projectId: fx.projectId,
+        workspaceId: fx.workspaceId,
+        role: 'viewer',
+      },
+    });
+    return user;
+  }
+
+  it('a project VIEWER who is the ASSIGNEE sees the gate, may not decide it — and the door agrees', async () => {
+    const viewer = await projectViewer();
+    const reporter = await plainMember();
+    const { item, gate } = await designSubtaskWithGate({
+      assigneeId: viewer.id,
+      reporterId: reporter.id,
+    });
+    const ctx = { userId: viewer.id, workspaceId: fx.workspaceId };
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      ctx,
+    );
+    expect(read.gate?.id).toBe(gate.id);
+    expect(read.canDecide).toBe(false);
+
+    await expect(
+      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, ctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it('POSITIVE CONTROL — the same relationship with the floor held may decide', async () => {
+    const assignee = await plainMember();
+    const reporter = await plainMember();
+    const { item } = await designSubtaskWithGate({
+      assigneeId: assignee.id,
+      reporterId: reporter.id,
+    });
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      { userId: assignee.id, workspaceId: fx.workspaceId },
+    );
+    expect(read.canDecide).toBe(true);
+  });
+
+  it('an UNREGISTERED kind names no floor, so it keeps the AUTHORITY answer alone', async () => {
+    // No handler, no `permission` — the Development block's pull-request frame
+    // draws *Awaiting you* from this for the person the gate is routed to
+    // (MOTIR-5336), and a bystander still reads false.
+    const assignee = await projectViewer();
+    const { item } = await designSubtaskWithGate({
+      kind: 'pull_request_merge',
+      assigneeId: assignee.id,
+      reporterId: (await plainMember()).id,
+    });
+    const read = (userId: string) =>
+      approvalGatesService.getForWorkItem(
+        { workItemId: item.id, kind: 'pull_request_merge' },
+        { userId, workspaceId: fx.workspaceId },
+      );
+
+    expect((await read(assignee.id)).canDecide).toBe(true);
+    expect((await read((await plainMember()).id)).canDecide).toBe(false);
   });
 });

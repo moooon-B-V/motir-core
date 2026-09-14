@@ -801,6 +801,12 @@ export default defineConfig({
         'app/**/items/_components/FolderPicker.tsx',
         'app/**/items/_components/FolderRowMenu.tsx',
         'app/**/items/_components/QuickViewFolderField.tsx',
+        // Story MOTIR-5309 · MOTIR-5379 — the item page's placement channel and its
+        // breadcrumb: two new files and the one they rewrote. Measured with the
+        // placement suites before pinning (the figures are in the story PR body).
+        'app/**/items/[key]/_components/PlacementProvider.tsx',
+        'app/**/items/[key]/_components/PlacementBreadcrumb.tsx',
+        'app/**/items/[key]/_components/ParentBreadcrumb.tsx',
         'app/**/items/[key]/_components/ChildPanel.tsx',
         'app/**/items/[key]/_components/ChildList.tsx',
         'lib/mcp/registry.ts',
@@ -2060,6 +2066,19 @@ export default defineConfig({
         'lib/mappers/approvalGateMappers.ts',
         'components/approvals/ApprovalGateControl.tsx',
         'components/approvals/portRenderStatus.tsx',
+        // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN — the approval overlay ───
+        // Subtask MOTIR-5226, the story's own vitest gate. The overlay, its
+        // address and client read, the row's settle signal and the route were in
+        // NO `include`, so they were absent from the report and gated nothing.
+        // `ApprovalsList.tsx` is already reported through
+        // `app/**/workbench/_components/**` above, and is PINNED below because
+        // this story rewrote its central interaction. MEASURED on the parent
+        // branch before being pinned; the numbers are beside each threshold.
+        'components/approvals/ApprovalOverlay.tsx',
+        'lib/approvals/overlayAddress.ts',
+        'lib/approvals/approvalOverlayClient.ts',
+        'lib/approvals/decidedGates.ts',
+        'app/api/work-items/approval-gate/route.ts',
         // Bug MOTIR-5150 — the PR-REFERENCE parser the link picker's query
         // grammar gained. A pure function with one job, so it is measured and
         // pinned here, per the note at the top of this list.
@@ -2095,6 +2114,35 @@ export default defineConfig({
         'lib/repositories/monitorConnectionRepository.ts',
         'lib/repositories/monitorInstallationRepository.ts',
         'lib/mappers/monitorMappers.ts',
+        // ── Story MOTIR-4906 · HOW TO TEST per RUN ─────────────────────────────
+        // Its story gate (MOTIR-5337). Every file the story ADDED that compiles to
+        // something, MEASURED on the parent branch before being pinned below, over
+        // the story's own suites plus the gate (`tests/howToTest/storyGate*.test.*`).
+        //
+        // ⚠️ `lib/dto/howToTest.ts` and `lib/dto/testInstructions.ts` are NOT here:
+        // they declare types only, so a threshold on them would gate an empty map.
+        // The files the story only WIDENED (`promptTemplate.ts`, the two webhook
+        // services, `dispatchRunService.ts`, `DevelopmentSection.tsx`, …) are not
+        // added either — gating a whole pre-existing module on one new arm is the
+        // trap the `changeRequestCiFeedback.ts` note above names. The CLI's
+        // `closeOutHowToTest.ts` is gated in `packages/cli/vitest.config.ts`.
+        'lib/testInstructions/caps.ts',
+        'lib/testInstructions/errors.ts',
+        'lib/repositories/testInstructionsRepository.ts',
+        'lib/repositories/testInstructionsRepoRepository.ts',
+        'lib/repositories/repoDeploymentRepository.ts',
+        'lib/mappers/testInstructionsMappers.ts',
+        'lib/services/testInstructionsService.ts',
+        'lib/services/repoDeploymentService.ts',
+        'lib/services/howToTestService.ts',
+        'lib/howToTest/assemble.ts',
+        'lib/mcp/tools/publishTestInstructions.ts',
+        'lib/dispatch/runCloseOutPrompt.ts',
+        'app/api/v1/dispatch-runs/[id]/close-out-prompt/route.ts',
+        'app/api/v1/work-items/[key]/how-to-test/route.ts',
+        'components/howToTest/HowToTestBlock.tsx',
+        'components/markdown/CopyableCodeBlock.tsx',
+        'components/github/DevelopmentGateFrame.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2134,6 +2182,51 @@ export default defineConfig({
         // 100 / 98.07 / 100 / 100. The two residual branches are the confirm
         // band's optional copy slots, which a kind may leave unset.
         'components/approvals/ApprovalGateControl.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN (Subtask MOTIR-5226) ────
+        // MEASURED on the parent branch over `tests/components/approval-overlay`,
+        // `workbench-approvals-list`, `approval-gate-fill-layout`,
+        // `tests/approvals/`, `tests/api/approval-gate-route.test.ts` and
+        // `tests/integration/approvals/`, then pinned at the project floor.
+        // 100 / 100 / 100 / 100 unless noted.
+        'lib/approvals/overlayAddress.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvals/approvalOverlayClient.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvals/decidedGates.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/api/work-items/approval-gate/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // 100 / 97.43 / 100 / 100. The two residual branches are v8's IMPLICIT
+        // else arms of the read effect's two `aborted` early returns, reported
+        // with no source location; both arms of each are driven by
+        // `approval-overlay.test.tsx` ("a read superseded by a new address…",
+        // "a FAILED read superseded…").
+        'components/approvals/ApprovalOverlay.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Report-only until this story rewrote its central interaction (the row
+        // now OPENS the overlay; MOTIR-5225). 100 / 100 / 100 / 100 with
+        // StatePill's unreachable `default` ignored, citing its invariant test.
+        'app/**/workbench/_components/ApprovalsList.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -3865,6 +3958,22 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story MOTIR-5309 · MOTIR-5379 — the placement channel, pinned at the floor.
+        'app/**/items/[key]/_components/PlacementProvider.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/[key]/_components/PlacementBreadcrumb.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/[key]/_components/ParentBreadcrumb.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/**/items/_components/IssueQuickViewController.tsx': {
           branches: 90,
           functions: 90,
@@ -3916,6 +4025,10 @@ export default defineConfig({
         // being loosened to make a build pass. (MOTIR-4782 renamed
         // `lib/home/` → `lib/workbench/`; the floors are unchanged.)
         'lib/workbench/tab.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-5213 · Subtask MOTIR-5221 — the landing cascade. MEASURED
+        // before being pinned: 100 / 100 / 100 with `tests/workbench/landing.test.ts`
+        // (the whole truth table), pinned at the repo's 90 floor.
+        'lib/workbench/landing.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/homeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/homeMappers.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask MOTIR-2653 — the page's own modules, MEASURED before being
@@ -4203,6 +4316,113 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mappers/monitorMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // ── Story MOTIR-4906 · HOW TO TEST per RUN (Subtask MOTIR-5337) ────────
+        // MEASURED on the parent branch before pinning (stmts / branches / funcs /
+        // lines). Fourteen files at 100 on all four axes; `howToTestService.ts`
+        // 100 / 91.66 / 100 / 100, `testInstructionsService.ts` 99 / 93.93 / 100 /
+        // 100 and `publishTestInstructions.ts` 100 / 90 / 100 / 100 — each remaining
+        // arm a race or a schema-enforced absence (a lock that finds no row after the
+        // read that found it; a repository section index the record always has).
+        'lib/testInstructions/caps.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/testInstructions/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/testInstructionsRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/testInstructionsRepoRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/repoDeploymentRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/testInstructionsMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/testInstructionsService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/repoDeploymentService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/howToTestService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/howToTest/assemble.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mcp/tools/publishTestInstructions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/dispatch/runCloseOutPrompt.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/dispatch-runs/[id]/close-out-prompt/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/work-items/[key]/how-to-test/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/howToTest/HowToTestBlock.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/markdown/CopyableCodeBlock.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ⚠️ PINNED BELOW THE FLOOR, at what it measures (75 / 100 / 50 / 75). The
+        // file is ONE function plus ONE closure, and the closure is the frame's
+        // `onDecide` — unreachable by construction while it passes `verbs={[]}`:
+        // `ApprovalGateControl` calls `onDecide` only from a verb, and the
+        // `pull_request_approval` kind has none until MOTIR-4909 registers it.
+        // Covering it would mean a verb this story deliberately does not draw
+        // (`tests/components/development-block.test.tsx` asserts there is none).
+        // MOTIR-4909 raises this to the floor when it supplies the verbs.
+        'components/github/DevelopmentGateFrame.tsx': {
+          lines: 75,
+          functions: 50,
+          branches: 90,
+          statements: 75,
+        },
       },
     },
   },

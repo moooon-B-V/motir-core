@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import {
   createOrganizationAction,
   createWorkspaceAction,
@@ -53,6 +54,7 @@ export interface OrgControlProps {
 export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
   const ts = useTranslations('shell');
+  const tErr = useTranslations('errors');
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -96,8 +98,16 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
             size="md"
             rightIcon={<ChevronDown className="h-4 w-4" />}
             aria-label={t('menu.ariaLabel')}
+            // An ANCESTOR tier of the bar's context path, so it truncates — and it
+            // yields width before the project does (MOTIR-4897 ·
+            // design/shell/design-notes.md § *The context path's truncation
+            // budget*). Without `min-w-0` a flex child cannot go below its content,
+            // which here is the whole capped name: at `xl` the row overflowed and
+            // pushed the project tier under the right cluster. The chevron's span
+            // is `aria-hidden` and keeps its minimum.
+            className="min-w-0 shrink-3 [&>span:not([aria-hidden])]:min-w-0"
           >
-            <span className="flex items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
               {/* No mark. An organization carries none — there is no way to give
                   it one, so any mark here would be generated from the name
                   (`docs/decisions/entity-marks.md` §2).
@@ -110,7 +120,7 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
                   font-serif: the org name is a header IDENTITY label — it wears
                   the headline role so the `data-type` axis re-types the header
                   chrome too (see ProjectSwitcher). */}
-              <span className="max-w-[20ch] truncate font-serif">{activeOrg.name}</span>
+              <span className="min-w-0 max-w-[20ch] truncate font-serif">{activeOrg.name}</span>
             </span>
           </Button>
         </Popover.Trigger>
@@ -243,14 +253,16 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
         label={ts('workspaceSwitcher.nameLabel')}
         submitLabel={t('menu.newWorkspace')}
         // MOTIR-5130 — a §4.4 cap refusal comes back as a VALUE, not a throw, so
-        // it is translated into the modal's failure shape and the server's
-        // message (which NAMES the plan limit) is what the reader is told. This
-        // modal used to carry no `onError` at all while its organisation twin
-        // nine lines below did, so the refusal reached the user as a 500 and
-        // then as nothing.
+        // it is translated into the modal's failure shape and the plan limit is
+        // what the reader is told. This modal used to carry no `onError` at all
+        // while its organisation twin nine lines below did, so the refusal
+        // reached the user as a 500 and then as nothing.
+        // MOTIR-5133 — the sentence is chosen by the `entitlement` KIND from the
+        // catalogue, never `result.error`: that is the server's English string,
+        // and a `zh` reader was being shown it verbatim.
         run={async (name) => {
           const result = await createWorkspaceAction(name);
-          if (!result.ok) return { error: result.error };
+          if (!result.ok) return { error: entitlementExceededMessage(tErr, result.entitlement) };
         }}
         onDone={() => router.refresh()}
         onError={(message) =>

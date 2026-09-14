@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 import { Lock } from 'lucide-react';
-import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -16,12 +15,9 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
-import { hasAiEntitlement } from '@/lib/billing/aiEntitlement';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
-import { billingService } from '@/lib/services/billingService';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
-import { AcceptanceVideoCard } from './_components/AcceptanceVideoCard';
 import { BillingCard } from './_components/BillingCard';
 import { WorkspaceFoldInSection } from './_components/WorkspaceFoldInSection';
 import { JobRunsFoldInSection } from './_components/JobRunsFoldInSection';
@@ -122,16 +118,14 @@ export default async function OrganizationSettingsPage({
   const foldInWorkspace = isWorkspaceTierRevealed(orgWorkspaces.length)
     ? null
     : (orgWorkspaces[0] ?? null);
-  // MOTIR-3448 — allocation row 13: SERIAL → ONE WAVE, plus the frame.
+  // MOTIR-3448 — allocation row 13: the frame, and (once) a wave.
   //
-  // ⚠️ THE MEASUREMENT DIFFERS FROM THE ALLOCATION, and the smaller number is the
-  // true one. The asset counts THREE serial reads here — `listUserWorkspaces`,
-  // `listMembers`, `getAiAccess`. `listUserWorkspaces` is already concurrent: it
-  // rides the gate's own `Promise.all` beside `getWorkspaceContext` and
-  // `cookies()`, and it has to, because `resolveActiveOrganization` consumes it.
-  // So the genuine win is TWO — `listMembers` and `getAiAccess`, which need only
-  // `org.id` and the actor and were written one after the other for no reason.
-  // Still the largest single win in the family.
+  // ⚠️ THE WAVE IS GONE, AND SO IS ITS REASON (MOTIR-5172). The asset counted
+  // three serial reads here and the genuine win was two — `listMembers` and
+  // `getAiAccess`. `getAiAccess` fed exactly one consumer, the acceptance-video
+  // card, and that card left this page when the switch moved to
+  // `Project settings ▸ Approvals` (`design/org-admin/design-notes.md` panel 7b).
+  // A read with no consumer is not kept for symmetry, so the pane is one read.
   //
   // `resolveActiveOrganization` stays ABOVE the boundary: it decides the
   // no-active-org state AND supplies the org name the header interpolates.
@@ -154,7 +148,6 @@ export default async function OrganizationSettingsPage({
           isAdmin={isAdmin}
           actorUserId={session.user.id}
           actorEmail={session.user.email}
-          acceptanceVideoEnabled={org.acceptanceVideoEnabled}
           orgWorkspaceCount={orgWorkspaces.length}
           foldInWorkspace={foldInWorkspace}
           jobsParams={jobsParams}
@@ -165,11 +158,11 @@ export default async function OrganizationSettingsPage({
 }
 
 /**
- * The org pane's two reads, below the boundary and now in ONE wave.
+ * The org pane's ONE read, below the boundary.
  *
- * `allSettledOrThrow` rather than a bare `Promise.all`: both arms open a
- * transaction, so a rejection on one must not leave the other running
- * unobserved (MOTIR-3066).
+ * It was two, in one `allSettledOrThrow` wave (MOTIR-3066); the second —
+ * `billingService.getAiAccess` — existed only for the acceptance-video card,
+ * which MOTIR-5172 removed with the switch's move to the project tier.
  */
 async function OrgPaneBody({
   orgId,
@@ -178,7 +171,6 @@ async function OrgPaneBody({
   isAdmin,
   actorUserId,
   actorEmail,
-  acceptanceVideoEnabled,
   orgWorkspaceCount,
   foldInWorkspace,
   jobsParams,
@@ -189,30 +181,16 @@ async function OrgPaneBody({
   isAdmin: boolean;
   actorUserId: string;
   actorEmail: string;
-  acceptanceVideoEnabled: boolean;
   orgWorkspaceCount: number;
   foldInWorkspace: { id: string } | null;
   jobsParams: { tab?: string; status?: string; page?: string };
 }) {
   const t = await getTranslations('orgAdmin');
-  const [{ total: memberCount }, aiAccess] = await allSettledOrThrow([
-    organizationsService.listMembers({ organizationId: orgId, actorUserId, limit: 1 }),
-    // Acceptance-video card (MOTIR-1635): the toggle is only effective for an org
-    // ENTITLED to paid-AI features. That is not the same question as "does it hold
-    // a paid plan" (MOTIR-2545): `getAiAccess` returns the inert
-    // `notApplicableAiAccess()` sentinel for a self-hosted build AND for a `meta`
-    // organization, and reading `hasPaidAiPlan` off it answered "no" for an org
-    // the paywall explicitly does not apply to — showing moooon an Upgrade button
-    // and disabling its own toggle. `hasAiEntitlement` reads the DTO the way its
-    // contract says to, and is the same predicate `AiPaywall` gates on.
-    //
-    // No `isCloudBilling()` branch here: `getAiAccess` already short-circuits to
-    // that sentinel off-cloud, before any read, so the predicate returns true
-    // there exactly as the old `: true` arm did — one code path, one place the
-    // rule lives.
-    billingService.getAiAccess({ actorUserId, organizationId: orgId }),
-  ]);
-  const hasAcceptancePlan = hasAiEntitlement(aiAccess);
+  const { total: memberCount } = await organizationsService.listMembers({
+    organizationId: orgId,
+    actorUserId,
+    limit: 1,
+  });
 
   return (
     <>
@@ -230,13 +208,6 @@ async function OrgPaneBody({
               passive placeholder — cloud-only (ADR §6): off-cloud there is no
               billing surface at all, so the card simply doesn't render. */}
           {isCloudBilling() ? <BillingCard /> : null}
-
-          <AcceptanceVideoCard
-            orgId={orgId}
-            initialEnabled={acceptanceVideoEnabled}
-            hasPlan={hasAcceptancePlan}
-            canManage={isAdmin}
-          />
         </>
       ) : (
         // Panel 5d's forbidden treatment, applied to the ORG-SCOPED sections

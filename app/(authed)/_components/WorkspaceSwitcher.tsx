@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import { createWorkspaceAction, switchWorkspaceAction } from '../_actions';
 
 export interface WorkspaceSwitcherProps {
@@ -23,6 +24,7 @@ export interface WorkspaceSwitcherProps {
 export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSwitcherProps) {
   const t = useTranslations('shell');
   const tl = useTranslations('labels');
+  const tErr = useTranslations('errors');
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -63,10 +65,15 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
           // same action (the org menu's "New workspace" is the other), and it
           // used to answer the refusal with `createError` — "Could not create
           // workspace" — which is exactly the generic text that leaves a reader
-          // unable to tell a plan ceiling from an outage. The server's message
-          // names the limit, so it is what gets shown; the modal stays open,
-          // because nothing was created.
-          toast({ variant: 'error', title: result.error });
+          // unable to tell a plan ceiling from an outage. The refusal names the
+          // limit, so it is what gets shown — in the reader's language, picked
+          // by the `entitlement` kind rather than the server's English
+          // `result.error` (MOTIR-5133); the modal stays open, because nothing
+          // was created.
+          toast({
+            variant: 'error',
+            title: entitlementExceededMessage(tErr, result.entitlement),
+          });
           return;
         }
         setCreateOpen(false);
@@ -118,11 +125,17 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
             size="md"
             rightIcon={<ChevronDown className="h-4 w-4" />}
             aria-label={t('workspaceSwitcher.switch')}
+            // An ANCESTOR tier: it truncates, and yields width before the project
+            // does. See OrgControl's trigger (MOTIR-4897).
+            className="min-w-0 shrink-3 [&>span:not([aria-hidden])]:min-w-0"
           >
             {/* font-serif: the workspace name is a header IDENTITY label — headline
                 role so the `data-type` axis re-types the header chrome (see
                 ProjectSwitcher). */}
-            <span className="max-w-[24ch] truncate font-serif">
+            {/* `block`: this span sits directly in the Button's own label span,
+                not in a flex row, so it is INLINE — and `text-overflow` ignores an
+                inline box. Without it the name spills rather than ellipsizing. */}
+            <span className="block min-w-0 max-w-[24ch] truncate font-serif">
               {active?.name ?? t('workspaceSwitcher.select')}
             </span>
           </Button>

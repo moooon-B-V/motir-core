@@ -27,6 +27,7 @@ import type {
 } from '@/lib/dto/organizationRepos';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
+import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
 import {
   GithubRemovalHappensOnGithubError,
   MotirHostedRepoIsTakenOverError,
@@ -729,6 +730,8 @@ export const organizationRepoService = {
         } catch (err) {
           translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
         }
+        // A settled `connected` row may be what ESTABLISHES the set (MOTIR-5178).
+        await projectPrMergeModeService.seedAtEstablishment(projectId, ctx.workspaceId, tx);
         return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
       }),
     );
@@ -800,6 +803,8 @@ export const organizationRepoService = {
         } catch (err) {
           translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
         }
+        // A settled `connected` row may be what ESTABLISHES the set (MOTIR-5178).
+        await projectPrMergeModeService.seedAtEstablishment(projectId, ctx.workspaceId, tx);
         return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
       }),
     );

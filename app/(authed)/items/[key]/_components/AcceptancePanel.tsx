@@ -43,28 +43,41 @@ export interface AcceptancePanelProps {
   workItemId: string;
   /** The card whose page this panel is on — the path BOTH of this panel's
    *  actions revalidate on success (Bug MOTIR-5160 for `decide`, Bug MOTIR-5196
-   *  for `turnOn`). Each action knows an id of its own — a work item, an
-   *  organisation — and neither is the path; the path is the card's IDENTIFIER,
+   *  for `turnOn`). Each action knows an id of its own — a work item, a
+   *  project — and neither is the path; the path is the card's IDENTIFIER,
    *  and `LateSections` already holds it. */
   itemIdentifier: string;
-  organizationId: string | null;
+  /** The STORY'S project — whose switch Turn on flips (MOTIR-5172). It was the
+   *  organisation's id while the switch was an org column. */
+  projectId: string;
   eligibility: AcceptanceVideoEligibilityDTO;
   initialEvidence: AcceptanceEvidenceDTO | null;
   /** The reviewer may act (edit permission) AND the story is in_review. */
   canDecide: boolean;
-  settingsHref: string;
 }
 
-const SETTINGS_ANCHOR = '#acceptance-video';
+/**
+ * Where the switch LIVES — both of State B's links land here (MOTIR-5172).
+ *
+ * ⚠️ NOT A PROP ANY MORE, AND NOT `/settings/organization`. The href used to be
+ * passed in as `settingsHref="/settings/organization"` with `#acceptance-video`
+ * appended here, and when the switch moved to the project tier the org page
+ * stopped holding the control — so the link still LOOKED like it worked. A link to
+ * a page the setting has left is worse than no link. The target is one fixed room,
+ * so it is a constant beside the panel rather than a string every caller can get
+ * wrong, and the anchor names the element the room renders
+ * (`AcceptanceVideoGateCard`'s `id`), which `tests/e2e/cloud-video.spec.ts`
+ * follows to a rendered switch.
+ */
+export const ACCEPTANCE_VIDEO_SETTINGS_HREF = '/settings/project/approvals#acceptance-video';
 
 export function AcceptancePanel({
   workItemId,
   itemIdentifier,
-  organizationId,
+  projectId,
   eligibility,
   initialEvidence,
   canDecide,
-  settingsHref,
 }: AcceptancePanelProps) {
   const t = useTranslations('acceptance');
   const router = useRouter();
@@ -105,10 +118,9 @@ export function AcceptancePanel({
   }
 
   function turnOn() {
-    if (!organizationId) return;
     setError(null);
     startTransition(async () => {
-      const res = await turnOnAcceptanceVideoAction({ organizationId, itemIdentifier });
+      const res = await turnOnAcceptanceVideoAction({ projectId, itemIdentifier });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -186,7 +198,7 @@ export function AcceptancePanel({
                   {t('off.turnOn')}
                 </span>
                 <Link
-                  href={settingsHref + SETTINGS_ANCHOR}
+                  href={ACCEPTANCE_VIDEO_SETTINGS_HREF}
                   className="ml-2 text-[13px] font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
                 >
                   {t('off.goToSettings')}
@@ -199,7 +211,7 @@ export function AcceptancePanel({
                 {t('off.memberBody')}
               </p>
               <Link
-                href={settingsHref + SETTINGS_ANCHOR}
+                href={ACCEPTANCE_VIDEO_SETTINGS_HREF}
                 className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
               >
                 <Settings className="h-[13px] w-[13px]" aria-hidden />

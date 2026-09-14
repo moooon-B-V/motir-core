@@ -100,7 +100,6 @@ export const organizationRepository = {
       name?: string;
       slug?: string;
       isMeta?: boolean;
-      acceptanceVideoEnabled?: boolean;
       /** The org-tier require-2FA policy (Story MOTIR-1215 · MOTIR-3644). */
       requiresTwoFactor?: boolean;
     },

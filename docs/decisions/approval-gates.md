@@ -46,6 +46,11 @@
   **§8 is the one to read first.** It is the discriminator the other five
   amendments are consequences of.
 
+- **AMENDED 2026-09-13 (MOTIR-5174), at §7, additively.** The rule for when the
+  provenance default is written, what a MIXED or EMPTY project seeds, and the
+  three-release retirement of `Workspace.subtaskPrMergeMode`. §7's own text and
+  value table are unchanged.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -887,11 +892,11 @@ happened. That guard is a sibling story, not this record's to ship.
 - Both are nearly free **today**: the column has no functional reader, and will
   have one the moment §4 ships.
 
-| value                | behaviour                                                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`manual`**         | a `pull_request_merge` gate IS created; a person decides it. The default for a project whose repositories are imported                                             |
-| **`auto`**           | **no gate is created.** The default for a project established with Motir-hosted repositories                                                                       |
-| **`review_on_fail`** | **RESERVED and UNIMPLEMENTED.** It behaves as `manual`. Stated here rather than left to be discovered; the enum value ships to avoid a later Postgres enum `ALTER` |
+| value                    | behaviour                                                                                                                                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`manual`**             | a `pull_request_merge` gate IS created; a person decides it. The default for a project whose repositories are imported                                                                                                             |
+| **`auto`**               | **no gate is created.** The default for a project established with Motir-hosted repositories                                                                                                                                       |
+| ~~**`review_on_fail`**~~ | ~~**RESERVED and UNIMPLEMENTED.** It behaves as `manual`. Stated here rather than left to be discovered; the enum value ships to avoid a later Postgres enum `ALTER`~~ — **RETIRED 2026-09-13, see the amendment below (point 4)** |
 
 **The DEFAULT is derived from repository PROVENANCE, and it is a default rather
 than a law.** A project established with Motir-hosted repositories seeds `auto`;
@@ -902,6 +907,112 @@ both, so a provenance law for one would silently govern the other. The setting
 overrides in either direction, which is what makes the deep link from the
 approval surface meaningful: someone who defaulted to `manual` and cannot read a
 diff can reach the switch that stops asking them.
+
+#### 7 · AMENDED 2026-09-13 (MOTIR-5174) — WHEN the default is written, what a MIXED project gets, and what retiring the old column costs
+
+§7 above decides the rename, the tier and that the default follows provenance.
+It left three things unsaid, and Story MOTIR-4880's cards build on all three.
+They are settled here, so every card reads one record rather than three plan
+summaries. **One row above is struck**: `review_on_fail` is retired (point 4).
+
+**1. The default is written at ESTABLISHMENT, not at `project.create`.** A
+project row exists before it has any repositories. `projectRepository`'s create
+runs long before the _"where should your code live?"_ step, whose read model is
+`lib/services/projectRepoEstablishService.ts` and whose rows
+`lib/services/projectRepoSetService.ts` owns. At `create` there is no provenance
+to read, so the provenance default **cannot be a column `@default`**. The column
+default (`manual`) is a FLOOR: it is what a row holds until something decides
+the value.
+
+- **The moment.** A project is ESTABLISHED the first time its repository set
+  holds at least one row and every row is settled (`created` / `connected` /
+  `skipped` — `transitions.isSettledState`, the ADR §4.1 machine's own
+  definition). The check runs at the seams that settle a row or append a settled
+  one: `projectRepoSetService`'s `attachRealizedRepo` (the `created` and
+  `connected` hops) and `transitionRow` (the `skipped` hop), and
+  `organizationRepoService`'s `linkRealized` / `connectAndLink`. Those two write
+  a `connected` organisation row directly, and they are how a project connected
+  to its organisation's repositories gets its set.
+- **ONCE, and a stamp says whether it has happened.** `Project` carries a
+  nullable `prMergeModeDecidedAt`. Null means nothing has decided the value yet
+  and the floor stands. Deriving the default writes the value AND the stamp,
+  under the project row's lock, and only where the stamp is null. A person
+  changing the setting writes the stamp too. So later events never re-derive
+  the value: re-establishing, adding a hosted repository to a `manual` project,
+  or removing a row and settling the set again. **A value a person holds is
+  never overwritten by a default.** Without the stamp, a floor `manual` and a
+  chosen `manual` are the same bytes.
+- **The backfill stamps established projects only.** The migration that adds
+  `Project.prMergeMode` copies each project's workspace value, so nobody's
+  effective answer changes on the day it lands. It stamps
+  `prMergeModeDecidedAt` only on a project that already holds a settled row. A
+  project that was already established never has an establishment event to wait
+  for, so it keeps the carried value. A project that has not established yet
+  gets the provenance default when it does. Nobody could have chosen the carried
+  workspace value: the column was never rendered and never read.
+
+**2. The rule is total. A MIXED project and an EMPTY one both seed `manual`.**
+
+| the set's REPOSITORIES at establishment (a `skipped` row has none, and is ignored) | seeds    |
+| ---------------------------------------------------------------------------------- | -------- |
+| at least one, and **every** one is Motir-hosted                                    | `auto`   |
+| at least one is not Motir-hosted — imported, or MIXED with hosted ones             | `manual` |
+| **none** — an empty set, or every row `skipped`                                    | `manual` |
+
+**Why the mixed case falls to `manual`, for a reader who never opens the code:**
+asking a question nobody needed costs one click, but merging into somebody's
+own repository without asking costs their trust. So Motir stops asking only when
+every repository in the project is one it hosts.
+§7's own argument, that a project can hold both sections
+(`lib/projectRepos/roomSections.ts`), is exactly why a project that is not
+wholly Motir's must not be governed by the hosted default.
+
+**Provenance is `isMotirHostedOwner` (`lib/git/hostOwnership.ts`) and nothing
+else**, composed over each realized repository's owner login with the
+`hostOwner` the server resolves once (`provisioningOrgLogin()`). **Do not
+re-spell the comparison.** Bug MOTIR-4892 found three surfaces spelling it three
+times and disagreeing about one row, which is the whole reason that module
+exists. `hostOwner: null` classifies nothing as hosted, so a deployment that
+cannot provision seeds every project `manual`. That is the correct answer, not a
+degraded one.
+
+**3. Retiring `Workspace.subtaskPrMergeMode` takes THREE releases, and so it is
+not in this story.** An expand/contract removal is normally two phases: move the
+readers, then drop the column. Here that is one phase short, **because the
+Prisma datamodel declaration is itself a reader**. A client asked for a
+`Workspace` without a `select` fetches every field the model declares, and the
+declaration is removed by the same commit that drops the column. The migration
+is applied before the new build takes traffic, so a two-phase retirement leaves
+the still-serving build selecting a column that is gone for the whole rollout. A
+search for the field's name cannot find that reader, because no line names it.
+The phases:
+
+| release | what ships                                                                                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1**   | Story MOTIR-4880: every application reader moves to `Project.prMergeMode`. The workspace column and its Prisma field both STAY                                 |
+| **2**   | the field leaves the generated client while the column stays in the database, deployed on its own, so a build that neither selects nor names it serves traffic |
+| **3**   | the column is dropped                                                                                                                                          |
+
+Releases 2 and 3 are Story **MOTIR-5175**, `blocked_by` MOTIR-4880.
+
+**4. `review_on_fail` is RETIRED, not reserved (Yue, 2026-09-13).** Only a
+**green** pull request is ever a merge candidate, in every mode. A red pull
+request never reaches In Review: it belongs to the run's fix loop, and when that
+loop gives up the work item is stuck, which is not an approval. So a mode that
+"asks when checks fail" would put a merge approval on broken code, and no
+meaning survives its name. The reason it was reserved had the cost backwards:
+adding a Postgres enum value later is a cheap `ALTER TYPE … ADD VALUE`, and
+**removing** one is the expensive direction.
+
+- `PrMergeMode` is `auto | manual`. The migration that renames the type
+  (`20260913120000_project_pr_merge_mode`) rebuilds it without the retired
+  member, mapping any workspace that held it to `manual`, which is how it
+  behaved.
+- The two modes, stated against the lifecycle: **`manual`** — a person approves
+  a green pull request before it merges; **`auto`** — Motir merges a green pull
+  request with no gate.
+- A future mode that needs a third value (e.g. _merge automatically unless the
+  run had to repair its own checks_) is added then, as its own decision.
 
 #### 7a. What the audit trail says when `auto` means no gate — DECIDED BY THE PLANNER (rung: Yue's own §6c principle)
 
@@ -1046,6 +1157,66 @@ MOTIR-4527 (_Hosting what the agent builds — tenant applications on
 motir.site_)** and is not decided here. Until it lands, a project whose
 repositories produce no preview has two paths rather than three, and says so.
 
+> ### 9 — AMENDMENT: HOW TO TEST is per RUN (MOTIR-4906 re-plan, 2026-09-13), DECIDED BY THE REQUESTER (Yue, 2026-09-13)
+>
+> _"'how to test' should not be per PR, it should be per run, so the design is
+> not right for a story/container run. how to test in the PR should still be
+> there, the agent should produce 'how to test' in the run target before finish
+> the run"_ — Yue, 2026-09-13.
+>
+> §9 said the section belongs on _the work item_ and the consequences amendment
+> made it _"an authoring obligation on every card that produces a pull
+> request"_. Read literally, that keys HOW TO TEST per card and per pull request,
+> and that is the reading the first design of MOTIR-4906 drew: a block under
+> every Development row. **For a story run that is wrong** — nobody accepts a
+> story one child's pull request at a time. This amendment settles the unit:
+>
+> 1. **The unit is the RUN.** One HOW TO TEST record per run, written onto the
+>    **run target** — the work item the run was launched against:
+>    - a **container / parent run** (the runbook's parent run of a story) — the
+>      container;
+>    - a **scoped CLI run** — its scope target;
+>    - a **single-card dispatch** (and each card of an unscoped batch) — the card
+>      itself.
+>
+>    A run that touches several repositories writes **one** record with a
+>    **section per repository** (that repository's head commit and setup
+>    commands). The click-path is one, for the run. A child card of a container
+>    run writes none of its own.
+>
+> 2. **The agent writes it BEFORE THE RUN FINISHES** — for a run delivered
+>    through a session or parent pull request, before that pull request is
+>    marked ready; for a single card, before `implemented`. Where a run finishes
+>    in orchestrator code with no agent in it, the run gains a close-out step
+>    that puts one there.
+> 3. **The pull-request body KEEPS its How to test section.** This amends §9's
+>    _"not into the pull-request body"_: the record on the work item is what
+>    Motir renders; the body is what a reviewer on the host reads. Both carry the
+>    same content, and neither replaces the other.
+> 4. **Where it renders — ONE gate, ONE block** (Yue, 2026-09-13: _"'approve to
+>    merge the PRs' is the gate, how to test is telling user how to validate the
+>    PRs, so they are the same gate, not 2 separated things"_). On the run target's
+>    item page the **Development block** carries the pull-request rows AND the
+>    run's How to test in one section. How to test is the EVIDENCE of the one
+>    gate _approve to merge the pull requests_, never a gate, section or verb of
+>    its own. When that gate is awaiting, the block IS the universal approval
+>    frame — its rows and How to test are the port — exactly as the Design result
+>    section is for a design decision. A child card of a container run shows a
+>    pointer to its run target instead. (The full-screen approval overlay is not
+>    part of this amendment; it is MOTIR-5214's, for every gate.)
+>
+>    **Content.** The record's content is **rich text** (`bodyMd`, sections
+>    allowed), written by the agent over MCP like a design note or an acceptance
+>    receipt. Every command sits in a fenced code block, which renders
+>    click-to-copy. Only what Motir derives stays structured: the repositories and
+>    their commits, the preview, the checks CI ran, the branch fetch.
+>
+> 5. **Which record is current:** the newest run's. Earlier runs' records remain
+>    as history.
+>
+> The three paths, the _an unavailable path is SAID_ rule and the self-hosted
+> scope above are unchanged.
+
 ---
 
 ## Consequences
@@ -1085,7 +1256,7 @@ repositories produce no preview has two paths rather than three, and says so.
 >   amendment pull request, for §6c's re-keying. It remains the only file outside
 >   this one that changes.
 > - **A coding card's deliverable grows a HOW TO TEST section** (§9), written onto
->   the work item. That is an authoring obligation on every card that produces a
+>   the work item (per RUN, on the run target — see §9's 2026-09-13 amendment). That is an authoring obligation on every card that produces a
 >   pull request, and it is what the approval port renders.
 
 ## What SHIPPED — the dated close-out (MOTIR-4795, 2026-09-10)

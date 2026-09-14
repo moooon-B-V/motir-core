@@ -5546,6 +5546,28 @@
         font-family: var(--font-mono);
         text-align: center;
       }
+      /* A RETIRED state (MOTIR-4884): kept on the board as the record of a decision, never
+         presented as a current one. The drawing stays at full ink — dimming it would take its
+         text below AA — so the frame is dashed and the caption carries the label instead. */
+      .frame.retired .device,
+      .rail-col.retired .rail {
+        border-style: dashed;
+        border-color: #8a867f;
+      }
+      .retired-tag {
+        display: inline-block;
+        margin-right: 8px;
+        padding: 1px 6px;
+        border: 1px solid #dedbd6;
+        border-radius: 4px;
+        background: #f2f0ec;
+        color: #55534f;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
     </style>
   </head>
   <body>
@@ -9025,15 +9047,25 @@
       </section>
 
       <section class="panel">
-        <h2 class="panel-h">Panel C · The three states the project tier inherits</h2>
+        <h2 class="panel-h">
+          Panel C · The states the project tier inherits — two, and a retired third
+        </h2>
         <p class="panel-p">
-          The rail head resolved three states no other rail row needs, and all three move with the
+          The rail head resolved three states no other rail row needs, and they moved with the
           control. The
           <b>archived</b> pill is <code>shrink-0</code>, so the NAME truncates around it rather than
-          the pill being dropped. The <b>no-project</b> state cannot be the rail's full-width
-          lavender card in a horizontal row, so it takes the ghost-button grammar the other tiers
-          use — keeping the accent <code>+</code> square and the label, and opening the same
+          the pill being dropped. The <b>no-project</b> state could not be the rail's full-width
+          lavender card in a horizontal row, so it took the ghost-button grammar the other tiers use
+          — keeping the accent <code>+</code> square and the label, and opening the same
           <code>CreateProjectModal</code>.
+        </p>
+        <p class="panel-p">
+          <span class="retired-tag">Retired · MOTIR-4873</span>
+          <b>There are two states now.</b> A default project is seeded at the workspace tier
+          (MOTIR-4870), so no member reaches the shell without one and <code>ProjectTier</code>
+          renders the switcher unconditionally. The two no-project frames below are kept as the
+          record of that decision, in dashed frames — they are not a state this surface draws.
+          Creating an additional project lives on the switcher.
         </p>
         <figure class="frame">
           <figcaption>
@@ -9797,8 +9829,11 @@
             </header>
           </div>
         </figure>
-        <figure class="frame">
-          <figcaption>No project — the create-first door IS the tier</figcaption>
+        <figure class="frame retired">
+          <figcaption>
+            <span class="retired-tag">Retired · MOTIR-4873</span>No project — the create-first door
+            WAS the tier
+          </figcaption>
           <div class="device" data-vw="1280" style="width: 1280px">
             <header
               data-surface="header"
@@ -10190,8 +10225,10 @@
             </header>
           </div>
         </figure>
-        <figure class="frame">
-          <figcaption>No project, 375px</figcaption>
+        <figure class="frame retired">
+          <figcaption>
+            <span class="retired-tag">Retired · MOTIR-4873</span>No project, 375px
+          </figcaption>
           <div class="device" data-vw="375" style="width: 375px">
             <header
               data-surface="header"
@@ -10685,10 +10722,12 @@
         <p class="panel-p">
           The rail answers <i>where inside this project can I go</i>. Its head was answering a
           different question, which is why it needed three states nothing else in the rail needs.
-          All three move to the bar and the default-area head is <b>removed</b> — the rail starts at
-          its first nav section. The settings and account areas keep their own headers
-          (<code>SettingsSidebarHeader</code>, <code>AccountSidebarHeader</code>) untouched, and the
-          collapsed rail's 32px project avatar goes with the rest.
+          They moved to the bar and the default-area head is <b>removed</b> — the rail starts at its
+          first nav section. The <i>no project</i> column is <b>retired</b> (MOTIR-4873): no member
+          reaches the shell without a project any more, so it is kept in a dashed frame as the
+          record of what the head used to offer. The settings and account areas keep their own
+          headers (<code>SettingsSidebarHeader</code>, <code>AccountSidebarHeader</code>) untouched,
+          and the collapsed rail's 32px project avatar goes with the rest.
         </p>
         <div class="rail-row">
           <div class="rail-col">
@@ -10725,8 +10764,10 @@
               </button>
             </div>
           </div>
-          <div class="rail-col">
-            <figcaption>today — no project</figcaption>
+          <div class="rail-col retired">
+            <figcaption>
+              <span class="retired-tag">Retired · MOTIR-4873</span>before — no project
+            </figcaption>
             <div class="rail">
               <div
                 class="rounded-(--radius-card) border transition-shadow duration-(--transition-duration) bg-(--el-tint-lavender) border-transparent cursor-pointer hover:shadow-(--shadow-card) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background flex items-center gap-2 p-2"

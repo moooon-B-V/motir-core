@@ -314,6 +314,9 @@ model User {
   // audit-not-ownership semantics as `approvedAcceptanceEvidences`. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   withdrawnDesignEvidences         DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
+  // How-to-test records this user published (MOTIR-5328). SetNull on the FK:
+  // a deleted publisher leaves the record, unattributed.
+  publishedTestInstructions        TestInstructions[]        @relation("TestInstructionsPublishedBy")
   /// Approval gates this user decided (the audit's "who", ADR §6a). `SetNull` on
   /// the gate keeps the row — the back-relation is the inverse of that. NAMED
   /// since MOTIR-4912, because `routedToApprovalGates` is a second relation to
@@ -950,8 +953,14 @@ model Organization {
   /// Subtask MOTIR-1630). Default ON: an ELIGIBLE (paid-AI) org opted into the
   /// (bounded) cost by paying, and a non-eligible org's toggle is moot (the
   /// entitlement gate blocks generation regardless), so ON never leaks cost.
-  /// Set by an org admin via PATCH /api/organizations/[orgId]; read by
-  /// acceptanceVideoEligibilityService alongside billingService.hasPaidAiPlan.
+  ///
+  /// ⚠️ NO READER AND NO WRITER — PHASE 1 of a three-phase column removal.
+  /// The switch is `Project.acceptanceVideoEnabled` (MOTIR-4925); MOTIR-5172
+  /// removed this column's last application reader and writer (the org settings
+  /// card, the `PATCH /api/organizations/[orgId]` arm, and
+  /// `organizationsService.setAcceptanceVideoEnabled`). The field stays DECLARED
+  /// on purpose: a select-less read still asks for it, so the client stops
+  /// selecting it in its own release (MOTIR-5173, `@ignore`) before any drop.
   acceptanceVideoEnabled Boolean @default(true) @map("acceptance_video_enabled")
 
   /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
@@ -972,8 +981,9 @@ model Organization {
   /// requirement the first time the org's is switched off.
   ///
   /// Set by an org owner/admin; read by the compliance verdict in MOTIR-3645.
-  /// `organization.acceptanceVideoEnabled` above is the shipped precedent for
-  /// an org-level boolean policy (`organizationsService.setAcceptanceVideoEnabled`).
+  /// Written the way `organizationsService.renameOrganization` writes the org
+  /// row. (This line cited `setAcceptanceVideoEnabled` as the precedent until
+  /// MOTIR-5172 retired that write with the switch's move to the project tier.)
   ///
   /// NO `@@index`: the org read is a primary-key lookup, and an index on a
   /// two-valued boolean would be dead weight.
@@ -1041,17 +1051,24 @@ model OrganizationMembership {
 /// Tenant boundary. Every workspace-scoped row (projects, work items, …)
 /// FKs against Workspace.id with onDelete: Cascade. The slug column is a
 /// URL-safe handle; it's unique globally (not per-user) so workspace URLs
-/// are sharable. subtaskPrMergeMode is consumed by Story 1.4 + Epic 4 —
-/// see Story 1.4 § Merge modes. `organizationId` (Story 6.10) nests the
+/// are sharable. `organizationId` (Story 6.10) nests the
 /// workspace under its parent `Organization` — non-nullable after the backfill
 /// (every existing workspace got its own default org); Cascade so deleting an
 /// org takes its workspaces with it (the whole tenant goes).
 model Workspace {
-  id                 String             @id @default(cuid())
+  id                 String      @id @default(cuid())
   organizationId     String
   name               String
-  slug               String             @unique
-  subtaskPrMergeMode SubtaskPrMergeMode @default(manual)
+  slug               String      @unique
+  /// ⚠️ BEING RETIRED — read `Project.prMergeMode` (MOTIR-4880). The merge policy
+  /// moved to the PROJECT, the tier its reader (the merge gate) is scoped to, and
+  /// nothing reads this column any more. It is NOT removed with its readers: the
+  /// declaration itself is a reader (a `Workspace` fetched without a `select`
+  /// asks for every declared field), so removing it takes three releases —
+  /// Story MOTIR-5175 (`docs/decisions/approval-gates.md` §7's 2026-09-13
+  /// amendment). Its value was copied onto every project by the migration that
+  /// added `Project.prMergeMode`.
+  subtaskPrMergeMode PrMergeMode @default(manual)
 
   /// Whether every member of this workspace must hold a second factor
   /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
@@ -1093,6 +1110,11 @@ model Workspace {
   // workspace, like every other tenanted lifecycle row.
   designEvidences             DesignEvidence[]
   designAssets                DesignAsset[]
+  // How-to-test records (Story MOTIR-4906 · MOTIR-5328). Cascade with the workspace.
+  testInstructions            TestInstructions[]
+  testInstructionsRepos       TestInstructionsRepo[]
+  // Preview deployments reported by connected repositories (MOTIR-5329). Cascade.
+  repoDeployments             RepoDeployment[]
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
   boards                      Board[]
@@ -1297,6 +1319,24 @@ model Project {
   /// organisation's value, because an org that had deliberately turned acceptance
   /// video OFF must not find every project under it turned back on.
   acceptanceVideoEnabled           Boolean               @default(true) @map("acceptance_video_enabled")
+  /// How this project's pull requests are merged (MOTIR-4880 ·
+  /// `docs/decisions/approval-gates.md` §7). PROJECT-scoped because a merge
+  /// policy is a property of a codebase and its team, and the merge gate that
+  /// reads it is scoped to a project.
+  ///
+  /// ⚠️ The column DEFAULT is a FLOOR, not the product default. A project row
+  /// exists before it has any repositories, so the provenance-derived default
+  /// (all Motir-hosted ⇒ `auto`; imported, MIXED or empty ⇒ `manual`) cannot be
+  /// a column default: it is written at ESTABLISHMENT by
+  /// `projectPrMergeModeService` (MOTIR-5178). Existing rows were backfilled
+  /// from their workspace's `subtaskPrMergeMode`.
+  prMergeMode                      PrMergeMode           @default(manual) @map("pr_merge_mode")
+  /// When `prMergeMode` was last DECIDED — by the establishment default or by a
+  /// person. NULL means nothing has decided it and the floor stands, which is
+  /// the only state in which the establishment default may write. Without it a
+  /// floor `manual` and a chosen `manual` are the same bytes, and a default
+  /// would overwrite a person's choice (§7's 2026-09-13 amendment).
+  prMergeModeDecidedAt             DateTime?             @map("pr_merge_mode_decided_at")
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the
@@ -1629,6 +1669,9 @@ model Project {
   /// Every CLI run reported against this project (Story MOTIR-1789). Cascade —
   /// a run's whole meaning is the cards it worked, which go with the project.
   dispatchRuns                DispatchRun[]
+  /// How-to-test records for this project's cards (MOTIR-5328). Cascade.
+  testInstructions            TestInstructions[]
+  testInstructionsRepos       TestInstructionsRepo[]
 
   /// The addresses this project answers on, and which one is CANONICAL
   /// (Story MOTIR-3878 · `docs/decisions/public-tenant-addresses.md`).
@@ -1934,16 +1977,19 @@ enum ProjectAccessLevel {
   @@map("project_access_level")
 }
 
-/// Workspace-level setting controlling whether Subtask PRs auto-merge into
-/// the Story branch. Defaults to `manual` (developer-friendly review flow).
-/// `review_on_fail` is reserved for a later Story that ships the CI-driven
-/// gate; shipping the enum value now avoids a Postgres enum ALTER later.
-enum SubtaskPrMergeMode {
+/// How a project's pull requests are merged (`docs/decisions/approval-gates.md`
+/// §7). `manual` — a person approves a GREEN pull request before it merges;
+/// `auto` — Motir merges a green pull request with no gate. A red pull request is
+/// never a merge candidate in either mode. Renamed in place from the
+/// `subtask_pr_merge_mode` type, because a pull request is no longer a subtask's.
+/// The reserved `review_on_fail` value was RETIRED (MOTIR-4880, 2026-09-13): no
+/// meaning survives the rule that only a green pull request is merged, and adding
+/// an enum value later is a cheap `ADD VALUE` while removing one is not.
+enum PrMergeMode {
   auto
   manual
-  review_on_fail
 
-  @@map("subtask_pr_merge_mode")
+  @@map("pr_merge_mode")
 }
 
 /// Which value is THE planning estimate a project's surfaces display + the
@@ -2343,6 +2389,8 @@ model WorkItem {
   // it (docs/decisions/design-result.md §3), so this relation hangs off every
   // leaf, not only stories. Cascade with the item.
   designEvidences      DesignEvidence[]
+  /// How-to-test records, one current per repository (MOTIR-5328). Cascade.
+  testInstructions     TestInstructions[]
   /// Approval gates hanging off this card (the per-card read).
   approvalGates        ApprovalGate[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
@@ -4208,6 +4256,95 @@ model DesignAsset {
   /// The panel read: one result's assets in render order.
   @@index([designEvidenceId, position])
   @@map("design_asset")
+}
+
+/// HOW TO TEST one work item's change in one repository (Story MOTIR-4906 ·
+/// Subtask MOTIR-5328; `docs/decisions/approval-gates.md` §9).
+///
+/// The dispatched agent writes it onto the WORK ITEM through
+/// `publish_test_instructions`, instead of into a pull-request body Motir cannot
+/// read. A card whose pull requests land in two repositories carries two current
+/// records, because install / migrate / seed / run differ per repository — a
+/// single-repository card is the degenerate case of one.
+///
+/// VERSIONED like {@link DesignEvidence}: every publish is kept, and exactly one
+/// row per `(workItemId, repoId)` is current (the partial unique index
+/// `test_instructions_one_current_per_item_repo` enforces it). History is what
+/// lets the item page say *these were written for an earlier commit* rather than
+/// showing stale steps as though they were fresh.
+///
+/// The branch fetch is deliberately NOT stored: the read composes it from the
+/// pull request's own `headRef`, so the copyable block always checks out the
+/// branch Motir recorded rather than whatever the agent typed.
+model TestInstructions {
+  id            String   @id @default(cuid())
+  /// Tenancy of record ON THE ROW — RLS does not traverse foreign keys (the
+  /// `work_item_delivery` / `dispatch_run` precedent), so the policy stays a
+  /// pure active-workspace gate with no per-row subquery.
+  workspaceId   String   @map("workspace_id")
+  projectId     String   @map("project_id")
+  /// The RUN TARGET — the item the run was launched against (a story for a
+  /// container / scoped run, the card itself for a single-card dispatch).
+  /// `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment: HOW TO TEST
+  /// is per RUN, so one record per run lands here, never one per pull request.
+  workItemId    String   @map("work_item_id")
+  /// The run's HOW TO TEST as RICH TEXT (Markdown), exactly as the agent wrote it
+  /// over MCP — sections allowed, every command in a fenced code block (rendered
+  /// click-to-copy). `docs/decisions/approval-gates.md` §9 amendment, point 4.
+  bodyMd        String   @map("body_md") @db.Text
+  /// The path to open on the preview host, e.g. `/items/ACME-7`.
+  previewPath   String?  @map("preview_path")
+  /// The dispatch run that wrote it — the run this record is the output of. Null
+  /// for a runbook-driven run with no dispatch row. SetNull: a pruned run loses
+  /// attribution, never the record.
+  dispatchRunId String?  @map("dispatch_run_id")
+  /// WHO published it. SetNull, like every other audit stamp.
+  publishedById String?  @map("published_by_id")
+  isCurrent     Boolean  @default(true) @map("is_current")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem    WorkItem               @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun?           @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
+  publishedBy User?                  @relation("TestInstructionsPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  repos       TestInstructionsRepo[]
+
+  /// The history read: one item's runs, newest first. Its column list is
+  /// deliberately NOT the partial unique index's `(work_item_id)` — Prisma's
+  /// differ pairs indexes by column list (the partial-index rule in CLAUDE.md,
+  /// MOTIR-1960).
+  @@index([workItemId, createdAt(sort: Desc)])
+  @@index([workspaceId])
+  @@map("test_instructions")
+}
+
+/// One REPOSITORY SECTION of a run's HOW TO TEST record (Story MOTIR-4906 ·
+/// Subtask MOTIR-5328): the commit that repository's section was written for,
+/// and the setup commands a reviewer runs after checking out its branch. A run
+/// touching two repositories writes one `TestInstructions` with two of these.
+model TestInstructionsRepo {
+  id                 String @id @default(cuid())
+  workspaceId        String @map("workspace_id")
+  projectId          String @map("project_id")
+  testInstructionsId String @map("test_instructions_id")
+  /// FK → `GithubRepo`, the provider-agnostic repository row
+  /// `github_pull_request.repo_id` and `work_item_delivery.repo_id` already key on.
+  repoId             String @map("repo_id")
+  /// The head commit this repository's section was written for.
+  commitSha          String @map("commit_sha")
+  /// Section order within the record, as the publisher gave it.
+  position           Int    @default(0)
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testInstructions TestInstructions @relation(fields: [testInstructionsId], references: [id], onDelete: Cascade)
+  repo             GithubRepo       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([testInstructionsId, repoId])
+  @@index([repoId])
+  @@index([workspaceId])
+  @@map("test_instructions_repo")
 }
 
 /// Which vocabulary of decision verbs a gate carries (the approval-gate ADR
@@ -6321,6 +6458,9 @@ model GithubRepo {
   /// set row with a null realized repo, not a deleted plan.
   projectRepos                ProjectRepo[]
   workItemDeliveries          WorkItemDelivery[]
+  testInstructionsRepos       TestInstructionsRepo[]
+  /// Preview deployments this repository's host reported (MOTIR-5329). Cascade.
+  repoDeployments             RepoDeployment[]
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -6558,6 +6698,48 @@ model GithubCheckRun {
   @@unique([pullRequestId, commitSha, checkName, checkSuiteId])
   @@index([pullRequestId])
   @@map("github_check_run")
+}
+
+/// ONE DEPLOYMENT a repository's own host reported — the PREVIEW URL behind the
+/// HOW TO TEST block's "in the preview" path (Story MOTIR-4906 · MOTIR-5329).
+///
+/// Motir only LISTENS: it creates no deployment and posts no status. The row is
+/// the host's latest status for one deployment, keyed on the host's own id, and
+/// stored against the COMMIT it deployed (and the ref it was made from, for the
+/// read that knows a pull request's branch but not yet its head sha).
+///
+/// Out-of-order delivery is guarded IN THE WRITE: the upsert overwrites only when
+/// the incoming status is not older than the stored one, so a late `in_progress`
+/// never replaces a `success` that already arrived.
+model RepoDeployment {
+  id                   String   @id @default(cuid())
+  /// The repository's tenancy, copied onto the row so the policy is a pure gate
+  /// (the `test_instructions` / `work_item_delivery` precedent).
+  workspaceId          String   @map("workspace_id")
+  repoId               String   @map("repo_id")
+  provider             String
+  providerDeploymentId String   @map("provider_deployment_id")
+  commitSha            String   @map("commit_sha")
+  ref                  String
+  environment          String
+  /// One of `DEPLOYMENT_STATES` (`lib/git/types.ts`); text so a provider's new
+  /// state can be stored and rendered as `unknown` rather than refused.
+  state                String
+  /// Only an `http:` / `https:` URL is kept; anything else is stored NULL,
+  /// because the port renders this as a link.
+  environmentUrl       String?  @map("environment_url")
+  occurredAt           DateTime @map("occurred_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repo      GithubRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, provider, providerDeploymentId])
+  @@index([repoId, commitSha])
+  @@index([repoId, ref])
+  @@index([workspaceId])
+  @@map("repo_deployment")
 }
 
 /// THE CI feedback comment for one `(change request, head commit, work item)`
@@ -9038,8 +9220,10 @@ model DispatchRun {
   scope     WorkItem? @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
   createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  cards  DispatchRunCard[]
-  events DispatchRunEvent[]
+  cards            DispatchRunCard[]
+  events           DispatchRunEvent[]
+  /// How-to-test records this run wrote (MOTIR-5328). SetNull on the FK.
+  testInstructions TestInstructions[]
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.

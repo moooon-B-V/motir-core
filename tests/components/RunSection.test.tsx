@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RunSection } from '@/app/(authed)/items/[key]/_components/RunSection';
-import type { DispatchRunDto } from '@/lib/dto/dispatchRuns';
+import type { DispatchRunDto, DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 
 // THE RUN SECTION (Story MOTIR-1789 · MOTIR-1796) — the panel that shows what
 // an agent did to THIS card.
@@ -223,6 +223,101 @@ describe('every run-history row opens that run', () => {
     expect(screen.getByRole('link', { name: 'motir batch' }).getAttribute('href')).toBe(
       '/runs?run=run_0',
     );
+  });
+});
+
+// ── THE SCOPE BLOCK (Story MOTIR-5363 · design MOTIR-5402 panels 1–3) ────────
+//
+// ⚠️ A CONTAINER THAT WAS RUN AS A SCOPE HAS NO LEG OF ITS OWN, so its leg
+// history is empty — and the empty state used to say *No runs yet* on the one
+// page a person opens to ask what happened to that story.
+
+function scoped(over: Partial<DispatchRunListItemDto> = {}): DispatchRunListItemDto {
+  return {
+    id: 'run_s',
+    command: 'run',
+    origin: 'local',
+    scopeWorkItemId: 'itm_1',
+    scopeLabel: 'PROD-42',
+    status: 'succeeded',
+    stopReason: 'drained',
+    agent: 'claude',
+    model: 'opus-5',
+    startedAt: '2026-08-29T14:02:11.000Z',
+    endedAt: '2026-08-29T14:40:11.000Z',
+    createdById: 'usr_1',
+    cardCount: 3,
+    legs: {
+      queued: 0,
+      running: 0,
+      integrated: 0,
+      implemented: 2,
+      failed: 0,
+      replanned: 0,
+      skipped: 1,
+      not_reached: 0,
+    },
+    ...over,
+  };
+}
+
+function mountWithScope(runs: DispatchRunDto[], scopeRun: DispatchRunListItemDto | null) {
+  return render(
+    <RunSection
+      initialRuns={runs}
+      initialCursor={null}
+      itemKey="PROD-42"
+      formattedTimes={times(runs)}
+      scopeRun={scopeRun}
+      scopeRunTime="29 Aug, 14:02 UTC"
+    />,
+  );
+}
+
+describe('⚠️ a container run as a SCOPE is not “nothing has run”', () => {
+  it('scope only: no empty state, the block, the row and the door', () => {
+    mountWithScope([], scoped());
+    expect(screen.queryByText('Nothing has run yet.')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Run as a scope' })).toBeTruthy();
+    expect(screen.getByText('An agent worked this work item’s children as one run.')).toBeTruthy();
+    // The row's outcome is the index's own sentence, not a second wording of it.
+    expect(screen.getByText(/2 of 3 done · 1 skipped/)).toBeTruthy();
+    // Both links KEEP the scope: the row opens the run over the narrowed list.
+    expect(screen.getByRole('link', { name: 'motir run' }).getAttribute('href')).toBe(
+      '/runs?scope=PROD-42&run=run_s',
+    );
+    expect(
+      screen.getByRole('link', { name: 'See every run of PROD-42 →' }).getAttribute('href'),
+    ).toBe('/runs?scope=PROD-42');
+    // No step timeline — steps belong to a LEG, and this item has none.
+    expect(screen.queryByText('Claimed')).toBeNull();
+  });
+
+  it('a LIVE scoped run says so, and still opens NO stream from this section', async () => {
+    mountWithScope([], scoped({ status: 'running', stopReason: null, endedAt: null }));
+    expect(
+      screen.getByText('An agent is working this work item’s children as one run.'),
+    ).toBeTruthy();
+    await Promise.resolve();
+    // Watching a scoped run live is the modal's job, one click away.
+    expect(requested()).toEqual([]);
+  });
+
+  it('BOTH: the leg content comes first and is unchanged, the block follows', () => {
+    mountWithScope([run()], scoped({ id: 'run_s2' }));
+    const html = document.body.innerHTML;
+    expect(screen.getByText('Implemented')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Run as a scope' })).toBeTruthy();
+    expect(html.indexOf('Run as a scope')).toBeGreaterThan(html.indexOf('Implemented'));
+    expect(
+      screen.getByRole('link', { name: 'See every run of PROD-42 →' }).getAttribute('href'),
+    ).toBe('/runs?scope=PROD-42');
+  });
+
+  it('NEITHER: the shipped empty state, and no block', () => {
+    mountWithScope([], null);
+    expect(screen.getByText('Nothing has run yet.')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Run as a scope' })).toBeNull();
   });
 });
 

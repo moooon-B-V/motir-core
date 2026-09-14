@@ -18,6 +18,7 @@ import { createTestWorkItem } from '../../fixtures';
 import { plansService } from '@/lib/services/plansService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { truncateAuthTables } from '../../helpers/db';
+import { adminDb } from '../../helpers/adminDb';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 
 // The Story 11.1 vitest GATE (Subtask 11.1.5 — MOTIR-1861).
@@ -438,6 +439,22 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
     const myPlan = await plansService.createPlan(mine.fixture.projectId, {}, mine.ctx);
     const theirPlan = await plansService.createPlan(theirs.fixture.projectId, {}, theirs.ctx);
 
+    // MOTIR-5357's run-addressed read needs an `[id]` naming a SCOPED run the
+    // caller owns (an unscoped run answers 422), and a foreign run whose id must
+    // never appear.
+    const scopedRun = (caller: typeof mine, item: typeof myItem) =>
+      adminDb.dispatchRun.create({
+        data: {
+          workspaceId: caller.fixture.workspaceId,
+          projectId: caller.fixture.projectId,
+          command: 'run_scope',
+          status: 'running',
+          scopeWorkItemId: item.id,
+        },
+      });
+    const myRun = await scopedRun(mine, myItem);
+    const theirRun = await scopedRun(theirs, theirItem);
+
     const foreign = [
       theirs.workspace.id,
       theirs.user.id,
@@ -447,6 +464,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       theirs.fixture.projectId,
       theirSprint.id,
       theirPlan.id,
+      theirRun.id,
     ];
 
     /** Fill one `[slug]` segment with a value the CALLER legitimately owns. */
@@ -455,6 +473,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       if (slug === 'projectKey') return mine.projectKey;
       if (slug === 'sprintId') return mySprint.id;
       if (slug === 'planId') return myPlan.id;
+      if (slug === 'id') return myRun.id;
       throw new Error(
         `the cross-tenant sweep has no value for the dynamic segment [${slug}] — ` +
           'add one rather than letting the route be skipped',
