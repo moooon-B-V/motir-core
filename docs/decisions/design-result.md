@@ -30,7 +30,9 @@
   the note as a link, **no `.png`, no inline `noteMd`**, published **only when an
   open work item is `blocked_by` the design**, a change is a new delta mock, and
   the asset set is two files; **§1's `image` row and note-section scoping, and
-  AMENDMENT 2 Q2, are superseded**). **Read all four before treating §1, §6 or
+  AMENDMENT 2 Q2, are superseded**; its **Q8** (MOTIR-5533) adds that a design
+  card with an open linked pull request — one or many — shows its result INSIDE
+  the Development block and raises no `design_result` gate). **Read all four before treating §1, §6 or
   AMENDMENT 2 Q2/Q3 as current.** The title still names "the CI trigger" because that is
   what this record decided and every citation of it lands here; AMENDMENT 2 is
   where it stops being true.
@@ -860,6 +862,60 @@ and a design with a pull request is still approved through
 The ~~struck~~ convention this record uses for superseded text is NOT applied to
 §1 above: its table is still the correct description of a stored row, and this
 amendment is where a reader learns which of its rows a new publish may still use.
+
+> ⚠️ **Q8 below narrows the gate-lifecycle line in "NOT changed".** A publish
+> still raises an `awaiting` `design_result` gate — on a card with NO open linked
+> pull request. Q8 is the other case.
+
+#### Q8 — a design card WITH open linked pull requests: the result renders INSIDE the Development block, and ONE gate decides (MOTIR-5533, 2026-09-14)
+
+**Settled by Yue on review of this story's own design:** _"if there's linked PR,
+the PR and the design should show together in one section, just like how to
+test. because they become one gate, approve the design will merge the PR too.
+reuse the development PR UI."_ — and, the same day, _"there can be multiple
+linked PRs, we don't set the limitation."_
+
+**This is not new policy.** `approval-gates.md` §1's amendment already keys
+`design_result` to _"a design with **no pull request**"_: a design that opened
+one is approved through `pull_request_approval` — _"same gate, design port"_ —
+and §8 Workflow B gives design and code the same rows. What this amendment had
+left unsaid, and what the shipped publish contradicted (it raised a
+`design_result` gate on every publish), is written down here.
+
+1. **Which gate.** A design card with at least one OPEN linked pull request —
+   `workItemDeliveryRepository.countOpenByWorkItem(workItemId) > 0` — is decided
+   by the approve-to-merge gate (MOTIR-4909): **ONE gate over the card's whole
+   delivery set**, however many pull requests it links and in however many
+   repositories, and approving it merges every one of them. Its design result
+   raises **no** `design_result` gate. A design card with no open linked pull
+   request keeps the `design_result` gate exactly as Q1–Q7 describe.
+2. **Where it renders.** The result renders **inside the Development block**:
+   every linked pull-request row (the shipped row UI, reused), then the design
+   result **once** — the mock frame(s), then the note link — then How to test,
+   as ONE section and ONE frame. **There is no limit on how many pull requests a
+   card links**; the design result belongs to the CARD, not to any one pull
+   request, so it is never repeated per row. No standalone Design result section
+   is drawn on that card. The slot lives in the block itself, so the item page,
+   the quick-view peek and the approval overlay's port show the same thing.
+3. **When the answer is read — at publish and at link.**
+   - **Publish:** the open-delivery read runs inside the publish transaction; when
+     it is > 0 the evidence is recorded and superseded exactly as before, and no
+     gate is created.
+   - **Link:** linking a pull request — the first or a later one — to a card that
+     holds an **awaiting** `design_result` gate supersedes that gate (§6b's
+     `superseded` state) in the link's own transaction. A DECIDED design gate is
+     left alone: an answer outlives its subject.
+   - **Unlink / close:** writes nothing. A design gate is not resurrected when the
+     last open pull request goes away; the next publish raises one.
+4. **Before MOTIR-4909 ships.** The Development frame has no verbs until the
+   approve-to-merge gate is registered, so such a card has no gate in Motir and is
+   merged on the host — exactly as a code card is today. The design result is
+   still visible in the block.
+5. **What does NOT change:** Q1's shape and its refusals, Q2's publish-only-when-
+   work-waits rule, the two-file set, the delta mock, the note as a link, stored
+   results, and `approval-gates.md` §6c's pin — an approval through
+   `pull_request_approval` pins the current design version, which
+   `approvalGatesService.decide` already does for every kind.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 
