@@ -21,6 +21,8 @@ import { Segmented } from '@/components/ui/Segmented';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { AttachmentDTO, AttachmentsPageDTO } from '@/lib/dto/attachments';
 import { ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES } from '@/lib/blob/allowlist';
+import { isEntitlementKind, type EntitlementKind } from '@/lib/billing/entitlements';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import { useAttachmentsView } from '@/lib/hooks/useAttachmentsView';
 import { formatBytes } from '@/lib/utils/bytes';
 import { cn } from '@/lib/utils/cn';
@@ -77,9 +79,15 @@ interface UploadError {
   message: string;
 }
 
-/** Rejection carrying the route's typed error code (e.g. FILE_TOO_LARGE). */
+/**
+ * Rejection carrying the route's typed error code (e.g. FILE_TOO_LARGE) and, for
+ * a §4 cap refusal (402), the refused `entitlement` kind that selects its words.
+ */
 class UploadFailure extends Error {
-  constructor(readonly code?: string) {
+  constructor(
+    readonly code?: string,
+    readonly entitlement?: EntitlementKind,
+  ) {
     super(code ?? 'UPLOAD_FAILED');
   }
 }
@@ -112,13 +120,18 @@ function postAttachment(
           return;
         }
       }
-      let code: string | undefined;
+      let body: { code?: string; entitlement?: unknown } = {};
       try {
-        code = (JSON.parse(xhr.responseText) as { code?: string }).code;
+        body = JSON.parse(xhr.responseText) as typeof body;
       } catch {
         // non-JSON error body — fall through to the generic message
       }
-      reject(new UploadFailure(code));
+      reject(
+        new UploadFailure(
+          body.code,
+          isEntitlementKind(body.entitlement) ? body.entitlement : undefined,
+        ),
+      );
     };
     xhr.onerror = () => reject(new UploadFailure());
     xhr.onabort = () => reject(new UploadFailure(ABORTED));
@@ -254,8 +267,14 @@ export function AttachmentsPanel({
         .catch((err: unknown) => {
           const code = err instanceof UploadFailure ? err.code : undefined;
           if (code === ABORTED) return;
-          const message =
-            code && LOCALIZED_UPLOAD_CODES.has(code)
+          // A cap refusal is not transient — "please try again" would be false.
+          // Its words depend on WHICH cap, so the body's `entitlement` selects
+          // the catalogue sentence; the server's English `error` is never shown
+          // (MOTIR-5133 / MOTIR-5444).
+          const entitlement = err instanceof UploadFailure ? err.entitlement : undefined;
+          const message = entitlement
+            ? entitlementExceededMessage(tErrors, entitlement)
+            : code && LOCALIZED_UPLOAD_CODES.has(code)
               ? tErrors(`upload.${code}`)
               : tErrors('upload.failed');
           setUploadErrors((current) => [...current, { key, filename: file.name, message }]);
