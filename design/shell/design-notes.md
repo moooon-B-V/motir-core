@@ -1153,10 +1153,19 @@ section (MOTIR-4163).
 
 Declaration order, from `app/(authed)/_components/SidebarNav.tsx`'s `sections.push({ id: 'bottom' })`:
 
-| #   | Row          | Glyph         | Destination                                 | Rendered                         |
-| --- | ------------ | ------------- | ------------------------------------------- | -------------------------------- |
-| 1   | **Settings** | `settings`    | `/settings/project`, else the settings home | CONDITIONAL — `showSettingsDoor` |
-| 2   | **Job runs** | `list-checks` | `/settings/workspace/jobs`                  | always                           |
+| #   | Row          | Glyph         | Destination                                                                          | Rendered                       |
+| --- | ------------ | ------------- | ------------------------------------------------------------------------------------ | ------------------------------ |
+| 1   | **Settings** | `settings`    | the actor's first visible settings room — `/settings/project` (Details) for an admin | CONDITIONAL — that room exists |
+| 2   | **Job runs** | `list-checks` | `/settings/workspace/jobs`                                                           | always                         |
+
+> ⚠️ **AMENDED by MOTIR-5319 (2026-09-13) — the Settings row's DESTINATION.** It read
+> _"`/settings/project`, else the settings home"_. The _else_ arm was already gone (MOTIR-4873
+> removed the no-project state), and the first arm was wrong for a hand-composed partial role:
+> `/settings/project` is Details, gated on `project:administer`, so a role holding only
+> `board:configure` saw the door and landed on `Admins only`. The row now goes to the first entry of
+> the actor's view-gated settings rail — the same filter that decides whether it renders — which is
+> still Details for an administrator. `rail-bottom-section.mock.html` draws the administrator's arm,
+> so its `href="/settings/project"` is unchanged and correct.
 
 **ONE of the two is conditional, and the section's FLOOR is ONE row** — Job runs, alone. That
 floor is the open product's common case, not an edge state, which is why the asset draws it beside

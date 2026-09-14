@@ -1146,3 +1146,36 @@ export function selfBlockingDesignCriteria(
     ? { designCriterionIndex, surfaceCriterionIndex }
     : null;
 }
+
+/**
+ * The enumerated acceptance criteria of a body, one string per criterion, in
+ * order — so a criterion's 1-based index is its position in this array plus one.
+ *
+ * Scope and attribution are {@link firstPostMergeCriterion}'s exactly: the
+ * acceptance-criteria span only, a column-zero bullet (or `1.` item) opens a
+ * criterion, and every continuation line belongs to the bullet it wraps from.
+ * That is what lets the CONTAINER-COVERAGE check (MOTIR-5362) number criteria
+ * the same way the shape checks do, so a container carrying findings from both
+ * families is read against one numbering.
+ *
+ * The text is returned RAW — inline markup intact — because a caller may want the
+ * backtick spans the markup delimits, and stripping is cheap for one that does not.
+ * A body with no acceptance-criteria heading returns `[]`, never a guess.
+ */
+export function acceptanceCriteriaTexts(md: string | null | undefined): string[] {
+  if (!md) return [];
+  const span = acceptanceCriteriaSpan(md);
+  if (!span) return [];
+
+  const criteria: string[] = [];
+  for (const raw of md.slice(span.start, span.end).split('\n')) {
+    if (CRITERION_BULLET_RE.test(raw)) {
+      criteria.push(raw);
+      continue;
+    }
+    // Before the first bullet: the heading itself and any lead-in prose.
+    if (criteria.length === 0) continue;
+    criteria[criteria.length - 1] += `\n${raw}`;
+  }
+  return criteria;
+}

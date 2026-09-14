@@ -155,7 +155,15 @@ describe('no second gating list — every gated surface resolves through its reg
   // it belongs, in the registry's own suite.
   it('the settings rail reads the registry', () => {
     expect(SIDEBAR).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability)');
-    expect(SIDEBAR).toContain('hasVisibleSettingsArea(held, availability)');
+    // ⚠️ AMENDED (MOTIR-5319): the door's VISIBILITY and its DESTINATION are now
+    // ONE `visibleSettingsNav` read — it renders when that list has a first entry
+    // and links to it — so the separate `hasVisibleSettingsArea(held, availability)`
+    // call this pinned is gone from the sidebar. The predicate itself is still
+    // asserted equal to "the filter is non-empty" by the access-matrix suite, so
+    // the claim this line made (the door reads the registry) is unchanged.
+    expect(SIDEBAR).toContain(
+      'const settingsDoorHref = visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability)[0]?.href',
+    );
   });
 
   it('the palette settings block reads the SAME registry', () => {

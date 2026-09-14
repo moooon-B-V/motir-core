@@ -189,14 +189,40 @@ describe('the line that says this card is one of N', () => {
     });
     mount([many]);
     expect(screen.getByText(/1 of 3/)).toBeTruthy();
+    // `design/runs/design-notes.md` § The DEEP LINK is `/runs?run=<id>`: the run
+    // view is a modal over the runs index, not a route, so `/runs/<id>` is a 404
+    // (bug MOTIR-5398 — this assertion used to pin that 404).
     const link = screen.getByRole('link', { name: /See the whole run/ });
-    expect(link.getAttribute('href')).toBe('/runs/run_1');
+    expect(link.getAttribute('href')).toBe('/runs?run=run_1');
+  });
+
+  it('URI-encodes the run id in the deep link', () => {
+    const odd = run({
+      id: 'run 1/&x',
+      cards: [run().cards[0]!, { ...run().cards[0]!, id: 'leg_2', key: 'PROD-43', position: 1 }],
+    });
+    mount([odd]);
+    const link = screen.getByRole('link', { name: /See the whole run/ });
+    expect(link.getAttribute('href')).toBe('/runs?run=run%201%2F%26x');
   });
 
   it('does NOT appear for a set of one — there is no other card to discover', () => {
     mount([run()]);
     expect(screen.queryByText(/ of 1 in this run/)).toBeNull();
     expect(screen.queryByRole('link', { name: /See the whole run/ })).toBeNull();
+  });
+});
+
+describe('every run-history row opens that run', () => {
+  it('links each row to the run modal at `/runs?run=<id>`, never a `/runs/<id>` route', () => {
+    const older = run({ id: 'run_0', command: 'batch' });
+    mount([run(), older]);
+    expect(screen.getByRole('link', { name: 'motir run' }).getAttribute('href')).toBe(
+      '/runs?run=run_1',
+    );
+    expect(screen.getByRole('link', { name: 'motir batch' }).getAttribute('href')).toBe(
+      '/runs?run=run_0',
+    );
   });
 });
 

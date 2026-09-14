@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
+import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
 import { PrMergeModeCard } from './_components/PrMergeModeCard';
@@ -10,8 +12,9 @@ import { guardSettingsPage } from '../_guard';
 
 // `Project settings ▸ Approvals` — server component (Story MOTIR-4925 · Subtask
 // MOTIR-5170), built to `design/projects/approvals.mock.html` panel 0 (the door)
-// and panels 1–2 (the switch's two ordinary states). Its second card, the MERGE
-// MODE (Story MOTIR-4880 · Subtask MOTIR-5181), is panels 6–8.
+// and panels 1–3 (On, Off, and Unavailable when the organisation has no paid AI
+// plan — MOTIR-5171). Its second card, the MERGE MODE (Story MOTIR-4880 · Subtask
+// MOTIR-5181), is panels 6–8.
 //
 // THE ROOM, not a card bolted onto an existing page, and the design argues it from
 // the switch's readers and writers rather than from resemblance: a second
@@ -44,9 +47,23 @@ export default async function ProjectApprovalsPage() {
   const refused = await guardSettingsPage('approvals', ctx);
   if (refused) return refused;
 
+  // THREE reads, and the room owns two of them. The switch's stored value and the
+  // merge mode are this room's SETTINGS; whether the organisation may publish
+  // acceptance video at all is the eligibility service's verdict, read off its DTO
+  // and never re-derived here — that service is the one place the entitlement AND
+  // is computed. `no_plan` is the only reason that makes the switch moot:
+  // `not_applicable` (self-host / the meta org) is UNGATED, so it is entitled.
+  // `allSettledOrThrow`, not `Promise.all`: the eligibility read runs an org-access
+  // gate that rejects on an ordinary path, and a sibling read must not be left
+  // running unobserved when it does (MOTIR-3077).
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const [settings, { prMergeMode }] = await Promise.all([
+  const [settings, eligibility, { prMergeMode }] = await allSettledOrThrow([
     approvalGateSettingsService.getSettings(ctx.projectId, serviceCtx),
+    acceptanceVideoEligibilityService.resolve({
+      actorUserId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
+    }),
     projectPrMergeModeService.getPrMergeMode(ctx.projectId, serviceCtx),
   ]);
 
@@ -64,6 +81,7 @@ export default async function ProjectApprovalsPage() {
       <AcceptanceVideoGateCard
         projectKey={ctx.project.identifier}
         initialEnabled={settings.acceptanceVideoEnabled}
+        entitled={eligibility.reason !== 'no_plan'}
       />
 
       <PrMergeModeCard projectKey={ctx.project.identifier} initialMode={prMergeMode} />

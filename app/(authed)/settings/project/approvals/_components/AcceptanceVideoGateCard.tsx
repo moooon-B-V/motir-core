@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
+import { buttonVariants } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 
 // The ACCEPTANCE-VIDEO gate switch (Story MOTIR-4925 · Subtask MOTIR-5170), built
 // to `design/projects/approvals.mock.html` panels 1 (ON) and 2 (OFF) and their
@@ -24,9 +28,15 @@ import { useToast } from '@/components/ui/Toast';
 // (`AcceptanceVideoCard.tsx`), which is one of the three defects the design found
 // by rendering that card rather than reading it.
 //
-// SCOPE: this card ships the two states an admin of an entitled organisation sees.
-// `Unavailable` (no paid AI plan) is MOTIR-5171's, because it carries a shipped
-// defect of its own. There is NO read-only state: the room is manage-only
+// ⚠️ THREE STATES, AND THE ENTITLEMENT DECIDES THE NAME AND THE SWITCH TOGETHER
+// (panel 3 · MOTIR-5171). With no paid AI plan the state is `Unavailable` and the
+// switch is off and disabled, WHATEVER the stored flag says. The org-tier card
+// computed its label from the flag alone and its switch from `flag && hasPlan`, so
+// with no plan it printed "On" beside a switch that was off. Here both read ONE
+// derived `state`, so no pair of (stored flag × entitlement) can make them disagree.
+// The stored flag is still kept, untouched: buying a plan restores what was chosen.
+//
+// There is NO read-only state: the room is manage-only
 // (`design/projects/design-notes.md` § ⭐ Approvals §6, 2026-09-13), so every actor
 // who renders this card may change it. MOTIR-5278's `canManage` prop and its
 // disabled branch were reverted by MOTIR-5394.
@@ -35,16 +45,25 @@ export interface AcceptanceVideoGateCardProps {
   /** The project's `MOTIR`-style identifier — the key the route is addressed by. */
   projectKey: string;
   initialEnabled: boolean;
+  /**
+   * The organisation may publish acceptance video at all — read by the page off
+   * `acceptanceVideoEligibilityService`'s DTO. This card computes no entitlement.
+   */
+  entitled: boolean;
 }
+
+type GateState = 'on' | 'off' | 'unavailable';
 
 export function AcceptanceVideoGateCard({
   projectKey,
   initialEnabled,
+  entitled,
 }: AcceptanceVideoGateCardProps) {
   const t = useTranslations('approvals.acceptanceVideo');
   const { toast } = useToast();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [isPending, startTransition] = useTransition();
+  const state: GateState = !entitled ? 'unavailable' : enabled ? 'on' : 'off';
 
   function toggle(next: boolean) {
     // Optimistic, then reconciled from the response — the same shape the sibling
@@ -79,20 +98,32 @@ export function AcceptanceVideoGateCard({
           <p className="text-(--el-text-secondary) font-sans text-sm">{t('desc')}</p>
         </div>
       }
+      footer={
+        state === 'unavailable' ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-1.5 text-(--el-text-secondary) font-sans text-xs">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {t('orgPlanNote')}
+            </span>
+            <Link
+              href={BILLING_PLANS_PATH}
+              className={buttonVariants({ variant: 'primary', size: 'sm' })}
+            >
+              {t('upgrade')}
+            </Link>
+          </div>
+        ) : undefined
+      }
     >
       <div className="flex items-center justify-between gap-4">
         <span className="flex flex-col gap-0.5">
-          <span className="font-sans text-sm font-medium text-(--el-text)">
-            {enabled ? t('on') : t('off')}
-          </span>
-          <span className="text-(--el-text-secondary) font-sans text-xs">
-            {enabled ? t('onWhat') : t('offWhat')}
-          </span>
+          <span className="font-sans text-sm font-medium text-(--el-text)">{t(state)}</span>
+          <span className="text-(--el-text-secondary) font-sans text-xs">{t(`${state}What`)}</span>
         </span>
         <Switch
-          checked={enabled}
+          checked={state === 'on'}
           onCheckedChange={toggle}
-          disabled={isPending}
+          disabled={state === 'unavailable' || isPending}
           aria-label={t('title')}
         />
       </div>
