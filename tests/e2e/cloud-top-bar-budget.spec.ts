@@ -50,7 +50,7 @@
 // wait on the dialog's own role state.
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { pinContextCookies } from './_helpers/billing';
 import { usersService } from '@/lib/services/usersService';
@@ -335,8 +335,8 @@ async function seedLongContextPath(page: Page): Promise<void> {
     workspaceId: workspace.id,
     actorUserId: owner.id,
   });
-  await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
-  await db.workspaceMembership.update({
+  await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
@@ -344,7 +344,7 @@ async function seedLongContextPath(page: Page): Promise<void> {
   // workspace — the create below is REFUSED without this. Set on the org row, the
   // same remedy `acceptance-workspace-settings-area.spec.ts` documents: a paid AI
   // plan bundles a seat, which resolves the tier to `scaled` (no workspace cap).
-  await db.organization.update({
+  await adminDb.organization.update({
     where: { id: workspace.organizationId },
     data: { aiIncludedSeat: true },
   });
@@ -353,7 +353,7 @@ async function seedLongContextPath(page: Page): Promise<void> {
     ownerUserId: owner.id,
     organizationId: workspace.organizationId,
   });
-  await db.notification.createMany({
+  await adminDb.notification.createMany({
     data: [1, 2, 3].map((n) => ({
       workspaceId: workspace.id,
       recipientUserId: owner.id,
