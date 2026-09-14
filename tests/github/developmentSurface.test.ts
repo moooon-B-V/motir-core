@@ -246,3 +246,59 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
     ]);
   });
 });
+
+// ── Q8 (Story MOTIR-5488 · MOTIR-5498) ───────────────────────────────────────
+// The peek draws a design result inside its Development block only when a linked
+// pull request is OPEN, so its read carries the current result in exactly that
+// case and nothing otherwise.
+describe('getQuickView().designEvidence — the Development slot read (Q8)', () => {
+  async function designCardWithPr(email: string, prState: 'open' | 'merged') {
+    const s = await makeScenario(email);
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: `Design with a ${prState} PR` },
+      s.ctx,
+    );
+    const row = await adminDb.workItem.findFirstOrThrow({ where: { id: item.id } });
+    await adminDb.designEvidence.create({
+      data: {
+        workspaceId: s.workspace.id,
+        workItemId: row.id,
+        producedByKey: item.identifier,
+        commitSha: 'cafe1234567',
+      },
+    });
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: prState === 'open' ? 91 : 92,
+      headRef: `design/${item.identifier}`,
+      title: 'Design it',
+    });
+    if (prState === 'merged') {
+      await adminDb.githubPullRequest.updateMany({
+        where: { number: 92 },
+        data: { state: 'closed', merged: true },
+      });
+    }
+    return workItemsService.getQuickView(
+      s.project.id,
+      item.identifier,
+      s.project.accessLevel,
+      s.ctx,
+      'en',
+    );
+  }
+
+  it('carries the current design result when a linked pull request is open', async () => {
+    const peek = await designCardWithPr('dev-q8-open@example.com', 'open');
+    expect(peek.pullRequests.map((pr) => pr.state)).toEqual(['open']);
+    expect(peek.designEvidence?.producedByKey).toBe(peek.identifier);
+  });
+
+  it('carries nothing when every linked pull request is merged', async () => {
+    const peek = await designCardWithPr('dev-q8-merged@example.com', 'merged');
+    expect(peek.pullRequests.map((pr) => pr.state)).toEqual(['merged']);
+    expect(peek.designEvidence).toBeNull();
+  });
+});

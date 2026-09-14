@@ -1,3 +1,4 @@
+import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
   Prisma,
@@ -5548,6 +5549,17 @@ export const workItemsService = {
     // The filed item's folder PATH (MOTIR-5352) — one bounded chain read, and
     // none at all for an unfiled item: this payload is fetched on every row click.
     const folderPath = await this.getFolderPath(detail.folderId, ctx);
+    // The design result, for the Development block's slot (`design-result.md`
+    // AMENDMENT 4 Q8) — read ONLY when a linked pull request is open, which is the
+    // one case the peek draws it: without one the design is a section of the full
+    // page, which the peek does not render. The same open-row test the block
+    // applies (`hasOpenPullRequest`), over the same two lists.
+    const hasOpenPr =
+      pullRequests.some((pr) => pr.state === 'open') ||
+      deliveryView.deliveries.some((d) => d.pullRequest.state === 'open');
+    const designEvidence = hasOpenPr
+      ? await designEvidenceService.getCurrentForWorkItem(detail.item.id, ctx)
+      : null;
     return toQuickViewData(
       detail,
       members,
@@ -5563,6 +5575,7 @@ export const workItemsService = {
       repoDelivery,
       deliveryView.deliveries,
       folderPath,
+      designEvidence,
     );
   },
 

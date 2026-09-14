@@ -4,10 +4,12 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 
-// DesignResultPanel (Story MOTIR-2664 · Subtask MOTIR-2670) — the three states
-// the design draws, rendered in happy-dom. The panel is READ-ONLY, so there is
-// no action to mock: what is under test is its branching, the frame's security
-// posture, and that the note goes through the one shipped Markdown renderer.
+// DesignResultPanel (Story MOTIR-2664 · Subtask MOTIR-2670; redrawn as WHAT TO
+// REVIEW by Story MOTIR-5488 · MOTIR-5498, design
+// `design/work-items/design-result--what-to-review.mock.html`) rendered in
+// happy-dom. The panel is READ-ONLY, so there is no action to mock: what is under
+// test is its branching, the frame's security posture, and that the note is a
+// LINK — never rendered inline — with no screenshot strip.
 
 const { DesignResultPanel } =
   await import('@/app/(authed)/items/[key]/_components/DesignResultPanel');
@@ -24,13 +26,31 @@ function asset(p: Partial<DesignAssetDTO> & { kind: DesignAssetDTO['kind'] }): D
   };
 }
 
+/** A new-format result's one note file (AMENDMENT 4). */
+const NOTE = asset({
+  kind: 'note_file',
+  position: 1,
+  url: '/api/attachments/att-note/content',
+  mimeType: 'text/markdown',
+  sourcePath: 'design/work-items/design-notes.md',
+});
+
+/** An EARLIER-format result: inline note + a screenshot, as stored before AMENDMENT 4. */
+function olderEvidence(p: Partial<DesignEvidenceDTO> = {}): DesignEvidenceDTO {
+  return evidence({
+    noteMd: '## The Design result panel\n\nProse the reviewer read inline.',
+    assets: [asset({ kind: 'mock' }), asset({ kind: 'image', position: 1 }), NOTE],
+    ...p,
+  });
+}
+
 function evidence(p: Partial<DesignEvidenceDTO> = {}): DesignEvidenceDTO {
   return {
     id: 'ev-1',
     workItemId: 'wi-1',
-    noteMd: '## The Design result panel\n\nProse the reviewer reads.',
+    noteMd: null,
     noteTruncated: false,
-    assets: [asset({ kind: 'mock' }), asset({ kind: 'image', position: 1 })],
+    assets: [asset({ kind: 'mock' }), NOTE],
     commitSha: 'cafe1234567',
     ciRunUrl: 'https://ci.example/run/9',
     producedByKey: 'MOTIR-2669',
@@ -67,16 +87,16 @@ async function renderReady(ui: Parameters<typeof render>[0]) {
 }
 
 describe('nothing published yet', () => {
-  it('reads as "this predates the feature", never as an error', () => {
+  it('says a result is published only when work waits on the design', () => {
     render(<DesignResultPanel evidence={null} isDesignCard />);
 
     expect(screen.getByText('No design result published yet')).toBeTruthy();
-    // It says where a result comes from, so nobody hunts for an upload control.
-    // ⚠️ It must name the AGENT'S publish, and it must not name CI (MOTIR-3819):
-    // the lane MOTIR-3797 deleted is what the old copy described, and a reader
-    // told to wait for a pull request to run CI waits for ever.
-    expect(screen.getByText(/publish_design_result/)).toBeTruthy();
-    expect(screen.getByText(/the call was not made/)).toBeTruthy();
+    // AMENDMENT 4 Q2: an empty panel is often CORRECT, so the copy says when a
+    // result exists and where an un-waited-on design is reviewed instead.
+    expect(screen.getByText(/only when other work waits on this design/)).toBeTruthy();
+    expect(screen.getByText(/the pull request is where the design is reviewed/)).toBeTruthy();
+    // No retired three-file detail and no screenshot.
+    expect(screen.queryByText(/screenshot/i)).toBeNull();
     expect(screen.queryByText(/runs CI/)).toBeNull();
     // Not an error surface: no retry, no warning.
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
@@ -85,97 +105,72 @@ describe('nothing published yet', () => {
   it('tells a NON-design card the same thing in its own words', () => {
     render(<DesignResultPanel evidence={null} isDesignCard={false} />);
     expect(screen.getByText('No design result published yet')).toBeTruthy();
-    // The shorter arm: same claim, no tool name and no three-file detail.
     expect(screen.getByText(/the agent working this work item publishes it/)).toBeTruthy();
-    expect(screen.queryByText(/publish_design_result/)).toBeNull();
-    expect(screen.queryByText(/runs CI/)).toBeNull();
+    expect(screen.queryByText(/only when other work waits/)).toBeNull();
   });
 });
 
-/** The note's rendered region — the element the prose styles actually land on. */
-function noteRegion(container: HTMLElement): HTMLElement | null {
-  return container.querySelector<HTMLElement>('.motir-prose');
-}
-
-describe('the published panel', () => {
-  it('renders the note through the shipped Markdown renderer AND the shipped prose styles', async () => {
+describe('a current result — what to review', () => {
+  it('leads with the mock and puts the note ONE LINK away, under it', async () => {
     const { container } = await renderReady(
       <DesignResultPanel evidence={evidence()} isDesignCard />,
     );
 
-    // A real heading element, not the raw `## …` source — i.e. it went through
-    // a Markdown render.
-    expect(screen.getByRole('heading', { name: 'The Design result panel' })).toBeTruthy();
-    expect(screen.queryByText(/^## /)).toBeNull();
+    const noteLink = screen.getByRole('link', { name: /Open note/ });
+    expect(noteLink.getAttribute('href')).toBe('/api/attachments/att-note/content');
+    expect(noteLink.getAttribute('target')).toBe('_blank');
+    expect(noteLink.getAttribute('rel')).toContain('noopener');
+    expect(screen.getByText('design/work-items/design-notes.md')).toBeTruthy();
 
-    // ⚠️ Assert the class that STYLES it, not merely a class that is present.
-    // This assertion used to name `markdown-body`, which is defined in no
-    // stylesheet in the repo or in any dependency — so it passed forever while
-    // the note rendered with Tailwind preflight in force: no heading scale, no
-    // list markers, no table rules (MOTIR-3510). `motir-prose` is the shipped
-    // read surface's, via MarkdownView.
-    const note = noteRegion(container);
-    expect(note).toBeTruthy();
-    expect(container.querySelector('.markdown-body')).toBeNull();
-    // The heading is INSIDE that region, so the styles reach the content.
-    expect(note!.contains(screen.getByRole('heading', { name: 'The Design result panel' }))).toBe(
-      true,
-    );
+    // The mock comes FIRST: the frame precedes the note row in document order.
+    const frame = container.querySelector('iframe')!;
+    expect(frame.compareDocumentPosition(noteLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('BOUNDS the note at the frame height and scrolls it inside itself', async () => {
+  it('renders NO inline Markdown and NO image', async () => {
     const { container } = await renderReady(
       <DesignResultPanel evidence={evidence()} isDesignCard />,
     );
-
-    // The measurement the design pinned for the frame is the note's too — a
-    // real `design-notes.md` section is the taller of the two artifacts.
-    const note = noteRegion(container)!;
-    expect(note.className).toContain('h-[32rem]');
-    expect(note.className).toContain('overflow-y-auto');
-    // Wide tables still scroll sideways inside the note rather than widening
-    // the page.
-    expect(note.className).toContain('overflow-x-auto');
-
-    // And it is CONTAINED — a header strip naming the source sits directly
-    // above it, sharing the frame's grammar.
-    const strip = note.previousElementSibling as HTMLElement | null;
-    expect(strip).toBeTruthy();
-    expect(strip!.textContent).toContain('Design note');
-    expect(strip!.className).toContain('border-b-0');
-    expect(note.className).toContain('border-(--el-border)');
+    expect(container.querySelector('.motir-prose')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.queryByText('Earlier format')).toBeNull();
+    expect(screen.queryByText(/mocks — the panels that changed/)).toBeNull();
   });
 
-  it('keeps a LONG note inside its bounded container', async () => {
-    // The defect this card fixed: a real section is 200–350 lines of headings,
-    // paragraphs and wide tables, and it used to set the page's height — the
-    // mock frame, the screenshots and the provenance were pushed thousands of
-    // pixels down. Length must change nothing about the note's box.
-    const longNote = Array.from(
-      { length: 40 },
-      (_, i) =>
-        `### Section ${i}\n\nA paragraph of the published note.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n`,
-    ).join('\n');
-
+  it('stacks SEVERAL mocks with a count line above them and still ONE note row', async () => {
     const { container } = await renderReady(
-      <DesignResultPanel evidence={evidence({ noteMd: longNote })} isDesignCard />,
+      <DesignResultPanel
+        evidence={evidence({
+          assets: [
+            asset({ kind: 'mock', id: 'm1' }),
+            asset({
+              kind: 'mock',
+              id: 'm2',
+              position: 1,
+              sourcePath: 'design/workbench/approval-overlay.mock.html',
+            }),
+            NOTE,
+          ],
+        })}
+        isDesignCard
+      />,
     );
+    await waitFor(() => expect(container.querySelectorAll('iframe')).toHaveLength(2));
+    expect(screen.getByText('2 mocks — the panels that changed')).toBeTruthy();
+    expect(screen.getByText('design/workbench/approval-overlay.mock.html')).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: /Open note/ })).toHaveLength(1);
+  });
 
-    const note = noteRegion(container)!;
-    expect(note.className).toContain('h-[32rem]');
-    expect(note.className).toContain('overflow-y-auto');
-
-    // Every heading of the long note lives inside that one bounded region —
-    // nothing escapes it, and there is exactly one such region.
-    const headings = screen.getAllByRole('heading', { name: /^Section \d+$/ });
-    expect(headings).toHaveLength(40);
-    for (const heading of headings) expect(note.contains(heading)).toBe(true);
-    expect(container.querySelectorAll('.motir-prose')).toHaveLength(1);
-
-    // The artifacts BELOW it are still siblings of the note, not descendants
-    // pushed down by it: the frame follows the note in the panel.
-    expect(container.querySelector('iframe')).toBeTruthy();
-    expect(note.contains(container.querySelector('iframe'))).toBe(false);
+  it('keeps the note row when its file is reclaimed, with no link that 404s', async () => {
+    await renderReady(
+      <DesignResultPanel
+        evidence={evidence({ assets: [asset({ kind: 'mock' }), { ...NOTE, url: null }] })}
+        isDesignCard
+      />,
+    );
+    expect(screen.getByText('design/work-items/design-notes.md')).toBeTruthy();
+    expect(screen.getByText('No longer stored')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Open note/ })).toBeNull();
   });
 
   it('shows the provenance the publish recorded', async () => {
@@ -187,92 +182,80 @@ describe('the published panel', () => {
     expect(screen.getByText('MOTIR-2669')).toBeTruthy();
   });
 
-  it('renders the truncation notice and a link to the complete note ONLY when truncated', () => {
-    const { container, unmount } = render(<DesignResultPanel evidence={evidence()} isDesignCard />);
-    expect(container.textContent).not.toContain('Shown in part');
-    unmount();
-
-    render(
+  it('renders a MINIMAL result — no provenance — without empty chrome', async () => {
+    const { container } = await renderReady(
       <DesignResultPanel
-        evidence={evidence({
-          noteTruncated: true,
+        evidence={evidence({ commitSha: null, ciRunUrl: null, producedByKey: null })}
+        isDesignCard
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /CI run/ })).toBeNull();
+    expect(container.querySelector('iframe')).toBeTruthy();
+  });
+
+  it('is READ-ONLY — it exposes no control that writes', async () => {
+    await renderReady(<DesignResultPanel evidence={evidence()} isDesignCard />);
+    for (const button of screen.queryAllByRole('button')) {
+      expect(button.textContent).not.toMatch(/approve|request|publish|delete/i);
+    }
+  });
+});
+
+describe('an EARLIER-format result', () => {
+  it('lists its note and screenshots as FILE links — nothing inline', async () => {
+    const { container } = await renderReady(
+      <DesignResultPanel evidence={olderEvidence()} isDesignCard />,
+    );
+
+    expect(screen.getByText('Earlier format')).toBeTruthy();
+    expect(screen.getByText('Files')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open note/ })).toBeTruthy();
+    const screenshot = screen.getByRole('link', { name: /Open file/ });
+    expect(screenshot.getAttribute('href')).toBe('/api/attachments/att-image/content');
+    expect(screenshot.getAttribute('target')).toBe('_blank');
+    // No rendered Markdown, no thumbnail, no lightbox.
+    expect(container.querySelector('.motir-prose')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'The Design result panel' })).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Its mock still renders in the frame.
+    expect(container.querySelector('iframe')).toBeTruthy();
+  });
+
+  it('renders two screenshots as two file rows, and a reclaimed one says so', async () => {
+    await renderReady(
+      <DesignResultPanel
+        evidence={olderEvidence({
           assets: [
             asset({ kind: 'mock' }),
-            asset({
-              kind: 'note_file',
-              position: 2,
-              sourcePath: 'design/work-items/design-notes.md',
-            }),
+            asset({ kind: 'image', id: 'i1', position: 1 }),
+            asset({ kind: 'image', id: 'i2', position: 2, url: null }),
+            NOTE,
           ],
         })}
         isDesignCard
       />,
     );
-    expect(screen.getByText(/Shown in part/)).toBeTruthy();
-    // The escape hatch points at the file that carries the WHOLE text.
-    expect(
-      screen.getByRole('link', { name: /Download design-notes/ }).getAttribute('href'),
-    ).toContain('download=1');
+    expect(screen.getAllByText('Screenshot')).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /Open file/ })).toHaveLength(1);
+    expect(screen.getByText('No longer stored')).toBeTruthy();
   });
+});
 
-  it('renders a MINIMAL result — no note, no provenance — without empty chrome', async () => {
-    // A PR that changed only a mock publishes exactly that. The panel must not
-    // render an empty note block or a provenance row of blank chips.
+describe('inside the Development block (Q8)', () => {
+  it('renders as the SLOT: its own heading, a one-line provenance, no chips', async () => {
     const { container } = await renderReady(
-      <DesignResultPanel
-        evidence={evidence({
-          noteMd: null,
-          commitSha: null,
-          ciRunUrl: null,
-          producedByKey: null,
-          assets: [asset({ kind: 'mock' })],
-        })}
-        isDesignCard
-      />,
+      <DesignResultPanel evidence={evidence()} isDesignCard placement="development" />,
     );
-
-    expect(noteRegion(container)).toBeNull();
+    const slot = screen.getByRole('group', { name: 'Design result' });
+    expect(slot.querySelector('h4')!.textContent).toBe('Design result');
+    expect(slot.textContent).toContain('Published by MOTIR-2669');
+    expect(slot.textContent).toContain('cafe123');
+    // The section's chips are not drawn in the slot.
     expect(screen.queryByRole('link', { name: /CI run/ })).toBeNull();
-    expect(screen.queryByText('Screenshot')).toBeNull();
-    // The frame — the one thing that WAS published — is still there.
-    expect(container.querySelector('iframe')).toBeTruthy();
-  });
-
-  it('renders the truncation notice without a download link when the note file is gone', async () => {
-    // The inline copy is truncated but the `note_file` blob has been GC-reclaimed:
-    // say so, and do not offer a link to nothing.
-    await renderReady(
-      <DesignResultPanel
-        evidence={evidence({
-          noteTruncated: true,
-          assets: [asset({ kind: 'mock' }), asset({ kind: 'note_file', url: null, position: 2 })],
-        })}
-        isDesignCard
-      />,
-    );
-    expect(screen.getByText(/Shown in part/)).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /Download design-notes/ })).toBeNull();
-  });
-
-  it('skips a screenshot whose blob has been GC-reclaimed', async () => {
-    await renderReady(
-      <DesignResultPanel
-        evidence={evidence({
-          assets: [asset({ kind: 'mock' }), asset({ kind: 'image', url: null, position: 1 })],
-        })}
-        isDesignCard
-      />,
-    );
-    expect(screen.queryByText('Screenshot')).toBeNull();
-  });
-
-  it('is READ-ONLY — it exposes no control that writes', async () => {
-    await renderReady(<DesignResultPanel evidence={evidence()} isDesignCard />);
-    // The only buttons are the screenshot thumbnails (which open the lightbox).
-    // Approve / request-changes belong to the runtime gate, not here.
-    for (const button of screen.queryAllByRole('button')) {
-      expect(button.textContent).not.toMatch(/approve|request|publish|delete/i);
-    }
+    // The same frame and note link.
+    expect(slot.contains(container.querySelector('iframe'))).toBe(true);
+    expect(screen.getByRole('link', { name: /Open note/ })).toBeTruthy();
   });
 });
 
@@ -333,7 +316,7 @@ describe('the mock frame', () => {
     await waitFor(() => expect(screen.getByText('The mock could not be loaded')).toBeTruthy());
     expect(container.querySelector('iframe')).toBeNull();
     // Never a blank rectangle, and the rest of the panel survives the failure.
-    expect(screen.getByRole('heading', { name: 'The Design result panel' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open note/ })).toBeTruthy();
     // The escape still works while the frame is down.
     expect(screen.getByRole('link', { name: /Open in new tab/ })).toBeTruthy();
 
@@ -374,43 +357,13 @@ describe('the mock frame', () => {
   });
 });
 
-describe('the screenshot', () => {
-  it('opens in the shipped lightbox rather than a second image viewer', async () => {
-    await renderReady(<DesignResultPanel evidence={evidence()} isDesignCard />);
-
-    const thumb = screen.getByRole('button', { name: /design-result\.png/ });
-    fireEvent.click(thumb);
-
-    // The lightbox is the shipped AttachmentPreview: a dialog carrying the
-    // filename and its own download control.
-    expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(screen.getAllByText('design-result.png').length).toBeGreaterThan(0);
-  });
-
-  it('survives an unmount while the probe is in flight, and a sizeless image', async () => {
+describe('an unmount while the probe is in flight', () => {
+  it('sets no state on a gone component', async () => {
     let settle: (v: unknown) => void = () => {};
     probe.mockReturnValueOnce(new Promise((r) => (settle = r)) as never);
     const { unmount } = render(<DesignResultPanel evidence={evidence()} isDesignCard />);
     unmount();
-    // Settling AFTER unmount must not set state on a gone component.
     settle({ type: 'opaqueredirect', ok: false, status: 0 });
-
-    await renderReady(
-      <DesignResultPanel
-        evidence={evidence({
-          assets: [asset({ kind: 'mock' }), asset({ kind: 'image', sizeBytes: null, position: 1 })],
-        })}
-        isDesignCard
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /design-result\.png/ }));
-    expect(screen.getByRole('dialog')).toBeTruthy();
-  });
-
-  it('shows no screenshot section when the result carries no image', () => {
-    render(
-      <DesignResultPanel evidence={evidence({ assets: [asset({ kind: 'mock' })] })} isDesignCard />,
-    );
-    expect(screen.queryByText('Screenshot')).toBeNull();
+    await renderReady(<DesignResultPanel evidence={evidence()} isDesignCard />);
   });
 });

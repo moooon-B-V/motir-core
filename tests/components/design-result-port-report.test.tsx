@@ -18,8 +18,7 @@ import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence
 // because they can fail independently, and because this one needs the panel's
 // evidence fixtures while that one needs the frame's gate fixtures.
 //
-// `design-result-panel.test.tsx` is deliberately NOT touched — it pins the
-// panel's own rendering, which this card does not change.
+// `design-result-panel.test.tsx` pins the panel's own rendering.
 
 const { DesignResultPanel } =
   await import('@/app/(authed)/items/[key]/_components/DesignResultPanel');
@@ -162,11 +161,23 @@ describe('the SUBJECT the resolver returned as unavailable', () => {
     expect(latest()).toBe('failed');
   });
 
-  it('reports RENDERED for a note-only result — no mock to probe, nothing to fail', async () => {
+  it('reports RENDERED for an EARLIER result with no mock but a reachable screenshot (MOTIR-5498)', async () => {
+    // A decided gate on a result stored before AMENDMENT 4 must not read as a
+    // failed port: its files ARE its subject now that nothing renders inline.
+    const { latest } = renderReporting(
+      <DesignResultPanel
+        evidence={evidence({ assets: [asset({ kind: 'image', position: 1 })] })}
+        isDesignCard
+      />,
+    );
+    await waitFor(() => expect(latest()).toBe('rendered'));
+  });
+
+  it('reports FAILED for an inline note alone — it is no longer rendered, so nothing to look at', () => {
     const { latest } = renderReporting(
       <DesignResultPanel evidence={evidence({ assets: [] })} isDesignCard />,
     );
-    await waitFor(() => expect(latest()).toBe('rendered'));
+    expect(latest()).toBe('failed');
   });
 });
 

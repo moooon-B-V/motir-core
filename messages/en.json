@@ -6218,6 +6218,8 @@
     "development": {
       "title": "Development",
       "gloss": "Pull requests and how to test them · live PR and CI status",
+      "glossWithDesign": "Pull requests, the design and how to test them · live PR and CI status",
+      "pullRequestsGroup": "Pull requests",
       "howToTest": {
         "title": "How to test",
         "writtenBy": "Written by <b>{run}</b> · {time}",
@@ -7354,15 +7356,21 @@
     "frameFailed": "The mock could not be loaded",
     "frameFailedBody": "Its preview link may have expired. The file itself is safe.",
     "retry": "Retry",
-    "screenshots": "Screenshot",
-    "noteTruncated": "Shown in part — the complete note is published as a file.",
-    "downloadNote": "Download design-notes.md",
+    "openNote": "Open note",
+    "noteGone": "No longer stored",
+    "mockCount": "{count, plural, other {# mocks — the panels that changed}}",
+    "earlierFormat": "Earlier format",
+    "earlierFormatBody": "Published before results became what to review — its note and screenshot are kept as files.",
+    "files": "Files",
+    "screenshot": "Screenshot",
+    "openFile": "Open file",
+    "slotProvenance": "Published by <b>{key}</b>",
     "ciRun": "CI run",
     "publishedBy": "published by",
     "empty": {
       "title": "No design result published yet",
       "body": "A design result appears here once the agent working this work item publishes it. Nothing else does.",
-      "bodyDesign": "A design result appears here once this work item’s agent publishes it with publish_design_result — the note, the page/view mock and the screenshot, in one call. Nothing else publishes it, so an empty panel means the call was not made."
+      "bodyDesign": "A design result is published only when other work waits on this design — its agent then publishes the mock and the note. With nothing waiting, the pull request is where the design is reviewed."
     },
     "frameLoading": "Loading the mock…"
   },
