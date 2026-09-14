@@ -129,11 +129,11 @@ export function AcceptancePanel({
       // MOTIR-5196) — the same disposition `decide` above carries. Both halves
       // ship: the action puts the fresh tree on its own response where nothing
       // can race it, and this reaches the surfaces a server tree does not cover.
-      // Removing it is a SEPARATE claim nobody has tested — and here there is a
-      // second reason not to touch it: against the FIXED action this surface
-      // still fails to repaint about 1 run in 16, so the client half is
-      // currently doing work the server half demonstrably does not cover. The
-      // measurements are on `turnOnAcceptanceVideoAction`.
+      // Removing it is a SEPARATE claim nobody has shipped against, and it is
+      // not what the residual ~1-in-16 failure was about: that was the vendored
+      // React dropping a Suspense ping mid-render (MOTIR-5255 —
+      // `patches/next@16.2.6.patch`), and deleting this line measured the SAME
+      // 2/24 red as keeping it.
       //
       // ⚠️ AND A COMMITTED STATE UPDATE HERE IS NOT THE REMEDY — it was TRIED.
       // `decide` above calls `setEvidence` before its refresh and never flakes,

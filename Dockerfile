@@ -36,6 +36,10 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# `pnpm-workspace.yaml`'s patchedDependencies are applied AT install, so the patch
+# files must be here before it (MOTIR-5255 — the vendored react-dom ping fix;
+# `tests/react-dom-ping-patch.test.ts` pins this line).
+COPY patches ./patches
 COPY packages/design-system/package.json packages/design-system/
 COPY packages/cli/package.json packages/cli/
 COPY prisma ./prisma
