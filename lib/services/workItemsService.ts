@@ -16,7 +16,12 @@ import {
 } from '@/lib/filters/registry';
 import type { FilterAst } from '@/lib/filters/ast';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
-import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
+import {
+  assertValidParent,
+  assertValidPlacement,
+  allowedParentKinds,
+  type IssueType,
+} from '@/lib/issues/parentRules';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
@@ -59,7 +64,11 @@ import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { toFolderTreeRowDto } from '@/lib/mappers/folderMappers';
 import type { TreeFolderLevel } from '@/lib/repositories/workItemRepository';
-import { CrossProjectFolderError, FolderNotFoundError } from '@/lib/folders/errors';
+import {
+  CrossProjectFolderError,
+  FolderNotFoundError,
+  PlacementConflictError,
+} from '@/lib/folders/errors';
 import type { FileWorkItemInput, FileWorkItemResultDto } from '@/lib/dto/folders';
 import {
   QUICK_SEARCH_DEFAULT_LIMIT,
@@ -688,8 +697,56 @@ function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
   // when the issue is born directly in a sprint (Subtask 4.2.2 create-into-
   // sprint), so the created revision records that assignment.
   set('sprintId', row.sprintId);
+  // The folder an item is born filed in (MOTIR-5407); skipped when unfiled.
+  set('folderId', row.folderId);
   set('position', row.position);
   return diff;
+}
+
+/**
+ * The FILING step shared by `fileWorkItem` and `updateWorkItem`'s `folderId`
+ * (Story MOTIR-5310 · MOTIR-5407) — resolve a folder placement against the
+ * LOCKED current row, inside the caller's transaction, into the write and the
+ * revision cells it owes. Returns `null` when the item already sits there.
+ *
+ * Filing sets `folderId`, clears `parentId` and appends the item after the
+ * folder's last filed item; `null` takes it out to the root. The folder is
+ * locked so a concurrent delete cannot land between the check and the write. A
+ * missing (or other-workspace, which RLS hides) folder is `FolderNotFoundError`,
+ * another project's is `CrossProjectFolderError`, and leaving a folder is
+ * refused for a `kind` that may not be a root. The caller writes the row, the
+ * revision, and the rollups / child-set event for the parent the item left.
+ */
+async function planFolderFiling(
+  current: WorkItem,
+  kind: IssueType,
+  target: string | null,
+  tx: Prisma.TransactionClient,
+): Promise<{
+  update: { folderId: string | null; parentId: null; position: string };
+  diff: Record<string, DiffCell>;
+} | null> {
+  if (target === null) {
+    if (current.folderId === null) return null;
+    // Filed items carry no work-item parent, so leaving the folder leaves the
+    // item a root — which a subtask may not be.
+    assertValidPlacement({ parentKind: null, filed: false }, kind);
+  } else {
+    const folder = await folderRepository.lockById(target, tx);
+    if (!folder) throw new FolderNotFoundError(target);
+    if (folder.projectId !== current.projectId) throw new CrossProjectFolderError();
+    if (current.folderId === target && current.parentId === null) return null;
+  }
+
+  const position = keyForAppend(
+    await workItemRepository.findLastPositionAtFolderLevel(current.projectId, target, tx),
+  );
+  const diff: Record<string, DiffCell> = {
+    folderId: { from: current.folderId, to: target },
+    position: { from: current.position, to: position },
+  };
+  if (current.parentId !== null) diff.parentId = { from: current.parentId, to: null };
+  return { update: { folderId: target, parentId: null, position }, diff };
 }
 
 export interface MoveWorkItemInput {
@@ -1219,13 +1276,20 @@ export const workItemsService = {
     // to this same `CrossProjectParentError`). This check stays because it is the
     // friendlier error and it runs before a key is burned, not because it is the
     // only thing standing behind the rule.
+    //
+    // A FOLDER is the other placement (MOTIR-5407): naming both is refused
+    // outright, and a filed item may be any kind — the placement rule mirrors
+    // the kind-parent trigger, which lets a subtask be a root when it is filed.
+    // The folder itself is locked and checked inside the transaction below.
+    const folderId = input.folderId ?? null;
+    if (input.parentId != null && folderId !== null) throw new PlacementConflictError();
     if (input.parentId != null) {
       const parent = await readWorkItem(input.parentId, ctx);
       if (!parent) throw new WorkItemNotFoundError(input.parentId);
       if (parent.projectId !== input.projectId) throw new CrossProjectParentError();
       assertValidParent(parent.kind, input.kind);
     } else {
-      assertValidParent(null, input.kind);
+      assertValidPlacement({ parentKind: null, filed: folderId !== null }, input.kind);
     }
 
     // Sprint pre-flight (Subtask 4.2.2 — create-into-sprint): when the caller
@@ -1371,6 +1435,14 @@ export const workItemsService = {
       // under RLS) skips the cap rather than blocking a legitimate create.
       const capOrgId = await workspaceRepository.findOrganizationId(workspaceId, tx);
       if (capOrgId) await entitlementsService.assertWithinWorkItemCap(capOrgId, tx);
+      // The folder the item is born in (MOTIR-5407), LOCKED so a concurrent
+      // delete cannot remove it between this check and the insert. Under the
+      // bound workspace context a folder in another workspace reads as missing.
+      if (folderId !== null) {
+        const folder = await folderRepository.lockById(folderId, tx);
+        if (!folder) throw new FolderNotFoundError(folderId);
+        if (folder.projectId !== input.projectId) throw new CrossProjectFolderError();
+      }
       const key = await projectRepository.allocateWorkItemNumber(input.projectId, tx);
       // Build the identifier prefix from a FRESH in-tx read, NOT the pre-tx
       // `project` snapshot: a project key change (Story 6.8 `changeKey`) racing
@@ -1406,13 +1478,22 @@ export const workItemsService = {
 
       // Append after the last sibling. Siblings are project-scoped and
       // parent-scoped (top-level when parentId is null) so the position only
-      // orders true peers.
-      const siblings = await workItemRepository.findSiblings(
-        input.projectId,
-        input.parentId ?? null,
-        tx,
-      );
-      const lastPosition = siblings.length ? siblings[siblings.length - 1]!.position : null;
+      // orders true peers. A FILED item's peers are the folder's level.
+      let lastPosition: string | null;
+      if (folderId !== null) {
+        lastPosition = await workItemRepository.findLastPositionAtFolderLevel(
+          input.projectId,
+          folderId,
+          tx,
+        );
+      } else {
+        const siblings = await workItemRepository.findSiblings(
+          input.projectId,
+          input.parentId ?? null,
+          tx,
+        );
+        lastPosition = siblings.length ? siblings[siblings.length - 1]!.position : null;
+      }
       const position = keyForAppend(lastPosition);
 
       // Global backlog rank (Subtask 4.1.4): a new issue is appended after the
@@ -1460,6 +1541,7 @@ export const workItemsService = {
         workspaceId,
         projectId: input.projectId,
         parentId: input.parentId ?? null,
+        folderId,
         kind: input.kind,
         key,
         identifier,
@@ -1749,6 +1831,7 @@ export const workItemsService = {
   ): Promise<WorkItemDto> {
     const PATCH_KEYS: readonly (keyof UpdateWorkItemInput)[] = [
       'parentId',
+      'folderId',
       'kind',
       'title',
       'descriptionMd',
@@ -1773,6 +1856,12 @@ export const workItemsService = {
       // read-only actor can't probe an item through a write route.
       await projectAccessService.assertCanEdit(current.projectId, ctx);
       return toWorkItemDto(current);
+    }
+
+    // The two placements are exclusive (MOTIR-5407): a patch naming both a
+    // work-item parent and a folder is ambiguous, and refused before the lock.
+    if (patch.parentId !== undefined && patch.folderId !== undefined) {
+      throw new PlacementConflictError();
     }
 
     // Story points (Story 4.3 · exposed on this patch in 7.8.21): validate the
@@ -2037,14 +2126,32 @@ export const workItemsService = {
       // (parent, kind) pair, and (2) the new kind must legally parent every
       // existing child. (DB trigger backstops cycle/depth/kind on the write;
       // cross-project parenting has no trigger, so it's checked here.)
+      //
+      // FOLDERS (MOTIR-5407) are the other placement. A `folderId` patch files
+      // or unfiles through the step `fileWorkItem` uses — which clears the
+      // work-item parent, so it is a re-parent to the root when the item had
+      // one. A `parentId` patch onto a work item clears the folder instead (the
+      // `moveWorkItem` rule), or the `work_item_parent_xor_folder` CHECK would
+      // refuse the write. Either way the effective placement is validated with
+      // the folder-aware rule, so a filed item may be re-kinded to a subtask.
       const nextKind = patch.kind !== undefined ? patch.kind : current.kind;
-      const nextParentId = patch.parentId !== undefined ? patch.parentId : current.parentId;
       const kindChanged = patch.kind !== undefined && patch.kind !== current.kind;
-      const parentChanged = patch.parentId !== undefined && patch.parentId !== current.parentId;
+      const filing =
+        patch.folderId !== undefined
+          ? await planFolderFiling(current, nextKind, patch.folderId, tx)
+          : null;
+      const nextParentId =
+        filing !== null ? null : patch.parentId !== undefined ? patch.parentId : current.parentId;
+      const parentChanged =
+        filing !== null
+          ? current.parentId !== null
+          : patch.parentId !== undefined && patch.parentId !== current.parentId;
+      const nextFolderId =
+        filing !== null ? filing.update.folderId : nextParentId !== null ? null : current.folderId;
 
-      if (kindChanged || parentChanged) {
+      if (kindChanged || parentChanged || filing !== null) {
         if (nextParentId === null) {
-          assertValidParent(null, nextKind);
+          assertValidPlacement({ parentKind: null, filed: nextFolderId !== null }, nextKind);
         } else {
           const parent = await workItemRepository.findById(nextParentId, tx);
           if (!parent) throw new WorkItemNotFoundError(nextParentId);
@@ -2062,9 +2169,16 @@ export const workItemsService = {
         diff.kind = { from: current.kind, to: patch.kind };
       }
 
-      if (parentChanged) {
+      if (filing !== null) {
+        Object.assign(update, filing.update);
+        Object.assign(diff, filing.diff);
+      } else if (parentChanged) {
         update.parentId = patch.parentId;
         diff.parentId = { from: current.parentId, to: patch.parentId };
+        if (nextFolderId !== current.folderId) {
+          update.folderId = nextFolderId;
+          diff.folderId = { from: current.folderId, to: nextFolderId };
+        }
       }
 
       // ── Type / executor (Story 2.7) ───────────────────────────────────
@@ -2214,7 +2328,7 @@ export const workItemsService = {
         // Null when the patch did not move the item — a `parentId` absent from
         // the patch, or present and equal, changes no child set.
         movedBetween: parentChanged
-          ? { previousParentId: current.parentId, newParentId: patch.parentId ?? null }
+          ? { previousParentId: current.parentId, newParentId: nextParentId }
           : null,
       };
     });
@@ -3615,46 +3729,23 @@ export const workItemsService = {
       if (!current) throw new WorkItemNotFoundError(workItemId);
       await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
 
-      const target = input.folderId;
-      const unchanged = {
-        result: {
-          workItemId,
-          folderId: current.folderId,
-          parentId: current.parentId,
-          position: current.position,
-          updatedAt: current.updatedAt.toISOString(),
-        },
-        previousParentId: null,
-      };
-
-      if (target === null) {
-        if (current.folderId === null) return unchanged;
-        // Filed items carry no work-item parent, so leaving the folder leaves
-        // the item a root — which a subtask may not be.
-        assertValidParent(null, current.kind);
-      } else {
-        const folder = await folderRepository.lockById(target, tx);
-        if (!folder) throw new FolderNotFoundError(target);
-        if (folder.projectId !== current.projectId) throw new CrossProjectFolderError();
-        if (current.folderId === target && current.parentId === null) return unchanged;
+      const filing = await planFolderFiling(current, current.kind, input.folderId, tx);
+      if (filing === null) {
+        return {
+          result: {
+            workItemId,
+            folderId: current.folderId,
+            parentId: current.parentId,
+            position: current.position,
+            updatedAt: current.updatedAt.toISOString(),
+          },
+          previousParentId: null,
+        };
       }
 
-      const position = keyForAppend(
-        await workItemRepository.findLastPositionAtFolderLevel(current.projectId, target, tx),
-      );
-      const diff: Record<string, DiffCell> = {
-        folderId: { from: current.folderId, to: target },
-        position: { from: current.position, to: position },
-      };
-      if (current.parentId !== null) diff.parentId = { from: current.parentId, to: null };
-
-      const row = await workItemRepository.update(
-        workItemId,
-        { folderId: target, parentId: null, position },
-        tx,
-      );
+      const row = await workItemRepository.update(workItemId, filing.update, tx);
       await workItemRevisionsService.recordRevision(
-        { workItemId, changedById: ctx.userId, changeKind: 'updated', diff },
+        { workItemId, changedById: ctx.userId, changeKind: 'updated', diff: filing.diff },
         tx,
       );
       if (current.parentId !== null) {
