@@ -9,6 +9,7 @@ import type {
 } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import {
@@ -313,11 +314,39 @@ async function resolveGateAuthority(
   item: { assigneeId: string | null; reporterId: string | null; projectId: string },
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
+  held?: ReadonlySet<PermissionKey>,
 ): Promise<ApprovalGateAuthorityDTO | null> {
   if (item.assigneeId === ctx.userId) return 'assignee';
   if (item.assigneeId === null && item.reporterId === ctx.userId) return 'reporter';
+  const permissions = held ?? (await projectAccessService.getPermissions(item.projectId, ctx, tx));
+  return permissions.has('approval:decide_any') ? 'admin' : null;
+}
+
+/**
+ * Whether this actor may decide a gate of `kind` on `item` — the RENDER read's
+ * statement of the door's TWO checks, in the door's order (Bug MOTIR-5445).
+ *
+ * ⚠️ THE FLOOR FIRST, THEN THE AUTHORITY. `decide` asserts the permission the
+ * kind names before it asks `resolveGateAuthority`, and a read that asked only
+ * the second drew Approve for a project `viewer` who is the assignee — a press
+ * the door refuses. The queue read already held the floor (`listAwaitingMe`'s
+ * `canEdit`), so the item page and the approval overlay disagreed with the row
+ * that opened them.
+ *
+ * A kind this build does not register has no door at all, so nobody can decide
+ * it. The permissions are read ONCE and handed to the authority test, because
+ * this is the item page's render path.
+ */
+async function canDecideGate(
+  item: { assigneeId: string | null; reporterId: string | null; projectId: string },
+  kind: ApprovalGateKindDTO,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  if (!isRegisteredGateKind(kind)) return false;
   const held = await projectAccessService.getPermissions(item.projectId, ctx, tx);
-  return held.has('approval:decide_any') ? 'admin' : null;
+  if (!held.has(handlerFor(kind).permission)) return false;
+  return (await resolveGateAuthority(item, ctx, tx, held)) !== null;
 }
 
 export const approvalGatesService = {
@@ -377,7 +406,10 @@ export const approvalGatesService = {
       // It resolves an ARM; this read needs only whether there IS one. The
       // admin arm inside it is ASKED of `projectAccessService`, never derived
       // here (the second-policy-path rule this service already records).
-      const canDecide = (await resolveGateAuthority(item, ctx, tx)) !== null;
+      //
+      // …behind the kind's permission FLOOR, which the door asserts first
+      // (`canDecideGate`, MOTIR-5445).
+      const canDecide = await canDecideGate(item, input.kind, ctx, tx);
 
       // WHO the frame says it is waiting on — §2's routing rule asked of the
       // item as it stands NOW, which is the question the sentence poses. The id

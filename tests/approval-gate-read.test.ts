@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { ApprovalGateNotAuthorisedError } from '@/lib/approvalGates/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
@@ -502,5 +503,77 @@ describe('getForWorkItem is TOTAL over ApprovalGateKind (MOTIR-5223)', () => {
     expect(read.gate?.id).toBe(gate.id);
     expect(read.gate?.kind).toBe('pull_request_merge');
     expect(read.routedToLabel).not.toBeNull();
+  });
+});
+
+describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR-5445)', () => {
+  // ⚠️ THE MATRIX ABOVE CANNOT SEE THIS, because every actor in it holds the
+  // floor: a plain workspace member can edit work items. The relationship arms
+  // were the whole of `canDecide`, and the one shape that separates them from
+  // the door is a reader who IS the assignee and may NOT edit — a project
+  // `viewer`. The queue read held the floor; this read did not.
+
+  /** A project `viewer`: a workspace member whose ONLY project membership is `viewer`. */
+  async function projectViewer() {
+    const user = await plainMember();
+    await adminDb.projectMembership.deleteMany({
+      where: { userId: user.id, projectId: fx.projectId },
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        userId: user.id,
+        projectId: fx.projectId,
+        workspaceId: fx.workspaceId,
+        role: 'viewer',
+      },
+    });
+    return user;
+  }
+
+  it('a project VIEWER who is the ASSIGNEE sees the gate, may not decide it — and the door agrees', async () => {
+    const viewer = await projectViewer();
+    const reporter = await plainMember();
+    const { item, gate } = await designSubtaskWithGate({
+      assigneeId: viewer.id,
+      reporterId: reporter.id,
+    });
+    const ctx = { userId: viewer.id, workspaceId: fx.workspaceId };
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      ctx,
+    );
+    expect(read.gate?.id).toBe(gate.id);
+    expect(read.canDecide).toBe(false);
+
+    await expect(
+      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, ctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it('POSITIVE CONTROL — the same relationship with the floor held may decide', async () => {
+    const assignee = await plainMember();
+    const reporter = await plainMember();
+    const { item } = await designSubtaskWithGate({
+      assigneeId: assignee.id,
+      reporterId: reporter.id,
+    });
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      { userId: assignee.id, workspaceId: fx.workspaceId },
+    );
+    expect(read.canDecide).toBe(true);
+  });
+
+  it('an UNREGISTERED kind has no door, so nobody may decide it — not even the owner', async () => {
+    const { item } = await designSubtaskWithGate({ kind: 'pull_request_merge' });
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_merge' },
+      fx.ctx,
+    );
+    expect(read.gate).not.toBeNull();
+    expect(read.canDecide).toBe(false);
   });
 });

@@ -243,6 +243,37 @@ describe('GET /api/work-items/approval-gate · seeing is not deciding', () => {
   });
 });
 
+describe('GET /api/work-items/approval-gate · the permission floor (MOTIR-5445)', () => {
+  it('a project VIEWER who is the ASSIGNEE sees the resolved gate with canDecide false', async () => {
+    // Routed the gate, and held out of deciding it by the kind's
+    // `work_item:edit` floor — which the door asserts, and which this read
+    // skipped until MOTIR-5445, so the overlay drew verbs the door refused.
+    const card = await designCard();
+    await publish(card);
+    const viewer = await plainMember();
+    await adminDb.projectMembership.deleteMany({
+      where: { userId: viewer.id, projectId: fx.projectId },
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        userId: viewer.id,
+        projectId: fx.projectId,
+        workspaceId: fx.workspaceId,
+        role: 'viewer',
+      },
+    });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { assigneeId: viewer.id } });
+    signIn(viewer);
+
+    const res = await gateViaRoute({ key: card.identifier, kind: 'design_result' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.gate.state).toBe('awaiting');
+    expect(body.subject.state).toBe('resolved');
+    expect(body.canDecide).toBe(false);
+  });
+});
+
 describe('GET /api/work-items/approval-gate · the refusals', () => {
   it('no active project → 401, and the 2FA hold does NOT pre-empt it', async () => {
     await adminDb.workspace.update({
