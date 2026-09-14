@@ -52,7 +52,12 @@ import {
   childrenBelowClaimBar,
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
-import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
+import {
+  APPROVAL_GATE_HANDLERS,
+  handlerFor,
+  isRegisteredGateKind,
+  type RegisteredGateKind,
+} from '@/lib/approvalGates/registry';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
@@ -2795,6 +2800,46 @@ export const workItemsService = {
             gateKind: gate.kind,
             itemKey: current.identifier,
             workItemId,
+          });
+        }
+      }
+
+      // RULE 2b — AN APPROVAL WAITING ON ITS MERGE STILL HOLDS THE MOVE (Yue,
+      // 2026-09-14; ADR §6d AMENDMENT). When the item has an OPEN delivering pull
+      // request, approving writes no terminal status: the merge is the one writer
+      // of it (§8). A hand move there would take that status from the merge — so
+      // it is refused while an `approved` gate of a kind owning the target exists
+      // AND a delivering pull request is still open. The merge itself passes: the
+      // sync commits its pull request as closed before it transitions the card.
+      // Ordered by cost: the common card has no approved gate and pays one indexed
+      // read; the status list is resolved only when an approval AND an open pull
+      // request are both present.
+      const kindsWithIntent = (Object.keys(APPROVAL_GATE_HANDLERS) as RegisteredGateKind[]).filter(
+        (kind) => handlerFor(kind).statusIntent !== null,
+      );
+      const approved =
+        kindsWithIntent.length > 0
+          ? await approvalGateRepository.findLatestApprovedOfKinds(workItemId, kindsWithIntent, tx)
+          : null;
+      if (
+        approved &&
+        isRegisteredGateKind(approved.kind) &&
+        (await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0
+      ) {
+        const intent = handlerFor(approved.kind).statusIntent;
+        statuses ??= await workflowsService.listStatusesByProject(
+          current.projectId,
+          ctx.workspaceId,
+          tx,
+        );
+        if (intent && resolveStatusIntent(statuses, intent) === toStatusKey) {
+          throw new ApprovalGatePendingError({
+            statusKey: toStatusKey,
+            gateId: approved.id,
+            gateKind: approved.kind,
+            itemKey: current.identifier,
+            workItemId,
+            waitingOn: 'merge',
           });
         }
       }

@@ -527,7 +527,13 @@ export const approvalGatesService = {
       const kind = err.gateKind as ApprovalGateKindDTO;
       const item = await workItemRepository.findById(err.workItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId) {
-        return { itemKey: err.itemKey, kind, canDecide: false, routedToLabel: null };
+        return {
+          itemKey: err.itemKey,
+          kind,
+          waitingOn: err.waitingOn,
+          canDecide: false,
+          routedToLabel: null,
+        };
       }
       const canDecide = await canDecideGate(item, kind, ctx, tx);
       const routedToId = isRegisteredGateKind(kind)
@@ -537,7 +543,10 @@ export const approvalGatesService = {
       return {
         itemKey: err.itemKey,
         kind,
-        canDecide,
+        waitingOn: err.waitingOn,
+        // Nothing is left to decide on an approved gate awaiting its merge, so no
+        // surface may offer an approve door for it.
+        canDecide: err.waitingOn === 'decision' && canDecide,
         routedToLabel: routedToDisplayName(routedTo),
       };
     });

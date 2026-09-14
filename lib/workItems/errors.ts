@@ -535,19 +535,33 @@ export class ApprovalGatePendingError extends WorkItemError {
   /** The work item's `KEY-n`, for a message and a link a person can follow. */
   readonly itemKey: string;
   readonly workItemId: string;
+  /**
+   * WHAT the held move is waiting for (ADR §6d AMENDMENT, rule 2b):
+   * - `decision` — the gate is `awaiting`, and approving it makes this move;
+   * - `merge` — the gate is already `approved`, but the item still has an OPEN
+   *   delivering pull request, so the MERGE is the one writer of this status.
+   */
+  readonly waitingOn: 'decision' | 'merge';
   constructor(args: {
     statusKey: string;
     gateId: string;
     gateKind: string;
     itemKey: string;
     workItemId: string;
+    waitingOn?: 'decision' | 'merge';
   }) {
+    const kindLabel = args.gateKind.replace(/_/g, ' ');
     super(
-      `${args.itemKey} cannot be moved to "${args.statusKey}" directly: a ` +
-        `${args.gateKind.replace(/_/g, ' ')} approval is waiting on it, and approving that ` +
-        'decision is what makes this move. Decide it in Motir, or move the item somewhere ' +
-        'else — only this one move is held.',
+      args.waitingOn === 'merge'
+        ? `${args.itemKey} cannot be moved to "${args.statusKey}" directly: its ${kindLabel} ` +
+            'approval is recorded, and its pull request is still open — merging it is what ' +
+            'makes this move. Merge the pull request, or move the item somewhere else — only ' +
+            'this one move is held.'
+        : `${args.itemKey} cannot be moved to "${args.statusKey}" directly: a ${kindLabel} ` +
+            'approval is waiting on it, and approving that decision is what makes this move. ' +
+            'Decide it in Motir, or move the item somewhere else — only this one move is held.',
     );
+    this.waitingOn = args.waitingOn ?? 'decision';
     this.name = 'ApprovalGatePendingError';
     this.statusKey = args.statusKey;
     this.gateId = args.gateId;

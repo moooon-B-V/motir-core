@@ -922,6 +922,30 @@ directly below. Build to them.
 > already happened; a `changes_requested` gate has already sent the work back;
 > a `superseded` one asks nothing.
 >
+> #### 2b. …and an APPROVED gate still holds the move while its MERGE is pending — ADDED 2026-09-14 (Yue)
+>
+> **Yue:** _"after approving the status is not changed to done, it changes to
+> approved, but done should be blocked too."_
+>
+> When the work item has an OPEN delivering pull request, approving writes no
+> terminal status: §8's discriminator hands `done` to the merge, and MOTIR-4909's
+> gate lands the card in `approved` instead. Rule 2 alone would then let a person
+> drag the approved card to Done by hand while its pull request is unmerged —
+> taking `done` from its one writer. So **an `approved` gate whose kind owns the
+> target status refuses that move for as long as the item has an open delivering
+> pull request.** It is the same code, `APPROVAL_GATE_PENDING`, with
+> `waitingOn: 'merge'` (rule 2's hold is `waitingOn: 'decision'`), and its payload
+> carries `canDecide: false`: nothing is left to decide, so no surface offers an
+> approve door — the pull request's merge is the way forward.
+>
+> - **The merge itself passes.** The status sync commits its pull request as
+>   closed before it transitions the card, so the open-delivery count it sees is
+>   zero (and a sibling still open is already `deferred_open_pr`).
+> - **Every other move stays open**, as rule 3 says — sending it back, blocking,
+>   cancelling.
+> - **Rule 2's reopen path is unchanged:** once the pull request has merged, an
+>   approved gate holds nothing.
+>
 > #### 3. Exactly ONE move is refused per gate: the move INTO the owned status
 >
 > Every other move the workflow declares stays legal — `→ in_progress`,
@@ -1051,7 +1075,7 @@ routedToLabel }` — with `canDecide` computed as the Approvals read computes
 >
 > | rules        | card                                                                                       |
 > | ------------ | ------------------------------------------------------------------------------------------ |
-> | 1–5          | MOTIR-5526 — the guard, `APPROVAL_GATE_PENDING` and its payload on every door              |
+> | 1–5, 2b      | MOTIR-5526 — the guard, `APPROVAL_GATE_PENDING` and its payload on every door              |
 > | 6 and 8      | MOTIR-5527 — the withdraw, and the lock order                                              |
 > | 7            | MOTIR-5532 — the re-ask, and the current-subject registry seam                             |
 > | the surfaces | MOTIR-5528 — the item page, quick view and edit page · MOTIR-5529 — the board and the list |

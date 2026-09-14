@@ -139,6 +139,7 @@ describe('POST /api/board/move', () => {
     expect(body.gate).toEqual({
       itemKey: item.identifier,
       kind: 'design_result',
+      waitingOn: 'decision',
       canDecide: true,
       routedToLabel: expect.any(String),
     });

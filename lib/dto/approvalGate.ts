@@ -46,6 +46,11 @@ export type ApprovalGateKindDTO =
 export interface ApprovalGatePendingPayloadDTO {
   itemKey: string;
   kind: ApprovalGateKindDTO;
+  /** `decision` — the gate awaits a person, and the surface offers Review &
+   *  approve to one who may decide. `merge` — it is already approved and the
+   *  item's pull request is still open, so the surface offers no approve door:
+   *  the merge makes the move (ADR §6d AMENDMENT, rule 2b). */
+  waitingOn: 'decision' | 'merge';
   canDecide: boolean;
   routedToLabel: string | null;
 }

@@ -427,6 +427,23 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The newest `approved` gate on a work item among the given kinds, or null
+   * (MOTIR-5526 · ADR §6d AMENDMENT, rule 2b). The guard's second question: an
+   * approval already recorded whose kind owns the target status — held only while
+   * the item's pull request is still open, because the merge writes that status.
+   */
+  async findLatestApprovedOfKinds(
+    workItemId: string,
+    kinds: ApprovalGateKind[],
+    tx: Prisma.TransactionClient,
+  ): Promise<ApprovalGate | null> {
+    return tx.approvalGate.findFirst({
+      where: { workItemId, kind: { in: kinds }, state: 'approved' },
+      orderBy: { decidedAt: 'desc' },
+    });
+  },
+
+  /**
    * Whether a subject already has a LIVE question — a gate on
    * `(workItemId, kind, subjectId)` that is `awaiting` or `approved` (MOTIR-5532).
    *
