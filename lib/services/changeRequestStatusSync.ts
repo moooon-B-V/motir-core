@@ -20,6 +20,7 @@ import {
   type DeliverySetShortfall,
 } from '@/lib/workItems/deliverySet';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { withdrawMergeGatesOnClose } from './mergeGates';
 import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
@@ -335,6 +336,12 @@ export async function syncChangeRequestStatus(
       // reflect this delivery's state so the row is never left stale.
       prId = (await githubPullRequestRepository.upsert(prRow, tx)).id;
     }
+
+    // A CLOSED pull request — merged or not — is a merge question nobody can answer
+    // any more, so its awaiting merge gates are withdrawn in the transaction that
+    // records the close (MOTIR-5515). This is also what retires a gate a crash left
+    // awaiting between a merge and its decision: the merge delivery lands here.
+    if (cr.state === 'closed') await withdrawMergeGatesOnClose(prId, tx);
 
     // MOTIR-3007 · MOTIR-3721 — WHICH ITEMS does this delivery carry? A `motir
     // auto` run integrates every card onto ONE session branch and opens ONE pull
@@ -1228,7 +1235,10 @@ async function applyTransition(
   toStatusKey: string,
   ctx: { userId: string; workspaceId: string },
 ): Promise<void> {
-  await workItemsService.updateStatus(workItemId, toStatusKey, ctx);
+  // `keepPendingQuestions`: a lifecycle move is not a person pulling the work back.
+  // This sync withdraws merge gates BY SUBJECT (`withdrawMergeGatesOnClose`), so the
+  // funnel's blanket rule-6 withdraw must not take a sibling pull request's question.
+  await workItemsService.updateStatus(workItemId, toStatusKey, ctx, { keepPendingQuestions: true });
 }
 
 /** Map a transition failure to a logged no-op outcome — the webhook never crashes

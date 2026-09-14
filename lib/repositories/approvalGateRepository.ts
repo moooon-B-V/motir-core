@@ -427,6 +427,61 @@ export const approvalGateRepository = {
   },
 
   /**
+   * Every `awaiting` gate of `kind` asking about ONE subject, on any card — the merge
+   * gate's withdrawal read (Story MOTIR-4882 · MOTIR-5515): a pull request's head
+   * moving is a fact about the pull request, not about a card.
+   */
+  async findAwaitingBySubject(
+    kind: ApprovalGateKind,
+    subjectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ApprovalGate[]> {
+    return tx.approvalGate.findMany({
+      where: { kind, subjectId, state: 'awaiting' },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
+   * RETIRE the `awaiting` gates of `kind` asking about ONE subject (Story MOTIR-4882 ·
+   * MOTIR-5515) — narrowed to one card by `workItemId`, and sparing a gate whose
+   * `subjectVersion` is `exceptVersion` (the head that did not move).
+   *
+   * ⚠️ BY SUBJECT, NOT BY CARD. {@link supersedeAwaitingByWorkItem} retires EVERY
+   * awaiting gate of a kind on a card, which is right for a design result (one current
+   * version) and wrong for a merge gate: a card delivered by two pull requests holds
+   * two independent questions, and one head moving must not withdraw the other.
+   *
+   * It writes `state` and nothing else, and it cannot reach the immutability trigger
+   * for the reason the by-card variant states: its predicate is `state = 'awaiting'`.
+   */
+  async supersedeAwaitingBySubject(
+    where: {
+      kind: ApprovalGateKind;
+      subjectId: string;
+      workItemId?: string;
+      exceptVersion?: string;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: {
+        kind: where.kind,
+        subjectId: where.subjectId,
+        state: 'awaiting',
+        ...(where.workItemId !== undefined ? { workItemId: where.workItemId } : {}),
+        ...(where.exceptVersion !== undefined
+          ? {
+              OR: [{ subjectVersion: null }, { NOT: { subjectVersion: where.exceptVersion } }],
+            }
+          : {}),
+      },
+      data: { state: 'superseded' },
+    });
+    return result.count;
+  },
+
+  /**
    * Whether a subject already has a LIVE question — a gate on
    * `(workItemId, kind, subjectId)` that is `awaiting` or `approved` (MOTIR-5532).
    *

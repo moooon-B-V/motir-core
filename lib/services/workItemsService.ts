@@ -2516,14 +2516,35 @@ export const workItemsService = {
     workItemId: string,
     toStatusKey: string,
     ctx: ServiceContext,
+    opts: {
+      /**
+       * Writes that must commit WITH the status write or not at all, run in its
+       * transaction after the transition applied — the CI promotion's merge gates
+       * (MOTIR-5515). Runs on a no-op move too, which is what makes a retried
+       * promotion finish what a lost race started. The post-commit event below is
+       * unchanged by it.
+       */
+      inTransaction?: (tx: Prisma.TransactionClient) => Promise<void>;
+      /** See `applyStatusTransition`'s `keepPendingQuestions` — the merge sync's
+       *  lifecycle moves (MOTIR-5527 · MOTIR-4882). */
+      keepPendingQuestions?: boolean;
+    } = {},
   ): Promise<WorkItemDto> {
     // MOTIR-2846: `withWorkspaceContext`, not a bare `db.$transaction`. A bare
     // one binds no GUCs, so every gate read inside `applyStatusTransition` —
     // the item, its project, the workflow — comes back empty under `motir_app`
     // and the transition 404s an item that is on the screen.
-    const { dto, transition } = await withWorkspaceContext(ctx, (tx) =>
-      workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx),
-    );
+    const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
+      const applied = await workItemsService.applyStatusTransition(
+        workItemId,
+        toStatusKey,
+        ctx,
+        tx,
+        opts.keepPendingQuestions ? { keepPendingQuestions: true } : {},
+      );
+      if (opts.inTransaction) await opts.inTransaction(tx);
+      return applied;
+    });
     // Post-commit, never inside the tx — a rollback must not have notified
     // (the 5.1.2 rule). A no-op move carries no transition, so it emits
     // nothing. The 5.4.5 watcher job consumes this; 5.7's bell fans in later.
@@ -2671,6 +2692,16 @@ export const workItemsService = {
        * approval-gate guard skips THIS gate and no other.
        */
       decidingGateId?: string;
+      /**
+       * The move is the PRODUCT's own lifecycle, not a person pulling work back —
+       * the merge sync moving a card out of review because one of its pull
+       * requests closed (MOTIR-4882). Rule 6's withdraw (ADR §6d AMENDMENT) is for
+       * a person abandoning the question; the sync withdraws exactly the gates
+       * whose subject changed, BY SUBJECT (`mergeGates`), and a blanket withdraw
+       * here would take the OTHER pull request's question with it. The guard still
+       * applies — this exempts nothing it refuses.
+       */
+      keepPendingQuestions?: boolean;
     } = {},
   ): Promise<{
     dto: WorkItemDto;
@@ -2841,7 +2872,7 @@ export const workItemsService = {
     // the audit cannot read it as a decision; who pulled the work back is on this
     // transition's own revision row. Placed AFTER the guard, which can only ever
     // refuse a move INTO an owned status — never one of these.
-    if (awaitingGates.length > 0 && !opts.system) {
+    if (awaitingGates.length > 0 && !opts.system && !opts.keepPendingQuestions) {
       const projectStatuses = (statuses ??= await workflowsService.listStatusesByProject(
         current.projectId,
         ctx.workspaceId,

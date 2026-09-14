@@ -58,7 +58,18 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_ALREADY_DECIDED'
   | 'APPROVAL_GATE_SUPERSEDED'
   | 'APPROVAL_GATE_NOT_AUTHORISED'
-  | 'APPROVAL_GATE_KIND_UNREGISTERED';
+  | 'APPROVAL_GATE_KIND_UNREGISTERED'
+  // MERGE tier — the HOST refused the merge a `pull_request_merge` approval
+  // performs (Story MOTIR-4882 · MOTIR-5512; `approval-gates.md` §4, second
+  // amendment decision 8). The seam maps the host's answer onto these; the merge
+  // entry point returns them and writes nothing, so the gate stays decidable.
+  // A changed subject is NOT one of these — it supersedes the gate and answers
+  // `APPROVAL_GATE_SUPERSEDED`.
+  | 'MERGE_CHECKS_NOT_GREEN'
+  | 'MERGE_CONFLICT'
+  | 'MERGE_BRANCH_PROTECTED'
+  | 'MERGE_ALREADY_MERGED'
+  | 'MERGE_APP_PERMISSION_MISSING';
 
 /**
  * Base class for every approval-gate typed error. Concrete subclasses set a
@@ -257,6 +268,39 @@ export class ApprovalGateNotAuthorisedError extends ApprovalGateError {
  * a row written by a migration, a fixture, or a half-landed future card meets a
  * named refusal instead of an `undefined` handler and a `TypeError`.
  */
+/** The MERGE tier's tags — the host refusing the merge an approval performs. */
+export type MergeRefusalTag = Extract<ApprovalGateErrorTag, `MERGE_${string}`>;
+
+/**
+ * The HOST refused the merge a `pull_request_merge` approval performs (Story MOTIR-4882 ·
+ * MOTIR-5517). Thrown by the merge entry point BEFORE anything is decided, so the gate
+ * stays awaiting and the refusal is drawn in place with its next action.
+ *
+ * `permission` is the one a missing App permission names, as the host named it;
+ * `reason` is the host's own account of a protection rule — carried for the record and
+ * never drawn as copy (`refusals.ts`).
+ */
+export class ApprovalGateMergeRefusedError extends ApprovalGateError {
+  readonly tag: MergeRefusalTag;
+  readonly code: MergeRefusalTag;
+  readonly permission: string | null;
+  readonly reason: string | null;
+  constructor(
+    readonly gateId: string,
+    tag: MergeRefusalTag,
+    extra: { permission?: string | null; reason?: string | null } = {},
+  ) {
+    super(
+      `The host refused the merge approval gate ${gateId} asks for (${tag}); nothing was decided.`,
+    );
+    this.tag = tag;
+    this.code = tag;
+    this.permission = extra.permission ?? null;
+    this.reason = extra.reason ?? null;
+    this.name = 'ApprovalGateMergeRefusedError';
+  }
+}
+
 export class ApprovalGateKindUnregisteredError extends ApprovalGateError {
   readonly tag = 'APPROVAL_GATE_KIND_UNREGISTERED' as const;
   readonly code = 'APPROVAL_GATE_KIND_UNREGISTERED' as const;

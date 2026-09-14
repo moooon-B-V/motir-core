@@ -37,6 +37,7 @@ import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { repoDeploymentService } from './repoDeploymentService';
+import { withdrawMergeGatesOnHeadMove } from './mergeGates';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -410,6 +411,10 @@ export const githubWebhookService = {
     // fires at most ONCE per pull request either way, so the per-push cost the
     // argument turns on is untouched.
     await writeLinkCheckForDelivery(body);
+    // A push to the pull request withdraws the merge gate asked about the previous
+    // head (MOTIR-5515). Above the action gate for the link check's reason:
+    // `synchronize` is exactly the action `HANDLED_PR_ACTIONS` leaves out.
+    await withdrawMergeGatesOnSynchronize(body);
 
     if (!HANDLED_PR_ACTIONS.has(String(body['action']))) {
       return { event: 'pull_request', outcome: 'ignored_action' };
@@ -816,6 +821,51 @@ async function reconcileInstallation(
  * host that refuses a check must never make GitHub retry a delivery that already
  * moved a card (the same rule the file-listing capture below states).
  */
+/**
+ * WITHDRAW the merge gates a PUSH made stale (Story MOTIR-4882 · MOTIR-5515): a
+ * `synchronize` delivery carries the new head, so any awaiting merge gate on that pull
+ * request whose version names another head is superseded.
+ *
+ * The CI event for the new head withdraws it too; this is the earlier of the two, and
+ * the only one for the minutes before any check has reported. SWALLOWS EVERYTHING, for
+ * the link check's reason: the delivery's load-bearing effect is the status sync.
+ */
+async function withdrawMergeGatesOnSynchronize(body: Record<string, unknown>): Promise<void> {
+  try {
+    if (body['action'] !== 'synchronize') return;
+    const installationId = readInstallationId(body);
+    const pr = asRecord(body['pull_request']);
+    const providerRepoId = readId(asRecord(body['repository'])?.['id']);
+    const number = typeof pr?.['number'] === 'number' ? pr['number'] : null;
+    const headSha = asRecord(pr?.['head'])?.['sha'];
+    if (!installationId || !providerRepoId || number === null || typeof headSha !== 'string') {
+      return;
+    }
+
+    await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return;
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        providerRepoId,
+        tx,
+      );
+      if (!repo) return;
+      // `approval_gate` has no system arm — bind the repository's tenant first.
+      await bindWorkspaceContext(tx, repo.workspaceId);
+      const row = await githubPullRequestRepository.findByRepoAndNumber(repo.id, number, tx);
+      if (row) await withdrawMergeGatesOnHeadMove(row.id, tx, headSha);
+    });
+  } catch (err) {
+    console.warn('[githubWebhookService] could not withdraw merge gates on a push', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 const LINK_CHECK_PR_ACTIONS = new Set([
   'opened',
   'reopened',

@@ -20,6 +20,7 @@ import {
   type RegisteredGateKind,
 } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
+import { settingsDoorFor, type GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotAuthorisedError,
@@ -153,6 +154,14 @@ export interface WorkItemGateRead {
    * The two columns are both right, about different questions.
    */
   routedToLabel: string | null;
+  /**
+   * The SETTINGS DOOR this viewer is handed for the gate's kind (MOTIR-5513) —
+   * the kind's own door when they hold `workflow:manage`, the key its destination
+   * is guarded by, and `null` otherwise or for a kind with no project setting
+   * (`lib/approvalGates/settingsDoor.ts`). The frame renders exactly what it is
+   * handed, so this read is the ONLY place the door is gated.
+   */
+  settingsDoor: GateSettingsDoor | null;
 }
 
 /**
@@ -320,7 +329,7 @@ async function routingScope(
  * separately and FIRST by the decide door, and is what a project `viewer` who
  * happens to be the assignee fails; this function never sees it.
  */
-async function resolveGateAuthority(
+export async function resolveGateAuthority(
   item: { assigneeId: string | null; reporterId: string | null; projectId: string },
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
@@ -355,8 +364,8 @@ async function canDecideGate(
   kind: ApprovalGateKindDTO,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
+  held: Awaited<ReturnType<typeof projectAccessService.getPermissions>>,
 ): Promise<boolean> {
-  const held = await projectAccessService.getPermissions(item.projectId, ctx, tx);
   if (isRegisteredGateKind(kind) && !held.has(handlerFor(kind).permission)) return false;
   return (await resolveGateAuthority(item, ctx, tx, held)) !== null;
 }
@@ -400,14 +409,14 @@ export const approvalGatesService = {
       // A cross-workspace row is indistinguishable from one that never existed,
       // exactly as the decide door has it — no existence leak through a read.
       if (!item || item.workspaceId !== ctx.workspaceId)
-        return { gate: null, canDecide: false, routedToLabel: null };
+        return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
 
       const row = await approvalGateRepository.findLatestByWorkItem(
         input.workItemId,
         input.kind,
         tx,
       );
-      if (!row) return { gate: null, canDecide: false, routedToLabel: null };
+      if (!row) return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
 
       // ⚠️ THE SAME FUNCTION the decide door calls, not merely the same rule
       // written twice. `resolveGateAuthority` is the ONE statement of ADR §2's
@@ -421,7 +430,11 @@ export const approvalGatesService = {
       //
       // …behind the kind's permission FLOOR, which the door asserts first
       // (`canDecideGate`, MOTIR-5445).
-      const canDecide = await canDecideGate(item, input.kind, ctx, tx);
+      // ⚠️ THE PERMISSIONS ARE READ ONCE, here, and serve both answers this read
+      // gives about the VIEWER — whether they may press, and whether they are handed
+      // the settings door (MOTIR-5513). This is the item page's render path.
+      const held = await projectAccessService.getPermissions(item.projectId, ctx, tx);
+      const canDecide = await canDecideGate(item, input.kind, ctx, tx, held);
 
       // WHO the frame says it is waiting on — §2's routing rule asked of the
       // item as it stands NOW, which is the question the sentence poses. The id
@@ -449,6 +462,10 @@ export const approvalGatesService = {
         gate: toApprovalGateDto(row),
         canDecide,
         routedToLabel: routedToDisplayName(routedTo),
+        settingsDoor: settingsDoorFor(
+          isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
+          held,
+        ),
       };
     });
   },
@@ -487,11 +504,16 @@ export const approvalGatesService = {
       if (moves.length === 0) return [];
 
       const out: HeldTransitionDTO[] = [];
+      // The actor's permissions, read ONCE for every held move — `canDecideGate`
+      // takes them rather than re-reading per call (this is a render path).
+      const permissions = moves.some((m) => m.waitingOn === 'decision' && m.gateId !== null)
+        ? await projectAccessService.getPermissions(item.projectId, ctx, tx)
+        : null;
       for (const move of moves) {
         const kind = move.gateKind as ApprovalGateKindDTO;
         const canDecide =
-          move.waitingOn === 'decision' && move.gateId !== null
-            ? await canDecideGate(item, kind, ctx, tx)
+          permissions && move.waitingOn === 'decision' && move.gateId !== null
+            ? await canDecideGate(item, kind, ctx, tx, permissions)
             : false;
         const routedToId = isRegisteredGateKind(kind)
           ? handlerFor(kind).routeTo({ item, ctx, tx })
@@ -597,7 +619,13 @@ export const approvalGatesService = {
           routedToLabel: null,
         };
       }
-      const canDecide = await canDecideGate(item, kind, ctx, tx);
+      const canDecide = await canDecideGate(
+        item,
+        kind,
+        ctx,
+        tx,
+        await projectAccessService.getPermissions(item.projectId, ctx, tx),
+      );
       const routedToId = isRegisteredGateKind(kind)
         ? handlerFor(kind).routeTo({ item, ctx, tx })
         : routingTargetId(item);
@@ -788,7 +816,7 @@ export const approvalGatesService = {
     // non-awaiting answer here means this kind has no live question — never
     // that one was hidden behind a decided row.
     if (read.gate?.state !== 'awaiting')
-      return { gate: null, canDecide: false, routedToLabel: null };
+      return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
     return read;
   },
 

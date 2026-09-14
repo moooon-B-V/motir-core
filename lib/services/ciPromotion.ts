@@ -1,5 +1,9 @@
-import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
-import type { GithubCheckRun, Prisma } from '@/generated/prisma/client';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceContext,
+} from '@/lib/workspaces/context';
+import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import {
   claimedCompleteSha,
@@ -17,6 +21,8 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
+import { settleGreenVerdict, type AutoMergeRequest } from './mergeGates';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ContainerHasOpenChildrenError,
   ApprovalGatePendingError,
@@ -91,6 +97,13 @@ const SKIPPABLE = [
 const SOURCE_STATUS = 'implemented';
 /** The status CI green moves it to. */
 const TARGET_STATUS = 'in_review';
+/**
+ * The statuses a card can hold while its merge gates are still a live question —
+ * where a green verdict RE-RAISES a gate a head move withdrew (MOTIR-5515). A card
+ * the promotion moves never passes through here: its gates are raised in the
+ * promotion's own transaction.
+ */
+const REVIEW_STATUSES: readonly string[] = ['in_review', 'approved'];
 
 /** Every pull request that delivers this card, by id, with the check rows the
  *  verdict is derived from — the union the doc block below explains, extracted
@@ -212,9 +225,10 @@ export async function promoteDeliveredCardsOnGreen(args: {
 }): Promise<string[]> {
   const targets = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, args.workspaceId);
+    const none = { promote: [] as string[], reRaise: [] as string[] };
     const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
-    if (!pr) return [];
-    if (derivePrCiState(pr.checkRuns) !== 'passing') return [];
+    if (!pr) return none;
+    if (derivePrCiState(pr.checkRuns) !== 'passing') return none;
 
     // ⚠️ THE PULL REQUEST, NOT A CARD READ OFF IT (MOTIR-3721). This used to
     // resolve the pull request's own link column and hand the resolver a single
@@ -245,10 +259,22 @@ export async function promoteDeliveredCardsOnGreen(args: {
       const row = await workItemRepository.findById(item.id, tx);
       if (row && (await everyDeliveryIsGreen(row, tx))) green.push(item.id);
     }
-    return green;
+
+    // ⚠️ AND THE CARDS ALREADY IN REVIEW (MOTIR-5515). A card that went green, was
+    // promoted and had a gate withdrawn by a push stays in review — so the green
+    // verdict for its new head is the moment its fresh gate is owed, and the
+    // `implemented` filter above would never reach it. Their verdict is judged under
+    // the card's lock, in `reRaiseMergeGates`.
+    const reRaise = set.items
+      .filter((item) => REVIEW_STATUSES.includes(item.status))
+      .map((item) => item.id);
+    return { promote: green, reRaise };
   });
 
-  return promoteEach(targets, { userId: args.actorUserId, workspaceId: args.workspaceId });
+  const ctx = { userId: args.actorUserId, workspaceId: args.workspaceId };
+  const promoted = await promoteEach(targets.promote, ctx);
+  await reRaiseMergeGates(targets.reRaise, ctx);
+  return promoted;
 }
 
 /**
@@ -398,6 +424,67 @@ async function reconcileClaimedCompleteDeliveries(
 }
 
 /**
+ * Settle this card's green verdict — merge gates in a `manual` project, the auto merges
+ * owed in an `auto` one — over the SAME delivery set the verdict was judged on
+ * (MOTIR-5515 · MOTIR-5518): `collectDeliveries`, so a member the verdict counted is a
+ * member the settlement asks about.
+ */
+async function settleMergesForCard(
+  item: WorkItem,
+  ctx: { userId: string; workspaceId: string },
+  tx: Prisma.TransactionClient,
+): Promise<AutoMergeRequest[]> {
+  const members = await collectDeliveries(item, tx);
+  return settleGreenVerdict({ item, pullRequestIds: [...members.keys()] }, ctx, tx);
+}
+
+/**
+ * Dispatch the auto merges a committed settlement owes (MOTIR-5518) — ONE job per pull
+ * request, keyed on `(pull request, head)` so a redelivered verdict enqueues nothing new.
+ * Post-commit by construction: it is called only after the transaction returned.
+ */
+async function dispatchAutoMerges(
+  workItemId: string,
+  requests: readonly AutoMergeRequest[],
+  ctx: { userId: string; workspaceId: string },
+): Promise<void> {
+  for (const request of requests) {
+    await sendEvent('pull-request/auto-merge.requested', {
+      workspaceId: ctx.workspaceId,
+      workItemId,
+      pullRequestId: request.pullRequestId,
+      headSha: request.headSha,
+      actorUserId: ctx.userId,
+      idempotencyKey: `${request.pullRequestId}:${request.headSha}`,
+    });
+  }
+}
+
+/**
+ * RE-RAISE for cards already in review (MOTIR-5515): under the card's row lock — the
+ * same lock the promotion's status write takes, so two green events for one card
+ * serialise and the second finds the first's gates — re-judge the whole set and raise
+ * whatever is missing. A card whose set is not green raises nothing. In an `auto`
+ * project the same verdict dispatches the new head's merge instead (MOTIR-5518).
+ */
+async function reRaiseMergeGates(
+  workItemIds: readonly string[],
+  ctx: { userId: string; workspaceId: string },
+): Promise<void> {
+  for (const id of workItemIds) {
+    const requests = await withWorkspaceContext(ctx, async (tx) => {
+      // A card deleted since the verdict locks nothing and reads back null.
+      await workItemRepository.lockById(id, tx);
+      const item = await workItemRepository.findById(id, tx);
+      if (!item || !REVIEW_STATUSES.includes(item.status)) return [];
+      if (!(await everyDeliveryIsGreen(item, tx))) return [];
+      return settleMergesForCard(item, ctx, tx);
+    });
+    await dispatchAutoMerges(id, requests, ctx);
+  }
+}
+
+/**
  * Move each card through the SHIPPED authority, one transaction each, and treat
  * a per-card refusal as a skip rather than a failure of the whole promotion.
  *
@@ -405,6 +492,11 @@ async function reconcileClaimedCompleteDeliveries(
  * us, or an actor without edit rights on one project must not stop the other
  * cards of the same run from being promoted — the same per-item tolerance
  * `completeSession` applies to a session close-out.
+ *
+ * ⚠️ THE MERGE GATES COMMIT WITH THE STATUS WRITE (MOTIR-5515). They are raised in
+ * `updateStatus`'s own transaction, after the transition, so a card never reaches
+ * review without them and a failed gate insert rolls the promotion back. The
+ * post-commit `work-item/transitioned` event is `updateStatus`'s, exactly as before.
  */
 async function promoteEach(
   workItemIds: string[],
@@ -413,8 +505,19 @@ async function promoteEach(
   const promoted: string[] = [];
   for (const id of workItemIds) {
     try {
-      await workItemsService.updateStatus(id, TARGET_STATUS, ctx);
+      let autoMerges: AutoMergeRequest[] = [];
+      await workItemsService.updateStatus(id, TARGET_STATUS, ctx, {
+        inTransaction: async (tx) => {
+          // Non-null by construction: the transition above locked and wrote this row
+          // in this same transaction.
+          const item = (await workItemRepository.findById(id, tx))!;
+          autoMerges = await settleMergesForCard(item, ctx, tx);
+        },
+      });
       promoted.push(id);
+      // AFTER the promotion committed (MOTIR-5518) — and the promotion to in_review
+      // stands whatever the merge does.
+      await dispatchAutoMerges(id, autoMerges, ctx);
     } catch (err) {
       if (!SKIPPABLE.some((kind) => err instanceof kind)) throw err;
       console.warn('[ciPromotion] skipped a card CI green could not promote', {

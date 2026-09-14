@@ -556,6 +556,174 @@ An approval that does not merge is a note, not a gate.
 > card reaches `approved` either way, and somebody still presses merge. §8's
 > Workflow B row 4b is why there are two gates rather than one.
 
+> ### §4 — SECOND AMENDMENT (MOTIR-5510, 2026-09-14): the MERGE gate's contract — one per pull request, raised on green, merged or enqueued OUTSIDE the decision, and its outcome recorded on the PULL REQUEST
+>
+> **What was OPEN.** §4 decides the seam, the App-by-provenance rule and that
+> every refusal renders; §8 row 3 says the gates are raised on green and row 5
+> says _merge — or ENQUEUE_. Nothing here said what one merge gate is ABOUT on a
+> card with several pull requests, when it goes away, how an Approve that must
+> call a host is recorded by a door that runs in one transaction, or what an
+> automatic merge leaves behind. Story MOTIR-4882's children build against those
+> answers, so they are written down once, here. **Everything above in §4 stands**;
+> this block adds to it and supersedes one earlier card's wording (decision 2).
+>
+> **Read at base `cc09db183`.** Written to merge in EITHER order with
+> MOTIR-5479's amendment for the approve-and-merge gate: this block touches no
+> line that one edits (§8 row 4a), and its decisions 4 and 5 are the merge gate's
+> side of 5479's decision 5 — merge, or enqueue where the repository has a queue;
+> each merge gate decided only on success, with `outcomeRef: null`; the merge
+> commit or queue entry on the pull request; a refused one stays `awaiting`.
+>
+> **1. SUBJECT — one gate per pull request** (rung 2: the shipped uniqueness
+> key). `subjectId` is the `github_pull_request` row id and `subjectVersion` is
+> `owner/name#number@headSha`. The gate hangs on the **run target** — the work
+> item the delivering run was launched against, as
+> `howToTestService.getForWorkItem` resolves it (`runTarget`). The partial unique
+> index `approval_gate_one_awaiting_per_subject` over
+> `(work_item_id, kind, subject_id) WHERE state = 'awaiting'`
+> (`prisma/migrations/20260908210000_add_approval_gate/migration.sql:91-93`)
+> already allows exactly this, and §6b states why: a card carrying several open
+> pull requests legitimately has several simultaneous awaiting merge gates. This
+> narrows §1's amendment row _"**any** card **with a pull request**"_ to the run
+> target; a child the same pull requests also deliver gets no merge gate of its own.
+>
+> **2. RAISED on the all-green verdict, and only there** (rung 2: §8 row 3, and
+> §7's amendment point 4). The raise takes §8 row 3's verdict and moment — the
+> run target's delivery set turning green, as `lib/services/ciPromotion.ts`
+> judges it (`everyDeliveryIsGreen`) — and fires only when the project's
+> `prMergeMode` is `manual` and only for a provider that can merge (decision 11).
+> **A merge gate is never raised on a pull request whose checks are not green, in
+> either mode**: only a green pull request is a merge candidate (§7 amendment
+> point 4). **This supersedes, by quotation, the wording MOTIR-4793 carried before
+> plan `cmu1iamkg009rhutxld323mnw` re-scoped it** — that its gate is _"created
+> when a pull request is LINKED"_. A link is not a verdict; a gate raised on it
+> would ask a person to merge code CI has not judged.
+>
+> **3. WITHDRAWN** (rung 2: §6b's `superseded`, written by the product). An
+> awaiting merge gate is set `superseded` when its pull request's head moves, when
+> the pull request closes, or when its delivery row leaves the run target. It
+> writes `state` and nothing else, exactly as the design publish path does (§6b
+> SHIPPED). The next all-green verdict raises a fresh gate against the new head.
+>
+> **4. APPROVE IS EXECUTED OUTSIDE THE DECIDE TRANSACTION, and its OUTCOME is
+> recorded on the PULL REQUEST, not on the gate** (rung 2: the shipped decide
+> door). `approvalGatesService.decide` is one transaction with no post-commit
+> hook — its own doc comment says _"a failing effect still discards the
+> decision"_ — so it cannot call a host and survive the call failing. The merge
+> entry point therefore runs:
+>
+> - **(a) check** — read the gate; it is `awaiting`, the actor holds §2's
+>   authority, and the pull request still matches `subjectVersion`, is open, and
+>   is still delivered. A mismatch SUPERSEDES that gate (decision 3) and returns
+>   the shipped `APPROVAL_GATE_SUPERSEDED`;
+> - **(b) call the seam** — merge or enqueue, outside any transaction;
+> - **(c) on `merged` or `enqueued`** — call `decide` normally. The handler writes
+>   no status, so the gate's **`outcomeRef` is `null`**; then record
+>   `merge_authority = 'gate'` and `merge_outcome_ref` (the merge commit SHA, or
+>   `queue:<entryId>`) on the pull request;
+> - **(d) on a refusal** — write NOTHING. The gate stays `awaiting` and decidable.
+>
+> **Why not `outcomeRef`.** `outcome_ref` is written as `effect.statusWritten`
+> (`lib/services/approvalGatesService.ts:909`), and the item page applies it as a
+> status KEY — `OptimisticStatusProvider.tsx`, and
+> `DesignResultSection.tsx:168`'s `applyOptimisticStatus(result.gate.outcomeRef)`.
+> A merge SHA there would be painted onto the card as a status.
+>
+> **The race.** Two people press at once and one merges. The other's seam call
+> returns `MERGE_ALREADY_MERGED`, or its `decide` loses to the partial index or to
+> `APPROVAL_GATE_ALREADY_DECIDED`. Neither is a 500.
+>
+> **The stamp.** When MOTIR-5234's stamp is required on `decide`, the entry point
+> carries it through from its caller, and its `APPROVAL_GATE_STALE_SUBJECT` is
+> checked after (a)'s supersede check, never instead of it.
+>
+> **5. THE MERGE METHOD is the repository's, never hard-coded** (rung 2: the host
+> setting). It is read from the repository's own settings, first allowed wins:
+> `allow_squash_merge` → `allow_merge_commit` → `allow_rebase_merge`.
+>
+> **6. THE QUEUE** (rung 2: GitHub's documented API; the permission is a
+> HYPOTHESIS). A base branch whose active rules include `merge_queue` is detected
+> with `GET /repos/{owner}/{repo}/rules/branches/{branch}`, which GitHub lists
+> under _Repository permissions for Metadata_ (read) on its _Permissions required
+> for GitHub Apps_ page — so no App needs anything new to ASK. Such a pull request
+> is enqueued with the GraphQL mutation `enqueuePullRequest`, passing
+> `expectedHeadOid` so a moved head cannot be enqueued. A `405` from the merge
+> call reading _"must be merged through the merge queue"_ also routes to enqueue.
+> An enqueued pull request leaves the card where it is: `done` still arrives only
+> through the merge webhook, when the queue lands it. **The enqueue is expected to
+> need `pull_requests: write` — recorded as a hypothesis, not a reading**, to be
+> confirmed by the first real enqueue. `motir-studio` holds no `pull_requests`
+> permission, so a HOSTED repository could not be enqueued today; MOTIR-4161
+> carries that consequence.
+>
+> **7. THE APP** (rung 2: the shipped provenance helper). The role is
+> `'provisioning'` (`motir-studio`) when
+> `isMotirHostedOwner(repo.owner, provisioningOrgLogin())`
+> (`lib/git/hostOwnership.ts:43`, `lib/ciMetering/config.ts:33`) holds, and
+> `'user-facing'` (`motir-integration`) otherwise — including when the host owner
+> is `null`. The two grants, as read in
+> `docs/decisions/unlinked-pull-request-check.md:30-31` after its 2026-09-14
+> amendment:
+>
+> | App                 | what matters here                                                                                       |
+> | ------------------- | ------------------------------------------------------------------------------------------------------- |
+> | `motir-integration` | `contents: write` (MOTIR-4787) · `pull_requests: write` · `metadata: read` — merges an imported repo    |
+> | `motir-studio`      | `contents: write` · `metadata: read` · **no `pull_requests`** — merges a hosted repo, cannot enqueue it |
+>
+> The merge itself needs `contents: write`: GitHub lists
+> `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` under _Repository
+> permissions for Contents_ (write).
+>
+> **8. THE REFUSAL UNION — FIVE new members** (rung 2: `lib/approvalGates/refusals.ts`,
+> which mirrors the server's tag and forbids a second vocabulary):
+>
+> | member                         | the host's answer                                                                          |
+> | ------------------------------ | ------------------------------------------------------------------------------------------ |
+> | `MERGE_CHECKS_NOT_GREEN`       | `405` — not mergeable while required checks are pending or failing                         |
+> | `MERGE_CONFLICT`               | `mergeable_state: dirty`                                                                   |
+> | `MERGE_BRANCH_PROTECTED`       | `405` — a required review or rule is not satisfied                                         |
+> | `MERGE_ALREADY_MERGED`         | the pull request is already merged                                                         |
+> | `MERGE_APP_PERMISSION_MISSING` | `403`, or GraphQL `FORBIDDEN` — naming the permission from `X-Accepted-GitHub-Permissions` |
+>
+> **A changed subject is NOT a sixth member.** A moved head (`409`, which GitHub
+> documents as _"sha was provided and pull request head did not match"_), a closed
+> pull request or a lost link SUPERSEDES the gate and returns
+> `APPROVAL_GATE_SUPERSEDED`; a gate somebody else decided is
+> `APPROVAL_GATE_ALREADY_DECIDED`; MOTIR-5234's `APPROVAL_GATE_STALE_SUBJECT` is
+> its own. A second name for any of these is exactly the second vocabulary
+> `refusals.ts`'s header forbids. (§4's original list above — _"no linked pull
+> request"_ and _"a gate somebody else decided"_ — maps onto those two shipped
+> members rather than onto new ones.)
+>
+> **9. AUTO MODE, and §7a's authority record made concrete** (rung 3: §7a's own
+> reading, still the planner's). On the same green verdict, in an `auto` project,
+> **no gate is raised**; Motir merges or enqueues each pull request after commit,
+> through the same seam. The pull request records `merge_authority = 'auto_mode'`
+> and `merge_outcome_ref`. **§7a's _"the `work_item_delivery` / pull-request row"_
+> is settled as the pull request**: the columns are
+> `github_pull_request.merge_authority` (`gate` | `auto_mode`) and
+> `merge_outcome_ref`, written only when Motir merges or enqueues — a hand merge on
+> the host leaves both `null`, which is the honest answer. A refused automatic
+> merge writes no record: it posts ONE comment on the run target naming the pull
+> request, the refusal and its next action, and is not retried for the same head
+> SHA.
+>
+> **10. THE PERMISSION KEY** (rung 2: §1's handler table). `work_item:merge_pull_request`
+> is the permission §1 names for this kind, and it does not exist yet —
+> `git grep -n "merge_pull_request" cc09db183 -- lib prisma` returns no hits (exit
+> 1). It is added to `lib/permissions/catalog.ts`, granted to every built-in role
+> that holds `work_item:edit`.
+>
+> **11. CAPABILITY** (rung 2: the seam's own convention). Merging is declared by the
+> optional `mergeChangeRequest?` method and a `providerSupportsMerge` helper, the
+> way `resolveRepoTarballUrl?` (`lib/git/provider.ts:161`) declares its capability
+> today. MOTIR-4610 replaces capability-by-optional-method with a declared set, and
+> this helper is one of the sites it converts.
+>
+> **Not decided here:** §8 row 4a (MOTIR-5479's), what a queue EJECTION does to
+> the card (MOTIR-5461), how a GitHub review maps onto gates (MOTIR-4910), and
+> whether a provisioned repository gets a queue at all (MOTIR-4161).
+
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 
 | owned HERE (Epic MOTIR-4878)                   | kept by MOTIR-693 (9.2)                                                       |
@@ -1023,7 +1191,11 @@ routedToLabel }` — with `canDecide` computed as the Approvals read computes
 > - any move to the cancelled status,
 >
 > **supersedes the item's `awaiting` gates**, in the same transaction as the
-> move. **`→ blocked` does not:** blocking pauses the work, it does not abandon
+> move. **A PERSON's move, not the product's lifecycle:** the merge status sync
+> moving a card out of review because one of its pull requests closed passes
+> `keepPendingQuestions` and withdraws nothing here — it withdraws merge gates BY
+> SUBJECT itself (MOTIR-4882), and a blanket withdraw would take a sibling pull
+> request's question with it. **`→ blocked` does not:** blocking pauses the work, it does not abandon
 > the question. The supersede writes `state` and nothing else, exactly as §6b's
 > publish-path supersede does — no actor, no note, no `decided_at` — so the audit
 > still cannot read a withdrawn question as a decision. Who pulled the work back
