@@ -51,6 +51,16 @@ import { isWorkspaceTierRevealed } from '@/lib/workspaces/tierDisclosure';
 // 47px at 320px — the tier nav's assumed 68px floor is unreachable, because
 // `OrgControl` and `WorkspaceSwitcher` cannot compress below 112px between
 // them. The one-tier band is what closes that.
+//
+// THE TRUNCATION BUDGET (MOTIR-4897 · design § *The context path's truncation
+// budget*). The ladder decides which tiers are PRESENT; it cannot decide how wide
+// they are, because a name is data. So every tier is elastic — `min-w-0`, its
+// name truncated inside its cap — and the ANCESTORS (`OrgControl`,
+// `WorkspaceSwitcher`) carry `shrink-3` against the project's `shrink`, so they
+// yield width first and the most specific tier stays the most legible. Before
+// this the ancestors could not shrink at all: at `xl`, with names as long as a
+// new tenant is given, the row overflowed and the project tier — last in it —
+// passed UNDER the `flex-none` right cluster, visible and unclickable.
 // ════════════════════════════════════════════════════════════════════════════
 
 export interface ShellTierNavProps {
