@@ -132,6 +132,21 @@ export interface ApprovalGateControlProps {
    */
   filesKept?: boolean | null;
   /**
+   * WHERE THE FRAME SITS — `inline` (the default: a card on a page or inside a
+   * row) or `fill` (Subtask MOTIR-5224: the approval OVERLAY, which IS the
+   * container).
+   *
+   * ⚠️ A LAYOUT INPUT, NOT A STATE. `fill` changes the frame's BOX and nothing
+   * inside it (`design/workbench/design-notes.md` § 22 *THE FILL FORM*): the
+   * card chrome comes off, the port takes the recipe the expanded arm already
+   * uses — `min-h-0 flex-1 overflow-y-auto`, floor and ceiling dropped, because
+   * the viewport is the ceiling — and Expand is not offered, because the overlay
+   * already is the expanded form. Band 1, band 3, every state, every verb, the
+   * confirm band and the refusal are byte-identical, and `inline` renders exactly
+   * what every call site rendered before this input existed.
+   */
+  layout?: 'inline' | 'fill';
+  /**
    * Record the decision. Resolves to a refusal the frame draws IN PLACE, or
    * null on success — at which point the caller has already reconciled.
    */
@@ -207,11 +222,16 @@ const PORT_CEILING = 'max-h-[34rem]';
 function PortBox({
   children,
   expanded,
+  fill,
   showExpand,
   onToggleExpanded,
 }: {
   children: ReactNode;
   expanded: boolean;
+  /** The frame's FILL form (MOTIR-5224) — the expanded recipe without its
+   *  wrapper, and never an Expand/Collapse control, because there is nothing
+   *  to expand into. */
+  fill: boolean;
   /**
    * Whether to draw the EXPAND control. The floor, the ceiling and the scroll
    * are unconditional — they are the box — but the control is not.
@@ -241,7 +261,7 @@ function PortBox({
   return (
     <div
       className={
-        expanded
+        expanded || fill
           ? // ⚠️ `min-h-0 flex-1 overflow-y-auto` IS THE LOAD-BEARING PART, AND
             // IT IS THE RECIPE `Modal.Body` OWNS. In a flex column a bare child
             // gets `min-height: auto` and cannot shrink below its content, so
@@ -277,7 +297,7 @@ function PortBox({
           while expanded would drop the only control that gets the reader back
           out, leaving them inside a viewport-sized panel with no way to close
           it. Whatever hides the affordance must never hide the way back. */}
-      {showExpand || expanded ? (
+      {!fill && (showExpand || expanded) ? (
         <div className="pointer-events-none sticky top-0 z-10 flex justify-end">
           <Button
             variant="secondary"
@@ -477,12 +497,14 @@ export function ApprovalGateControl({
   confirmConsequences,
   routedToLabel,
   filesKept = null,
+  layout = 'inline',
   onDecide,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
   const tPort = useTranslations('approvalGate.port');
   const [phase, setPhase] = useState<Phase>({ kind: 'awaiting' });
   const [expanded, setExpanded] = useState(false);
+  const fill = layout === 'fill';
 
   // MOTIR-5032 — the port's own report, and the gate on band 3 that follows from
   // it. `usePortRenderStatus` defaults to `'rendered'` when NOTHING reports, so
@@ -556,14 +578,19 @@ export function ApprovalGateControl({
   const frame = (
     <div
       className={
-        expanded
-          ? // The expanded form is dialog-SHAPED and is deliberately not a
-            // `Modal`: it holds no focus trap and steals nothing, because the
-            // frame is still the page's own content — just given the viewport.
-            // The recipe (scrim token, panel token, the `max-h`/flex column)
-            // mirrors `Modal` so the two read as one language.
-            'fixed top-1/2 left-1/2 z-50 flex max-h-[90vh] w-[90vw] max-w-[72rem] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-(--radius-modal) border border-(--el-border) bg-(--el-page-bg)'
-          : 'overflow-hidden rounded-(--radius-card) border border-(--el-border)'
+        fill
+          ? // THE FILL FORM (MOTIR-5224): the overlay is the container, so no
+            // radius, no border and no fixed wrapper — a flex column that takes
+            // the height it is given.
+            'flex min-h-0 flex-1 flex-col overflow-hidden'
+          : expanded
+            ? // The expanded form is dialog-SHAPED and is deliberately not a
+              // `Modal`: it holds no focus trap and steals nothing, because the
+              // frame is still the page's own content — just given the viewport.
+              // The recipe (scrim token, panel token, the `max-h`/flex column)
+              // mirrors `Modal` so the two read as one language.
+              'fixed top-1/2 left-1/2 z-50 flex max-h-[90vh] w-[90vw] max-w-[72rem] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-(--radius-modal) border border-(--el-border) bg-(--el-page-bg)'
+            : 'overflow-hidden rounded-(--radius-card) border border-(--el-border)'
       }
       onKeyDown={(event) => {
         if (expanded && event.key === 'Escape') setExpanded(false);
@@ -601,10 +628,11 @@ export function ApprovalGateControl({
       <PortRenderStatusProvider reporter={reporter}>
         <PortBox
           expanded={expanded}
+          fill={fill}
           // Drawn where the asset draws it: a decision that is YOURS to make,
           // not yet made, over a subject that actually rendered — and never
           // over `G`'s dead port, which has nothing to expand.
-          showExpand={canDecide && !decided && !withdrawn && portShown}
+          showExpand={!fill && canDecide && !decided && !withdrawn && portShown}
           onToggleExpanded={() => setExpanded((v) => !v)}
         >
           {withdrawn ? (

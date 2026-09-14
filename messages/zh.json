@@ -8260,6 +8260,22 @@
       }
     }
   },
+  "approvalOverlay": {
+    "escKey": "Esc",
+    "dialogTitle": "{key} 的{kind}",
+    "openWorkItem": "打开工作项",
+    "loading": "正在加载审批",
+    "notAvailable": {
+      "title": "此审批不可用",
+      "body": "它可能已不存在，或你没有访问权限。后面的页面没有变化。"
+    },
+    "notRenderable": {
+      "body": "这是一项{kind}审批。Motir 支持展示此类型后，它会在这里打开——这不是你造成的。"
+    },
+    "subjectGone": {
+      "body": "此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。"
+    }
+  },
   "approvals": {
     "acceptanceVideo": {
       "title": "验收视频审批",

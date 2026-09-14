@@ -1,3 +1,4 @@
+import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 
 // Wire DTOs for the approval-gate record (Story MOTIR-4778 · Subtask
@@ -268,4 +269,49 @@ export interface ApprovalQueuePageDto {
   total: number;
   page: number;
   pageSize: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE APPROVAL OVERLAY's READ (Story MOTIR-5214 · Subtask MOTIR-5223) — what
+// `GET /api/work-items/approval-gate` answers for ONE work item and ONE kind.
+//
+// The overlay is addressed by a URL that can be pasted into a cold tab, so it
+// holds no queue row to hand a server action: it asks for the gate, whether
+// this reader may decide it, and the subject the port renders, in one read.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What the PORT has to render, per kind — FOUR answers, and none of them is an
+ * absence of an answer.
+ *
+ * ⚠️ `no_gate`, `kind_not_built` and `gone` ARE DIFFERENT FACTS, and a surface
+ * that collapsed any two would tell the reader something false
+ * (`design/workbench/design-notes.md` § 20 refuses the same collapse on a row):
+ * the card has no question of this kind · this build cannot render this kind
+ * yet · the bytes this question was about no longer resolve.
+ */
+export type ApprovalGateOverlaySubjectDTO =
+  | { state: 'no_gate' }
+  | { state: 'kind_not_built' }
+  | { state: 'gone' }
+  | {
+      state: 'resolved';
+      kind: 'design_result';
+      /** The version the gate asks about — read by the gate's `subjectId`. */
+      evidence: DesignEvidenceDTO;
+      /** `DesignGateSubjectDTO.filesKept`, off the row rather than the state. */
+      filesKept: boolean;
+    };
+
+/** The overlay's one read. */
+export interface ApprovalGateOverlayReadDTO {
+  /** The card the address named — what the overlay's header identifies. */
+  workItem: { id: string; identifier: string; title: string };
+  /** The gate of the asked kind, whatever its state; null when the card has none. */
+  gate: ApprovalGateDTO | null;
+  /** The AUTHORITY answer (`approvalGatesService.getForWorkItem`), never the routing one. */
+  canDecide: boolean;
+  /** Whose decision it is waiting on, as a name — the frame's state `B` line. */
+  routedToLabel: string | null;
+  subject: ApprovalGateOverlaySubjectDTO;
 }

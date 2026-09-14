@@ -8264,6 +8264,22 @@
       }
     }
   },
+  "approvalOverlay": {
+    "escKey": "Esc",
+    "dialogTitle": "{kind} for {key}",
+    "openWorkItem": "Open work item",
+    "loading": "Loading the approval",
+    "notAvailable": {
+      "title": "This approval is not available",
+      "body": "It may no longer exist, or you may not have access to it. The page behind this is unchanged."
+    },
+    "notRenderable": {
+      "body": "This is a {kind} approval. It will open here once Motir can show that kind — nothing you did caused this."
+    },
+    "subjectGone": {
+      "body": "The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now."
+    }
+  },
   "approvals": {
     "acceptanceVideo": {
       "title": "Acceptance video approval",

@@ -2066,6 +2066,19 @@ export default defineConfig({
         'lib/mappers/approvalGateMappers.ts',
         'components/approvals/ApprovalGateControl.tsx',
         'components/approvals/portRenderStatus.tsx',
+        // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN — the approval overlay ───
+        // Subtask MOTIR-5226, the story's own vitest gate. The overlay, its
+        // address and client read, the row's settle signal and the route were in
+        // NO `include`, so they were absent from the report and gated nothing.
+        // `ApprovalsList.tsx` is already reported through
+        // `app/**/workbench/_components/**` above, and is PINNED below because
+        // this story rewrote its central interaction. MEASURED on the parent
+        // branch before being pinned; the numbers are beside each threshold.
+        'components/approvals/ApprovalOverlay.tsx',
+        'lib/approvals/overlayAddress.ts',
+        'lib/approvals/approvalOverlayClient.ts',
+        'lib/approvals/decidedGates.ts',
+        'app/api/work-items/approval-gate/route.ts',
         // Bug MOTIR-5150 — the PR-REFERENCE parser the link picker's query
         // grammar gained. A pure function with one job, so it is measured and
         // pinned here, per the note at the top of this list.
@@ -2169,6 +2182,51 @@ export default defineConfig({
         // 100 / 98.07 / 100 / 100. The two residual branches are the confirm
         // band's optional copy slots, which a kind may leave unset.
         'components/approvals/ApprovalGateControl.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN (Subtask MOTIR-5226) ────
+        // MEASURED on the parent branch over `tests/components/approval-overlay`,
+        // `workbench-approvals-list`, `approval-gate-fill-layout`,
+        // `tests/approvals/`, `tests/api/approval-gate-route.test.ts` and
+        // `tests/integration/approvals/`, then pinned at the project floor.
+        // 100 / 100 / 100 / 100 unless noted.
+        'lib/approvals/overlayAddress.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvals/approvalOverlayClient.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvals/decidedGates.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/api/work-items/approval-gate/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // 100 / 97.43 / 100 / 100. The two residual branches are v8's IMPLICIT
+        // else arms of the read effect's two `aborted` early returns, reported
+        // with no source location; both arms of each are driven by
+        // `approval-overlay.test.tsx` ("a read superseded by a new address…",
+        // "a FAILED read superseded…").
+        'components/approvals/ApprovalOverlay.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Report-only until this story rewrote its central interaction (the row
+        // now OPENS the overlay; MOTIR-5225). 100 / 100 / 100 / 100 with
+        // StatePill's unreachable `default` ignored, citing its invariant test.
+        'app/**/workbench/_components/ApprovalsList.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
