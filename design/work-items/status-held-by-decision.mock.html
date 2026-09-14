@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The status control says so — a move held by a pending approval (MOTIR-4887 ·
+      MOTIR-5523)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — Story MOTIR-4887, design subtask MOTIR-5523.
+      Gates MOTIR-5528 (item page, quick view, edit page) and MOTIR-5529 (the list
+      row); composed by the board design MOTIR-5525.
+
+      WHAT IT DRAWS. While an awaiting approval gate owns one of a work item's
+      moves (approval-gates.md section 6d AMENDMENT, rules 1-5), the STATUS CONTROL
+      carries a held message and ONE Review & approve button that opens the
+      full-screen approval overlay (design/workbench/design-notes.md section 22)
+      over the current page. Only the owned move is held.
+
+      GROUNDED IN A RENDER. Before drawing, the shipped StatusPill and StatusPicker
+      were bundled and rendered headlessly with the real theme tokens (In Review in
+      the default restricted workflow): the option set, the dot hues, the Pill's
+      classes and the Combobox trigger/menu/option classes below are copied from
+      that render's emitted markup, not reconstructed.
+
+      COMPOSES: CoreFieldsPanel's FieldCard, StatusPill (Pill), StatusPicker
+      (Combobox), Button primary sm, the quick-view rail field, FormField. NEW:
+      the held message (tint-yellow, the approval frame's own awaiting hue) and
+      the held option (a disabled ComboboxOption with a trailing tag).
+
+      Toggle the theme for the dark board. See design-notes.md section
+      "The status control says so".
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 16px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Tokens this asset adds, copied from the design system's theme ── */
+      :root {
+        --color-ink: #1a1a1a;
+        --el-page-bg: var(--color-background);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --height-btn-sm: 32px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 64px;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0 0 6px;
+        color: var(--el-text-strong);
+      }
+      .review-head p {
+        margin: 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 28px auto 10px;
+        max-width: 1100px;
+      }
+      .panel-label code {
+        text-transform: none;
+      }
+      .stage {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 36px;
+        align-items: flex-start;
+      }
+      .stage-col {
+        flex-direction: column;
+        gap: 14px;
+      }
+      .specimen {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .cap {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        max-width: 460px;
+        line-height: 1.5;
+        margin: 0;
+      }
+      .rail {
+        width: 300px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .fcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 10px 14px;
+      }
+      .fcard .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .fcard .flabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .fcard .chev {
+        margin-top: -2px;
+        padding: 2px;
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+        display: inline-flex;
+      }
+      .fcard .chev svg {
+        width: 16px;
+        height: 16px;
+      }
+      .fcard .fvalue {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--el-text);
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .ghost-bar {
+        height: 20px;
+        width: 60%;
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+      }
+      /* StatusPill — Pill's emitted classes: chip padding + badge radius, the hue in the tint background, --el-text-strong ink */
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+      }
+      .spill-review {
+        background: var(--el-tint-sky);
+      }
+      .spill-progress {
+        background: var(--el-tint-sky);
+      }
+      .spill-done {
+        background: var(--el-tint-mint);
+      }
+      .spill-todo {
+        background: var(--el-surface);
+        border-color: var(--el-border-soft);
+      }
+      .spill-blocked {
+        background: var(--el-tint-peach);
+      }
+      /* ── THE HELD MESSAGE — the new element ── */
+      .held {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-tint-yellow);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+      }
+      .held-glyph {
+        flex: none;
+        display: inline-flex;
+        margin-top: 2px;
+        color: var(--el-text-strong);
+      }
+      .held-glyph svg {
+        width: 14px;
+        height: 14px;
+      }
+      .held-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+      }
+      .held-text {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .held-text strong {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .held-anchored {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        width: 300px;
+        z-index: 2;
+        box-shadow: var(--shadow-elevated);
+      }
+      /* Button primary · sm — Button.tsx's emitted classes */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        text-decoration: none;
+        border: 0;
+        cursor: pointer;
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      /* Combobox — the shipped trigger + menu surface + option row */
+      .cbx {
+        width: 100%;
+      }
+      .cbx-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        text-align: left;
+      }
+      .cbx-trigger.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .cbx-trigger .tval {
+        flex: 1;
+      }
+      .updown {
+        margin-left: auto;
+        display: inline-flex;
+        color: var(--el-icon-muted);
+      }
+      .updown svg {
+        width: 16px;
+        height: 16px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border);
+      }
+      .cbx-menu {
+        margin-top: 4px;
+        width: 100%;
+        max-width: 18rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .cbx-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .cbx-opt.is-active {
+        background: var(--el-option-active-bg);
+      }
+      .cbx-opt .check {
+        margin-left: 4px;
+        display: inline-flex;
+        color: var(--el-accent-on-surface);
+      }
+      .cbx-opt .check svg {
+        width: 16px;
+        height: 16px;
+      }
+      .cbx-opt.is-held {
+        cursor: not-allowed;
+      }
+      .cbx-opt.is-held .olabel {
+        color: var(--el-text-secondary);
+      }
+      .held-tag {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .held-tag svg {
+        width: 12px;
+        height: 12px;
+      }
+      /* quick-view rail field */
+      .qv-rail {
+        width: 300px;
+        margin: 0;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 6px 14px;
+      }
+      .rail-field {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .rail-field:last-child {
+        border-bottom: 0;
+      }
+      .rail-field dt {
+        display: flex;
+        align-items: center;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-field dd {
+        margin: 6px 0 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      /* edit page FormField */
+      .form-field {
+        width: 360px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .ff-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      /* list rows */
+      .list {
+        width: 760px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding-bottom: 150px;
+      }
+      .list-narrow {
+        width: 460px;
+        padding-bottom: 110px;
+      }
+      .lrow {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 14px;
+      }
+      .lr-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .scell {
+        position: relative;
+        width: 130px;
+      }
+      .lrow.is-refused .scell .spill {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /* address + overlay stub */
+      .address {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .addr-row {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
+      .addr-k {
+        width: 48px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        text-transform: uppercase;
+      }
+      .overlay-stub {
+        width: 420px;
+        height: 170px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .ov-exit {
+        display: flex;
+        justify-content: flex-end;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .ov-body {
+        padding: 18px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .legend-t {
+        border-collapse: collapse;
+        max-width: 460px;
+        font-size: 12.5px;
+      }
+      .legend-t th {
+        text-align: left;
+        vertical-align: top;
+        padding: 6px 12px 6px 0;
+        color: var(--el-text-strong);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .legend-t td {
+        padding: 6px 0;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The status control says so — a move held by a pending approval</h1>
+        <p>
+          Story <strong>MOTIR-4887</strong> · design <strong>MOTIR-5523</strong> · gates
+          <strong>MOTIR-5528</strong> (item page · quick view · edit page) and
+          <strong>MOTIR-5529</strong> (the list row), and is composed by the board design
+          <strong>MOTIR-5525</strong>. While an <code>awaiting</code> gate owns one of the item's
+          moves (ADR <code>approval-gates.md</code> §6d AMENDMENT, rules 1–5), the status control
+          itself says the status can't be moved there directly, and hands the reader the door: one
+          <strong>Review &amp; approve</strong> button into the full-screen approval overlay. Only
+          that one move is held. Every value below that names a status or a gate kind is an
+          <em>example of an interpolated value</em> (<code>{status}</code> = In Review → Done,
+          <code>{decision}</code> = Design result).
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-updown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-scan-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+          <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+          <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+          <circle cx="12" cy="12" r="1" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ═══ PANEL 1 — the item page rail, CLOSED control, awaiting · may decide ═══ -->
+    <div class="panel-label">
+      1 · Item page rail — closed control · gate <code>awaiting</code> · reader MAY decide
+    </div>
+    <div class="stage">
+      <div class="specimen">
+        <p class="cap">
+          The shipped Status FieldCard, unopened. The held message sits INSIDE the card, directly
+          under the status value — visible without opening anything.
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span>
+              <button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="spill spill-review">In Review</span>
+              <div class="held" role="status">
+                <span class="held-glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <div class="held-body">
+                  <p class="held-text">
+                    Status can't be moved to <strong>Done</strong> directly — a
+                    <strong>Design result</strong> approval is waiting.
+                  </p>
+                  <a
+                    class="btn btn-primary btn-sm"
+                    href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                    >Review &amp; approve
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Type</span></div>
+            <div class="fvalue"><div class="ghost-bar"></div></div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Assignee</span></div>
+            <div class="fvalue"><div class="ghost-bar"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap">
+          The button is a link to the SAME page with the overlay address added —
+          <code>withApprovalOverlay(href, { itemKey, kind })</code>. It opens the full-screen
+          overlay (<code>design/workbench/design-notes.md</code> § 22) over this page; closing it
+          returns here with every other parameter untouched.
+        </p>
+        <div class="address">
+          <span class="addr-row"
+            ><span class="addr-k">before</span><code>/items/MOTIR-812</code></span
+          >
+          <span class="addr-row"
+            ><span class="addr-k">after</span
+            ><code>/items/MOTIR-812?approval=MOTIR-812&amp;approvalKind=design_result</code></span
+          >
+        </div>
+        <div class="overlay-stub" aria-hidden="true">
+          <div class="ov-exit"><span>Close</span></div>
+          <div class="ov-body">The approval overlay — composed, not redrawn (§ 22 Panel 1)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 2 — the open dropdown, awaiting · may decide ═══ -->
+    <div class="panel-label">
+      2 · Item page rail — dropdown open · gate <code>awaiting</code> · the held option
+    </div>
+    <div class="stage">
+      <div class="specimen">
+        <p class="cap">
+          Opening the picker keeps the message in place above it. The held target renders a lock and
+          “needs approval” and cannot be picked. Every other legal target works as it does today.
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span>
+              <button class="chev" aria-label="Close Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <div class="held" role="status">
+                <span class="held-glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <div class="held-body">
+                  <p class="held-text">
+                    Status can't be moved to <strong>Done</strong> directly — a
+                    <strong>Design result</strong> approval is waiting.
+                  </p>
+                  <a
+                    class="btn btn-primary btn-sm"
+                    href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                    >Review &amp; approve
+                  </a>
+                </div>
+              </div>
+              <div class="cbx">
+                <button class="cbx-trigger is-focus" role="combobox" aria-expanded="true">
+                  <span
+                    class="dot"
+                    style="background: var(--el-status-in-review)"
+                    aria-hidden="true"
+                  ></span>
+                  <span class="tval">In Review</span>
+                  <span class="updown"
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </button>
+                <div class="cbx-menu" role="listbox" aria-label="Status">
+                  <div class="cbx-opt is-active" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-blocked)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Blocked</span>
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-in-progress)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">In Progress</span>
+                  </div>
+                  <div class="cbx-opt" role="option" aria-selected="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-in-review)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">In Review</span
+                    ><span class="check"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-approved)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Approved</span>
+                  </div>
+                  <div class="cbx-opt is-held" role="option" aria-disabled="true">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-done)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Done</span
+                    ><span class="held-tag"
+                      ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg>needs
+                      approval</span
+                    >
+                  </div>
+                  <div class="cbx-opt" role="option">
+                    <span
+                      class="dot"
+                      style="background: var(--el-status-cancelled)"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="olabel">Cancelled</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap">
+          The option set is the shipped one for this workflow from In Review (rendered from the real
+          <code>StatusPicker</code> before drawing). Only the target the gate OWNS is held — for a
+          <code>design_result</code> gate that is the project's done-category status. Blocked, In
+          Progress, Approved and Cancelled stay pickable.
+        </p>
+        <table class="legend-t">
+          <tbody>
+            <tr>
+              <th>held option</th>
+              <td>
+                <code>aria-disabled="true"</code>, not focus-skipped: arrow keys land on it and the
+                screen reader reads “Done, needs approval, unavailable”.
+              </td>
+            </tr>
+            <tr>
+              <th>ink</th>
+              <td>
+                label <code>--el-text-secondary</code> · tag <code>--el-text-secondary</code> · lock
+                12px. No opacity dim.
+              </td>
+            </tr>
+            <tr>
+              <th>primitive</th>
+              <td>
+                <code>ComboboxOption</code> gains <code>disabled?: boolean</code> + the
+                <code>trailing</code> tag it already has.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 3 — the quick view rail + edit page ═══ -->
+    <div class="panel-label">
+      3 · Quick view rail and edit page — the same control, the same message
+    </div>
+    <div class="stage">
+      <div class="specimen">
+        <p class="cap">
+          Quick view (<code>IssueQuickViewPanel</code> → <code>EditableRailField</code>). The
+          message on the control IS the quick view's signal — no second line elsewhere in the peek.
+          The overlay opens OVER the peek's host page.
+        </p>
+        <dl class="qv-rail">
+          <div class="rail-field">
+            <dt>
+              Status
+              <span class="updown"
+                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+              ></span>
+            </dt>
+            <dd>
+              <span class="spill spill-review">In Review</span>
+              <div class="held" role="status">
+                <span class="held-glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <div class="held-body">
+                  <p class="held-text">
+                    Status can't be moved to <strong>Done</strong> directly — a
+                    <strong>Design result</strong> approval is waiting.
+                  </p>
+                  <a
+                    class="btn btn-primary btn-sm"
+                    href="?peek=MOTIR-812&amp;approval=MOTIR-812&amp;approvalKind=design_result"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                    >Review &amp; approve
+                  </a>
+                </div>
+              </div>
+            </dd>
+          </div>
+          <div class="rail-field">
+            <dt>Type</dt>
+            <dd><div class="ghost-bar"></div></dd>
+          </div>
+        </dl>
+      </div>
+      <div class="specimen">
+        <p class="cap">
+          Edit page (<code>EditIssueForm</code>) renders the same <code>StatusPicker</code>, so it
+          carries the same message above the picker and the same held option. No extra panel, no
+          banner on the form.
+        </p>
+        <div class="form-field">
+          <label class="ff-label">Status</label>
+          <div class="held" role="status">
+            <span class="held-glyph" aria-hidden="true"
+              ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+            ></span>
+            <div class="held-body">
+              <p class="held-text">
+                Status can't be moved to <strong>Done</strong> directly — a
+                <strong>Design result</strong> approval is waiting.
+              </p>
+              <a
+                class="btn btn-primary btn-sm"
+                href="?approval=MOTIR-812&amp;approvalKind=design_result"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg>Review
+                &amp; approve
+              </a>
+            </div>
+          </div>
+          <div class="cbx">
+            <button class="cbx-trigger" role="combobox" aria-expanded="false">
+              <span
+                class="dot"
+                style="background: var(--el-status-in-review)"
+                aria-hidden="true"
+              ></span>
+              <span class="tval">In Review</span>
+              <span class="updown"
+                ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+              ></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 4 — the /items row status cell after a refused commit ═══ -->
+    <div class="panel-label">
+      4 · <code>/items</code> row — the status cell after a commit comes back
+      <code>APPROVAL_GATE_PENDING</code>
+    </div>
+    <div class="stage stage-col">
+      <p class="cap">
+        The list reads NO gate per row. The row learns of the hold only when a commit is refused:
+        the cell reverts to its old value and the message + button anchor to that cell, in place of
+        the toast. It closes on Escape, an outside click, or opening the overlay.
+      </p>
+      <div class="list">
+        <div class="lrow">
+          <span class="lr-id">MOTIR-811</span
+          ><span class="grow">Settings room — the switch row</span
+          ><span class="scell"><span class="spill spill-progress">In Progress</span></span
+          ><span class="avatar">P</span>
+        </div>
+        <div class="lrow is-refused">
+          <span class="lr-id">MOTIR-812</span
+          ><span class="grow">Design — the status control says so</span>
+          <span class="scell">
+            <span class="spill spill-review">In Review</span>
+            <div class="held held-anchored" role="alert">
+              <span class="held-glyph" aria-hidden="true"
+                ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+              ></span>
+              <div class="held-body">
+                <p class="held-text">
+                  Status can't be moved to <strong>Done</strong> directly — a
+                  <strong>Design result</strong> approval is waiting.
+                </p>
+                <a
+                  class="btn btn-primary btn-sm"
+                  href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg>Review
+                  &amp; approve
+                </a>
+              </div>
+            </div>
+          </span>
+          <span class="avatar">M</span>
+        </div>
+        <div class="lrow">
+          <span class="lr-id">MOTIR-813</span><span class="grow">Board refuses on the card</span
+          ><span class="scell"><span class="spill spill-todo">To Do</span></span
+          ><span class="avatar">Y</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 5 — see-only reader ═══ -->
+    <div class="panel-label">
+      5 · A reader who may SEE but not decide — gate <code>awaiting</code> ·
+      <code>canDecide: false</code>
+    </div>
+    <div class="stage">
+      <div class="specimen">
+        <p class="cap">
+          Same message, ending with who it waits on (<code>routedToLabel</code>). NO button — a door
+          that would refuse the person pressing it is not offered.
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="spill spill-review">In Review</span>
+              <div class="held" role="status">
+                <span class="held-glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <div class="held-body">
+                  <p class="held-text">
+                    Status can't be moved to <strong>Done</strong> directly — a
+                    <strong>Design result</strong> approval is waiting on <strong>Mara S.</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap">
+          The see-only reader in the list, after a refused commit: the same anchored message, no
+          button. The held option in their dropdown is identical to Panel 2.
+        </p>
+        <div class="list list-narrow">
+          <div class="lrow is-refused">
+            <span class="lr-id">MOTIR-812</span
+            ><span class="grow">Design — the status control…</span>
+            <span class="scell">
+              <span class="spill spill-review">In Review</span>
+              <div class="held held-anchored" role="alert">
+                <span class="held-glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <div class="held-body">
+                  <p class="held-text">
+                    Status can't be moved to <strong>Done</strong> directly — a
+                    <strong>Design result</strong> approval is waiting on <strong>Mara S.</strong>
+                  </p>
+                </div>
+              </div>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 6 — every other gate state: unchanged ═══ -->
+    <div class="panel-label">
+      6 · Gate <code>approved</code> · <code>changes_requested</code> · <code>superseded</code> —
+      the control exactly as today
+    </div>
+    <div class="stage">
+      <div class="specimen">
+        <p class="cap">
+          <code>approved</code> — the card is Done; reopening it by hand is a legal, unheld move
+          (§6d).
+        </p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue"><span class="spill spill-done">Done</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap"><code>changes_requested</code> — no message, no held option.</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue"><span class="spill spill-progress">In Progress</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap"><code>superseded</code> — the question was withdrawn; nothing is held.</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">Status</span
+              ><button class="chev" aria-label="Edit Status">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue"><span class="spill spill-blocked">Blocked</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 7 — zh ═══ -->
+    <div class="panel-label">7 · <code>zh</code> — both variants</div>
+    <div class="stage" lang="zh">
+      <div class="specimen">
+        <p class="cap">可决定的读者</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head">
+              <span class="flabel">状态</span
+              ><button class="chev" aria-label="编辑状态">
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="spill spill-review">审阅中</span>
+              <div class="held" role="status">
+                <span class="held-glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <div class="held-body">
+                  <p class="held-text">
+                    无法直接将状态改为<strong>已完成</strong>——<strong>设计成果</strong>审批正在等待。
+                  </p>
+                  <a
+                    class="btn btn-primary btn-sm"
+                    href="?approval=MOTIR-812&amp;approvalKind=design_result"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-scan-eye" /></svg
+                    >审阅并批准</a
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="specimen">
+        <p class="cap">仅可查看的读者 · 下拉中被保留的选项</p>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">状态</span></div>
+            <div class="fvalue">
+              <div class="held" role="status">
+                <span class="held-glyph" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <div class="held-body">
+                  <p class="held-text">
+                    无法直接将状态改为<strong>已完成</strong>——<strong>设计成果</strong>审批正在等待
+                    <strong>Mara S.</strong> 处理。
+                  </p>
+                </div>
+              </div>
+              <div class="cbx-menu" role="listbox" aria-label="状态">
+                <div class="cbx-opt" role="option">
+                  <span
+                    class="dot"
+                    style="background: var(--el-status-in-progress)"
+                    aria-hidden="true"
+                  ></span
+                  ><span class="olabel">进行中</span>
+                </div>
+                <div class="cbx-opt is-held" role="option" aria-disabled="true">
+                  <span
+                    class="dot"
+                    style="background: var(--el-status-done)"
+                    aria-hidden="true"
+                  ></span
+                  ><span class="olabel">已完成</span
+                  ><span class="held-tag"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock" /></svg
+                    >需要审批</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
