@@ -4695,14 +4695,14 @@ and the empty state are composed from that render, unchanged except where named.
 
 ### The panels
 
-| #   | State                                                  | What changes                                                                                                                                                                                                |
-| --- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | A current result, one mock                             | A **note link row** leads, above the frame. Nothing inline.                                                                                                                                                 |
-| 2   | Several delta mocks                                    | One shipped frame per `mock`, in publish (`position`) order, 20px apart; a **count line** above the first frame; still ONE note row.                                                                        |
-| 3   | The note file reclaimed (`url` null)                   | The row stays and names the note; its link is replaced by _No longer stored_ — never a link that 404s.                                                                                                      |
-| 4   | An older stored result (inline `noteMd`, `image` rows) | An **Earlier format** pill + a one-line reason, then a **Files** list: the note row and one row per screenshot, each a file link. No rendered Markdown, no thumbnails, no lightbox. The mock frame renders. |
-| 5   | Empty, on a design work item                           | Shape unchanged; the body copy says a result exists only when other work waits on the design.                                                                                                               |
-| 6   | Inside the approval overlay                            | The frame is not redesigned: band 2 holds panel 1 (or 2, 3, 4) — the note row, then the frame(s). Verbs stay below the port.                                                                                |
+| #   | State                                                  | What changes                                                                                                                                                                                                      |
+| --- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | A current result, one mock                             | The mock frame leads; the **note link row** sits at the BOTTOM, under the frame and above the provenance chips. Nothing inline.                                                                                   |
+| 2   | Several delta mocks                                    | One shipped frame per `mock`, in publish (`position`) order, 20px apart; a **count line** above the first frame; still ONE note row, under the last frame.                                                        |
+| 3   | The note file reclaimed (`url` null)                   | The row stays and names the note; its link is replaced by _No longer stored_ — never a link that 404s.                                                                                                            |
+| 4   | An older stored result (inline `noteMd`, `image` rows) | An **Earlier format** pill + a one-line reason, then the mock frame, then a **Files** list under it: the note row and one row per screenshot, each a file link. No rendered Markdown, no thumbnails, no lightbox. |
+| 5   | Empty, on a design work item                           | Shape unchanged; the body copy says a result exists only when other work waits on the design.                                                                                                                     |
+| 6   | Inside the approval overlay                            | The frame is not redesigned: band 2 holds panel 1 (or 2, 3, 4) — the frame(s), then the note row under them. Verbs stay below the port.                                                                           |
 
 A result with BOTH an inline `noteMd` and no `note_file` cannot come from a
 publish (§1 always shipped the companion); if one exists it renders panel 4 with
@@ -4720,6 +4720,12 @@ the note row in its panel-3 state.
 | Files caption       | section label (uppercase 12px, the old _Screenshot_ label's style) | `--el-text-secondary`                                                                                            | —                                                               |
 | Screenshot file row | the note link row, `FileImage`                                     | as the note link row                                                                                             | as the note link row                                            |
 | Frame strip link    | the shipped anchor                                                 | **`--el-text`**, not the shipped `--el-link`: `--el-link` on `--el-surface-soft` is 4.37:1, under AA (MOTIR-453) | unchanged                                                       |
+
+**Order, and why (revised on review, 2026-09-14):** mock(s) → note link row →
+provenance. The note is NOT the first thing a reviewer meets. The mock is what the
+approval is about; the note is written for the agents that build to the design, and
+a reviewer may never open it — so it sits at the bottom, one link away, and nothing
+is drawn above the first frame except the count line when there are several.
 
 The note link's `href` is the `note_file` asset's own `url` — the authenticated
 `/api/attachments/<id>/content` route — opened in a new tab (AMENDMENT 4 Q5). A

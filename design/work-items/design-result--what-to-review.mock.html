@@ -26,7 +26,7 @@
       frame, provenance chips and empty state below mirror that render.
 
       PANELS (review EACH):
-        1 · A current result, one mock — the note as a LINK row above the frame.
+        1 · A current result, one mock — the note as a LINK row below the frame.
         2 · Several delta mocks — how the frames stack and are named.
         3 · The note file reclaimed — the link's absent state.
         4 · An older stored result — its note and screenshot as FILE links.
@@ -223,6 +223,12 @@
       }
       .note-row + .note-row {
         margin-top: 8px;
+      }
+      /* The note sits UNDER the mock(s): the mock is what is reviewed, the note is
+         for whoever wants more (MOTIR-5494 revision). */
+      .frame + .note-row,
+      .frame + .files-cap {
+        margin-top: 16px;
       }
       .row-label {
         color: var(--el-text);
@@ -540,24 +546,17 @@
       shipped panel as it stands.
     </p>
     <section class="panel">
-      <h2>1 · A current result, one mock — the note is a LINK, above the frame</h2>
+      <h2>1 · A current result, one mock — the mock leads, the note is a LINK below it</h2>
       <p class="why">
-        The link row leads, so a reviewer knows the note exists before scrolling past a 32rem frame.
-        It opens the published <code>note_file</code> attachment in a new tab. The frame, its strip
-        and the provenance line are the shipped ones, unchanged.
+        The mock is what a reviewer is asked to judge, so it comes first and nothing sits above it.
+        The note is for whoever wants more, so its link row sits at the bottom, under the frame. It
+        opens the published <code>note_file</code> attachment in a new tab. The frame, its strip and
+        the provenance line are the shipped ones, unchanged.
       </p>
       <div class="card">
         <div class="card-head">
           <span class="card-title">Design result</span
           ><span class="card-gloss">— what this work item produced</span>
-        </div>
-        <div class="note-row">
-          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
-          ><span class="row-label">Design note</span
-          ><span class="mono row-path">design/work-items/design-notes.md</span
-          ><a class="row-link" href="#note"
-            >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
-          ></a>
         </div>
         <div class="frame-strip">
           <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
@@ -572,6 +571,14 @@
           <div class="swatch" style="background: var(--el-tint-sky)"></div>
           <div class="swatch" style="background: var(--el-tint-mint)"></div>
         </div>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+          ><span class="row-label">Design note</span
+          ><span class="mono row-path">design/work-items/design-notes.md</span
+          ><a class="row-link" href="#note"
+            >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
         <div class="prov">
           <span class="chip"
             ><svg class="ic-sm" aria-hidden="true"><use href="#i-commit" /></svg
@@ -585,20 +592,13 @@
       <p class="why">
         A change that touches more than one surface publishes more than one delta mock. Each keeps
         the shipped frame, and its strip names the source path; a count line says how many there
-        are, so a reviewer does not stop after the first frame. Still ONE note link.
+        are, so a reviewer does not stop after the first frame. Still ONE note link, under the last
+        frame.
       </p>
       <div class="card">
         <div class="card-head">
           <span class="card-title">Design result</span
           ><span class="card-gloss">— what this work item produced</span>
-        </div>
-        <div class="note-row">
-          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
-          ><span class="row-label">Design note</span
-          ><span class="mono row-path">design/work-items/design-notes.md</span
-          ><a class="row-link" href="#note"
-            >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
-          ></a>
         </div>
         <p class="stack-cap">2 mocks — the panels that changed</p>
         <div class="frame-strip">
@@ -626,6 +626,14 @@
           <div class="swatch" style="background: var(--el-tint-sky)"></div>
           <div class="swatch" style="background: var(--el-tint-mint)"></div>
         </div>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+          ><span class="row-label">Design note</span
+          ><span class="mono row-path">design/work-items/design-notes.md</span
+          ><a class="row-link" href="#note"
+            >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
         <div class="prov">
           <span class="chip"
             ><svg class="ic-sm" aria-hidden="true"><use href="#i-commit" /></svg
@@ -646,12 +654,6 @@
           <span class="card-title">Design result</span
           ><span class="card-gloss">— what this work item produced</span>
         </div>
-        <div class="note-row">
-          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
-          ><span class="row-label">Design note</span
-          ><span class="mono row-path">design/work-items/design-notes.md</span
-          ><span class="row-gone">No longer stored</span>
-        </div>
         <div class="frame-strip">
           <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
           ><span class="mono strip-path"
@@ -664,6 +666,12 @@
           <p>The published delta mock renders here — the panels that changed, nothing else.</p>
           <div class="swatch" style="background: var(--el-tint-sky)"></div>
           <div class="swatch" style="background: var(--el-tint-mint)"></div>
+        </div>
+        <div class="note-row">
+          <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+          ><span class="row-label">Design note</span
+          ><span class="mono row-path">design/work-items/design-notes.md</span
+          ><span class="row-gone">No longer stored</span>
         </div>
         <div class="prov">
           <span class="chip"
@@ -678,8 +686,8 @@
       <p class="why">
         A result published before AMENDMENT 4 carries an inline note and <code>image</code> assets.
         Nothing is migrated and nothing re-renders inline: no Markdown, no thumbnails, no lightbox.
-        An <em>Earlier format</em> pill says why it looks different, and every file is one link
-        away. Its mock still renders in the frame.
+        An <em>Earlier format</em> pill says why it looks different; its mock still renders in the
+        frame, and the files list sits under it, every file one link away.
       </p>
       <div class="card">
         <div class="card-head">
@@ -692,6 +700,18 @@
             >Published before results became what to review — its note and screenshot are kept as
             files.</span
           >
+        </div>
+        <div class="frame-strip">
+          <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+          ><span class="mono strip-path">design/work-items/design-result.mock.html</span
+          ><span class="strip-link"
+            >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+          ></span>
+        </div>
+        <div class="frame">
+          <p>The earlier result&#39;s mock, rendered as before.</p>
+          <div class="swatch" style="background: var(--el-tint-sky)"></div>
+          <div class="swatch" style="background: var(--el-tint-mint)"></div>
         </div>
         <p class="files-cap">Files</p>
         <div class="note-row">
@@ -709,18 +729,6 @@
           ><a class="row-link" href="#png"
             >Open file <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
           ></a>
-        </div>
-        <div class="frame-strip">
-          <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
-          ><span class="mono strip-path">design/work-items/design-result.mock.html</span
-          ><span class="strip-link"
-            >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
-          ></span>
-        </div>
-        <div class="frame">
-          <p>The earlier result&#39;s mock, rendered as before.</p>
-          <div class="swatch" style="background: var(--el-tint-sky)"></div>
-          <div class="swatch" style="background: var(--el-tint-mint)"></div>
         </div>
         <div class="prov">
           <span class="chip"
@@ -759,9 +767,9 @@
     <section class="panel">
       <h2>6 · Inside the approval overlay — the same port, in band 2</h2>
       <p class="why">
-        The frame is not redesigned. Band 2 holds exactly panel 1 (or 2, 3, 4): the note link row,
-        then the frame(s). A reviewer deciding a design sees the mock first and reaches the note in
-        one click; the verbs stay below the port.
+        The frame is not redesigned. Band 2 holds exactly panel 1 (or 2, 3, 4): the frame(s), then
+        the note link row under them. A reviewer deciding a design sees the mock first and reaches
+        the note in one click; the verbs stay below the port.
       </p>
       <div class="gate">
         <div class="frameHead">
@@ -771,14 +779,6 @@
           </div>
         </div>
         <div class="port">
-          <div class="note-row">
-            <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
-            ><span class="row-label">Design note</span
-            ><span class="mono row-path">design/work-items/design-notes.md</span
-            ><a class="row-link" href="#note"
-              >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
-            ></a>
-          </div>
           <div class="frame-strip">
             <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
             ><span class="mono strip-path"
@@ -791,6 +791,14 @@
             <p>The published delta mock renders here — the panels that changed, nothing else.</p>
             <div class="swatch" style="background: var(--el-tint-sky)"></div>
             <div class="swatch" style="background: var(--el-tint-mint)"></div>
+          </div>
+          <div class="note-row">
+            <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+            ><span class="row-label">Design note</span
+            ><span class="mono row-path">design/work-items/design-notes.md</span
+            ><a class="row-link" href="#note"
+              >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
           </div>
         </div>
         <div class="frameFoot">
