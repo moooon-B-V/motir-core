@@ -25,8 +25,13 @@
   classification table while losing its producer) and **AMENDMENT 3**
   (MOTIR-4750, 2026-09-07 — **AMENDMENT 2 Q3's single-call shape is no longer
   the only shape**: `create_design_upload` adds the mint-then-PUT door Q3
-  rejected, because the ceiling Q3 measured was not the binding one). **Read all
-  three before treating §1, §6 or AMENDMENT 2 Q3 as current.** The title still names "the CI trigger" because that is
+  rejected, because the ceiling Q3 measured was not the binding one) and
+  **AMENDMENT 4** (MOTIR-5489, 2026-09-14 — a result is the changed mock(s) plus
+  the note as a link, **no `.png`, no inline `noteMd`**, published **only when an
+  open work item is `blocked_by` the design**, a change is a new delta mock, and
+  the asset set is two files; **§1's `image` row and note-section scoping, and
+  AMENDMENT 2 Q2, are superseded**). **Read all four before treating §1, §6 or
+  AMENDMENT 2 Q2/Q3 as current.** The title still names "the CI trigger" because that is
   what this record decided and every citation of it lands here; AMENDMENT 2 is
   where it stops being true.
 
@@ -686,6 +691,175 @@ that the number to watch was never the blob cap.
 AMENDMENT 2 Q3, unchanged, plus AMENDMENT 2 itself — the agent still DECLARES its
 target, nothing is inferred from a branch, a title or a diff, and a design card
 is still unfinished until the evidence id is on it.
+
+### AMENDMENT 4 (MOTIR-5489, 2026-09-14): a result is WHAT TO REVIEW — the changed mock(s) with the note as a link, no screenshot, published only when work waits on the design
+
+**What changed, in one sentence.** A design result used to be everything a
+design card drew — the note sections inline, the mock, the `.png` export — and
+every design card published one. It is now **the mock of what changed, with the
+note one link away**, and it is published **only when a work item that is not
+finished is `blocked_by` the design card**. Story MOTIR-5488 implements it; the
+decisions below were settled by Yue on 2026-09-14 (rung 3 — the requester's
+explicit choice), and this amendment writes them down once so every sibling card
+implements one text.
+
+**Why.** A design result exists to put in front of a person the decision they are
+being asked to make. Measured against that, the old shape carried three kinds of
+noise. The first thing a reviewer met was the note — prose written so that an
+agent can build to the design — rendered at full height above the design itself.
+Below the mock sat a screenshot of that same mock, which earned its place when a
+design could only be seen on its pull request and is now a second copy of what
+the panel already shows. And a change to one panel of an existing surface
+arrived as the whole redrawn surface, so the reviewer had to find the change
+before judging it. The publish rule added a fourth: every publish raises an
+approval gate (`approval-gates.md` §1), and a gate is only worth asking a person
+for when something waits on its answer.
+
+#### Q1 — what a result IS: one or more `mock` assets plus exactly ONE `note_file`
+
+| input on a publish (MCP tool, `create_design_upload`, or either HTTP route) | disposition                                                                                                                                          | refusal code                         |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| a `mock` asset (`*.mock.html`)                                              | **required — one or more.** A delta change may publish several delta mocks (Q3)                                                                      | `DESIGN_EVIDENCE_MOCK_REQUIRED`      |
+| a `note_file` asset (`design-notes.md` / `*.design-notes.md`)               | **required — exactly one.** Still written, still published; the result SHOWS it as a link (Q5)                                                       | `DESIGN_EVIDENCE_NOTE_FILE_REQUIRED` |
+| an `image` asset (`.png`)                                                   | **RETIRED — refused.** The `design_asset_kind` enum value `image` STAYS, so stored rows keep reading; no migration                                   | `DESIGN_EVIDENCE_IMAGE_RETIRED`      |
+| `noteMd` (the inline note sections)                                         | **RETIRED — refused**, whether empty or not. The `design_evidence.note_md` column STAYS for stored rows; nothing writes it any more, so no migration | `DESIGN_EVIDENCE_NOTE_MD_RETIRED`    |
+
+All four answer `422` over HTTP — the request parses, and its SHAPE is one the
+contract no longer accepts (the class `DESIGN_EVIDENCE_NOT_A_LEAF` already
+answers 422 for). An `image` or `noteMd` is checked FIRST, so a
+caller still sending the old three-file shape is told which input is retired
+rather than something vaguer about its count.
+
+**A retired input is REFUSED, never silently ignored.** An agent cannot tell an
+ignored field from an accepted one: a publish that quietly dropped the `.png`
+would return an evidence id, the agent would report the screenshot published,
+and the next agent reading that report would believe it. A refusal naming the
+retired input is the one answer that changes what the caller does next.
+
+**The refusal fires at `create_design_upload` too**, for the asset-kind half: a
+grant requested for `kind: image` is refused with
+`DESIGN_EVIDENCE_IMAGE_RETIRED`, so no bytes are uploaded for a publish that can
+never succeed. The mock / note-file COUNT is a property of the whole publish, so
+it is checked at publish, not per grant.
+
+#### Q2 — WHEN a result is published: only when an open work item is `blocked_by` the design card
+
+**The rule.** A publish is accepted only when at least one work item that is
+**not archived** and whose status is **not in the `done` category** carries an
+`is_blocked_by` edge TO the design card —
+`workItemLinkRepository.findByToItem(designCardId, 'is_blocked_by')`, filtered.
+Otherwise it is refused `DESIGN_EVIDENCE_NOTHING_WAITS` (`409` — the request is
+well-formed; the tree is in a state where a result has no one to serve), with a
+message saying that no open work item is `blocked_by` the design, so its pull
+request is its review.
+
+**The read happens TWICE, and both are load-bearing:** at `create_design_upload`
+(the upload-grant mint — so an agent is refused BEFORE it PUTs bytes) and again
+at publish, inside the publish transaction (so a dependent that closed between
+the mint and the publish is seen).
+
+| case                                                                                | counts?          | why                                                                                                                              |
+| ----------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| a dependent under **another story or epic**                                         | **yes**          | the edge is what makes the design a precondition; where the dependent sits in the tree is irrelevant                             |
+| a dependent that is **`done` or `cancelled`**                                       | **no**           | both are the `done` CATEGORY; nothing waits on an answer for work that is finished or abandoned                                  |
+| a dependent that is **archived**                                                    | **no**           | a person decided it should not be worked, which is a stronger instruction than its status                                        |
+| a **parent-run** publish (`withinParentKey`), dependents are siblings in that story | **yes**          | a sibling is a work item like any other; the parent run changes where the design's commit lands, not whether its dependents wait |
+| a **republish** after the last dependent has closed                                 | **no — refused** | the same read, at the same two moments. The earlier result and its gate are untouched: a refused publish supersedes nothing      |
+| a **bug** whose fix needs a design first                                            | **yes**          | that bug is `blocked_by` its design, so it is simply the first row; it is not an exception to the rule                           |
+
+**A design card with no result is reviewed through its pull request.** A design
+that nothing waits on — a design defect fixed in place, a record of a surface as
+built — opens its `design/*` pull request as it always has, and that pull
+request is approved through `pull_request_approval` (`approval-gates.md` §1's
+amendment). No `design_result` gate is raised for it, because no publish
+happened. **This is not a way to skip review; it is the review moving to where
+the change already is.**
+
+**What the rule deliberately does NOT read:** the design card's own `type`
+(§3 still accepts a `code` card amending an asset — it publishes under the same
+rule), the dependent's `type` or kind, and whether the edge was planned or wired
+later. The edge is the whole question.
+
+#### Q3 — a change to an existing design is a NEW DELTA MOCK
+
+- **Name:** `<surface>--<change>.mock.html`, beside the surface it amends, in the
+  same `design/<area>/`. The double hyphen separates the surface from the change,
+  so `detail--design-result-review.mock.html` reads as _a change to `detail`_.
+- **Content:** ONLY the panels that change — the changed state, the new
+  element, the altered layout — drawn from the real shipped components exactly
+  as a full mock is (the design-against-shipped-reality rule is unchanged).
+- **Note:** a NEW `##` section in the area's `design-notes.md`, citing the
+  section and the mock it amends by path.
+- **The existing mock is NOT edited.** It is the record of the moment it was
+  drawn. A design is for its moment: the next run renders what the default branch
+  actually ships before it builds, so an older mock is a record, never a
+  specification to keep current.
+- **The result publishes the delta mock(s) only**, plus the area note as the one
+  `note_file`.
+- **What counts as "only the changed panels" is a drawing judgement** carried by
+  the convention, the dispatch prompt and the runbook — not a guard. No check
+  measures a delta.
+
+#### Q4 — the asset set is TWO files: `design-notes.md` + `<surface>.mock.html`
+
+The `.png` export is **no longer required anywhere** — not by a convention, not
+by a guard, not by the publish. A `.pen` source is **not accepted for a NEW
+design**, because a `.pen` can only be reviewed through its export, and the
+export is what this amendment retires. **Existing exports and `.pen` sources are
+not deleted** — 232 `.png` and 14 `.pen` under `design/` on `origin/main`
+(`git ls-tree -r --name-only origin/main -- design | grep -cE '\.png$'` /
+`'\.pen$'`, at `d1f0863b5`). They are records; nothing will read them as
+required, and deleting them changes nothing a reviewer sees.
+
+#### Q5 — the note link targets the published `note_file` ATTACHMENT
+
+Not a repository URL. The attachment is the one address that works for every
+repository a result can come from — connected, unconnected, private, a
+customer's own — and it is the one `approval-gates.md` §6c's pin retains with an
+APPROVED result, so the link a reviewer approved beside is still there after a
+supersede. It is served through `GET /api/attachments/[id]/content` like every
+other design asset (§5 unchanged).
+
+#### Q6 — STORED results are shown with their files reachable as LINKS
+
+A result published before this amendment may carry an inline `noteMd` and
+`image` assets. **No data migration.** The panel keeps every file reachable —
+the note, and each screenshot — as a link, and re-renders nothing inline. A
+decided gate's record therefore stays inspectable exactly as it was decided,
+without the retired rendering coming back for the stored rows.
+
+#### Q7 — what this SUPERSEDES, and what it does NOT
+
+**Superseded:**
+
+- **§1's classification table, the `*.png` → `image` row** — retired for new
+  publishes (Q1). The `mock` and `note` rows stand; the `note` row now publishes
+  the WHOLE area note as the `note_file`, never sections.
+- **§1's note-SECTION scoping and the 64 KiB inline cap** — there is no inline
+  note to scope or cap. The `note_file` companion, which §1 introduced so the cap
+  was "a rendering bound rather than a data-loss bound", is now the only note.
+- **AMENDMENT 2 Q2 (_the AGENT supplies the sections_)** — amended: the agent
+  supplies no sections. Q2's mitigations for a forgettable publish still stand,
+  now joined by a publish that can be CORRECTLY absent (Q2 above) — so the
+  dispatch prompt carries the publish step only when the server finds a waiting
+  dependent, and a design card with none is not "missing its result".
+- **§5's _"the `.png` plus open-in-new-tab remain as escapes"_** — the `.png`
+  half; open-in-new-tab stands.
+- **The KIND table row in `approval-gates.md` §1's amendment** — _"the mock, the
+  notes, the screenshot"_ now reads _the changed mock(s), the note as a link_.
+
+**NOT changed:** §2's no-entitlement axis · §3's leaf-owns-the-result rule and
+`NotALeafError` / `NotAChildError` · §4's retention, supersede and idempotency,
+and `approval-gates.md` §6c's pin · §5's three `text/html` layers in full ·
+`ALLOWED_DESIGN_ASSET_TYPES` (`image/png` stays allowed for READING stored
+rows) · AMENDMENT 2's explicit-key declaration · AMENDMENT 3's two asset forms ·
+the gate lifecycle: a publish still raises an `awaiting` `design_result` gate,
+and a design with a pull request is still approved through
+`pull_request_approval`.
+
+The ~~struck~~ convention this record uses for superseded text is NOT applied to
+§1 above: its table is still the correct description of a stored row, and this
+amendment is where a reader learns which of its rows a new publish may still use.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 

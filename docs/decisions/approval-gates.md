@@ -163,7 +163,7 @@ subject body. **No second vocabulary, no second control, no second decide door.*
 >
 > | kind                    | the port shows                                                            | fires when                           |
 > | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------ |
-> | `design_result`         | the mock, the notes, the screenshot                                       | a design with **no pull request**    |
+> | `design_result`         | the changed mock(s), the note as a link — `design-result.md` AMENDMENT 4  | a design with **no pull request**    |
 > | `decision_approval`     | the decision **document**                                                 | a decision with **no pull request**  |
 > | `pull_request_approval` | what the card produced — design assets, or **what changed + how to test** | **any** card **with a pull request** |
 > | `pull_request_merge`    | the same port; it is the second decision on the same subject (§8, row 4b) | **any** card **with a pull request** |
