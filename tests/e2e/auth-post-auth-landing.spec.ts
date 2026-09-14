@@ -4,6 +4,7 @@ import { signIn, signUp, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
 // E2E: the property MOTIR-2645 restores — **signing in performs exactly ONE
 // navigation to the landing route, so a `page.goto` immediately afterwards
@@ -92,10 +93,18 @@ test.describe('post-auth landing', () => {
     // of a soft navigation. Both are counted — a request that is ISSUED is a
     // race that exists, even if it is later aborted — and prefetches are not,
     // since they commit nothing.
+    //
+    // ⚠️ A FOLLOWED REDIRECT HOP IS NOT A SECOND NAVIGATION (MOTIR-5221). The bare
+    // `/workbench` now answers 307 to the resolved tab, and the browser follows it
+    // INSIDE the same navigation — Playwright reports the hop as a new request
+    // whose `redirectedFrom()` is the first. The race this pins (MOTIR-2645) is
+    // two INDEPENDENT navigations to the landing, so a hop is skipped; a second
+    // navigation still has no `redirectedFrom` and is still counted.
     const landingNavigations: string[] = [];
     page.on('request', (r) => {
       if (new URL(r.url()).pathname !== POST_AUTH_LANDING) return;
       if (r.headers()['next-router-prefetch'] === '1') return;
+      if (r.redirectedFrom()) return;
       landingNavigations.push(r.isNavigationRequest() ? 'document' : 'rsc');
     });
 
@@ -123,17 +132,19 @@ test.describe('post-auth landing', () => {
     // field at all), so its client redirect plugin never fires and there is no
     // second, document navigation to race the first. Asserting the count here
     // is what would catch that changing under us.
+    // A followed redirect hop is part of ONE navigation, as in the test above.
     const landingNavigations: string[] = [];
     page.on('request', (r) => {
       if (new URL(r.url()).pathname !== POST_AUTH_LANDING) return;
       if (r.headers()['next-router-prefetch'] === '1') return;
+      if (r.redirectedFrom()) return;
       landingNavigations.push(r.isNavigationRequest() ? 'document' : 'rsc');
     });
 
     // The shared helper settles on a RENDERED `/workbench` — the URL AND the
     // `home-page` marker — so reaching this line already proves the route.
     await signUp(page, SIGNUP_EMAIL);
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
 
     expect(
       landingNavigations,

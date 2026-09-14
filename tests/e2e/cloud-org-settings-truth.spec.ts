@@ -30,6 +30,7 @@
 
 import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'org-settings-truth-pass-123';
 const OWNER_EMAIL = 'owner@moooon.test';
@@ -75,7 +76,7 @@ test('the organization settings page offers no address it cannot resolve, and no
     // helper keeps its contract by settling there and navigating on.
     await page.waitForURL('**/onboarding', { timeout: 30_000 });
     await page.goto('/workbench');
-    await page.waitForURL('**/workbench', { timeout: 30_000 });
+    await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
 
     await page.goto('/settings/organization');
     await expect(page.getByRole('heading', { name: 'Organization settings' })).toBeVisible();

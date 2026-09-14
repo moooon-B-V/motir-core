@@ -3916,6 +3916,10 @@ export default defineConfig({
         // being loosened to make a build pass. (MOTIR-4782 renamed
         // `lib/home/` → `lib/workbench/`; the floors are unchanged.)
         'lib/workbench/tab.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-5213 · Subtask MOTIR-5221 — the landing cascade. MEASURED
+        // before being pinned: 100 / 100 / 100 with `tests/workbench/landing.test.ts`
+        // (the whole truth table), pinned at the repo's 90 floor.
+        'lib/workbench/landing.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/homeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/homeMappers.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask MOTIR-2653 — the page's own modules, MEASURED before being

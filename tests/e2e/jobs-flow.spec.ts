@@ -31,6 +31,7 @@ import { resetDatabase, db, truncateJobTables } from './_helpers/db-reset';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
 import { startSignedOut } from './_helpers/shell-session';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'jobs-flow-spec-pass-123';
 
@@ -67,7 +68,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   // helper keeps its contract by settling there and navigating on.
   await page.waitForURL('**/onboarding', { timeout: 30_000 });
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench', { timeout: 30_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
 }
 
 // The signed-up user's auto-created workspace is "{local-part}'s Workspace".
@@ -327,7 +328,7 @@ test('@smoke role gating: a non-owner member sees a disabled Replay with a toolt
   // (MOTIR-5132): it calls the same server action the workspace switcher does,
   // so it is a context switch and resolves its destination through the same
   // owner instead of naming a route of its own.
-  await memberPage.waitForURL('**/workbench');
+  await memberPage.waitForURL(isLandedWorkbenchUrl);
 
   // Seed a DLQ row in the shared workspace so the Replay control renders.
   await seedInviteDlqRow({ workspaceId, to: 'role-gate@example.com', idempotencyKey: 'role-1' });
