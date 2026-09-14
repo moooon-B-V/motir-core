@@ -1167,17 +1167,23 @@
         text-transform: uppercase;
         color: var(--el-text-secondary);
       }
-      /* NEW (state 7) — the DESIGN SLOT inside the Development block: below every
-         pull-request row and its caption, above How to test. Same separator as How
-         to test, so the block reads rows · design · how to test as three parts of
-         ONE port. */
+      /* NEW (state 7) — the DESIGN SLOT inside the Development block: FIRST, above
+         How to test and above every pull-request row (revised on review: what to
+         review leads). The rows and their caption move below How to test behind the
+         same separator, so the block reads design · how to test · pull requests as
+         three parts of ONE port. A block with no design result keeps rows then How
+         to test. */
       .devblk .dr-slot {
-        margin-top: 16px;
+        margin-top: 4px;
         display: flex;
         flex-direction: column;
         gap: 10px;
+        min-width: 0;
+      }
+      .devblk .dvb-prs {
+        margin-top: 16px;
         border-top: 1px solid var(--el-border-soft);
-        padding-top: 16px;
+        padding-top: 8px;
         min-width: 0;
       }
       .devblk .dr-slot .frame-strip,
@@ -1685,9 +1691,11 @@
       <h2>7a · A design card WITH a linked pull request — ONE Development section, at rest</h2>
       <p class="why">
         AMENDMENT 4 Q8. When the card has an open linked pull request, its design result is not a
-        section of its own: it sits INSIDE the Development block, below the pull-request rows and
-        above How to test, and no separate Design result section is drawn on this card. The rows,
-        their caption and How to test are the shipped block (<code>DevelopmentSectionBody</code>,
+        section of its own: it sits INSIDE the Development block, FIRST — the design result, then
+        How to test, then the pull-request rows with their caption — and no separate Design result
+        section is drawn on this card. (A block with no design result keeps rows, then How to test.)
+        The rows, their caption and How to test are the shipped block
+        (<code>DevelopmentSectionBody</code>,
         <code>design/github/design-notes.md</code> §20), composed, not redrawn. The only new element
         is the design slot. No gate is awaiting yet, so there is no frame and no verb.
       </p>
@@ -1698,27 +1706,6 @@
             >— Pull requests, the design and how to test them · live PR and CI status</span
           >
         </div>
-        <div class="pr-row">
-          <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-          <div class="pr-text">
-            <div class="pr-title">Design the result as what to review</div>
-            <div class="pr-meta">moooon/motir-core · #2896</div>
-          </div>
-          <span class="pr-states"
-            ><span class="pill pill-sky"
-              ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-            ><span class="pill pill-mint"
-              ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-            ></span
-          >
-          <a class="ext" href="#" aria-label="Open on GitHub"
-            ><svg aria-hidden="true"><use href="#i-external" /></svg
-          ></a>
-        </div>
-        <p class="dvb-caption">
-          Link with + Link pull request here, or with
-          <span class="dvb-mono">link_pull_request</span> over the MCP.
-        </p>
         <div class="dr-slot" role="group" aria-label="Design result">
           <div class="dvb-htt-head">
             <h4 class="dvb-htt-title">Design result</h4>
@@ -1776,13 +1763,36 @@
             </ol>
           </div>
         </div>
+        <div class="dvb-prs" role="group" aria-label="Pull requests">
+          <div class="pr-row">
+            <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+            <div class="pr-text">
+              <div class="pr-title">Design the result as what to review</div>
+              <div class="pr-meta">moooon/motir-core · #2896</div>
+            </div>
+            <span class="pr-states"
+              ><span class="pill pill-sky"
+                ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+              ><span class="pill pill-mint"
+                ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+              ></span
+            >
+            <a class="ext" href="#" aria-label="Open on GitHub"
+              ><svg aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+          <p class="dvb-caption">
+            Link with + Link pull request here, or with
+            <span class="dvb-mono">link_pull_request</span> over the MCP.
+          </p>
+        </div>
       </div>
     </section>
     <section class="panel">
       <h2>7b · SEVERAL linked pull requests, in two repositories — every row, the design ONCE</h2>
       <p class="why">
         A card links any number of pull requests, in any repositories. Every row is listed; the
-        design result belongs to the CARD, not to a pull request, so it renders once beneath all of
+        design result belongs to the CARD, not to a pull request, so it renders once above all of
         them — never repeated per row.
       </p>
       <div class="card devblk">
@@ -1792,44 +1802,6 @@
             >— Pull requests, the design and how to test them · live PR and CI status</span
           >
         </div>
-        <div class="pr-row">
-          <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-          <div class="pr-text">
-            <div class="pr-title">Design the result as what to review</div>
-            <div class="pr-meta">moooon/motir-core · #2896</div>
-          </div>
-          <span class="pr-states"
-            ><span class="pill pill-sky"
-              ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-            ><span class="pill pill-mint"
-              ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-            ></span
-          >
-          <a class="ext" href="#" aria-label="Open on GitHub"
-            ><svg aria-hidden="true"><use href="#i-external" /></svg
-          ></a>
-        </div>
-        <div class="pr-row">
-          <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-          <div class="pr-text">
-            <div class="pr-title">Two-file design guide for new projects</div>
-            <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
-          </div>
-          <span class="pr-states"
-            ><span class="pill pill-sky"
-              ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-            ><span class="pill pill-peach"
-              ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
-            ></span
-          >
-          <a class="ext" href="#" aria-label="Open on GitHub"
-            ><svg aria-hidden="true"><use href="#i-external" /></svg
-          ></a>
-        </div>
-        <p class="dvb-caption">
-          Link with + Link pull request here, or with
-          <span class="dvb-mono">link_pull_request</span> over the MCP.
-        </p>
         <div class="dr-slot" role="group" aria-label="Design result">
           <div class="dvb-htt-head">
             <h4 class="dvb-htt-title">Design result</h4>
@@ -1887,13 +1859,53 @@
             </ol>
           </div>
         </div>
+        <div class="dvb-prs" role="group" aria-label="Pull requests">
+          <div class="pr-row">
+            <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+            <div class="pr-text">
+              <div class="pr-title">Design the result as what to review</div>
+              <div class="pr-meta">moooon/motir-core · #2896</div>
+            </div>
+            <span class="pr-states"
+              ><span class="pill pill-sky"
+                ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+              ><span class="pill pill-mint"
+                ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+              ></span
+            >
+            <a class="ext" href="#" aria-label="Open on GitHub"
+              ><svg aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+          <div class="pr-row">
+            <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+            <div class="pr-text">
+              <div class="pr-title">Two-file design guide for new projects</div>
+              <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
+            </div>
+            <span class="pr-states"
+              ><span class="pill pill-sky"
+                ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+              ><span class="pill pill-peach"
+                ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+              ></span
+            >
+            <a class="ext" href="#" aria-label="Open on GitHub"
+              ><svg aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+          <p class="dvb-caption">
+            Link with + Link pull request here, or with
+            <span class="dvb-mono">link_pull_request</span> over the MCP.
+          </p>
+        </div>
       </div>
     </section>
     <section class="panel">
       <h2>7c · The same block as the awaiting approve-and-merge gate — ONE frame over all of it</h2>
       <p class="why">
         When MOTIR-4909's gate is awaiting, <code>DevelopmentGateFrame</code> wraps the whole block
-        — rows, design slot and How to test — as one port. Drawn as the frame ships today: band 1
+        — design slot, How to test and rows — as one port. Drawn as the frame ships today: band 1
         and band 2 only. Band 3's <em>Approve and merge</em> and its consequence line are
         MOTIR-4909's (drawn in <code>design/github/github.mock.html</code> Panel 12c) and arrive
         with that story; approving merges every pull request in the block.
@@ -1924,44 +1936,6 @@
             <div class="af-expand-bar">
               <button class="af-expand" type="button">Expand ⤢</button>
             </div>
-            <div class="pr-row">
-              <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-              <div class="pr-text">
-                <div class="pr-title">Design the result as what to review</div>
-                <div class="pr-meta">moooon/motir-core · #2896</div>
-              </div>
-              <span class="pr-states"
-                ><span class="pill pill-sky"
-                  ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                ><span class="pill pill-mint"
-                  ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                ></span
-              >
-              <a class="ext" href="#" aria-label="Open on GitHub"
-                ><svg aria-hidden="true"><use href="#i-external" /></svg
-              ></a>
-            </div>
-            <div class="pr-row">
-              <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-              <div class="pr-text">
-                <div class="pr-title">Two-file design guide for new projects</div>
-                <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
-              </div>
-              <span class="pr-states"
-                ><span class="pill pill-sky"
-                  ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                ><span class="pill pill-peach"
-                  ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
-                ></span
-              >
-              <a class="ext" href="#" aria-label="Open on GitHub"
-                ><svg aria-hidden="true"><use href="#i-external" /></svg
-              ></a>
-            </div>
-            <p class="dvb-caption">
-              Link with + Link pull request here, or with
-              <span class="dvb-mono">link_pull_request</span> over the MCP.
-            </p>
             <div class="dr-slot" role="group" aria-label="Design result">
               <div class="dvb-htt-head">
                 <h4 class="dvb-htt-title">Design result</h4>
@@ -2026,6 +2000,46 @@ pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
                 </ol>
               </div>
             </div>
+            <div class="dvb-prs" role="group" aria-label="Pull requests">
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Design the result as what to review</div>
+                  <div class="pr-meta">moooon/motir-core · #2896</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-mint"
+                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                <div class="pr-text">
+                  <div class="pr-title">Two-file design guide for new projects</div>
+                  <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
+                </div>
+                <span class="pr-states"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                  ><span class="pill pill-peach"
+                    ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                  ></span
+                >
+                <a class="ext" href="#" aria-label="Open on GitHub"
+                  ><svg aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="dvb-caption">
+                Link with + Link pull request here, or with
+                <span class="dvb-mono">link_pull_request</span> over the MCP.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -2034,7 +2048,7 @@ pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
       <h2>8 · Inside the approval overlay — band 2 is state 7's block</h2>
       <p class="why">
         The approve-to-merge overlay (MOTIR-5438) opens this same block as its port: the reviewer
-        reads every pull request, the mock and How to test before pressing anything. The frame is
+        reads the mock, How to test and every pull request before pressing anything. The frame is
         not redesigned. Band 3 is Panel 12c's, owned by MOTIR-4909.
       </p>
       <div class="gate devblk">
@@ -2045,44 +2059,6 @@ pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
           </div>
         </div>
         <div class="port">
-          <div class="pr-row">
-            <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-            <div class="pr-text">
-              <div class="pr-title">Design the result as what to review</div>
-              <div class="pr-meta">moooon/motir-core · #2896</div>
-            </div>
-            <span class="pr-states"
-              ><span class="pill pill-sky"
-                ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-              ><span class="pill pill-mint"
-                ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-              ></span
-            >
-            <a class="ext" href="#" aria-label="Open on GitHub"
-              ><svg aria-hidden="true"><use href="#i-external" /></svg
-            ></a>
-          </div>
-          <div class="pr-row">
-            <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-            <div class="pr-text">
-              <div class="pr-title">Two-file design guide for new projects</div>
-              <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
-            </div>
-            <span class="pr-states"
-              ><span class="pill pill-sky"
-                ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-              ><span class="pill pill-peach"
-                ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
-              ></span
-            >
-            <a class="ext" href="#" aria-label="Open on GitHub"
-              ><svg aria-hidden="true"><use href="#i-external" /></svg
-            ></a>
-          </div>
-          <p class="dvb-caption">
-            Link with + Link pull request here, or with
-            <span class="dvb-mono">link_pull_request</span> over the MCP.
-          </p>
           <div class="dr-slot" role="group" aria-label="Design result">
             <div class="dvb-htt-head">
               <h4 class="dvb-htt-title">Design result</h4>
@@ -2142,6 +2118,46 @@ pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
                 <li>Open the mock in a new tab, then the note.</li>
               </ol>
             </div>
+          </div>
+          <div class="dvb-prs" role="group" aria-label="Pull requests">
+            <div class="pr-row">
+              <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+              <div class="pr-text">
+                <div class="pr-title">Design the result as what to review</div>
+                <div class="pr-meta">moooon/motir-core · #2896</div>
+              </div>
+              <span class="pr-states"
+                ><span class="pill pill-sky"
+                  ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                ><span class="pill pill-mint"
+                  ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                ></span
+              >
+              <a class="ext" href="#" aria-label="Open on GitHub"
+                ><svg aria-hidden="true"><use href="#i-external" /></svg
+              ></a>
+            </div>
+            <div class="pr-row">
+              <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+              <div class="pr-text">
+                <div class="pr-title">Two-file design guide for new projects</div>
+                <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
+              </div>
+              <span class="pr-states"
+                ><span class="pill pill-sky"
+                  ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                ><span class="pill pill-peach"
+                  ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                ></span
+              >
+              <a class="ext" href="#" aria-label="Open on GitHub"
+                ><svg aria-hidden="true"><use href="#i-external" /></svg
+              ></a>
+            </div>
+            <p class="dvb-caption">
+              Link with + Link pull request here, or with
+              <span class="dvb-mono">link_pull_request</span> over the MCP.
+            </p>
           </div>
         </div>
         <div class="frameFoot">

@@ -4703,9 +4703,9 @@ and the empty state are composed from that render, unchanged except where named.
 | 4   | An older stored result (inline `noteMd`, `image` rows) | An **Earlier format** pill + a one-line reason, then the mock frame, then a **Files** list under it: the note row and one row per screenshot, each a file link. No rendered Markdown, no thumbnails, no lightbox. |
 | 5   | Empty, on a design work item                           | Shape unchanged; the body copy says a result exists only when other work waits on the design.                                                                                                                     |
 | 6   | Inside the approval overlay — NO open linked PR        | The frame is not redesigned: band 2 holds panel 1 (or 2, 3, 4) — the frame(s), then the note row under them. Verbs stay below the port. A card WITH an open linked PR is state 8, not this.                       |
-| 7a  | One open linked PR, at rest                            | No standalone Design result section. The Development block reads: the PR row, the link caption, the **design-result slot** (heading, provenance, frame(s), note row), then How to test.                           |
-| 7b  | Two open linked PRs in two repositories                | Every row is listed, in any repository, with no cap. The slot renders ONCE below the last row — the result belongs to the card, not to a pull request.                                                            |
-| 7c  | 7b while the approve-to-merge gate is awaiting         | `DevelopmentGateFrame` wraps the whole block — rows, slot and How to test — as ONE port. Bands 1 and 2 only: no verbs are drawn, because they are MOTIR-4909's (`design/github/github.mock.html` Panel 12c).      |
+| 7a  | One open linked PR, at rest                            | No standalone Design result section. The Development block reads, top to bottom: the **design-result slot** (heading, provenance, frame(s), note row), How to test, then the PR row and its link caption.         |
+| 7b  | Two open linked PRs in two repositories                | Every row is listed, in any repository, with no cap. The slot renders ONCE, above How to test and above every row — the result belongs to the card, not to a pull request.                                        |
+| 7c  | 7b while the approve-to-merge gate is awaiting         | `DevelopmentGateFrame` wraps the whole block — slot, How to test and rows — as ONE port. Bands 1 and 2 only: no verbs are drawn, because they are MOTIR-4909's (`design/github/github.mock.html` Panel 12c).      |
 | 8   | The approval overlay for that card                     | Band 2 is state 7's block, unchanged. Band 3 is Panel 12c's _Request changes_ · _Approve and merge_ with its consequence line — cited, not designed here. No design band and no design verbs.                     |
 
 A result with BOTH an inline `noteMd` and no `note_file` cannot come from a
@@ -4783,13 +4783,27 @@ rendered headless and checked against the shipped `DevelopmentSectionBody` in
 verbatim, scoped under `.devblk` so they cannot collide with this mock's own
 `.card` / `.frame` / `.note-row`.
 
-**Where the slot sits.** Inside `DevelopmentSectionBody`, in this order:
+**Where the slot sits (revised on review, 2026-09-14: "design result and how to
+test should be before the PRs").** Inside `DevelopmentSectionBody`, when the block
+holds a design result, in this order:
 
-1. every PR row, in the block's existing order, any number, any repository;
-2. the link caption (unchanged);
-3. **the design-result slot** — rendered only when the card carries a current
-   design result;
-4. `HowToTestBlock` (unchanged).
+1. **the design-result slot** — the mock frame(s), then the note link;
+2. `HowToTestBlock` (unchanged);
+3. every PR row, in the block's existing order, any number, any repository;
+4. the link caption, still directly under the rows.
+
+So the design slot and `HowToTestBlock` render ABOVE the rows. What to review and
+how to test it lead; the pull requests the approval merges follow. The rows and
+caption sit behind a `--el-border-soft` rule (`.dvb-prs` in the mock), the
+separator How to test used to carry.
+
+**A block with NO design result is unchanged.** It keeps today's order: rows,
+caption, then `HowToTestBlock`, as §20 draws it. The reorder is conditional on the
+slot rendering, never a change to every Development block.
+
+**In the clamped port** (7c, before _Expand_), the rows now sit below the fold on
+a design card. That is the intended reading order, and every row is one _Expand_
+away. Band 1's "N pull requests" line still counts them.
 
 The slot's body is panels 1–4's body, unchanged: the count line when there are
 several mocks, the frame(s), then the note row at the bottom. The provenance chips
@@ -4809,7 +4823,8 @@ for orientation; it is 4909's design.
 
 | Element              | Primitive composed                                           | Colour token                                                                   | Shape token |
 | -------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ | ----------- |
-| Design-result slot   | a `role="group"` region, `aria-label` = `designResult.title` | top rule `--el-border-soft`                                                    | —           |
+| Design-result slot   | a `role="group"` region, `aria-label` = `designResult.title` | none — it is first                                                             | —           |
+| Rows group           | the shipped rows + caption, wrapped when the slot renders    | top rule `--el-border-soft`                                                    | —           |
 | Slot heading         | text, 13px semibold                                          | `--el-text`                                                                    | —           |
 | Slot provenance      | text, 12px; key and short sha (sha monospace)                | `--el-text-secondary`; sha `--el-text-identifier`                              | —           |
 | Frame / note in port | panels 1–4's frame and note row                              | background `--el-card`, so `--el-link` keeps AA inside the port's soft surface | unchanged   |
@@ -4831,7 +4846,9 @@ in states 7–8 is an existing key.
 #### GIVES / TAKES — states 7–8
 
 - **GIVES [MOTIR-5498](motir:cmu1hrmyh0020hutxio6hqh30)** (the panel) panels 7a–7c:
-  - the slot inside `DevelopmentSectionBody` in the order above;
+  - the slot inside `DevelopmentSectionBody` in the order above: slot, then
+    `HowToTestBlock`, then the rows and caption, only when a design result
+    renders (a block without one keeps rows, then How to test);
   - the standalone section suppressed while an open linked PR exists;
   - the two copy keys and the slot tokens.
 - **GIVES [MOTIR-5534](motir:cmu1mcnrr000ai0txplyb9iqz)** (no `design_result` gate)
