@@ -830,11 +830,27 @@ the door in the same place a person now looks for project context.
 > somebody with nothing — which was always a workspace-tier act being performed
 > on a route that only exists inside a project.
 >
-> **⚠️ THE MOCK IS NOT REDRAWN BY THIS CARD, deliberately.** Panel C still draws
-> three columns and Panel E still draws the rail head, so the asset and this
-> section disagree until a design pass reconciles them — which is a design act
-> wanting Yue's eye on a seven-panel board, not a side effect of a code change.
-> It is filed rather than left as a sentence.
+> **The mock now agrees with this section (MOTIR-4884, 2026-09-14).** MOTIR-4873
+> left the board drawing the no-project state as a current one, deliberately, for
+> a design pass to reconcile. That pass chose to **mark the state RETIRED IN
+> PLACE** — Panel C's two no-project renders (1280px and 375px) and Panel E's
+> _no project_ rail column each carry a `Retired · MOTIR-4873` tag in their
+> caption and a dashed frame, and both panels' intros say in the past tense what
+> the door was for.
+>
+> **Why in place, and not the two alternatives.** _Dropping the renders_ would
+> leave this row and the paragraph under it arguing for a drawing nobody can
+> see — the record the row is kept for would lose its picture. _Moving them into
+> a separate "what this replaced" band_ would split one comparison across two
+> panels: the no-project column is only legible beside the active and archived
+> columns it was designed to sit with. Panel A already sets the precedent —
+> it is captioned _"what ships today"_ and kept as a before-state rather than
+> erased.
+>
+> **The drawing keeps its full ink.** A retired frame is not dimmed, because
+> dimming would take its text below AA and a board's annotations owe contrast
+> too (`docs/decisions/design-board-chrome-aa.md`); the dashed edge and the tag
+> carry the status instead.
 
 ### The rail head, after the project leaves
 
