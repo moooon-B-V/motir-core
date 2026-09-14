@@ -2582,6 +2582,29 @@ export const workItemRepository = {
   },
 
   /**
+   * The identifier, TITLE and filing instant of MANY work items in ONE query —
+   * the CONTAINER-COVERAGE advisory's child side (MOTIR-5362), which judges
+   * ownership off a child's title and adoption off its `createdAt`.
+   *
+   * Deliberately NOT {@link findDescriptionsByIds}: that one drags every body,
+   * and the coverage check reads no child body at all (the measurement on
+   * MOTIR-5362 is why). Workspace-scoped like its neighbours, read-only path, and
+   * an empty input short-circuits.
+   */
+  async findTitlesByIds(
+    ids: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; identifier: string; title: string; createdAt: Date }>> {
+    if (ids.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.workItem.findMany({
+      where: { id: { in: ids }, workspaceId },
+      select: { id: true, identifier: true, title: true, createdAt: true },
+    });
+  },
+
+  /**
    * Per-kind count of the LIVE (non-archived) DESCENDANTS of a subtree, in ONE
    * round-trip via a recursive CTE (Story 2.9 · Subtask 2.9.9). The root is
    * EXCLUDED (`depth > 1`) and only rows with `archivedAt IS NULL` are counted,

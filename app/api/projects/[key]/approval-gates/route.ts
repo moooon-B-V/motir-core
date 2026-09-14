@@ -14,15 +14,15 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // unbrowsable project is a 404, never a 403 — no existence leak). Thin HTTP
 // transport per CLAUDE.md: resolve, one service call, map typed errors.
 //
-// The READ is open to every project browser and the WRITE is `workflow:manage`
-// (MOTIR-5278 · `docs/decisions/permission-inventory.md` R65), both asserted in
-// the service rather than here — this route is reachable by URL whether or not
-// the rail offers its row, which is the whole reason the destination guard exists
-// one layer up.
+// The authority is `workflow:manage` on BOTH verbs, because the room is MANAGE-ONLY
+// (`docs/decisions/permission-inventory.md` R65; MOTIR-5394 reverted MOTIR-5278's
+// browse-level read). It is asserted in the service rather than here: this route
+// is reachable by URL whether or not the rail offers its row, which is the whole
+// reason the destination guard exists one layer up.
 //
 // Typed errors → status codes:
-//   ProjectNotFoundError    → 404  (either verb — no such project, or not a browser)
-//   PermissionDeniedError   → 403  (PATCH — lacks `workflow:manage`)
+//   ProjectNotFoundError    → 404  (no such project, or not a browser)
+//   PermissionDeniedError   → 403  (either verb — lacks `workflow:manage`)
 
 interface RouteParams {
   params: Promise<{ key: string }>;

@@ -193,12 +193,15 @@ import type {
   TreeLevelDto,
   ProjectRoadmapDto,
   WorkItemValidityDto,
+  WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
   WorkItemImplementationProvenanceInput,
   WorkItemRepositoryDto,
   WorkItemPlacementDto,
 } from '@/lib/dto/workItems';
 import { buildProseVsGraphAdvisories } from '@/lib/services/proseGraphAdvisoryService';
+import { containerCoverageFinding } from '@/lib/workItems/containerCoverage';
+import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
@@ -6908,8 +6911,95 @@ async function computeWorkItemValidity(
   // Deterministic order (by gated item, then blocker) for a stable wire shape.
   blockers.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 
-  const advisories = await computeSubtreeProseAdvisories(root, notDone, membersById, edges, ctx);
-  return { key: root.identifier, valid: blockers.length === 0, blockers, advisories };
+  const prose = await computeSubtreeProseAdvisories(root, notDone, membersById, edges, ctx);
+  const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
+  return {
+    key: root.identifier,
+    valid: blockers.length === 0,
+    blockers,
+    advisories: [...prose, ...coverage],
+  };
+}
+
+/**
+ * The CONTAINER-COVERAGE advisories for a validated subtree (MOTIR-5362) — for
+ * every NOT-done member that holds children, does each of its acceptance
+ * criteria have a child that owns it? The pure decision is
+ * `containerCoverageFinding`; this gathers its rows.
+ *
+ * Two reads at most, and none for the common subtree: the containers' bodies
+ * first (a container with no acceptance-criteria heading can never fire, so its
+ * children are never read), then ONE titles read over the children of the
+ * containers that remain. A child is any live member whose `parentId` is the
+ * container — `done` children included, because a finished child can own a
+ * criterion as well as an open one.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — appended after the prose family, and the `valid`
+ * / `blockers` verdict above is computed without it.
+ */
+async function computeSubtreeCoverageAdvisories(
+  notDone: Array<{ id: string; identifier: string }>,
+  members: Array<{ id: string; parentId: string | null }>,
+  ctx: ServiceContext,
+): Promise<WorkItemCoverageAdvisoryDto[]> {
+  const childIdsByParent = new Map<string, string[]>();
+  for (const m of members) {
+    if (m.parentId === null) continue;
+    const ids = childIdsByParent.get(m.parentId);
+    if (ids) ids.push(m.id);
+    else childIdsByParent.set(m.parentId, [m.id]);
+  }
+  const containers = notDone.filter((m) => childIdsByParent.has(m.id));
+  if (containers.length === 0) return [];
+
+  const containerRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findDescriptionsByIds(
+      containers.map((c) => c.id),
+      ctx.workspaceId,
+      tx,
+    ),
+  );
+  const eligible = containerRows.filter(
+    (row) => acceptanceCriteriaTexts(row.descriptionMd).length > 0,
+  );
+  if (eligible.length === 0) return [];
+
+  const childRows = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTitlesByIds(
+          eligible.flatMap((row) => childIdsByParent.get(row.id) ?? []),
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((row) => [row.id, row]),
+  );
+  const identifierById = new Map(containers.map((c) => [c.id, c.identifier]));
+
+  const advisories: WorkItemCoverageAdvisoryDto[] = [];
+  for (const container of eligible) {
+    const children = (childIdsByParent.get(container.id) ?? []).flatMap((id) => {
+      const row = childRows.get(id);
+      return row
+        ? [{ identifier: row.identifier, title: row.title, createdAt: row.createdAt }]
+        : [];
+    });
+    const finding = containerCoverageFinding(container, children);
+    if (!finding) continue;
+    for (const criterionIndex of finding.unownedCriterionIndices) {
+      advisories.push({
+        kind: 'coverage',
+        item: identifierById.get(container.id) ?? container.id,
+        severity: 'likely-unowned-criterion',
+        criterionIndex,
+        adoptedChildren: finding.adoptedChildren,
+      });
+    }
+  }
+  // Deterministic wire order: by container, then by criterion.
+  advisories.sort((a, b) => a.item.localeCompare(b.item) || a.criterionIndex - b.criterionIndex);
+  return advisories;
 }
 
 /**

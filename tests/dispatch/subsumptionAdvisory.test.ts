@@ -11,7 +11,11 @@ import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import { runDispatchPrompt } from '@/lib/mcp/tools/dispatchPrompt';
 import { runValidateWorkItem } from '@/lib/mcp/tools/validateWorkItem';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
-import { isSubsumptionAdvisory, type WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
+import {
+  isSubsumptionAdvisory,
+  type WorkItemProseAdvisoryDto,
+  type WorkItemValidityAdvisoryDto,
+} from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -170,7 +174,7 @@ async function makeCard(
   return { ...item, createdAt: createdAt.toISOString() };
 }
 
-const subsumptions = (advisories: WorkItemProseAdvisoryDto[]) =>
+const subsumptions = (advisories: WorkItemValidityAdvisoryDto[]) =>
   advisories.filter(isSubsumptionAdvisory);
 
 describe('the retro-check — criterion 4, on the real incidents', () => {

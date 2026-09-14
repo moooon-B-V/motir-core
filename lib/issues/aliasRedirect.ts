@@ -1,5 +1,5 @@
 import { projectsService } from '@/lib/services/projectsService';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 
 /**
@@ -16,7 +16,9 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
  * current key (→ 404), and `viaAlias` guarantees the canonical identifier
  * differs from the requested prefix, so the redirect can never loop. A missing /
  * cross-workspace / released-alias / browse-denied prefix yields `null` (404, no
- * existence leak — same shape as a live miss).
+ * existence leak — same shape as a live miss). All four arrive as
+ * `ProjectNotFoundError`: `resolveByKey` re-throws the browse gate's refusal as
+ * one (MOTIR-5320), so there is no second class to catch here.
  */
 export async function resolveAliasedIssueKey(
   key: string,
@@ -35,9 +37,7 @@ export async function resolveAliasedIssueKey(
     if (!viaAlias) return null;
     return `${project.identifier}-${number}`;
   } catch (err) {
-    if (err instanceof ProjectNotFoundError || err instanceof ProjectAccessDeniedError) {
-      return null;
-    }
+    if (err instanceof ProjectNotFoundError) return null;
     throw err;
   }
 }

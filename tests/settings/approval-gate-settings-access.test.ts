@@ -10,25 +10,25 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
-// Task MOTIR-5278 — the Approvals room's two keys, over the REAL stack.
+// Task MOTIR-5394 — the Approvals room is MANAGE-ONLY: its READ and its WRITE both
+// take `workflow:manage`, proven over the REAL stack.
 //
-// `design/projects/design-notes.md` § ⭐ Approvals §6 (decided on MOTIR-5190): the
-// room is SEEN by every project browser and CHANGED by an admin. The registry
-// entry declares that pair (`viewPermission: 'project:browse'`,
-// `permission: 'workflow:manage'`), and the rail now admits a member. That makes
-// the service's READ the thing that decides whether the door the rail just
-// offered opens onto a room or onto a crash — so it is proven here against a real
-// seeded membership rather than a typed permission set.
+// ⚠️ KEPT AND INVERTED, NOT DELETED. MOTIR-5278 added this file to prove that a
+// member could READ the room its browse view had opened. That view is reverted
+// (`design/projects/design-notes.md` § ⭐ Approvals §6, amended 2026-09-13 ·
+// MOTIR-4880 re-plan). A mechanical revert would have deleted the file, and with it
+// the only real-stack proof of who may read the gates and who may change them. So
+// the same fixture now proves the opposite read.
 //
 // Three facts, each with its control:
-//   1. a MEMBER's read returns the STORED value (not a default — it is flipped off
-//      first, so a hard-coded `true` cannot pass);
-//   2. the same member's WRITE is refused, at the service AND as a 403 on the route
-//      — while an ADMIN's identical write goes through, so the refusal is about
-//      the key and not a broken fixture;
-//   3. a NON-browser's read is still `ProjectNotFoundError` at the service — the
-//      key moved, the 404-vs-403 posture did not. (The ROUTE's 404 for that actor
-//      is MOTIR-5320's; see the note at the bottom of this file.)
+//   1. a project MEMBER's READ is refused, as `PermissionDeniedError` naming
+//      `workflow:manage` at the service and a `403` on GET. Their WRITE is refused
+//      the same way at the service and on PATCH, and the stored value does not move;
+//   2. CONTROL: a holder of `workflow:manage` (a project ADMIN) reads the STORED
+//      value and writes it, so each refusal is about the key and not the fixture;
+//   3. a NON-browser's read is still `ProjectNotFoundError` at the service, so the
+//      404-vs-403 posture is unchanged. (The ROUTE's 404 for that actor is
+//      MOTIR-5320's; see the note at the bottom of this file.)
 //
 // The session is the one thing stubbed: a route test has no cookie jar, so the
 // compliance gate hands back the actor. Everything after it — `getByKey`, the
@@ -141,25 +141,48 @@ const patchBody = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
-describe('the READ is open to every project browser (MOTIR-5278)', () => {
-  it('a project MEMBER reads the STORED value — at the service and through GET', async () => {
-    const s = await seed('member-read');
+describe('the READ takes `workflow:manage` — a member is refused it (MOTIR-5394)', () => {
+  // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
+  // MOTIR-5394); MOTIR-5278's browse view is reverted. MOTIR-5278 asserted here that
+  // this member READ the stored value, at the service and with a 200 on GET.
+  it('a project MEMBER’s read is REFUSED at the service, naming the key', async () => {
+    const s = await seed('member-read-service');
+
+    const attempt = approvalGateSettingsService.getSettings(s.projectId, s.member);
+    await expect(attempt).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(attempt).rejects.toMatchObject({ permission: 'workflow:manage' });
+  });
+
+  it('…and is a 403 on `GET /api/projects/[key]/approval-gates`, carrying no value', async () => {
+    const s = await seed('member-read-route');
+    await storeAcceptanceVideo(s.projectId, false);
+
+    actAs(s.member);
+    const res = await GET(new Request('https://app.motir.co/x'), params(s.projectKey));
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ permission: 'workflow:manage' });
+    expect(body).not.toHaveProperty('acceptanceVideoEnabled');
+  });
+
+  it('CONTROL: an ADMIN reads the STORED value — at the service and through GET', async () => {
+    const s = await seed('admin-read');
     // Off, because the column defaults on: a read that ignored the row would pass
     // a default-valued fixture.
     await storeAcceptanceVideo(s.projectId, false);
 
-    await expect(approvalGateSettingsService.getSettings(s.projectId, s.member)).resolves.toEqual({
+    await expect(approvalGateSettingsService.getSettings(s.projectId, s.admin)).resolves.toEqual({
       acceptanceVideoEnabled: false,
     });
 
-    actAs(s.member);
+    actAs(s.admin);
     const res = await GET(new Request('https://app.motir.co/x'), params(s.projectKey));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ acceptanceVideoEnabled: false });
   });
 });
 
-describe('the WRITE keeps `workflow:manage` (MOTIR-5278)', () => {
+describe('the WRITE keeps `workflow:manage` (MOTIR-5278, unchanged by MOTIR-5394)', () => {
   it('the same MEMBER’s write is REFUSED at the service, and the stored value does not move', async () => {
     const s = await seed('member-write-service');
     await storeAcceptanceVideo(s.projectId, false);
@@ -205,13 +228,17 @@ describe('a NON-browser still cannot learn the room exists — the 404-vs-403 po
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
-  // ⚠️ NO ROUTE-LEVEL 404 CASE HERE, AND THAT IS A FILED DEFECT, NOT AN OVERSIGHT.
-  // One was written, and it went red on the shipped route before this card's
-  // change is ever reached: `projectsService.getByKey` refuses an in-workspace
-  // non-browser with `ProjectAccessDeniedError` — its own doc promises
-  // `ProjectNotFoundError` — and this route, like twelve other
-  // `/api/projects/[key]/*` routes, maps only the promised one, so the refusal
-  // escapes as a 500. That is MOTIR-5320, whose first criterion is exactly the
-  // case removed here, on this file's fixture. Asserting the 500 would pin the
-  // defect; asserting the 404 would fail on code this card does not own.
+  // MOTIR-5320 — the route-level case this file could not carry when it was
+  // written: `projectsService.getByKey` used to refuse this actor with
+  // `ProjectAccessDeniedError`, which this route does not map, so the GET was a
+  // 500. The lookup now refuses with the not-found error its own doc promised.
+  // Every other key-addressed route is covered the same way in
+  // `tests/projects/key-lookup-browse-denial.test.ts`.
+  it('…and is a 404 on `GET /api/projects/[key]/approval-gates`, not a 500 (MOTIR-5320)', async () => {
+    const s = await seed('outsider-route');
+    actAs(s.outsider);
+    const res = await GET(new Request('https://app.motir.co/x'), params(s.projectKey));
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe('PROJECT_NOT_FOUND');
+  });
 });
