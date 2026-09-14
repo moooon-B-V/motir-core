@@ -204,7 +204,7 @@ export function PlanItemNode({
             {item.identifier ?? t('newItem')}
           </span>
           <span
-            className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
+            className={`mt-0.5 line-clamp-2 text-sm leading-snug font-semibold ${
               // MOTIR-4260 — `--el-text-secondary`, not `--el-text-muted`: the
               // `remove` frame six elements up paints `bg-(--el-muted)`, where
               // the muted ink is 4.12:1 in light (AA is 4.5) and secondary is
