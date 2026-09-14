@@ -13,6 +13,7 @@ import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
+import type { EntitlementKind } from '@/lib/billing/entitlements';
 import {
   IllegalParentTypeError,
   WorkItemError,
@@ -104,7 +105,7 @@ export interface CreateIssueInput {
 
 export type CreateIssueResult =
   | { ok: true; id: string; identifier: string }
-  | { ok: false; error: string; field?: 'parent' | 'links' };
+  | { ok: false; error: string; field?: 'parent' | 'links'; entitlement?: EntitlementKind };
 
 export async function createIssueAction(input: CreateIssueInput): Promise<CreateIssueResult> {
   const session = await getSession();
@@ -180,8 +181,12 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
       };
     }
     // §4 work-item cap hit (8.1.11) — the org is at its free-tier ceiling.
-    // Surface the upgrade message as a toast (the upgrade CTA is 8.1.7/8.1.8).
-    if (err instanceof EntitlementExceededError) return { ok: false, error: err.message };
+    // The DISCRIMINATOR crosses the boundary and the modal picks the translated
+    // sentence by it (MOTIR-5133); `error` stays the server's English string,
+    // which no reader-facing arm renders for a refusal that carries a kind.
+    if (err instanceof EntitlementExceededError) {
+      return { ok: false, error: err.message, entitlement: err.entitlement };
+    }
     // Any other typed work-item error (cross-project parent, assignee/reporter
     // not a member, …) surfaces as a toast with its own message.
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };

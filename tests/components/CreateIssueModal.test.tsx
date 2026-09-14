@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import { renderWithIntl as render, enMessages } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 import { ToastProvider } from '@/components/ui/Toast';
 
 // The Due-date DatePicker opens a Radix Popover (Popper), which needs
@@ -302,6 +303,42 @@ describe('CreateIssueModal — validation + submit', () => {
     });
     await waitFor(() => expect(screen.getByText('That project no longer exists.')).toBeTruthy());
     expect(modalHeading()).not.toBeNull(); // stays open so the user can retry
+  });
+
+  // MOTIR-5133 — a §4.1 cap refusal is toasted in the reader's language, picked
+  // by its `entitlement` kind. `error` is the server's English sentence, which a
+  // `zh` reader used to be shown verbatim; here it is a sentinel no toast may carry.
+  const SERVER_ENGLISH = 'SERVER-SIDE ENGLISH — must never reach a reader';
+  const CAP_REFUSAL = { ok: false, error: SERVER_ENGLISH, entitlement: 'work_items' };
+
+  it('a cap refusal toasts the catalogue sentence for its kind, not the server string', async () => {
+    createIssueActionSpy.mockResolvedValue(CAP_REFUSAL);
+    openModal();
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'One too many' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    });
+    await waitFor(() =>
+      expect(screen.getByText(enMessages.errors.entitlementExceeded.work_items)).toBeTruthy(),
+    );
+    expect(screen.queryByText(SERVER_ENGLISH)).toBeNull();
+    expect(modalHeading()).not.toBeNull();
+  });
+
+  it('a cap refusal reaches a zh reader in Chinese', async () => {
+    createIssueActionSpy.mockResolvedValue(CAP_REFUSAL);
+    render(<Shell />, { locale: 'zh', messages: zhMessages });
+    fireEvent.click(screen.getByRole('button', { name: zhMessages.shell.createIssue.title }));
+    fireEvent.change(screen.getByLabelText(zhMessages.shell.createIssue.titleLabel), {
+      target: { value: '超出上限' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: zhMessages.shell.createIssue.create }));
+    });
+    await waitFor(() =>
+      expect(screen.getByText(zhMessages.errors.entitlementExceeded.work_items)).toBeTruthy(),
+    );
+    expect(screen.queryByText(SERVER_ENGLISH)).toBeNull();
   });
 });
 

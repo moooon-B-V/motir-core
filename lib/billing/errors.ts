@@ -100,6 +100,12 @@ export class InvalidBillingQuantityError extends Error {
  * path still throws for the PER-FILE size cap (a malformed-request shape); this
  * is the TOTAL-STORAGE / count caps and the tier-derived per-file overage that
  * an upgrade lifts.
+ *
+ * The default MESSAGE is the server-side string — logs, the API body's `error`,
+ * an agent's tool result. It is English and is never what a READER is shown: a
+ * reader-facing surface selects `errors.entitlementExceeded.<entitlement>` from
+ * the catalogue by the discriminator (`lib/billing/entitlementCopy.ts`,
+ * MOTIR-5133), whose `en` entries say exactly what this sentence says.
  */
 export class EntitlementExceededError extends Error {
   readonly code = 'ENTITLEMENT_EXCEEDED' as const;

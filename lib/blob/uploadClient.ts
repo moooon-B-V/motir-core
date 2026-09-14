@@ -10,7 +10,13 @@
 // i18n: the route returns a stable `code`; this maps it to a TRANSLATED message
 // via the `errors`-scoped translator the caller passes in (a client component's
 // useTranslations('errors')) — so the editor notice is localized, not the
-// server's English string.
+// server's English string. A §4 cap refusal (402 `ENTITLEMENT_EXCEEDED`) carries
+// no per-code sentence: its words depend on WHICH cap, so it is selected by the
+// body's `entitlement` kind instead (MOTIR-5133). Before that, the code arm
+// looked up `upload.ENTITLEMENT_EXCEEDED`, a key no catalogue has.
+
+import { isEntitlementKind } from '@/lib/billing/entitlements';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 
 // A minimal translator shape (satisfied by next-intl's useTranslations('errors')).
 type UploadTranslator = (key: string) => string;
@@ -21,13 +27,16 @@ export async function uploadIssueAttachment(file: File, t: UploadTranslator): Pr
 
   const res = await fetch('/api/upload/issue-attachment', { method: 'POST', body: form });
   if (!res.ok) {
-    let code: string | undefined;
+    let body: { code?: string; entitlement?: unknown } = {};
     try {
-      code = ((await res.json()) as { code?: string }).code;
+      body = (await res.json()) as typeof body;
     } catch {
       // non-JSON error body — fall through to the generic message
     }
-    throw new Error(code ? t(`upload.${code}`) : t('upload.failed'));
+    if (isEntitlementKind(body.entitlement)) {
+      throw new Error(entitlementExceededMessage(t, body.entitlement));
+    }
+    throw new Error(body.code ? t(`upload.${body.code}`) : t('upload.failed'));
   }
 
   const body = (await res.json()) as { url: string };

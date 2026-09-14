@@ -692,6 +692,15 @@
       "RATE_LIMITED": "Too many uploads — please wait a moment and try again.",
       "failed": "Upload failed — please try again."
     },
+    "entitlementExceeded": {
+      "work_items": "Your plan's work items limit has been reached.",
+      "projects": "Your plan's projects limit has been reached.",
+      "workspaces": "Your plan's workspaces limit has been reached.",
+      "organizations": "Your plan's organizations limit has been reached.",
+      "file_size": "Your plan's file size limit has been reached.",
+      "storage": "Your plan's storage limit has been reached.",
+      "custom_domains": "Your plan's custom domains limit has been reached."
+    },
     "customFields": {
       "CUSTOM_FIELD_NOT_FOUND": "Custom field not found.",
       "VALUE_TYPE_MISMATCH": "The value does not match the field's type.",

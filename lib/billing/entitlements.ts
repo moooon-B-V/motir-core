@@ -25,22 +25,38 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 export type PmTier = 'free' | 'scaled' | 'enterprise' | 'meta';
 
 /**
+ * Every kind of entitlement a create/upload can hit, as a RUNTIME list.
+ * `EntitlementKind` is derived FROM it, so a new kind cannot exist in the type
+ * without being iterable here — which is what lets
+ * `tests/billing/entitlement-exceeded-copy.test.ts` fail on a kind that ships
+ * with no translated refusal (MOTIR-5133).
+ */
+export const ENTITLEMENT_KINDS = [
+  'work_items',
+  'projects',
+  'workspaces',
+  'organizations',
+  'file_size',
+  'storage',
+  // A customer-owned domain for a public project (Story MOTIR-3878 ·
+  // `docs/decisions/public-tenant-addresses.md` §9). The TENANT SUBDOMAIN is
+  // free on every tier and has no kind here — only the customer domain is
+  // gated, which is what every mirror in the category does.
+  'custom_domains',
+] as const;
+
+/**
  * The kind of entitlement a create/upload hit — the machine-readable
  * `entitlement` field on `EntitlementExceededError` the UI keys its upgrade
- * prompt off (8.1.7/8.1.8).
+ * prompt off (8.1.7/8.1.8), and the key its translated refusal is selected by
+ * (`lib/billing/entitlementCopy.ts`).
  */
-export type EntitlementKind =
-  | 'work_items'
-  | 'projects'
-  | 'workspaces'
-  | 'organizations'
-  | 'file_size'
-  | 'storage'
-  /** A customer-owned domain for a public project (Story MOTIR-3878 ·
-   *  `docs/decisions/public-tenant-addresses.md` §9). The TENANT SUBDOMAIN is
-   *  free on every tier and has no kind here — only the customer domain is
-   *  gated, which is what every mirror in the category does. */
-  | 'custom_domains';
+export type EntitlementKind = (typeof ENTITLEMENT_KINDS)[number];
+
+/** Narrows an untyped value — a JSON body's `entitlement` — to a known kind. */
+export function isEntitlementKind(value: unknown): value is EntitlementKind {
+  return typeof value === 'string' && (ENTITLEMENT_KINDS as readonly string[]).includes(value);
+}
 
 /** One tier's §4 caps. `null` = unlimited (the cap does not apply). */
 export interface PmEntitlements {

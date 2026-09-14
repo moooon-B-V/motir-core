@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
+import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import { createWorkspaceAction, switchWorkspaceAction } from '../_actions';
 
 export interface WorkspaceSwitcherProps {
@@ -23,6 +24,7 @@ export interface WorkspaceSwitcherProps {
 export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSwitcherProps) {
   const t = useTranslations('shell');
   const tl = useTranslations('labels');
+  const tErr = useTranslations('errors');
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -63,10 +65,15 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
           // same action (the org menu's "New workspace" is the other), and it
           // used to answer the refusal with `createError` — "Could not create
           // workspace" — which is exactly the generic text that leaves a reader
-          // unable to tell a plan ceiling from an outage. The server's message
-          // names the limit, so it is what gets shown; the modal stays open,
-          // because nothing was created.
-          toast({ variant: 'error', title: result.error });
+          // unable to tell a plan ceiling from an outage. The refusal names the
+          // limit, so it is what gets shown — in the reader's language, picked
+          // by the `entitlement` kind rather than the server's English
+          // `result.error` (MOTIR-5133); the modal stays open, because nothing
+          // was created.
+          toast({
+            variant: 'error',
+            title: entitlementExceededMessage(tErr, result.entitlement),
+          });
           return;
         }
         setCreateOpen(false);

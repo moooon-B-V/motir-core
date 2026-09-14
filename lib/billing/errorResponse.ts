@@ -37,7 +37,10 @@ export function mapBillingError(err: unknown): NextResponse | null {
   }
   if (err instanceof EntitlementExceededError) {
     // §4 cap hit (8.1.11) → 402 Payment Required + the upgrade-prompt payload
-    // (the `entitlement` kind + limit/usage the UI keys its prompt off).
+    // (the `entitlement` kind + limit/usage the UI keys its prompt off). `error`
+    // is the server's English string; a reader-facing client selects the
+    // translated sentence by `entitlement` (lib/billing/entitlementCopy.ts,
+    // MOTIR-5133) and never renders `error` for a refusal.
     return NextResponse.json(
       { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },
       { status: 402 },
