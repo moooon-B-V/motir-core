@@ -6,6 +6,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import Link from 'next/link';
@@ -53,6 +54,8 @@ export interface IssueListToolbarProps {
    * definitions, its components, and the active AST's referenced labels. */
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders by path — the builder's Folder field (MOTIR-5378). */
+  folders: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   /** Project identifier — the Label editor's autocomplete read (6.1.5) AND
    * the [Saved] dropdown's reads (6.2.3). */
@@ -76,6 +79,7 @@ export async function IssueListToolbar({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   projectKey,
   viewer,
@@ -121,6 +125,7 @@ export async function IssueListToolbar({
         sprints={sprints}
         customFields={customFields}
         components={components}
+        folders={folders}
         referencedLabels={referencedLabels}
         projectKey={projectKey}
       />

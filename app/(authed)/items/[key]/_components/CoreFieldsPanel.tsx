@@ -4,11 +4,12 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Bot, Calendar, Clock, GitBranch, Goal, Plus, User } from 'lucide-react';
+import { Bot, Calendar, Clock, Folder, GitBranch, Goal, Plus, User } from 'lucide-react';
 import type {
   ExecutorDto,
   WorkItemDto,
   WorkItemKindDto,
+  WorkItemPlacementDto,
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -40,7 +41,12 @@ import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
-import { changeStatusAction, updateIssueAction, type UpdateIssueInput } from '../edit/actions';
+import {
+  changeStatusAction,
+  fileWorkItemAction,
+  updateIssueAction,
+  type UpdateIssueInput,
+} from '../edit/actions';
 import { setWorkItemSprint } from '@/components/issues/actions/workItemActionsClient';
 import { Avatar, FieldCard } from './FieldCard';
 import { CustomFieldsSection } from './CustomFieldsSection';
@@ -52,6 +58,8 @@ import { ComponentsCard } from './ComponentsCard';
 import { ProvenanceSection } from './ProvenanceSection';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { useDisplayedStatus } from './OptimisticStatusProvider';
+import { usePlacement, usePlacementReporter } from './PlacementProvider';
+import { QuickViewFolderControl } from '../../_components/QuickViewFolderField';
 
 // The issue detail metadata rail (Story 2.4 · Subtasks 2.4.2 + 2.4.4). Per the
 // mockup `design/work-items/detail.png`: a stack of field cards that DISPLAY the
@@ -123,6 +131,7 @@ type EditableKey =
   | 'priority'
   | 'assignee'
   | 'parent'
+  | 'folder'
   | 'sprint'
   | 'dueDate'
   | 'estimate';
@@ -216,6 +225,28 @@ export function CoreFieldsPanel({
   const eff = { ...item, status: pageStatus, ...overrides };
   const effParent = parentOverride !== undefined ? parentOverride : parent;
 
+  // THE FOLDER FIELD (Story MOTIR-5309 · MOTIR-5377). Its value is the page's
+  // placement channel — where the item sits, as the server last answered — so it
+  // renders only on the page (`null` outside a provider). A pick shows at once
+  // (the inline-edit rule); the pending value is stored with the placement it was
+  // picked OVER and stands only while the channel still reads that placement, so
+  // the server's answer to the report — or to a later Parent change — replaces it.
+  const placement = usePlacement();
+  const tf = useTranslations('folders');
+  const [folderOverride, setFolderOverride] = useState<
+    { folderId: string | null; path: string[]; over: WorkItemPlacementDto | null } | undefined
+  >(undefined);
+  const pendingFolder =
+    folderOverride !== undefined && folderOverride.over === placement ? folderOverride : undefined;
+  // The item's OWN folder — the picker's checked option. An item placed through its
+  // root has none of its own, so picking the inherited folder files it directly.
+  const ownFolderId = pendingFolder ? pendingFolder.folderId : (placement?.folderId ?? null);
+  const shownFolder: { path: string[]; via: WorkItemSummaryDto | null } | null = pendingFolder
+    ? pendingFolder.folderId === null
+      ? null
+      : { path: pendingFolder.path, via: null }
+    : (placement?.placementFolder ?? null);
+
   const typeMeta = ISSUE_TYPE_META[eff.kind];
   const reporter = members.find((m) => m.userId === eff.reporterId);
   const assignee = members.find((m) => m.userId === eff.assigneeId);
@@ -240,6 +271,41 @@ export function CoreFieldsPanel({
 
   const toggle = (key: EditableKey) => setEditing((cur) => (cur === key ? null : key));
 
+  // THE PAGE'S PLACEMENT CHANNEL (MOTIR-5381). A parent change moves the item, and
+  // the breadcrumb that draws where it sits is another island; reporting asks the
+  // server where the item now is. A no-op outside the page (unit call sites).
+  const reportPlacementChange = usePlacementReporter();
+
+  // File the item into a folder, or take it out of one. The placement rules are
+  // `fileWorkItem`'s: filing clears a work-item parent (so Parent reads None while
+  // it saves), un-filing leaves the parent as it is. The success arm's `updatedAt`
+  // becomes the panel's token so the next inline edit is not refused as stale.
+  function fileIntoFolder(folderId: string | null, path: string[]) {
+    setEditing(null);
+    /* v8 ignore next -- UNREACHABLE through the shipped control: the picker's
+       `choose` DISMISSES on its current option and never hands it back, and the
+       current option is exactly `ownFolderId`. Kept as the rail's own guard should
+       the control change. Asserted by issue-detail-fields.test.tsx › 'picking the
+       folder the item is already in writes nothing'. */
+    if (folderId === ownFolderId) return;
+    setFolderOverride({ folderId, path, over: placement });
+    if (folderId !== null) {
+      setParentOverride(null);
+      setOverrides((o) => ({ ...o, parentId: null }));
+    }
+    startTransition(async () => {
+      const res = await fileWorkItemAction({ workItemId: item.id, folderId });
+      if (res.ok) {
+        setUpdatedAt(res.updatedAt);
+        reportPlacementChange(item.id);
+      } else {
+        setFolderOverride(undefined);
+        if (folderId !== null) revert(['parentId']);
+        toast({ variant: 'error', title: res.error });
+      }
+    });
+  }
+
   function patch(input: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>) {
     setEditing(null);
     setOverrides((o) => ({ ...o, ...input }));
@@ -248,6 +314,8 @@ export function CoreFieldsPanel({
       if (res.ok) {
         // The 200 IS the confirmation — keep the optimistic value, no refresh.
         setUpdatedAt(res.updatedAt);
+        // Only after a SUCCESSFUL parent change: a failed or stale save moved nothing.
+        if (input.parentId !== undefined) reportPlacementChange(item.id);
       } else if (res.stale) {
         // A genuine conflict (someone else edited): drop our optimistic value
         // and re-read the server's newer state — the one place a refresh is right.
@@ -519,6 +587,44 @@ export function CoreFieldsPanel({
           muted(t('none'))
         )}
       </FieldCard>
+
+      {/* Folder (MOTIR-5377, placement.mock.html panels 2–3) — directly below Parent,
+          because the two are one fact about placement. The control is the quick
+          view's, unforked. A viewer sees the value with no chevron. */}
+      {placement ? (
+        <FieldCard
+          label={tf('fieldLabel')}
+          editable={canEdit}
+          editing={editing === 'folder'}
+          onToggle={() => toggle('folder')}
+        >
+          {editing === 'folder' ? (
+            <QuickViewFolderControl
+              folderId={ownFolderId}
+              parent={effParent}
+              onPick={fileIntoFolder}
+              onDismiss={() => setEditing(null)}
+            />
+          ) : shownFolder ? (
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Folder className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+                <span className="truncate">{shownFolder.path.join(' ▸ ')}</span>
+              </span>
+              {shownFolder.via ? (
+                <span className="text-xs text-(--el-text-secondary)">
+                  {tf('placedThrough', {
+                    key: shownFolder.via.identifier,
+                    title: shownFolder.via.title,
+                  })}
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            muted(tf('noFolder'))
+          )}
+        </FieldCard>
+      ) : null}
 
       {/* Labels + Components (5.4.8) — between Parent and Due date: with the
           relational fields, ahead of the date/estimate group (the Jira

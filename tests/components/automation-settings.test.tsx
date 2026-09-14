@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import type { AutomationRuleSummaryDto } from '@/lib/dto/automationRules';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
+import { decodeFilterParam } from '@/lib/filters/ast';
 import { AUTOMATION_TRIGGER_TYPES } from '@/lib/automation/registry';
 import { EDITOR_READY_ACTION_TYPES } from '@/app/(authed)/settings/project/automation/_components/AutomationRuleEditor';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -116,7 +118,7 @@ function rule(over: Partial<AutomationRuleSummaryDto> = {}): AutomationRuleSumma
   };
 }
 
-function renderSettings(rules: AutomationRuleSummaryDto[]): void {
+function renderSettings(rules: AutomationRuleSummaryDto[], folders?: ProjectFoldersDto): void {
   const ui: ReactElement = (
     <ToastProvider>
       <AutomationSettings
@@ -128,6 +130,7 @@ function renderSettings(rules: AutomationRuleSummaryDto[]): void {
         sprints={[]}
         customFields={[]}
         components={[]}
+        folders={folders}
         referencedLabels={[]}
       />
     </ToastProvider>
@@ -286,5 +289,39 @@ describe('AutomationRuleEditor — registry-driven when/if/then', () => {
     expect(body.name).toBe('Move to review');
     expect(body.triggerType).toBe('created');
     expect(body.actions).toEqual([{ type: 'transition', toStatusId: 'review' }]);
+  });
+
+  it('offers the Folder condition over the project folders, and the saved rule carries it (MOTIR-5378)', async () => {
+    renderSettings([], {
+      truncated: false,
+      folders: [
+        { id: 'f-parked', parentFolderId: null, name: 'Parked', position: 'a0', path: ['Parked'] },
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Rule name' }), {
+      target: { value: 'Skip parked work' },
+    });
+    // The If block is the SAME builder, so it gains the same Folder row.
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Folder' }));
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Folder values' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Parked' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add action' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Target status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'In Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save rule' }));
+    await act(async () => {});
+
+    const call = fetchMock.mock.calls.find(([, init]) => (init?.method ?? 'GET') === 'POST');
+    expect(call).toBeTruthy();
+    const body = JSON.parse(call![1].body) as { condition: string | null };
+    const decoded = decodeFilterParam(body.condition ?? '');
+    expect(decoded.ok ? decoded.ast : decoded).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-parked'] }],
+    });
   });
 });

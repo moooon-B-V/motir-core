@@ -1,7 +1,8 @@
 import { Fragment } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
+import { Folder } from 'lucide-react';
+import type { PlacementFolderDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 
@@ -14,21 +15,51 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // epic reads first and the immediate parent last, matching the lineage a nested
 // subtask (Subtask → Task → Story → Epic) walks up to.
 //
-// A top-level item has no ancestors → renders nothing (the AC's "no breadcrumb"
-// case). Each segment is a plain `next/link` to that ancestor's own detail page
-// (`/items/[key]`) — the tree recursion the breadcrumb implies — so the chain
-// is keyboard-navigable as a sequence of links. Wrapped in a `<nav>` landmark
-// with an accessible name so assistive tech announces it as navigation.
+// A filed item's EFFECTIVE folder leads the chain (Story MOTIR-5309 ·
+// MOTIR-5381, design/work-items/placement.mock.html panel 4): ONE segment, the
+// path joined with `▸`, before the ancestors. It is TEXT, not a link — nothing in
+// the product takes a reader to a folder — with the folder glyph, a visually-hidden
+// "Folder:" prefix, and the full path in its `title` for when it truncates. The
+// landmark is named by its content: "Folder and parent work items" when a folder
+// segment is present, the shipped "Parent work items" otherwise.
+//
+// An unfiled top-level item has no segments → renders nothing (the AC's "no
+// breadcrumb" case); a FILED root now renders its folder. Each work-item segment
+// is a plain `next/link` to that ancestor's own detail page (`/items/[key]`), so
+// the chain is keyboard-navigable as a sequence of links.
 
-export function ParentBreadcrumb({ ancestors }: { ancestors: WorkItemSummaryDto[] }) {
+export function ParentBreadcrumb({
+  ancestors,
+  placementFolder = null,
+}: {
+  ancestors: WorkItemSummaryDto[];
+  placementFolder?: PlacementFolderDto | null;
+}) {
   const t = useTranslations('issueViews');
-  if (ancestors.length === 0) return null;
+  const tf = useTranslations('folders');
+  if (ancestors.length === 0 && placementFolder === null) return null;
+  const folderPath = placementFolder ? placementFolder.path.join(' ▸ ') : null;
 
   return (
     <nav
-      aria-label={t('parentIssuesAria')}
+      aria-label={folderPath !== null ? t('placementBreadcrumbAria') : t('parentIssuesAria')}
       className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
     >
+      {folderPath !== null ? (
+        <>
+          <span className="text-(--el-text-secondary)" aria-hidden>
+            ·
+          </span>
+          <span
+            className="flex min-w-0 max-w-full items-center gap-1 font-sans text-sm text-(--el-text-secondary)"
+            title={folderPath}
+          >
+            <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="sr-only">{tf('breadcrumbFolderLabel')}</span>
+            <span className="truncate">{folderPath}</span>
+          </span>
+        </>
+      ) : null}
       {ancestors.map((ancestor) => {
         const meta = ISSUE_TYPE_META[ancestor.kind];
         return (

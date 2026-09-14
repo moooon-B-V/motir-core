@@ -59,6 +59,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 import {
@@ -101,6 +102,8 @@ export interface AutomationRuleEditorProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders — the condition block's Folder field (MOTIR-5378). */
+  folders?: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   onCancel: () => void;
   onSaved: (rule: AutomationRuleDto) => void;
@@ -119,6 +122,7 @@ export function AutomationRuleEditor({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   onCancel,
   onSaved,
@@ -156,6 +160,7 @@ export function AutomationRuleEditor({
     ast: initial.conditionAst,
     customFields,
     components,
+    folders,
     referencedLabels,
   });
 
@@ -346,6 +351,7 @@ export function AutomationRuleEditor({
             sprints={sprints}
             customFields={customFields}
             components={components}
+            folders={folders}
             referencedLabels={referencedLabels}
             projectKey={projectKey}
           />

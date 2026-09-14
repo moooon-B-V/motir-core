@@ -22,6 +22,7 @@ import type {
   WorkItemPriorityDto,
   WorkItemTypeDto,
   WorkItemExplanationSourceDto,
+  WorkItemPlacementDto,
 } from '@/lib/dto/workItems';
 
 // Server Actions for the issue edit form (Subtask 2.3.6). Two DISTINCT paths —
@@ -149,6 +150,41 @@ export async function fileWorkItemAction(input: {
       const tf = await getServerTranslator('folders');
       return { ok: false, error: tf('fileRefused') };
     }
+    if (err instanceof ProjectAccessDeniedError) {
+      const ta = await getServerTranslator('projectAccess');
+      return { ok: false, error: ta('readOnlyHint') };
+    }
+    if (err instanceof WorkItemError) {
+      const t = await getErrorsTranslator();
+      return { ok: false, error: workItemErrorMessage(err, t) };
+    }
+    throw err;
+  }
+}
+
+export type WorkItemPlacementActionResult =
+  | { ok: true; placement: WorkItemPlacementDto }
+  | { ok: false; error: string };
+
+/**
+ * Where a work item sits NOW (Story MOTIR-5309 · MOTIR-5381) — the item page's
+ * placement channel asks this after the rail's Parent or Folder field moved the
+ * item. Transport only over `workItemsService.getWorkItemPlacement`: the same
+ * mapper the page's first render reads, the same browse gate, and the same
+ * not-found for an item in another project or workspace. A refusal is a result,
+ * never a throw — the channel keeps its last value.
+ */
+export async function getWorkItemPlacementAction(
+  workItemId: string,
+): Promise<WorkItemPlacementActionResult> {
+  const ctx = await requireContext();
+  try {
+    const placement = await workItemsService.getWorkItemPlacement(ctx.projectId, workItemId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    return { ok: true, placement };
+  } catch (err) {
     if (err instanceof ProjectAccessDeniedError) {
       const ta = await getServerTranslator('projectAccess');
       return { ok: false, error: ta('readOnlyHint') };

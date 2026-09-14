@@ -801,6 +801,12 @@ export default defineConfig({
         'app/**/items/_components/FolderPicker.tsx',
         'app/**/items/_components/FolderRowMenu.tsx',
         'app/**/items/_components/QuickViewFolderField.tsx',
+        // Story MOTIR-5309 · MOTIR-5379 — the item page's placement channel and its
+        // breadcrumb: two new files and the one they rewrote. Measured with the
+        // placement suites before pinning (the figures are in the story PR body).
+        'app/**/items/[key]/_components/PlacementProvider.tsx',
+        'app/**/items/[key]/_components/PlacementBreadcrumb.tsx',
+        'app/**/items/[key]/_components/ParentBreadcrumb.tsx',
         'app/**/items/[key]/_components/ChildPanel.tsx',
         'app/**/items/[key]/_components/ChildList.tsx',
         'lib/mcp/registry.ts',
@@ -3890,6 +3896,22 @@ export default defineConfig({
         'app/**/items/_components/FolderPicker.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/items/_components/FolderRowMenu.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/items/_components/QuickViewFolderField.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-5309 · MOTIR-5379 — the placement channel, pinned at the floor.
+        'app/**/items/[key]/_components/PlacementProvider.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/[key]/_components/PlacementBreadcrumb.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/[key]/_components/ParentBreadcrumb.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,

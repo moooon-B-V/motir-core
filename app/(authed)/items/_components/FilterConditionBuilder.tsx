@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Component as ComponentIcon, Plus, Tag, TriangleAlert, X } from 'lucide-react';
+import {
+  Component as ComponentIcon,
+  Folder,
+  Info,
+  Plus,
+  Tag,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Segmented } from '@/components/ui/Segmented';
 import { CUSTOM_FIELD_TYPE_META } from '@/lib/customFields/typeMeta';
@@ -35,6 +43,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import { cn } from '@/lib/utils/cn';
 import { AdvancedFilterValueEditor } from './AdvancedFilterValueEditor';
@@ -100,6 +109,9 @@ function fieldIcon(def: FilterFieldDef): ReactNode | undefined {
   if (def.id === 'cmp') {
     return <ComponentIcon className="h-4 w-4 text-(--el-text-muted)" aria-hidden />;
   }
+  if (def.id === 'folder') {
+    return <Folder className="h-4 w-4 text-(--el-text-muted)" aria-hidden />;
+  }
   return undefined;
 }
 
@@ -120,11 +132,16 @@ export function useFilterConditionModel(args: {
   ast: FilterAst | null;
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders (Story MOTIR-5309 · MOTIR-5378). A host that passes
+   * none — the board and backlog bars — offers no Folder field, rather than one
+   * with nothing to pick. */
+  folders?: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   fields?: FilterFieldDef[];
 }): FilterConditionModel {
-  const { ast, customFields, components, referencedLabels, fields } = args;
+  const { ast, customFields, components, folders, referencedLabels, fields } = args;
 
+  const offersFolders = folders !== undefined;
   const menuFields = useMemo(
     () =>
       advancedBuilderFields(
@@ -132,8 +149,8 @@ export function useFilterConditionModel(args: {
           buildAdvancedFilterFieldDefs(
             customFields.map((f) => ({ id: f.id, fieldType: f.fieldType })),
           ),
-      ),
-    [fields, customFields],
+      ).filter((def) => offersFolders || def.id !== 'folder'),
+    [fields, customFields, offersFolders],
   );
 
   const dynamicLabels = useMemo<DynamicFieldLabels>(
@@ -152,8 +169,12 @@ export function useFilterConditionModel(args: {
         ),
         labelIds: new Set(referencedLabels.map((l) => l.id)),
         componentIds: new Set(components.map((c) => c.id)),
+        // Only a COMPLETE folder list can say a folder is gone — a truncated
+        // window would flag a real folder past the cap.
+        folderIds:
+          folders && !folders.truncated ? new Set(folders.folders.map((f) => f.id)) : undefined,
       }),
-    [ast, customFields, referencedLabels, components],
+    [ast, customFields, referencedLabels, components, folders],
   );
 
   const resolveDef = useMemo(
@@ -177,6 +198,8 @@ export interface FilterConditionBuilderProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders — the Folder row's value editor (MOTIR-5378). */
+  folders?: ProjectFoldersDto;
   referencedLabels: LabelDto[];
   projectKey: string;
   /** Hide the combinator sentence when a single-or-empty group makes it noise
@@ -200,6 +223,7 @@ export function FilterConditionBuilder({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   projectKey,
   showCombinator = true,
@@ -349,6 +373,7 @@ export function FilterConditionBuilder({
               sprints={sprints}
               customFields={customFields}
               components={components}
+              folders={folders}
               referencedLabels={referencedLabels}
               projectKey={projectKey}
               staleValueIds={stale.staleValueIds}
@@ -374,6 +399,15 @@ export function FilterConditionBuilder({
             ) : pending ? (
               <p className="col-span-full -mt-1 text-xs text-(--el-text-muted) italic">
                 {t('advancedPendingNote')}
+              </p>
+            ) : null}
+            {/* Under a Folder list-operator row only (placement.mock.html panel 5):
+                the predicate matches the chosen folders AND every folder inside
+                them, so the row says so before a sub-folder's work disappears. */}
+            {def.id === 'folder' && editorKind !== 'none' ? (
+              <p className="col-span-full -mt-1 flex items-center gap-1.5 text-xs text-(--el-text-secondary)">
+                <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                {t('advancedFolderIncludesInside')}
               </p>
             ) : null}
           </div>

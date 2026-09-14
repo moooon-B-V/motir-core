@@ -12,6 +12,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import { AutomationRuleList } from './AutomationRuleList';
 import { AutomationRuleEditor } from './AutomationRuleEditor';
@@ -40,6 +41,8 @@ export interface AutomationSettingsProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders — the rule condition's Folder field (MOTIR-5378). */
+  folders?: ProjectFoldersDto;
   referencedLabels: LabelDto[];
 }
 
@@ -52,6 +55,7 @@ export function AutomationSettings({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
 }: AutomationSettingsProps) {
   const t = useTranslations('settings.automation');
@@ -164,6 +168,7 @@ export function AutomationSettings({
         sprints={sprints}
         customFields={customFields}
         components={components}
+        folders={folders}
         referencedLabels={referencedLabels}
         onCancel={() => setMode({ kind: 'list' })}
         onSaved={handleSaved}

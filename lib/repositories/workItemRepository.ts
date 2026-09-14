@@ -5335,10 +5335,87 @@ function customFieldConditionSql(
   }
 }
 
+/**
+ * The work-item TREE-DEPTH limit — a root is depth 1, and the
+ * `enforce_work_item_depth_limit` trigger raises `WI_DEPTH_LIMIT_EXCEEDED`
+ * (→ `DepthLimitExceededError`) past 4 (prisma/migrations/
+ * 20260817160000_work_item_parent_tenancy). So any item reaches its root in at
+ * most `WORK_ITEM_MAX_DEPTH - 1` parent hops.
+ */
+const WORK_ITEM_MAX_DEPTH = 4;
+
+/**
+ * `w`'s EFFECTIVE folder (Story MOTIR-5309 · MOTIR-5376): its own `folderId`,
+ * else its ROOT ancestor's. Only a root can carry a folder — the CHECK
+ * `work_item_parent_xor_folder` keeps `parentId` and `folderId` apart — so at
+ * most one link of the parent chain is non-null and a COALESCE down it is exact.
+ * The hops are built from {@link WORK_ITEM_MAX_DEPTH}, so the walk covers the
+ * whole chain the trigger allows. Aliases are fixed literals; nothing binds.
+ */
+const EFFECTIVE_FOLDER_SQL: Prisma.Sql = (() => {
+  const folders: Prisma.Sql[] = [Prisma.sql`w."folderId"`];
+  const joins: Prisma.Sql[] = [];
+  let child = Prisma.sql`w`;
+  for (let hop = 1; hop < WORK_ITEM_MAX_DEPTH; hop++) {
+    const alias = Prisma.raw(`"fp${hop}"`);
+    joins.push(Prisma.sql`LEFT JOIN "work_item" ${alias} ON ${alias}."id" = ${child}."parentId"`);
+    folders.push(Prisma.sql`${alias}."folderId"`);
+    child = alias;
+  }
+  return Prisma.sql`(SELECT COALESCE(${Prisma.join(folders, ', ')}) FROM (SELECT 1) "fp0" ${Prisma.join(joins, ' ')})`;
+})();
+
+/**
+ * The chosen folder ids PLUS every folder beneath them — a recursive walk DOWN
+ * `folder.parent_folder_id`, the reverse of `folderRepository.findAncestorIds`,
+ * bounded like it. UNCORRELATED on purpose, so Postgres evaluates it once per
+ * query rather than once per row; it needs no `w."projectId"` scope because every
+ * id reaching SQL survived the referent check (`loadFilterReferents` keeps only
+ * this project's folders — any other id is stale and compiles to `FALSE` before
+ * this runs), and a folder's subtree never leaves its project (the folder service
+ * refuses a cross-project move with `CrossProjectFolderError`).
+ */
+function folderSubtreeIdsSql(folderIds: string[]): Prisma.Sql {
+  return Prisma.sql`ARRAY(
+    WITH RECURSIVE "fsel" AS (
+      SELECT f."id", 0 AS depth FROM "folder" f WHERE f."id" = ANY(${folderIds})
+      UNION ALL
+      SELECT c."id", s.depth + 1 FROM "folder" c JOIN "fsel" s ON c."parent_folder_id" = s."id"
+       WHERE s.depth < 1000
+    )
+    SELECT "id" FROM "fsel")`;
+}
+
+/**
+ * A FOLDER condition → its predicate over the effective folder. `is_any_of` is
+ * membership in the chosen folders' subtrees; `is_none_of` is its negation,
+ * which — the effective folder being NULL for an unfiled item — includes the
+ * unfiled bucket (the enum none-of rule); the empty pair reads the effective
+ * folder's presence.
+ */
+function folderConditionSql(condition: FilterCondition): Prisma.Sql {
+  switch (condition.operator) {
+    case 'is_any_of':
+    case 'is_none_of': {
+      const member = Prisma.sql`COALESCE(${EFFECTIVE_FOLDER_SQL} = ANY(${folderSubtreeIdsSql(condition.value as string[])}), FALSE)`;
+      return condition.operator === 'is_none_of' ? Prisma.sql`NOT ${member}` : member;
+    }
+    case 'is_empty':
+      return Prisma.sql`${EFFECTIVE_FOLDER_SQL} IS NULL`;
+    case 'is_not_empty':
+      return Prisma.sql`${EFFECTIVE_FOLDER_SQL} IS NOT NULL`;
+    // resolveFilterAst pins `folder` to the enum operator set before this switch.
+    /* v8 ignore next 2 */
+    default:
+      throw new UnknownFilterOperatorError(condition.field, condition.operator);
+  }
+}
+
 /** One resolved condition → its parenthesized predicate fragment. */
 function compileConditionSql(condition: FilterCondition, def: FilterFieldDef): Prisma.Sql {
   if (def.customField) return customFieldConditionSql(condition, def.customField);
   if (def.id === 'lbl' || def.id === 'cmp') return joinListConditionSql(def.id, condition);
+  if (def.id === 'folder') return folderConditionSql(condition);
   const { field, operator, value } = condition;
   if (field === 'text') {
     // Validation pinned the text ops + a string value.

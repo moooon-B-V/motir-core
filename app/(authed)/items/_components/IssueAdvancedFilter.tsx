@@ -15,6 +15,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import { cn } from '@/lib/utils/cn';
 import { useAdvancedFilterPopover } from './AdvancedFilterContext';
@@ -55,6 +56,10 @@ export interface IssueAdvancedFilterProps {
   customFields: CustomFieldDefinitionDTO[];
   /** The project's components (bounded) — the Component field's value editor. */
   components: ComponentDto[];
+  /** The project's folders by path (Story MOTIR-5309 · MOTIR-5378) — the Folder
+   * field's value editor. The board and backlog omit it, and offer no Folder
+   * field. */
+  folders?: ProjectFoldersDto;
   /** The active AST's referenced labels, resolved to names server-side — seeds
    * the Label editor's chips + drives label stale-detection. */
   referencedLabels: LabelDto[];
@@ -79,6 +84,7 @@ export function IssueAdvancedFilter({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
   projectKey,
   fields,
@@ -100,6 +106,7 @@ export function IssueAdvancedFilter({
     ast,
     customFields,
     components,
+    folders,
     referencedLabels,
     fields,
   });
@@ -228,6 +235,7 @@ export function IssueAdvancedFilter({
             sprints={sprints}
             customFields={customFields}
             components={components}
+            folders={folders}
             referencedLabels={referencedLabels}
             projectKey={projectKey}
           />

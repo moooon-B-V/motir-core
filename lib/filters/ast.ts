@@ -32,12 +32,12 @@ export type BuiltInFilterFieldId =
   | 'storyPoints'
   | 'estimate';
 
-/** The Epic-5 field ids (Subtask 6.1.2): the static label/component fields
- * and the per-project DYNAMIC custom-field entries, keyed `cf:<fieldId>` —
- * the field list is data, so these resolve against a per-project referent
- * set (`ProjectFilterReferents` in lib/filters/registry.ts), never a static
- * map. */
-export type Epic5FilterFieldId = 'lbl' | 'cmp' | `cf:${string}`;
+/** The referent-backed field ids (Subtask 6.1.2): the static label/component
+ * fields, the FOLDER field (MOTIR-5376), and the per-project DYNAMIC
+ * custom-field entries, keyed `cf:<fieldId>` — their value ids are data, so
+ * these resolve against a per-project referent set (`ProjectFilterReferents`
+ * in lib/filters/registry.ts), never a static map. */
+export type Epic5FilterFieldId = 'lbl' | 'cmp' | 'folder' | `cf:${string}`;
 
 export type FilterFieldId = BuiltInFilterFieldId | Epic5FilterFieldId;
 

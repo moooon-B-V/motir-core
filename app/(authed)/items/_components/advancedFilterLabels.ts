@@ -39,6 +39,7 @@ const FIELD_LABEL_KEYS: Partial<Record<FilterFieldId, string>> = {
   // rail-card titles (labelsField / componentsField).
   lbl: 'advancedFieldLabel',
   cmp: 'advancedFieldComponent',
+  folder: 'advancedFieldFolder',
 };
 
 /**
