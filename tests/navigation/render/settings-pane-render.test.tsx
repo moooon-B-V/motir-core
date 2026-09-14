@@ -60,6 +60,10 @@ vi.mock('@/lib/services/customFieldsService', () => ({
 vi.mock('@/lib/services/componentsService', () => ({
   componentsService: { listComponents: async () => [] },
 }));
+// The rule condition's Folder field reads the project's folders (MOTIR-5378).
+vi.mock('@/lib/services/foldersService', () => ({
+  foldersService: { listProjectFolders: async () => ({ folders: [], truncated: false }) },
+}));
 vi.mock('@/lib/services/labelsService', () => ({
   labelsService: { resolveByIds: async () => [] },
 }));
