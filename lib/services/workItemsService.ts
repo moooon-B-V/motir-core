@@ -52,12 +52,7 @@ import {
   childrenBelowClaimBar,
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
-import {
-  APPROVAL_GATE_HANDLERS,
-  handlerFor,
-  isRegisteredGateKind,
-  type RegisteredGateKind,
-} from '@/lib/approvalGates/registry';
+import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
@@ -1056,6 +1051,13 @@ const ROADMAP_CANCELLED_KEY = 'cancelled';
 /** The status an item enters to be reviewed — the one whose entry re-asks its
  *  pending questions (ADR `approval-gates.md` §6d AMENDMENT, rule 7). */
 const REVIEW_STATUS_KEY = 'in_review';
+/** The status an approve-to-merge approval writes — never set by hand while a
+ *  pull request is open (ADR `approval-gates.md` §6d AMENDMENT, rule 2b). */
+const APPROVED_STATUS_KEY = 'approved';
+/** The gate kind that decides a card with a pull request (§1's amendment). Named
+ *  by the refusal when no gate row has been raised yet — the pull request is
+ *  open but not yet green. */
+const PULL_REQUEST_GATE_KIND = 'pull_request_approval';
 
 /** The status keys that count as DONE on a roadmap meter: every `done`-category
  *  status except `cancelled`. */
@@ -2783,6 +2785,38 @@ export const workItemsService = {
     // a gate owns. The common card pays one indexed read
     // (`approval_gate_work_item_id_idx`) and no status read.
     let statuses: WorkflowStatusDto[] | null = null;
+
+    // RULE 2b — WITH A PULL REQUEST, `approved` AND `done` HAVE ONE WRITER EACH
+    // (Yue, 2026-09-14; ADR §6d AMENDMENT, rule 2b). *"It's about if there's a
+    // PR."* When the item has an OPEN delivering pull request, the approval is the
+    // approve-to-merge gate: approving writes `approved` (and merges or enqueues),
+    // and the merge webhook writes `done`. So a hand move INTO `approved` is
+    // refused unless it is the deciding gate's own write, and a hand move INTO the
+    // done category (other than Cancelled) is refused outright — the merge makes
+    // it. The merge itself passes: the sync commits its pull request as closed
+    // before it transitions the card. System writes are exempt, as everywhere.
+    //
+    // Checked BEFORE rule 1's awaiting-gate hold, because with a pull request open
+    // the answer to "what is Done waiting for?" is the MERGE, whichever gate rows
+    // exist. Only a move into one of the two held statuses pays the delivery read.
+    const intoApproved = toStatusKey === APPROVED_STATUS_KEY && !opts.decidingGateId;
+    const intoDone = target.category === 'done' && toStatusKey !== ROADMAP_CANCELLED_KEY;
+    if (
+      !opts.system &&
+      (intoApproved || intoDone) &&
+      (await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0
+    ) {
+      const gate = awaitingGates[0] ?? null;
+      throw new ApprovalGatePendingError({
+        statusKey: toStatusKey,
+        gateId: gate?.id ?? null,
+        gateKind: gate?.kind ?? PULL_REQUEST_GATE_KIND,
+        itemKey: current.identifier,
+        workItemId,
+        waitingOn: intoDone ? 'merge' : 'decision',
+      });
+    }
+
     if (!opts.system) {
       for (const gate of awaitingGates) {
         if (gate.id === opts.decidingGateId || !isRegisteredGateKind(gate.kind)) continue;
@@ -2800,46 +2834,6 @@ export const workItemsService = {
             gateKind: gate.kind,
             itemKey: current.identifier,
             workItemId,
-          });
-        }
-      }
-
-      // RULE 2b — AN APPROVAL WAITING ON ITS MERGE STILL HOLDS THE MOVE (Yue,
-      // 2026-09-14; ADR §6d AMENDMENT). When the item has an OPEN delivering pull
-      // request, approving writes no terminal status: the merge is the one writer
-      // of it (§8). A hand move there would take that status from the merge — so
-      // it is refused while an `approved` gate of a kind owning the target exists
-      // AND a delivering pull request is still open. The merge itself passes: the
-      // sync commits its pull request as closed before it transitions the card.
-      // Ordered by cost: the common card has no approved gate and pays one indexed
-      // read; the status list is resolved only when an approval AND an open pull
-      // request are both present.
-      const kindsWithIntent = (Object.keys(APPROVAL_GATE_HANDLERS) as RegisteredGateKind[]).filter(
-        (kind) => handlerFor(kind).statusIntent !== null,
-      );
-      const approved =
-        kindsWithIntent.length > 0
-          ? await approvalGateRepository.findLatestApprovedOfKinds(workItemId, kindsWithIntent, tx)
-          : null;
-      if (
-        approved &&
-        isRegisteredGateKind(approved.kind) &&
-        (await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0
-      ) {
-        const intent = handlerFor(approved.kind).statusIntent;
-        statuses ??= await workflowsService.listStatusesByProject(
-          current.projectId,
-          ctx.workspaceId,
-          tx,
-        );
-        if (intent && resolveStatusIntent(statuses, intent) === toStatusKey) {
-          throw new ApprovalGatePendingError({
-            statusKey: toStatusKey,
-            gateId: approved.id,
-            gateKind: approved.kind,
-            itemKey: current.identifier,
-            workItemId,
-            waitingOn: 'merge',
           });
         }
       }

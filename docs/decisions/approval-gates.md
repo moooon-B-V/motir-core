@@ -922,29 +922,44 @@ directly below. Build to them.
 > already happened; a `changes_requested` gate has already sent the work back;
 > a `superseded` one asks nothing.
 >
-> #### 2b. …and an APPROVED gate still holds the move while its MERGE is pending — ADDED 2026-09-14 (Yue)
+> #### 2b. It is about whether there is a PULL REQUEST — with one open, `approved` and `done` each have ONE writer — ADDED 2026-09-14 (Yue)
 >
-> **Yue:** _"after approving the status is not changed to done, it changes to
-> approved, but done should be blocked too."_
+> **Yue:** _"when the design work item has a linked PR, approve the design should
+> change the status to approved, and merge should be auto triggered or auto
+> enqueued, webhook changes approved to done after PR merge. if no PR, the work
+> item status will be changed to done after approving. so it's about if there's a
+> PR. if there's a PR, the design gate is actually gone, approval gate is the
+> trigger merge gate like any other regular PR"_ — and, of this story's guard:
+> _"not only done is blocked, approved manual set should be blocked too."_
 >
-> When the work item has an OPEN delivering pull request, approving writes no
-> terminal status: §8's discriminator hands `done` to the merge, and MOTIR-4909's
-> gate lands the card in `approved` instead. Rule 2 alone would then let a person
-> drag the approved card to Done by hand while its pull request is unmerged —
-> taking `done` from its one writer. So **an `approved` gate whose kind owns the
-> target status refuses that move for as long as the item has an open delivering
-> pull request.** It is the same code, `APPROVAL_GATE_PENDING`, with
-> `waitingOn: 'merge'` (rule 2's hold is `waitingOn: 'decision'`), and its payload
-> carries `canDecide: false`: nothing is left to decide, so no surface offers an
-> approve door — the pull request's merge is the way forward.
+> | the work item has…                  | the decision…                              | `approved` is written by                     | `done` is written by  |
+> | ----------------------------------- | ------------------------------------------ | -------------------------------------------- | --------------------- |
+> | **no open pull request**            | the kind's own gate (e.g. the design)      | —                                            | **approving**         |
+> | **an open delivering pull request** | the approve-to-merge gate (§1, MOTIR-4909) | **approving**, which also merges or enqueues | **the merge webhook** |
 >
+> So, beside rule 1's hold on an `awaiting` gate's owned status, **while the item
+> has an OPEN delivering pull request a hand move INTO `approved` is refused unless
+> it is the deciding gate's own write, and a hand move INTO the done category
+> (Cancelled excepted) is refused outright.** Same code, `APPROVAL_GATE_PENDING`:
+> `waitingOn: 'decision'` for `approved`, `waitingOn: 'merge'` for `done`. The
+> payload's `canDecide` is true only when a gate is actually awaiting a decision —
+> never for the merge wait, and never while the pull request is open but not yet
+> green, when no gate has been raised (the refusal then names the
+> `pull_request_approval` kind with no gate id).
+>
+> - **Checked BEFORE rule 1**, because with a pull request open the answer to
+>   "what is Done waiting for?" is the merge, whichever gate rows exist.
 > - **The merge itself passes.** The status sync commits its pull request as
->   closed before it transitions the card, so the open-delivery count it sees is
->   zero (and a sibling still open is already `deferred_open_pr`).
-> - **Every other move stays open**, as rule 3 says — sending it back, blocking,
->   cancelling.
-> - **Rule 2's reopen path is unchanged:** once the pull request has merged, an
->   approved gate holds nothing.
+>   closed before it transitions the card, so it sees no open delivery (and a
+>   sibling still open is already `deferred_open_pr`).
+> - **System writes are exempt**, and the parent rollup treats the refusal as a
+>   logged no-op (`approval_pending`) — a derivation must not take either status
+>   from its writer, nor fail its job trying.
+> - **Every other move stays open**, as rule 3 says.
+> - **Not decided here:** the approve-to-merge gate itself, the `approved` write
+>   and the merge or enqueue (MOTIR-4909 / MOTIR-4882), and a design card with a
+>   pull request raising no `design_result` gate (MOTIR-5534). This rule is the
+>   guard's half of that model and holds whichever of them has landed.
 >
 > #### 3. Exactly ONE move is refused per gate: the move INTO the owned status
 >

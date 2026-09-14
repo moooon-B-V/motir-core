@@ -530,7 +530,9 @@ export class ApprovalGatePendingError extends WorkItemError {
   readonly tag = 'APPROVAL_GATE_PENDING' as const;
   readonly code = 'APPROVAL_GATE_PENDING' as const;
   readonly statusKey: string;
-  readonly gateId: string;
+  /** The awaiting gate being waited on, or null when the item's pull request is
+   *  open and no gate has been raised yet (rule 2b). */
+  readonly gateId: string | null;
   readonly gateKind: string;
   /** The work item's `KEY-n`, for a message and a link a person can follow. */
   readonly itemKey: string;
@@ -538,13 +540,13 @@ export class ApprovalGatePendingError extends WorkItemError {
   /**
    * WHAT the held move is waiting for (ADR §6d AMENDMENT, rule 2b):
    * - `decision` — the gate is `awaiting`, and approving it makes this move;
-   * - `merge` — the gate is already `approved`, but the item still has an OPEN
-   *   delivering pull request, so the MERGE is the one writer of this status.
+   * - `merge` — the item has an OPEN delivering pull request, so the MERGE is the
+   *   one writer of this status (rule 2b).
    */
   readonly waitingOn: 'decision' | 'merge';
   constructor(args: {
     statusKey: string;
-    gateId: string;
+    gateId: string | null;
     gateKind: string;
     itemKey: string;
     workItemId: string;
@@ -553,10 +555,9 @@ export class ApprovalGatePendingError extends WorkItemError {
     const kindLabel = args.gateKind.replace(/_/g, ' ');
     super(
       args.waitingOn === 'merge'
-        ? `${args.itemKey} cannot be moved to "${args.statusKey}" directly: its ${kindLabel} ` +
-            'approval is recorded, and its pull request is still open — merging it is what ' +
-            'makes this move. Merge the pull request, or move the item somewhere else — only ' +
-            'this one move is held.'
+        ? `${args.itemKey} cannot be moved to "${args.statusKey}" directly: it has an open ` +
+            'pull request, and merging it is what makes this move. Approve and merge the pull ' +
+            'request, or move the item somewhere else — only this move is held.'
         : `${args.itemKey} cannot be moved to "${args.statusKey}" directly: a ${kindLabel} ` +
             'approval is waiting on it, and approving that decision is what makes this move. ' +
             'Decide it in Motir, or move the item somewhere else — only this one move is held.',

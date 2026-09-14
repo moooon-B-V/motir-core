@@ -546,7 +546,10 @@ export const approvalGatesService = {
         waitingOn: err.waitingOn,
         // Nothing is left to decide on an approved gate awaiting its merge, so no
         // surface may offer an approve door for it.
-        canDecide: err.waitingOn === 'decision' && canDecide,
+        // A door is offered only when a gate is actually waiting on a decision:
+        // not while the merge is what the move waits for, and not while the pull
+        // request is open but no gate has been raised yet.
+        canDecide: err.waitingOn === 'decision' && err.gateId !== null && canDecide,
         routedToLabel: routedToDisplayName(routedTo),
       };
     });

@@ -288,7 +288,7 @@ describe('the refusal carries ONE payload out of the service', () => {
   });
 });
 
-describe('an APPROVED gate still holds `done` while its pull request is open (rule 2b)', () => {
+describe('WITH AN OPEN PULL REQUEST, `approved` and `done` have one writer each (rule 2b)', () => {
   /** Link an OPEN (or merged) pull request to the item — the delivery row
    *  `link_pull_request` writes, which is what makes the merge the writer of Done. */
   async function linkPullRequest(itemId: string, state: 'open' | 'closed') {
@@ -336,16 +336,9 @@ describe('an APPROVED gate still holds `done` while its pull request is open (ru
     return pr;
   }
 
-  it('approving with an open pull request writes no Done, and a hand move to Done is then REFUSED — waiting on the merge', async () => {
-    const { itemId, identifier, gateId } = await gatedItem();
+  it('a hand move to Done is refused — waiting on the MERGE — whether or not anything was approved', async () => {
+    const { itemId, identifier } = await gatedItem();
     await linkPullRequest(itemId, 'open');
-
-    const decided = await approvalGatesService.decide(
-      { gateId, decision: 'approve', source: 'ui' },
-      fx.ctx,
-    );
-    expect(decided.gate.state).toBe('approved');
-    expect(await statusOf(itemId)).toBe('in_review');
 
     const err = (await workItemsService
       .updateStatus(itemId, 'done', fx.ctx)
@@ -353,42 +346,14 @@ describe('an APPROVED gate still holds `done` while its pull request is open (ru
 
     expect(err).toBeInstanceOf(ApprovalGatePendingError);
     expect(err.waitingOn).toBe('merge');
-    expect(err.gateId).toBe(gateId);
     expect(await statusOf(itemId)).toBe('in_review');
-
-    // No approve door is offered for a decision that has already been made.
     const gate = await approvalGatesService.describePendingRefusal(err, fx.ctx);
     expect(gate).toMatchObject({ itemKey: identifier, waitingOn: 'merge', canDecide: false });
   });
 
-  it('every other move stays open — `→ in_progress` and `→ cancelled`', async () => {
-    for (const to of ['in_progress', 'cancelled']) {
-      const { itemId, gateId } = await gatedItem();
-      await linkPullRequest(itemId, 'open');
-      await approvalGatesService.decide({ gateId, decision: 'approve', source: 'ui' }, fx.ctx);
-      await workItemsService.updateStatus(itemId, to, fx.ctx);
-      expect(await statusOf(itemId)).toBe(to);
-    }
-  });
-
-  it('once the pull request is no longer open (merged), the move to Done passes — the merge path', async () => {
-    const { itemId, gateId } = await gatedItem();
-    const pr = await linkPullRequest(itemId, 'open');
-    await approvalGatesService.decide({ gateId, decision: 'approve', source: 'ui' }, fx.ctx);
-
-    // What the merge sync commits BEFORE it transitions the card.
-    await adminDb.githubPullRequest.update({
-      where: { id: pr.id },
-      data: { state: 'closed', merged: true },
-    });
-
-    await workItemsService.updateStatus(itemId, 'done', fx.ctx);
-    expect(await statusOf(itemId)).toBe('done');
-  });
-
-  it('an open pull request with NO approved gate does not hold Done on this rule', async () => {
+  it('a hand move to APPROVED is refused — waiting on the decision — and names no gate when none was raised', async () => {
     const story = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'story', title: 'No gate' },
+      { projectId: fx.projectId, kind: 'story', title: 'PR, no gate yet' },
       fx.ctx,
     );
     const item = await workItemsService.createWorkItem(
@@ -399,6 +364,73 @@ describe('an APPROVED gate still holds `done` while its pull request is open (ru
     await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
     await linkPullRequest(item.id, 'open');
 
+    const err = (await workItemsService
+      .updateStatus(item.id, 'approved', fx.ctx)
+      .catch((e) => e)) as ApprovalGatePendingError;
+
+    expect(err).toBeInstanceOf(ApprovalGatePendingError);
+    expect(err.waitingOn).toBe('decision');
+    expect(err.gateId).toBeNull();
+    expect(err.gateKind).toBe('pull_request_approval');
+    expect(await statusOf(item.id)).toBe('in_review');
+    const gate = await approvalGatesService.describePendingRefusal(err, fx.ctx);
+    expect(gate).toMatchObject({ waitingOn: 'decision', canDecide: false });
+  });
+
+  it('the approval’s OWN write into `approved` passes (decidingGateId)', async () => {
+    const { itemId, gateId } = await gatedItem();
+    await linkPullRequest(itemId, 'open');
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemsService.applyStatusTransition(itemId, 'approved', fx.ctx, tx, {
+        decidingGateId: gateId,
+      }),
+    );
+    expect(await statusOf(itemId)).toBe('approved');
+  });
+
+  it('every other move stays open — `→ in_progress`, `→ blocked` and `→ cancelled`', async () => {
+    for (const to of ['in_progress', 'blocked', 'cancelled']) {
+      const { itemId } = await gatedItem();
+      await linkPullRequest(itemId, 'open');
+      await workItemsService.updateStatus(itemId, to, fx.ctx);
+      expect(await statusOf(itemId)).toBe(to);
+    }
+  });
+
+  it('once the pull request is merged, Done passes — the merge path', async () => {
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Merged' },
+      fx.ctx,
+    );
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', parentId: story.id, title: 'Plain' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
+    const pr = await linkPullRequest(item.id, 'open');
+
+    // What the merge sync commits BEFORE it transitions the card.
+    await adminDb.githubPullRequest.update({
+      where: { id: pr.id },
+      data: { state: 'closed', merged: true },
+    });
+
+    await workItemsService.updateStatus(item.id, 'done', fx.ctx);
+    expect(await statusOf(item.id)).toBe('done');
+  });
+
+  it('with NO pull request, a card without a gate still moves to Done by hand', async () => {
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'No PR' },
+      fx.ctx,
+    );
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', parentId: story.id, title: 'Plain' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
     await workItemsService.updateStatus(item.id, 'done', fx.ctx);
     expect(await statusOf(item.id)).toBe('done');
   });

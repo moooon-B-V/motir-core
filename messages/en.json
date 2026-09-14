@@ -674,7 +674,7 @@
       "MISSING_ARTIFACT_EVIDENCE": "A \"deploy\" work item can't be closed until a comment on it records the artifact it published — a version (1.4.0), a registry digest (sha256:…) or an integrity hash (sha512-…). If this deliverable genuinely has no identifier, add a comment beginning \"NO ARTIFACT:\" with the reason.",
       "CONTAINER_HAS_OPEN_CHILDREN": "This item can't reach that status while children of its own have not been implemented. A parent there claims everything under it is built, and its pull request is opened on that claim. Land the children, re-parent them out if they are no longer in scope, or move the item to Done — which completes them deliberately rather than as a side effect.",
       "APPROVAL_GATE_PENDING": "This status can't be set directly — an approval on this item is waiting, and approving it is what makes this move. Every other move is still open.",
-      "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the approval is recorded and its pull request is still open, so merging it is what makes this move. Every other move is still open."
+      "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
