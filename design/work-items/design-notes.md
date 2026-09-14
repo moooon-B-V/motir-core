@@ -6794,6 +6794,10 @@ own and is drawn at rest; what it opens is [MOTIR-5214](motir:cmtxm4v3600edhztx2
 | [MOTIR-5351](motir:cmtzsio9b01cjhvoirkfuxmxl)                                                 | **GIVES** the narrow row (`design/github` 12n); nothing in this area                               |
 | [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw)                                                 | **GIVES** the block in both homes; the spec is `design/github` §20                                 |
 
+> **Amended 2026-09-14 (review of MOTIR-5540):** at the **project root**, folders show **after all the
+> epics** — epics, then folders, then the root's other work items. Inside a folder the order above
+> is unchanged. See § `/items` first run › _Root order_.
+
 ## `/items` first run — a root that holds only folders (Story MOTIR-4927 · MOTIR-5540 — `items-first-run.mock.html`)
 
 Every project is now born with a root folder named **Bugs**, where Motir files the bugs it creates on
@@ -6817,6 +6821,29 @@ exactly as a folder row is drawn today.
 - **Unchanged:** the List view (it never shows folders, MOTIR-5314); a FILTERED view that matches
   nothing keeps its own _no matching_ state; a root with at least one work item renders the tree as
   today, with no empty state.
+
+### Root order — epics first, then folders (review of MOTIR-5540, 2026-09-14)
+
+**At the PROJECT ROOT, folders show after all the epics.** A root level reads in three bands, in this
+order:
+
+1. **every epic** at the root, in the tree's active sort;
+2. **the folders** at the root, in their own order (their position), under any column sort;
+3. **the root's other work items** (stories, tasks, bugs, subtasks), in the active sort.
+
+- **This amends the Folders read at the root only** (MOTIR-5314's _a level is its folders THEN its
+  work items_). Inside a FOLDER the level is unchanged: its child folders first, then its work items.
+- **The epics stay the project's first-order structure**: a person opening `/items` still meets the
+  plan's epics at the top, and the folders — places work is tidied away into — follow them.
+- **One `take` / `offset` still runs across the whole level**, now across three bands: offset `o` is
+  epic `o` while `o < E`, folder `o − E` while `o < E + F`, and work item `o − E − F` after; `total` is
+  `E + F + I`, so walking the level page by page still visits every row exactly once.
+- **A column sort reorders inside the epic band and inside the work-item band**, never across them,
+  and never reorders the folders.
+- **Nothing drawn in this asset changes**: its panels show projects with no work items, so no epics.
+  The List view (no folders) and a filtered view are unchanged.
+- **Not built by MOTIR-5541**, which owns the empty-state rule only; the root order has its own code
+  card under MOTIR-4927.
 
 ### The panels
 
