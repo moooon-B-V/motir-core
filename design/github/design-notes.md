@@ -1133,6 +1133,12 @@ Read it beside the CSS block in `github.mock.html`. Each quoted class string sho
 attribute on the element it sits above; anything that does not is drift, and drift in this asset is a
 bug worth filing (this is the third).
 
+> **2026-09-13 — the narrow row ships (MOTIR-5351).** `PullRequestRow` gains `@max-[30rem]:` variants
+> against a `@container` on the rows' `<ul>`: below a 30rem column the pill group drops to its own line
+> (`order-last basis-full flex-wrap pb-1 pl-[27px]`) and the link-out stays on line 1 (`order-2`). The
+> derived `.pr-row` comment above now quotes the row's new class string, and §20's
+> `.pr-row.dvb-row-narrow` rule is the narrow state of this same derived block — no longer a proposal.
+
 ### What was wrong, and what changed
 
 The row was a hand drawing, authored by MOTIR-1595 in 2026-07 and never measured against the
@@ -1347,7 +1353,7 @@ row**: below a `30rem` container the row wraps; glyph · title · link-out stay 
 group drops to line 2, indented under the title (`order-last basis-full pl-[27px]`). The desktop row
 is unchanged, so **§19's derived `.pr-row` block is not edited**: the narrow variant is a separate
 `.pr-row.dvb-row-narrow` rule with its intended class strings quoted above it. When MOTIR-5351 ships,
-that rule folds into the derived block, per §19. The block itself needs nothing new at that width:
+that rule folds into the derived block, per §19 (done, 2026-09-13). The block itself needs nothing new at that width:
 facts wrap their pill under the label and every code block scrolls inside itself.
 
 ### Fields read

@@ -14,6 +14,7 @@
 //   UnknownDispatchRunCardError     → 422
 //   DispatchRunEventBodyTooLargeError → 413
 //   DispatchRunEventLimitError      → 422
+//   DispatchRunNoTargetError        → 422
 
 /**
  * 404 — no such run FOR THIS CALLER.
@@ -131,5 +132,23 @@ export class DispatchRunEventLimitError extends Error {
         'The run can still be closed.',
     );
     this.name = 'DispatchRunEventLimitError';
+  }
+}
+
+/**
+ * 422 — a close-out prompt was asked for a run with NO RUN TARGET (Story
+ * MOTIR-4906 · MOTIR-5357): an unscoped batch, whose every card was its own
+ * target and published in its own prompt. Refused rather than answered with a
+ * plausible default target, which would write one run's How to test onto an item
+ * the run was never launched against.
+ */
+export class DispatchRunNoTargetError extends Error {
+  readonly code = 'NO_RUN_TARGET';
+  constructor(id: string) {
+    super(
+      `Dispatch run ${id} was not launched against a work item, so it has no run target to ` +
+        'write How to test onto — each of its cards is its own target.',
+    );
+    this.name = 'DispatchRunNoTargetError';
   }
 }

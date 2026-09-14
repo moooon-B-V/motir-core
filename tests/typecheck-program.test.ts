@@ -94,6 +94,7 @@ const REQUIRED_TSCONFIGS = [
   'tsconfig.base.json',
   'tsconfig.app.json',
   'tsconfig.tests.json',
+  'tsconfig.components.json',
   'tsconfig.e2e.json',
   'tsconfig.scripts.json',
   'tsconfig.solution.json',
@@ -171,6 +172,7 @@ describe('the type-check is a solution of project references (MOTIR-4293)', () =
     expect(compositeProjects.length).toBeGreaterThanOrEqual(4);
     expect(compositeProjects).toContain('tsconfig.app.json');
     expect(compositeProjects).toContain('tsconfig.tests.json');
+    expect(compositeProjects).toContain('tsconfig.components.json');
     expect(compositeProjects).toContain('tsconfig.e2e.json');
     expect(compositeProjects).toContain('tsconfig.scripts.json');
   });

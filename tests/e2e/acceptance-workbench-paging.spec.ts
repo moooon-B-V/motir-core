@@ -7,6 +7,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { db as prisma } from '@/lib/db';
+import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 
 // THE ACCEPTANCE RECEIPT FOR THE PAGER AND THE KIND ORDER
 // (Story MOTIR-4850 · MOTIR-4855).
@@ -144,8 +145,10 @@ test('a person walks their own Workbench by page, and the top of the list is wha
     'Signing in lands on the Workbench, with a footer that says how much there is',
     async () => {
       await signIn(page, OWNER, PASSWORD);
-      await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+      await expect(page).toHaveURL(LANDED_WORKBENCH_URL);
       await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
+      // The walk pages To do, and To do has its own address (MOTIR-5218).
+      await page.goto('/workbench?tab=todo');
       // The change a reader notices first: the list now says how far it goes.
       // Before this story it said `Next` and nothing else.
       await expect(page.getByText(/Showing 1–25 of 55/)).toBeVisible();
@@ -168,7 +171,7 @@ test('a person walks their own Workbench by page, and the top of the list is wha
   await chapter('Jump to page three — and the address goes with you', async () => {
     await page.getByRole('button', { name: 'Page 3' }).click();
     await expect(page.getByText(/Showing 51–55 of 55/)).toBeVisible();
-    await expect(page).toHaveURL(/\?page=3$/);
+    await expect(page).toHaveURL(/\?tab=todo&page=3$/);
     // Bookmarkable, shareable, and the server re-reads it — which is the whole
     // difference between a page number and an opaque cursor.
     await beat();
@@ -177,11 +180,11 @@ test('a person walks their own Workbench by page, and the top of the list is wha
   await chapter('And a way BACK, which the old one did not have at all', async () => {
     await page.getByRole('button', { name: 'Previous page' }).click();
     await expect(page.getByText(/Showing 26–50 of 55/)).toBeVisible();
-    await expect(page).toHaveURL(/\?page=2$/);
+    await expect(page).toHaveURL(/\?tab=todo&page=2$/);
     await beat();
     // Page one is the tab's own address — one canonical URL per view.
     await page.getByRole('button', { name: 'Page 1' }).click();
-    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}\\?tab=todo$`));
     await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
     await beat();
   });

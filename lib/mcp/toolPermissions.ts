@@ -221,6 +221,13 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // permission.
   create_acceptance_upload: 'work_item:edit',
   publish_acceptance_result: 'work_item:edit',
+  // `publish_test_instructions` (Story MOTIR-4906 · MOTIR-5331) — the SAME key
+  // again, for the reason every evidence publisher above gives: writing HOW TO
+  // TEST onto a card is EDITING that card, and its caller is the sandboxed agent,
+  // whose `CLI_TOKEN_GRANT` already carries `work_item:edit`. A narrower or newer
+  // key would make the door unreachable for the one actor it exists for.
+  // `CLI_TOKEN_GRANT` is NOT widened here.
+  publish_test_instructions: 'work_item:edit',
   // `link_pull_request` (Story MOTIR-3525 · MOTIR-3526) — declaring which work
   // item a pull request delivers is EDITING that work item, so it takes the same
   // key the picker's own write path sits behind, and the SERVICE asserts it too

@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
 import { parseWorkbenchTab, workbenchTabHref } from '@/lib/workbench/tab';
+import { resolveWorkbenchLanding, workbenchLandingHref } from '@/lib/workbench/landing';
 import { parsePage } from '@/lib/issues/issueListView';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { WorkbenchTabs } from './_components/WorkbenchTabs';
@@ -222,6 +223,35 @@ export default async function WorkbenchPage({
 
   const params = await searchParams;
   const tab = parseWorkbenchTab(params['tab']);
+
+  // ⚠️ THE BARE PATH IS A RESOLVER, NOT A VIEW (MOTIR-5221, `design/workbench/
+  // design-notes.md` § 21). A request that names no known tab — absent,
+  // misspelled, hand-edited — reads the counts and FORWARDS to the first of To
+  // approve · In progress · To do with anything in it, To do being terminal. An
+  // explicit, known `?tab=` never reaches this branch, so it always wins.
+  //
+  // ⚠️ IT REDIRECTS RATHER THAN RENDERING IN PLACE — decided, not incidental.
+  // Rendering in place would keep `/workbench` in the address bar while the
+  // content varied per reader and per day: one spelling naming many views, the
+  // ambiguity `lib/workbench/tab.ts` just retired. And it would force the counts
+  // to be read BEFORE the list on EVERY request, because the page cannot pick a
+  // tab until it knows them — serialising the `Promise.all` below for a decision
+  // only the paramless request needs. Redirecting keeps both: the address tells
+  // the truth, a link shared after landing names a tab, and every concrete-tab
+  // request keeps its parallel read exactly as it shipped. Only this branch pays a
+  // hop, and it reads the counts and nothing else — no list, no members, no
+  // workflow.
+  //
+  // ⚠️ AND THE HOP IS AN HTTP REDIRECT, NOT A SECOND NAVIGATION. `redirect()`
+  // here runs before this page renders anything, and nothing above `children` in
+  // `app/(authed)/layout.tsx` is a Suspense boundary, so no byte has been flushed
+  // and Next answers 307: the browser follows it inside the SAME navigation.
+  // `tests/e2e/auth-post-auth-landing.spec.ts` pins exactly one navigation to the
+  // landing (MOTIR-2645's race), and counts the followed hop as part of it.
+  if (tab === null) {
+    const landingCounts = await homeService.tabCounts(ctx);
+    redirect(workbenchLandingHref(resolveWorkbenchLanding(landingCounts), params));
+  }
   // The page rides the URL beside `?tab=`, read with the SHIPPED `parsePage`,
   // which already answers 1 for absent, non-numeric, zero and negative — the
   // four degenerate spellings a hand-edited URL or a stale bookmark produces.

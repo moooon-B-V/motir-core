@@ -6205,7 +6205,75 @@
     },
     "development": {
       "title": "Development",
-      "gloss": "Linked pull requests · live PR and CI status",
+      "gloss": "Pull requests and how to test them · live PR and CI status",
+      "howToTest": {
+        "title": "How to test",
+        "writtenBy": "Written by <b>{run}</b> · {time}",
+        "code": {
+          "copy": "Copy",
+          "copyAria": "Copy code",
+          "copied": "Copied",
+          "copyFailed": "Couldn't copy — select the text instead"
+        },
+        "stale": {
+          "title": "Written for <sha>{recordSha}</sha> — {repo} is now at <sha>{headSha}</sha>.",
+          "body": "The instructions below may be out of date. The preview and CI follow the new head.",
+          "pill": "Stale"
+        },
+        "preview": {
+          "title": "In the preview",
+          "state": {
+            "success": "Ready",
+            "queued": "Queued",
+            "pending": "Pending",
+            "in_progress": "Deploying",
+            "failure": "Deploy failed",
+            "error": "Deploy errored",
+            "inactive": "Inactive",
+            "canceled": "Canceled"
+          },
+          "notReady": "The {environment} deployment for this head is {state}. Its link appears here when it succeeds.",
+          "failed": "The {environment} deployment for this head did not succeed, so there is no preview to open. Test it locally, or wait for the next push.",
+          "inactive": "The {environment} deployment for this head is no longer active — a newer deployment replaced it.",
+          "canceled": "The {environment} deployment for this head was canceled before it finished.",
+          "none": "No preview reported",
+          "noneBody": "This repository's CI reported no deployment for this head. Motir does not create previews."
+        },
+        "local": {
+          "title": "Locally",
+          "noBranch": "No branch to fetch",
+          "noBranchBody": "No pull request carries this repository's branch yet, so there is nothing to fetch."
+        },
+        "ci": {
+          "title": "What CI proved",
+          "summary": "{passed} of {total} checks passed",
+          "conclusion": {
+            "success": "Passed",
+            "failure": "Failed",
+            "pending": "Running",
+            "neutral": "Neutral"
+          },
+          "none": "No checks reported",
+          "noneBody": "No checks have reported for this head yet, so CI has proven nothing here."
+        },
+        "noSection": {
+          "title": "Not in this run's record",
+          "pill": "No section",
+          "body": "{run} wrote no section for this repository, so its pull request is not covered by the instructions above. Its row still carries its PR and CI status."
+        },
+        "missing": {
+          "title": "No run has written how to test this item.",
+          "owedByRun": "Owed by {run}. The pull requests above still carry their own status.",
+          "noRun": "No run is recorded for this item."
+        },
+        "earlier": {
+          "toggle": "Earlier runs ({count})"
+        },
+        "child": {
+          "pointer": "Tested as part of <link>{key}</link>"
+        },
+        "unknownState": "Unrecognised How to test state: {value}"
+      },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
       "autoLinkCaption": "Linked by <mono>link_pull_request</mono> over the MCP or a <mono>motir auto</mono> session branch.",
@@ -6940,7 +7008,7 @@
       "title": "Projects",
       "caption": "The GitLab projects Motir syncs. Connecting a project lets Motir read its merge requests and pipelines.",
       "empty": "No projects connected yet. Connect a project to start syncing merge requests and pipelines.",
-      "foot": "Connecting a project adds a webhook for merge-request and pipeline events. Motir does not build a code index for GitLab projects, so AI planning cannot read their source.",
+      "foot": "Connecting a project adds a webhook for merge-request, pipeline, push and deployment events. Motir does not build a code index for GitLab projects, so AI planning cannot read their source.",
       "synced": "Synced",
       "syncLabel": "Sync {project}",
       "connectProject": "Connect a project",
@@ -6952,7 +7020,9 @@
       "error": {
         "not_connected": "GitLab isn't connected. Reconnect to choose projects.",
         "not_found": "That project isn't among your GitLab memberships anymore.",
-        "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again."
+        "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again.",
+        "webhook_not_configured": "This Motir server has no GitLab webhook secret configured, so it can't receive project events. Ask whoever runs it to set GITLAB_WEBHOOK_SECRET.",
+        "webhook_failed": "Couldn't add Motir's webhook to that project. Adding a webhook needs the Maintainer role on the project in GitLab."
       }
     }
   },

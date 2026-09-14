@@ -375,6 +375,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           key: item1,
           videoPathname: 'acceptance/rogue/rogue.webm',
         },
+        // MOTIR-5331 — the HOW TO TEST door, aimed at tenant A's item. The key must
+        // read as not-found before the repository is resolved, so a non-member
+        // neither learns A's repositories nor writes a record onto A's card.
+        publish_test_instructions: {
+          key: item1,
+          bodyMd: 'rogue',
+          repos: [{ repo: 'acme/web', commitSha: 'a'.repeat(40) }],
+        },
         // MOTIR-3526. Aimed at tenant A's item like its neighbours: the ITEM key
         // must read as not-found BEFORE the repository is looked at, so a
         // non-member learns neither that the card exists nor which repositories
@@ -860,6 +868,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         publish_acceptance_result: {
           key: item1,
           videoPathname: 'acceptance/scoped/scoped.webm',
+        },
+        // MOTIR-5331 — the caller's OWN item. A write-scoped tool, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        publish_test_instructions: {
+          key: item1,
+          bodyMd: 'scoped',
+          repos: [{ repo: 'acme/web', commitSha: 'a'.repeat(40) }],
         },
         // MOTIR-3526 — the caller's OWN item. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate; the

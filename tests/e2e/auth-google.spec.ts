@@ -35,6 +35,7 @@
 import { writeFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // See the matching note in auth-credentials.spec.ts — the smoke
 // dashboard's POST-form sign-out returns 415, so we drop the session
@@ -141,7 +142,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   // which is a change to the auth callback, not to this card.
   await page.waitForURL('**/onboarding', { timeout: 15_000 });
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
   // Exactly one user row + one google account row in the DB.
@@ -165,7 +166,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   // and MOTIR-4871 falsified the second half: `/sign-up` resolves the entrance
   // now, `/sign-in` still resolves the landing, so the same button has TWO
   // destinations and which one it takes is a property of the page it sits on.
-  await page.waitForURL('**/workbench', { timeout: 15_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 15_000 });
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
   const usersAfterSecond = await db.user.findMany({
@@ -218,7 +219,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   // there and navigating on.
   await page.waitForURL('**/onboarding');
   await page.goto('/workbench');
-  await page.waitForURL('**/workbench');
+  await page.waitForURL(isLandedWorkbenchUrl);
 
   // Snapshot the email-first user — there should be ONE row with a
   // credential account and emailVerified=false (verification UX is not
@@ -245,7 +246,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   });
   await page.goto('/sign-in');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
-  await page.waitForURL('**/workbench', { timeout: 15_000 });
+  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 15_000 });
   await assertSignedInAs(page, EMAIL_FIRST_EMAIL);
 
   // DB shape after auto-link:

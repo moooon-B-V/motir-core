@@ -208,6 +208,20 @@ export async function LateUpperSections({
             // quick view disagree (MOTIR-3036).
             repoDelivery={repoDelivery}
             deliveries={deliveries}
+            // THE DEVELOPMENT BLOCK (MOTIR-5336, design §20): How to test renders
+            // INSIDE this card, below the rows — never a second section in this
+            // stack — and an awaiting approve-to-merge gate makes the rows plus
+            // How to test the port of ONE frame, as Design result's gate does.
+            howToTest={r.howToTest}
+            mergeGate={
+              r.mergeGate.gate
+                ? {
+                    gate: r.mergeGate.gate,
+                    canDecide: r.mergeGate.canDecide,
+                    routedToLabel: r.mergeGate.routedToLabel,
+                  }
+                : null
+            }
           />
         </ContentSectionCard>
       </DevelopmentLinkProvider>

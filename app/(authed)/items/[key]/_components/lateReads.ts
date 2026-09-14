@@ -9,10 +9,12 @@ import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVide
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { howToTestService } from '@/lib/services/howToTestService';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
 import type { DesignGateSubjectDTO } from '@/lib/dto/designEvidence';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { ActivityTab } from '@/lib/activity/tab';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 
@@ -100,6 +102,22 @@ export interface LateReads {
    * item with no children, because only a container can be a scope.
    */
   scopeRun: DispatchRunListItemDto | null;
+  /**
+   * The run's HOW TO TEST for this card (Story MOTIR-4906 · MOTIR-5336) — the
+   * Development block's second part, rendered inside the same card below the
+   * rows. `null` on a failed read: the block then renders the rows alone, which
+   * is what the card rendered before, rather than an error in a card whose rows
+   * still read fine.
+   */
+  howToTest: HowToTestDto | null;
+  /**
+   * The card's AWAITING approve-to-merge gate (`pull_request_approval`), or
+   * `gate: null`. Read exactly as `designGate` is — the same service, the same
+   * containment — and only its awaiting answer, because only an awaiting gate
+   * draws the frame (design §20). The kind is unregistered until MOTIR-4909, so
+   * on a live tenant this is always `gate: null`.
+   */
+  mergeGate: Awaited<ReturnType<typeof approvalGatesService.getAwaitingForWorkItem>>;
 }
 
 export interface LateReadsInput {
@@ -148,6 +166,8 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       designGate,
       runs,
       scopeRun,
+      howToTest,
+      mergeGate,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -253,6 +273,23 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             }
           })()
         : null,
+      (async () => {
+        try {
+          return await howToTestService.getForWorkItem(itemId, ctx);
+        } catch {
+          return null;
+        }
+      })(),
+      (async () => {
+        try {
+          return await approvalGatesService.getAwaitingForWorkItem(
+            { workItemId: itemId, kind: 'pull_request_approval' },
+            ctx,
+          );
+        } catch {
+          return { gate: null, canDecide: false, routedToLabel: null };
+        }
+      })(),
     ]);
 
     return {
@@ -271,6 +308,8 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       designGate,
       runs,
       scopeRun,
+      howToTest,
+      mergeGate,
     };
   })();
 }

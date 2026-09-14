@@ -356,6 +356,14 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `node:fs` and `node:path` only, so it carries no coverage into the merged
   // report. ~0.15 s per scan, three scans.
   'tests/e2e-page-rooted-locators.test.ts',
+  // ── tests/navigation/ — the single-`main`-landmark guard (MOTIR-5432) ─────
+  // Derived rather than remembered: it imports `mainLandmarkScan.ts`, which
+  // walks `app/(authed)/` with `readdirSync` and parses every `.tsx` through the
+  // compiler API, asking whether any page nests a second `main` landmark inside
+  // `AppLayout`'s. The lane's shape exactly — one whole-subtree parse, no
+  // database, nothing rendered, and it imports only `node:fs`, `node:path` and
+  // `typescript`, so it carries no coverage into the merged report.
+  'tests/navigation/shell-single-main-landmark.test.ts',
 ] as const;
 
 /**

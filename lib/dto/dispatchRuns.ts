@@ -240,3 +240,17 @@ export interface ActiveDispatchRunDto {
   startedAt: string;
   cards: Array<{ key: string | null; disposition: DispatchCardDisposition }>;
 }
+
+/**
+ * A run's CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) — what the CLI hands
+ * one agent before marking the run's pull requests ready, so HOW TO TEST is
+ * written onto the run target by an agent that sees the whole run.
+ */
+export interface DispatchRunCloseOutPromptDto {
+  runId: string;
+  /** The run target — the item the run was launched against. */
+  targetKey: string;
+  prompt: string;
+  /** The cards the run landed (integrated or implemented), in run order. */
+  landedKeys: string[];
+}
