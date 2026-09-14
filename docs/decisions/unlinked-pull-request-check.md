@@ -25,10 +25,20 @@ cannot. Read on 2026-08-27 with an App JWT signed by the deployed
 `GITHUB_APP_PRIVATE_KEY`, `GET https://api.github.com/app`, from inside the
 `motir-core` Fly machine (the only place the key exists):
 
-| App                                           | id      | permissions                                                                                                                                                                                 | events                                             |
-| --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| **`motir-integration`** — the user-facing one | 4206669 | `checks: read` · `contents: read` · `issues: read` · `metadata: read` · **`pull_requests: write`** · `security_events: read`                                                                | `check_run`, `check_suite`, `pull_request`, `push` |
-| `motir-studio` — provisioning                 | 4445390 | `actions: read` · `administration: write` · `contents: write` · `metadata: read` · `organization_actions_variables: write` · `organization_self_hosted_runners: write` · `workflows: write` | `workflow_job`                                     |
+| App                                           | id      | permissions                                                                                                                                                                                 | events                                                                  |
+| --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **`motir-integration`** — the user-facing one | 4206669 | `checks: read` · **`contents: write`** · `deployments: read` · `issues: read` · `metadata: read` · **`pull_requests: write`** · `security_events: read`                                     | `check_run`, `check_suite`, `deployment_status`, `pull_request`, `push` |
+| `motir-studio` — provisioning                 | 4445390 | `actions: read` · `administration: write` · `contents: write` · `metadata: read` · `organization_actions_variables: write` · `organization_self_hosted_runners: write` · `workflows: write` | `workflow_job`                                                          |
+
+> **Amended 2026-09-14 (MOTIR-4787).** The `motir-integration` row was re-read
+> from `GET /orgs/moooon-B-V/installations` (installation `144235820`'s granted
+> set). `contents` was raised from `read` to **`write`** and accepted on the
+> installation, because merging a pull request writes to the base branch
+> (`approval-gates.md` §4). `deployments: read` and the `deployment_status`
+> event were added to the App before that change, not by it, and are recorded
+> here for the first time. The 2026-08-27 reading this section reasoned from had
+> `contents: read` and neither deployments entry; every other value is
+> unchanged.
 
 **There is no `checks: write` and no `statuses` permission at all**, on either
 App. `motir-studio` is not a fallback: it is installed only on `motir-projects`
