@@ -8,7 +8,8 @@
 //      links to this organization", and nothing in the product resolves that
 //      address — `docs/decisions/organization-url.md` settled it.
 //   2. The Acceptance video card no longer paywalls an organization the paywall
-//      does not apply to (MOTIR-2545). `getAiAccess` returns an inert sentinel
+//      does not apply to (MOTIR-2545). (That switch now lives in
+//      `Project settings ▸ Approvals` — MOTIR-5172 — and the chapters follow it.) `getAiAccess` returns an inert sentinel
 //      for a `meta` org; the page used to read `hasPaidAiPlan` off it and
 //      conclude "no plan", which showed moooon an Upgrade button AND stuck its
 //      own toggle Off.
@@ -29,7 +30,7 @@
 // green tick always means something.
 
 import { test, expect } from './_helpers/promoted-regression';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 const PASSWORD = 'org-settings-truth-pass-123';
@@ -142,32 +143,38 @@ test('the organization settings page offers no address it cannot resolve, and no
     await beat();
   });
 
-  await chapter('The acceptance-video card, on an organization that must pay', async () => {
+  // ⚠️ THE ACCEPTANCE-VIDEO HALF OF THIS RECEIPT MOVED ROOMS (MOTIR-5172). The
+  // card these two chapters watched was on `/settings/organization`; the switch is
+  // a PROJECT setting now and the org page draws no trace of it
+  // (`design/org-admin/design-notes.md` panel 7b). The claim the chapters make —
+  // a meta organization is not paywalled, and a paying-tier one still is — is
+  // unchanged, so they follow the switch to `Project settings ▸ Approvals` rather
+  // than being deleted. The first asserts the card is GONE from here before it
+  // leaves, so the move is watched from both ends.
+  await chapter('The acceptance-video switch, on an organization that must pay', async () => {
+    // The losing end, first. MOTIR-5056's reasoning on the absence twins above
+    // holds here: `toHaveCount` resolves the whole match set, so it cannot throw
+    // strict mode, and the claim is about the DOCUMENT.
+    await expect(page.getByRole('switch', { name: /acceptance video/i })).toHaveCount(0);
+
+    await page.goto('/settings/project/approvals');
+    await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toBeVisible();
+
     // A brand-new org is NOT meta. On a cloud harness it should still see the
     // plan gate — the fix narrowed the denial, it did not remove it.
-    //
-    // ⚠️ SCOPED TO `#main` (MOTIR-3725). Same cause as the `getByRole` note
-    // above, and this one has no role to reach for — an `id` is a raw CSS query,
-    // so it matches the outgoing subtree as readily as the live one. `CLAUDE.md`
-    // gives the second remedy for exactly this case: *"reach for `getByRole`, or
-    // scope to the live subtree"*. It bites hardest after the `page.reload()`
-    // below, where nothing settles the transition at all.
-    //
-    // `#main` is the shell's live region, and Playwright named it itself:
-    // `aka locator('#main #acceptance-video')` was element 1 of the strict-mode
-    // violation, the stale twin being reachable only as `.nth(1)`.
-    const card = page.locator('#main #acceptance-video');
-    await expect(card).toBeVisible();
+    const main = page.getByRole('main');
+    const toggle = main.getByRole('switch', { name: 'Acceptance video approval' });
+    await expect(toggle).toBeVisible();
 
     if (CLOUD) {
-      await expect(card.getByText('Requires a paid Motir AI plan')).toBeVisible();
-      await expect(card.getByRole('link', { name: /upgrade/i })).toBeVisible();
-      await expect(card.getByRole('switch')).toBeDisabled();
+      await expect(main.getByText('Unavailable', { exact: true })).toBeVisible();
+      await expect(main.getByRole('link', { name: 'Upgrade' })).toBeVisible();
+      await expect(toggle).toBeDisabled();
     } else {
       // Off-cloud there is no paywall at all, by design (ADR §6). Assert THAT,
       // so this branch is a real check rather than a skipped one.
-      await expect(card.getByText('Requires a paid Motir AI plan')).toHaveCount(0);
-      await expect(card.getByRole('switch')).toBeEnabled();
+      await expect(main.getByRole('link', { name: 'Upgrade' })).toHaveCount(0);
+      await expect(toggle).toBeEnabled();
     }
 
     // The 'before' frame of the pair. The next chapter's whole meaning is that
@@ -177,7 +184,7 @@ test('the organization settings page offers no address it cannot resolve, and no
   });
 
   await chapter(
-    'The same card, on the META organization — no upsell, and a switch that moves',
+    'The same switch, on the META organization — no upsell, and a switch that moves',
     async () => {
       // Flip the signed-in user's own organization to meta, which is the single
       // column the exemption turns on, then reload the server-rendered page.
@@ -188,40 +195,45 @@ test('the organization settings page offers no address it cannot resolve, and no
       await db.organization.update({ where: { id: org.id }, data: { isMeta: true } });
       await page.reload();
 
-      const card = page.locator('#acceptance-video');
-      await expect(card).toBeVisible();
+      const main = page.getByRole('main');
+      const toggle = main.getByRole('switch', { name: 'Acceptance video approval' });
+      await expect(toggle).toBeVisible();
 
-      // The defect, asserted from the user's seat: no denial copy, no checkout
+      // The defect, asserted from the user's seat: no denial state, no checkout
       // link, and a switch that is actually operable.
-      await expect(card.getByText('Requires a paid Motir AI plan')).toHaveCount(0);
-      await expect(card.getByRole('link', { name: /upgrade/i })).toHaveCount(0);
-      await expect(card.getByRole('switch')).toBeEnabled();
+      await expect(main.getByText('Unavailable', { exact: true })).toHaveCount(0);
+      await expect(main.getByRole('link', { name: 'Upgrade' })).toHaveCount(0);
+      await expect(toggle).toBeEnabled();
 
       // The 'after' frame — the same card, same position on screen, minus the
       // denial the org was never subject to.
       await beat();
 
-      // And it is not merely enabled — it reflects and persists the stored value.
-      // `checked={enabled && hasPlan}` is what used to render it Off regardless of
-      // the database, so toggling it is the assertion that closes the loop.
+      // And it is not merely enabled — it persists. The write is the PROJECT's
+      // now (`PATCH /api/projects/[key]/approval-gates`), so that is the response
+      // waited on and the row read back.
       const saved = page.waitForResponse(
-        (r) => /\/api\/organizations\//.test(r.url()) && r.request().method() === 'PATCH',
+        (r) => /\/approval-gates$/.test(r.url()) && r.request().method() === 'PATCH',
       );
-      await card.getByRole('switch').click();
+      await toggle.click();
       expect((await saved).status()).toBe(200);
 
       // Hold on the moved switch. This is the frame that disproves the defect:
       // the control the meta org could not operate, operating.
       await beat();
 
-      const after = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
-      expect(after.acceptanceVideoEnabled).toBe(false);
+      const projects = await adminDb.project.findMany({
+        where: { workspace: { organizationId: org.id } },
+        select: { acceptanceVideoEnabled: true },
+      });
+      expect(projects.map((p) => p.acceptanceVideoEnabled)).toContain(false);
     },
   );
 
   await chapter('What the run just proved', async () => {
     // A closing beat so the recording ends on a readable frame rather than
     // cutting on the last click.
+    await page.goto('/settings/organization');
     await expect(page.getByRole('heading', { name: 'Organization settings' })).toBeVisible();
     // MOTIR-5056: NOT converted. A `toHaveCount` assertion resolves the whole match
     // set, so it cannot throw strict mode — this site is not in the defect class — and

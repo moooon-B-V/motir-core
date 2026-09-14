@@ -2,16 +2,6 @@
   "acceptance": {
     "title": "验收",
     "gloss": "查看端到端测试视频",
-    "card": {
-      "title": "验收视频",
-      "desc": "当故事的端到端测试通过时录制一段短视频，并附于故事以供审阅与批准。",
-      "on": "已开启",
-      "off": "已关闭",
-      "requiresPlan": "需要付费的 Motir AI 方案",
-      "upgrade": "升级",
-      "saved": "已保存",
-      "saveError": "保存失败，请重试。"
-    },
     "pending": {
       "title": "正在等待验收视频",
       "body": "该故事的端到端测试将在下次通过时把录制视频发布到此处。"
@@ -38,9 +28,10 @@
     },
     "off": {
       "title": "验收视频已关闭",
-      "adminBody": "开启后，当该故事的端到端测试通过时将录制并附上视频凭证。",
-      "memberBody": "请联系组织管理员在组织设置中开启验收视频。",
+      "adminBody": "开启后，为该故事发布的任何验收视频都将等待审批。",
+      "memberBody": "请联系项目管理员在项目设置中开启验收视频。",
       "turnOn": "开启",
+      "turnOnForbidden": "只有项目管理员可以开启验收视频。",
       "goToSettings": "前往设置",
       "viewSettings": "查看设置"
     },

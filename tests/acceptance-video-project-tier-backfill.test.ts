@@ -66,12 +66,14 @@ let seq = 0;
 async function seedTenant(tag: string, orgAnswer: boolean) {
   const n = seq++;
   const org = await adminDb.organization.create({
-    data: {
-      name: `Org ${tag}`,
-      slug: `avp-org-${tag}-${n}`,
-      acceptanceVideoEnabled: orgAnswer,
-    },
+    data: { name: `Org ${tag}`, slug: `avp-org-${tag}-${n}` },
   });
+  // The organisation's answer is written by SQL rather than through the generated
+  // client: the column has no application writer after MOTIR-5172, and MOTIR-5173
+  // `@ignore`s the field — while this file, which executes the migration's
+  // copy-forward FROM that column, still needs it set.
+  await adminDb.$executeRaw`
+    UPDATE organization SET acceptance_video_enabled = ${orgAnswer} WHERE id = ${org.id}`;
   const workspace = await adminDb.workspace.create({
     data: { name: `WS ${tag}`, slug: `avp-ws-${tag}-${n}`, organizationId: org.id },
   });

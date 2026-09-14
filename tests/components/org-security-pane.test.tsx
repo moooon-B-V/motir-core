@@ -186,7 +186,7 @@ describe('the org menu carries the door onto it', () => {
       <ToastProvider>
         <OrgControl
           activeOrg={{ id: 'org_acme', name: 'Acme', role: 'owner' }}
-          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme', acceptanceVideoEnabled: true }]}
+          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme' }]}
           cloudBilling={false}
         />
       </ToastProvider>,
@@ -206,7 +206,7 @@ describe('the org menu carries the door onto it', () => {
       <ToastProvider>
         <OrgControl
           activeOrg={{ id: 'org_acme', name: 'Acme', role: 'owner' }}
-          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme', acceptanceVideoEnabled: true }]}
+          orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme' }]}
           cloudBilling={false}
         />
       </ToastProvider>,

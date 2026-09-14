@@ -5,11 +5,17 @@ import { createTestWorkspace } from './fixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
-// acceptanceVideoEligibilityService + organizationsService.setAcceptanceVideoEnabled
-// (Story MOTIR-1627 · Subtask MOTIR-1630) against a REAL Postgres. billingService
-// is mocked at the getAiAccessForContext seam ONLY (its own tests cover the plan
-// resolution) so this suite proves the COMBINATION logic — plan × switch — and
-// the real org-admin-gated toggle write.
+// acceptanceVideoEligibilityService (Story MOTIR-1627 · Subtask MOTIR-1630)
+// against a REAL Postgres. billingService is mocked at the getAiAccessForContext
+// seam ONLY (its own tests cover the plan resolution) so this suite proves the
+// COMBINATION logic — plan × switch — and who may flip the switch.
+//
+// ⚠️ THE ORG-TIER WRITE THIS FILE ALSO COVERED IS GONE (MOTIR-5172):
+// `organizationsService.setAcceptanceVideoEnabled` was removed with the switch's
+// move to the project tier. The organisation column is still in the schema until
+// its three-phase removal finishes, so where a case needs it to DISAGREE with the
+// project it is written and read by SQL — a test must not become the column's
+// last reader through the generated client.
 //
 // ⚠️ THE TWO HALVES OF THE AND NOW LIVE AT DIFFERENT TIERS (MOTIR-4925 ·
 // MOTIR-5168): `hasPaidAiPlan` is the ORGANISATION's and the SWITCH is the
@@ -30,7 +36,9 @@ vi.mock('@/lib/services/billingService', () => ({
 
 const { acceptanceVideoEligibilityService } =
   await import('@/lib/services/acceptanceVideoEligibilityService');
-const { organizationsService } = await import('@/lib/services/organizationsService');
+const { projectMembersService } = await import('@/lib/services/projectMembersService');
+const { usersService } = await import('@/lib/services/usersService');
+const { workspacesService } = await import('@/lib/services/workspacesService');
 
 function access(partial: Partial<AiAccessDTO>): AiAccessDTO {
   return {
@@ -73,6 +81,13 @@ async function seed() {
     organizationId: ws.organizationId,
     projectId: project.id,
   };
+}
+
+/** The retired organisation column, by SQL (see the header). */
+async function orgColumn(organizationId: string): Promise<boolean> {
+  const rows = await adminDb.$queryRaw<{ acceptance_video_enabled: boolean }[]>`
+    SELECT acceptance_video_enabled FROM organization WHERE id = ${organizationId}`;
+  return rows[0]!.acceptance_video_enabled;
 }
 
 beforeEach(async () => {
@@ -166,10 +181,7 @@ describe("the switch is the PROJECT's, and the entitlement stays the organisatio
     // The organisation's own column is left ON for both, so neither verdict can
     // be right by accident: a read that still consulted the organisation would
     // return `eligible` for the OFF project too.
-    const orgRow = await adminDb.organization.findUniqueOrThrow({
-      where: { id: fx.organizationId },
-    });
-    expect(orgRow.acceptanceVideoEnabled).toBe(true);
+    expect(await orgColumn(fx.organizationId)).toBe(true);
 
     const offVerdict = await acceptanceVideoEligibilityService.resolve({
       actorUserId: fx.ownerId,
@@ -220,11 +232,8 @@ describe("the switch is the PROJECT's, and the entitlement stays the organisatio
     const fx = await seed();
     aiAccess.current = access({ organizationId: fx.organizationId, hasPaidAiPlan: true });
 
-    await organizationsService.setAcceptanceVideoEnabled({
-      organizationId: fx.organizationId,
-      actorUserId: fx.ownerId,
-      enabled: false,
-    });
+    await adminDb.$executeRaw`
+      UPDATE organization SET acceptance_video_enabled = false WHERE id = ${fx.organizationId}`;
 
     const r = await acceptanceVideoEligibilityService.resolve({
       actorUserId: fx.ownerId,
@@ -253,31 +262,57 @@ describe("the switch is the PROJECT's, and the entitlement stays the organisatio
   });
 });
 
-describe('organizationsService.setAcceptanceVideoEnabled', () => {
-  it('an org owner flips the toggle; the DTO + row reflect it', async () => {
-    const fx = await seed();
-
-    const dto = await organizationsService.setAcceptanceVideoEnabled({
-      organizationId: fx.organizationId,
-      actorUserId: fx.ownerId,
-      enabled: false,
+describe("canManageToggle is the PROJECT's `workflow:manage` (MOTIR-5172)", () => {
+  // It was `orgAccess.isOrgAdmin` while the switch was an org column. The write
+  // moved to `approvalGateSettingsService` (which asserts `workflow:manage`), so
+  // the panel's admin-vs-member split must ask the same key or it offers Turn on
+  // to someone the write refuses.
+  async function projectActor(
+    fx: Awaited<ReturnType<typeof seed>>,
+    role: 'admin' | 'member',
+  ): Promise<string> {
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const u = await usersService.createUser({
+      email: `${role}-${projectSeq}@elig.example`,
+      password: 'elig-manage-pass-123',
+      name: role,
     });
-    expect(dto.acceptanceVideoEnabled).toBe(false);
+    await workspacesService.addMember({ userId: u.id, workspaceId: fx.workspaceId });
+    await projectMembersService.addMember({
+      key: project.identifier,
+      actorUserId: fx.ownerId,
+      ctx: { userId: fx.ownerId, workspaceId: fx.workspaceId },
+      targetUserId: u.id,
+      role,
+    });
+    return u.id;
+  }
 
-    const row = await adminDb.organization.findUniqueOrThrow({ where: { id: fx.organizationId } });
-    expect(row.acceptanceVideoEnabled).toBe(false);
+  it('a project ADMIN who is NOT an org admin may manage it', async () => {
+    const fx = await seed();
+    aiAccess.current = access({ organizationId: fx.organizationId, hasPaidAiPlan: true });
+    const adminId = await projectActor(fx, 'admin');
+    // Joined to the organisation as a plain `member` (workspace invite) — the
+    // old org-admin answer was `false` for exactly this actor.
+
+    const r = await acceptanceVideoEligibilityService.resolve({
+      actorUserId: adminId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+    expect(r.canManageToggle).toBe(true);
   });
 
-  it('a non-member cannot flip it (404 no-leak)', async () => {
+  it('a project MEMBER may not', async () => {
     const fx = await seed();
-    const { owner: stranger } = await createTestWorkspace({ name: 'Other' });
+    aiAccess.current = access({ organizationId: fx.organizationId, hasPaidAiPlan: true });
+    const memberId = await projectActor(fx, 'member');
 
-    await expect(
-      organizationsService.setAcceptanceVideoEnabled({
-        organizationId: fx.organizationId,
-        actorUserId: stranger.id,
-        enabled: false,
-      }),
-    ).rejects.toMatchObject({ code: 'ORGANIZATION_NOT_FOUND' });
+    const r = await acceptanceVideoEligibilityService.resolve({
+      actorUserId: memberId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+    expect(r.canManageToggle).toBe(false);
   });
 });

@@ -16,7 +16,6 @@ export function toOrganizationDTO(org: Organization): OrganizationDTO {
     id: org.id,
     name: org.name,
     slug: org.slug,
-    acceptanceVideoEnabled: org.acceptanceVideoEnabled,
   };
 }
 

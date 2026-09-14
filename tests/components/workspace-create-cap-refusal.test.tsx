@@ -44,7 +44,6 @@ const ACME: OrganizationDTO = {
   id: 'org_acme',
   name: 'Acme',
   slug: 'acme',
-  acceptanceVideoEnabled: true,
 };
 const WS: WorkspaceSummaryDTO = { id: 'ws_1', name: 'Studio', slug: 'studio' };
 

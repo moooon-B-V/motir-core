@@ -57,6 +57,9 @@ export interface LateReads {
     ReturnType<typeof acceptanceEvidenceService.getCurrentForStory>
   > | null;
   canDecideAcceptance: boolean;
+  /** The item's own project — the acceptance panel's Turn on flips THIS project's
+   *  switch (MOTIR-5172). Already resolved for the page; carried, never re-read. */
+  projectId: string;
   designEvidence: Awaited<ReturnType<typeof designEvidenceService.getCurrentForWorkItem>>;
   isDesignCard: boolean;
   /**
@@ -226,6 +229,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       acceptanceEligibility,
       acceptanceEvidence,
       canDecideAcceptance: input.canEdit && input.itemStatus === 'in_review',
+      projectId,
       designEvidence,
       isDesignCard: input.itemType === 'design',
       designGate,

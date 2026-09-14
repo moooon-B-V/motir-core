@@ -75,8 +75,10 @@ export const twoFactorPolicyService = {
   /**
    * Set the organization's require-2FA policy. Org owner/admin only.
    *
-   * Modelled on `organizationsService.setAcceptanceVideoEnabled`, the shipped
-   * precedent for an org-level boolean policy: ONE `withOrgContext`
+   * Modelled on `organizationsService.renameOrganization`, the shipped shape for
+   * an org-admin write. (It named `setAcceptanceVideoEnabled` until MOTIR-5172
+   * removed that method with the switch's move to the project tier; the shape it
+   * described is the rename's, unchanged): ONE `withOrgContext`
    * transaction, the membership gate read inside it, then the repository write
    * with `tx` threaded through. `organization_mutate_active` gates the UPDATE on
    * `id = current_setting('app.organization_id')`, which is what that context

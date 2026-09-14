@@ -94,14 +94,15 @@ describe('the meta organization, end to end from the database row', () => {
     expect(hasAiEntitlement(access)).toBe(true);
   });
 
-  it('the settings page derivation hands the card hasPlan: TRUE for a meta org', async () => {
+  it('the entitlement derivation answers TRUE for a meta org', async () => {
     const { owner, organizationId } = await orgWithOwner('moooon');
     await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 
-    // Exactly the expression `app/(authed)/settings/organization/page.tsx`
-    // evaluates. If someone re-introduces the direct `hasPaidAiPlan` read, this
-    // is the assertion that goes red — reading that field here would yield
-    // `false` and hand the meta org an Upgrade button.
+    // The expression the org settings page's acceptance-video card evaluated
+    // until MOTIR-5172 removed the card with the switch's move to the project
+    // tier. The predicate outlives that surface. If someone re-introduces a
+    // direct `hasPaidAiPlan` read, this is the assertion that goes red — reading
+    // that field here would yield `false` and hand the meta org an Upgrade button.
     const hasAcceptancePlan = hasAiEntitlement(
       await billingService.getAiAccess({ actorUserId: owner.id, organizationId }),
     );

@@ -1,6 +1,7 @@
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { billingService } from '@/lib/services/billingService';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
@@ -82,7 +83,7 @@ export const acceptanceVideoEligibilityService = {
     // over — MOTIR-3066's `getQuickView` shape exactly, with the gate written
     // second instead of first. `allSettledOrThrow` awaits both arms and then
     // rethrows the first rejection in ARRAY order.
-    const [project, orgAccess] = await allSettledOrThrow([
+    const [project] = await allSettledOrThrow([
       withSystemContext((tx) => projectRepository.findById(input.projectId, tx)),
       organizationsService.resolveOrgAccess(input.actorUserId, organizationId),
     ]);
@@ -96,6 +97,28 @@ export const acceptanceVideoEligibilityService = {
     const eligible = access.hasPaidAiPlan && toggleEnabled;
     const reason = !access.hasPaidAiPlan ? 'no_plan' : !toggleEnabled ? 'toggle_off' : 'eligible';
 
+    // ⚠️ WHO MAY FLIP THE SWITCH IS THE PROJECT'S QUESTION, NOT THE ORGANISATION'S
+    // (MOTIR-5172). This read `orgAccess.isOrgAdmin` while the switch was an org
+    // column. The switch moved and its write moved with it — both the room and the
+    // panel's Turn on now go through `approvalGateSettingsService`, which asserts
+    // `workflow:manage` — so an org-admin answer here would offer Turn on to an
+    // org admin the write refuses, and send a project admin who is not an org
+    // admin off to "ask a project admin". The key is read from the SAME place the
+    // write asserts it. Only asked once the project resolved: a missing project
+    // has no switch anyone may manage.
+    //
+    // `resolveOrgAccess` is still awaited above, for its GATE alone —
+    // it refuses an actor outside the organisation, and that refusal is the
+    // verdict's posture — so its result is no longer destructured.
+    const canManageToggle = project
+      ? (
+          await projectAccessService.getPermissions(project.id, {
+            userId: input.actorUserId,
+            workspaceId: input.workspaceId,
+          })
+        ).has('workflow:manage')
+      : false;
+
     return {
       applicable: true,
       eligible,
@@ -103,7 +126,7 @@ export const acceptanceVideoEligibilityService = {
       hasPaidAiPlan: access.hasPaidAiPlan,
       toggleEnabled,
       canManageBilling: access.canManageBilling,
-      canManageToggle: orgAccess.isOrgAdmin,
+      canManageToggle,
       organizationId,
     };
   },
