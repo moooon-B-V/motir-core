@@ -105,3 +105,25 @@ export type PrMergeModeValue = 'auto' | 'manual';
 
 /** Every merge mode, in the order a surface lists them. */
 export const PR_MERGE_MODE_VALUES: readonly PrMergeModeValue[] = ['manual', 'auto'];
+
+/** One folder as the Bugs room names it (Story MOTIR-4927 · MOTIR-4938). */
+export interface BugDestinationFolderDto {
+  id: string;
+  name: string;
+  /** The folder's name path, ROOT FIRST. */
+  path: string[];
+}
+
+/**
+ * A project's BUG DESTINATION as `Project settings → Bugs` renders it.
+ *
+ * `folder` is the stored pointer, resolved: the folder new bugs are filed into,
+ * or `null` for the project root — a choice, not a gap. `bugsFolder` is "this
+ * project's Bugs folder" the room's first choice names: the pointed folder when
+ * it is still called Bugs, otherwise the ROOT folder called Bugs, or `null` when
+ * the project has none. It is a LABEL match for display, never how a bug is filed.
+ */
+export interface BugDestinationDto {
+  folder: BugDestinationFolderDto | null;
+  bugsFolder: BugDestinationFolderDto | null;
+}

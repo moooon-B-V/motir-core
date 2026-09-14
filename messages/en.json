@@ -1666,7 +1666,8 @@
       "rules": "Rules",
       "repositories": "Repositories",
       "monitoring": "Monitoring",
-      "approvals": "Approvals"
+      "approvals": "Approvals",
+      "bugs": "Bugs"
     },
     "roles": {
       "admin": {
@@ -3605,6 +3606,7 @@
         "estimation": "How this project estimates work is managed by project admins. Ask an admin if the scale needs changing.",
         "fields": "Custom fields are managed by project admins. Ask an admin if a field needs adding or changing.",
         "components": "Components are managed by project admins. Ask an admin if one needs adding or changing.",
+        "bugs": "Where this project's bugs are filed is managed by project admins. Ask an admin if the destination needs changing.",
         "ai-planning": "AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
         "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
@@ -3655,6 +3657,29 @@
     "approvals": {
       "title": "Approvals",
       "pageDescription": "Which decisions this project asks a person to make before work is finished."
+    },
+    "bugs": {
+      "title": "Bugs",
+      "pageDescription": "Where Motir files the bugs it creates on its own for this project — issues arriving from a connected monitor, for one. A bug a person files keeps the parent they choose.",
+      "cardTitle": "Bug destination",
+      "cardDescription": "New bugs are filed into this folder. Changing it does not move bugs that are already filed. Deleting the folder moves its bugs, and this destination, to its parent.",
+      "bugsFolderTitle": "This project's Bugs folder",
+      "bugsFolderDescription": "Created with the project. Rename it or move it and it stays the destination.",
+      "open": "Open",
+      "openAria": "Open {name}",
+      "anotherFolderTitle": "Another folder",
+      "anotherFolderDescription": "Any folder in this project.",
+      "projectRootTitle": "Project root",
+      "projectRootDescription": "Bugs are filed at the top of the project with no parent — nothing sits between a new bug and the backlog.",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "savedTitle": "Bug destination saved",
+      "savedRoot": "New bugs will be filed at the project root.",
+      "savedFolder": "New bugs will be filed into {path}.",
+      "saveErrorTitle": "Bug destination not saved",
+      "saveError": "Something went wrong. Try again.",
+      "saveForbidden": "You can no longer change where this project's bugs are filed.",
+      "folderGone": "That folder no longer exists. Choose another."
     }
   },
   "boards": {
