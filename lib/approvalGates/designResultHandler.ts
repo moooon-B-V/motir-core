@@ -168,7 +168,13 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
 
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx);
+    // `decidingGateId`: this gate is still `awaiting` here — the door writes the
+    // decision AFTER the effect — so without it the approval-gate guard would
+    // refuse the very move this approval exists to make (ADR §6d AMENDMENT,
+    // rule 5). It exempts THIS gate only.
+    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
+      decidingGateId: gate.id,
+    });
     return { statusWritten: resolvedStatusKey };
   },
 

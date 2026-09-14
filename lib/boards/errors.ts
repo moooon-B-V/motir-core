@@ -12,6 +12,8 @@
 // `WorkItemNotFoundError` from `lib/workItems/errors.ts` (already a 404), so the
 // move path doesn't invent a parallel work-item-not-found error.
 
+import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
+
 /**
  * A cross-column move resolved to an ILLEGAL workflow transition under the
  * project's `restricted` policy (no `workflow_transition` row connects the
@@ -32,6 +34,27 @@ export class IllegalBoardMoveError extends Error {
     this.fromStatus = fromStatus;
     this.toStatus = toStatus;
     this.reason = reason;
+  }
+}
+
+/**
+ * A cross-column move into the status an `awaiting` approval gate OWNS (Story
+ * MOTIR-4887 · Subtask MOTIR-5526; ADR `approval-gates.md` §6d AMENDMENT). The
+ * edge is legal, so this is NOT {@link IllegalBoardMoveError}: the board must
+ * tell the two apart, because this refusal is rendered ON THE CARD with a door
+ * into the approval rather than as the snap-back toast. → 409 carrying `code`
+ * and the `gate` payload.
+ *
+ * Re-raised from `ApprovalGatePendingError` with the render payload attached
+ * AFTER the move's transaction rolled back (`boardsService.moveCard`).
+ */
+export class ApprovalGatePendingBoardMoveError extends Error {
+  readonly code = 'APPROVAL_GATE_PENDING' as const;
+  readonly gate: ApprovalGatePendingPayloadDTO;
+  constructor(message: string, gate: ApprovalGatePendingPayloadDTO) {
+    super(message);
+    this.name = 'ApprovalGatePendingBoardMoveError';
+    this.gate = gate;
   }
 }
 

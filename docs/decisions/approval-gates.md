@@ -964,6 +964,16 @@ routedToLabel }` — with `canDecide` computed as the Approvals read computes
 > _Why:_ without the second exemption, approving a gate is refused by the guard
 > the gate exists to protect, and approval breaks the day the guard ships.
 >
+> **A consequence, not a third exemption (recorded by MOTIR-5526, 2026-09-14): a
+> MERGE is a door like any other.** `changeRequestStatusSync` moves a card
+> through `workItemsService.updateStatus`, which is neither `system` nor a
+> deciding gate, so a pull request that merges while a gate owning `done` is
+> still `awaiting` is HELD — outcome `approval_pending`, with a note on the card
+> saying so. Nothing is stranded: with the pull request merged, approving the
+> gate finds no open delivery and writes `done` itself (§8's first arm). That is
+> the order the gate exists to enforce — the decision, then the status — and a
+> merge that skipped it is exactly the walk-around this amendment closes.
+>
 > #### 6. Pulling the work back WITHDRAWS the question
 >
 > A move that is not `opts.system`, and is either of:

@@ -48,6 +48,9 @@ import { commentRepository } from '@/lib/repositories/commentRepository';
 import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItems/artifactEvidence';
 import { isStatusTransitionRefusal } from '@/lib/workItems/statusTransitionRefusals';
 import { CONTAINER_CLAIM_STATUS_KEYS, childrenBelowClaimBar } from '@/lib/workItems/statusLadder';
+import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -97,6 +100,7 @@ import {
   IllegalTransitionError,
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
+  ApprovalGatePendingError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
   NotEpicError,
@@ -2647,7 +2651,18 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
-    opts: { sessionBranch?: string; system?: boolean } = {},
+    opts: {
+      sessionBranch?: string;
+      system?: boolean;
+      /**
+       * The approval gate whose OWN decision is making this move (ADR
+       * `approval-gates.md` §6d AMENDMENT, rule 5). `approvalGatesService.decide`
+       * runs the kind's effect BEFORE it writes the decision, so that gate is
+       * still `awaiting` while its approval writes the status it owns. The
+       * approval-gate guard skips THIS gate and no other.
+       */
+      decidingGateId?: string;
+    } = {},
   ): Promise<{
     dto: WorkItemDto;
     transition: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
@@ -2716,6 +2731,57 @@ export const workItemsService = {
         ctx.workspaceId,
       );
       if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+    }
+
+    // THE APPROVAL-GATE GUARD (Story MOTIR-4887 · MOTIR-5526; ADR
+    // `docs/decisions/approval-gates.md` §6d AMENDMENT, rules 1–5). An `awaiting`
+    // gate OWNS one status — the one approving it would write — and a move INTO
+    // that status by hand would skip the decision the gate exists to record. So
+    // exactly that move is refused; every other move the workflow allows stays
+    // legal, because a pending decision must not make the card unusable.
+    //
+    //   • WHAT a gate owns is its kind's `statusIntent`, read from the REGISTRY
+    //     and resolved against this project's own statuses — never a kind or a
+    //     status literal here. A `null` intent, a kind this build does not
+    //     register (it has no door to be decided through, so refusing its move
+    //     would strand the card), and an intent the workflow cannot resolve all
+    //     own NOTHING.
+    //   • ONLY `awaiting` refuses (the query's own predicate). `approved`,
+    //     `changes_requested` and `superseded` hold nothing, which is what keeps
+    //     §6d's reopen path legal.
+    //   • `opts.system` is EXEMPT, like both sibling gates below.
+    //   • `opts.decidingGateId` is EXEMPT for that ONE gate: the decide door runs
+    //     the effect before it writes the decision, so its own approval would
+    //     otherwise be refused by the guard it exists to protect.
+    //
+    // ⚠️ THE STATUSES ARE READ ON `tx`, NEVER THROUGH `resolveStatusKey`, which
+    // reads in a context of its own — a second pooled connection while this
+    // transaction holds the item `FOR UPDATE`. The rule is shared through the pure
+    // `resolveStatusIntent`, so the door and the guard cannot disagree about what
+    // a gate owns. The common card pays one indexed read
+    // (`approval_gate_work_item_id_idx`) and no status read.
+    if (!opts.system) {
+      const awaiting = await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx);
+      let statuses: WorkflowStatusDto[] | null = null;
+      for (const gate of awaiting) {
+        if (gate.id === opts.decidingGateId || !isRegisteredGateKind(gate.kind)) continue;
+        const intent = handlerFor(gate.kind).statusIntent;
+        if (!intent) continue;
+        statuses ??= await workflowsService.listStatusesByProject(
+          current.projectId,
+          ctx.workspaceId,
+          tx,
+        );
+        if (resolveStatusIntent(statuses, intent) === toStatusKey) {
+          throw new ApprovalGatePendingError({
+            statusKey: toStatusKey,
+            gateId: gate.id,
+            gateKind: gate.kind,
+            itemKey: current.identifier,
+            workItemId,
+          });
+        }
+      }
     }
 
     // THE CLOSE-OUT ARTIFACT-EVIDENCE GATE (MOTIR-2709). A `type: 'deploy'`

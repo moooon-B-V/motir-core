@@ -4,12 +4,14 @@ import type {
   ApprovalGateDTO,
   ApprovalGateDecisionSourceDTO,
   ApprovalGateKindDTO,
+  ApprovalGatePendingPayloadDTO,
   ApprovalQueuePageDto,
   GateDecision,
 } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import type { ApprovalGatePendingError } from '@/lib/workItems/errors';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import {
@@ -437,6 +439,46 @@ export const approvalGatesService = {
 
       return {
         gate: toApprovalGateDto(row),
+        canDecide,
+        routedToLabel: routedToDisplayName(routedTo),
+      };
+    });
+  },
+
+  /**
+   * The render payload for an `APPROVAL_GATE_PENDING` refusal (Story MOTIR-4887 ·
+   * Subtask MOTIR-5526) — what every status door hands its surface.
+   *
+   * ⚠️ CALLED AFTER THE REFUSED TRANSACTION HAS ROLLED BACK, never inside it. The
+   * guard throws from `applyStatusTransition` while that transaction holds the
+   * item `FOR UPDATE`; computing authority there would widen the lock for a
+   * render concern. So the error carries ids and this read resolves the rest in
+   * a context of its own.
+   *
+   * `canDecide` is `canDecideGate` — the SAME function the approval frame's read
+   * uses, floor first then authority — and `routedToLabel` is the kind's own live
+   * routing answer, exactly as `getForWorkItem` computes both. A gate that has
+   * vanished in between (decided, superseded) still answers: the refusal already
+   * happened, and the surface re-reads the item on its next render.
+   */
+  async describePendingRefusal(
+    err: ApprovalGatePendingError,
+    ctx: ServiceContext,
+  ): Promise<ApprovalGatePendingPayloadDTO> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const kind = err.gateKind as ApprovalGateKindDTO;
+      const item = await workItemRepository.findById(err.workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) {
+        return { itemKey: err.itemKey, kind, canDecide: false, routedToLabel: null };
+      }
+      const canDecide = await canDecideGate(item, kind, ctx, tx);
+      const routedToId = isRegisteredGateKind(kind)
+        ? handlerFor(kind).routeTo({ item, ctx, tx })
+        : routingTargetId(item);
+      const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
+      return {
+        itemKey: err.itemKey,
+        kind,
         canDecide,
         routedToLabel: routedToDisplayName(routedTo),
       };

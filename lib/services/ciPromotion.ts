@@ -19,6 +19,7 @@ import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import {
   ContainerHasOpenChildrenError,
+  ApprovalGatePendingError,
   IllegalTransitionError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
@@ -79,6 +80,11 @@ const SKIPPABLE = [
   // children. Skippable rather than fatal for this list's stated reason: it says
   // nothing about the OTHER cards the same run delivered.
   ContainerHasOpenChildrenError,
+  // The approval-gate guard (MOTIR-5526). No kind registered today owns
+  // `in_review`, but the guard reads the registry rather than a literal, so a
+  // kind that did would refuse this promotion for that one card — which, like
+  // the rest of this list, says nothing about the other cards the run delivered.
+  ApprovalGatePendingError,
 ];
 
 /** The ONLY status a promotion moves a card out of. */

@@ -34,7 +34,8 @@ export type WorkItemErrorTag =
   | 'ARCHIVED_TARGET_REPO'
   | 'CONFLICTING_TARGET_REPO_INPUT'
   | 'MISSING_ARTIFACT_EVIDENCE'
-  | 'CONTAINER_HAS_OPEN_CHILDREN';
+  | 'CONTAINER_HAS_OPEN_CHILDREN'
+  | 'APPROVAL_GATE_PENDING';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -502,6 +503,57 @@ export class ContainerHasOpenChildrenError extends WorkItemError {
     this.name = 'ContainerHasOpenChildrenError';
     this.statusKey = statusKey;
     this.openChildren = openChildren;
+  }
+}
+
+/**
+ * THE APPROVAL-GATE GUARD's refusal (Story MOTIR-4887 · Subtask MOTIR-5526; ADR
+ * `docs/decisions/approval-gates.md` §6d AMENDMENT, rules 1–5).
+ *
+ * A work item carries an `awaiting` approval gate whose kind OWNS the status this
+ * move targets — the status approving that gate would itself write. Moving there
+ * by hand would skip the decision, so the move is refused and every other move
+ * stays legal.
+ *
+ * ⚠️ ITS OWN CODE, NOT `ILLEGAL_TRANSITION`. The edge IS legal: a caller told
+ * otherwise goes and edits their workflow, which fixes nothing. The fix is to
+ * decide the gate, and only this code can say so — the same argument
+ * {@link ContainerHasOpenChildrenError} makes for its own.
+ *
+ * Kind-agnostic: it names the gate's kind and never assumes it is a design. The
+ * doors enrich it into the render payload (`{ itemKey, kind, canDecide,
+ * routedToLabel }`) through `approvalGatesService.describePendingRefusal`, AFTER
+ * the refused transaction has rolled back — which is why it carries ids rather
+ * than the payload itself.
+ */
+export class ApprovalGatePendingError extends WorkItemError {
+  readonly tag = 'APPROVAL_GATE_PENDING' as const;
+  readonly code = 'APPROVAL_GATE_PENDING' as const;
+  readonly statusKey: string;
+  readonly gateId: string;
+  readonly gateKind: string;
+  /** The work item's `KEY-n`, for a message and a link a person can follow. */
+  readonly itemKey: string;
+  readonly workItemId: string;
+  constructor(args: {
+    statusKey: string;
+    gateId: string;
+    gateKind: string;
+    itemKey: string;
+    workItemId: string;
+  }) {
+    super(
+      `${args.itemKey} cannot be moved to "${args.statusKey}" directly: a ` +
+        `${args.gateKind.replace(/_/g, ' ')} approval is waiting on it, and approving that ` +
+        'decision is what makes this move. Decide it in Motir, or move the item somewhere ' +
+        'else — only this one move is held.',
+    );
+    this.name = 'ApprovalGatePendingError';
+    this.statusKey = args.statusKey;
+    this.gateId = args.gateId;
+    this.gateKind = args.gateKind;
+    this.itemKey = args.itemKey;
+    this.workItemId = args.workItemId;
   }
 }
 

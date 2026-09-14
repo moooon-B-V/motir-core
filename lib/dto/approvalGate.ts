@@ -30,6 +30,26 @@ export type ApprovalGateKindDTO =
   | 'pull_request_approval'
   | 'pull_request_merge';
 
+/**
+ * The payload every status door carries when the approval-gate guard refuses a
+ * move (`APPROVAL_GATE_PENDING` — Story MOTIR-4887 · Subtask MOTIR-5526; ADR
+ * `approval-gates.md` §6d AMENDMENT, rule 4). ONE shape on the board move, the
+ * status server action, `/api/v1` and MCP, so a surface renders the refusal
+ * without re-deriving any of it.
+ *
+ * - `itemKey` + `kind` address the approval overlay (`overlayAddress.ts`).
+ * - `canDecide` is the same answer the approval frame draws its verbs from — the
+ *   kind's permission floor AND §2's authority — so a surface never offers a
+ *   Review & approve button the door would then refuse.
+ * - `routedToLabel` names whose decision it is, for the reader who may only look.
+ */
+export interface ApprovalGatePendingPayloadDTO {
+  itemKey: string;
+  kind: ApprovalGateKindDTO;
+  canDecide: boolean;
+  routedToLabel: string | null;
+}
+
 /** Where a gate's decision stands (ADR §6b). Mirrors the `ApprovalGateState`
  *  Prisma enum. */
 export type ApprovalGateStateDTO = 'awaiting' | 'approved' | 'changes_requested' | 'superseded';
