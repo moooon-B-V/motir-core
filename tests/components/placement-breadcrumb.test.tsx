@@ -210,4 +210,21 @@ describe('ParentBreadcrumb outside the channel', () => {
     const { container } = render(<PlacementBreadcrumb />);
     expect(container.firstChild).toBeNull();
   });
+
+  it('a reporter outside a provider is a no-op — it asks the server nothing and throws nothing', () => {
+    // The rail's unit call sites and any surface without a breadcrumb report into
+    // this: a parent change there must neither crash nor fire a placement read.
+    function LoneReporter() {
+      const report = usePlacementReporter();
+      return (
+        <button type="button" onClick={() => report('wi_7')}>
+          report
+        </button>
+      );
+    }
+    render(<LoneReporter />);
+
+    expect(() => fireEvent.click(screen.getByRole('button', { name: 'report' }))).not.toThrow();
+    expect(placementSpy).not.toHaveBeenCalled();
+  });
 });

@@ -282,6 +282,11 @@ export function CoreFieldsPanel({
   // becomes the panel's token so the next inline edit is not refused as stale.
   function fileIntoFolder(folderId: string | null, path: string[]) {
     setEditing(null);
+    /* v8 ignore next -- UNREACHABLE through the shipped control: the picker's
+       `choose` DISMISSES on its current option and never hands it back, and the
+       current option is exactly `ownFolderId`. Kept as the rail's own guard should
+       the control change. Asserted by issue-detail-fields.test.tsx › 'picking the
+       folder the item is already in writes nothing'. */
     if (folderId === ownFolderId) return;
     setFolderOverride({ folderId, path, over: placement });
     if (folderId !== null) {

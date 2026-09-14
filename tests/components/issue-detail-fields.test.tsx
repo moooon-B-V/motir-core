@@ -576,8 +576,31 @@ describe('CoreFieldsPanel · Folder field', () => {
       fireEvent.click(current);
     });
 
+    // The invariant the rail's own same-folder guard rests on: the picker DISMISSES
+    // on its current option rather than handing it back (CoreFieldsPanel's v8 ignore).
+    expect(screen.queryByRole('listbox', { name: 'Folders' })).toBeNull();
     expect(fileSpy).not.toHaveBeenCalled();
     expect(placementSpy).not.toHaveBeenCalled();
+  });
+
+  it('un-filing reads No folder while it saves, and leaves Parent as it is', async () => {
+    let resolveFile!: (v: unknown) => void;
+    fileSpy.mockReturnValue(new Promise((r) => (resolveFile = r)));
+    renderFolder(filedDirectly);
+
+    const listbox = await openFolder();
+    await act(async () => {
+      fireEvent.click(within(listbox).getByRole('option', { name: 'No folder' }));
+    });
+
+    expect(fileSpy).toHaveBeenCalledWith({ workItemId: 'wi_1', folderId: null });
+    expect(within(card('Folder')).getByText('No folder')).toBeTruthy();
+    expect(within(card('Parent')).getByText('None')).toBeTruthy();
+
+    await act(async () => {
+      resolveFile({ ok: true, updatedAt: '2026-06-04T00:00:00.000Z' });
+    });
+    expect(placementSpy).toHaveBeenCalledWith('wi_1');
   });
 
   it('a refused filing reverts Folder AND Parent, toasts the reason, and reports nothing', async () => {

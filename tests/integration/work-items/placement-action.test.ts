@@ -15,8 +15,10 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 import { db } from '@/lib/db';
 import { foldersService } from '@/lib/services/foldersService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { getWorkItemPlacementAction } from '@/app/(authed)/items/[key]/edit/actions';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -32,11 +34,11 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-function actAs(fx: WorkItemFixture) {
-  session.current = { user: { id: fx.ctx.userId } };
+function actAs(fx: WorkItemFixture, userId = fx.ctx.userId) {
+  session.current = { user: { id: userId } };
   activeCtx.current = {
     projectId: fx.projectId,
-    userId: fx.ctx.userId,
+    userId,
     workspaceId: fx.workspaceId,
   };
 }
@@ -84,5 +86,23 @@ describe('getWorkItemPlacementAction', () => {
 
     expect(res.ok).toBe(false);
     expect(res.ok ? '' : res.error).toMatch(/not found/i);
+  });
+
+  it('refuses a workspace member who cannot browse the project as a result, never a throw', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Behind the gate' },
+      fx.ctx,
+    );
+    // Private to its members, so a workspace member who is NOT on it cannot browse it.
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    const outsider = await createTestUser({ email: 'placement-outsider@ex.com', name: 'Outsider' });
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: fx.workspaceId });
+    actAs(fx, outsider.id);
+
+    await expect(getWorkItemPlacementAction(item.id)).resolves.toEqual({
+      ok: false,
+      error: 'You have read-only access to this project',
+    });
   });
 });

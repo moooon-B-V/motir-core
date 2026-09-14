@@ -849,6 +849,51 @@ describe('IssueAdvancedFilter — the Folder row', () => {
     expect(screen.getByRole('option', { name: 'Component' })).toBeTruthy();
   });
 
+  it('a host with no folders still restores a shared folder condition — disabled, its ids as they are', () => {
+    // A board or backlog URL can carry a Folder condition its host never loads
+    // folders for: the row stays (it still filters server-side), names no path
+    // it cannot know, and calls nothing deleted.
+    renderBuilder({
+      folders: null,
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-parked'] }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('f-parked')).toBeTruthy();
+    expect(within(row).queryByText('Unknown value')).toBeNull();
+    const values = within(row).getByRole('combobox', { name: 'Folder values' });
+    expect((values as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('the applied chip names an id as it is when the host loaded no folders, or only a truncated list', () => {
+    const summary = (folders: ProjectFoldersDto | undefined, id: string) =>
+      renderWithIntl(
+        <AdvancedFilterSummary
+          ast={{
+            combinator: 'and',
+            conditions: [{ field: 'folder', operator: 'is_any_of', value: [id] }],
+          }}
+          statuses={STATUSES}
+          members={MEMBERS}
+          sprints={SPRINTS}
+          customFields={CUSTOM_FIELDS}
+          components={COMPONENTS}
+          folders={folders}
+          referencedLabels={REFERENCED_LABELS}
+        />,
+      );
+
+    summary(undefined, 'f-parked');
+    expect(screen.getByText('is any of f-parked')).toBeTruthy();
+    cleanup();
+
+    summary({ ...FOLDERS, truncated: true }, 'f-past-the-cap');
+    expect(screen.getByText('is any of f-past-the-cap')).toBeTruthy();
+  });
+
   it('the applied chip names each folder by its path, and a deleted one as unknown', () => {
     renderWithIntl(
       <AdvancedFilterSummary
