@@ -8217,6 +8217,7 @@
     "noFolder": "No folder",
     "fieldLabel": "Folder",
     "breadcrumbFolderLabel": "Folder:",
+    "placedThrough": "Through {key} {title}",
     "removesFromParent": "Filing it removes it from {key} {title}.",
     "fileRefused": "That folder belongs to another project, so this work item stayed where it was.",
     "delete": "Delete…",

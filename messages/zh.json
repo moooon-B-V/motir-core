@@ -8213,6 +8213,7 @@
     "noFolder": "无文件夹",
     "fieldLabel": "文件夹",
     "breadcrumbFolderLabel": "文件夹：",
+    "placedThrough": "经由 {key} {title}",
     "removesFromParent": "归档后，它将不再属于 {key} {title}。",
     "fileRefused": "该文件夹属于另一个项目，因此此工作项保持原位。",
     "delete": "删除…",
