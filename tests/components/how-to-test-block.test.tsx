@@ -81,7 +81,11 @@ describe('a single-repository record (Panel 12a)', () => {
     const { container } = renderBlock(recordDto());
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
     expect(hrefs).not.toContain(CORE_PR.url);
-    expect(hrefs.every((h) => !h?.includes('github.com'))).toBe(true);
+    // Parsed, not substring-matched: no anchor's HOST is GitHub's.
+    const hosts = hrefs.map((h) => (h ? new URL(h, 'https://motir.test').hostname : null));
+    expect(hosts.some((host) => host === 'github.com' || host?.endsWith('.github.com'))).toBe(
+      false,
+    );
     expect(screen.queryByRole('button', { name: /approve|merge|request changes/i })).toBeNull();
   });
 
