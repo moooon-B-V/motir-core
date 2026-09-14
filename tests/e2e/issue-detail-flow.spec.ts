@@ -25,6 +25,7 @@
 // brittle text.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { actionWrite } from './_helpers/authoritative-signal';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
@@ -120,6 +121,19 @@ async function blockersOf(page: Page, id: string): Promise<{ id: string }[]> {
 async function searchLinkPicker(page: Page, query: string): Promise<void> {
   await page.getByRole('combobox', { name: /Search by identifier or title/ }).fill(query);
 }
+
+// MOTIR-5431 — the link panel is OPTIMISTIC (MOTIR-4496): its row is added or
+// removed BEFORE `createLinkAction` / `removeLinkAction` is even sent, so an
+// in-page row assertion proves the client state, not the saved link. Any
+// `goto` / `reload` after one must first await the write itself.
+//
+// `actionWrite` matches the action by its request BODY. An add is marked by the
+// target's id, which only `createLinkAction` carries (the picker's
+// `listLinkCandidatesAction` sends the CURRENT item's id and the query). A
+// remove carries no target id at all — only the link id the panel holds — so it
+// is marked by its `linkId` key, which no other Server Action on the item page
+// takes.
+const REMOVE_LINK_WRITE = '"linkId"';
 
 test('@smoke renders the canonical detail page (header · rendered Markdown · core fields · Edit)', async ({
   page,
@@ -476,11 +490,13 @@ test('@smoke link management — add a blocked-by link via the panel; persists +
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await searchLinkPicker(page, 'blocker');
   await page.getByRole('option', { name: /The blocker issue/ }).click();
+  const addWrite = actionWrite(page, `/items/${a.identifier}`, b.id);
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 
   // The blocker row appears and readiness flips to Blocked.
   await expect(page.getByRole('link', { name: /The blocker issue/ })).toBeVisible();
   await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
+  expect((await addWrite).status()).toBe(200);
 
   // Persisted across reload.
   await page.reload();
@@ -610,11 +626,13 @@ test('@smoke link management — remove a blocked-by link (confirm) flips back t
 
   // Remove the OPEN blocker via the per-row × → confirm popover → Remove link.
   await page.getByRole('button', { name: `Remove Blocked by link to ${open.identifier}` }).click();
+  const removeWrite = actionWrite(page, `/items/${a.identifier}`, REMOVE_LINK_WRITE);
   await page.getByRole('button', { name: 'Remove link' }).click();
 
   // Its row is gone; the remaining blocker is terminal → "Ready to start".
   await expect(page.getByRole('link', { name: /Open blocker/ })).toHaveCount(0);
   await expect(page.getByText('Ready to start')).toBeVisible();
+  expect((await removeWrite).status()).toBe(200);
   await page.reload();
   expect((await blockersOf(page, a.id)).map((x) => x.id)).toEqual([resolved.id]);
 });
@@ -636,8 +654,12 @@ test('@smoke link management — removing a relates_to link drops both reciproca
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await searchLinkPicker(page, 'Delta');
   await page.getByRole('option', { name: /Issue Delta/ }).click();
+  const addWrite = actionWrite(page, `/items/${a.identifier}`, d.id);
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByRole('link', { name: /Issue Delta/ })).toBeVisible();
+  // A relates_to link moves no readiness, so nothing else on A's page waits for
+  // the write — D's reciprocal row exists only once it has committed.
+  expect((await addWrite).status()).toBe(200);
 
   // The reciprocal row shows on D's page.
   await page.goto(`/items/${d.identifier}`);
@@ -646,8 +668,10 @@ test('@smoke link management — removing a relates_to link drops both reciproca
   // Remove it from A → both halves drop.
   await page.goto(`/items/${a.identifier}`);
   await page.getByRole('button', { name: `Remove Relates to link to ${d.identifier}` }).click();
+  const removeWrite = actionWrite(page, `/items/${a.identifier}`, REMOVE_LINK_WRITE);
   await page.getByRole('button', { name: 'Remove link' }).click();
   await expect(page.getByRole('link', { name: /Issue Delta/ })).toHaveCount(0);
+  expect((await removeWrite).status()).toBe(200);
 
   await page.goto(`/items/${d.identifier}`);
   await expect(page.getByRole('link', { name: /Issue Alpha/ })).toHaveCount(0);
