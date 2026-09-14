@@ -57,6 +57,7 @@ function reads(): LateReads {
     acceptanceEligibility: null,
     acceptanceEvidence: null,
     canDecideAcceptance: false,
+    projectId: 'proj-acme',
     designEvidence: null,
     isDesignCard: false,
     designGate: { gate: null, canDecide: false, routedToLabel: null, subject: null },
