@@ -1100,8 +1100,8 @@ it**, and that is why §3's rule is conditional rather than simply reversed.
 
 **Design and code take the SAME rows.** A design card that opened a pull request
 — one or many — is Workflow B; only its PORT differs: the Development block shows
-every pull-request row, the design result once (the mock(s) with the note as a
-link), and How to test, and no `design_result` gate is raised for the card
+the design result once (the mock(s) with the note as a link), then How to test,
+then every pull-request row, and no `design_result` gate is raised for the card
 (`design-result.md` AMENDMENT 4 Q8).
 
 **Row 4b is WHY there are two gates rather than one.** A GitHub approval tells

@@ -812,8 +812,8 @@ decision record.
    you were expecting it.
    **The one exception: a card with an OPEN linked pull request — one or many, in
    any repositories — raises NO design gate.** Its pull requests carry the
-   decision: the result shows inside the card's Development block beside them and
-   How to test, and approving that one gate merges them all. Linking an open pull
+   decision: the result shows inside the card's Development block, with How to test,
+   above them, and approving that one gate merges them all. Linking an open pull
    request later retires a design gate that was still awaiting
    (`docs/decisions/design-result.md` AMENDMENT 4 Q8).
 2. **Who it waits on.** The card's **assignee**, or its **reporter** when there

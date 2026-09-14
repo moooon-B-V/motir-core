@@ -890,9 +890,10 @@ left unsaid, and what the shipped publish contradicted (it raised a
    raises **no** `design_result` gate. A design card with no open linked pull
    request keeps the `design_result` gate exactly as Q1–Q7 describe.
 2. **Where it renders.** The result renders **inside the Development block**:
-   every linked pull-request row (the shipped row UI, reused), then the design
-   result **once** — the mock frame(s), then the note link — then How to test,
-   as ONE section and ONE frame. **There is no limit on how many pull requests a
+   the design result **once** — the mock frame(s), then the note link — then
+   How to test, then every linked pull-request row (the shipped row UI, reused),
+   as ONE section and ONE frame. What there is to review leads; the pull
+   requests that carry it follow. **There is no limit on how many pull requests a
    card links**; the design result belongs to the CARD, not to any one pull
    request, so it is never repeated per row. No standalone Design result section
    is drawn on that card. The slot lives in the block itself, so the item page,
