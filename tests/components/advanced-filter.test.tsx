@@ -6,6 +6,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { EMPTY_FILTER, parseIssueFilter, type IssueFilter } from '@/lib/issues/issueListFilter';
@@ -151,12 +152,30 @@ const REFERENCED_LABELS: LabelDto[] = [
   { id: 'lbl-api', name: 'api' },
 ];
 
+// The project's folders (Story MOTIR-5309 · MOTIR-5378) — a root and one inside it,
+// so options and chips are told apart by PATH.
+const FOLDERS: ProjectFoldersDto = {
+  truncated: false,
+  folders: [
+    { id: 'f-parked', parentFolderId: null, name: 'Parked', position: 'a0', path: ['Parked'] },
+    {
+      id: 'f-2025',
+      parentFolderId: 'f-parked',
+      name: '2025',
+      position: 'a0',
+      path: ['Parked', '2025'],
+    },
+  ],
+};
+
 function renderBuilder(
   opts: {
     ast?: FilterAst | null;
     fields?: FilterFieldDef[];
     customFields?: CustomFieldDefinitionDTO[];
     components?: ComponentDto[];
+    /** `null` renders a host that passes no folders (the board / backlog). */
+    folders?: ProjectFoldersDto | null;
     referencedLabels?: LabelDto[];
   } = {},
 ) {
@@ -173,6 +192,7 @@ function renderBuilder(
       sprints={SPRINTS}
       customFields={opts.customFields ?? CUSTOM_FIELDS}
       components={opts.components ?? COMPONENTS}
+      folders={opts.folders === null ? undefined : (opts.folders ?? FOLDERS)}
       referencedLabels={opts.referencedLabels ?? REFERENCED_LABELS}
       projectKey="PROD"
       fields={opts.fields}
@@ -666,6 +686,7 @@ describe('AdvancedFilterSummary — Epic-5 value resolution (6.1.5)', () => {
         sprints={SPRINTS}
         customFields={CUSTOM_FIELDS}
         components={COMPONENTS}
+        folders={FOLDERS}
         referencedLabels={referencedLabels}
       />,
     );
@@ -695,5 +716,160 @@ describe('AdvancedFilterSummary — Epic-5 value resolution (6.1.5)', () => {
       [],
     );
     expect(screen.getByText('is any of Unknown value')).toBeTruthy();
+  });
+});
+
+// The builder's FOLDER row (Story MOTIR-5309 · MOTIR-5378, placement.mock.html
+// panel 5): last in the menu's Other group, values and chips by path, the
+// included-folders hint, the empty pair, a deleted folder, no folders, a truncated
+// list, a host that loads none, a reopened filter, and the applied chip.
+describe('IssueAdvancedFilter — the Folder row', () => {
+  function addFolderRow(): HTMLElement {
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Folder' }));
+    return row;
+  }
+
+  function openValues(row: HTMLElement) {
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Folder values' }));
+  }
+
+  it('sits last in the Other group, right after Component, with the four list operators', () => {
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    const names = screen.getAllByRole('option').map((o) => (o.textContent ?? '').trim());
+    expect(names.indexOf('Folder')).toBe(names.indexOf('Component') + 1);
+
+    fireEvent.click(screen.getByRole('option', { name: 'Folder' }));
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Operator' }));
+    expect(screen.getAllByRole('option')).toHaveLength(4);
+  });
+
+  it('lists folders by PATH, and picking two writes a ?filter= carrying both ids', () => {
+    renderBuilder();
+    openBuilder();
+    const row = addFolderRow();
+    openValues(row);
+    expect(screen.getByRole('option', { name: 'Parked ▸ 2025' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: 'Parked' }));
+    openValues(row);
+    fireEvent.click(screen.getByRole('option', { name: 'Parked ▸ 2025' }));
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-parked', 'f-2025'] }],
+    });
+  });
+
+  it('says folders inside a chosen folder are included, under a list-operator row', () => {
+    renderBuilder();
+    openBuilder();
+    const row = addFolderRow();
+    expect(within(row).getByText('Folders inside a chosen folder are included.')).toBeTruthy();
+  });
+
+  it('is empty collapses the value slot and drops the hint', () => {
+    renderBuilder({
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_empty', value: null }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).queryByRole('combobox', { name: 'Folder values' })).toBeNull();
+    expect(within(row).queryByText('Folders inside a chosen folder are included.')).toBeNull();
+  });
+
+  it('reopens a saved or shared folder filter with its row populated by path', () => {
+    renderBuilder({
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_none_of', value: ['f-2025'] }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('Parked ▸ 2025')).toBeTruthy();
+    expect(within(row).getByRole('combobox', { name: 'Folder values' })).toBeTruthy();
+  });
+
+  it('a deleted folder renders the unknown-value chip and the per-row notice', () => {
+    renderBuilder({
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-parked', 'f-gone'] }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(within(row).getByText('Parked')).toBeTruthy();
+    expect(within(row).getByText('Unknown value')).toBeTruthy();
+    expect(
+      within(row).getByText(
+        'This value no longer exists in the project — this condition matches nothing.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('a project with no folders says so in the value list', () => {
+    renderBuilder({ folders: { folders: [], truncated: false } });
+    openBuilder();
+    const row = addFolderRow();
+    openValues(row);
+    expect(screen.getByText('This project has no folders yet.')).toBeTruthy();
+  });
+
+  it('a truncated folder list shows the notice, and flags no folder past the window as deleted', () => {
+    renderBuilder({
+      folders: { ...FOLDERS, truncated: true },
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'folder', operator: 'is_any_of', value: ['f-past-the-cap'] }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    openValues(row);
+    expect(screen.getByText('Showing the first 2 folders.')).toBeTruthy();
+    expect(within(row).queryByText('Unknown value')).toBeNull();
+  });
+
+  it('a host that passes no folders offers no Folder field', () => {
+    renderBuilder({ folders: null });
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    expect(screen.queryByRole('option', { name: 'Folder' })).toBeNull();
+    expect(screen.getByRole('option', { name: 'Component' })).toBeTruthy();
+  });
+
+  it('the applied chip names each folder by its path, and a deleted one as unknown', () => {
+    renderWithIntl(
+      <AdvancedFilterSummary
+        ast={{
+          combinator: 'and',
+          conditions: [
+            { field: 'folder', operator: 'is_any_of', value: ['f-2025'] },
+            { field: 'folder', operator: 'is_none_of', value: ['f-gone'] },
+          ],
+        }}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        folders={FOLDERS}
+        referencedLabels={REFERENCED_LABELS}
+      />,
+    );
+    expect(screen.getAllByText('Folder')).toHaveLength(2);
+    expect(screen.getByText('is any of Parked ▸ 2025')).toBeTruthy();
+    expect(screen.getByText('is none of Unknown value')).toBeTruthy();
   });
 });

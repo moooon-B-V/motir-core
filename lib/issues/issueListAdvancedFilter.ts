@@ -183,6 +183,9 @@ const SUPPORTED_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   'sprint-select',
   'label-select',
   'component-select',
+  // Story MOTIR-5309 · MOTIR-5378: the Folder condition row. The registry entry
+  // (MOTIR-5376) stays out of the menu until this gate lets it in.
+  'folder-select',
   'cf-option-select',
   'text',
   'number',

@@ -13,6 +13,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { ProjectFoldersDto } from '@/lib/dto/folders';
 import type { LabelDto } from '@/lib/dto/labels';
 import { customFieldFilterFieldId } from '@/lib/filters/ast';
 import { useAdvancedFilterPopover } from './AdvancedFilterContext';
@@ -42,6 +43,9 @@ export interface AdvancedFilterSummaryProps {
   sprints: SprintDto[];
   customFields: CustomFieldDefinitionDTO[];
   components: ComponentDto[];
+  /** The project's folders — a Folder chip names each by its path (MOTIR-5378).
+   * Absent on a host that loads none, where an id renders as itself. */
+  folders?: ProjectFoldersDto;
   referencedLabels: LabelDto[];
 }
 
@@ -52,6 +56,7 @@ export function AdvancedFilterSummary({
   sprints,
   customFields,
   components,
+  folders,
   referencedLabels,
 }: AdvancedFilterSummaryProps) {
   const t = useTranslations('issueViews');
@@ -66,6 +71,10 @@ export function AdvancedFilterSummary({
   const componentsById = useMemo(
     () => new Map(components.map((c) => [c.id, c.name])),
     [components],
+  );
+  const folderPathsById = useMemo(
+    () => (folders ? new Map(folders.folders.map((f) => [f.id, f.path.join(' ▸ ')])) : null),
+    [folders],
   );
   const labelsById = useMemo(
     () => new Map(referencedLabels.map((l) => [l.id, l.name])),
@@ -118,6 +127,12 @@ export function AdvancedFilterSummary({
         return labelsById.get(id) ?? t('advancedStaleValue');
       case 'cmp':
         return componentsById.get(id) ?? t('advancedStaleValue');
+      case 'folder': {
+        const path = folderPathsById?.get(id);
+        if (path !== undefined) return path;
+        // Only a COMPLETE folder list can say a folder is gone.
+        return folderPathsById !== null && !folders?.truncated ? t('advancedStaleValue') : id;
+      }
       default:
         return id;
     }
