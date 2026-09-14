@@ -271,6 +271,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ discrepancies: Array<{ containerCount: number; containerMinutes: number; driftMinutes: number; exceedsTolerance: boolean; fleetJobCount: number; meteredMinutes: number; repoName: string }>; org: string; outcome: "reconciled"; periodStart: Date; repos: Array<{ containerCount: number; containerMinutes: number; driftMinutes: number; exceedsTolerance: boolean; fleetJobCount: number; meteredMinutes: number; repoName: string }> } | { outcome: "skipped"; reason: "metering_disabled" }',
   },
+  'reconcile-open-deliveries': {
+    file: 'lib/jobs/definitions/pullRequestReconcile.ts',
+    shape:
+      '{ examined: number; failed: number; gone: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
+  },
   'reconcile-github-billed': {
     file: 'lib/jobs/definitions/ciMinutesReconcile.ts',
     shape:

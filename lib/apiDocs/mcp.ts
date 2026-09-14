@@ -604,9 +604,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // agent run alone. Summary UNCHANGED for the reason above, which the
     // paragraph anticipated: the drift is on the advisory channel, and the
     // summary describes the verdict.
+    //
+    // Re-pinned for MOTIR-5362's new advisory FAMILY, `coverage`
+    // (`likely-unowned-criterion` — a container criterion no child owns). Summary
+    // UNCHANGED, and this is the first re-pin that was a family rather than a
+    // severity: still the advisory channel, still never a gate, so the verdict
+    // line stays true.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '5e25f8f8a9fb',
+    descriptionFingerprint: '03c985aeafef',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

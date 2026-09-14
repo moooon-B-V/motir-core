@@ -18,6 +18,7 @@ import {
   InvalidIdentifierError,
   InvalidProjectImageError,
   InvalidProjectNameError,
+  ProjectAccessDeniedError,
   ProjectNotFoundError,
   ProjectOverviewTooLongError,
   ProjectTaglineTooLongError,
@@ -855,6 +856,22 @@ export const projectsService = {
    * the RLS workspace GUC. `getByKey` now delegates here, so the agent-dispatch
    * endpoints transparently resolve retired keys too; the hot path stays a
    * single project-row fetch (no alias query on a live hit).
+   *
+   * ⚠️ THE GATE'S OWN REFUSAL IS TRANSLATED HERE, AND THAT IS THE CONTRACT
+   * (MOTIR-5320). `assertCanBrowse` refuses a non-browser with
+   * `ProjectAccessDeniedError`, which is NOT a `ProjectNotFoundError` — so until
+   * this translation existed the sentence above was false for a workspace member
+   * who is not on a private project: every route mapping only the not-found error
+   * let the refusal escape as a 500, and every route whose mapper knew the denial
+   * answered 403 with the project's internal id in the body. It is re-thrown as
+   * the SAME `ProjectNotFoundError(key)` the resolver throws on a miss, so the
+   * refusal carries the key the caller typed and nothing else — the answer is
+   * byte-identical to a key that was never created. The token-binding refusal the
+   * gate raises (already a not-found, but naming the project id) takes the same
+   * path. Translated at the owner rather than mapped per route, so a route that
+   * resolves by key is correct without knowing this; `tests/permissions/
+   * storyGate.test.ts` guard 4 holds the other half — every such route maps the
+   * not-found error at all.
    */
   async resolveByKey(
     key: string,
@@ -866,7 +883,14 @@ export const projectsService = {
         ctx.workspaceId,
         tx,
       );
-      await projectAccessService.assertCanBrowse(project.id, ctx, tx);
+      try {
+        await projectAccessService.assertCanBrowse(project.id, ctx, tx);
+      } catch (err) {
+        if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError) {
+          throw new ProjectNotFoundError(key);
+        }
+        throw err;
+      }
       return { project: toProjectDTO(project), viaAlias };
     });
   },

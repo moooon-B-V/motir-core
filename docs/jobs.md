@@ -591,6 +591,24 @@ SOONER than the lane it replaces would have.
 merged) — the opposite of Inngest's behaviour, and the safe direction: losing
 coalescing costs money, merging loses events.
 
+**An emitter can make ONE arrival due now — `immediate` (MOTIR-5360).**
+`sendSystemEvent(name, data, { immediate: true })` resolves the same key and
+takes the same lock, but writes `run_at = now` instead of `now + period`: a first
+arrival opens a window that is already due, and a coalescing one pulls the
+pending run forward. It is NOT a way to skip the debounce. The row still carries
+the key, so every later same-key arrival coalesces into it and the queue still
+never holds two pending runs for one key. The switch belongs to the EMITTER, per
+dispatch, because one job can serve a trigger that arrives in bursts and one with
+a person waiting. Its one user is the planning-session refresh
+(`enqueueCodeGraphRefresh(…, { trigger: 'session_start' })`), where the push
+debounce cost 122 s of a ≈ 211 s wait.
+
+**An arrival never moves an already-due run back into the future.** Once
+`run_at` has passed, the run is only waiting for a worker. A coalescing arrival
+repoints the event as usual but leaves `run_at` where it is, so a push landing
+between an immediate arrival and the claim cannot re-defer that run by a whole
+`period`. A run that is not yet due is moved exactly as before.
+
 **The guard** is `tests/jobs/engine-debounce.test.ts`, against real Postgres —
 including the concurrent first arrival, which a serial test cannot see. It used to
 have a sibling rather than a predecessor (`tests/jobs/debounce-burst.test.ts`,

@@ -124,7 +124,17 @@ function isUniqueViolation(err: unknown): boolean {
 export async function dispatchEventToEngine(
   name: string,
   data: unknown,
-  opts?: { idempotencyKey?: string | null; logger?: Pick<Console, 'warn'> },
+  opts?: {
+    idempotencyKey?: string | null;
+    logger?: Pick<Console, 'warn'>;
+    /**
+     * This arrival is due NOW rather than one debounce `period` from now
+     * (MOTIR-5360). It still coalesces into the pending run its key holds, so it
+     * pulls that run forward instead of adding a second one. It changes nothing
+     * for a subscriber that declares no debounce, which is already due now.
+     */
+    immediate?: boolean;
+  },
 ): Promise<DispatchResult> {
   const log = opts?.logger ?? console;
 
@@ -195,12 +205,17 @@ export async function dispatchEventToEngine(
     const debounceKey = resolveDebounceKey(sub.debounce, data, sub.id);
     try {
       if (sub.debounce !== undefined && debounceKey !== null) {
-        const outcome = await enqueueDebounced(sub, sub.debounce, debounceKey, {
-          eventId: event.id,
-          eventName: name,
-          workspaceId,
-        });
+        const immediate = opts?.immediate === true;
+        const outcome = await enqueueDebounced(
+          sub,
+          sub.debounce,
+          debounceKey,
+          { eventId: event.id, eventName: name, workspaceId },
+          immediate,
+        );
         (outcome === 'enqueued' ? enqueued : coalesced).push(sub.id);
+        // An immediate arrival leaves its run due now, so wake a worker for it.
+        if (immediate) dueNow = true;
         continue;
       }
 
@@ -274,6 +289,7 @@ async function enqueueDebounced(
   debounce: NonNullable<JobManifestEntry['debounce']>,
   debounceKey: string,
   event: { eventId: string; eventName: string; workspaceId: string | null },
+  immediate: boolean,
 ): Promise<'enqueued' | 'coalesced'> {
   const attempt = async (): Promise<'enqueued' | 'coalesced'> =>
     withSystemContext(async (tx) => {
@@ -287,7 +303,10 @@ async function enqueueDebounced(
         await jobQueueRepository.coalesceDebounced(
           pending.id,
           {
-            runAt: debouncedRunAt(debounce, now, pending.debounceFirstSeenAt),
+            runAt: debouncedRunAt(debounce, now, pending.debounceFirstSeenAt, {
+              immediate,
+              pendingRunAt: pending.runAt,
+            }),
             eventId: event.eventId,
             eventName: event.eventName,
             workspaceId: event.workspaceId,
@@ -303,8 +322,10 @@ async function enqueueDebounced(
           eventName: event.eventName,
           workspaceId: event.workspaceId,
           // The first arrival opens the window: due one whole `period` from now,
-          // with nothing to cap against yet.
-          runAt: debouncedRunAt(debounce, now, null),
+          // with nothing to cap against yet — or due now, for an immediate one.
+          // Either way the row carries the key, so a later same-key arrival
+          // coalesces into it rather than queueing a second run.
+          runAt: debouncedRunAt(debounce, now, null, { immediate }),
           maxAttempts: sub.maxAttempts,
           idempotencyKey: null,
           debounceKey,

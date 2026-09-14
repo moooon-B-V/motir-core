@@ -7,7 +7,12 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { runDispatchPrompt } from '@/lib/mcp/tools/dispatchPrompt';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import { isReferenceAdvisory } from '@/lib/dto/workItems';
-import type { ExecutorDto, WorkItemProseAdvisoryDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type {
+  ExecutorDto,
+  WorkItemProseAdvisoryDto,
+  WorkItemTypeDto,
+  WorkItemValidityAdvisoryDto,
+} from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -107,7 +112,7 @@ async function toInReview(id: string, fx: WorkItemFixture): Promise<void> {
 // three-membered since MOTIR-2903, so the families with no far end are narrowed
 // out POSITIVELY rather than by "not shape" — which is what stops a new family
 // being mapped for a `referenced` it does not have.
-const keys = (advisories: WorkItemProseAdvisoryDto[]) =>
+const keys = (advisories: WorkItemValidityAdvisoryDto[]) =>
   advisories.filter(isReferenceAdvisory).map((a) => a.referenced);
 
 describe('buildDispatchProseAdvisories — the single-card resolver', () => {

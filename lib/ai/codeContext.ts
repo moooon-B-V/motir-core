@@ -332,11 +332,19 @@ export function resolveRefreshDisposition(input: {
  * where a refresh can actually run.
  *
  * ⚠️ IT NEVER BLOCKS. The enqueue is fire-and-forget through the SHIPPED
- * `enqueueCodeGraphRefresh`, so the 2-minute debounce and its cap apply and five
- * sessions in ten minutes coalesce into one refresh RUN. No second trigger with
- * its own semantics, and the session never awaits the result: whether a refresh
- * can land mid-conversation is MOTIR-4591's question, and that it must not be
- * waited on is settled here.
+ * `enqueueCodeGraphRefresh`, and the session never awaits the result: whether a
+ * refresh can land mid-conversation is MOTIR-4591's question, and that it must
+ * not be waited on is settled here.
+ *
+ * ⚠️ AND IT DOES NOT SIT OUT THE 2-MINUTE DEBOUNCE (MOTIR-5360). This used to say
+ * the debounce applied, and MOTIR-4591 measured what that cost: 122 s of the
+ * ≈ 211 s it took motir-core's graph to become current. The debounce exists to
+ * coalesce bursts of PUSHES, and a session start is one event with a person
+ * waiting. So it enqueues with `trigger: 'session_start'`, which makes the run due
+ * now while keeping the same event and the same debounce key. Five sessions in
+ * ten minutes still produce one queued run at a time: each coalesces into the
+ * pending one, and a run already executing holds the (repo × project) admission
+ * slot. No second trigger with its own semantics.
  *
  * Returns `undefined` — exactly as `resolveProjectCodeContext` does — when the workspace
  * has no connected repo, so the caller OMITS `context.code` and a code-less
@@ -405,13 +413,18 @@ export async function resolvePlanningCodeContext(ctx: {
       try {
         const installationId = await installationIdForWorkspace(ctx);
         if (installationId) {
-          await enqueueCodeGraphRefresh({
-            installationId,
-            workspaceId: ctx.workspaceId,
-            repoOwner: repo.repoRef.split('/')[0] ?? '',
-            repoName: repo.repoRef.split('/').slice(1).join('/'),
-            defaultBranch: repo.defaultBranch,
-          });
+          await enqueueCodeGraphRefresh(
+            {
+              installationId,
+              workspaceId: ctx.workspaceId,
+              repoOwner: repo.repoRef.split('/')[0] ?? '',
+              repoName: repo.repoRef.split('/').slice(1).join('/'),
+              defaultBranch: repo.defaultBranch,
+            },
+            // A person is waiting, so the refresh does not sit out the PUSH
+            // debounce (MOTIR-5360). It still coalesces with a queued one.
+            { trigger: 'session_start' },
+          );
         }
       } catch (err) {
         console.error('[codeContext] refresh not enqueued at session start; planning proceeds', {
