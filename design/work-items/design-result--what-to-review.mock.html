@@ -31,7 +31,10 @@
         3 · The note file reclaimed — the link's absent state.
         4 · An older stored result — its note and screenshot as FILE links.
         5 · Empty — the copy now says when a result is published.
-        6 · Inside the approval overlay — the same port in band 2.
+        6 · Inside the approval overlay — the same port in band 2 (no pull request).
+        7 · A card WITH linked pull requests — the result INSIDE the Development block (7a one PR,
+            7b two PRs in two repositories, 7c the awaiting approve-and-merge frame).
+        8 · That block as the approve-to-merge overlay's port.
 
       Tokens copied 1:1 from design-result.mock.html's block (itself 1:1 with
       app/globals.css); colour ONLY via --el-*, shape via element-semantic tokens.
@@ -443,6 +446,751 @@
         border: 1px solid var(--el-accent);
         color: var(--el-accent-text);
       }
+
+      /* ─── Tokens the COMPOSED Development block reads (states 7–8) — copied 1:1
+         from design/github/github.mock.html's token block, which is 1:1 with
+         app/globals.css. ─── */
+      :root {
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-card: var(--color-background);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-text-identifier: var(--color-slate);
+        --el-warning-surface: var(--color-tint-peach);
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-y: 12px;
+      }
+
+      /* ─── Composed from design/github/github.mock.html (§20, Panel 12b/12c),
+         scoped under .devblk so its row / pill / How-to-test / frame rules cannot
+         collide with this mock's own. NOTHING below is redrawn. ─── */
+      .devblk .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.3;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .devblk .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .devblk .pill-sky {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .devblk .pill-mint {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .devblk .pill-rose {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .devblk .pill-peach {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .devblk .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .devblk .pr-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        margin-top: 8px;
+      }
+      .devblk .pr-row .pr-ic {
+        width: 17px;
+        height: 17px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .devblk .pr-text {
+        min-width: 0;
+        flex: 1;
+        padding-top: 4px;
+        padding-bottom: 4px;
+      }
+      .devblk .pr-title {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .devblk .pr-meta {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .devblk .pr-states {
+        display: inline-flex;
+        flex: none;
+        gap: 6px;
+        align-items: center;
+      }
+      .devblk .ext {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        padding: 4px;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+      }
+      .devblk .ext svg {
+        width: 16px;
+        height: 16px;
+      }
+      .devblk .link-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--el-link);
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: var(--radius-control);
+        padding: 3px 6px;
+      }
+      .devblk .link-cta svg {
+        width: 15px;
+        height: 15px;
+      }
+      .devblk .pr-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .devblk .pr-opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .devblk .pr-opt > svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .devblk .pr-opt .o-title {
+        min-width: 0;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .devblk .pr-opt .o-meta {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .devblk .pr-opt .pill {
+        flex: none;
+      }
+      .devblk .dvb-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+      }
+      .devblk .dvb-htt {
+        margin-top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 16px;
+        min-width: 0;
+      }
+      .devblk .dvb-htt-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 8px;
+      }
+      .devblk .dvb-htt-title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .devblk .dvb-htt-by {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-htt-by b {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .devblk .dvb-caption {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-callout {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .devblk .dvb-callout svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+      }
+      .devblk .dvb-callout-stale {
+        background: var(--el-warning-surface);
+        color: var(--el-text-strong);
+      }
+      .devblk .dvb-callout-missing {
+        background: var(--el-callout-bg);
+        color: var(--el-callout-text);
+      }
+      .devblk .dvb-callout b {
+        font-weight: 600;
+      }
+      .devblk .dvb-sha {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12px;
+      }
+      .devblk .dvb-md {
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .devblk .dvb-md > * + * {
+        margin-top: 0.6em;
+      }
+      .devblk .dvb-md h2 {
+        margin: 16px 0 0;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-md h2:first-child {
+        margin-top: 0;
+      }
+      .devblk .dvb-md p {
+        margin-bottom: 0;
+      }
+      .devblk .dvb-md ol,
+      .devblk .dvb-md ul {
+        margin-bottom: 0;
+        padding-left: 1.5rem;
+      }
+      .devblk .dvb-md ol {
+        list-style: decimal;
+      }
+      .devblk .dvb-md ul {
+        list-style: disc;
+      }
+      .devblk .dvb-md li + li {
+        margin-top: 2px;
+      }
+      .devblk .dvb-md strong {
+        font-weight: 600;
+      }
+      .devblk .dvb-md code {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.85em;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: 0.1em 0.35em;
+        border-radius: var(--radius-control);
+      }
+      .devblk .dvb-code {
+        margin: 8px 0 0;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+        min-width: 0;
+      }
+      .devblk .dvb-in-port .dvb-code {
+        background: var(--el-card);
+      }
+      .devblk .dvb-code-bar {
+        display: flex;
+        min-height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 0 4px 0 var(--spacing-control-x);
+      }
+      .devblk .dvb-code-lang {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-code pre {
+        margin: 0;
+        overflow-x: auto;
+        white-space: pre;
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12px;
+        line-height: 1.65;
+        color: var(--el-code-text);
+      }
+      .devblk .dvb-copy {
+        display: inline-flex;
+        height: 24px;
+        align-items: center;
+        gap: 4px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        padding: 0 var(--spacing-control-x);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .devblk .dvb-copy:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .devblk .dvb-copy.is-hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .devblk .dvb-copy.is-copied {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .devblk .dvb-copy svg {
+        width: 14px;
+        height: 14px;
+      }
+      .devblk .dvb-repos {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .devblk .dvb-repo {
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .devblk .dvb-repo-head {
+        display: flex;
+        min-height: 28px;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+        padding-bottom: 4px;
+      }
+      .devblk .dvb-repo-head > svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .devblk .dvb-repo-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-identifier);
+      }
+      .devblk .dvb-repo-end {
+        margin-left: auto;
+      }
+      .devblk .dvb-fact {
+        border-top: 1px solid var(--el-border-soft);
+        padding: 6px 0;
+      }
+      .devblk .dvb-fact-first {
+        border-top: 0;
+      }
+      .devblk .dvb-fact-line {
+        display: flex;
+        min-height: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+      }
+      .devblk .dvb-fact-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .devblk .dvb-fact-label svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .devblk .dvb-fact-val {
+        margin-left: auto;
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-fact-body {
+        margin: 4px 0 0;
+        padding-left: 20px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-fact .dvb-code {
+        margin: 4px 0 0 20px;
+      }
+      .devblk .dvb-url {
+        margin: 4px 0 0 20px;
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 4px;
+        font-size: 12.5px;
+        color: var(--el-link);
+        text-decoration: underline;
+      }
+      .devblk .dvb-url-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .devblk .dvb-url svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .devblk .dvb-checks {
+        margin: 4px 0 0 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .devblk .dvb-check {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .devblk .dvb-check-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .devblk .dvb-disclose {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        padding: 4px;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: left;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .devblk .dvb-disclose:hover {
+        background: var(--el-muted);
+      }
+      .devblk .dvb-disclose svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .devblk .dvb-pointer {
+        margin-top: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 12px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-pointer > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .devblk .dvb-keylink {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 12.5px;
+        color: var(--el-link);
+        text-decoration: underline;
+      }
+      .devblk .pr-row.dvb-row-narrow {
+        flex-wrap: wrap;
+        row-gap: 2px;
+      }
+      .devblk .pr-row.dvb-row-narrow .pr-states {
+        order: 3;
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        padding-left: 27px;
+        padding-bottom: 4px;
+      }
+      .devblk .pr-row.dvb-row-narrow .ext {
+        order: 2;
+      }
+      .devblk .pr-row.dvb-awaiting {
+        border-style: dashed;
+        background: var(--el-surface-soft);
+      }
+      .devblk .pr-row .dvb-awaiting-title {
+        color: var(--el-text-secondary);
+      }
+      .devblk .dvb-ext-spacer {
+        width: 24px;
+        flex: none;
+      }
+      .devblk .af-frame {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .devblk .af-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .devblk .af-what {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .devblk .af-kind {
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .devblk .af-meta {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .devblk .af-port {
+        position: relative;
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+        min-height: 196px;
+        max-height: 34rem;
+        overflow: auto;
+        padding: 14px;
+      }
+      .devblk .af-expand-bar {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 4px;
+      }
+      .devblk .af-expand {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .devblk .af-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+      }
+      .devblk .af-why {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+      }
+      .devblk .af-verbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .devblk .af-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .devblk .af-btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .devblk .af-btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .devblk .af-pill-await {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        flex: none;
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .devblk .af-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+      }
+      .devblk .dvb-col {
+        width: 590px;
+      }
+      .devblk .dvb-col-wide {
+        width: 1220px;
+      }
+      .devblk .dvb-col-narrow {
+        width: 400px;
+      }
+      .devblk .dvb-col .panel,
+      .devblk .dvb-col-wide .panel,
+      .devblk .dvb-col-narrow .panel {
+        width: 100%;
+      }
+      .devblk .dvb-grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding: var(--spacing-card-padding);
+      }
+      .devblk .dvb-grid2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: var(--spacing-card-padding);
+      }
+      .devblk .dvb-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: var(--spacing-card-padding);
+      }
+      .devblk .dvb-stack > .dvb-htt:first-child {
+        margin-top: 0;
+        border-top: 0;
+        padding-top: 0;
+      }
+      .devblk .dvb-cap {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      /* NEW (state 7) — the DESIGN SLOT inside the Development block: below every
+         pull-request row and its caption, above How to test. Same separator as How
+         to test, so the block reads rows · design · how to test as three parts of
+         ONE port. */
+      .devblk .dr-slot {
+        margin-top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 16px;
+        min-width: 0;
+      }
+      .devblk .dr-slot .frame-strip,
+      .devblk .dr-slot .frame {
+        margin: 0;
+      }
+      .devblk .dr-slot .frame-strip + .frame {
+        margin-top: -10px;
+      }
+      .devblk .af-port .frame,
+      .devblk .af-port .note-row {
+        background: var(--el-card);
+      }
     </style>
   </head>
   <body>
@@ -534,6 +1282,127 @@
         <circle cx="12" cy="12" r="3" />
         <line x1="3" x2="9" y1="12" y2="12" />
         <line x1="15" x2="21" y1="12" y2="12" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-git-pr"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="5" cy="6" r="3" />
+        <path d="M5 9v12" />
+        <circle cx="19" cy="18" r="3" />
+        <path d="m15 9-3-3 3-3" />
+        <path d="M12 6h5a2 2 0 0 1 2 2v7" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-check"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-dots"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M17 12h.01" />
+        <path d="M12 12h.01" />
+        <path d="M7 12h.01" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-copy"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-repo"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 19a5 5 0 0 1-5-5v8" />
+        <path
+          d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+        />
+        <circle cx="13" cy="12" r="2" />
+        <circle cx="20" cy="19" r="2" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-globe"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+        <path d="M2 12h20" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-terminal"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 19h8" />
+        <path d="m4 17 6-6-6-6" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-list-checks"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M13 5h8" />
+        <path d="M13 12h8" />
+        <path d="M13 19h8" />
+        <path d="m3 17 2 2 4-4" />
+        <path d="m3 7 2 2 4-4" />
+      </symbol>
+      <symbol
+        viewBox="0 0 24 24"
+        id="i-plus"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
       </symbol>
     </svg>
 
@@ -767,9 +1636,10 @@
     <section class="panel">
       <h2>6 · Inside the approval overlay — the same port, in band 2</h2>
       <p class="why">
-        The frame is not redesigned. Band 2 holds exactly panel 1 (or 2, 3, 4): the frame(s), then
-        the note link row under them. A reviewer deciding a design sees the mock first and reaches
-        the note in one click; the verbs stay below the port.
+        For a design card with NO open linked pull request. The frame is not redesigned. Band 2
+        holds exactly panel 1 (or 2, 3, 4): the frame(s), then the note link row under them. A card
+        WITH a linked pull request is state 8. A reviewer deciding a design sees the mock first and
+        reaches the note in one click; the verbs stay below the port.
       </p>
       <div class="gate">
         <div class="frameHead">
@@ -806,6 +1676,479 @@
           ><span style="display: inline-flex; gap: 8px"
             ><button class="btn btn-secondary">Request changes</button
             ><button class="btn btn-primary">Approve</button></span
+          >
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>7a · A design card WITH a linked pull request — ONE Development section, at rest</h2>
+      <p class="why">
+        AMENDMENT 4 Q8. When the card has an open linked pull request, its design result is not a
+        section of its own: it sits INSIDE the Development block, below the pull-request rows and
+        above How to test, and no separate Design result section is drawn on this card. The rows,
+        their caption and How to test are the shipped block (<code>DevelopmentSectionBody</code>,
+        <code>design/github/design-notes.md</code> §20), composed, not redrawn. The only new element
+        is the design slot. No gate is awaiting yet, so there is no frame and no verb.
+      </p>
+      <div class="card devblk">
+        <div class="card-head">
+          <span class="card-title">Development</span
+          ><span class="card-gloss"
+            >— Pull requests, the design and how to test them · live PR and CI status</span
+          >
+        </div>
+        <div class="pr-row">
+          <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+          <div class="pr-text">
+            <div class="pr-title">Design the result as what to review</div>
+            <div class="pr-meta">moooon/motir-core · #2896</div>
+          </div>
+          <span class="pr-states"
+            ><span class="pill pill-sky"
+              ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+            ><span class="pill pill-mint"
+              ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+            ></span
+          >
+          <a class="ext" href="#" aria-label="Open on GitHub"
+            ><svg aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <p class="dvb-caption">
+          Link with + Link pull request here, or with
+          <span class="dvb-mono">link_pull_request</span> over the MCP.
+        </p>
+        <div class="dr-slot" role="group" aria-label="Design result">
+          <div class="dvb-htt-head">
+            <h4 class="dvb-htt-title">Design result</h4>
+            <span class="dvb-htt-by"
+              >Published by <b>MOTIR-5494</b> · <span class="mono">c0389f2</span></span
+            >
+          </div>
+          <div class="frame-strip">
+            <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+            ><span class="mono strip-path"
+              >design/work-items/design-result--what-to-review.mock.html</span
+            ><span class="strip-link"
+              >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+            ></span>
+          </div>
+          <div class="frame">
+            <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+            <div class="swatch" style="background: var(--el-tint-sky)"></div>
+            <div class="swatch" style="background: var(--el-tint-mint)"></div>
+          </div>
+          <div class="note-row">
+            <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+            ><span class="row-label">Design note</span
+            ><span class="mono row-path">design/work-items/design-notes.md</span
+            ><a class="row-link" href="#note"
+              >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+        </div>
+        <div class="dvb-htt" role="group" aria-label="How to test">
+          <div class="dvb-htt-head">
+            <h4 class="dvb-htt-title">How to test</h4>
+            <span class="dvb-htt-by">Written by <b>Parent run #412</b> · 14 Sep 2026, 19:20</span>
+          </div>
+          <div class="dvb-md">
+            <h2>Precondition</h2>
+            <p>
+              Sign in as <strong>ada@acme.test</strong>; the seed creates a design card with a
+              published result.
+            </p>
+            <h2>Set up</h2>
+            <div class="dvb-code">
+              <div class="dvb-code-bar">
+                <span class="dvb-code-lang">bash</span
+                ><button class="dvb-copy" type="button" aria-label="Copy code">
+                  <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                </button>
+              </div>
+              <pre>pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre>
+            </div>
+            <h2>Click-path</h2>
+            <ol>
+              <li>Open the design card and read the Development section.</li>
+              <li>Open the mock in a new tab, then the note.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>7b · SEVERAL linked pull requests, in two repositories — every row, the design ONCE</h2>
+      <p class="why">
+        A card links any number of pull requests, in any repositories. Every row is listed; the
+        design result belongs to the CARD, not to a pull request, so it renders once beneath all of
+        them — never repeated per row.
+      </p>
+      <div class="card devblk">
+        <div class="card-head">
+          <span class="card-title">Development</span
+          ><span class="card-gloss"
+            >— Pull requests, the design and how to test them · live PR and CI status</span
+          >
+        </div>
+        <div class="pr-row">
+          <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+          <div class="pr-text">
+            <div class="pr-title">Design the result as what to review</div>
+            <div class="pr-meta">moooon/motir-core · #2896</div>
+          </div>
+          <span class="pr-states"
+            ><span class="pill pill-sky"
+              ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+            ><span class="pill pill-mint"
+              ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+            ></span
+          >
+          <a class="ext" href="#" aria-label="Open on GitHub"
+            ><svg aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <div class="pr-row">
+          <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+          <div class="pr-text">
+            <div class="pr-title">Two-file design guide for new projects</div>
+            <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
+          </div>
+          <span class="pr-states"
+            ><span class="pill pill-sky"
+              ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+            ><span class="pill pill-peach"
+              ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+            ></span
+          >
+          <a class="ext" href="#" aria-label="Open on GitHub"
+            ><svg aria-hidden="true"><use href="#i-external" /></svg
+          ></a>
+        </div>
+        <p class="dvb-caption">
+          Link with + Link pull request here, or with
+          <span class="dvb-mono">link_pull_request</span> over the MCP.
+        </p>
+        <div class="dr-slot" role="group" aria-label="Design result">
+          <div class="dvb-htt-head">
+            <h4 class="dvb-htt-title">Design result</h4>
+            <span class="dvb-htt-by"
+              >Published by <b>MOTIR-5494</b> · <span class="mono">c0389f2</span></span
+            >
+          </div>
+          <div class="frame-strip">
+            <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+            ><span class="mono strip-path"
+              >design/work-items/design-result--what-to-review.mock.html</span
+            ><span class="strip-link"
+              >Open in new tab <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+            ></span>
+          </div>
+          <div class="frame">
+            <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+            <div class="swatch" style="background: var(--el-tint-sky)"></div>
+            <div class="swatch" style="background: var(--el-tint-mint)"></div>
+          </div>
+          <div class="note-row">
+            <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+            ><span class="row-label">Design note</span
+            ><span class="mono row-path">design/work-items/design-notes.md</span
+            ><a class="row-link" href="#note"
+              >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+        </div>
+        <div class="dvb-htt" role="group" aria-label="How to test">
+          <div class="dvb-htt-head">
+            <h4 class="dvb-htt-title">How to test</h4>
+            <span class="dvb-htt-by">Written by <b>Parent run #412</b> · 14 Sep 2026, 19:20</span>
+          </div>
+          <div class="dvb-md">
+            <h2>Precondition</h2>
+            <p>
+              Sign in as <strong>ada@acme.test</strong>; the seed creates a design card with a
+              published result.
+            </p>
+            <h2>Set up</h2>
+            <div class="dvb-code">
+              <div class="dvb-code-bar">
+                <span class="dvb-code-lang">bash</span
+                ><button class="dvb-copy" type="button" aria-label="Copy code">
+                  <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                </button>
+              </div>
+              <pre>pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre>
+            </div>
+            <h2>Click-path</h2>
+            <ol>
+              <li>Open the design card and read the Development section.</li>
+              <li>Open the mock in a new tab, then the note.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>7c · The same block as the awaiting approve-and-merge gate — ONE frame over all of it</h2>
+      <p class="why">
+        When MOTIR-4909's gate is awaiting, <code>DevelopmentGateFrame</code> wraps the whole block
+        — rows, design slot and How to test — as one port. Drawn as the frame ships today: band 1
+        and band 2 only. Band 3's <em>Approve and merge</em> and its consequence line are
+        MOTIR-4909's (drawn in <code>design/github/github.mock.html</code> Panel 12c) and arrive
+        with that story; approving merges every pull request in the block.
+      </p>
+      <div class="card devblk">
+        <div class="card-head">
+          <span class="card-title">Development</span
+          ><span class="card-gloss"
+            >— Pull requests, the design and how to test them · live PR and CI status</span
+          >
+        </div>
+        <div class="af-frame">
+          <div class="af-head">
+            <div class="af-what">
+              <span class="af-kind">Development</span
+              ><span class="af-meta">2 pull requests · delivered by Parent run #412</span>
+            </div>
+            <span class="af-pill-await"
+              ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+            >
+          </div>
+          <div
+            class="af-port dvb-in-port"
+            role="group"
+            aria-label="What is being decided"
+            tabindex="0"
+          >
+            <div class="af-expand-bar">
+              <button class="af-expand" type="button">Expand ⤢</button>
+            </div>
+            <div class="pr-row">
+              <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+              <div class="pr-text">
+                <div class="pr-title">Design the result as what to review</div>
+                <div class="pr-meta">moooon/motir-core · #2896</div>
+              </div>
+              <span class="pr-states"
+                ><span class="pill pill-sky"
+                  ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                ><span class="pill pill-mint"
+                  ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                ></span
+              >
+              <a class="ext" href="#" aria-label="Open on GitHub"
+                ><svg aria-hidden="true"><use href="#i-external" /></svg
+              ></a>
+            </div>
+            <div class="pr-row">
+              <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+              <div class="pr-text">
+                <div class="pr-title">Two-file design guide for new projects</div>
+                <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
+              </div>
+              <span class="pr-states"
+                ><span class="pill pill-sky"
+                  ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                ><span class="pill pill-peach"
+                  ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                ></span
+              >
+              <a class="ext" href="#" aria-label="Open on GitHub"
+                ><svg aria-hidden="true"><use href="#i-external" /></svg
+              ></a>
+            </div>
+            <p class="dvb-caption">
+              Link with + Link pull request here, or with
+              <span class="dvb-mono">link_pull_request</span> over the MCP.
+            </p>
+            <div class="dr-slot" role="group" aria-label="Design result">
+              <div class="dvb-htt-head">
+                <h4 class="dvb-htt-title">Design result</h4>
+                <span class="dvb-htt-by"
+                  >Published by <b>MOTIR-5494</b> · <span class="mono">c0389f2</span></span
+                >
+              </div>
+              <div class="frame-strip">
+                <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+                ><span class="mono strip-path"
+                  >design/work-items/design-result--what-to-review.mock.html</span
+                ><span class="strip-link"
+                  >Open in new tab
+                  <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+                ></span>
+              </div>
+              <div class="frame">
+                <p>
+                  The published delta mock renders here — the panels that changed, nothing else.
+                </p>
+                <div class="swatch" style="background: var(--el-tint-sky)"></div>
+                <div class="swatch" style="background: var(--el-tint-mint)"></div>
+              </div>
+              <div class="note-row">
+                <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+                ><span class="row-label">Design note</span
+                ><span class="mono row-path">design/work-items/design-notes.md</span
+                ><a class="row-link" href="#note"
+                  >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+                ></a>
+              </div>
+            </div>
+            <div class="dvb-htt" role="group" aria-label="How to test">
+              <div class="dvb-htt-head">
+                <h4 class="dvb-htt-title">How to test</h4>
+                <span class="dvb-htt-by"
+                  >Written by <b>Parent run #412</b> · 14 Sep 2026, 19:20</span
+                >
+              </div>
+              <div class="dvb-md">
+                <h2>Precondition</h2>
+                <p>
+                  Sign in as <strong>ada@acme.test</strong>; the seed creates a design card with a
+                  published result.
+                </p>
+                <h2>Set up</h2>
+                <div class="dvb-code">
+                  <div class="dvb-code-bar">
+                    <span class="dvb-code-lang">bash</span
+                    ><button class="dvb-copy" type="button" aria-label="Copy code">
+                      <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                    </button>
+                  </div>
+                  <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                  >
+                </div>
+                <h2>Click-path</h2>
+                <ol>
+                  <li>Open the design card and read the Development section.</li>
+                  <li>Open the mock in a new tab, then the note.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>8 · Inside the approval overlay — band 2 is state 7's block</h2>
+      <p class="why">
+        The approve-to-merge overlay (MOTIR-5438) opens this same block as its port: the reviewer
+        reads every pull request, the mock and How to test before pressing anything. The frame is
+        not redesigned. Band 3 is Panel 12c's, owned by MOTIR-4909.
+      </p>
+      <div class="gate devblk">
+        <div class="frameHead">
+          <div>
+            <div class="frameKind">Development</div>
+            <div class="frameMeta">2 pull requests · <span class="mono">MOTIR-5494</span></div>
+          </div>
+        </div>
+        <div class="port">
+          <div class="pr-row">
+            <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+            <div class="pr-text">
+              <div class="pr-title">Design the result as what to review</div>
+              <div class="pr-meta">moooon/motir-core · #2896</div>
+            </div>
+            <span class="pr-states"
+              ><span class="pill pill-sky"
+                ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+              ><span class="pill pill-mint"
+                ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+              ></span
+            >
+            <a class="ext" href="#" aria-label="Open on GitHub"
+              ><svg aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+          <div class="pr-row">
+            <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+            <div class="pr-text">
+              <div class="pr-title">Two-file design guide for new projects</div>
+              <div class="pr-meta">moooon/nextjs-prisma-vercel-starter · #24</div>
+            </div>
+            <span class="pr-states"
+              ><span class="pill pill-sky"
+                ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+              ><span class="pill pill-peach"
+                ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+              ></span
+            >
+            <a class="ext" href="#" aria-label="Open on GitHub"
+              ><svg aria-hidden="true"><use href="#i-external" /></svg
+            ></a>
+          </div>
+          <p class="dvb-caption">
+            Link with + Link pull request here, or with
+            <span class="dvb-mono">link_pull_request</span> over the MCP.
+          </p>
+          <div class="dr-slot" role="group" aria-label="Design result">
+            <div class="dvb-htt-head">
+              <h4 class="dvb-htt-title">Design result</h4>
+              <span class="dvb-htt-by"
+                >Published by <b>MOTIR-5494</b> · <span class="mono">c0389f2</span></span
+              >
+            </div>
+            <div class="frame-strip">
+              <svg class="ic" aria-hidden="true"><use href="#i-panels" /></svg
+              ><span class="mono strip-path"
+                >design/work-items/design-result--what-to-review.mock.html</span
+              ><span class="strip-link"
+                >Open in new tab
+                <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+              ></span>
+            </div>
+            <div class="frame">
+              <p>The published delta mock renders here — the panels that changed, nothing else.</p>
+              <div class="swatch" style="background: var(--el-tint-sky)"></div>
+              <div class="swatch" style="background: var(--el-tint-mint)"></div>
+            </div>
+            <div class="note-row">
+              <svg class="ic" aria-hidden="true"><use href="#i-file-text" /></svg
+              ><span class="row-label">Design note</span
+              ><span class="mono row-path">design/work-items/design-notes.md</span
+              ><a class="row-link" href="#note"
+                >Open note <svg class="ic-sm" aria-hidden="true"><use href="#i-external" /></svg
+              ></a>
+            </div>
+          </div>
+          <div class="dvb-htt" role="group" aria-label="How to test">
+            <div class="dvb-htt-head">
+              <h4 class="dvb-htt-title">How to test</h4>
+              <span class="dvb-htt-by">Written by <b>Parent run #412</b> · 14 Sep 2026, 19:20</span>
+            </div>
+            <div class="dvb-md">
+              <h2>Precondition</h2>
+              <p>
+                Sign in as <strong>ada@acme.test</strong>; the seed creates a design card with a
+                published result.
+              </p>
+              <h2>Set up</h2>
+              <div class="dvb-code">
+                <div class="dvb-code-bar">
+                  <span class="dvb-code-lang">bash</span
+                  ><button class="dvb-copy" type="button" aria-label="Copy code">
+                    <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                  </button>
+                </div>
+                <pre>
+pnpm install --frozen-lockfile &amp;&amp; pnpm db:seed &amp;&amp; pnpm dev</pre
+                >
+              </div>
+              <h2>Click-path</h2>
+              <ol>
+                <li>Open the design card and read the Development section.</li>
+                <li>Open the mock in a new tab, then the note.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+        <div class="frameFoot">
+          <span class="footWhy">Approving merges both pull requests (MOTIR-4909).</span
+          ><span style="display: inline-flex; gap: 8px"
+            ><button class="btn btn-secondary">Request changes</button
+            ><button class="btn btn-primary">Approve and merge</button></span
           >
         </div>
       </div>

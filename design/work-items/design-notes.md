@@ -4702,7 +4702,11 @@ and the empty state are composed from that render, unchanged except where named.
 | 3   | The note file reclaimed (`url` null)                   | The row stays and names the note; its link is replaced by _No longer stored_ — never a link that 404s.                                                                                                            |
 | 4   | An older stored result (inline `noteMd`, `image` rows) | An **Earlier format** pill + a one-line reason, then the mock frame, then a **Files** list under it: the note row and one row per screenshot, each a file link. No rendered Markdown, no thumbnails, no lightbox. |
 | 5   | Empty, on a design work item                           | Shape unchanged; the body copy says a result exists only when other work waits on the design.                                                                                                                     |
-| 6   | Inside the approval overlay                            | The frame is not redesigned: band 2 holds panel 1 (or 2, 3, 4) — the frame(s), then the note row under them. Verbs stay below the port.                                                                           |
+| 6   | Inside the approval overlay — NO open linked PR        | The frame is not redesigned: band 2 holds panel 1 (or 2, 3, 4) — the frame(s), then the note row under them. Verbs stay below the port. A card WITH an open linked PR is state 8, not this.                       |
+| 7a  | One open linked PR, at rest                            | No standalone Design result section. The Development block reads: the PR row, the link caption, the **design-result slot** (heading, provenance, frame(s), note row), then How to test.                           |
+| 7b  | Two open linked PRs in two repositories                | Every row is listed, in any repository, with no cap. The slot renders ONCE below the last row — the result belongs to the card, not to a pull request.                                                            |
+| 7c  | 7b while the approve-to-merge gate is awaiting         | `DevelopmentGateFrame` wraps the whole block — rows, slot and How to test — as ONE port. Bands 1 and 2 only: no verbs are drawn, because they are MOTIR-4909's (`design/github/github.mock.html` Panel 12c).      |
+| 8   | The approval overlay for that card                     | Band 2 is state 7's block, unchanged. Band 3 is Panel 12c's _Request changes_ · _Approve and merge_ with its consequence line — cited, not designed here. No design band and no design verbs.                     |
 
 A result with BOTH an inline `noteMd` and no `note_file` cannot come from a
 publish (§1 always shipped the companion); if one exists it renders panel 4 with
@@ -4761,6 +4765,85 @@ note); `screenshots` is replaced by `files` + `screenshot`.
   names to assert: the link _Open note_, and no `img` in the port.
 - **TAKES nothing** from the publish contract, the dispatch prompt or the approval
   frame: none of them draws the port.
+
+### States 7–8 — a design card with open linked pull requests (Q8)
+
+**The rule.** `docs/decisions/design-result.md` AMENDMENT 4 Q8: a design card with
+at least one OPEN linked pull request is decided by the approve-to-merge gate, one
+gate over its whole delivery set, and raises no `design_result` gate. Its result
+therefore renders INSIDE the Development block, and the card has no standalone
+Design result section. Approving merges every pull request in the block.
+
+**Rendered first.** The block is composed from the design of record, not redrawn:
+`design/github/design-notes.md` §20 and `design/github/github.mock.html` Panel 12c,
+rendered headless and checked against the shipped `DevelopmentSectionBody` in
+`components/github/DevelopmentSection.tsx` — rows, then the link caption, then
+`HowToTestBlock`, wrapped in `DevelopmentGateFrame` when the merge gate is
+`awaiting`. The mock copies that asset's row, pill, How to test and frame rules
+verbatim, scoped under `.devblk` so they cannot collide with this mock's own
+`.card` / `.frame` / `.note-row`.
+
+**Where the slot sits.** Inside `DevelopmentSectionBody`, in this order:
+
+1. every PR row, in the block's existing order, any number, any repository;
+2. the link caption (unchanged);
+3. **the design-result slot** — rendered only when the card carries a current
+   design result;
+4. `HowToTestBlock` (unchanged).
+
+The slot's body is panels 1–4's body, unchanged: the count line when there are
+several mocks, the frame(s), then the note row at the bottom. The provenance chips
+collapse to one line under the slot heading.
+
+**One component, three hosts.** Because the slot lives in `DevelopmentSectionBody`,
+it appears identically on the item page, in the quick-view peek (both mount
+`DevelopmentSection`) and in the approval overlay's port (MOTIR-5438 / MOTIR-5439).
+No host draws its own copy, and no host renders the standalone Design result
+section for such a card.
+
+**No verbs in the frame yet.** Until MOTIR-4909 ships, `DevelopmentGateFrame`
+passes `verbs={[]}`, so 7c draws bands 1–2 only. Panel 8 shows Panel 12c's band 3
+for orientation; it is 4909's design.
+
+#### Anatomy — the new elements
+
+| Element              | Primitive composed                                           | Colour token                                                                   | Shape token |
+| -------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ | ----------- |
+| Design-result slot   | a `role="group"` region, `aria-label` = `designResult.title` | top rule `--el-border-soft`                                                    | —           |
+| Slot heading         | text, 13px semibold                                          | `--el-text`                                                                    | —           |
+| Slot provenance      | text, 12px; key and short sha (sha monospace)                | `--el-text-secondary`; sha `--el-text-identifier`                              | —           |
+| Frame / note in port | panels 1–4's frame and note row                              | background `--el-card`, so `--el-link` keeps AA inside the port's soft surface | unchanged   |
+
+Everything else — rows, pills, the caption, How to test, the frame bands — is
+§20's and keeps its tokens.
+
+#### Copy
+
+| Key                                  | `en`                                                                   | `zh`                                            |
+| ------------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------- |
+| `github.development.glossWithDesign` | Pull requests, the design and how to test them · live PR and CI status | 拉取请求、设计及其测试方法 · 实时 PR 与 CI 状态 |
+| `designResult.title` (reused)        | Design result                                                          | 设计结果                                        |
+| `designResult.slotProvenance`        | Published by {key}                                                     | 由 {key} 发布                                   |
+
+`glossWithDesign` replaces `gloss` only when the slot renders. Every other string
+in states 7–8 is an existing key.
+
+#### GIVES / TAKES — states 7–8
+
+- **GIVES [MOTIR-5498](motir:cmu1hrmyh0020hutxio6hqh30)** (the panel) panels 7a–7c:
+  - the slot inside `DevelopmentSectionBody` in the order above;
+  - the standalone section suppressed while an open linked PR exists;
+  - the two copy keys and the slot tokens.
+- **GIVES [MOTIR-5534](motir:cmu1mcnrr000ai0txplyb9iqz)** (no `design_result` gate)
+  the visible consequence of its rule: on such a card, no design verbs and no design
+  band are drawn anywhere. It TAKES nothing from this asset.
+- **GIVES [MOTIR-5438](motir:cmu118c4s0009hytxgtmyfeg8)** (the overlay design)
+  state 7 to compose as band 2 on a design card. It draws nothing new for the design.
+- **GIVES [MOTIR-5439](motir:cmu118c7e000bhytxn9l5u1v0)** (the overlay read) the
+  field the port reads: the current `DesignEvidenceDTO` beside the pull requests and
+  `HowToTestDto`, or `null`.
+- **TAKES from [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)** band 3, its verbs,
+  its consequence line and its states. None is designed here; 7c draws none.
 
 ## ⭐ The repository SET on the work-item DETAIL page (Story MOTIR-2725 · MOTIR-2413 — `repository-set.mock.html`)
 
