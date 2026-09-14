@@ -24,6 +24,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **The shipped peek in PROPOSAL mode**           | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
 | **The PROPOSED to-do list in the peek**         | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV   |
 | **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI  |
+| **A proposal FILED into a folder**              | **`plan-folder-placement.mock.html`** + `.png`            | MOTIR-5406           | Part XVII |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -4856,3 +4857,247 @@ on two surfaces that section never addressed.
   with few `done` roots it behaves indistinguishably from the right one.
 - **No other flag.** Every element drawn is shipped, and the one number this Part does not own —
   the cap — is cited from `lib/planning/levelCaps.ts` rather than restated.
+
+---
+
+# Part XVII — A proposal FILED into a folder, on the plan review (MOTIR-5406 · Story MOTIR-5310 — `plan-folder-placement.mock.html`)
+
+**Its OWN asset**: `design/ai-planning/plan-folder-placement.mock.html` + `plan-folder-placement.png`,
+five panels, plus this section. It draws NO new surface and adds no entrance: the plan detail is
+reached as Part I §5 draws it (the left-nav _Plans_ entry, then a row) or from the item a plan was run
+on (the pending-plan indicator, `design/work-items/design-notes.md` § _The PENDING-PLAN indicator_).
+
+A plan proposal can now name a folder as the place a card is filed (`folder:<id>`), and until this
+Part the review surface could only say where a card hangs by its work-item parent. A folder-placed
+proposal has no work-item parent, so the shipped canvas drew it as an ordinary root and the reviewer
+approved a placement they never saw.
+
+## 17.0 Drawn against SHIPPED reality — what was rendered, and how
+
+Every node, list row, crumb and rail on the board is the shipped component's own markup: a
+throwaway RTL dump rendered `PlanItemNode`, `PlanProposalList` (en and zh) and `PlanReviewRail`
+through the shipped `renderWithIntl` harness against `planReviewItem` fixtures, and the canvas
+chrome (breadcrumb, the Show changes toggle, the level caption, the emphasis ring and dim) is
+`ProjectRoadmapCanvas`'s markup verbatim. The committed epic nodes reproduce
+`plan-canvas-grouped-roots.mock.html`'s, and the page's leading token block is lifted from that asset
+unchanged. **The NEW elements are exactly five**: the placement line, the folder crumb segment, the
+folder side of a diff, the list row's folder fact, and the deleted-folder state.
+
+The stylesheet is Tailwind's real output for this document:
+
+```js
+// input.css → postcss([@tailwindcss/postcss]) → inlined as the mock's second <style>
+//   @import 'tailwindcss' source(none);
+//   @source './page.html';            // the mock's own markup, before inlining
+//   @import '@motir/design-system/theme.css';
+```
+
+The PNG was exported with `node scripts/render-design-mock.mjs --width 1200` after
+`prettier --write` on the mock (`NEW`, 2400×11554).
+
+## 17.1 The workflow spec this Part draws to
+
+Nothing here decides BEHAVIOUR; three sibling cards do, and each panel reads them:
+
+| card                                  | what it settles for the design                                                                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5414** — the append           | `folder:<id>` is accepted as an `add`'s `parentRef` and a `modify`'s `patch.parentRef`, refused in every edge carrier; a folder admits any kind; **a filed card is a ROOT** (depth 1)                         |
+| **MOTIR-5423** — materialize          | an `add` is created filed; a `modify` re-parent sets one placement and clears the other; **a folder deleted between append and approve refuses the WHOLE approve**, nothing materializes, the plan stays open |
+| **MOTIR-5415** — the plan read        | the review model carries `folderId`, `folderPath` (root first) and `folderMissing` on a folder-placed proposal, and both sides of a `modify`'s placement                                                      |
+| **MOTIR-5418** — the review UI builds | the pixels, to this Part                                                                                                                                                                                      |
+
+The folder VOCABULARY is composed, not redrawn: the lucide `folder` glyph in `--el-text-secondary`
+and the `Parked ▸ 2025` path form joined with `▸` are `design/work-items/folders.mock.html`'s
+(§ _Folders_) and `design/work-items/placement.mock.html`'s (§ _Placement_ — the breadcrumb's folder
+segment is text, not a link, and leads the chain).
+
+## 17.2 DECISION 1 — a filed card ARRIVES among the roots, and says where it is filed ON the card
+
+**The arrival rule is unchanged** (Part IX §1): the canvas opens on the level the plan most fills,
+counted by `parentNodeId`. A folder-placed proposal has `parentNodeId: null`, so it counts under the
+top level, and it is drawn there — **among the other roots, not grouped under its folder path**.
+
+- **Why not a folder level on the canvas.** The canvas draws roadmap LEVELS, one at a time, from the
+  roadmap's own per-level read — and neither the roadmap nor that read has a folder level (MOTIR-5309
+  decided the roadmap gains no folder display). A grouped folder node would be a level whose
+  committed contents the read cannot supply, so it would draw the plan's cards WITHOUT the company
+  they keep, which is the whole thing a level is for (Part V panel E, `planLevel.tsx`: _"seeing the
+  company a proposed card will keep is most of what 'is this the right place for it?' means"_). And a
+  filed card IS a root, for readiness and for the tree (MOTIR-5414) — drawing it anywhere else would
+  be a statement about the tree the product does not make.
+- **Why it is not grouped into "Not in an epic".** A proposal is never grouped: Part XVI DECISION 2
+  keeps every row the plan touches on the road, and a pending `add` is not a committed row. Unchanged.
+- **The default view is unchanged too** (Part IX §3 / Part XIII §6). A folder is not a container for
+  `planShape`: every folder-placed proposal lands on ONE canvas level, the top one, so a plan filing
+  cards into two folders does not straddle.
+
+**The placement line (panel 1b, 2).** A filed `add` spends the node's bottom slot — the slot a
+`modify` spends on its diff line, which an `add` never has — on where it will be filed: the folder
+glyph, then the path. The LAST segment takes `--el-text` at medium weight (it is the destination);
+the rest and the `▸` separators take `--el-text-secondary`. A root `add` with no folder draws no line
+at all, exactly as today.
+
+**When a bottom slot is present the title clamps to ONE line** (`block truncate`, the full title in
+`title`), and that includes a `modify`'s diff line. Measured in Chromium: the node is a fixed
+280 × 124, and a two-line title (38.5px) plus the key plus a 16px slot does not fit: the body's
+`overflow-hidden` cuts the second title line through its middle. One clean ellipsis replaces a
+half-line.
+
+**The folder crumb segment (panel 1a, 5).** When the canvas is drilled into a filed proposal's
+subtree — the arrival level for a filed story WITH children — the breadcrumb gains ONE segment ahead of
+the proposal's own crumb: `Roadmap › [folder] Parked ▸ 2025 › New · Importer retries with backoff`.
+It is a `<span>`, not a `<button>`: it navigates nowhere, because no canvas level is a folder, and
+`placement.mock.html` already rules a folder segment text for the same reason. It carries a
+visually-hidden `Folder:` label and the full path in `title`. It appears only when the ROOT-most
+proposal of the drilled chain is filed; a committed filed ancestor adds no segment (the canvas reads a
+proposal's OWN placement, the story's decision for agents, and never the item page's effective folder).
+
+## 17.3 DECISION 2 — mixed placements: the line on the canvas, a fact on the list row
+
+**Panel 2.** One plan, three placements. On the canvas the filed cards are ordinary roots whose only
+difference is the line. In the LIST body the same fact lands where the shipped `under {parent}` sits in
+the facts line: **`in [folder] Parked ▸ 2025`**. The list's sections stay the op sections Part VIII
+drew — **placement is a fact on the row, never a grouping**; grouping by folder would reorder the one
+body whose job is to say what exactly is being approved, by op.
+
+## 17.4 DECISION 3 — a move into or out of a folder is the shipped diff, with a folder side
+
+**Panel 3.** A `modify` that files a committed item, or takes one out, renders in the shipped diff
+grammar on both bodies — the canvas `DiffLine` (old side struck, `›`, new side) and the list's
+`ChangeLines` (`→`) — with a folder side carrying the glyph and its path.
+
+- **The row is labelled `Placement` whenever EITHER side is a folder.** A folder is not a parent
+  (the story's own decision), so `Parent` would be false on those rows. A work-item → work-item move
+  keeps the shipped `Parent` label and is byte-identical.
+- **The project root reads `Project root`** (`folders.projectRoot`, shipped) once a folder is on the
+  other side — never the empty cell the shipped `null` renders, which beside a folder path reads as a
+  value that failed to load.
+- **A placement change that involves a folder LEADS the change list**, so the one line the card has
+  is spent on it. Today `buildChanges` pushes `parent` after the title, sizing and both bodies.
+- **Each card is drawn on the level it ARRIVES at**, exactly as a work-item re-parent is today
+  (`departingIds` / `parentNodeIdOf`): filed into a folder → the top level (3a); out of a folder under
+  `PROD-9` → `PROD-9`'s level (3b). Show changes rings it; its op badge still says `change`.
+
+## 17.5 DECISION 4 — the stale folder has no name left, and Approve is unavailable
+
+**Panel 4.** The folder a proposal names was deleted after the plan was written. **Its name was deleted
+with it**, so no surface can say _Parked ▸ 2025_ about it, and none pretends to. (MOTIR-5423 asks the
+approve refusal to name "the folder"; there is nothing but an id left to name it by, and an id is not
+copy. Every string here names the PROPOSAL.)
+
+**While `planned` (4a):**
+
+- **The card wears the SHIPPED `Out of date` badge** (`--el-tint-yellow`, `triangle-alert`) — the
+  surface already has exactly one "this proposal no longer matches the tree" language, and a second
+  would be a fourth op language. Its `title` reason is a new one, **Folder deleted since planned**,
+  beside the shipped _Parent removed since planned_.
+- **Its placement line becomes `Folder deleted`**, behind lucide `folder-x`, the words in
+  `--el-text-strong`. Text first; the glyph and the badge are the second and third channels.
+- **The rail's shipped stale summary lists it** with the same reason, and **Approve is DISABLED**, with
+  the hint naming the two real exits: _Approve is unavailable while 1 item is filed into a deleted
+  folder. Ask Motir to revise the plan, or decline it._ A control whose press the server is certain to
+  refuse, and that no retry can clear, is a dead control wearing a live face — the shape
+  MOTIR-3240 found on `generating`. Decline stays enabled.
+- **The list row** takes the shipped `may be out of date` pill and the `Folder deleted` fact in place
+  of `in [folder] …`.
+
+**After a refused approve (4b)** — the folder was deleted after the page loaded, so Approve was live and
+the server refused the WHOLE approve: the rail's shipped `role="alert"` slot says **Nothing was created
+— "{title}" is filed into a folder that was deleted after this plan was written.** It is keyed on the
+refusal's code rather than falling to the generic `actionError`. The island refetches, which puts the
+card, the summary and the hint into 4a's state underneath the alert; the plan stays _Ready to review_.
+
+## 17.6 DECISION 5 — a long path collapses by COUNT, never by measurement
+
+**Panel 5.** One rule, two ceilings, so a test can assert it without a layout engine:
+
+| where                     | renders whole | longer paths collapse to |
+| ------------------------- | ------------- | ------------------------ |
+| the card's placement line | ≤ 3 segments  | `first ▸ … ▸ last`       |
+| the breadcrumb segment    | ≤ 3 segments  | `first ▸ … ▸ last`       |
+| the list row's fact       | ≤ 4 segments  | `first ▸ … ▸ last`       |
+
+The first segment says whose, the last says where; the middle is what a reader can most afford to lose.
+Inside that, every segment still `min-w-0 truncate`s as the backstop, and the `▸` separators never
+shrink. **The full path is always the element's `title` (hover) and a visually-hidden span (its
+accessible name)**, so hover and focus both read it whole.
+
+## 17.7 Elements — primitive and tokens
+
+| element                   | composes                                                                             | colour                                                              | shape                                       |
+| ------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------- |
+| placement line (card)     | `PlanItemNode`'s bottom slot; lucide `folder` 14px, `aria-hidden`; sr-only full path | glyph + path `--el-text-secondary`; last segment `--el-text` medium | `mt-1.5`, `text-xs`, one line               |
+| deleted-folder line       | the same slot; lucide `folder-x`                                                     | glyph `--el-text-secondary`; words `--el-text-strong` medium        | as above                                    |
+| stale badge               | the SHIPPED `stale-badge`                                                            | `--el-tint-yellow`, `--el-text-strong`                              | `--radius-badge`                            |
+| folder crumb segment      | a `<span>` in the canvas breadcrumb's `<ol>`; lucide `folder`; sr-only `Folder:`     | `--el-text-secondary`; no hover (not a control)                     | `max-w-[18rem]`, `px-1.5 py-0.5` as `Crumb` |
+| diff folder side (canvas) | `DiffLine` side; lucide `folder` 12px                                                | old side `--el-text-secondary` struck; new side `--el-text` medium  | as shipped                                  |
+| diff folder side (list)   | `ChangeLines` `<dd>` side; lucide `folder` 12px                                      | old `--el-text-secondary` struck; new `--el-text-strong` semibold   | as shipped                                  |
+| list folder fact          | a `<span>` in the row's facts line; lucide `folder` 12px                             | `--el-text-secondary`                                               | `truncate`                                  |
+| Approve, disabled         | the SHIPPED `Button` primary, `disabled`                                             | as shipped (`disabled:opacity-50`)                                  | as shipped                                  |
+| refusal                   | the SHIPPED rail `role="alert"` paragraph                                            | `--el-danger-on-surface`                                            | as shipped                                  |
+
+No new primitive, no new token, no Tier-0 `--color-*`, no raw hue.
+
+## 17.8 Which review-model field each drawn element reads
+
+| element                                  | reads                                                                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| placement line, list folder fact         | `folderPath` (non-null ⇒ filed), `folderMissing: false`                                                    |
+| deleted-folder line + badge + rail entry | `folderMissing: true`                                                                                      |
+| Approve disabled + its hint              | any item's `folderMissing` on a `planned` plan                                                             |
+| folder crumb segment                     | the ROOT-most proposal of the drilled chain's `folderPath`                                                 |
+| `Placement` diff row                     | the `parent` change whose `from` or `to` side is a folder — its path, or `root`, or a work-item identifier |
+| the refusal alert                        | MOTIR-5423's refusal code, and the refused proposal's `title`                                              |
+
+A `modify`'s two sides must arrive TYPED — a folder path, a work item, or the project root — rather
+than as the two bare strings the `parent` change carries today, because the glyph and the label both
+depend on which. MOTIR-5415 owns the shape.
+
+## 17.9 Copy — English and Chinese
+
+| key (suggested)                              | en                                                                                                                                                      | zh                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `planReview.placementFiledIn`                | Filed in {path}                                                                                                                                         | 归档于文件夹 {path}                                                                  |
+| `planReview.listInFolder`                    | in {path}                                                                                                                                               | 位于 {path}                                                                          |
+| `planReview.field_placement`                 | Placement                                                                                                                                               | 位置                                                                                 |
+| `planReview.folderMissing`                   | Folder deleted                                                                                                                                          | 文件夹已删除                                                                         |
+| `planReview.folderMissingAria`               | Filed in a folder that was deleted                                                                                                                      | 归档到的文件夹已被删除                                                               |
+| `planReview.staleFolderRemoved`              | Folder deleted since planned                                                                                                                            | 规划后文件夹已被删除                                                                 |
+| `planReview.approveHintFolderMissing`        | Approve is unavailable while {n, plural, one {# item is} other {# items are}} filed into a deleted folder. Ask Motir to revise the plan, or decline it. | 有 {n} 个工作项归档到了已删除的文件夹，暂时无法批准。请让 Motir 修改计划，或拒绝它。 |
+| `planReview.approveFolderMissingRefused`     | Nothing was created — “{title}” is filed into a folder that was deleted after this plan was written.                                                    | 未创建任何内容 —“{title}”归档到的文件夹在计划写好后已被删除。                        |
+| `folders.projectRoot` (shipped)              | Project root                                                                                                                                            | 项目根目录                                                                           |
+| `folders.breadcrumbFolderLabel` (MOTIR-5381) | Folder:                                                                                                                                                 | 文件夹：                                                                             |
+
+Every other string the panels render already ships (`planReview.*`, `roadmap.canvas.*`).
+
+## 17.10 a11y
+
+The placement line, the crumb segment and the list fact are TEXT, never controls, so a reviewer without
+`work_item:edit` — or without `ai:decide_plan` — sees exactly the same pixels; nothing on this Part is an
+action except the shipped Approve / Decline. Every glyph is `aria-hidden`; the path is always in the
+accessible name. State is never colour alone: _Folder deleted_ and _Out of date_ are words.
+
+## 17.11 GIVES / TAKES
+
+| work item                    | GIVES / TAKES       | what                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5418** — review UI   | **GIVES**           | the placement line and its slot; the one-line title clamp whenever a slot is present (a `modify` too); the folder crumb segment and when it appears; the list fact; the `Placement` label rule and `Project root`; the stale badge reason, the deleted-folder line, the disabled Approve and its hint; the keyed refusal copy; the count-based collapse rule; every string above |
+| **MOTIR-5415** — plan read   | **GIVES**           | a `modify`'s placement sides arrive typed (folder / work item / root); a placement change involving a folder sorts FIRST in `changes`; `folderMissing` is readable by the rail for the Approve disable                                                                                                                                                                           |
+| **MOTIR-5423** — materialize | **GIVES**           | the refusal's copy names the proposal, not the folder — the folder's name no longer exists; the code must be distinct from the generic action error                                                                                                                                                                                                                              |
+| **MOTIR-5414** — the append  | **TAKES a premise** | a filed card is a root, which is why it arrives among the roots                                                                                                                                                                                                                                                                                                                  |
+| Parts IX, XIII, XVI          | **lose nothing**    | the arrival rule, the default view, the grouping predicate and the Show changes treatment are applied unchanged                                                                                                                                                                                                                                                                  |
+
+## 17.12 What Part XVII does NOT draw
+
+The folder picker, the folder tree and the quick view's Folder field (`design/work-items/`), any way
+for a reviewer to CHANGE a proposal's folder (a proposal is read, and changed by revising the plan —
+Part V §3), the `get_plan` text and the `/api/v1` payload (MOTIR-5415), and the dark board.
+
+## 17.13 ⚠️ Planning flags
+
+- **MOTIR-5423's refusal cannot name the folder.** The row is gone by the time approve re-checks, so the
+  typed error can carry the id and the proposal, not a name. Its criterion _"naming the folder and the
+  proposal"_ should read _the folder's id and the proposal_; the copy above names the proposal only.
+- **A `modify` with a two-line title is already cut in half by its diff line today** (the same fixed
+  124px, measured in Chromium). MOTIR-5418 fixes it as part of the slot rule above rather than as a
+  separate card, because the placement line is the second tenant of the same slot.
