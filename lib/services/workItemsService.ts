@@ -5295,6 +5295,21 @@ export const workItemsService = {
   },
 
   /**
+   * A filed item's folder PATH, names root-first (MOTIR-5352) — one bounded chain
+   * read, and none at all for an unfiled item. The ONE path read the quick view and
+   * the `/api/v1` work-item detail (MOTIR-5412) share, so the two cannot disagree
+   * about where an item sits. Pass `IssueDetailDto.folderId`: the detail read that
+   * produced it already gated the caller, and a folder belongs to its item's
+   * project, so this read opens no gate of its own.
+   */
+  async getFolderPath(folderId: string | null, ctx: ServiceContext): Promise<string[]> {
+    if (folderId === null) return [];
+    return withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      folderRepository.findPathNames(folderId, tx),
+    );
+  },
+
+  /**
    * The condensed QUICK-VIEW (peek) payload for `?peek=<identifier>` (Subtask
    * 2.5.19; bug 8.8.2 made the peek a client-fetched island). Reuses the SAME
    * aggregate read the full detail page uses (`getIssueDetail` — inheriting its
@@ -5416,13 +5431,7 @@ export const workItemsService = {
     const { canEdit } = await projectAccessService.getCapabilities(projectId, ctx);
     // The filed item's folder PATH (MOTIR-5352) — one bounded chain read, and
     // none at all for an unfiled item: this payload is fetched on every row click.
-    const folderId = detail.folderId;
-    const folderPath =
-      folderId === null
-        ? []
-        : await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-            folderRepository.findPathNames(folderId, tx),
-          );
+    const folderPath = await this.getFolderPath(detail.folderId, ctx);
     return toQuickViewData(
       detail,
       members,

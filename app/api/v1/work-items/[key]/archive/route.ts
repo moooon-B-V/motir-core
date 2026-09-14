@@ -50,12 +50,14 @@ export const POST = withV1Route<{ key: string }>(
     ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
     const childEdges = await readChildDependencyEdges(detail, ctx.service);
     const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
+    const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
     return NextResponse.json(
       presentWorkItemDetail(
         detail,
         commentCountFor(counts, detail.item.id),
         childEdges,
         deliveries,
+        folderPath,
       ),
     );
   },

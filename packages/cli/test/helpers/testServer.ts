@@ -342,6 +342,8 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     updatedAt: '2026-01-01T00:00:00.000Z',
     descriptionMd: null,
     parentKey: null,
+    folderId: null,
+    folderPath: null,
     ancestorKeys: [],
     children: [],
     links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },

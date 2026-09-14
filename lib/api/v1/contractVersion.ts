@@ -395,5 +395,26 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.28.0` at `4a4975c40`, so this claims `1.29.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATIONS.
+ *
+ * - `1.30.0` — MOTIR-5412 adds a work item's FOLDER placement to the work-item
+ *   resource: `folderId` and `folderPath` (names root-first) on the detail every
+ *   single-item read and write returns — `getWorkItem`, `createWorkItem`,
+ *   `updateWorkItem`, `transitionWorkItem`, `archiveWorkItem`,
+ *   `restoreWorkItem` — both non-null exactly when the item is filed; and
+ *   `folderId` on the `createWorkItem` / `updateWorkItem` request bodies (a string
+ *   files the item, `null` on a PATCH takes it out), plus `PLACEMENT_CONFLICT`
+ *   (422) when a body names `parentKey` AND `folderId`.
+ *
+ *   Additive: two new response fields and one new optional request field on
+ *   existing operations (§8's allowed list), and a new code for a new condition.
+ *   A `parentKey` PATCH on a filed item now succeeds and unfiles it, where it
+ *   ended in a database CHECK violation (a bare 500) before — a fault repaired,
+ *   not a shape changed. The contract-version guard cannot see fields, so this
+ *   entry is the record.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.29.0` on `parent/MOTIR-5310-agents-file-into-folders` at `7c5c00e74`,
+ *   so this claims `1.30.0`. If a sibling has taken it since, RENUMBER this entry
+ *   — it names the FIELDS.
  */
-export const V1_CONTRACT_VERSION = '1.29.0';
+export const V1_CONTRACT_VERSION = '1.30.0';

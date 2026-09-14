@@ -249,6 +249,34 @@ describe('motir show', () => {
     expect(printed).not.toMatch(/null|undefined/);
   });
 
+  // MOTIR-5412 — a filed item's folder, read off the v1 detail's `folderPath`.
+  it('prints a Folder line under the lineage for a FILED item, and none otherwise', async () => {
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': {
+        body: {
+          ...detail,
+          parentKey: null,
+          ancestorKeys: [],
+          folderId: 'cfolder1',
+          folderPath: ['Parked', '2025'],
+        },
+      },
+    });
+    const stdout = capture();
+
+    await showCommand('PROD-7', {});
+
+    expect(stdout()).toContain('LINEAGE\nPROD-7\nFolder: Parked ▸ 2025');
+  });
+
+  it('prints no Folder line for an unfiled item', async () => {
+    const stdout = capture();
+
+    await showCommand('PROD-7', {});
+
+    expect(stdout()).not.toContain('Folder:');
+  });
+
   it('reads it with ONE tool call — get_work_item, with the normalized key', async () => {
     capture();
 

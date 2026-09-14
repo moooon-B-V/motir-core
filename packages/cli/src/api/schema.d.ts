@@ -28,7 +28,7 @@ export interface paths {
         put?: never;
         /**
          * Create a work item
-         * @description Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project.
+         * @description Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -70,7 +70,7 @@ export interface paths {
         };
         /**
          * Read a work item
-         * @description The full work item: its own fields, its parent and children, its five link groups, its readiness verdict and its comment count. The response carries an `ETag` for use as an `If-Match` on a later update.
+         * @description The full work item: its own fields, its parent and children, its five link groups, its readiness verdict, its comment count and — when it is filed — its folder (`folderId` and the root-first `folderPath`). The response carries an `ETag` for use as an `If-Match` on a later update.
          *
          *     Requires the `project:browse` permission.
          */
@@ -82,7 +82,7 @@ export interface paths {
         head?: never;
         /**
          * Update a work item
-         * @description Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved.
+         * @description Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -1131,6 +1131,8 @@ export interface components {
             updatedAt: string;
             descriptionMd: string | null;
             parentKey: string | null;
+            folderId: string | null;
+            folderPath: string[] | null;
             ancestorKeys: string[];
             children: {
                 key: string;
@@ -2286,6 +2288,7 @@ export interface operations {
                     kind: "epic" | "story" | "task" | "subtask" | "bug";
                     title: string;
                     parentKey?: string | null;
+                    folderId?: string | null;
                     descriptionMd?: string | null;
                     /** @enum {string} */
                     priority?: "lowest" | "low" | "medium" | "high" | "highest";
@@ -2738,6 +2741,7 @@ export interface operations {
                     descriptionMd?: string | null;
                     explanationMd?: string | null;
                     parentKey?: string | null;
+                    folderId?: string | null;
                     /** @enum {string} */
                     priority?: "lowest" | "low" | "medium" | "high" | "highest";
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "deploy" | "manual" | "legal" | "chore") | null;

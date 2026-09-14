@@ -476,6 +476,11 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 409 — deleting a ROOT folder would leave a subtask with neither a parent nor
   // a folder. A conflict with what the folder holds, fixed by moving it first.
   SUBTASK_NEEDS_PLACEMENT: 409,
+  // 422 — a work item named BOTH a work-item parent and a folder (MOTIR-5412, the
+  // `/api/v1` work-item placement). An item hangs under a work item or sits in a
+  // folder, never both, and the request describes one placement twice. The caller
+  // can fix it by sending one of the two.
+  PLACEMENT_CONFLICT: 422,
 
   // 11.7.7 (MOTIR-2241) — the activity read. Its own failure modes are the
   // wrapper's (401/403/429), the shared cursor 422, and `WORK_ITEM_NOT_FOUND`
