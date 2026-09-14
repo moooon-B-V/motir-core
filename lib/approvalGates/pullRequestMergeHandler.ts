@@ -39,6 +39,27 @@ export const MERGE_MODE_SETTINGS_DOOR: GateSettingsDoor = {
   labelKey: 'mergeMode',
 };
 
+/**
+ * A merge gate's version — `owner/name#number@headSha` (decision 1) — for `headSha`
+ * when a caller knows it (a `pull_request` delivery carries it), else the latest check
+ * run's commit. Null when neither names a head.
+ *
+ * ONE function, because three places write or compare it: the raise, the head-move
+ * withdrawal and the decision. Two spellings of it would supersede a gate whose head
+ * never moved.
+ */
+export function pullRequestSubjectVersion(
+  pr: {
+    number: number;
+    repo: { owner: string; name: string };
+    checkRuns: Parameters<typeof liveRowsAtLatestSha>[0];
+  },
+  headSha?: string,
+): string | null {
+  const head = headSha ?? liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+  return head ? `${pr.repo.owner}/${pr.repo.name}#${pr.number}@${head}` : null;
+}
+
 export const pullRequestMergeGateHandler: GateHandler<GithubPullRequestWithInstallation> = {
   /**
    * The subject is the `github_pull_request` row the gate was raised for
@@ -65,9 +86,7 @@ export const pullRequestMergeGateHandler: GateHandler<GithubPullRequestWithInsta
    */
   async subjectVersion(args: GateEffectArgs): Promise<string | null> {
     const pr = await this.resolveSubject(args);
-    if (!pr) return null;
-    const head = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
-    return head ? `${pr.repo.owner}/${pr.repo.name}#${pr.number}@${head}` : null;
+    return pr ? pullRequestSubjectVersion(pr) : null;
   },
 
   /** ADR §2: `assigneeId ?? reporterId` — the routing rule every kind shares. */

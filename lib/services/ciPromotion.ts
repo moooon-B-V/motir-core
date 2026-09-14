@@ -1,5 +1,9 @@
-import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
-import type { GithubCheckRun, Prisma } from '@/generated/prisma/client';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceContext,
+} from '@/lib/workspaces/context';
+import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import {
   claimedCompleteSha,
@@ -17,6 +21,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
+import { raiseMergeGates } from './mergeGates';
 import {
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
@@ -85,6 +90,13 @@ const SKIPPABLE = [
 const SOURCE_STATUS = 'implemented';
 /** The status CI green moves it to. */
 const TARGET_STATUS = 'in_review';
+/**
+ * The statuses a card can hold while its merge gates are still a live question —
+ * where a green verdict RE-RAISES a gate a head move withdrew (MOTIR-5515). A card
+ * the promotion moves never passes through here: its gates are raised in the
+ * promotion's own transaction.
+ */
+const REVIEW_STATUSES: readonly string[] = ['in_review', 'approved'];
 
 /** Every pull request that delivers this card, by id, with the check rows the
  *  verdict is derived from — the union the doc block below explains, extracted
@@ -206,9 +218,10 @@ export async function promoteDeliveredCardsOnGreen(args: {
 }): Promise<string[]> {
   const targets = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, args.workspaceId);
+    const none = { promote: [] as string[], reRaise: [] as string[] };
     const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
-    if (!pr) return [];
-    if (derivePrCiState(pr.checkRuns) !== 'passing') return [];
+    if (!pr) return none;
+    if (derivePrCiState(pr.checkRuns) !== 'passing') return none;
 
     // ⚠️ THE PULL REQUEST, NOT A CARD READ OFF IT (MOTIR-3721). This used to
     // resolve the pull request's own link column and hand the resolver a single
@@ -239,10 +252,22 @@ export async function promoteDeliveredCardsOnGreen(args: {
       const row = await workItemRepository.findById(item.id, tx);
       if (row && (await everyDeliveryIsGreen(row, tx))) green.push(item.id);
     }
-    return green;
+
+    // ⚠️ AND THE CARDS ALREADY IN REVIEW (MOTIR-5515). A card that went green, was
+    // promoted and had a gate withdrawn by a push stays in review — so the green
+    // verdict for its new head is the moment its fresh gate is owed, and the
+    // `implemented` filter above would never reach it. Their verdict is judged under
+    // the card's lock, in `reRaiseMergeGates`.
+    const reRaise = set.items
+      .filter((item) => REVIEW_STATUSES.includes(item.status))
+      .map((item) => item.id);
+    return { promote: green, reRaise };
   });
 
-  return promoteEach(targets, { userId: args.actorUserId, workspaceId: args.workspaceId });
+  const ctx = { userId: args.actorUserId, workspaceId: args.workspaceId };
+  const promoted = await promoteEach(targets.promote, ctx);
+  await reRaiseMergeGates(targets.reRaise, ctx);
+  return promoted;
 }
 
 /**
@@ -392,6 +417,41 @@ async function reconcileClaimedCompleteDeliveries(
 }
 
 /**
+ * Raise this card's merge gates over the SAME delivery set the verdict was judged on
+ * (MOTIR-5515) — `collectDeliveries`, so a member the verdict counted is a member the
+ * raise asks about.
+ */
+async function raiseMergeGatesForCard(
+  item: WorkItem,
+  ctx: { userId: string; workspaceId: string },
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const members = await collectDeliveries(item, tx);
+  await raiseMergeGates({ item, pullRequestIds: [...members.keys()] }, ctx, tx);
+}
+
+/**
+ * RE-RAISE for cards already in review (MOTIR-5515): under the card's row lock — the
+ * same lock the promotion's status write takes, so two green events for one card
+ * serialise and the second finds the first's gates — re-judge the whole set and raise
+ * whatever is missing. A card whose set is not green raises nothing.
+ */
+async function reRaiseMergeGates(
+  workItemIds: readonly string[],
+  ctx: { userId: string; workspaceId: string },
+): Promise<void> {
+  for (const id of workItemIds) {
+    await withWorkspaceContext(ctx, async (tx) => {
+      if (!(await workItemRepository.lockById(id, tx))) return;
+      const item = await workItemRepository.findById(id, tx);
+      if (!item || !REVIEW_STATUSES.includes(item.status)) return;
+      if (!(await everyDeliveryIsGreen(item, tx))) return;
+      await raiseMergeGatesForCard(item, ctx, tx);
+    });
+  }
+}
+
+/**
  * Move each card through the SHIPPED authority, one transaction each, and treat
  * a per-card refusal as a skip rather than a failure of the whole promotion.
  *
@@ -399,6 +459,11 @@ async function reconcileClaimedCompleteDeliveries(
  * us, or an actor without edit rights on one project must not stop the other
  * cards of the same run from being promoted — the same per-item tolerance
  * `completeSession` applies to a session close-out.
+ *
+ * ⚠️ THE MERGE GATES COMMIT WITH THE STATUS WRITE (MOTIR-5515). They are raised in
+ * `updateStatus`'s own transaction, after the transition, so a card never reaches
+ * review without them and a failed gate insert rolls the promotion back. The
+ * post-commit `work-item/transitioned` event is `updateStatus`'s, exactly as before.
  */
 async function promoteEach(
   workItemIds: string[],
@@ -407,7 +472,12 @@ async function promoteEach(
   const promoted: string[] = [];
   for (const id of workItemIds) {
     try {
-      await workItemsService.updateStatus(id, TARGET_STATUS, ctx);
+      await workItemsService.updateStatus(id, TARGET_STATUS, ctx, {
+        inTransaction: async (tx) => {
+          const item = await workItemRepository.findById(id, tx);
+          if (item) await raiseMergeGatesForCard(item, ctx, tx);
+        },
+      });
       promoted.push(id);
     } catch (err) {
       if (!SKIPPABLE.some((kind) => err instanceof kind)) throw err;
