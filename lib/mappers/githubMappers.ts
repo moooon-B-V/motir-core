@@ -1,10 +1,16 @@
-import type { GithubIdentity, GithubInstallation, GithubRepo } from '@/generated/prisma/client';
+import type {
+  GithubIdentity,
+  GithubInstallation,
+  GithubPullRequest,
+  GithubRepo,
+} from '@/generated/prisma/client';
 import type {
   GithubIdentityDTO,
   GithubInstallationDTO,
   GithubRepoDTO,
   LinkedPullRequestDto,
   PullRequestLinkCandidateDto,
+  PullRequestMergeRecordDto,
   WorkItemDeliveryDto,
 } from '@/lib/dto/github';
 import type {
@@ -72,6 +78,17 @@ export function toLinkedPullRequestDto(row: GithubPullRequestWithContext): Linke
     ci: derivePrCiState(row.checkRuns),
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
   };
+}
+
+/**
+ * A pull-request row → its MERGE RECORD (MOTIR-5520). Takes only the two columns, so
+ * every read of the row — a bare row, one with its repository, one with its
+ * installation — maps the same way.
+ */
+export function toPullRequestMergeRecordDto(
+  row: Pick<GithubPullRequest, 'mergeAuthority' | 'mergeOutcomeRef'>,
+): PullRequestMergeRecordDto {
+  return { mergeAuthority: row.mergeAuthority, mergeOutcomeRef: row.mergeOutcomeRef };
 }
 
 /**
