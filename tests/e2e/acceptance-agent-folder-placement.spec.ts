@@ -212,7 +212,9 @@ test('an integration files work, an agent proposes into the folder, and a review
   // ── Step 3 — the reviewer sees where each card lands ─────────────────────
   await chapter('An agent’s plan says which folder each card will be filed into', async () => {
     await page.goto(`/plans/${planId}?view=canvas`);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
+      'Ready to review',
+    );
     // The landmark FIRST: nothing below may pass against a page that never mounted.
     await expect(reviewCanvas(page)).toBeVisible();
 
@@ -224,7 +226,7 @@ test('an integration files work, an agent proposes into the folder, and a review
   });
 
   await chapter('Show changes: Old reports moves from the root into Backlog ideas', async () => {
-    const toggle = page.getByTestId('show-changes-toggle');
+    const toggle = page.getByRole('main').getByTestId('show-changes-toggle');
     // Armed on arrival (MOTIR-4020), so the reader lands on the marked changes.
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     const move = node(page, oldReports.id).getByTestId('diff-line');
@@ -244,7 +246,7 @@ test('an integration files work, an agent proposes into the folder, and a review
     );
     await approve.click();
     expect((await approved).status()).toBe(200);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
   });
 
   await chapter('In the tree, all three items are inside Backlog ideas', async () => {
@@ -314,7 +316,9 @@ test('a folder deleted after the plan was written refuses the approve and create
       .filter({ hasText: 'Nothing was created' })
       .filter({ hasText: 'Draft scratch notes' }),
   ).toContainText('is filed into a folder that was deleted after this plan was written.');
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+  await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
+    'Ready to review',
+  );
 
   // Reloaded, the card carries the stale state and Approve is a dead control.
   await page.reload();
