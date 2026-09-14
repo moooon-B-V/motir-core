@@ -640,79 +640,95 @@ swap can redefine the full shape language, not just colour.
 
 ---
 
-## ⚠️ Design assets — THREE files per surface (notes + source + `.png`)
+## ⚠️ Design assets — TWO files per surface (notes + mock)
 
 **EXTREMELY IMPORTANT: a design surface under `design/<area>/` is only complete
-when ALL THREE files exist together — none is optional.** When you produce or
+when BOTH files exist together — neither is optional.** When you produce or
 update a design asset (a `type: design` subtask, or any change to a mock), you
-MUST land all three, with a shared basename:
+MUST land both:
 
 1. **`design-notes.md`** — the spec: every primitive used, the exact copy, and
    the `--el-*` colour + `[data-style]` shape-token role for every
    element. (One per area; it indexes that area's surfaces.)
-2. **The asset SOURCE** — a self-contained **`<surface>.mock.html`** built from
-   the real design system (the `components/ui/*` primitives' markup + the
-   `globals.css` `--el-*` / shape tokens — NEVER Tier-0 `--color-*` or raw
-   `rounded-*`/`p-*`/`h-*`; the colour + shape token rules above apply to mocks
-   exactly as to components). The HTML is the source of truth. (A legacy Pencil
-   `.pen` source is also accepted, but new assets should be HTML mocks — no
-   Pencil→code gap.)
-3. **A `.png` EXPORT** — `<surface>.png`, beside the source (e.g.
-   `triage.mock.html` → `triage.png`; a multi-panel mock exports ONE full-page
-   PNG). **This is REQUIRED, not "if useful":** it is the board/tenant-visible
-   face of the asset and what a reviewer skims on the PR without opening the
-   HTML. Render it with Playwright chromium — full-page, light theme,
-   `deviceScaleFactor: 2`, viewport width ~1200 — matching the existing
-   `design/ready/ready.png` / `design/reports/charts.png` convention.
+2. **`<surface>.mock.html`** — a self-contained mock built from the real design
+   system (the `components/ui/*` primitives' markup + the `globals.css` `--el-*`
+   / shape tokens — NEVER Tier-0 `--color-*` or raw `rounded-*`/`p-*`/`h-*`; the
+   colour + shape token rules above apply to mocks exactly as to components). The
+   HTML is the source of truth.
 
-A design surface shipped with only notes + HTML (no `.png`), or HTML + PNG (no
-notes), is **incomplete** — do not open the design PR / mark the subtask done
-until all three are committed. (The `motir-meta` `MOTIR.md` design-reference
-rule carries the same definition-of-done for the planner side.)
+**There is no `.png` export any more, and a NEW `.pen` source is not accepted**
+(`docs/decisions/design-result.md` AMENDMENT 4). The export existed so a design
+could be skimmed on its pull request; the mock now renders on the card, so an
+export is a second copy of what the reviewer already sees. A `.pen` can only be
+reviewed through an export, so a new surface is drawn as a mock. The existing
+exports and the 14 legacy `.pen` sources stay as records — do not delete them,
+and do not update them. `tests/design-three-file-set.test.ts` fails an area that
+ships an asset with no `design-notes.md`, and fails any `.pen` not on its legacy
+list.
 
-**How the `.png` reaches the board — YOU publish it.** The "tenant-visible face"
-above is not a wish and it is not automatic: once the three files are committed,
-**call the `publish_design_result` MCP tool** with the card's key, the
-`*.mock.html` as `mock`, the `.png` as `image`, the note file as `note_file`, and
-`noteMd` carrying the `##` SECTIONS this work wrote — never a whole area note.
-The item page then renders them in its **Design result** panel. Two things
-follow, and the second is the one that bites:
+### A change to an existing design is a NEW DELTA MOCK
 
-- **You still commit all three files.** The published result is the card's VIEW
-  of the asset; the repository stays the source of truth.
+**Do not edit the existing mock.** Draw the change in a new
+**`<surface>--<change>.mock.html`** beside it, holding **only the panels that
+change** — the changed state, the new element, the altered layout — composed
+from the real shipped components exactly as a full mock is. Add a new `##`
+section to the area's `design-notes.md` that cites the section and the mock it
+amends by path. An older mock is a record of the moment it was drawn, never a
+specification to keep current: every run renders what `main` actually ships
+before it builds on it. What counts as "only the changed panels" is a drawing
+judgement — no guard measures it.
+
+### Publishing the design result — ONLY when an open work item waits on the design
+
+**A design result is published only when a work item that is not in the `done`
+category (and not archived) is `blocked_by` the design card.** A publish raises
+an approval gate (the section below), and a gate is only worth a person's time
+when something waits on its answer. So:
+
+- **Something waits on it** → once both files are committed, **call the
+  `publish_design_result` MCP tool** with the card's key, each mock (the delta
+  mock(s) for a change) as `mock`, and the area's notes file as the one
+  `note_file`. **No `image`, no `noteMd`** — both are retired and the server
+  REFUSES them by name (`DESIGN_EVIDENCE_IMAGE_RETIRED` /
+  `DESIGN_EVIDENCE_NOTE_MD_RETIRED`), as it refuses a publish with no mock or not
+  exactly one note file. The item page shows the mock(s) in its **Design result**
+  panel with the note one link away.
+- **Nothing waits on it** — a design defect fixed in place, a record of a surface
+  as built → **publish nothing.** The server refuses it
+  (`DESIGN_EVIDENCE_NOTHING_WAITS`), and the design's pull request is its review.
+  A bug whose fix needs a design first is NOT this case: that bug is `blocked_by`
+  its design, so the design publishes.
+
+Three things follow when you do publish, and the second is the one that bites:
+
+- **You still commit both files.** The published result is the card's VIEW of
+  the asset; the repository stays the source of truth.
 - **⚠️ NOTHING ELSE MAKES THAT CALL, AND A MISSING PUBLISH LOOKS EXACTLY LIKE A
   SUCCESSFUL RUN.** There is no CI step, no check and no background job behind
-  it. A design card that writes its files, lands its commit, pushes and opens a
-  green pull request — and never calls the tool — is indistinguishable from one
-  that finished, except for an empty panel on a surface the run never opens. So
-  **confirm the result arrived** before calling a design card done: the
-  confirmation is the **evidence `id` the call returns**, and putting it on the
-  card is what makes it checkable by somebody else. No call ⇒ nothing was
-  published, whatever the pull request says.
-- **⚠️ A FULL-PAGE `.png` IS NORMALLY TOO LARGE TO SEND INLINE — use the mint
-  door for it (MOTIR-4750).** `publish_design_result` takes each asset EITHER as
-  `contentBase64` or as the `pathname` of a grant, and the inline form is not
-  merely slower for a big asset: the bytes have to be EMITTED by you as a tool
-  argument, and a multi-sheet board is several megabytes (this tree's
-  `design/ai-chat/planning-workspace.png` is 3.9 MB, 5.2 MB of base64). So for
-  anything over roughly a megabyte: call **`create_design_upload`** with the
-  card's key and one entry per file, PUT each file's bytes straight to the
-  `uploadUrl` it returns (`curl -X PUT --upload-file …` with that
-  `Content-Type`), then send each `pathname` to `publish_design_result`.
-  **One publish uses one form for all of its assets** — a mix is refused by
-  name.
+  it. A design card that something waits on, that writes its files, lands its
+  commit, pushes and opens a green pull request — and never calls the tool — is
+  indistinguishable from one that finished, except for an empty panel on a
+  surface the run never opens. So **confirm the result arrived** before calling
+  such a card done: the confirmation is the **evidence `id` the call returns**,
+  and putting it on the card is what makes it checkable by somebody else.
+- **A large asset goes through the mint door (MOTIR-4750).**
+  `publish_design_result` takes each asset EITHER as `contentBase64` or as the
+  `pathname` of a grant, and the bytes of an inline asset have to be EMITTED by
+  you as a tool argument. For anything over roughly a megabyte: call
+  **`create_design_upload`** with the card's key and one entry per file, PUT each
+  file's bytes straight to the `uploadUrl` it returns (`curl -X PUT --upload-file …`
+  with that `Content-Type`), then send each `pathname` to
+  `publish_design_result`. **One publish uses one form for all of its assets** —
+  a mix is refused by name.
 
 > ⚠️ **This warning is OLDER than the tool, and it is kept because the hazard
 > outlived the mechanism.** It was written when CI did the publishing: the
 > publish step shared a job with the guards and ran after them, so a failing
-> guard skipped it silently, and the script also exited 0 on a fork (no
-> credential) or a branch whose name yielded no work-item key. That publisher is
-> retired in every repository (MOTIR-3797) and none of those causes exists any
-> more. The SHAPE is identical and now has one cause instead of three — a call
-> nobody made — which is a fair trade only because a forgotten call costs one
-> card its result, while an absent publisher cost every card in a repository
-> every result, silently, for as long as nobody looked
-> (`docs/decisions/design-result.md` AMENDMENT 2 Q2).
+> guard skipped it silently. That publisher is retired in every repository
+> (MOTIR-3797). The SHAPE is identical and now has one cause — a call nobody
+> made (`docs/decisions/design-result.md` AMENDMENT 2 Q2). Since AMENDMENT 4 a
+> result can also be CORRECTLY absent, so an empty panel means something only on
+> a card something is `blocked_by`.
 
 **Which card it publishes to is the key you PASS.** Nothing is inferred from a
 branch, a title or a diff. The server refuses the two mistakes it can see: a
@@ -724,43 +740,22 @@ and `POST /api/v1/work-items/{key}/attachments` exist for a deliverable that has
 no lifecycle of its own — a research findings document, a review's notes. A
 design result has its own publisher (`publish_design_result`) and its own panel,
 and `text/html` is refused by the general door anyway, so routing one through it
-would split the three-file set across two surfaces
+would split the asset set across two surfaces
 (`docs/decisions/attachment-api-door.md` §3). If you are publishing from
 something that is not an MCP client, the `design-evidence` HTTP routes are still
 the supported door (`docs/decisions/design-result.md` AMENDMENT 2 Q1).
 
-**Re-export the `.png` with `node scripts/render-design-mock.mjs <mock.html>`,
-AFTER `prettier --write` on the mock.** It recovers the viewport width from the
-committed export, renders the asset as it stands at `HEAD` first, and tells you
-whether what changed in the PNG is your diff or the render environment
-(`EXACT` / `DIMS` / `DRIFT`, the last carrying its `Δbaseline=`). A new asset
-with no committed export takes `--width` (~1200 is the tree's convention).
+### Rendering a mock to an image — an OPTIONAL local tool
 
-**⚠️ A fourth verdict, `REFLOW`, is a REFUSAL — nothing is written (MOTIR-4374).**
-The viewport is SEARCHED, and a width match does not identify one: at
-`deviceScaleFactor: 2` the search probes half the committed width and the scale
-factor doubles the output back to it, so a 1×-exported asset has a second,
-document-REFLOWING candidate that passes the width test. It used to keep the
-first match it found and prefer 2×, which re-exported
-`design/ai-chat/target-picker.png` (1200×2932) at **1200×8206** under an ordinary
-`DRIFT` — a plausible image, three times too tall, of a design nobody drew. It
-now takes the HEIGHT-NEAREST candidate, and reports `REFLOW` instead of writing
-when even that one is more than 25% from the committed height. If the delta is
-genuinely real, re-run with `--width <the viewport it was exported at>`.
-
-**⚠️ A surface that ships a `<name>.dark.png` has FOUR files, and the exporter
-now writes BOTH boards (MOTIR-4868).** The dark board is the same board with
-`data-theme="dark"` on the root — the only asset-side evidence for the dark half
-of the palette, where `--el-text-inverted` flips. Until this card the script
-exported the light board only and said nothing about the other, so a mock edit
-re-exported with the shipped tool left the dark PNG drawing the OLD design at
-full fidelity under an `EXACT` verdict for the half it did do. It is now keyed on
-the file's EXISTENCE — no flag to remember — and prints one verdict line per
-board, each against its own committed export, each written or refused on its own.
-`--dark` is only for CREATING a first dark board, and takes `--width` like any
-new asset. `tests/design-dark-board-parity.test.ts` is the standing guard: both
-boards of a surface must agree on dimensions, because a theme flip changes ink
-and never layout.
+**`node scripts/render-design-mock.mjs <mock.html>` still works, for anyone who
+wants to look at a mock as an image** — to self-review a layout, or to compare a
+render against what ships. **Nothing requires its output and nothing publishes
+it**, so do not commit a new `.png` as part of a design card. Two facts about the
+tool, for when you do reach for it: it SEARCHES the viewport and refuses with
+`REFLOW` rather than writing an image more than 25% from a committed export's
+height (MOTIR-4374) — re-run with `--width <N>` if the delta is real; and for a
+legacy surface that ships a `<name>.dark.png` it renders both boards, which
+`tests/design-dark-board-parity.test.ts` holds to matching dimensions.
 
 **⚠️ The ink rules apply to a mock's OWN `<style>` block and its board chrome,
 not only to its utility classes.** `--el-text-muted` fails AA on `--el-surface` /

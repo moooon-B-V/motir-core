@@ -2,34 +2,27 @@ import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// MOTIR-3069 — the THREE-FILE rule was stated in two places and measured in none.
+// MOTIR-3069 — the design-asset rule was stated in two places and measured in none.
+// MOTIR-5490 — and the rule is now TWO files, not three.
 //
 // ── The rule ────────────────────────────────────────────────────────────────
-// `CLAUDE.md` § *Design assets — THREE files per surface*: "a design surface
-// under `design/<area>/` is only complete when ALL THREE files exist together —
-// none is optional", and "a design surface shipped with only notes + HTML (no
-// `.png`), or HTML + PNG (no notes), is **incomplete**". `motir-meta`'s
-// design-reference rule carries the same definition-of-done for the planner.
+// `CLAUDE.md` § *Design assets — TWO files per surface*: a design surface under
+// `design/<area>/` is `design-notes.md` + `<surface>.mock.html`. The `.png`
+// export this guard used to require is RETIRED (`docs/decisions/design-result.md`
+// AMENDMENT 4): it existed so a design could be skimmed on its pull request, and
+// the mock now renders on the card, so an export is a second copy of what the
+// reviewer already sees. A `.pen` source is not accepted for a NEW surface,
+// because a `.pen` can only be reviewed through the export that is gone.
 //
-// ── Why neither statement held ──────────────────────────────────────────────
-// Both are documents an agent READS and then acts from memory, which is the
-// same failure MOTIR-3014 was filed for one token over: a constraint written
-// down twice, violated anyway, because the only thing checking it was somebody
-// remembering. Seven `.mock.html` files had shipped with no export — one of them
-// since 2026-06-04 — and the tree walk that would have found them already
-// existed twice over (`design-asset-addresses`, `design-ink-contrast` both walk
-// `design/**`). What was missing was one assertion over it.
-//
-// `design/work-items/links.mock.html` is why this is a guard and not three
-// renders: its area DOES contain an `internal-links.png`, so a reader auditing
-// the folder by eye finds a plausible neighbour and moves on. A guard does not,
-// which is the whole difference between a rule and a measurement.
+// ── Why this is a guard and not a sentence ──────────────────────────────────
+// Both halves are documents an agent READS and then acts from memory. The notes
+// half was measured because seven mocks once shipped with no export for weeks and
+// nothing noticed; the `.pen` half is measured for the same reason in the other
+// direction — "no new Pencil files" holds only if something fails when one lands.
 //
 // ── What the failure message owes ───────────────────────────────────────────
-// The missing FILE and the command that produces it. A guard that reports
-// "design/boards/board.mock.html" and stops has handed the reader a hunt: the
-// renderer takes `--width` for an asset with no committed export to recover the
-// viewport from, and that flag is exactly the thing nobody remembers.
+// The offending FILE and the rule it breaks, so the reader knows what to do
+// rather than what went wrong.
 
 const ROOT = process.cwd();
 const DESIGN_DIR = join(ROOT, 'design');
@@ -58,18 +51,38 @@ const ASSET = /(?:\.mock\.html|\.pen|\.png)$/;
 const areaOf = (path: string): string => path.slice(0, path.lastIndexOf('/'));
 
 /**
- * Every `*.mock.html` in the listing with no same-basename `.png` beside it,
- * reported as the missing EXPORT plus the command that writes it.
+ * The 14 `.pen` sources on the tree when the two-file rule landed
+ * (`git ls-tree -r --name-only origin/main -- design | grep -E '\.pen$'`,
+ * MOTIR-5490). They are RECORDS of the moment they were drawn and stay; a `.pen`
+ * can only be reviewed through an export, and exports are retired, so no NEW one
+ * is accepted. Asserted tight below — a listed file that is deleted must lose its
+ * row, so the list can only shrink.
  */
-function missingExports(paths: string[]): string[] {
-  const present = new Set(paths);
+const LEGACY_PENS: readonly string[] = [
+  'design/auth/auth-screens.pen',
+  'design/projects/projects.pen',
+  'design/shell/cmd-k.pen',
+  'design/shell/desktop-collapsed.pen',
+  'design/shell/desktop.pen',
+  'design/shell/mobile-drawer.pen',
+  'design/shell/shortcuts.pen',
+  'design/work-items/create.pen',
+  'design/work-items/detail.pen',
+  'design/work-items/tree.pen',
+  'design/workspaces/invite-accept.pen',
+  'design/workspaces/invite-email.pen',
+  'design/workspaces/settings.pen',
+  'design/workspaces/switcher.pen',
+];
+
+/** Every `.pen` in the listing that is not a legacy record — a NEW Pencil source. */
+function newPens(paths: string[], legacy: readonly string[] = LEGACY_PENS): string[] {
+  const allowed = new Set(legacy);
   return paths
-    .filter((path) => path.endsWith(MOCK_SUFFIX))
-    .map((mock) => ({ mock, png: `${mock.slice(0, -MOCK_SUFFIX.length)}.png` }))
-    .filter(({ png }) => !present.has(png))
+    .filter((path) => path.endsWith('.pen') && !allowed.has(path))
     .map(
-      ({ mock, png }) =>
-        `${png} is missing — export it with: node scripts/render-design-mock.mjs --width <N> ${mock}`,
+      (pen) =>
+        `${pen} is a new .pen source — a design surface is TWO files, design-notes.md + <surface>.mock.html; draw it as a mock`,
     )
     .sort();
 }
@@ -122,20 +135,22 @@ function designTree(dir: string = DESIGN_DIR, out: string[] = []): string[] {
 
 const TREE = designTree();
 
-describe('a design surface ships all THREE files (MOTIR-3069)', () => {
+describe('a design surface ships its TWO files (MOTIR-3069, MOTIR-5490)', () => {
   it('walks a design tree that actually has assets in it', () => {
     // Without this every assertion below passes vacuously if the walk breaks or
     // the folder moves — the failure mode a tree-walk guard is most exposed to.
     expect(TREE.filter((path) => path.endsWith(MOCK_SUFFIX)).length).toBeGreaterThan(50);
-    expect(TREE.filter((path) => path.endsWith('.png')).length).toBeGreaterThan(50);
   });
 
-  it('exports a `.png` beside every `*.mock.html`', () => {
-    // The load-bearing half. The `.png` is the board- and tenant-visible face of
-    // the asset — what CI publishes onto the work item and what a reviewer skims
-    // on the PR — so a mock without one is invisible at exactly the moment it is
-    // meant to be reviewed.
-    expect(missingExports(TREE)).toEqual([]);
+  it('accepts no NEW `.pen` source', () => {
+    expect(newPens(TREE)).toEqual([]);
+  });
+
+  it('holds `LEGACY_PENS` tight — a deleted legacy source loses its row', () => {
+    const present = new Set(TREE);
+    for (const pen of LEGACY_PENS) {
+      expect(present.has(pen), `${pen} is gone — drop its row`).toBe(true);
+    }
   });
 
   it('keeps a `design-notes.md` in every area that ships an asset', () => {
@@ -167,54 +182,29 @@ describe('a design surface ships all THREE files (MOTIR-3069)', () => {
 // stays healthy, which means they never demonstrate that the check can FAIL.
 // These do, on listings small enough to read.
 
-describe('the three-file check on a fixture tree', () => {
-  const HEALTHY = [
-    'design/boards/design-notes.md',
-    'design/boards/board.mock.html',
-    'design/boards/board.png',
-  ];
+describe('the two-file check on a fixture tree', () => {
+  const HEALTHY = ['design/boards/design-notes.md', 'design/boards/board.mock.html'];
 
-  it('passes a complete area', () => {
-    expect(missingExports(HEALTHY)).toEqual([]);
+  it('passes a complete area — a mock and its notes, with NO `.png`', () => {
+    expect(newPens(HEALTHY)).toEqual([]);
     expect(missingNotes(HEALTHY)).toEqual([]);
   });
 
-  it('names the missing export AND the command that writes it', () => {
-    const noExport = HEALTHY.filter((path) => path !== 'design/boards/board.png');
-    expect(missingExports(noExport)).toEqual([
-      'design/boards/board.png is missing — export it with: node scripts/render-design-mock.mjs --width <N> design/boards/board.mock.html',
+  it('passes a delta mock beside the surface it amends, with no export for either', () => {
+    const delta = [...HEALTHY, 'design/boards/board--swimlanes.mock.html'];
+    expect(newPens(delta)).toEqual([]);
+    expect(missingNotes(delta)).toEqual([]);
+  });
+
+  it('fails a `.pen` that is not a legacy record, naming the two-file rule', () => {
+    const pen = [...HEALTHY, 'design/boards/board.pen'];
+    expect(newPens(pen)).toEqual([
+      'design/boards/board.pen is a new .pen source — a design surface is TWO files, design-notes.md + <surface>.mock.html; draw it as a mock',
     ]);
   });
 
-  it('is not satisfied by a PLAUSIBLE NEIGHBOUR — the near-miss this card was filed for', () => {
-    // `design/work-items/links.mock.html` shipped for ten weeks beside an
-    // `internal-links.png`. Matching on the AREA rather than the basename is the
-    // shape of the eye-audit that missed it, so the fixture states the
-    // difference: a same-area export of a DIFFERENT surface is not this
-    // surface's export.
-    const neighbour = [
-      'design/work-items/design-notes.md',
-      'design/work-items/links.mock.html',
-      'design/work-items/internal-links.mock.html',
-      'design/work-items/internal-links.png',
-    ];
-    expect(missingExports(neighbour)).toEqual([
-      'design/work-items/links.png is missing — export it with: node scripts/render-design-mock.mjs --width <N> design/work-items/links.mock.html',
-    ]);
-  });
-
-  it('reports EVERY missing export, sorted — not just the first', () => {
-    const several = [
-      'design/a/design-notes.md',
-      'design/a/two.mock.html',
-      'design/a/one.mock.html',
-      'design/a/three.mock.html',
-      'design/a/three.png',
-    ];
-    expect(missingExports(several).map((finding) => finding.split(' ')[0])).toEqual([
-      'design/a/one.png',
-      'design/a/two.png',
-    ]);
+  it('does not report a `.pen` on the legacy list', () => {
+    expect(newPens(['design/shell/desktop.pen', 'design/shell/design-notes.md'])).toEqual([]);
   });
 
   it('reports an area whose assets ship with no spec', () => {
