@@ -249,6 +249,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // partial skeleton would be the worst possible leak here: it names every
         // card A has.
         skeleton: { projectKey: 'PROD' },
+        // MOTIR-5409 — the folder tools, aimed at tenant A's PROJECT: the key resolves
+        // inside the caller's workspace first, so a non-member reads it as not-found
+        // before any folder id is looked at.
+        list_folders: { projectKey: 'PROD' },
+        create_folder: { projectKey: 'PROD', name: 'rogue' },
+        update_folder: { projectKey: 'PROD', folderId: 'fld_whatever', name: 'rogue' },
+        delete_folder: { projectKey: 'PROD', folderId: 'fld_whatever' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
@@ -753,6 +760,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // project is exactly the well-formed "nothing configured" answer.
         get_project_state: { projectKey: 'PROD' },
         skeleton: { projectKey: 'PROD' },
+        // MOTIR-5409 — `list_folders` is a browse read that executes on the caller's own
+        // project; the three writes are `work_item:edit`-gated, and a folder id that
+        // names nothing is a not-found, never a scope denial.
+        list_folders: { projectKey: 'PROD' },
+        create_folder: { projectKey: 'PROD', name: 'scoped folder' },
+        update_folder: { projectKey: 'PROD', folderId: 'fld_scoped', name: 'scoped rename' },
+        delete_folder: { projectKey: 'PROD', folderId: 'fld_scoped' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },

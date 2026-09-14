@@ -350,6 +350,8 @@ function workItemDetail(key) {
     updatedAt: NOW,
     descriptionMd: null,
     parentKey: null,
+    folderId: null,
+    folderPath: null,
     ancestorKeys: [],
     children: [],
     links: {

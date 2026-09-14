@@ -112,6 +112,16 @@ export interface ProposalPlacement {
   parentNodeId: string | null;
   /** The committed ancestor path down to that parent, ROOT FIRST. */
   parentTrail: { identifier: string; title: string }[];
+  /**
+   * The folder the proposal will sit in (MOTIR-5415) — the second grouping key,
+   * for a proposal whose placement is a folder rather than a work item. Absent
+   * on a placement built before folders existed, which renders as it did.
+   */
+  folderId?: string | null;
+  /** That folder's names, ROOT FIRST; null when it no longer exists. */
+  folderPath?: string[] | null;
+  /** The folder was deleted after the plan was written. */
+  folderMissing?: boolean;
 }
 
 export type PlacementByPlanItemId = ReadonlyMap<string, ProposalPlacement>;
@@ -151,6 +161,15 @@ function describeItem(item: PlanItemDto, placement?: ProposalPlacement): string 
 /** `under MOTIR-2200 ▸ MOTIR-3154 — A DECIDED plan's cards vanish:` — the live
  *  branch a group of proposals hangs off, named the way the canvas breadcrumb
  *  names it. */
+/** The heading a folder-placed group is printed under (MOTIR-5415). A deleted
+ *  folder has no name left, so it is named by id and marked. */
+function folderHeading(placement: ProposalPlacement): string {
+  if (placement.folderMissing || !placement.folderPath) {
+    return `Folder: (deleted — folder:${placement.folderId}) — approve will refuse this plan:`;
+  }
+  return `Folder: ${placement.folderPath.join(' ▸ ')}:`;
+}
+
 function groupHeading(trail: { identifier: string; title: string }[]): string {
   const chain = trail.map((c) => c.identifier).join(' ▸ ');
   const parent = trail.at(-1)!;
@@ -211,6 +230,15 @@ function renderProposals(items: PlanItemDto[], placements?: PlacementByPlanItemI
   for (const root of roots) {
     const placement = placements?.get(root.id);
     const trail = placement?.parentTrail ?? [];
+    // A FOLDER-placed root groups under its folder path (MOTIR-5415), beside the
+    // committed-parent groups — a folder is not a parent, so it has its own key.
+    if (placement?.folderId && !placement.parentNodeId) {
+      const key = `folder:${placement.folderId}`;
+      const group = groups.get(key);
+      if (group) group.items.push(root);
+      else groups.set(key, { heading: folderHeading(placement), items: [root] });
+      continue;
+    }
     if (!placement?.parentNodeId || trail.length === 0) {
       ungrouped.push(root);
       continue;
@@ -309,6 +337,9 @@ async function resolvePlacements(
             identifier: c.identifier,
             title: c.title,
           })),
+          folderId: item.folderId,
+          folderPath: item.folderPath,
+          folderMissing: item.folderMissing,
         },
       ]),
     );
@@ -324,7 +355,13 @@ export async function runGetPlan(
 ): Promise<CallToolResult> {
   const plan = await plansService.getPlan(args.planId, ctx);
   const placements = await resolvePlacements(args.planId, ctx);
-  return toolOk(summarizePlan(plan, placements), derived(planPayload, presentMcpPlan(plan)));
+  // The folders the proposals NAME (MOTIR-5415), for the structured payload —
+  // the same reading `/api/v1` presents beside `parentRef`.
+  const folders = await planReviewService.resolveProposalFolders(plan, ctx);
+  return toolOk(
+    summarizePlan(plan, placements),
+    derived(planPayload, presentMcpPlan(plan, folders)),
+  );
 }
 
 export function registerGetPlan(server: McpServer, resolveContext: McpContextResolver): void {

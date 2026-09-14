@@ -24,6 +24,10 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     // The committed ANCESTOR path down to that parent (bug MOTIR-3152) — empty by
     // default, matching the null parent above.
     parentTrail: [],
+    // The FOLDER placement (MOTIR-5415) — none by default.
+    folderId: null,
+    folderPath: null,
+    folderMissing: false,
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],

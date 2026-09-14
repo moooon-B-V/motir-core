@@ -377,5 +377,59 @@
  *   renders the `## How to test` section of a session pull request body from the
  *   same record the item page shows. Additive: ONE new operation; gated on
  *   `project:browse`. Same re-read-before-merge rule as `1.27.0` above.
+ *
+ * - `1.29.0` — MOTIR-5408 adds the FOLDER resource: `listFolders`
+ *   (`GET /api/v1/projects/{projectKey}/folders`, one level, keyset-paged over
+ *   `(position, id)`), `createFolder` (`POST` on the same path), `getFolder`,
+ *   `updateFolder` and `deleteFolder` (`GET` / `PATCH` / `DELETE`
+ *   `/api/v1/folders/{folderId}`), plus the `folders` cursor collection and six
+ *   folder error codes (`FOLDER_NOT_FOUND`, `INVALID_FOLDER_NAME`,
+ *   `FOLDER_NAME_TAKEN`, `FOLDER_CYCLE`, `CROSS_PROJECT_FOLDER`,
+ *   `SUBTASK_NEEDS_PLACEMENT`), each of which rendered as a bare 500 before.
+ *
+ *   Additive: five new operations (§8's first allowed change) and new codes for
+ *   new conditions. No declared shape changed and nothing was removed. Reads are
+ *   gated on `project:browse`, writes on `work_item:edit` — the key the folder
+ *   service asserts — and `CLI_TOKEN_GRANT` carries both.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.28.0` at `4a4975c40`, so this claims `1.29.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATIONS.
+ *
+ * - `1.30.0` — MOTIR-5412 adds a work item's FOLDER placement to the work-item
+ *   resource: `folderId` and `folderPath` (names root-first) on the detail every
+ *   single-item read and write returns — `getWorkItem`, `createWorkItem`,
+ *   `updateWorkItem`, `transitionWorkItem`, `archiveWorkItem`,
+ *   `restoreWorkItem` — both non-null exactly when the item is filed; and
+ *   `folderId` on the `createWorkItem` / `updateWorkItem` request bodies (a string
+ *   files the item, `null` on a PATCH takes it out), plus `PLACEMENT_CONFLICT`
+ *   (422) when a body names `parentKey` AND `folderId`.
+ *
+ *   Additive: two new response fields and one new optional request field on
+ *   existing operations (§8's allowed list), and a new code for a new condition.
+ *   A `parentKey` PATCH on a filed item now succeeds and unfiles it, where it
+ *   ended in a database CHECK violation (a bare 500) before — a fault repaired,
+ *   not a shape changed. The contract-version guard cannot see fields, so this
+ *   entry is the record.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.29.0` on `parent/MOTIR-5310-agents-file-into-folders` at `7c5c00e74`,
+ *   so this claims `1.30.0`. If a sibling has taken it since, RENUMBER this entry
+ *   — it names the FIELDS.
+ *
+ * - `1.31.0` — MOTIR-5415 adds `folderId` and `folderPath` to `PlanProposal`
+ *   (`getPlan`, `GET /api/v1/plans/{planId}`, and the plan
+ *   `getWorkItemPlan` / `approveWorkItemPlan` return): the folder a proposal
+ *   NAMES as its placement (`parentRef` / `patch.parentRef` = `folder:<id>`) and
+ *   that folder's names, root first. `folderPath` is `null` for a folder deleted
+ *   after the plan was written. `parentKey` stays `null` for a folder ref, as it
+ *   is for every ref that names no work item.
+ *
+ *   Additive: two new nullable response fields (§8's allowed list). No
+ *   operation, no request shape and no existing field changed.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: this claims
+ *   `1.31.0` because sibling MOTIR-5412 claims `1.30.0` on the same parent
+ *   branch. If the numbering has moved, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.28.0';
+export const V1_CONTRACT_VERSION = '1.31.0';

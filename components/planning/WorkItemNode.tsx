@@ -370,7 +370,7 @@ export function WorkItemNode({
             // frame's `remove` state) can strike the title without redrawing the
             // card — the same struck-title language `showDone` uses below.
             data-node-title
-            className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
+            className={`mt-0.5 line-clamp-2 text-sm leading-snug font-semibold ${
               showDone ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
             }`}
           >
@@ -533,21 +533,19 @@ export function GhostAnchor({
         <ArrowUpRight className="size-3.5" aria-hidden="true" />
         {identifier}
       </span>
-      <span className="mt-1 line-clamp-1 block text-xs text-(--el-text-secondary)">
+      <span className="mt-1 line-clamp-1 text-xs text-(--el-text-secondary)">
         {title ?? t('defaultTitle')}
       </span>
       {outOfSprint ? (
-        <span className="mt-0.5 line-clamp-1 block text-xs text-(--el-danger)">
+        <span className="mt-0.5 line-clamp-1 text-xs text-(--el-danger)">
           {t('notInThisSprint')}
         </span>
       ) : parentTitle ? (
-        <span className="mt-0.5 line-clamp-1 block text-xs text-(--el-danger)">
+        <span className="mt-0.5 line-clamp-1 text-xs text-(--el-danger)">
           {t('inParent', { parent: parentTitle })}
         </span>
       ) : (
-        <span className="mt-0.5 line-clamp-1 block text-xs text-(--el-danger)">
-          {t('elsewhere')}
-        </span>
+        <span className="mt-0.5 line-clamp-1 text-xs text-(--el-danger)">{t('elsewhere')}</span>
       )}
     </div>
   );
@@ -616,7 +614,7 @@ export function LevelGroupNode({ count }: { count: number }) {
           </div>
           <span
             data-node-title
-            className="mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold text-(--el-text)"
+            className="mt-0.5 line-clamp-2 text-sm leading-snug font-semibold text-(--el-text)"
           >
             {t('title')}
           </span>

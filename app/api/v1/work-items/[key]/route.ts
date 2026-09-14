@@ -45,8 +45,15 @@ export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
   const childEdges = await readChildDependencyEdges(detail, ctx.service);
   const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
+  const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
   return NextResponse.json(
-    presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges, deliveries),
+    presentWorkItemDetail(
+      detail,
+      commentCountFor(counts, detail.item.id),
+      childEdges,
+      deliveries,
+      folderPath,
+    ),
   );
 });
 
@@ -110,6 +117,10 @@ export const PATCH = withV1Route<{ key: string }>({ permission: 'work_item:edit'
         'dueDate',
       ]),
       ...parentPatch,
+      // `folderId` files the item (a string) or unfiles it (`null`); absent leaves
+      // the placement alone. Beside `parentKey` the service raises
+      // `PLACEMENT_CONFLICT` (422) before the row lock (MOTIR-5412).
+      ...(body.folderId === undefined ? {} : { folderId: body.folderId }),
     },
     ctx.service,
     ...(expected ? [{ expectedUpdatedAt: expected }] : []),
@@ -120,8 +131,15 @@ export const PATCH = withV1Route<{ key: string }>({ permission: 'work_item:edit'
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
   const childEdges = await readChildDependencyEdges(detail, ctx.service);
   const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
+  const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
   return NextResponse.json(
-    presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges, deliveries),
+    presentWorkItemDetail(
+      detail,
+      commentCountFor(counts, detail.item.id),
+      childEdges,
+      deliveries,
+      folderPath,
+    ),
   );
 });
 

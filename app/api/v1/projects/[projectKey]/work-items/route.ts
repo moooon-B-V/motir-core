@@ -121,6 +121,9 @@ export const POST = withV1Route<{ projectKey: string }>(
         kind: body.kind,
         title: body.title,
         parentId,
+        // The folder to file it into (MOTIR-5412). Beside a `parentKey` this is
+        // the service's `PLACEMENT_CONFLICT` (422), raised before anything is written.
+        ...(body.folderId === undefined ? {} : { folderId: body.folderId }),
         ...pick(body, [
           'descriptionMd',
           'priority',
@@ -153,7 +156,10 @@ export const POST = withV1Route<{ projectKey: string }>(
     // project — `{}` is the honest input, not a skipped read.
     // A card that did not exist a moment ago has no delivery set, and `[]` is
     // the whole truth rather than a placeholder.
-    return NextResponse.json(presentWorkItemDetail(detail, 0, {}, []), { status: 201 });
+    const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
+    return NextResponse.json(presentWorkItemDetail(detail, 0, {}, [], folderPath), {
+      status: 201,
+    });
   },
 );
 

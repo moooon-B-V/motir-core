@@ -1,4 +1,5 @@
 import type { z } from 'zod/v4';
+import { FOLDER_COMPONENTS, FOLDER_OPERATIONS } from '@/lib/api/v1/folders/operations';
 import { operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { PLANNING_COMPONENTS, PLANNING_OPERATIONS } from '@/lib/api/v1/planning/operations';
 import { WORK_ITEM_COMPONENTS, WORK_ITEM_OPERATIONS } from '@/lib/api/v1/workItems/operations';
@@ -32,6 +33,8 @@ const RESOURCE_MODULES: readonly V1ResourceModule[] = [
   // step with the routes — see the module header for why a declaration cannot
   // land ahead of its route.
   { operations: WORK_LOOP_OPERATIONS, components: WORK_LOOP_COMPONENTS },
+  // Story MOTIR-5310's folder resource (MOTIR-5408).
+  { operations: FOLDER_OPERATIONS, components: FOLDER_COMPONENTS },
 ];
 
 /**

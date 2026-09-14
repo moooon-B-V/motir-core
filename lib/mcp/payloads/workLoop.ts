@@ -221,7 +221,10 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
 
 /** Map a plan — the shared envelope fields through v1's shape. */
-export function presentMcpPlan(plan: PlanWithItemsDto): McpPlan {
+export function presentMcpPlan(
+  plan: PlanWithItemsDto,
+  folders?: ReadonlyMap<string, { folderId: string; folderPath: string[] | null }>,
+): McpPlan {
   return {
     id: plan.id,
     status: plan.status,
@@ -240,7 +243,17 @@ export function presentMcpPlan(plan: PlanWithItemsDto): McpPlan {
     authorHarness: plan.authorHarness,
     authorModel: plan.authorModel,
     decisionReason: plan.decisionReason,
-    items: plan.items,
+    // Each proposal carries the folder it NAMES and that folder's path
+    // (MOTIR-5415) — `/api/v1`'s `folderId` / `folderPath`, on the same item the
+    // `parentRef` rides. Only when the caller resolved them; the fields are then
+    // present on every item, `null` where the proposal names no folder.
+    items: folders
+      ? plan.items.map((item) => ({
+          ...item,
+          folderId: folders.get(item.id)?.folderId ?? null,
+          folderPath: folders.get(item.id)?.folderPath ?? null,
+        }))
+      : plan.items,
   };
 }
 

@@ -481,6 +481,16 @@ export function presentLinkedPullRequest(
 export const workItemDetailSchema = workItemFieldsSchema.extend({
   descriptionMd: z.string().nullable(),
   parentKey: workItemKeySchema.nullable(),
+  /** The folder the item is FILED in — its OWN placement, beside `parentKey`
+   *  (Story MOTIR-5310 · MOTIR-5412). Non-null exactly when the item is filed, and
+   *  a filed item is always a root, so a story under a filed epic reads `null`:
+   *  its ancestry already travels as keys. NOT the item page's EFFECTIVE folder
+   *  (MOTIR-5375), which is a different field for a different reader. ADDITIVE;
+   *  `V1_CONTRACT_VERSION` moves for it. */
+  folderId: z.string().nullable(),
+  /** The filed folder's name path, ROOT FIRST (`["Parked", "2025"]`). Non-null
+   *  exactly when `folderId` is. */
+  folderPath: z.array(z.string()).nullable(),
   ancestorKeys: z.array(workItemKeySchema),
   children: z.array(workItemChildSchema),
   links: workItemLinkGroupsSchema,
@@ -689,6 +699,10 @@ export function presentWorkItemDetail(
   commentCount: number,
   childEdges: Readonly<Record<string, WorkItemDependencyEdgesDto>>,
   deliveries: readonly WorkItemDeliveryDto[],
+  /** The filed item's folder path, root first — `workItemsService.getFolderPath`
+   *  over `detail.folderId`. Read by the route and handed in, like the counts, so
+   *  the presenter stays a pure mapping. Ignored for an unfiled item. */
+  folderPath: readonly string[] = [],
 ): WorkItemDetail {
   const { item } = detail;
 
@@ -730,6 +744,8 @@ export function presentWorkItemDetail(
     }),
     descriptionMd: item.descriptionMd,
     parentKey: detail.parent === null ? null : detail.parent.identifier,
+    folderId: detail.folderId,
+    folderPath: detail.folderId === null ? null : [...folderPath],
     ancestorKeys: detail.ancestors.map((a) => a.identifier),
     children: detail.children.map((child) => ({
       ...ref(child),
@@ -901,6 +917,11 @@ export const createWorkItemBodySchema = z
     // A `MOTIR-<n>` key, never a cuid (ADR §7) — the route resolves it to the
     // internal parent id.
     parentKey: workItemKeySchema.nullish(),
+    // The FOLDER to file the new item into (MOTIR-5412) — a folder id, since a
+    // folder has no key. MUTUALLY EXCLUSIVE with `parentKey`: an item hangs under a
+    // work item OR sits in a folder, never both, so supplying both raises
+    // `PLACEMENT_CONFLICT` (422) rather than silently picking one.
+    folderId: z.string().min(1).nullish(),
     descriptionMd: z.string().nullish(),
     priority: prioritySchema.optional(),
     type: typeSchema.nullish(),
@@ -943,6 +964,11 @@ export const updateWorkItemBodySchema = z
     descriptionMd: z.string().nullish(),
     explanationMd: z.string().nullish(),
     parentKey: workItemKeySchema.nullish(),
+    /** File the item into this folder, or take it out of its folder with `null`
+     *  (MOTIR-5412). Applied atomically with every other field in the body, under
+     *  the same `If-Match`. Mutually exclusive with `parentKey`, exactly as on
+     *  create: both together is `PLACEMENT_CONFLICT` (422). */
+    folderId: z.string().min(1).nullish(),
     priority: prioritySchema.optional(),
     type: typeSchema.nullish(),
     executor: executorSchema.nullish(),

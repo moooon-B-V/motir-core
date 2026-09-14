@@ -3,6 +3,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
+import { foldersService } from '@/lib/services/foldersService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { SKELETON_ITEM_CAP, SKELETON_TOOL_NAME, summarizeSkeleton } from '@/lib/mcp/tools/skeleton';
@@ -40,6 +42,14 @@ interface SkeletonRow {
   status: string;
   parentKey: string | null;
   revision: string | null;
+  folderId: string | null;
+}
+
+interface SkeletonFolder {
+  id: string;
+  parentFolderId: string | null;
+  name: string;
+  path: string[];
 }
 
 interface SkeletonPayload {
@@ -49,6 +59,8 @@ interface SkeletonPayload {
   returned: number;
   truncated: boolean;
   limit: number;
+  folders: SkeletonFolder[];
+  foldersTruncated: boolean;
 }
 
 async function callSkeleton(
@@ -130,6 +142,69 @@ describe('skeleton — the whole project tree in one read', () => {
     expect(byKey.get(story.identifier)).toHaveProperty('revision');
   });
 
+  // MOTIR-5410 — a filed item is not an ordinary root: the row carries its OWN
+  // folder, the folders ride beside the rows with their name paths, and the text
+  // half names where the filed row sits.
+  it('carries folder PLACEMENT — a filed epic’s folderId, every folder with its path, and the path in the text', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    const parked = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Parked' },
+      fx.ctx,
+    );
+    const year = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: parked.id, name: '2025' },
+      fx.ctx,
+    );
+    const filed = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Filed epic', folderId: year.id },
+      fx.ctx,
+    );
+    const loose = await createTestWorkItem(fx, { kind: 'epic', title: 'Loose epic' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Story under the filed epic',
+      parentId: filed.id,
+    });
+
+    const res = await callSkeleton(fx.ctx, { projectKey: 'ACME' });
+    const payload = payloadOf(res);
+    const byKey = new Map(payload.items.map((row) => [row.key, row]));
+
+    expect(byKey.get(filed.identifier)?.folderId).toBe(year.id);
+    expect(byKey.get(filed.identifier)?.parentKey).toBeNull();
+    expect(byKey.get(loose.identifier)?.folderId).toBeNull();
+    // Only a root can be filed: the story's placement is its ancestor's key.
+    expect(byKey.get(child.identifier)?.folderId).toBeNull();
+    expect(byKey.get(child.identifier)?.parentKey).toBe(filed.identifier);
+
+    expect(payload.folders).toEqual([
+      { id: parked.id, parentFolderId: null, name: 'Parked', path: ['Parked'] },
+      { id: year.id, parentFolderId: parked.id, name: '2025', path: ['Parked', '2025'] },
+    ]);
+    expect(payload.foldersTruncated).toBe(false);
+    // Folders ride BESIDE the rows: the work-item count is untouched by them.
+    expect(payload.total).toBe(3);
+    expect(payload.items.map((r) => r.id)).not.toContain(parked.id);
+
+    const text = textOf(res);
+    expect(text).toContain(`${filed.identifier} (epic) — Parked ▸ 2025`);
+    expect(text).not.toContain(`${loose.identifier} (epic) —`);
+    expect(text).toContain('Folders (2):');
+  });
+
+  it('a project with no folders reports an EMPTY folder list, not an absent one', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await createTestWorkItem(fx, { kind: 'task', title: 'only' });
+
+    const res = await callSkeleton(fx.ctx, { projectKey: 'ACME' });
+    const payload = payloadOf(res);
+
+    expect(payload.folders).toEqual([]);
+    expect(payload.foldersTruncated).toBe(false);
+    expect(payload.items[0]?.folderId).toBeNull();
+    expect(textOf(res)).not.toContain('Folders (');
+  });
+
   it('a bounded answer reports the TRUNCATION FLAG — not merely a shorter list', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'ACME' });
     for (const title of ['one', 'two', 'three']) {
@@ -193,5 +268,19 @@ describe('skeleton — the whole project tree in one read', () => {
     expect(
       summarizeSkeleton({ projectKey: 'ACME', total: 9, returned: 2, truncated: true, limit: 2 }),
     ).toContain('NOT the whole project');
+    // A filed row whose folder is past the folder bound still names its folder id,
+    // and a capped folder list says so.
+    const capped = summarizeSkeleton({
+      projectKey: 'ACME',
+      total: 1,
+      returned: 1,
+      truncated: false,
+      limit: 5000,
+      items: [{ key: 'ACME-1', kind: 'epic', folderId: 'fold_gone' }],
+      folders: [{ id: 'fold_a', path: ['A'] }],
+      foldersTruncated: true,
+    });
+    expect(capped).toContain('ACME-1 (epic) — folder fold_gone');
+    expect(capped).toContain('Folders (1, TRUNCATED):');
   });
 });

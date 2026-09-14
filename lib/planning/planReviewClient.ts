@@ -20,6 +20,16 @@ export class PlanRequestError extends Error {
   constructor(
     readonly status: number,
     readonly code: string | null,
+    /**
+     * The refused proposal and the server's sentence, when the refusal names one
+     * (MOTIR-5418) — an approve refused by a folder deleted since the plan was
+     * written carries `planItemId` and a message naming `folder:<id>`, which is
+     * what lets the rail say which proposal rather than a generic error.
+     */
+    readonly detail: { planItemId: string | null; message: string | null } = {
+      planItemId: null,
+      message: null,
+    },
   ) {
     super(`Plan request failed (${status})`);
     this.name = 'PlanRequestError';
@@ -32,6 +42,21 @@ async function readError(res: Response): Promise<string | null> {
     return body.code ?? null;
   } catch {
     return null;
+  }
+}
+
+async function readErrorDetail(
+  res: Response,
+): Promise<{ code: string | null; planItemId: string | null; message: string | null }> {
+  try {
+    const body = (await res.json()) as { code?: string; planItemId?: string; error?: string };
+    return {
+      code: body.code ?? null,
+      planItemId: typeof body.planItemId === 'string' ? body.planItemId : null,
+      message: typeof body.error === 'string' ? body.error : null,
+    };
+  } catch {
+    return { code: null, planItemId: null, message: null };
   }
 }
 
@@ -55,7 +80,10 @@ export async function approvePlanRequest(planId: string): Promise<PlanWithItemsD
     method: 'POST',
     headers: { Accept: 'application/json' },
   });
-  if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
+  if (!res.ok) {
+    const { code, planItemId, message } = await readErrorDetail(res);
+    throw new PlanRequestError(res.status, code, { planItemId, message });
+  }
   return (await res.json()) as PlanWithItemsDto;
 }
 

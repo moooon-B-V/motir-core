@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import type { PlanItemStalenessDto } from '@/lib/dto/plans';
@@ -95,6 +96,31 @@ describe('planStalenessService — per-reason detection', () => {
     const v = verdictFor(result.items, items[0]!.id);
     expect(v.stale).toBe(true);
     expect(v.reasons).toEqual([{ code: 'parent_removed', parentId }]);
+  });
+
+  // ── MOTIR-5310 — a FOLDER placement is not a parent that can be removed ──────
+  //
+  // `parentRef: folder:<id>` files the add into a folder. The rule used to look the
+  // folder's id up among WORK ITEMS, find nothing, and flag every filed proposal
+  // `parent_removed` — so Approve opened the out-of-date confirm on a plan nothing
+  // had touched (found by the story's acceptance E2E, MOTIR-5421).
+  it('a proposed add FILED into a folder is all-clear — a folder ref is not a work-item parent', async () => {
+    const fx = await makeWorkItemFixture();
+    const folder = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Backlog ideas' },
+      fx.ctx,
+    );
+    const { planId, items } = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Map legacy fields', kind: 'story' },
+        parentRef: `folder:${folder.id}`,
+      },
+    ]);
+
+    const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+    expect(result.stale).toBe(false);
+    expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([]);
   });
 
   // ── MOTIR-3777 — an EDGE-LESS `add` is not stale because its parent is busy ──
