@@ -1,4 +1,5 @@
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
@@ -177,7 +178,7 @@ export const dispatchPromptService = {
     // `listRepoDelivery` classifies rather than refuses. (The archived refusal
     // over the whole SET is raised AFTER this settles, in
     // `resolveDispatchRepos`, so no arm is ever abandoned mid-flight.)
-    const [parentRow, blockerKeys, readiness, dispatchRepo, advisories, repoDelivery] =
+    const [parentRow, blockerKeys, readiness, dispatchRepo, advisories, repoDelivery, runScope] =
       await Promise.all([
         item.parentId
           ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -197,6 +198,13 @@ export const dispatchPromptService = {
         // It resolves the set through the item's REFERENCES, so it is also what
         // makes the array survive a repository rename on the host.
         workItemsService.listRepoDelivery(item.id, item.targetRepos, ctx),
+        // The RUN TARGET (MOTIR-5334): the scope of the running run that carries
+        // this item, when there is one. It decides only WHO publishes How to test
+        // — this agent on its own key, or the run's close-out on the scope — and
+        // has no refusal path.
+        withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          dispatchRunRepository.findRunningScopeForWorkItem(item.id, tx),
+        ),
       ]);
 
     const targetRepo = dispatchRepo?.name ?? null;
@@ -234,6 +242,7 @@ export const dispatchPromptService = {
       // lineage always wins, so a seed can never redirect one.
       sessionBranch:
         readiness.inheritedSessionBranch ?? item.sessionBranch ?? opts.sessionBranch ?? null,
+      runTargetKey: runScope?.identifier ?? null,
       // Passed through UNDEFAULTED. `undefined` is the template's own signal for
       // "the full protocol", so defaulting it here would put a second copy of
       // that decision in a second place.

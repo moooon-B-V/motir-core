@@ -64,6 +64,49 @@ export const dispatchRunRepository = {
     return tx.dispatchRun.create({ data });
   },
 
+  /**
+   * The id of the newest RUNNING run whose SCOPE TARGET is this work item, or
+   * that holds a leg for it, or null — the run a How-to-test record is
+   * attributed to (MOTIR-5331). HOW TO TEST is written onto the run target, so a
+   * scoped run's close-out publish on its story must resolve to that run even
+   * though the story is not one of its legs. Read server-side so an agent is
+   * never asked for an id it cannot know.
+   */
+  async findLatestRunningIdForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.dispatchRun.findFirst({
+      where: {
+        status: 'running',
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  },
+
+  /**
+   * The SCOPE of the newest RUNNING run holding a leg for one work item, or null
+   * — how a dispatch prompt learns whether its item is its own run target or one
+   * child of a scoped run (MOTIR-5334). A run is opened with its whole plan of
+   * legs before its first dispatch, so the leg exists by the time the prompt is
+   * asked for. Null when no running run carries the item, or the one that does
+   * has no scope.
+   */
+  async findRunningScopeForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; identifier: string } | null> {
+    const row = await tx.dispatchRun.findFirst({
+      where: { status: 'running', cards: { some: { workItemId } } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { scope: { select: { id: true, identifier: true } } },
+    });
+    return row?.scope ?? null;
+  },
+
   /** One run WITH its legs, in stored `position` order. */
   async findByIdWithCards(
     id: string,

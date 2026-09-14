@@ -14,6 +14,7 @@ import type {
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
+  NormalizedDeploymentStatus,
 } from './types';
 
 // The GitProvider seam (Story 7.10 · MOTIR-891). ONE interface every Git host
@@ -339,6 +340,19 @@ export interface GitProvider {
    * no GitLab job the fleet would ever boot a runner for.
    */
   parseWorkflowJobEvent?(rawPayload: unknown): NormalizedWorkflowJobEvent | null;
+
+  // --- Preview deployments (Story MOTIR-4906 · MOTIR-5329) -------------------
+
+  /**
+   * Normalize a raw DEPLOYMENT-STATUS webhook payload — the preview URL a
+   * repository's own CI reported for a commit — or `null` when it is not one
+   * (a different event, an unknown state, or a malformed body). PURE.
+   *
+   * OPTIONAL in the same style as the reads above: a host that reports no
+   * deployments simply does not declare it, and the webhook service no-ops.
+   * GitHub implements it here; GitLab's `deployment` hook is MOTIR-5332's.
+   */
+  parseDeploymentStatusEvent?(rawPayload: unknown): NormalizedDeploymentStatus | null;
 
   /**
    * Fetch the JOBS of one completed workflow run, normalized. The meter bills

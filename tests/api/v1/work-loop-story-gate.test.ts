@@ -182,6 +182,15 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'the event stream is the account of what the agent did, and an agent that could append to it ' +
     'could write its own account. The reporter is the process AROUND the agent, which speaks ' +
     '/api/v1. `work_item:edit`, mirroring the rest of the ingest.',
+  getDispatchRunCloseOutPrompt:
+    'MOTIR-5357 — the close-out prompt is a run READ for the process AROUND the agent: the CLI ' +
+    'fetches it and hands it to the agent as its prompt, so the agent never calls for it and a ' +
+    'tool would have no caller. It takes `project:browse`, the key ' +
+    '`dispatchRunService.getCloseOutPrompt` asserts, so no permission is invented.',
+  getWorkItemHowToTest:
+    'MOTIR-5358 — the HOW TO TEST read serves the CLI’s close-out summary. The agent WRITES the ' +
+    'record through `publish_test_instructions` and gets its receipt back from that tool; it has ' +
+    'no use for reading it again. `project:browse`, the key `howToTestService` asserts.',
   closeDispatchRun:
     'MOTIR-1789 · MOTIR-1792 — the same argument again, plus a mechanical one: the close is ' +
     'guarded by a row lock it shares with the server’s own abandoned-run reap, and a second ' +
@@ -240,7 +249,9 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 18 since MOTIR-4085 added the plan READ beside the approval — the SEVENTH
     // operation with no MCP counterpart, and the first whose reason is that an
     // agent has no USE for it rather than that it must be kept away from one.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(18);
+    // 20 since MOTIR-4906: the run's close-out prompt (MOTIR-5357) and the How
+    // to test read (MOTIR-5358), both READS the CLI makes for the operator's loop.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(20);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

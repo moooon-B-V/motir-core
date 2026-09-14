@@ -1,0 +1,33 @@
+{
+  // ── The COMPONENT TESTS project (MOTIR-5433) ─────────────────────────────────
+  //
+  // `tests/components/**` — the React render suites — carved out of
+  // `tsconfig.tests.json`, whose program had reached 89.3% of the default heap
+  // on `main` with the tripwire at 90% (`scripts/ci/assert-typecheck-headroom.mjs`).
+  // `tsconfig.base.json` priced this exact boundary before it was drawn: the
+  // largest single subdirectory, worth ~800 files out of the tests program.
+  //
+  // It REFERENCES the tests project because the render suites import
+  // `tests/helpers/**` and `tests/fixtures/**`; nothing outside
+  // `tests/components/` imports from here, so the arrow is one-way and the
+  // graph has no cycle. Each file belongs to EXACTLY ONE project:
+  // `tsconfig.tests.json` excludes this directory.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/components",
+    "tsBuildInfoFile": ".tsout/components/tsconfig.tsbuildinfo"
+  },
+  "include": ["tests/components/**/*.ts", "tests/components/**/*.tsx"],
+  "exclude": ["node_modules", "packages", ".tsout"],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.scripts.json" },
+    { "path": "./tsconfig.tests.json" }
+  ]
+}

@@ -2095,6 +2095,35 @@ export default defineConfig({
         'lib/repositories/monitorConnectionRepository.ts',
         'lib/repositories/monitorInstallationRepository.ts',
         'lib/mappers/monitorMappers.ts',
+        // ── Story MOTIR-4906 · HOW TO TEST per RUN ─────────────────────────────
+        // Its story gate (MOTIR-5337). Every file the story ADDED that compiles to
+        // something, MEASURED on the parent branch before being pinned below, over
+        // the story's own suites plus the gate (`tests/howToTest/storyGate*.test.*`).
+        //
+        // ⚠️ `lib/dto/howToTest.ts` and `lib/dto/testInstructions.ts` are NOT here:
+        // they declare types only, so a threshold on them would gate an empty map.
+        // The files the story only WIDENED (`promptTemplate.ts`, the two webhook
+        // services, `dispatchRunService.ts`, `DevelopmentSection.tsx`, …) are not
+        // added either — gating a whole pre-existing module on one new arm is the
+        // trap the `changeRequestCiFeedback.ts` note above names. The CLI's
+        // `closeOutHowToTest.ts` is gated in `packages/cli/vitest.config.ts`.
+        'lib/testInstructions/caps.ts',
+        'lib/testInstructions/errors.ts',
+        'lib/repositories/testInstructionsRepository.ts',
+        'lib/repositories/testInstructionsRepoRepository.ts',
+        'lib/repositories/repoDeploymentRepository.ts',
+        'lib/mappers/testInstructionsMappers.ts',
+        'lib/services/testInstructionsService.ts',
+        'lib/services/repoDeploymentService.ts',
+        'lib/services/howToTestService.ts',
+        'lib/howToTest/assemble.ts',
+        'lib/mcp/tools/publishTestInstructions.ts',
+        'lib/dispatch/runCloseOutPrompt.ts',
+        'app/api/v1/dispatch-runs/[id]/close-out-prompt/route.ts',
+        'app/api/v1/work-items/[key]/how-to-test/route.ts',
+        'components/howToTest/HowToTestBlock.tsx',
+        'components/markdown/CopyableCodeBlock.tsx',
+        'components/github/DevelopmentGateFrame.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -4207,6 +4236,113 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mappers/monitorMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // ── Story MOTIR-4906 · HOW TO TEST per RUN (Subtask MOTIR-5337) ────────
+        // MEASURED on the parent branch before pinning (stmts / branches / funcs /
+        // lines). Fourteen files at 100 on all four axes; `howToTestService.ts`
+        // 100 / 91.66 / 100 / 100, `testInstructionsService.ts` 99 / 93.93 / 100 /
+        // 100 and `publishTestInstructions.ts` 100 / 90 / 100 / 100 — each remaining
+        // arm a race or a schema-enforced absence (a lock that finds no row after the
+        // read that found it; a repository section index the record always has).
+        'lib/testInstructions/caps.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/testInstructions/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/testInstructionsRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/testInstructionsRepoRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/repoDeploymentRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/testInstructionsMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/testInstructionsService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/repoDeploymentService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/howToTestService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/howToTest/assemble.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mcp/tools/publishTestInstructions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/dispatch/runCloseOutPrompt.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/dispatch-runs/[id]/close-out-prompt/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/work-items/[key]/how-to-test/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/howToTest/HowToTestBlock.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/markdown/CopyableCodeBlock.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ⚠️ PINNED BELOW THE FLOOR, at what it measures (75 / 100 / 50 / 75). The
+        // file is ONE function plus ONE closure, and the closure is the frame's
+        // `onDecide` — unreachable by construction while it passes `verbs={[]}`:
+        // `ApprovalGateControl` calls `onDecide` only from a verb, and the
+        // `pull_request_approval` kind has none until MOTIR-4909 registers it.
+        // Covering it would mean a verb this story deliberately does not draw
+        // (`tests/components/development-block.test.tsx` asserts there is none).
+        // MOTIR-4909 raises this to the floor when it supplies the verbs.
+        'components/github/DevelopmentGateFrame.tsx': {
+          lines: 75,
+          functions: 50,
+          branches: 90,
+          statements: 75,
+        },
       },
     },
   },

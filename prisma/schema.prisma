@@ -314,6 +314,9 @@ model User {
   // audit-not-ownership semantics as `approvedAcceptanceEvidences`. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   withdrawnDesignEvidences         DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
+  // How-to-test records this user published (MOTIR-5328). SetNull on the FK:
+  // a deleted publisher leaves the record, unattributed.
+  publishedTestInstructions        TestInstructions[]        @relation("TestInstructionsPublishedBy")
   /// Approval gates this user decided (the audit's "who", ADR §6a). `SetNull` on
   /// the gate keeps the row — the back-relation is the inverse of that. NAMED
   /// since MOTIR-4912, because `routedToApprovalGates` is a second relation to
@@ -1093,6 +1096,11 @@ model Workspace {
   // workspace, like every other tenanted lifecycle row.
   designEvidences             DesignEvidence[]
   designAssets                DesignAsset[]
+  // How-to-test records (Story MOTIR-4906 · MOTIR-5328). Cascade with the workspace.
+  testInstructions            TestInstructions[]
+  testInstructionsRepos       TestInstructionsRepo[]
+  // Preview deployments reported by connected repositories (MOTIR-5329). Cascade.
+  repoDeployments             RepoDeployment[]
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
   boards                      Board[]
@@ -1629,6 +1637,9 @@ model Project {
   /// Every CLI run reported against this project (Story MOTIR-1789). Cascade —
   /// a run's whole meaning is the cards it worked, which go with the project.
   dispatchRuns                DispatchRun[]
+  /// How-to-test records for this project's cards (MOTIR-5328). Cascade.
+  testInstructions            TestInstructions[]
+  testInstructionsRepos       TestInstructionsRepo[]
 
   /// The addresses this project answers on, and which one is CANONICAL
   /// (Story MOTIR-3878 · `docs/decisions/public-tenant-addresses.md`).
@@ -2343,6 +2354,8 @@ model WorkItem {
   // it (docs/decisions/design-result.md §3), so this relation hangs off every
   // leaf, not only stories. Cascade with the item.
   designEvidences      DesignEvidence[]
+  /// How-to-test records, one current per repository (MOTIR-5328). Cascade.
+  testInstructions     TestInstructions[]
   /// Approval gates hanging off this card (the per-card read).
   approvalGates        ApprovalGate[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
@@ -4208,6 +4221,95 @@ model DesignAsset {
   /// The panel read: one result's assets in render order.
   @@index([designEvidenceId, position])
   @@map("design_asset")
+}
+
+/// HOW TO TEST one work item's change in one repository (Story MOTIR-4906 ·
+/// Subtask MOTIR-5328; `docs/decisions/approval-gates.md` §9).
+///
+/// The dispatched agent writes it onto the WORK ITEM through
+/// `publish_test_instructions`, instead of into a pull-request body Motir cannot
+/// read. A card whose pull requests land in two repositories carries two current
+/// records, because install / migrate / seed / run differ per repository — a
+/// single-repository card is the degenerate case of one.
+///
+/// VERSIONED like {@link DesignEvidence}: every publish is kept, and exactly one
+/// row per `(workItemId, repoId)` is current (the partial unique index
+/// `test_instructions_one_current_per_item_repo` enforces it). History is what
+/// lets the item page say *these were written for an earlier commit* rather than
+/// showing stale steps as though they were fresh.
+///
+/// The branch fetch is deliberately NOT stored: the read composes it from the
+/// pull request's own `headRef`, so the copyable block always checks out the
+/// branch Motir recorded rather than whatever the agent typed.
+model TestInstructions {
+  id            String   @id @default(cuid())
+  /// Tenancy of record ON THE ROW — RLS does not traverse foreign keys (the
+  /// `work_item_delivery` / `dispatch_run` precedent), so the policy stays a
+  /// pure active-workspace gate with no per-row subquery.
+  workspaceId   String   @map("workspace_id")
+  projectId     String   @map("project_id")
+  /// The RUN TARGET — the item the run was launched against (a story for a
+  /// container / scoped run, the card itself for a single-card dispatch).
+  /// `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment: HOW TO TEST
+  /// is per RUN, so one record per run lands here, never one per pull request.
+  workItemId    String   @map("work_item_id")
+  /// The run's HOW TO TEST as RICH TEXT (Markdown), exactly as the agent wrote it
+  /// over MCP — sections allowed, every command in a fenced code block (rendered
+  /// click-to-copy). `docs/decisions/approval-gates.md` §9 amendment, point 4.
+  bodyMd        String   @map("body_md") @db.Text
+  /// The path to open on the preview host, e.g. `/items/ACME-7`.
+  previewPath   String?  @map("preview_path")
+  /// The dispatch run that wrote it — the run this record is the output of. Null
+  /// for a runbook-driven run with no dispatch row. SetNull: a pruned run loses
+  /// attribution, never the record.
+  dispatchRunId String?  @map("dispatch_run_id")
+  /// WHO published it. SetNull, like every other audit stamp.
+  publishedById String?  @map("published_by_id")
+  isCurrent     Boolean  @default(true) @map("is_current")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem    WorkItem               @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun?           @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
+  publishedBy User?                  @relation("TestInstructionsPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  repos       TestInstructionsRepo[]
+
+  /// The history read: one item's runs, newest first. Its column list is
+  /// deliberately NOT the partial unique index's `(work_item_id)` — Prisma's
+  /// differ pairs indexes by column list (the partial-index rule in CLAUDE.md,
+  /// MOTIR-1960).
+  @@index([workItemId, createdAt(sort: Desc)])
+  @@index([workspaceId])
+  @@map("test_instructions")
+}
+
+/// One REPOSITORY SECTION of a run's HOW TO TEST record (Story MOTIR-4906 ·
+/// Subtask MOTIR-5328): the commit that repository's section was written for,
+/// and the setup commands a reviewer runs after checking out its branch. A run
+/// touching two repositories writes one `TestInstructions` with two of these.
+model TestInstructionsRepo {
+  id                 String @id @default(cuid())
+  workspaceId        String @map("workspace_id")
+  projectId          String @map("project_id")
+  testInstructionsId String @map("test_instructions_id")
+  /// FK → `GithubRepo`, the provider-agnostic repository row
+  /// `github_pull_request.repo_id` and `work_item_delivery.repo_id` already key on.
+  repoId             String @map("repo_id")
+  /// The head commit this repository's section was written for.
+  commitSha          String @map("commit_sha")
+  /// Section order within the record, as the publisher gave it.
+  position           Int    @default(0)
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testInstructions TestInstructions @relation(fields: [testInstructionsId], references: [id], onDelete: Cascade)
+  repo             GithubRepo       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([testInstructionsId, repoId])
+  @@index([repoId])
+  @@index([workspaceId])
+  @@map("test_instructions_repo")
 }
 
 /// Which vocabulary of decision verbs a gate carries (the approval-gate ADR
@@ -6321,6 +6423,9 @@ model GithubRepo {
   /// set row with a null realized repo, not a deleted plan.
   projectRepos                ProjectRepo[]
   workItemDeliveries          WorkItemDelivery[]
+  testInstructionsRepos       TestInstructionsRepo[]
+  /// Preview deployments this repository's host reported (MOTIR-5329). Cascade.
+  repoDeployments             RepoDeployment[]
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -6558,6 +6663,48 @@ model GithubCheckRun {
   @@unique([pullRequestId, commitSha, checkName, checkSuiteId])
   @@index([pullRequestId])
   @@map("github_check_run")
+}
+
+/// ONE DEPLOYMENT a repository's own host reported — the PREVIEW URL behind the
+/// HOW TO TEST block's "in the preview" path (Story MOTIR-4906 · MOTIR-5329).
+///
+/// Motir only LISTENS: it creates no deployment and posts no status. The row is
+/// the host's latest status for one deployment, keyed on the host's own id, and
+/// stored against the COMMIT it deployed (and the ref it was made from, for the
+/// read that knows a pull request's branch but not yet its head sha).
+///
+/// Out-of-order delivery is guarded IN THE WRITE: the upsert overwrites only when
+/// the incoming status is not older than the stored one, so a late `in_progress`
+/// never replaces a `success` that already arrived.
+model RepoDeployment {
+  id                   String   @id @default(cuid())
+  /// The repository's tenancy, copied onto the row so the policy is a pure gate
+  /// (the `test_instructions` / `work_item_delivery` precedent).
+  workspaceId          String   @map("workspace_id")
+  repoId               String   @map("repo_id")
+  provider             String
+  providerDeploymentId String   @map("provider_deployment_id")
+  commitSha            String   @map("commit_sha")
+  ref                  String
+  environment          String
+  /// One of `DEPLOYMENT_STATES` (`lib/git/types.ts`); text so a provider's new
+  /// state can be stored and rendered as `unknown` rather than refused.
+  state                String
+  /// Only an `http:` / `https:` URL is kept; anything else is stored NULL,
+  /// because the port renders this as a link.
+  environmentUrl       String?  @map("environment_url")
+  occurredAt           DateTime @map("occurred_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repo      GithubRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, provider, providerDeploymentId])
+  @@index([repoId, commitSha])
+  @@index([repoId, ref])
+  @@index([workspaceId])
+  @@map("repo_deployment")
 }
 
 /// THE CI feedback comment for one `(change request, head commit, work item)`
@@ -9038,8 +9185,10 @@ model DispatchRun {
   scope     WorkItem? @relation("DispatchRunScope", fields: [scopeWorkItemId], references: [id], onDelete: SetNull)
   createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  cards  DispatchRunCard[]
-  events DispatchRunEvent[]
+  cards            DispatchRunCard[]
+  events           DispatchRunEvent[]
+  /// How-to-test records this run wrote (MOTIR-5328). SetNull on the FK.
+  testInstructions TestInstructions[]
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
