@@ -4,6 +4,7 @@ import {
   type GithubInstallation,
   type GithubPullRequest,
   type GithubRepo,
+  type MergeAuthority,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import { parsePullRequestReference } from '@/lib/github/prReferenceQuery';
@@ -95,6 +96,16 @@ export type GithubPullRequestWithChecks = GithubPullRequest & {
 /** A PR row with its repo AND the parent installation — the workspace-tenancy
  *  chain the explicit-link service validates (installation → repo → PR), plus
  *  the check rows the returned DTO needs (MOTIR-1596). */
+/** The merge record Motir writes when it merges or enqueues a pull request
+ *  (MOTIR-5520). `mergeOutcomeRef` is the merge commit SHA, or `queue:<entryId>`. Named after
+ *  its COLUMNS on purpose: `outcomeRef` is `approval_gate`'s field, and it means the
+ *  status key a decision applied — a second `outcomeRef` meaning a SHA is exactly
+ *  the confusion this record exists to keep off the gate. */
+export interface MotirMergeRecordInput {
+  mergeAuthority: MergeAuthority;
+  mergeOutcomeRef: string;
+}
+
 export type GithubPullRequestWithInstallation = GithubPullRequestWithContext & {
   repo: GithubRepo & { installation: GithubInstallation };
 };
@@ -482,6 +493,57 @@ export const githubPullRequestRepository = {
    * which returns the same `GithubPullRequestWithInstallation` the DTO is built
    * from. Nothing about the row changes on a link any more, so there is nothing
    * to re-read FOR — only the row itself. */
+
+  /** Record a merge MOTIR performed onto the pull request's row (MOTIR-5520;
+   *  `approval-gates.md` §4 second amendment, decision 9) — WHO or WHAT authorised
+   *  it and WHAT it produced. Written only by Motir's own merge paths (the gate's
+   *  entry point, auto mode); the webhook owns `merged` / `mergedAt` and never
+   *  touches these.
+   *
+   *  ⚠️ IDEMPOTENT BY ITS WHERE CLAUSE, NOT BY A READ: one statement that matches the
+   *  row only when it does NOT already carry exactly this record, so re-recording the
+   *  same values writes nothing and leaves `updatedAt` where it was. A DIFFERENT
+   *  record overwrites — a queued pull request's `queue:<entryId>` can be followed by
+   *  a later Motir merge of the same row — and the returned count is how the caller
+   *  tells a write (1) from a no-op or a vanished row (0).
+   *
+   *  The null arms are load-bearing: `NOT (merge_authority = 'gate')` is NULL, not
+   *  true, on an unrecorded row, so without them the FIRST write would match nothing.
+   *  Write path → `tx`. */
+  async recordMotirMerge(
+    pullRequestId: string,
+    record: MotirMergeRecordInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: {
+        id: pullRequestId,
+        OR: [
+          { mergeAuthority: null },
+          { mergeOutcomeRef: null },
+          { NOT: { mergeAuthority: record.mergeAuthority } },
+          { NOT: { mergeOutcomeRef: record.mergeOutcomeRef } },
+        ],
+      },
+      data: { mergeAuthority: record.mergeAuthority, mergeOutcomeRef: record.mergeOutcomeRef },
+    });
+    return result.count;
+  },
+
+  /** The pull requests a page of merge gates asks about, keyed by id, with the
+   *  repository and check rows a queue row renders (MOTIR-4793) — ONE query for the
+   *  whole page, never one per gate. An id that no longer resolves is simply absent. */
+  async findManyByIdsForSummary(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, GithubPullRequestWithContext>> {
+    if (ids.length === 0) return new Map();
+    const rows = await tx.githubPullRequest.findMany({
+      where: { id: { in: ids } },
+      include: { repo: true, checkRuns: true },
+    });
+    return new Map(rows.map((row) => [row.id, row]));
+  },
 
   /** Stamp a merged PR's capture facts onto its row (MOTIR-2922). `updateMany`
    *  rather than `update` deliberately: this runs POST-COMMIT and best-effort, so

@@ -5,9 +5,11 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
-import { approvalGatesService, type GateDecision } from '@/lib/services/approvalGatesService';
-import { ApprovalGateError } from '@/lib/approvalGates/errors';
+import type { GateDecision } from '@/lib/services/approvalGatesService';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import { ApprovalGateError, ApprovalGateMergeRefusedError } from '@/lib/approvalGates/errors';
 import { ApprovalGateAlreadyDecidedError } from '@/lib/approvalGates/errors';
+import { MergeChangeRequestError } from '@/lib/git/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
@@ -90,7 +92,9 @@ export async function decideApprovalGateAction(input: {
   const { gateId, decision, identifier, noteMd } = input;
   const ctx = await requireContext();
   try {
-    const { gate, filesKept } = await approvalGatesService.decide(
+    // Through the merge entry point (MOTIR-5517): an approve on a merge gate merges
+    // first and is decided only once it did; every other decision is the door's.
+    const { gate, filesKept } = await pullRequestMergeService.decideGate(
       // `ui` — a SERVER ACTION is a person pressing the control in Motir. It is
       // the audit's strongest claim (ADR §6a: *"a human click must be
       // distinguishable from a programmatic call"*), so it is stated at the one
@@ -120,6 +124,17 @@ export async function decideApprovalGateAction(input: {
     }
     if (err instanceof PermissionDeniedError) {
       return { ok: false, refusal: toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED') };
+    }
+    if (err instanceof ApprovalGateMergeRefusedError) {
+      return {
+        ok: false,
+        refusal: toGateRefusal(err.tag, { permission: err.permission, reason: err.reason }),
+      };
+    }
+    // The host did not answer the merge: nothing was decided, and there is no refusal
+    // of the host's to draw — the frame's unexpected arm, logged by the service.
+    if (err instanceof MergeChangeRequestError) {
+      return { ok: false, refusal: toGateRefusal('UNEXPECTED') };
     }
     if (err instanceof ApprovalGateError) {
       // ⚠️ The already-decided refusal is the one that can NAME the winner, and

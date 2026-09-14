@@ -131,26 +131,26 @@ carries a decided policy, and no row says `new`.
 > That is eight rows leaving the pending count and one gaining a gate — nine, and the guard's pin
 > falls **36 → 27** for exactly that reason. No key was added, removed or re-labelled.
 
-| Domain               | Permissions                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------- |
-| `ai` (4)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ · `ai:decide_plan`                                      |
-| `approval` (1)       | `approval:decide_any` (MOTIR-5292)                                                                      |
-| `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                                           |
-| `board` (1)          | `board:configure`                                                                                       |
-| `comment` (2)        | `comment:add` · `comment:moderate`                                                                      |
-| `estimation` (1)     | `estimation:manage`                                                                                     |
-| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                                                    |
-| `import` (1)         | `import:run` ᵖ                                                                                          |
-| `integration` (1)    | `integration:manage`                                                                                    |
-| `member` (2)         | `member:manage` · `project:manage_access`                                                               |
-| `project` (2)        | `project:administer` · `project:browse`                                                                 |
-| `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`                            |
-| `report` (3)         | `report:view` ᵖ · `saved_filter:manage` ᵖ · `saved_filter:manage_any`                                   |
-| `repository` (2)     | `repository:manage` · `repository:manage_access`                                                        |
-| `sprint` (1)         | `sprint:manage` ᵖ                                                                                       |
-| `watcher` (1)        | `watcher:manage`                                                                                        |
-| `work_item` (5)      | `project:browse` · `work_item:archive` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
-| `workflow` (2)       | `automation:manage` · `workflow:manage`                                                                 |
+| Domain               | Permissions                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `ai` (4)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ · `ai:decide_plan`                                                                       |
+| `approval` (1)       | `approval:decide_any` (MOTIR-5292)                                                                                                       |
+| `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                                                                            |
+| `board` (1)          | `board:configure`                                                                                                                        |
+| `comment` (2)        | `comment:add` · `comment:moderate`                                                                                                       |
+| `estimation` (1)     | `estimation:manage`                                                                                                                      |
+| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                                                                                     |
+| `import` (1)         | `import:run` ᵖ                                                                                                                           |
+| `integration` (1)    | `integration:manage`                                                                                                                     |
+| `member` (2)         | `member:manage` · `project:manage_access`                                                                                                |
+| `project` (2)        | `project:administer` · `project:browse`                                                                                                  |
+| `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`                                                             |
+| `report` (3)         | `report:view` ᵖ · `saved_filter:manage` ᵖ · `saved_filter:manage_any`                                                                    |
+| `repository` (2)     | `repository:manage` · `repository:manage_access`                                                                                         |
+| `sprint` (1)         | `sprint:manage` ᵖ                                                                                                                        |
+| `watcher` (1)        | `watcher:manage`                                                                                                                         |
+| `work_item` (6)      | `project:browse` · `work_item:archive` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:merge_pull_request` · `work_item:triage` ᵖ |
+| `workflow` (2)       | `automation:manage` · `workflow:manage`                                                                                                  |
 
 ᵖ = `planned` — justified here, not yet enforced.
 

@@ -146,3 +146,36 @@ export class RepoFileReadError extends Error {
     this.status = status;
   }
 }
+
+// ── MERGE (MOTIR-5514) ────────────────────────────────────────────────────────
+// A merge's REFUSALS are results (`MergeChangeRequestResult`), because each is an
+// answer a person can act on. This is the one thing that is NOT an answer: the host
+// did not respond in time, could not be reached, or replied with a status no
+// refusal names. It stays loud on purpose — a timeout reported as "the host
+// refused" would send a person off to satisfy a rule that does not exist.
+
+/** A merge call that produced no answer the seam can name. RETRYABLE. */
+export class MergeChangeRequestError extends Error {
+  readonly code = 'MERGE_CHANGE_REQUEST_FAILED' as const;
+  readonly providerId: string;
+  readonly reason: 'timeout' | 'unreachable' | 'unexpected_status';
+  readonly status: number | null;
+
+  constructor(
+    providerId: string,
+    reason: 'timeout' | 'unreachable' | 'unexpected_status',
+    detail: { status?: number; message?: string } = {},
+  ) {
+    const what =
+      reason === 'timeout'
+        ? 'did not answer in time'
+        : reason === 'unreachable'
+          ? 'could not be reached'
+          : `answered ${detail.status ?? 'an unexpected status'}`;
+    super(`the ${providerId} merge ${what}` + (detail.message ? ` (${detail.message})` : ''));
+    this.name = 'MergeChangeRequestError';
+    this.providerId = providerId;
+    this.reason = reason;
+    this.status = detail.status ?? null;
+  }
+}

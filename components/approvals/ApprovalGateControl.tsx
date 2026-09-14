@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill, type PillProps } from '@/components/ui/Pill';
@@ -116,6 +117,16 @@ export interface ApprovalGateControlProps {
   verbs: GateVerb[];
   /** Band 3's sentence: what approving will DO, beside the verbs. */
   consequence: ReactNode;
+  /**
+   * THE SETTINGS DOOR (MOTIR-5513; `approval-control.mock.html` panel `S`) — a
+   * KIND-SUPPLIED way out of being asked: a link to the project setting that
+   * decides whether this kind asks at all. Rendered in band 3's LEFT column, under
+   * the consequence line; never a verb and never beside the verbs, and pressing it
+   * decides nothing. The CALLER passes it only to a viewer holding the key its
+   * destination is guarded by (`settingsDoorFor`) — the frame never guesses.
+   * Absent, band 3 is byte-identical to state `A`.
+   */
+  settingsDoor?: { href: string; label: string };
   /** The confirm band's list — what approving is about to do, per kind. */
   confirmConsequences: ReactNode[];
   /** Who the gate is waiting on, for state `B`. */
@@ -378,6 +389,22 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       headline = t('decidedImmutable.title');
       break;
+    case 'MERGE_CHECKS_NOT_GREEN':
+      headline = t('mergeChecksNotGreen.title');
+      break;
+    case 'MERGE_CONFLICT':
+      headline = t('mergeConflict.title');
+      break;
+    case 'MERGE_BRANCH_PROTECTED':
+      // `refusal.reason` is the host's sentence and is NOT drawn — see the union.
+      headline = t('mergeBranchProtected.title');
+      break;
+    case 'MERGE_ALREADY_MERGED':
+      headline = t('mergeAlreadyMerged.title');
+      break;
+    case 'MERGE_APP_PERMISSION_MISSING':
+      headline = t('mergeAppPermissionMissing.title');
+      break;
     case 'UNEXPECTED':
       headline = t('unexpected.title');
       break;
@@ -406,6 +433,14 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
   }
 
   const nextActionKey = refusal.tag === 'UNEXPECTED' ? 'unexpected' : refusalKeyOf(refusal.tag);
+  // The one next action that names something: the permission the host asked for.
+  // Unnamed when the host did not say, so the sentence never carries a blank.
+  const nextAction =
+    refusal.tag === 'MERGE_APP_PERMISSION_MISSING'
+      ? refusal.permission
+        ? t('mergeAppPermissionMissing.next', { permission: refusal.permission })
+        : t('mergeAppPermissionMissing.nextUnnamed')
+      : t(`${nextActionKey}.next`);
 
   return (
     <div
@@ -417,8 +452,7 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
         aria-hidden
       />
       <p className="text-[13px] leading-snug text-(--el-text-strong)">
-        <b>{headline}</b>{' '}
-        <span className="text-(--el-text-secondary)">{t(`${nextActionKey}.next`)}</span>
+        <b>{headline}</b> <span className="text-(--el-text-secondary)">{nextAction}</span>
       </p>
     </div>
   );
@@ -483,6 +517,16 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'alreadyAwaiting';
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       return 'decidedImmutable';
+    case 'MERGE_CHECKS_NOT_GREEN':
+      return 'mergeChecksNotGreen';
+    case 'MERGE_CONFLICT':
+      return 'mergeConflict';
+    case 'MERGE_BRANCH_PROTECTED':
+      return 'mergeBranchProtected';
+    case 'MERGE_ALREADY_MERGED':
+      return 'mergeAlreadyMerged';
+    case 'MERGE_APP_PERMISSION_MISSING':
+      return 'mergeAppPermissionMissing';
   }
 }
 
@@ -494,6 +538,7 @@ export function ApprovalGateControl({
   port,
   verbs,
   consequence,
+  settingsDoor,
   confirmConsequences,
   routedToLabel,
   filesKept = null,
@@ -574,6 +619,23 @@ export function ApprovalGateControl({
       : phase.kind === 'pending'
         ? { severity: 'info' }
         : { tone: 'awaiting' };
+
+  // Band 3's left-hand sentence — what approving will DO, who it waits on, or
+  // (state `X`) that the verbs return once the subject renders. Hoisted so the
+  // settings door can sit UNDER it without the no-door row changing by a byte.
+  const consequenceLine = (
+    <span className="text-[13px] text-(--el-text-secondary)">
+      {!canDecide
+        ? t('waitingOn', { name: routedToLabel ?? t('theAssignee') })
+        : portShown
+          ? consequence
+          : // The asset's `X` footer, verbatim in intent: "The verbs
+            // return when the subject renders." It replaces the
+            // consequence sentence because there is no consequence to
+            // state — nothing is pressable.
+            tPort('verbsReturn')}
+    </span>
+  );
 
   const frame = (
     <div
@@ -732,17 +794,22 @@ export function ApprovalGateControl({
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3">
-          <span className="text-[13px] text-(--el-text-secondary)">
-            {!canDecide
-              ? t('waitingOn', { name: routedToLabel ?? t('theAssignee') })
-              : portShown
-                ? consequence
-                : // The asset's `X` footer, verbatim in intent: "The verbs
-                  // return when the subject renders." It replaces the
-                  // consequence sentence because there is no consequence to
-                  // state — nothing is pressable.
-                  tPort('verbsReturn')}
-          </span>
+          {settingsDoor ? (
+            // THE SETTINGS DOOR (MOTIR-5513, panel `S`): band 3's LEFT column,
+            // UNDER the consequence line. A column only when a kind supplies one,
+            // so a kind that supplies none renders this row exactly as before.
+            <span className="flex min-w-0 flex-col gap-1">
+              {consequenceLine}
+              <Link
+                href={settingsDoor.href}
+                className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
+              >
+                {settingsDoor.label}
+              </Link>
+            </span>
+          ) : (
+            consequenceLine
+          )}
           {/* ⚠️ STATE `B` RENDERS NO VERBS AT ALL — not disabled ones. A reader
               who may not decide can still SEE what is being decided; a greyed
               button would tell them the control is theirs and broken.

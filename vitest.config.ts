@@ -2064,6 +2064,30 @@ export default defineConfig({
         // this list's own rule: MEASURED at 100 / 100 / 100 / 100 on this branch.
         'lib/approvalGates/routing.ts',
         'lib/mappers/approvalGateMappers.ts',
+        // Story MOTIR-4882 · MOTIR-5519 — the MERGE story's files that carry logic:
+        // the `pull_request_merge` handler and its settings door, the provenance
+        // resolver, the run-target resolver, gate raise/withdraw, the merge entry
+        // point, and auto mode with its job. MEASURED on this branch before being
+        // pinned, per the note above — 100 / 100 / 100 / 100 on every one of the eight —
+        // over `tests/git`, `tests/github/{mergeGates,pullRequestMergeEntry,
+        // pullRequestAutoMerge,pullRequestMergeRecord,appRoleForRepo,ciGreenPromotion,
+        // mergeStoryEdges}`, `tests/integration/mergeStoryJourney`,
+        // `tests/approval-gate-{merge-kind,settings-door-read,coverage-floor}`,
+        // `tests/components/approval-gate-control` and `tests/howToTest/howToTestService`.
+        //
+        // `lib/git/providers/github.ts` is NOT pinned here: it is the whole GitHub
+        // provider, and this story added only its merge and enqueue paths. Those paths
+        // are fully covered (`tests/git/mergeChangeRequest{,Edges}.test.ts`); the file's
+        // remaining arms belong to the provider's pre-existing readers and parsers,
+        // whose own stories own their numbers.
+        'lib/approvalGates/pullRequestMergeHandler.ts',
+        'lib/approvalGates/settingsDoor.ts',
+        'lib/github/appRoleForRepo.ts',
+        'lib/services/runTarget.ts',
+        'lib/services/mergeGates.ts',
+        'lib/services/pullRequestMergeService.ts',
+        'lib/services/pullRequestAutoMergeService.ts',
+        'lib/jobs/definitions/pullRequestAutoMerge.ts',
         'components/approvals/ApprovalGateControl.tsx',
         'components/approvals/portRenderStatus.tsx',
         // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN — the approval overlay ───
@@ -2166,6 +2190,41 @@ export default defineConfig({
         },
         'lib/approvalGates/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/approvalGates/refusals.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // Story MOTIR-4882 · MOTIR-5519 — measured at 100 on all four axes (see the
+        // `include` note); pinned at the project's 90 floor so a refactor has room.
+        'lib/approvalGates/pullRequestMergeHandler.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/settingsDoor.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/github/appRoleForRepo.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/services/runTarget.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/services/mergeGates.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/services/pullRequestMergeService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/pullRequestAutoMergeService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/pullRequestAutoMerge.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'lib/approvalGates/routing.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/mappers/approvalGateMappers.ts': {
           lines: 90,

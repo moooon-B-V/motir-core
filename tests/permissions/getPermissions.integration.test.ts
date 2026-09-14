@@ -191,6 +191,10 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // because a delete cascade belongs at admin. That stays true — this is the
       // other operation the one key was carrying.
       'work_item:archive',
+      // MOTIR-4793 — merging a pull request through a merge gate. Held by every
+      // built-in role that holds `work_item:edit` (the key's own rule), so `member`
+      // gains it; `viewer` and the implicit workspace-member grant do not.
+      'work_item:merge_pull_request',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -219,6 +223,10 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // because a delete cascade belongs at admin. That stays true — this is the
       // other operation the one key was carrying.
       'work_item:archive',
+      // MOTIR-4793 — merging a pull request through a merge gate. Held by every
+      // built-in role that holds `work_item:edit` (the key's own rule), so `member`
+      // gains it; `viewer` and the implicit workspace-member grant do not.
+      'work_item:merge_pull_request',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -245,6 +253,10 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // because a delete cascade belongs at admin. That stays true — this is the
       // other operation the one key was carrying.
       'work_item:archive',
+      // MOTIR-4793 — merging a pull request through a merge gate. Held by every
+      // built-in role that holds `work_item:edit` (the key's own rule), so `member`
+      // gains it; `viewer` and the implicit workspace-member grant do not.
+      'work_item:merge_pull_request',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -270,6 +282,8 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'ai:decide_plan',
       // MOTIR-3629 — see the note on the `open` row above.
       'work_item:archive',
+      // MOTIR-4793 — see the note on the `open` row above.
+      'work_item:merge_pull_request',
       ...PUBLIC_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
@@ -388,7 +402,10 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // `docs/decisions/token-permissions.md` §10 — a member could already edit
     // every field and could not hide a row, which is a stronger restriction than
     // "may not destroy a subtree" and one nobody chose. Those are the only
-    // additions this assertion admits.
+    // additions this assertion admits — and MOTIR-4793 adds one more on the record:
+    // `work_item:merge_pull_request`, which every built-in role holding
+    // `work_item:edit` holds (`docs/decisions/approval-gates.md` §4, second amendment,
+    // decision 10).
     expect([...(catalog.roles.find((r) => r.key === 'viewer')?.permissions ?? [])].sort()).toEqual(
       ['project:browse', 'report:view'].sort(),
     );
@@ -397,6 +414,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
         'project:browse',
         'work_item:edit',
         'work_item:archive',
+        'work_item:merge_pull_request',
         'comment:add',
         'attachment:create',
         ...MEMBER_FACING_AT_MEMBER(),
