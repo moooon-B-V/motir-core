@@ -57,3 +57,18 @@ export async function seededBugsFolderIds(): Promise<Set<string>> {
     projects.flatMap((p) => (p.bugDestinationFolderId ? [p.bugDestinationFolderId] : [])),
   );
 }
+
+/**
+ * Put a project back to NO folders: clear its bug destination, then delete the
+ * seeded Bugs folder (MOTIR-4935). For a spec that drives the folder doors over a
+ * folder set it fully controls, or that needs a project with no folders at all.
+ * The seed itself is asserted in `tests/projects/bugsFolderSeed.test.ts`.
+ */
+export async function removeSeededBugsFolder(projectId: string): Promise<void> {
+  const folderId = await seededBugsFolderId(projectId);
+  await adminDb.project.update({
+    where: { id: projectId },
+    data: { bugDestinationFolderId: null },
+  });
+  await adminDb.folder.delete({ where: { id: folderId } });
+}

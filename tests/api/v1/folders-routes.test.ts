@@ -21,6 +21,7 @@ import {
 } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { removeSeededBugsFolder } from '../../fixtures/projectFixtures';
 
 // The `/api/v1` FOLDER resource (Story MOTIR-5310 · MOTIR-5408), end to end
 // through `withV1Route` against real Postgres.
@@ -129,7 +130,10 @@ async function expectRefusal(res: Response, status: number, code: string): Promi
 }
 
 async function editor(): Promise<V1ProjectCaller> {
-  return createV1ProjectCaller({ permissions: [...EDITOR] });
+  const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
+  // These specs drive the folder doors over a folder set they fully control.
+  await removeSeededBugsFolder(caller.fixture.projectId);
+  return caller;
 }
 
 /** A second project in the caller's workspace, with one folder in it. */

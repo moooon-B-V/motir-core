@@ -7,6 +7,7 @@ import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { removeSeededBugsFolder } from '../../fixtures/projectFixtures';
 
 // Repository-layer tests for the Story-7.16 issue-importer persistence leaves
 // (MOTIR-939): importRepository + importedIssueRepository. Real Postgres (no
@@ -125,6 +126,11 @@ describe('importRepository', () => {
     const id = await makeImport(fx);
 
     // Deleting the user must not destroy the import run — createdBy SET NULL.
+    // The owner created the project, so it also created the project's seeded Bugs
+    // folder (MOTIR-4935), whose creator is `Restrict` — as every folder's is. The
+    // product never hard-deletes a user (erasure anonymises in place), so this raw
+    // delete is a fixture act: take the folder out of its way first.
+    await removeSeededBugsFolder(fx.projectId);
     await adminDb.user.delete({ where: { id: fx.ownerId } });
 
     const read = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
