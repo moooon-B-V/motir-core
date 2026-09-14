@@ -377,5 +377,23 @@
  *   renders the `## How to test` section of a session pull request body from the
  *   same record the item page shows. Additive: ONE new operation; gated on
  *   `project:browse`. Same re-read-before-merge rule as `1.27.0` above.
+ *
+ * - `1.29.0` — MOTIR-5408 adds the FOLDER resource: `listFolders`
+ *   (`GET /api/v1/projects/{projectKey}/folders`, one level, keyset-paged over
+ *   `(position, id)`), `createFolder` (`POST` on the same path), `getFolder`,
+ *   `updateFolder` and `deleteFolder` (`GET` / `PATCH` / `DELETE`
+ *   `/api/v1/folders/{folderId}`), plus the `folders` cursor collection and six
+ *   folder error codes (`FOLDER_NOT_FOUND`, `INVALID_FOLDER_NAME`,
+ *   `FOLDER_NAME_TAKEN`, `FOLDER_CYCLE`, `CROSS_PROJECT_FOLDER`,
+ *   `SUBTASK_NEEDS_PLACEMENT`), each of which rendered as a bare 500 before.
+ *
+ *   Additive: five new operations (§8's first allowed change) and new codes for
+ *   new conditions. No declared shape changed and nothing was removed. Reads are
+ *   gated on `project:browse`, writes on `work_item:edit` — the key the folder
+ *   service asserts — and `CLI_TOKEN_GRANT` carries both.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.28.0` at `4a4975c40`, so this claims `1.29.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATIONS.
  */
-export const V1_CONTRACT_VERSION = '1.28.0';
+export const V1_CONTRACT_VERSION = '1.29.0';

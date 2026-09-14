@@ -187,6 +187,51 @@ export const folderRepository = {
        LIMIT ${page.take} OFFSET ${page.offset}`;
   },
 
+  /**
+   * One KEYSET page of a level's folders (Story MOTIR-5310 · MOTIR-5408) — the
+   * `/api/v1` folder list. Ordered by `(position, id)`, a TOTAL order, and seeks
+   * strictly after `after`, so a folder created or moved between two pages never
+   * shifts a page boundary the way `findLevel`'s offset would. Reads `take` rows;
+   * the caller asks for one more than it serves to learn whether a page follows.
+   *
+   * The same explicit `workspace_id` + `project_id` gate as `findLevel`.
+   */
+  async findLevelAfter(
+    projectId: string,
+    workspaceId: string,
+    parentFolderId: string | null,
+    after: { position: string; id: string } | undefined,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Folder[]> {
+    const parentPred =
+      parentFolderId === null
+        ? Prisma.sql`"parent_folder_id" IS NULL`
+        : Prisma.sql`"parent_folder_id" = ${parentFolderId}`;
+    const seek = after
+      ? Prisma.sql`AND ("position", "id") > (${after.position}, ${after.id})`
+      : Prisma.empty;
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "folder"
+       WHERE "project_id" = ${projectId}
+         AND "workspace_id" = ${workspaceId}
+         AND ${parentPred}
+         ${seek}
+       ORDER BY "position" ASC, "id" ASC
+       LIMIT ${take}`;
+    if (rows.length === 0) return [];
+    const byId = new Map(
+      (await tx.folder.findMany({ where: { id: { in: rows.map((r) => r.id) } } })).map((f) => [
+        f.id,
+        f,
+      ]),
+    );
+    return rows.flatMap((r) => {
+      const folder = byId.get(r.id);
+      return folder ? [folder] : [];
+    });
+  },
+
   /** The FULL folder count of one lazy tree level — the predicate `findLevel` reads. */
   async countLevel(
     projectId: string,
