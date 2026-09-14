@@ -6936,7 +6936,7 @@
       "title": "项目",
       "caption": "Motir 正在同步的 GitLab 项目。连接一个项目后，Motir 即可读取其合并请求和流水线。",
       "empty": "尚未连接任何项目。连接一个项目即可开始同步合并请求和流水线。",
-      "foot": "连接项目会为合并请求和流水线事件添加一个 Webhook。Motir 不会为 GitLab 项目建立代码索引，因此 AI 规划无法读取其源代码。",
+      "foot": "连接项目会为合并请求、流水线、推送和部署事件添加一个 Webhook。Motir 不会为 GitLab 项目建立代码索引，因此 AI 规划无法读取其源代码。",
       "synced": "同步中",
       "syncLabel": "同步 {project}",
       "connectProject": "连接项目",
@@ -6948,7 +6948,9 @@
       "error": {
         "not_connected": "GitLab 尚未连接。请重新连接以选择项目。",
         "not_found": "该项目已不在你的 GitLab 成员项目中。",
-        "unavailable": "无法连接到 GitLab——你的授权可能已被撤销。请重新连接 GitLab 后再试。"
+        "unavailable": "无法连接到 GitLab——你的授权可能已被撤销。请重新连接 GitLab 后再试。",
+        "webhook_not_configured": "此 Motir 服务器未配置 GitLab Webhook 密钥，因此无法接收项目事件。请联系服务器管理员设置 GITLAB_WEBHOOK_SECRET。",
+        "webhook_failed": "无法为该项目添加 Motir 的 Webhook。在 GitLab 中添加 Webhook 需要该项目的 Maintainer 角色。"
       }
     }
   },

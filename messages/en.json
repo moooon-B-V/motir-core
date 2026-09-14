@@ -6940,7 +6940,7 @@
       "title": "Projects",
       "caption": "The GitLab projects Motir syncs. Connecting a project lets Motir read its merge requests and pipelines.",
       "empty": "No projects connected yet. Connect a project to start syncing merge requests and pipelines.",
-      "foot": "Connecting a project adds a webhook for merge-request and pipeline events. Motir does not build a code index for GitLab projects, so AI planning cannot read their source.",
+      "foot": "Connecting a project adds a webhook for merge-request, pipeline, push and deployment events. Motir does not build a code index for GitLab projects, so AI planning cannot read their source.",
       "synced": "Synced",
       "syncLabel": "Sync {project}",
       "connectProject": "Connect a project",
@@ -6952,7 +6952,9 @@
       "error": {
         "not_connected": "GitLab isn't connected. Reconnect to choose projects.",
         "not_found": "That project isn't among your GitLab memberships anymore.",
-        "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again."
+        "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again.",
+        "webhook_not_configured": "This Motir server has no GitLab webhook secret configured, so it can't receive project events. Ask whoever runs it to set GITLAB_WEBHOOK_SECRET.",
+        "webhook_failed": "Couldn't add Motir's webhook to that project. Adding a webhook needs the Maintainer role on the project in GitLab."
       }
     }
   },
