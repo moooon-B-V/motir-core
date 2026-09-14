@@ -130,7 +130,11 @@ test('a manager finds the merge setting, changes it and it holds — and a membe
     await expect(option(page, AUTO)).toContainText(
       'When its checks pass, Motir merges the pull request without asking anyone.',
     );
-    await expect(page.getByText(/Motir does not merge pull requests yet/)).toBeVisible();
+    // `getByRole`, not a page-rooted `getByText`: the accessibility tree excludes a
+    // streamed or outgoing subtree, so the notice cannot match twice (MOTIR-5037).
+    await expect(
+      page.getByRole('paragraph').filter({ hasText: /Motir does not merge pull requests yet/ }),
+    ).toBeVisible();
     await expect(option(page, ASK)).toHaveAttribute('aria-checked', 'true');
     await beat();
   });
