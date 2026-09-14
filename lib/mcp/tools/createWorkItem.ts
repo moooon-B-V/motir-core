@@ -15,7 +15,9 @@ import type {
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { derived } from '../payloads/define';
-import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
+import { presentMcpWorkItem, workItemPlacementWritePayload } from '../payloads/workItems';
+import type { WorkItemPlacement } from '../payloads/workItems';
+import { describePlacement, readPlacement } from './placement';
 import { normalizeIdentifier } from './workItemRef';
 
 // `create_work_item` (Story 7.8 · Subtask 7.8.5) — create a work item (epic /
@@ -52,6 +54,13 @@ import { normalizeIdentifier } from './workItemRef';
 // the type→executor seed (a `type` set without an explicit `executor` seeds it
 // from `defaultExecutorForType`), and the shared estimate validation all run in
 // the service UNCHANGED — this tool only widens the input surface.
+//
+// FOLDERS (Story MOTIR-5310 · MOTIR-5413): `folderId` files the new item into a
+// folder at create, the other placement beside `parentKey`. The service owns
+// every rule — both together is `PLACEMENT_CONFLICT`, an unknown folder
+// `FOLDER_NOT_FOUND`, another project's `CROSS_PROJECT_FOLDER`, and a filed
+// SUBTASK is legal (a folder satisfies its must-have-a-parent rule). The result
+// carries a `placement` field read back off the row.
 
 export const CREATE_WORK_ITEM_TOOL_NAME = 'create_work_item';
 
@@ -73,7 +82,18 @@ const inputSchema = {
     .string()
     .optional()
     .describe(
-      'Optional parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent.',
+      'Optional parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent. ' +
+        'Mutually exclusive with folderId.',
+    ),
+  folderId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Optional: the id of a folder (as `list_folders` returns it) to FILE the new item into — the ' +
+        'other placement beside parentKey, which it may not be combined with (PLACEMENT_CONFLICT). ' +
+        'A filed item is a root, so any kind may be filed, a subtask included. The folder must be ' +
+        "in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
     ),
   descriptionMd: z.string().optional().describe('Optional Markdown description body.'),
   priority: z
@@ -190,6 +210,7 @@ interface CreateWorkItemArgs {
   kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
   title: string;
   parentKey?: string;
+  folderId?: string;
   descriptionMd?: string;
   priority?: WorkItemPriority;
   storyPoints?: number | null;
@@ -204,11 +225,11 @@ interface CreateWorkItemArgs {
 }
 
 /** Compact human-readable summary of a freshly-created work item. */
-function summarize(dto: WorkItemDto): string {
+function summarize(dto: WorkItemDto, placement: WorkItemPlacement): string {
   return [
     `Created ${dto.identifier} [${dto.kind}${dto.type ? `/${dto.type}` : ''}] ${dto.title}`,
-    `Status: ${dto.status} · Priority: ${dto.priority} · Reporter: ${dto.reporterId}` +
-      (dto.parentId ? ` · Parent: ${dto.parentId}` : ''),
+    `Status: ${dto.status} · Priority: ${dto.priority} · Reporter: ${dto.reporterId}`,
+    `Placed ${describePlacement(placement)}`,
   ].join('\n');
 }
 
@@ -221,6 +242,7 @@ export async function runCreateWorkItem(
     const project = await projectsService.getByKey(args.projectKey.trim().toUpperCase(), ctx);
 
     let parentId: string | null = null;
+    let parentKey: string | null = null;
     if (args.parentKey != null && args.parentKey.trim() !== '') {
       // A parent must be in the SAME project (the create service re-checks
       // same-project + kind-legality). Resolve it within the new item's project;
@@ -232,6 +254,7 @@ export async function runCreateWorkItem(
         ctx,
       );
       parentId = parent.id;
+      parentKey = parent.identifier;
     }
 
     const input: CreateWorkItemInput = {
@@ -239,6 +262,9 @@ export async function runCreateWorkItem(
       kind: args.kind as WorkItemKindDto,
       title: args.title,
       parentId,
+      // FOLDERS (MOTIR-5413): forwarded only when supplied. The service refuses
+      // it beside `parentId` and validates the folder under a lock.
+      ...(args.folderId !== undefined ? { folderId: args.folderId } : {}),
       descriptionMd: args.descriptionMd ?? null,
       ...(args.priority ? { priority: args.priority } : {}),
       // Story points (7.8.21): forward only when supplied — both a number and an
@@ -276,7 +302,11 @@ export async function runCreateWorkItem(
       },
     };
     const dto = await workItemsService.createWorkItem(input, ctx);
-    return toolOk(summarize(dto), derived(workItemWritePayload, presentMcpWorkItem(dto)));
+    const placement = await readPlacement(dto.id, parentKey, ctx);
+    return toolOk(
+      summarize(dto, placement),
+      derived(workItemPlacementWritePayload, { ...presentMcpWorkItem(dto), placement }),
+    );
   } catch (err) {
     return toToolError(err);
   }
@@ -292,7 +322,8 @@ export function registerCreateWorkItem(
       title: 'Create work item',
       description:
         'Create a work item (epic, story, task, bug, or subtask) in a project, optionally ' +
-        'under a parent. The reporter is the token owner. Use kind "epic" with no parent to ' +
+        'under a parent OR filed into a folder (folderId, from list_folders — never both). ' +
+        'The result carries a `placement` field saying where it landed. The reporter is the token owner. Use kind "epic" with no parent to ' +
         'create a top-level capability area; kind "bug" under a story/epic to LOG A BUG. ' +
         'Optionally set the leaf-authoring fields up front — story points, estimate ' +
         '(minutes), work type, and executor — so a subtask can be created fully-specified in ' +

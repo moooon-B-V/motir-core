@@ -349,7 +349,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 parentRef: {
                   type: ['string', 'null'],
                   description:
-                    'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead.',
+                    'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
                 },
                 blockedByAdd: {
                   type: 'array',
@@ -371,13 +371,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
             parentRef: {
               type: 'string',
               description:
-                'Where the proposed item hangs, in any of THREE forms: a work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or `planItem:<id>` naming another `add` in THIS plan — an id this tool returned in `planItemIds` on an earlier call. A key is resolved to its id when the proposal is appended, so the three are interchangeable; a key that names no work item in this workspace is refused HERE, not at approve.',
+                'Where the proposed item hangs, in any of THREE forms: a work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or `planItem:<id>` naming another `add` in THIS plan — an id this tool returned in `planItemIds` on an earlier call. A key is resolved to its id when the proposal is appended, so the three are interchangeable; a key that names no work item in this workspace is refused HERE, not at approve. OR, instead of a work-item parent, `folder:<folderId>` FILES the item into a folder of this project: it is then a root, any kind may be filed (`subtask` included), and an unknown folder or another project’s is refused HERE.',
             },
             blockedByRefs: {
               type: 'array',
               items: { type: 'string' },
               description:
-                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan.',
+                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is refused here — a folder is a placement, it blocks nothing.',
             },
             baseRevision: {
               type: 'string',
@@ -647,6 +647,28 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  create_folder: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+      name: {
+        type: 'string',
+        description: 'The new folder’s name. Unique among the folders at its level.',
+      },
+      parentFolderId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          'The folder to create it inside (an id from `list_folders`). Omit or pass null to create it at the project root.',
+      },
+    },
+    required: ['projectKey', 'name'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   create_plan: {
     type: 'object',
     properties: {
@@ -731,7 +753,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       parentKey: {
         type: 'string',
         description:
-          'Optional parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent.',
+          'Optional parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent. Mutually exclusive with folderId.',
+      },
+      folderId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          "Optional: the id of a folder (as `list_folders` returns it) to FILE the new item into — the other placement beside parentKey, which it may not be combined with (PLACEMENT_CONFLICT). A filed item is a root, so any kind may be filed, a subtask included. The folder must be in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
       },
       descriptionMd: { type: 'string', description: 'Optional Markdown description body.' },
       priority: {
@@ -823,6 +851,24 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['commentId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  delete_folder: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+      folderId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The folder id (as returned by `list_folders`).',
+      },
+    },
+    required: ['projectKey', 'folderId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -1076,6 +1122,19 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  list_folders: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+    },
+    required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   list_projects: {
     type: 'object',
     properties: {},
@@ -1195,10 +1254,15 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       parentKey: {
         anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
         description:
-          'The NEW parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent, and may not be the item itself or one of its descendants. Pass null to promote the item to a top-level root (allowed only for kinds that may live at the top level).',
+          'The NEW parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent, and may not be the item itself or one of its descendants. Pass null to promote the item to a top-level root (allowed only for kinds that may live at the top level; a filed item keeps its folder). Give EXACTLY ONE of parentKey and folderId.',
+      },
+      folderId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          "The id of a folder (as `list_folders` returns it) to FILE the item into, or null to take it OUT of its folder to the top level. Filing clears the work-item parent; the item's own children travel with it. Give EXACTLY ONE of parentKey and folderId. An unknown folder is FOLDER_NOT_FOUND, another project's CROSS_PROJECT_FOLDER.",
       },
     },
-    required: ['key', 'parentKey'],
+    required: ['key'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -1859,6 +1923,41 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  update_folder: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the folders belong to (e.g. "ACME").',
+      },
+      folderId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The folder id (as returned by `list_folders`).',
+      },
+      name: {
+        type: 'string',
+        description: 'RENAME: the folder’s new name. Do not combine with a placement.',
+      },
+      parentFolderId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          'PLACE: the folder to move it into (an id from `list_folders`), or null for the project root. Omit to keep its current parent and only reorder it. Do not combine with `name`.',
+      },
+      beforeId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description: 'PLACE: the sibling folder this one should sort AFTER.',
+      },
+      afterId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description: 'PLACE: the sibling folder this one should sort BEFORE.',
+      },
+    },
+    required: ['projectKey', 'folderId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   update_plan: {
     type: 'object',
     properties: {
@@ -2114,7 +2213,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       parentRef: {
         type: ['string', 'null'],
         description:
-          '`add` only: re-parent the proposal. A work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming another `add` on THIS plan; `null` makes it top-level. Re-validated by the same checks the append runs, so a key or a ref naming nothing is refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
+          '`add` only: re-parent the proposal. A work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming another `add` on THIS plan; `folder:<folderId>` to file it into a folder of this project instead; `null` makes it top-level. Re-validated by the same checks the append runs, so a key or a ref naming nothing is refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
       },
       blockedByRefs: {
         type: 'array',
@@ -2241,7 +2340,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               parentRef: {
                 type: ['string', 'null'],
                 description:
-                  'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead.',
+                  'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
               },
               blockedByAdd: {
                 type: 'array',

@@ -66,6 +66,8 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // which asserts `project:browse` by name, and the tool resolves its
   // `projectKey` through `projectsService.getByKey` (`assertCanBrowse`) first.
   skeleton: 'project:browse',
+  // `foldersService.listProjectFolders` asserts `project:browse` by name.
+  list_folders: 'project:browse',
   // `sprintsService.listByProject` asserts `project:browse` by name.
   list_sprints: 'project:browse',
   validate_sprint: 'project:browse',
@@ -149,6 +151,12 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   link_work_items: 'work_item:edit',
   unlink_work_items: 'work_item:edit',
   move_to_parent: 'work_item:edit',
+  // The three folder writes (MOTIR-5409) — `foldersService` asserts
+  // `work_item:edit` on every one (contract 1 of the folder ADR), and the key is
+  // already in `CLI_TOKEN_GRANT`, so a dispatched agent can tidy folders.
+  create_folder: 'work_item:edit',
+  update_folder: 'work_item:edit',
+  delete_folder: 'work_item:edit',
   // `changeKind` runs through `workItemsService.updateWorkItem`.
   change_kind: 'work_item:edit',
   // The two INTEGRATION writes. Both reach `applyStatusTransition` →

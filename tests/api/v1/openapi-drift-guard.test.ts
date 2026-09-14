@@ -777,6 +777,48 @@ describe('every operation’s REAL response validates against its declared schem
       { key },
     );
 
+    // ── The folder resource (Story MOTIR-5310 · MOTIR-5408) ──────────────────
+    // Create two, list the root, read and rename one, then delete the other —
+    // each response validated against its declaration below.
+    const folder = await drive(
+      'createFolder',
+      () => import('@/app/api/v1/projects/[projectKey]/folders/route'),
+      send(`/api/v1/projects/${pk}/folders`, 'POST', { name: 'Parked' }),
+      { projectKey: pk },
+    );
+    const folderId = (folder.body as { id: string }).id;
+    const spare = await handlerFor(
+      () => import('@/app/api/v1/projects/[projectKey]/folders/route'),
+      'POST',
+      send(`/api/v1/projects/${pk}/folders`, 'POST', { name: 'Spare' }),
+      { projectKey: pk },
+    );
+    const spareId = ((await spare.json()) as { id: string }).id;
+    await drive(
+      'listFolders',
+      () => import('@/app/api/v1/projects/[projectKey]/folders/route'),
+      get(`/api/v1/projects/${pk}/folders`),
+      { projectKey: pk },
+    );
+    await drive(
+      'getFolder',
+      () => import('@/app/api/v1/folders/[folderId]/route'),
+      get(`/api/v1/folders/${folderId}`),
+      { folderId },
+    );
+    await drive(
+      'updateFolder',
+      () => import('@/app/api/v1/folders/[folderId]/route'),
+      send(`/api/v1/folders/${folderId}`, 'PATCH', { name: 'Parked ideas' }),
+      { folderId },
+    );
+    await drive(
+      'deleteFolder',
+      () => import('@/app/api/v1/folders/[folderId]/route'),
+      send(`/api/v1/folders/${spareId}`, 'DELETE'),
+      { folderId: spareId },
+    );
+
     // ── The activity read (Story 11.7) ──────────────────────────────────────
     // Driven on the item that has BOTH a comment and a change trail by now, so
     // the `all` view's union validates against real entries of both types.

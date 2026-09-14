@@ -93,6 +93,9 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `bareTransactionScan` through the same compiler API, opens no database and
   // imports nothing from `lib/` or `app/` — the lane's shape exactly.
   'tests/work-items/status-write-guard.test.ts',
+  // MOTIR-5420 — every folder error mapped on both agent-facing doors, and no
+  // folder field on a list row: read from four named source files as data.
+  'tests/folders/folder-surface-guard.test.ts',
   // ── tests/workbench/ — the status-KEY-literal guard (MOTIR-4784) ──────────
   // The write guard's twin, on the READ side. The Workbench partitions on
   // `workflow_status.CATEGORY`, and a predicate written against a status KEY is

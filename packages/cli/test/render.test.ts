@@ -33,6 +33,7 @@ import {
   NO_COMMENTS_LINE,
   renderChildrenSection,
   renderItemHeader,
+  renderFolderLine,
   renderLineage,
   renderReadinessLine,
   renderReadyTable,
@@ -580,6 +581,24 @@ describe('renderLineage', () => {
 
   it('is the item alone when it has no ancestors', () => {
     expect(renderLineage(bareDetail())).toBe('PROD-7');
+  });
+});
+
+describe('renderFolderLine (MOTIR-5412)', () => {
+  it('prints the filed folder path root-first under the lineage', () => {
+    expect(renderFolderLine(fullDetail({ folderPath: ['Parked', '2025'] }))).toBe(
+      '\nFolder: Parked ▸ 2025',
+    );
+    expect(renderWorkItemDetail(fullDetail({ folderPath: ['Parked', '2025'] }))).toContain(
+      'LINEAGE\nPROD-1 › PROD-7\nFolder: Parked ▸ 2025\n\n',
+    );
+  });
+
+  it('prints NO line for an unfiled item — null, an empty path, or an older server', () => {
+    expect(renderFolderLine(bareDetail({ folderPath: null }))).toBe('');
+    expect(renderFolderLine(bareDetail({ folderPath: [] }))).toBe('');
+    expect(renderFolderLine(bareDetail())).toBe('');
+    expect(renderWorkItemDetail(bareDetail({ folderPath: null }))).not.toContain('Folder:');
   });
 });
 

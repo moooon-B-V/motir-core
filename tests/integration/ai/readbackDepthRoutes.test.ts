@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { GET as getItemGET } from '@/app/api/internal/ai/get-item/route';
 import { GET as getSubtreeGET } from '@/app/api/internal/ai/get-subtree/route';
@@ -240,6 +241,39 @@ describe('GET /api/internal/ai/get-subtree', () => {
     expect(body.nodes.length).toBe(2);
   });
 
+  // MOTIR-5410 — a subtree node carries its OWN placement: the filed root has
+  // its folder, its child (never filed — the CHECK) has none.
+  it('carries folderId on each node — the filed root’s folder, null below it', async () => {
+    const fx = await makeFixture();
+    const parked = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Parked' },
+      fx.ctx,
+    );
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Filed epic', folderId: parked.id },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story', parentId: epic.id },
+      fx.ctx,
+    );
+
+    const res = await getSubtreeGET(
+      req('get-subtree', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        query: { rootKey: epic.identifier, depth: '1' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const byKey = new Map(
+      body.nodes.map((n: { key: string; folderId: string | null }) => [n.key, n.folderId]),
+    );
+    expect(byKey.get(epic.identifier)).toBe(parked.id);
+    expect(byKey.get(story.identifier)).toBeNull();
+  });
+
   it('400s a missing rootKey', async () => {
     const fx = await makeFixture();
     const res = await getSubtreeGET(
@@ -318,6 +352,34 @@ describe('GET /api/internal/ai/skeleton', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.items.map((i: { key: string }) => i.key)).toContain(epic.identifier);
+  });
+
+  it('carries the same folder placement as plan-tree — folderId on the row, folders beside', async () => {
+    const fx = await makeFixture();
+    const parked = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Parked' },
+      fx.ctx,
+    );
+    const year = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: parked.id, name: '2025' },
+      fx.ctx,
+    );
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Epic', folderId: year.id },
+      fx.ctx,
+    );
+
+    const res = await skeletonGET(req('skeleton', { bearer: SERVICE_SECRET, token: tokenFor(fx) }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items.find((i: { key: string }) => i.key === epic.identifier)?.folderId).toBe(
+      year.id,
+    );
+    expect(body.folders.map((f: { path: string[] }) => f.path)).toEqual([
+      ['Parked'],
+      ['Parked', '2025'],
+    ]);
+    expect(body.foldersTruncated).toBe(false);
   });
 
   it('404s a foreign-project token', async () => {

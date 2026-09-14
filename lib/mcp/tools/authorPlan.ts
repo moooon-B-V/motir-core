@@ -34,7 +34,7 @@ import {
   presentMcpPlanAppend,
 } from '../payloads/workLoop';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
-import { isTempRef } from '@/lib/plans/refs';
+import { isFolderRef, isTempRef } from '@/lib/plans/refs';
 import { resolveWorkItemIdsByKeys } from './workItemRef';
 import { projectKeyField } from './readyFilters';
 import { GET_PLAN_TOOL_NAME } from './getPlan';
@@ -447,7 +447,10 @@ const patchSchema = z
           'ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent ' +
           'owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal ' +
           'to hang new work under a FINISHED parent) is a question about a live row. To land a ' +
-          'card under one this plan is adding, `add` it with that `parentRef` instead.',
+          'card under one this plan is adding, `add` it with that `parentRef` instead. ' +
+          'Or `folder:<folderId>` to FILE the target into a folder of this project instead of ' +
+          'under a work item — any kind may be filed, `subtask` included, and an unknown folder ' +
+          'or another project’s is refused at the append.',
       ),
     blockedByAdd: z
       .array(z.string())
@@ -488,14 +491,18 @@ const proposalSchema = z.object({
         'work-item id; or `planItem:<id>` naming another `add` in THIS plan — an id this ' +
         'tool returned in `planItemIds` on an earlier call. A key is resolved to its id when ' +
         'the proposal is appended, so the three are interchangeable; a key that names no work ' +
-        'item in this workspace is refused HERE, not at approve.',
+        'item in this workspace is refused HERE, not at approve. OR, instead of a work-item ' +
+        'parent, `folder:<folderId>` FILES the item into a folder of this project: it is then a ' +
+        'root, any kind may be filed (`subtask` included), and an unknown folder or another ' +
+        'project’s is refused HERE.',
     ),
   blockedByRefs: z
     .array(z.string())
     .optional()
     .describe(
       'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), ' +
-        'real work-item ids, or `planItem:<id>` refs into this plan.',
+        'real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is ' +
+        'refused here — a folder is a placement, it blocks nothing.',
     ),
   baseRevision: z
     .string()
@@ -714,7 +721,8 @@ const updatePlanProposalInputSchema = {
     .optional()
     .describe(
       '`add` only: re-parent the proposal. A work-item KEY ("ACME-7"), a real work-item id, or ' +
-        'a `planItem:<id>` ref naming another `add` on THIS plan; `null` makes it top-level. ' +
+        'a `planItem:<id>` ref naming another `add` on THIS plan; `folder:<folderId>` to file it ' +
+        'into a folder of this project instead; `null` makes it top-level. ' +
         'Re-validated by the same checks the append runs, so a key or a ref naming nothing is ' +
         'refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
     ),
@@ -1182,7 +1190,9 @@ function stampProvenance(
 const WORK_ITEM_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;
 
 function isWorkItemKey(ref: string): boolean {
-  return !isTempRef(ref) && WORK_ITEM_KEY_PATTERN.test(ref.trim());
+  // A `folder:<id>` placement (MOTIR-5414) is passed through untouched: it names a
+  // folder, never a work item, and the service judges it.
+  return !isTempRef(ref) && !isFolderRef(ref) && WORK_ITEM_KEY_PATTERN.test(ref.trim());
 }
 
 /**

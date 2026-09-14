@@ -748,6 +748,17 @@ export function renderLineage(detail: WorkItemDetail): string {
 }
 
 /**
+ * The `Folder:` line under the lineage (MOTIR-5412) — `\nFolder: Parked ▸ 2025`
+ * for a filed item, and NOTHING for an unfiled one. The `▸` separator is the path
+ * form the web's folder field uses, kept distinct from the lineage's `›` so a
+ * folder path is never read as a chain of work items.
+ */
+export function renderFolderLine(detail: Pick<WorkItemDetail, 'folderPath'>): string {
+  const path = detail.folderPath;
+  return path && path.length > 0 ? `\nFolder: ${path.join(' ▸ ')}` : '';
+}
+
+/**
  * The whole `motir show` block. Sections are separated by a blank line and
  * headed in caps, matching the CLI's own help surface; the DESCRIPTION is the
  * RAW Markdown, printed verbatim — the terminal is not a Markdown viewer, and
@@ -1047,7 +1058,7 @@ export function renderWorkItemDetail(detail: WorkItemDetail, titleWidth = 60): s
   const sections = [
     renderItemHeader(detail.item),
     `READINESS\n${renderReadinessLine(detail.readiness)}`,
-    `LINEAGE\n${renderLineage(detail)}`,
+    `LINEAGE\n${renderLineage(detail)}${renderFolderLine(detail)}`,
     renderChildrenSection(detail.children, titleWidth),
     renderRelationTable('BLOCKED BY', edgeRows(detail.blockedBy, titleWidth), 'none'),
     renderRelationTable('BLOCKS', edgeRows(detail.blocks, titleWidth), 'none'),

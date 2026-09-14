@@ -455,6 +455,33 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // rather than a shrug.
   PLAN_TARGET_LOCKED: 409,
 
+  // ── Story MOTIR-5310, the FOLDER resource (MOTIR-5408) ────────────────────
+  // The statuses `lib/folders/errors.ts`' own header names, so the tree's
+  // actions and this door describe one refusal one way. Each is driven through
+  // the wrapper by `tests/api/v1/folders-routes.test.ts`; before these rows every
+  // one of them rendered as a bare 500.
+  //
+  // 404 for a folder in another workspace or a project the token is not bound to
+  // as well as one that never existed — the existence-oracle rule (ADR §4).
+  FOLDER_NOT_FOUND: 404,
+  // 422 — empty after trimming, or over the name cap. The caller can fix it.
+  INVALID_FOLDER_NAME: 422,
+  // 409 — a sibling already has this name, case-insensitively. The body is fine;
+  // the level's STATE is not what the request assumed.
+  FOLDER_NAME_TAKEN: 409,
+  // 422 — a folder moved into itself or one of its own folders.
+  FOLDER_CYCLE: 422,
+  // 422 — a destination folder in another project. Folders are project-local.
+  CROSS_PROJECT_FOLDER: 422,
+  // 409 — deleting a ROOT folder would leave a subtask with neither a parent nor
+  // a folder. A conflict with what the folder holds, fixed by moving it first.
+  SUBTASK_NEEDS_PLACEMENT: 409,
+  // 422 — a work item named BOTH a work-item parent and a folder (MOTIR-5412, the
+  // `/api/v1` work-item placement). An item hangs under a work item or sits in a
+  // folder, never both, and the request describes one placement twice. The caller
+  // can fix it by sending one of the two.
+  PLACEMENT_CONFLICT: 422,
+
   // 11.7.7 (MOTIR-2241) — the activity read. Its own failure modes are the
   // wrapper's (401/403/429), the shared cursor 422, and `WORK_ITEM_NOT_FOUND`
   // above; the view and order parameters raise `InvalidRequestError` directly,

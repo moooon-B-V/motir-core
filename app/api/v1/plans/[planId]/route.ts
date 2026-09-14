@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { planReferenceIds, planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
+import { planReviewService } from '@/lib/services/planReviewService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -35,6 +36,8 @@ export const GET = withV1Route<{ planId: string }>(
       plan.projectId,
       ctx.service,
     );
-    return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs)));
+    // …and the FOLDERS its proposals name (MOTIR-5415), in one batched read.
+    const folders = await planReviewService.resolveProposalFolders(plan, ctx.service);
+    return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs), folders));
   },
 );

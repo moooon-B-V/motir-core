@@ -67,6 +67,10 @@ import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
 import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/getProjectState';
 import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
+import { LIST_FOLDERS_TOOL_NAME, registerListFolders } from './tools/listFolders';
+import { CREATE_FOLDER_TOOL_NAME, registerCreateFolder } from './tools/createFolder';
+import { UPDATE_FOLDER_TOOL_NAME, registerUpdateFolder } from './tools/updateFolder';
+import { DELETE_FOLDER_TOOL_NAME, registerDeleteFolder } from './tools/deleteFolder';
 import {
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   registerSearchWorkItemsSemantic,
@@ -155,6 +159,10 @@ export const MCP_TOOL_NAMES = [
   LIST_PROJECTS_TOOL_NAME,
   GET_PROJECT_STATE_TOOL_NAME,
   SKELETON_TOOL_NAME,
+  LIST_FOLDERS_TOOL_NAME,
+  CREATE_FOLDER_TOOL_NAME,
+  UPDATE_FOLDER_TOOL_NAME,
+  DELETE_FOLDER_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -329,6 +337,13 @@ export function registerMcpTools(
   // settle before it proposes anything; `search_work_items` answers it only as
   // a paging loop over flat rows the caller then re-parents itself.
   registerSkeleton(target, resolveContext);
+  // Folder tools (MOTIR-5409) — see and tidy a project's folders over the shipped
+  // folder service (MOTIR-5313). Placing a WORK ITEM in a folder is the work-item
+  // tools' job (MOTIR-5413), not these.
+  registerListFolders(target, resolveContext);
+  registerCreateFolder(target, resolveContext);
+  registerUpdateFolder(target, resolveContext);
+  registerDeleteFolder(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-

@@ -195,6 +195,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   list_projects: 'read',
   get_project_state: 'read',
   skeleton: 'read',
+  list_folders: 'read',
   // The SEMANTIC search (MOTIR-3101). A read at the gate — `assertCanBrowse` and
   // nothing more — which is what this legacy table records. That it also spends
   // an AI call is bounded by the `ai:chat` rate limit inside the tool, not by a
@@ -297,6 +298,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   link_work_items: 'work_items:write',
   unlink_work_items: 'work_items:write',
   move_to_parent: 'work_items:write',
+  create_folder: 'work_items:write',
+  update_folder: 'work_items:write',
+  delete_folder: 'work_items:write',
   change_kind: 'work_items:write',
   archive_work_item: 'work_items:archive',
   unarchive_work_item: 'work_items:archive',

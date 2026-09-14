@@ -1,5 +1,7 @@
 import type { WorkItemKindDto, WorkItemListItemDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type { FolderPickerNodeDto } from '@/lib/dto/folders';
 import type {
+  PlanTreeFolder,
   PlanTreeSkeletonItem,
   BlockingEdge,
   OrgContextResponse,
@@ -30,9 +32,14 @@ export interface SkeletonSourceRow {
 // container) resolves to null rather than a dangling id. `revisionByItemId` is
 // the batched latest-revision lookup the service computed once for the whole read
 // (MOTIR-1531); a row with no revision entry projects `revision: null`.
+// `folderIdByItemId` is the batched FILED-placement lookup (MOTIR-5410) — only a
+// filed item has an entry, so every other row projects `folderId: null`. It is a
+// required argument on purpose: a read that forgot it would report every filed
+// item as an ordinary root, which is exactly the defect it exists to remove.
 export function toSkeletonRows(
   rows: SkeletonSourceRow[],
   revisionByItemId: Map<string, string>,
+  folderIdByItemId: Map<string, string>,
 ): PlanTreeSkeletonItem[] {
   const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
   return rows.map((r) => ({
@@ -43,6 +50,7 @@ export function toSkeletonRows(
     status: r.status,
     parentKey: r.parentId ? (idToKey.get(r.parentId) ?? null) : null,
     revision: revisionByItemId.get(r.id) ?? null,
+    folderId: folderIdByItemId.get(r.id) ?? null,
   }));
 }
 
@@ -51,8 +59,23 @@ export function toSkeletonRows(
 export function toPlanTreeSkeleton(
   items: WorkItemSummaryDto[],
   revisionByItemId: Map<string, string>,
+  folderIdByItemId: Map<string, string>,
 ): PlanTreeSkeletonItem[] {
-  return toSkeletonRows(items, revisionByItemId);
+  return toSkeletonRows(items, revisionByItemId, folderIdByItemId);
+}
+
+// Map the project's folder picker nodes to the tree read's folder list
+// (MOTIR-5410). FIELD-BY-FIELD, not a spread, for the reason
+// `toSimilarWorkItemRows` gives: the picker DTO carries a `position` the planner
+// has no use for, and a spread would carry whatever the picker grows next across
+// the open-core boundary unannounced.
+export function toPlanTreeFolders(nodes: FolderPickerNodeDto[]): PlanTreeFolder[] {
+  return nodes.map((n) => ({
+    id: n.id,
+    parentFolderId: n.parentFolderId,
+    name: n.name,
+    path: n.path,
+  }));
 }
 
 // Map the transitive is_blocked_by closure's edges (item ids) to identifier

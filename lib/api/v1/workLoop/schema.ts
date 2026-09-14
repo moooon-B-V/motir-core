@@ -890,6 +890,22 @@ export const planProposalSchema = z.object({
    * iteration's own parent key, and it has no way to turn a cuid into one.
    */
   parentKey: workItemKeySchema.nullable(),
+  /**
+   * The FOLDER this proposal names as its placement (MOTIR-5415) — the id
+   * inside a `folder:<id>` `parentRef`, or inside a `modify`'s
+   * `patch.parentRef`. `null` for a proposal that names a work item, a
+   * temp-ref, the root, or no placement at all.
+   *
+   * ⚠️ ADDITIVE, beside `parentRef` exactly as `parentKey` is: the ref stays
+   * verbatim, and this is its resolved reading.
+   */
+  folderId: z.string().nullable(),
+  /**
+   * That folder's names, ROOT FIRST (`["Parked", "2025"]`). `null` when
+   * `folderId` is, AND when the folder no longer exists in the plan's project
+   * — deleted after the plan was written, which approve refuses.
+   */
+  folderPath: z.array(z.string()).nullable(),
   blockedByRefs: z.array(z.string()),
 });
 
@@ -1283,6 +1299,10 @@ export function presentPlanOutcome(outcome: PlanOutcomeDto): V1PlanOutcome {
 export function presentPlan(
   plan: PlanWithItemsDto,
   keyOfId: (id: string) => string | undefined,
+  foldersByPlanItemId: ReadonlyMap<
+    string,
+    { folderId: string; folderPath: string[] | null }
+  > = new Map(),
 ): V1Plan {
   return {
     id: plan.id,
@@ -1307,6 +1327,8 @@ export function presentPlan(
       // resolves to null, which is the honest answer rather than a guess.
       parentKey:
         committedRefId(item.parentRef) === null ? null : (keyOfId(item.parentRef!) ?? null),
+      folderId: foldersByPlanItemId.get(item.id)?.folderId ?? null,
+      folderPath: foldersByPlanItemId.get(item.id)?.folderPath ?? null,
       blockedByRefs: item.blockedByRefs,
     })),
   };
@@ -1316,6 +1338,9 @@ export function presentPlan(
  *  rather than a committed work item. */
 const PLAN_ITEM_REF_PREFIX = 'planItem:';
 
+/** A ref naming a FOLDER as the placement (MOTIR-5414) — never a work item. */
+const FOLDER_REF_PREFIX = 'folder:';
+
 /**
  * A ref that names a COMMITTED work item, or `null`.
  *
@@ -1324,7 +1349,9 @@ const PLAN_ITEM_REF_PREFIX = 'planItem:';
  */
 function committedRefId(ref: string | null): string | null {
   if (ref === null || ref === '') return null;
-  return ref.startsWith(PLAN_ITEM_REF_PREFIX) ? null : ref;
+  // A `folder:<id>` (MOTIR-5415) names a folder, not a work item — it has no key
+  // and is resolved into `folderId` / `folderPath` instead.
+  return ref.startsWith(PLAN_ITEM_REF_PREFIX) || ref.startsWith(FOLDER_REF_PREFIX) ? null : ref;
 }
 
 /**

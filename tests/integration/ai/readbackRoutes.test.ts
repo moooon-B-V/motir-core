@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { GET as planTreeGET } from '@/app/api/internal/ai/plan-tree/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
@@ -62,6 +63,37 @@ describe('GET /api/internal/ai/plan-tree — read-back auth', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.items.map((i: { key: string }) => i.key)).toContain(epic.identifier);
+  });
+
+  // MOTIR-5410 — the planner's breadth read carries folder placement: a filed
+  // root's own `folderId`, and the project's folders BESIDE the items.
+  it('carries folderId on a filed row and the folder list with paths', async () => {
+    const fx = await makeFixture();
+    const parked = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Parked' },
+      fx.ctx,
+    );
+    const filed = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Filed', folderId: parked.id },
+      fx.ctx,
+    );
+    const loose = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Loose' },
+      fx.ctx,
+    );
+
+    const res = await planTreeGET(planTreeReq({ bearer: SERVICE_SECRET, token: tokenFor(fx) }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const byKey = new Map(
+      body.items.map((i: { key: string; folderId: string | null }) => [i.key, i.folderId]),
+    );
+    expect(byKey.get(filed.identifier)).toBe(parked.id);
+    expect(byKey.get(loose.identifier)).toBeNull();
+    expect(body.folders).toEqual([
+      { id: parked.id, parentFolderId: null, name: 'Parked', path: ['Parked'] },
+    ]);
+    expect(body.foldersTruncated).toBe(false);
   });
 
   it('401s a missing service bearer', async () => {

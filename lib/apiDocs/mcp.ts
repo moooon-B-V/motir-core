@@ -505,9 +505,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // gained an optional `planId` that answers the SAME question over the live
     // tree ⊕ a plan's proposals. A reader picking a tool off this line is
     // picking it for what it reads, not for which tree it reads.
+    // Re-pinned for MOTIR-5413: the description now says the payload DECLARES the
+    // item's own folder placement (`folderId` + `folderPath`).
     summary:
-      'One item in full — description, status, parent and children, dependency edges, and a readiness verdict.',
-    descriptionFingerprint: '901407c6b4d0',
+      'One item in full — description, status, parent or folder, children, dependency edges, and a readiness verdict.',
+    descriptionFingerprint: 'ea684127e0a8',
   },
   get_work_item_activity: {
     summary:
@@ -552,9 +554,29 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '77241589544a',
   },
   skeleton: {
+    // Re-pinned for MOTIR-5410: the description now names the folder placement
+    // (`folderId` on a filed row, the project's `folders`) the read carries.
     summary:
-      "The whole project's tree shape in one read — every item's key, kind, title, status and parent, with no paging loop.",
-    descriptionFingerprint: '26ceb84cf462',
+      "The whole project's tree shape in one read — every item's key, kind, title, status, parent and folder, with no paging loop.",
+    descriptionFingerprint: 'e2e04caf7f60',
+  },
+  list_folders: {
+    summary:
+      "Every folder of a project in one read — each folder's id and its path — to find a folder by name.",
+    descriptionFingerprint: 'ef6a154466b6',
+  },
+  create_folder: {
+    summary: 'Create a folder at the root or inside another folder; names are unique per level.',
+    descriptionFingerprint: '4a0a04e70d18',
+  },
+  update_folder: {
+    summary: 'Rename a folder, or move and reorder it — one or the other per call, never both.',
+    descriptionFingerprint: 'eeec61eb8ae9',
+  },
+  delete_folder: {
+    summary:
+      'Delete a folder; its folders and work items move up, and the result lists what moved.',
+    descriptionFingerprint: 'ba8ca89ae989',
   },
   search_work_items_semantic: {
     summary:
@@ -722,9 +744,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'aa4e7ce9b277',
   },
   create_work_item: {
+    // Re-pinned for MOTIR-5413: `folderId` files the new item into a folder.
     summary:
-      'Create an epic, story, task, bug or subtask; points, estimate, type, executor and repo in one call.',
-    descriptionFingerprint: '1decba47fca7',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor and repo in one call.',
+    descriptionFingerprint: '94e776963f84',
   },
   update_work_item: {
     summary:
@@ -815,8 +838,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'ddebb74fa44c',
   },
   move_to_parent: {
-    summary: 'Re-parent an item, enforcing the kind-parent matrix and refusing a cycle.',
-    descriptionFingerprint: 'fc965c828ab0',
+    // Re-pinned for MOTIR-5413: exactly one of `parentKey` / `folderId`.
+    summary:
+      'Re-place an item — under a new parent, or into or out of a folder — enforcing the kind-parent matrix and refusing a cycle.',
+    descriptionFingerprint: '9d6435ea6cb1',
   },
   change_kind: {
     summary: "Reclassify a leaf's kind when it is mis-filed — subtask to task, and back.",

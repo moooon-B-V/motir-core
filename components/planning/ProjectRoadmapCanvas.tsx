@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { FolderPathLabel } from '@/components/planning/FolderPlacement';
 import {
   ChevronDown,
   ChevronLeft,
@@ -309,6 +310,16 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   resolveHeldNode?: (id: string) => CanvasCrumb | null;
   /**
+   * The FOLDER a drilled chain's ROOT-MOST crumb is filed into, when it is one
+   * (Story MOTIR-5310 · MOTIR-5418, `design/ai-planning` Part XVII §17.2). Given the
+   * first crumb's id, return its folder path ROOT FIRST, or `null`.
+   *
+   * The breadcrumb then gains ONE segment ahead of that crumb. It is TEXT, not a
+   * button: it navigates nowhere, because no canvas level is a folder. Optional —
+   * the roadmap and every other consumer draw exactly the breadcrumb they did.
+   */
+  crumbFolderPath?: (id: string) => readonly string[] | null;
+  /**
    * A one-line CAPTION for the level in view — `design/ai-planning` Part IX §1.4,
    * the `lvlcap` slot its mock draws (bug MOTIR-3453).
    *
@@ -388,9 +399,11 @@ export function ProjectRoadmapCanvas({
   controlledTrail,
   arriveAtReadableScale = false,
   resolveHeldNode,
+  crumbFolderPath,
   levelCaption,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
+  const tFolders = useTranslations('folders');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
   // to the localized project-scope copy; a caller (e.g. the sprint-scoped roadmap)
   // overrides the warning row with its own "blocker not in sprint" copy (MOTIR-1379,
@@ -1116,6 +1129,26 @@ export function ProjectRoadmapCanvas({
             <li className="shrink-0">
               <Crumb label={resolvedRootLabel} active={false} onClick={() => navigate(null)} />
             </li>
+            {(() => {
+              const folderPath = crumbs[0] ? (crumbFolderPath?.(crumbs[0].id) ?? null) : null;
+              if (!folderPath || folderPath.length === 0) return null;
+              return (
+                <li className="flex min-w-0 items-center gap-1" data-testid="crumb-folder">
+                  <ChevronRight
+                    className="size-3.5 shrink-0 text-(--el-text-faint)"
+                    aria-hidden="true"
+                  />
+                  <span className="flex max-w-[18rem] min-w-0 px-1.5 py-0.5">
+                    <FolderPathLabel
+                      path={folderPath}
+                      max={3}
+                      lastClassName=""
+                      srPrefix={tFolders('breadcrumbFolderLabel')}
+                    />
+                  </span>
+                </li>
+              );
+            })()}
             {crumbs.map((c, i) => (
               <li key={c.id} className="flex min-w-0 items-center gap-1">
                 <ChevronRight

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  toPlanTreeFolders,
   toPlanTreeSkeleton,
+  toSkeletonRows,
   toSearchResultRows,
   toBlockingEdges,
   toSimilarWorkItemRows,
@@ -28,7 +30,7 @@ function summary(over: Partial<WorkItemSummaryDto>): WorkItemSummaryDto {
 }
 
 describe('toPlanTreeSkeleton', () => {
-  it('projects to {key, id, kind, title, status, parentKey, revision} and resolves parentKey + revision', () => {
+  it('projects to {key, id, kind, title, status, parentKey, revision, folderId} and resolves parentKey + revision', () => {
     const epic = summary({ id: 'id_e', identifier: 'MOTIR-1', kind: 'epic', parentId: null });
     const story = summary({
       id: 'id_s',
@@ -40,7 +42,7 @@ describe('toPlanTreeSkeleton', () => {
     });
     // The batched revision map (MOTIR-1531): the epic has a latest revision, the
     // story has none → `revision: null`.
-    const out = toPlanTreeSkeleton([epic, story], new Map([['id_e', 'rev_e']]));
+    const out = toPlanTreeSkeleton([epic, story], new Map([['id_e', 'rev_e']]), new Map());
     expect(out).toEqual([
       {
         key: 'MOTIR-1',
@@ -50,6 +52,7 @@ describe('toPlanTreeSkeleton', () => {
         status: 'todo',
         parentKey: null,
         revision: 'rev_e',
+        folderId: null,
       },
       {
         key: 'MOTIR-2',
@@ -59,22 +62,69 @@ describe('toPlanTreeSkeleton', () => {
         status: 'in_progress',
         parentKey: 'MOTIR-1',
         revision: null,
+        folderId: null,
       },
     ]);
   });
 
   it('maps an empty project to an empty skeleton', () => {
-    expect(toPlanTreeSkeleton([], new Map())).toEqual([]);
+    expect(toPlanTreeSkeleton([], new Map(), new Map())).toEqual([]);
   });
 
   it('yields parentKey=null for a parent outside the batch', () => {
     const orphan = summary({ id: 'id_o', identifier: 'MOTIR-9', parentId: 'id_missing' });
-    expect(toPlanTreeSkeleton([orphan], new Map())[0]!.parentKey).toBeNull();
+    expect(toPlanTreeSkeleton([orphan], new Map(), new Map())[0]!.parentKey).toBeNull();
   });
 
   it('leaves revision null when the item has no entry in the batched map', () => {
     const item = summary({ id: 'id_o', identifier: 'MOTIR-9' });
-    expect(toPlanTreeSkeleton([item], new Map())[0]!.revision).toBeNull();
+    expect(toPlanTreeSkeleton([item], new Map(), new Map())[0]!.revision).toBeNull();
+  });
+
+  // MOTIR-5410 — the item's OWN folder placement rides the row, from the batched
+  // lookup; an item with no entry is not filed.
+  it('carries folderId for a filed row and null for every other row', () => {
+    const filed = summary({ id: 'id_f', identifier: 'MOTIR-3', kind: 'epic' });
+    const loose = summary({ id: 'id_l', identifier: 'MOTIR-4', kind: 'epic' });
+    const out = toPlanTreeSkeleton([filed, loose], new Map(), new Map([['id_f', 'fold_1']]));
+    expect(out.map((r) => [r.key, r.folderId])).toEqual([
+      ['MOTIR-3', 'fold_1'],
+      ['MOTIR-4', null],
+    ]);
+  });
+});
+
+describe('toSkeletonRows', () => {
+  it('resolves folderId on depth-read rows through the same batched map', () => {
+    const rows = toSkeletonRows(
+      [
+        {
+          id: 'id_a',
+          parentId: null,
+          kind: 'story',
+          identifier: 'MOTIR-7',
+          title: 'A',
+          status: 'todo',
+        },
+      ],
+      new Map(),
+      new Map([['id_a', 'fold_9']]),
+    );
+    expect(rows[0]!.folderId).toBe('fold_9');
+  });
+});
+
+describe('toPlanTreeFolders', () => {
+  it('projects exactly {id, parentFolderId, name, path} — the picker position does not cross', () => {
+    const out = toPlanTreeFolders([
+      { id: 'f1', parentFolderId: null, name: 'Parked', position: 'a0', path: ['Parked'] },
+      { id: 'f2', parentFolderId: 'f1', name: '2025', position: 'a0', path: ['Parked', '2025'] },
+    ]);
+    expect(out).toEqual([
+      { id: 'f1', parentFolderId: null, name: 'Parked', path: ['Parked'] },
+      { id: 'f2', parentFolderId: 'f1', name: '2025', path: ['Parked', '2025'] },
+    ]);
+    expect(Object.keys(out[0]!).sort()).toEqual(['id', 'name', 'parentFolderId', 'path']);
   });
 });
 

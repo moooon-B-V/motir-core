@@ -153,7 +153,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'createWorkItem',
     summary: 'Create a work item',
     description:
-      'Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project.',
+      'Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`.',
     permission: 'work_item:edit',
     parameters: [projectKeyParameter],
     requestBody: {
@@ -173,7 +173,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'getWorkItem',
     summary: 'Read a work item',
     description:
-      'The full work item: its own fields, its parent and children, its five link groups, its readiness verdict and its comment count. The response carries an `ETag` for use as an `If-Match` on a later update.',
+      'The full work item: its own fields, its parent and children, its five link groups, its readiness verdict, its comment count and — when it is filed — its folder (`folderId` and the root-first `folderPath`). The response carries an `ETag` for use as an `If-Match` on a later update.',
     permission: 'project:browse',
     parameters: [keyParameter],
     response: {
@@ -189,7 +189,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'updateWorkItem',
     summary: 'Update a work item',
     description:
-      'Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved.',
+      'Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`.',
     permission: 'work_item:edit',
     parameters: [keyParameter, ifMatchParameter],
     requestBody: {
