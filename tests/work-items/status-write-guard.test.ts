@@ -68,6 +68,10 @@ const STATUS_WRITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'not-a-status-write',
     'writes implementationSource / Harness / Model only; reported because the two conditional spreads are unfollowable, not because a status is in them',
   ],
+  'lib/services/workItemsService.ts#fileWorkItem#workItemRepository.update': [
+    'not-a-status-write',
+    "writes `planFolderFiling`'s placement patch only — `folderId`, `parentId: null` and `position`; reported because the patch is a variable the scanner cannot follow, not because a status is in it",
+  ],
   'lib/repositories/workItemRepository.ts#update#workItem.update': [
     'repository-leaf',
     'the door itself — an opaque `patch` parameter; lifecycle belongs to the service layer, and every caller of it is adjudicated above',

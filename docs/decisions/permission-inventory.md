@@ -530,6 +530,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/dispatch-runs/[id]/close`                       | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/close-out-prompt`            | —     | `assertPermission` (`project:browse`)              | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/events`                      | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
+| `/api/v1/folders/[folderId]`                             | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/me`                                             | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/plans/[planId]`                                 | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/plans/[planId]/status`                          | —     | `aiPlanEditsService.getOutcome` (transitive)       | —          | token-scoped | R1  |
@@ -537,6 +538,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/projects/[projectKey]`                          | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/backlog`                  | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/backlog/work-items`       | —     | — none —                                           | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/folders`                  | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/plan-session`             | —     | `assertCanEdit`                                    | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/plan-session/submissions` | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/plan-session/turns`       | —     | `assertCanEdit`                                    | —          | token-scoped | R1  |
