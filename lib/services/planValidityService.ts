@@ -18,8 +18,18 @@ import {
   buildProseVsGraphAdvisories,
   type ProseAdvisoryLocalRef,
 } from '@/lib/services/proseGraphAdvisoryService';
+import {
+  NOT_YET_FILED,
+  containerCoverageFinding,
+  type CoverageChild,
+} from '@/lib/workItems/containerCoverage';
+import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemProseAdvisoryDto, WorkItemValidityDto } from '@/lib/dto/workItems';
+import type {
+  WorkItemCoverageAdvisoryDto,
+  WorkItemProseAdvisoryDto,
+  WorkItemValidityDto,
+} from '@/lib/dto/workItems';
 import type { PlanValidityDto } from '@/lib/dto/plans';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
 import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
@@ -250,6 +260,124 @@ async function projectedProseAdvisories(
   return buildProseVsGraphAdvisories(subjects, ctx, localRefs);
 }
 
+/**
+ * A node's PROJECTED title (MOTIR-5403) — an `add`'s proposed title or a
+ * `modify`'s patched one — or `undefined` when the plan leaves the stored title
+ * standing. `PlanItemPatch.title` is optional and not nullable (a title cannot be
+ * cleared), so presence is the whole sparse rule.
+ */
+function projectedTitle(proj: Projection, nodeId: string): string | undefined {
+  const proposal = proj.proposalByRef.get(nodeId);
+  // `!`: `addProposals` rejects an `add` without `proposedFields`, and `title` is
+  // its one required key — the invariant `rowOf`'s null-object states once.
+  if (proposal) return proposal.proposedFields!.title;
+  return proj.patchByWorkItemId.get(nodeId)?.title;
+}
+
+/**
+ * The CONTAINER-COVERAGE advisories over the PROJECTED subtree (MOTIR-5403) —
+ * the projected twin of `computeSubtreeCoverageAdvisories` in
+ * `workItemsService`, deciding through the SAME pure `containerCoverageFinding`.
+ * It exists because adoption happens at PLAN time: an author re-parents an
+ * existing card under a container, and this call is the one an authoring agent
+ * is told to make before sealing. The committed check fires only after approve,
+ * once the adopted child is already sealed under the container.
+ *
+ * Same rule, projected inputs:
+ *   • CONTAINERS are the not-done members with PROJECTED children, so a card a
+ *     plan re-parents is a child here before it is one in the tree;
+ *   • a container's BODY is the plan's where the plan sets one (an `add`'s
+ *     proposed body, a `modify`'s patched one), else the stored one — the rule
+ *     the prose subjects above already follow;
+ *   • a child's TITLE is its proposal's or a `modify`'s patched title, else the
+ *     stored one;
+ *   • ADOPTION compares filing instants, and a proposal's is {@link NOT_YET_FILED}:
+ *     a proposed child is never adopted, and a stored child under a stored
+ *     container compares the two stored `createdAt`s, as the committed path does.
+ *
+ * ⚠️ A STORED child under a PROPOSED container has no code path, and needs none:
+ * the append refuses a `planItem:` `patch.parentRef` (`assertReparentLegal`) and
+ * an `add` only creates new nodes, so the projection never produces that shape.
+ * The filing instant still gives it an answer — adopted — and the pure test pins it.
+ *
+ * Two reads at most, both over STORED ids: the containers' bodies and filing
+ * instants, then the titles of the children of containers that carry criteria.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — the verdict is computed before this runs and
+ * nothing reads it back.
+ */
+async function projectedCoverageAdvisories(
+  proj: Projection,
+  memberIds: ReadonlySet<string>,
+  ctx: ServiceContext,
+): Promise<WorkItemCoverageAdvisoryDto[]> {
+  const containers = [...memberIds]
+    .map((id) => proj.nodes.get(id)!)
+    .filter((node) => !isDone(proj, node) && proj.childrenByParent.has(node.id));
+  if (containers.length === 0) return [];
+
+  const isStored = (id: string) => !id.startsWith(TEMP_REF_PREFIX);
+  const storedContainers = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findDescriptionsByIds(
+          containers.map((node) => node.id).filter(isStored),
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((row) => [row.id, row] as const),
+  );
+  const eligible = containers.flatMap((node) => {
+    const row = storedContainers.get(node.id);
+    // A node with no projected body is a stored one, whose row the read above holds.
+    const descriptionMd = proj.projectedDescription.has(node.id)
+      ? (proj.projectedDescription.get(node.id) ?? null)
+      : row!.descriptionMd;
+    if (acceptanceCriteriaTexts(descriptionMd).length === 0) return [];
+    return [{ node, descriptionMd, createdAt: row?.createdAt ?? NOT_YET_FILED }];
+  });
+  if (eligible.length === 0) return [];
+
+  const storedChildren = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTitlesByIds(
+          eligible.flatMap(({ node }) => proj.childrenByParent.get(node.id)!).filter(isStored),
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((row) => [row.id, row] as const),
+  );
+
+  const advisories: WorkItemCoverageAdvisoryDto[] = [];
+  for (const { node, descriptionMd, createdAt } of eligible) {
+    const children: CoverageChild[] = proj.childrenByParent.get(node.id)!.map((id) => {
+      const row = storedChildren.get(id);
+      return {
+        identifier: proj.nodes.get(id)!.identifier,
+        title: projectedTitle(proj, id) ?? row!.title,
+        createdAt: row?.createdAt ?? NOT_YET_FILED,
+      };
+    });
+    const finding = containerCoverageFinding({ descriptionMd, createdAt }, children);
+    if (!finding) continue;
+    for (const criterionIndex of finding.unownedCriterionIndices) {
+      advisories.push({
+        kind: 'coverage',
+        item: node.identifier,
+        severity: 'likely-unowned-criterion',
+        criterionIndex,
+        adoptedChildren: finding.adoptedChildren,
+      });
+    }
+  }
+  // Deterministic wire order, the committed path's: by container, then by criterion.
+  advisories.sort((a, b) => a.item.localeCompare(b.item) || a.criterionIndex - b.criterionIndex);
+  return advisories;
+}
+
 export const planValidityService = {
   /**
    * Is the PROJECTED subtree of `targetKey` finishable, once `planId` materializes?
@@ -319,8 +447,15 @@ export const planValidityService = {
       }
     }
     sortBlockers(blockers);
-    const advisories = await projectedProseAdvisories(proj, memberIds, ctx);
-    return { key: root.identifier, valid: blockers.length === 0, blockers, advisories };
+    // Prose families first, then COVERAGE — the committed verdict's order.
+    const prose = await projectedProseAdvisories(proj, memberIds, ctx);
+    const coverage = await projectedCoverageAdvisories(proj, memberIds, ctx);
+    return {
+      key: root.identifier,
+      valid: blockers.length === 0,
+      blockers,
+      advisories: [...prose, ...coverage],
+    };
   },
 
   /**

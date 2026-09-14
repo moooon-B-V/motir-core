@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { plansService } from '@/lib/services/plansService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -1993,6 +1994,65 @@ describe('validate_work_item (MCP) — the CONTAINER-COVERAGE advisory reaches t
     expect(text(res)).toContain(
       'Widen the adopted work item on the record, or file the sibling that covers the difference',
     );
+    await client.close();
+  });
+});
+
+describe('validate_work_item (MCP) with `planId` — the COVERAGE advisory reaches the PLAN author (MOTIR-5403)', () => {
+  const struct = (r: CallToolResult) => r.structuredContent as unknown as WorkItemValidityDto;
+  const text = (r: CallToolResult) => JSON.stringify(r.content);
+
+  it('names the criterion a re-parented OLDER card does not own, over the projection — still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'story',
+        title: 'Motir merges the pull request',
+        descriptionMd: [
+          '## Acceptance criteria',
+          '',
+          '- `GitProvider` declares `mergeChangeRequest` and the provider returns a typed result.',
+        ].join('\n'),
+      },
+      fx.ctx,
+    );
+    const home = await mk(fx, 'Where the gate was first filed', 'story');
+    const gate = await mk(
+      fx,
+      'The merge gate — every refusal renders in the control',
+      'subtask',
+      home.id,
+    );
+    await adminDb.workItem.update({
+      where: { id: gate.id },
+      data: { createdAt: new Date(new Date(story.createdAt).getTime() - 60_000) },
+    });
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: gate.id, patch: { parentRef: story.id } }],
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: story.identifier, planId: plan.id },
+    })) as CallToolResult;
+
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).advisories).toMatchObject([
+      {
+        kind: 'coverage',
+        item: story.identifier,
+        criterionIndex: 1,
+        adoptedChildren: [gate.identifier],
+      },
+    ]);
+    expect(text(res)).toContain(`once plan ${plan.id} materializes`);
+    expect(text(res)).toContain(`${story.identifier} criterion 1 has no owning child`);
+    expect(text(res)).toContain(`adopted: ${gate.identifier}`);
     await client.close();
   });
 });
