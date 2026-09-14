@@ -45,21 +45,26 @@ export interface AutoMergeRequest {
 }
 
 /**
- * Is this pull request a merge candidate NOW — open, on a provider that can merge, and
- * green at its latest head? The ONE statement both modes ask: a gate in `manual`, a
- * job in `auto`. Re-asked per member because a push can land between the verdict and
- * the transaction asking.
+ * The HEAD a merge candidate would be merged at, or `null` when the pull request is not
+ * a merge candidate NOW — open, on a provider that can merge, and green at its latest
+ * head. The ONE statement both modes ask: a gate in `manual`, a job in `auto`. Re-asked
+ * per member because a push can land between the verdict and the transaction asking.
+ *
+ * ⚠️ A green pull request always HAS a head: `derivePrCiState` answers `passing` only
+ * over a non-empty set of rows at the latest sha, so the head is read from that same
+ * set rather than checked for separately.
  */
-function isMergeCandidate(
-  pr: GithubPullRequestWithInstallation | null,
-): pr is GithubPullRequestWithInstallation {
-  return (
-    pr !== null &&
-    pr.state === 'open' &&
-    !pr.merged &&
-    providerSupportsMerge(getGitProvider(pr.repo.provider as GitProviderId)) &&
-    derivePrCiState(pr.checkRuns) === 'passing'
-  );
+function mergeCandidateHead(pr: GithubPullRequestWithInstallation | null): string | null {
+  if (
+    pr === null ||
+    pr.state !== 'open' ||
+    pr.merged ||
+    !providerSupportsMerge(getGitProvider(pr.repo.provider as GitProviderId)) ||
+    derivePrCiState(pr.checkRuns) !== 'passing'
+  ) {
+    return null;
+  }
+  return liveRowsAtLatestSha(pr.checkRuns)[0]!.commitSha;
 }
 
 /**
@@ -90,9 +95,8 @@ export async function settleGreenVerdict(
   const requests: AutoMergeRequest[] = [];
   for (const pullRequestId of args.pullRequestIds) {
     const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
-    if (!isMergeCandidate(pr)) continue;
-    const headSha = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
-    if (headSha) requests.push({ pullRequestId: pr.id, headSha });
+    const headSha = mergeCandidateHead(pr);
+    if (pr && headSha) requests.push({ pullRequestId: pr.id, headSha });
   }
   return requests;
 }
@@ -111,7 +115,9 @@ export async function settleGreenVerdict(
  *   - its provider cannot merge (GitLab until MOTIR-4883);
  *   - its own checks are not green at its latest head — re-asked per member, because
  *     a push can land between the verdict and this transaction;
- *   - no check has named its head, so there is no commit to pin the question to.
+ *
+ * (A green pull request always has a head to pin the question to — see
+ * {@link mergeCandidateHead}.)
  *
  * Returns how many gates it raised.
  */
@@ -137,9 +143,9 @@ export async function raiseMergeGates(
   for (const pullRequestId of args.pullRequestIds) {
     if (awaiting.has(pullRequestId)) continue;
     const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
-    if (!isMergeCandidate(pr)) continue;
-    const subjectVersion = pullRequestSubjectVersion(pr);
-    if (!subjectVersion) continue;
+    const headSha = mergeCandidateHead(pr);
+    if (!pr || !headSha) continue;
+    const subjectVersion = pullRequestSubjectVersion(pr, headSha)!;
 
     await approvalGateRepository.create(
       {

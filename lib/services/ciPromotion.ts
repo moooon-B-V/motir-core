@@ -467,7 +467,8 @@ async function reRaiseMergeGates(
 ): Promise<void> {
   for (const id of workItemIds) {
     const requests = await withWorkspaceContext(ctx, async (tx) => {
-      if (!(await workItemRepository.lockById(id, tx))) return [];
+      // A card deleted since the verdict locks nothing and reads back null.
+      await workItemRepository.lockById(id, tx);
       const item = await workItemRepository.findById(id, tx);
       if (!item || !REVIEW_STATUSES.includes(item.status)) return [];
       if (!(await everyDeliveryIsGreen(item, tx))) return [];
@@ -501,8 +502,10 @@ async function promoteEach(
       let autoMerges: AutoMergeRequest[] = [];
       await workItemsService.updateStatus(id, TARGET_STATUS, ctx, {
         inTransaction: async (tx) => {
-          const item = await workItemRepository.findById(id, tx);
-          if (item) autoMerges = await settleMergesForCard(item, ctx, tx);
+          // Non-null by construction: the transition above locked and wrote this row
+          // in this same transaction.
+          const item = (await workItemRepository.findById(id, tx))!;
+          autoMerges = await settleMergesForCard(item, ctx, tx);
         },
       });
       promoted.push(id);
