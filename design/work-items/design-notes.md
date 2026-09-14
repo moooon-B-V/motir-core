@@ -6795,6 +6795,85 @@ own and is drawn at rest; what it opens is [MOTIR-5214](motir:cmtxm4v3600edhztx2
 | [MOTIR-5351](motir:cmtzsio9b01cjhvoirkfuxmxl)                                                 | **GIVES** the narrow row (`design/github` 12n); nothing in this area                               |
 | [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw)                                                 | **GIVES** the block in both homes; the spec is `design/github` §20                                 |
 
+> **Amended 2026-09-14 (review of MOTIR-5540):** at the **project root**, folders show **after all the
+> epics** — epics, then folders, then the root's other work items. Inside a folder the order above
+> is unchanged. See § `/items` first run › _Root order_.
+
+## `/items` first run — a root that holds only folders (Story MOTIR-4927 · MOTIR-5540 — `items-first-run.mock.html`)
+
+Every project is now born with a root folder named **Bugs**, where Motir files the bugs it creates on
+its own (MOTIR-4935). The tree counts a level as its folders **and** its work items
+(`workItemsService.readFolderLevel`: `total = folderTotal + itemTotal`), and `IssueTreeTable` shows
+its `emptyState` only when `rows.length === 0`. Left alone, a brand-new project would open `/items`
+on a lone folder row instead of the drawn _No work items yet_ state. The Folders section above drew
+folder rows, an empty FOLDER and a read-only member, and never a project whose root holds only
+folders. This section decides it. Layout source of truth for **MOTIR-5541**.
+
+### The rule
+
+**The unfiltered Tree shows its empty state when its root holds ZERO WORK ITEMS.** Folder rows do not
+count toward emptiness, and they are still drawn, pinned above the empty state in their own order,
+exactly as a folder row is drawn today.
+
+- It is keyed on **work items**, never on a folder name, so a team that made folders before planning
+  meets the same message, and renaming the Bugs folder changes nothing.
+- The count comes from the server (the level read's work-item total, or a sibling field), not from
+  inspecting rows in the browser.
+- **Unchanged:** the List view (it never shows folders, MOTIR-5314); a FILTERED view that matches
+  nothing keeps its own _no matching_ state; a root with at least one work item renders the tree as
+  today, with no empty state.
+
+### Root order — epics first, then folders (review of MOTIR-5540, 2026-09-14)
+
+**At the PROJECT ROOT, folders show after all the epics.** A root level reads in three bands, in this
+order:
+
+1. **every epic** at the root, in the tree's active sort;
+2. **the folders** at the root, in their own order (their position), under any column sort;
+3. **the root's other work items** (stories, tasks, bugs, subtasks), in the active sort.
+
+- **This amends the Folders read at the root only** (MOTIR-5314's _a level is its folders THEN its
+  work items_). Inside a FOLDER the level is unchanged: its child folders first, then its work items.
+- **The epics stay the project's first-order structure**: a person opening `/items` still meets the
+  plan's epics at the top, and the folders — places work is tidied away into — follow them.
+- **One `take` / `offset` still runs across the whole level**, now across three bands: offset `o` is
+  epic `o` while `o < E`, folder `o − E` while `o < E + F`, and work item `o − E − F` after; `total` is
+  `E + F + I`, so walking the level page by page still visits every row exactly once.
+- **A column sort reorders inside the epic band and inside the work-item band**, never across them,
+  and never reorders the folders.
+- **Nothing drawn in this asset changes**: its panels show projects with no work items, so no epics.
+  The List view (no folders) and a filtered view are unchanged.
+- **Not built by MOTIR-5541**, which owns the empty-state rule only; the root order has its own code
+  card under MOTIR-4927.
+
+### The panels
+
+| Panel | State                                | What it draws                                                                                                             |
+| ----- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| **1** | a brand-new project                  | The shipped toolbar; the **Bugs** folder row (collapsed, actions button); the EmptyState below it with **New work item**. |
+| **2** | several folders, still no work items | Bugs, Later, Research as rows; the same EmptyState.                                                                       |
+| **3** | a member without `work_item:edit`    | No New folder, no New work item, no folder actions; the EmptyState without its action; folders still shown.               |
+| **4** | the List view                        | Unchanged: the switcher reads List, no New folder, the same EmptyState, no folder rows.                                   |
+
+### What it composes
+
+| Composed                                                         | Owned there, not here                                                                                                                               |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `folders.mock.html` — the tree, its toolbar, its folder rows     | Row anatomy, the actions button, the 22px indent, the empty-folder row; its token, tree and toolbar CSS and its icon sheet are spliced in verbatim. |
+| `packages/design-system` `EmptyState` (`list.mock.html` panel 3) | Card + the default lucide `Inbox` + title + description + action.                                                                                   |
+
+### Copy
+
+**No new strings.** The empty state is `issueViews.noIssuesTitle` / `issueViews.noIssuesDescription`
+and the shipped **New work item** action; the folder rows use the shipped `folders.*` strings.
+
+### Tokens & a11y
+
+Colour is `--el-*` only and shape is the element-semantic tokens. The empty state's icon and
+description use `--el-text-secondary`, which clears AA on every surface. The folder rows keep their
+shipped roles (`row`, `aria-level`, `aria-expanded`), and the empty state follows them in reading
+order, so a screen reader hears the folders and then that there are no work items yet.
+
 ## Placement — a filed work item's Folder field on its page, its breadcrumb, and the Folder filter row (Story MOTIR-5309 · MOTIR-5374 — `placement.mock.html`)
 
 Once work can be filed (§ Folders), every other place that shows where a work item sits has to say
