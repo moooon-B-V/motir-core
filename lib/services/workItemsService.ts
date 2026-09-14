@@ -5310,6 +5310,25 @@ export const workItemsService = {
   },
 
   /**
+   * A work item's OWN folder placement (Story MOTIR-5310 · MOTIR-5413) — the
+   * `folderId` on its row and that folder's path, names root-first; both `null`
+   * for an unfiled item. The OWN placement, never the effective one a child of a
+   * filed epic inherits on the item page: only a root is ever filed. The MCP
+   * write tools read it back after a create or a move, so the placement they
+   * report is the row's, not a value re-derived from their own arguments.
+   */
+  async getWorkItemPlacement(
+    id: string,
+    ctx: ServiceContext,
+  ): Promise<{ folderId: string | null; folderPath: string[] | null }> {
+    const row = await readWorkItem(id, ctx);
+    if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    if (row.folderId === null) return { folderId: null, folderPath: null };
+    return { folderId: row.folderId, folderPath: await this.getFolderPath(row.folderId, ctx) };
+  },
+
+  /**
    * The condensed QUICK-VIEW (peek) payload for `?peek=<identifier>` (Subtask
    * 2.5.19; bug 8.8.2 made the peek a client-fetched island). Reuses the SAME
    * aggregate read the full detail page uses (`getIssueDetail` — inheriting its

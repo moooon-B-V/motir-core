@@ -753,7 +753,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       parentKey: {
         type: 'string',
         description:
-          'Optional parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent.',
+          'Optional parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent. Mutually exclusive with folderId.',
+      },
+      folderId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          "Optional: the id of a folder (as `list_folders` returns it) to FILE the new item into — the other placement beside parentKey, which it may not be combined with (PLACEMENT_CONFLICT). A filed item is a root, so any kind may be filed, a subtask included. The folder must be in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
       },
       descriptionMd: { type: 'string', description: 'Optional Markdown description body.' },
       priority: {
@@ -1248,10 +1254,15 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       parentKey: {
         anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
         description:
-          'The NEW parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent, and may not be the item itself or one of its descendants. Pass null to promote the item to a top-level root (allowed only for kinds that may live at the top level).',
+          'The NEW parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent, and may not be the item itself or one of its descendants. Pass null to promote the item to a top-level root (allowed only for kinds that may live at the top level; a filed item keeps its folder). Give EXACTLY ONE of parentKey and folderId.',
+      },
+      folderId: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          "The id of a folder (as `list_folders` returns it) to FILE the item into, or null to take it OUT of its folder to the top level. Filing clears the work-item parent; the item's own children travel with it. Give EXACTLY ONE of parentKey and folderId. An unknown folder is FOLDER_NOT_FOUND, another project's CROSS_PROJECT_FOLDER.",
       },
     },
-    required: ['key', 'parentKey'],
+    required: ['key'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

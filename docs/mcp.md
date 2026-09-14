@@ -792,6 +792,18 @@ so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
 paid when there is something to read. The child rows do **not** carry it: this
 aggregate answers for one card, and the list reads answer per row.
 
+The aggregate **declares** the item's OWN folder placement (MOTIR-5413) —
+`folderId` (the folder it is filed in) and `folderPath` (that folder's names,
+root-first) — the same two fields `/api/v1`'s work-item detail
+publishes. Both are `null` for an unfiled item **and** for a child of a filed
+item: only a root is ever filed, and a child's ancestry already travels as keys.
+They are the ONLY folder fields on the payload, and the text summary prints a
+`Folder: Parked ▸ 2025` line beside `Parent:` when one is set.
+
+```jsonc
+{ "folderId": "cm9…", "folderPath": ["Parked", "2025"], "item": { "identifier": "ACME-7", … } }
+```
+
 Each **CHILD** row additionally carries the same
 [`dependencies` block](#the-dependencies-block-list-reads) the list reads attach
 — identical shape, identical guarantees — so the children's build ORDER is
@@ -901,7 +913,7 @@ Read-scoped, and access-gated exactly like the UI: an item in another workspace
 #### `create_work_item`
 
 Create a work item (epic / story / task / bug / subtask) under a project,
-optionally parented. The reporter is pinned to the token owner. Use
+optionally parented **or filed into a folder**. The reporter is pinned to the token owner. Use
 `kind: "epic"` with no `parentKey` to create a **top-level capability area**;
 `kind: "bug"` under a story/epic to **log a bug** (the bug-logging protocol). An
 epic is **root-only** — the kind-parent matrix admits no parent for it, so
@@ -914,7 +926,8 @@ epics included, so the agent surface can create one).
 | `projectKey`         | string                                              | yes      | The project the item is created in, e.g. `"ACME"`.                                                                                                                                                                                                                  |
 | `kind`               | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                                                                                                           |
 | `title`              | string                                              | yes      | The title (one line).                                                                                                                                                                                                                                               |
-| `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                                                                                                      |
+| `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent. Mutually exclusive with `folderId`.                                                                                                                                                                  |
+| `folderId`           | string                                              | no       | A folder id (from [`list_folders`](#list_folders)) to FILE the new item into. Any kind may be filed, a subtask included. With `parentKey` → `PLACEMENT_CONFLICT`; unknown → `FOLDER_NOT_FOUND`; another project's → `CROSS_PROJECT_FOLDER`.                         |
 | `descriptionMd`      | string                                              | no       | Markdown description body.                                                                                                                                                                                                                                          |
 | `priority`           | priority enum                                       | no       | Omit for the project default.                                                                                                                                                                                                                                       |
 | `storyPoints`        | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                                                                                                            |
@@ -927,7 +940,11 @@ epics included, so the agent surface can create one).
 | `plannedWithHarness` | string                                              | no       | Self-reported planning **harness** (e.g. `"Claude Code"`, `"Codex"`). Recorded as planning provenance alongside the server-set source `mcp`. Omit → unrecorded.                                                                                                     |
 | `plannedWithModel`   | string                                              | no       | Self-reported planning **model** (e.g. `"claude-opus-4-8"`, `"deepseek-chat"`). Recorded as planning provenance. Omit → unrecorded.                                                                                                                                 |
 
-**Output** — `structuredContent`: the created `WorkItemDto`.
+**Output** — `structuredContent`: the created `WorkItemDto`, plus a
+**`placement`** field — `{ parentKey, folderId, folderPath }` — saying where the
+item landed, read back off the row. At most one side is set; both null means the
+top level. The text summary says the same in words (`Placed in folder Parked ▸
+2025`).
 
 Every item created through this tool is stamped with planning provenance
 `source = mcp` (server-set — a caller cannot claim `manual`/`native`); the
@@ -1886,8 +1903,8 @@ is `totalCount − 1`, and `byKind` is the per-kind breakdown of the descendants
 
 #### `move_to_parent`
 
-**Re-parent** a work item: move it under a different parent, or promote it to a
-top-level root. This is the structural move `create_work_item` (parent is
+**Re-place** a work item: move it under a different parent, promote it to a
+top-level root, or file it into — or out of — a folder. This is the structural move `create_work_item` (parent is
 set only at create) and `update_work_item` (a field patch, not a structural
 move) deliberately leave out — so an agent can re-home a card **without** the
 delete-and-recreate hack that would lose its identifier, history, comments, and
@@ -1902,13 +1919,29 @@ be a **kind-legal** parent in the **same project**, and the move may not create 
 each returns a typed error naming the violation. Same Story-6.4 edit gate as the
 UI; a missing / cross-tenant key is an indistinguishable 404.
 
-| Input       | Type           | Required | Notes                                                                                     |
-| ----------- | -------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `key`       | string         | yes      | The work item to move, e.g. `"ACME-7"`.                                                   |
-| `parentKey` | string \| null | yes      | The new parent's identifier, or `null` to promote to a top-level root. Same-project only. |
+A work item sits under a work-item parent **or** in a folder, never both, so the
+tool takes **exactly one** of `parentKey` and `folderId` (MOTIR-5413):
 
-**Output** — `structuredContent`: the re-parented `WorkItemDto` (its `parentId`
-now the new parent, or `null` at the top level).
+- **`{ key, parentKey }`** — the re-parent above. Setting a work-item parent on a
+  filed item also takes it out of its folder. `parentKey: null` on a filed item
+  promotes it to the root and **keeps** its folder.
+- **`{ key, folderId: "<id>" }`** — file the item into that folder (an id from
+  [`list_folders`](#list_folders)), appended last at the folder's level. Its
+  work-item parent is cleared; its own children travel with it.
+- **`{ key, folderId: null }`** — take the item out of its folder, to the root. A
+  subtask cannot go there: `SUBTASK_NEEDS_PLACEMENT`.
+- **both, or neither** — refused before any read: both is `PLACEMENT_CONFLICT`,
+  neither is `INVALID_REQUEST`, and the message names the rule.
+
+| Input       | Type           | Required   | Notes                                                                                                                                                |
+| ----------- | -------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`       | string         | yes        | The work item to move, e.g. `"ACME-7"`.                                                                                                              |
+| `parentKey` | string \| null | one of two | The new parent's identifier, or `null` to promote to a top-level root. Same-project only.                                                            |
+| `folderId`  | string \| null | one of two | A folder id to file the item into, or `null` to take it out of its folder. Unknown → `FOLDER_NOT_FOUND`; another project's → `CROSS_PROJECT_FOLDER`. |
+
+**Output** — `structuredContent`: the moved `WorkItemDto`, plus a **`placement`**
+field — `{ parentKey, folderId, folderPath }` — read back off the row, so it
+agrees with a following [`get_work_item`](#get_work_item).
 
 ### Folders
 

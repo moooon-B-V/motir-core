@@ -429,6 +429,22 @@ describe('get_work_item derives its CHILD rows from v1’s schema', () => {
     expect(built.workflow).toEqual({ statuses: [] });
   });
 
+  it('DECLARES the item’s own folder placement — `folderId` + `folderPath` — and refuses a mistyped one (MOTIR-5413)', () => {
+    const row = presentMcpWorkItemChild(child, undefined, () => undefined);
+    const built = derived(getWorkItemPayload, {
+      item: { identifier: 'PROD-1856' },
+      folderId: 'folder-1',
+      folderPath: ['Parked', '2025'],
+      children: [row],
+    });
+    expect([built.folderId, built.folderPath]).toEqual(['folder-1', ['Parked', '2025']]);
+    // Declared, not merely passed through the catch-all: a path that is not a
+    // list of names fails at the tool.
+    expect(() =>
+      derived(getWorkItemPayload, { children: [row], folderPath: 'Parked ▸ 2025' as never }),
+    ).toThrow();
+  });
+
   it('`derived` REFUSES a payload whose children do not match the declared shape', () => {
     // The mapper drifting from its own declaration fails at the tool, not in
     // front of an agent.

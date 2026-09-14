@@ -583,8 +583,8 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
     const structured = res.structuredContent as Record<string, unknown>;
     const detail = await workItemsService.getIssueDetail(fx.projectId, story.identifier, fx.ctx);
     // Only the TRANSPORT attachments differ — `children`'s edge block (7.9.0f),
-    // the item's `commentCount` (MOTIR-2001), and the card's `deliveries`
-    // (MOTIR-3697). The web-facing `IssueDetailDto` is untouched by all three,
+    // the item's `commentCount` (MOTIR-2001), the card's `deliveries`
+    // (MOTIR-3697) and its declared `folderPath` (MOTIR-5413). The web-facing `IssueDetailDto` is untouched by all three,
     // so no route-shape test that reads this aggregate back can drift — which is
     // the reason each attaches at the transport rather than widening the DTO,
     // and the reason this list is allowed to grow while the assertion stays
@@ -593,6 +593,7 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
       children: _ignored,
       item: toolItem,
       deliveries: _deliveries,
+      folderPath: _folderPath,
       ...restOfTool
     } = structured;
     const {

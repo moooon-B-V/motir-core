@@ -16,6 +16,7 @@ import {
   nextReadyPayload,
   searchWorkItemsPayload,
   skeletonPayload,
+  workItemPlacementWritePayload,
   workItemWritePayload,
 } from './workItems';
 import {
@@ -75,13 +76,14 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // MOTIR-2961 — the KEYED claim. Its payload IS v1's `WorkItemClaim`, so it
   // probes that resource whole rather than a part of it.
   claim_work_item: claimWorkItemPayload as unknown as PayloadDefinition<never>,
-  create_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
+  // MOTIR-5413 — the two PLACING writes report where the item now sits.
+  create_work_item: workItemPlacementWritePayload as unknown as PayloadDefinition<never>,
   update_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   transition_status: workItemWritePayload as unknown as PayloadDefinition<never>,
   archive_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   unarchive_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   change_kind: workItemWritePayload as unknown as PayloadDefinition<never>,
-  move_to_parent: workItemWritePayload as unknown as PayloadDefinition<never>,
+  move_to_parent: workItemPlacementWritePayload as unknown as PayloadDefinition<never>,
   add_comment: addCommentPayload as unknown as PayloadDefinition<never>,
   // MOTIR-5295 — an edit returns the comment it changed, the same shape the
   // add returns, so it derives through the same definition.
