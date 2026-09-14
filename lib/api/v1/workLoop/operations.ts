@@ -818,7 +818,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'only the run. A run with no scope (an unscoped batch, whose every card was its own ' +
       'target) is refused with `NO_RUN_TARGET` rather than answered with a defaulted target. ' +
       'A read: it writes nothing and moves no status.',
-    permission: 'work_item:edit',
+    permission: 'project:browse',
     parameters: [
       {
         name: 'id',

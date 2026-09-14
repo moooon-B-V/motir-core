@@ -184,8 +184,8 @@ describe('GET /api/v1/dispatch-runs/{id}/close-out-prompt', () => {
     expect(res.status).toBe(404);
   });
 
-  it('declares work_item:edit, matching its route', () => {
+  it('declares project:browse, like every v1 GET and the key its service asserts', () => {
     const op = findV1Operation('GET', '/api/v1/dispatch-runs/{id}/close-out-prompt');
-    expect(op?.permission).toBe('work_item:edit');
+    expect(op?.permission).toBe('project:browse');
   });
 });

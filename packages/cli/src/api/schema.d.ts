@@ -962,7 +962,7 @@ export interface paths {
          * Get the prompt that writes a run’s How to test onto its run target
          * @description The CLOSE-OUT prompt for a run launched against a work item (a scoped run): the text a CLI hands ONE agent after the run’s last card lands and BEFORE it marks the run’s pull requests ready, so HOW TO TEST is written once onto the run target by an agent that sees every card the run landed. The target and the landed cards are read from the run’s own record — the caller names only the run. A run with no scope (an unscoped batch, whose every card was its own target) is refused with `NO_RUN_TARGET` rather than answered with a defaulted target. A read: it writes nothing and moves no status.
          *
-         *     Requires the `work_item:edit` permission.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getDispatchRunCloseOutPrompt"];
         put?: never;

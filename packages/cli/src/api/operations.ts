@@ -166,7 +166,7 @@ export const V1_OPERATIONS = {
   "getDispatchRunCloseOutPrompt": {
     method: "GET",
     path: "/api/v1/dispatch-runs/{id}/close-out-prompt",
-    permission: "work_item:edit",
+    permission: "project:browse",
     successStatus: 200,
     responseComponent: "DispatchRunCloseOutPrompt",
   },

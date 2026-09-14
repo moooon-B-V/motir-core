@@ -524,6 +524,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | -------------------------------------------------------- | ----- | -------------------------------------------------- | ---------- | ------------ | --- |
 | `/api/v1/dispatch-runs`                                  | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/close`                       | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]/close-out-prompt`            | —     | `assertPermission` (`project:browse`)              | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/events`                      | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
 | `/api/v1/me`                                             | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/plans/[planId]`                                 | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
@@ -553,6 +554,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/work-items/[key]/claim`                         | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/comments`                      | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/dispatch-prompt`               | —     | — none —                                           | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/how-to-test`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/expansions`                    | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/implementation`                | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/integration`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |

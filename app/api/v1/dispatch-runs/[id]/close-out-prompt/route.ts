@@ -12,9 +12,10 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 // come from the run's own record — the caller names only the run — and a run
 // with no scope is `NO_RUN_TARGET` (422), never a defaulted target.
 //
-// `work_item:edit` at the gate, the key the agent this prompt is for must hold
-// to publish, and one `CLI_TOKEN_GRANT` already carries.
-export const GET = withV1Route<{ id: string }>({ permission: 'work_item:edit' }, async (ctx) => {
+// `project:browse` at the gate, like every v1 GET: the key
+// `dispatchRunService.getCloseOutPrompt` asserts on the run's project. The
+// agent that PUBLISHES from this prompt is gated separately, on the tool.
+export const GET = withV1Route<{ id: string }>({ permission: 'project:browse' }, async (ctx) => {
   const dto = await dispatchRunService.getCloseOutPrompt(ctx.params.id, ctx.service);
   return NextResponse.json(presentDispatchRunCloseOutPrompt(dto));
 });
