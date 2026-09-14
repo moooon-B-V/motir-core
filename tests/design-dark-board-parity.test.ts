@@ -6,8 +6,10 @@ import { pngSize } from '../scripts/renderDesignMockSearch.mjs';
 // MOTIR-4868 — the FOURTH file nothing was watching.
 //
 // ── The rule ────────────────────────────────────────────────────────────────
-// `CLAUDE.md` § *Design assets — THREE files per surface* is written for ONE
-// PNG, and `tests/design-three-file-set.test.ts` measures exactly that. Five
+// `CLAUDE.md` § *Design assets* was written for ONE PNG when this guard landed.
+// Since MOTIR-5490 a surface is TWO files and no export is required at all, so
+// this guard now governs only the LEGACY exports still in the tree: where a pair
+// exists, the two boards must still agree. Five
 // assets in this tree ship a FOURTH: `<name>.dark.png`, which
 // `design/code-context/design-notes.md` § 14 defines as
 //

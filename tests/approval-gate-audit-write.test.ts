@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
+import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from './helpers/db';
 
 // THE AUDIT SET IS WRITTEN (Story MOTIR-4778 · Bug MOTIR-5046; ADR
@@ -98,10 +99,22 @@ afterAll(async () => {
 async function publish(label: string, commitSha: string | null = `sha-${label}`) {
   const pathname = `${designPrefix(fx.workspaceId, card.id)}${label}.mock.html`;
   store.set(pathname, { contentType: 'text/html', size: 2048 });
+  const notePathname = `${designPrefix(fx.workspaceId, card.id)}${label}.design-notes.md`;
+  store.set(notePathname, { contentType: 'text/markdown', size: 512 });
+  // AMENDMENT 4: a result is the mock plus ONE note file, published only while
+  // an open work item is `blocked_by` the card.
+  await ensureWorkWaitsOn(card.id, fx);
   return designEvidenceService.recordFromPathnames(
     {
       workItemId: card.id,
-      assets: [{ kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname }],
+      assets: [
+        { kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname },
+        {
+          kind: 'note_file',
+          sourcePath: 'design/work-items/design-notes.md',
+          pathname: notePathname,
+        },
+      ],
       commitSha,
     },
     fx.ctx,
@@ -395,6 +408,15 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
     // ADR §8's discriminator: a card with a linked OPEN pull request is approved
     // and moved by the MERGE, so this decision caused no transition. Recording
     // `done` here would put a status on the row that the card does not have.
+    //
+    // ⚠️ PUBLISHED FIRST, and the delivery written directly afterwards. Since
+    // MOTIR-5534 (design-result.md AMENDMENT 4 Q8) a publish onto a card that
+    // ALREADY has an open pull request raises no design gate, and a link through
+    // the service retires an awaiting one — so the arm under test is reached only
+    // by a delivery that appears after the publish without passing the link door,
+    // which is exactly the "a pull request can appear in between" case the
+    // handler's own comment keeps the arm for.
+    const gate = await gateFor((await publish('frame')).id);
     const installation = await adminDb.githubInstallation.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -435,7 +457,6 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
         repoId: repo.id,
       },
     });
-    const gate = await gateFor((await publish('frame')).id);
 
     const result = await approvalGatesService.decide(
       { gateId: gate.id, decision: 'approve', source: 'ui' },

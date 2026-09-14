@@ -91,19 +91,12 @@ export const NOTE_MD = [
 ].join('\n');
 
 export const MOCK_SOURCE_PATH = 'design/work-items/approval-frame.mock.html';
-export const IMAGE_SOURCE_PATH = 'design/work-items/approval-frame.png';
 export const NOTE_SOURCE_PATH = 'design/work-items/design-notes.md';
 
 /** A self-contained mock — inline CSS, no `<script>`, no remote URL (ADR §5). */
 export const MOCK_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Approval frame</title>
 <style>body{margin:0;font:14px/1.5 system-ui,sans-serif}section{padding:20px}</style>
 </head><body><section><h2>Approval frame</h2><p>Three bands: what is being decided, the subject, the verbs.</p></section></body></html>`;
-
-/** A 1x1 PNG — a real image rather than a broken-image glyph in the recording. */
-export const PNG_BYTES = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64',
-);
 
 // ⚠️ Deliberately NOT substrings of one another, nor of the note heading above:
 // `getByRole` matches by SUBSTRING and an overlap dies on strict mode.
@@ -271,19 +264,15 @@ export async function publishDesignResult(client: Client, key: string): Promise<
           contentBase64: Buffer.from(MOCK_HTML).toString('base64'),
         },
         {
-          kind: 'image',
-          sourcePath: IMAGE_SOURCE_PATH,
-          contentType: 'image/png',
-          contentBase64: PNG_BYTES.toString('base64'),
-        },
-        {
           kind: 'note_file',
           sourcePath: NOTE_SOURCE_PATH,
           contentType: 'text/markdown',
           contentBase64: Buffer.from(NOTE_MD).toString('base64'),
         },
       ],
-      noteMd: NOTE_MD,
+      // AMENDMENT 4 (MOTIR-5491): the mock and ONE note file — no `.png`, no
+      // inline `noteMd`. The seed's dependent card is `blocked_by` the design,
+      // which is what lets the publish through at all.
       producedByKey: key,
     },
   }) as Promise<CallToolResult>;

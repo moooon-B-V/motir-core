@@ -58,8 +58,8 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
 }));
 
 const { runPublishDesignResult } = await import('@/lib/mcp/tools/publishDesignResult');
-const { designEvidenceService, NOTE_MD_CAP_BYTES } =
-  await import('@/lib/services/designEvidenceService');
+const { designEvidenceService } = await import('@/lib/services/designEvidenceService');
+const { makeWorkWaitOn } = await import('../helpers/designWaits');
 const {
   ALLOWED_DESIGN_ASSET_TYPES,
   ALLOWED_UPLOAD_TYPES,
@@ -81,11 +81,14 @@ beforeEach(async () => {
 /** A design subtask under a story — the kind-parent matrix is a DB trigger. */
 async function makeSubtask(f: WorkItemFixture) {
   const story = await createTestWorkItem(f, { kind: 'story', title: 'Parent story' });
-  return createTestWorkItem(f, {
+  const card = await createTestWorkItem(f, {
     kind: 'subtask',
     title: 'Design — the readiness rail',
     parentId: story.id,
   });
+  // AMENDMENT 4 Q2: a result is published only while open work waits on it.
+  await makeWorkWaitOn(card.id, f);
+  return card;
 }
 
 const b64 = (s: string | Buffer) => Buffer.from(s).toString('base64');
@@ -98,10 +101,10 @@ const ASSETS = [
     contentBase64: b64('<!doctype html><title>rail</title><p>rail</p>'),
   },
   {
-    kind: 'image' as const,
-    sourcePath: 'design/work-items/rail.png',
-    contentType: 'image/png',
-    contentBase64: b64('PNG\r\n\n'),
+    kind: 'note_file' as const,
+    sourcePath: 'design/work-items/design-notes.md',
+    contentType: 'text/markdown',
+    contentBase64: b64('## The rail\n\nThe note, published as a file.\n'),
   },
 ];
 
@@ -113,7 +116,6 @@ describe('the tool → service → row → panel seam', () => {
       {
         key: item.identifier,
         assets: ASSETS,
-        noteMd: '## The rail\n\nRendered note.',
         commitSha: 'c0389f2',
         producedByKey: item.identifier,
       },
@@ -127,15 +129,15 @@ describe('the tool → service → row → panel seam', () => {
     const dto = await designEvidenceService.getCurrentForWorkItem(item.id, fx.ctx);
     expect(dto, 'the panel reads nothing back from a tool publish').not.toBeNull();
     expect(dto!.workItemId).toBe(item.id);
-    expect(dto!.noteMd).toBe('## The rail\n\nRendered note.');
+    expect(dto!.noteMd, 'AMENDMENT 4: the note is a link, not inline').toBeNull();
     expect(dto!.noteTruncated).toBe(false);
     expect(dto!.commitSha).toBe('c0389f2');
     expect(dto!.withdrawnAt).toBeNull();
 
     // Render ORDER is the panel's contract, not the caller's argument order.
-    expect(dto!.assets.map((a) => a.kind)).toEqual(['mock', 'image']);
+    expect(dto!.assets.map((a) => a.kind)).toEqual(['mock', 'note_file']);
     for (const asset of dto!.assets) {
-      expect(asset.sourcePath).toMatch(/^design\/work-items\/rail\./);
+      expect(asset.sourcePath).toMatch(/^design\/work-items\//);
       // ⚠️ Every url is the AUTHENTICATED content route, never a store URL — the
       // private posture, asserted on the shape a tool publish produces. The DTO
       // exposes no attachment id, deliberately, so the assertion is on the SHAPE
@@ -148,32 +150,33 @@ describe('the tool → service → row → panel seam', () => {
 
   it('the size and type on the DTO are the STORE’s, not the caller’s claim', async () => {
     const item = await makeSubtask(fx);
-    await runPublishDesignResult({ key: item.identifier, assets: [ASSETS[1]!] }, fx.ctx);
+    await runPublishDesignResult({ key: item.identifier, assets: ASSETS }, fx.ctx);
 
     const dto = await designEvidenceService.getCurrentForWorkItem(item.id, fx.ctx);
-    const png = dto!.assets[0]!;
+    const noteFile = dto!.assets.find((a) => a.kind === 'note_file')!;
     // The bytes the tool decoded, measured by the store's HEAD — the register
     // half never trusts what the caller reported.
-    expect(png.sizeBytes).toBe(Buffer.from(ASSETS[1]!.contentBase64, 'base64').byteLength);
-    expect(png.mimeType).toBe('image/png');
+    expect(noteFile.sizeBytes).toBe(Buffer.from(ASSETS[1]!.contentBase64, 'base64').byteLength);
+    expect(noteFile.mimeType).toBe('text/markdown');
   });
 });
 
-describe('the note’s TWO FORMS agree about one publish', () => {
-  // The inline `noteMd` is capped for RENDERING; the `note_file` asset carries
-  // the complete text. Only a seam test can prove they describe the same
-  // publish — the unit suite sees the cap, the panel sees the field, and neither
-  // sees that the full text survived it.
-  it('the cap truncates the inline note while the companion keeps every byte', async () => {
+describe('the note travels as ONE form — the file — and every byte of it is kept', () => {
+  // AMENDMENT 4 retired the inline `noteMd`, so there is no longer a capped copy
+  // to reconcile with the file: the `note_file` asset IS the note, and the panel
+  // links to it. What a seam test still owes is that the file a reviewer follows
+  // the link to is the whole document, as the store holds it.
+  it('a large note publishes whole as the `note_file`, with nothing stored inline', async () => {
     const item = await makeSubtask(fx);
 
-    const filler = 'a'.repeat(Math.floor(NOTE_MD_CAP_BYTES * 0.6));
+    const filler = 'a'.repeat(48 * 1024);
     const full = `## One\n\n${filler}\n\n## Two\n\n${filler}\n\nthe tail\n`;
 
-    await runPublishDesignResult(
+    const result = await runPublishDesignResult(
       {
         key: item.identifier,
         assets: [
+          ASSETS[0]!,
           {
             kind: 'note_file',
             sourcePath: 'design/work-items/design-notes.md',
@@ -181,19 +184,15 @@ describe('the note’s TWO FORMS agree about one publish', () => {
             contentBase64: b64(full),
           },
         ],
-        noteMd: full,
       },
       fx.ctx,
     );
+    expect(result.isError, JSON.stringify(result)).toBeFalsy();
 
     const dto = await designEvidenceService.getCurrentForWorkItem(item.id, fx.ctx);
-    expect(dto!.noteTruncated).toBe(true);
-    expect(dto!.noteMd).toContain('## One');
-    expect(dto!.noteMd, 'the cut lands on a `##` boundary').not.toContain('## Two');
+    expect(dto!.noteMd).toBeNull();
+    expect(dto!.noteTruncated).toBe(false);
 
-    // The COMPANION is the whole document, byte for byte. This is the assertion
-    // that makes the cap a rendering bound rather than data loss with a flag on
-    // it — and it reads the STORE, which is where the bytes actually are.
     const companion = dto!.assets.find((a) => a.kind === 'note_file');
     expect(companion).toBeDefined();
     expect(companion!.sizeBytes).toBe(Buffer.byteLength(full));

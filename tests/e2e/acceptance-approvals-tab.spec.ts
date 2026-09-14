@@ -7,12 +7,10 @@ import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
 import {
-  IMAGE_SOURCE_PATH,
   MOCK_HTML,
   MOCK_SOURCE_PATH,
   NOTE_MD,
   NOTE_SOURCE_PATH,
-  PNG_BYTES,
 } from './_helpers/design-approval-seed';
 import {
   plantFillerGates,
@@ -86,19 +84,12 @@ function publish(client: Client, key: string): Promise<CallToolResult> {
           contentBase64: b64(Buffer.from(MOCK_HTML)),
         },
         {
-          kind: 'image',
-          sourcePath: IMAGE_SOURCE_PATH,
-          contentType: 'image/png',
-          contentBase64: b64(PNG_BYTES),
-        },
-        {
           kind: 'note_file',
           sourcePath: NOTE_SOURCE_PATH,
           contentType: 'text/markdown',
           contentBase64: b64(Buffer.from(NOTE_MD)),
         },
       ],
-      noteMd: NOTE_MD,
       producedByKey: key,
     },
   }) as Promise<CallToolResult>;

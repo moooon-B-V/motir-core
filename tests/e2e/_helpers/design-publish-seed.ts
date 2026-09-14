@@ -67,19 +67,12 @@ export const NOTE_MD = [
 ].join('\n');
 
 export const MOCK_SOURCE_PATH = 'design/work-items/readiness-rail.mock.html';
-export const IMAGE_SOURCE_PATH = 'design/work-items/readiness-rail.png';
 export const NOTE_SOURCE_PATH = 'design/work-items/design-notes.md';
 
 /** A self-contained mock — inline CSS, no `<script>`, no remote URL (ADR §5). */
 export const MOCK_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Readiness rail</title>
 <style>body{margin:0;font:14px/1.5 system-ui,sans-serif}section{padding:20px}</style>
 </head><body><section><h2>Readiness rail</h2><p>Published by the agent, through the tool.</p></section></body></html>`;
-
-/** A 1x1 PNG — a real image rather than a broken-image glyph in the recording. */
-export const PNG_BYTES = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64',
-);
 
 // ⚠️ Deliberately NOT a substring of one another, and not of any heading the
 // page renders: `getByRole` matches an accessible name by SUBSTRING, so an
@@ -138,6 +131,23 @@ export async function seedDesignPublish(
       parentId: story.id,
       type: 'design',
     },
+    ctx,
+  );
+
+  // AMENDMENT 4 (MOTIR-5491): a design result publishes only while an open work
+  // item is `blocked_by` the design card, so the published card has one.
+  const waiting = await workItemsService.createWorkItem(
+    {
+      projectId: project.id,
+      kind: 'subtask',
+      title: 'Build the readiness rail',
+      parentId: story.id,
+      type: 'code',
+    },
+    ctx,
+  );
+  await workItemsService.linkWorkItems(
+    { fromId: waiting.id, toId: published.id, kind: 'is_blocked_by' },
     ctx,
   );
 

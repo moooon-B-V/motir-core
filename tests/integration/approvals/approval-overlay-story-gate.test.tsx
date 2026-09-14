@@ -13,6 +13,7 @@ import en from '@/messages/en.json';
 import { renderWithIntl } from '../../helpers/renderWithIntl';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from '../../helpers/db';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -195,10 +196,22 @@ async function designCard(): Promise<WorkItem> {
 async function publish(card: WorkItem) {
   const pathname = `${designPrefix(fx.workspaceId, card.id)}overlay.mock.html`;
   store.set(pathname, { contentType: 'text/html', size: 2048 });
+  const notePathname = `${designPrefix(fx.workspaceId, card.id)}overlay.design-notes.md`;
+  store.set(notePathname, { contentType: 'text/markdown', size: 512 });
+  // AMENDMENT 4: a result is the mock plus ONE note file, published only while
+  // an open work item is `blocked_by` the card.
+  await ensureWorkWaitsOn(card.id, fx);
   return designEvidenceService.recordFromPathnames(
     {
       workItemId: card.id,
-      assets: [{ kind: 'mock', sourcePath: 'design/workbench/overlay.mock.html', pathname }],
+      assets: [
+        { kind: 'mock', sourcePath: 'design/workbench/overlay.mock.html', pathname },
+        {
+          kind: 'note_file',
+          sourcePath: 'design/workbench/design-notes.md',
+          pathname: notePathname,
+        },
+      ],
       commitSha: 'sha-overlay',
     },
     fx.ctx,

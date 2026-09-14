@@ -51,7 +51,9 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 // server state, never by the caller:
 //
 //   1. WHAT TO DO varies by the item's `type` (code / design / test / decision /
-//      …) — a design card is told to produce a design asset, not code.
+//      …) — a design card is told to produce a design asset, not code, and
+//      whether it publishes a design result is decided by whether open work is
+//      `blocked_by` it (MOTIR-5495).
 //   2. A MANUAL item (`type: manual` or `executor: human`) gets the
 //      human-INSTRUCTION form and NO `GIT WORKFLOW` section at all: there is no
 //      branch, no PR, and telling a person to open one is noise.
@@ -258,6 +260,14 @@ export interface DispatchPromptSource {
   descriptionMd: string | null;
   /** The `PROD-<n>` keys of this item's `is_blocked_by` dependencies. */
   blockerKeys: string[];
+  /**
+   * The OTHER direction (MOTIR-5495): the keys of the open work items that are
+   * `blocked_by` THIS item — not archived, status outside the `done` category —
+   * ascending. A design card carries the publish step only when this is
+   * non-empty, because the server refuses a design result nothing waits on
+   * (`designEvidenceService.findWaitingDependentIds`, the one read both use).
+   */
+  openDependentKeys: string[];
   parent: { key: string; title: string } | null;
   projectName: string;
   /** The project key, e.g. `PROD` — the identifier prefix. */
@@ -350,36 +360,17 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '   Design to FIT what exists; never invent a route, nav, or architecture.',
     '2. RENDER the surface as it ships today (or the real components it composes)',
     '   before drawing anything, and design against that pixel reality.',
-    '3. Produce the design asset set for the surface, composed from the real design',
-    "   system's primitives and tokens — never a raw hex colour or a fixed radius.",
-    '4. Draw the ACCESS PATH: the affordance in the parent surface that opens this',
+    '3. Produce the design asset set for the surface — TWO files, the area’s',
+    '   design-notes.md and a <surface>.mock.html — composed from the real design',
+    "   system's primitives and tokens, never a raw hex colour or a fixed radius.",
+    '   Nothing else: no screenshot export, and no Pencil source.',
+    '4. If the surface ALREADY has a design, do not edit its mock. Draw the change',
+    '   in a NEW <surface>--<change>.mock.html holding only the panels that change,',
+    '   and add a new notes section citing the section and the mock it amends. An',
+    '   older mock is a record of its moment, not a specification to keep current.',
+    '5. Draw the ACCESS PATH: the affordance in the parent surface that opens this',
     '   one. Naming the route in prose is not enough — the reader must see the door.',
-    '5. Stop at the asset. A design is reviewed before anything is built on it.',
-    '6. PUBLISH the design result: commit the three files, then call the',
-    '   publish_design_result tool with this card’s key and the assets — the',
-    '   *.mock.html as kind "mock", the .png as kind "image", and the note file as',
-    '   kind "note_file" — plus noteMd carrying the note SECTIONS this card wrote.',
-    '   Send the sections describing the surface you drew, never the whole note',
-    '   file: an area note runs to hundreds of kilobytes, and a reviewer opening',
-    '   the card wants what changed. Do this in the SAME iteration that produced',
-    '   the asset, while the files are in front of you.',
-    '',
-    '   The REPOSITORY stays the source of truth: the published result is the',
-    '   card’s view of the asset and is',
-    '   never a replacement for committing the three files.',
-    '',
-    '   And nothing else will make this call. A design card whose result never',
-    '   arrives looks exactly like one that succeeded — files written, commit',
-    '   landed, checks green, card empty — so the publish is a step of this run,',
-    '   not something to confirm afterwards.',
-    '',
-    '   A full-page .png is normally too large to send inline, and you cannot',
-    '   emit several megabytes of base64 as a tool argument. For any asset over',
-    '   roughly a megabyte, call create_design_upload with this card’s key and',
-    '   one entry per file, PUT each file’s bytes to the uploadUrl it returns',
-    '   (curl -X PUT --upload-file <file> -H "Content-Type: <type>" "<url>"),',
-    '   and then send each grant’s pathname to publish_design_result instead of',
-    '   contentBase64. One publish uses one form for all of its assets.',
+    '6. Stop at the asset. A design is reviewed before anything is built on it.',
   ],
   test: [
     '1. Read the card description above and the behaviour under test.',
@@ -475,13 +466,69 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
 };
 
 /**
+ * THE DESIGN-RESULT STEP (MOTIR-5495; `docs/decisions/design-result.md`
+ * AMENDMENT 4) — appended to a `type: design` card's steps, and it is one of two
+ * texts chosen by the SERVER's answer to *"does an open work item wait on this
+ * card?"* ({@link DispatchPromptSource.openDependentKeys}).
+ *
+ * ⚠️ WHY IT STOPPED BEING UNCONDITIONAL. A publish raises an approval gate, and a
+ * gate is only worth a person's time when work is held up by its answer. A design
+ * nothing waits on — a design defect fixed in place — is reviewed on its pull
+ * request, and the server now REFUSES its result. An agent cannot reliably work
+ * out on its own whether anything depends on its card; the server can, from the
+ * same read the refusal uses, so the prompt never tells an agent to publish what
+ * the server will turn back.
+ *
+ * ⚠️ AND IT NAMES NO RETIRED INPUT, even to forbid it: naming the screenshot kind
+ * or the inline-note argument is how an agent learns they exist. It says which
+ * two kinds to send and that nothing else goes.
+ */
+function designResultSteps(openDependentKeys: readonly string[]): string[] {
+  if (openDependentKeys.length === 0) {
+    return [
+      '7. Do NOT publish a design result. No open work item is blocked_by this card,',
+      '   so nothing waits on this design: its pull request is its review, and',
+      '   publish_design_result would refuse the call.',
+    ];
+  }
+  return [
+    `7. PUBLISH the design result — ${openDependentKeys.join(', ')} ${
+      openDependentKeys.length === 1 ? 'is' : 'are'
+    } blocked_by this card, so`,
+    '   work waits on this design. Commit both files, then call the',
+    '   publish_design_result tool with this card’s key and exactly these assets:',
+    '   each *.mock.html you drew as kind "mock" (for a change, only the new delta',
+    '   mock), and the area’s design-notes.md as the one kind "note_file". Send',
+    '   nothing else — the result shows the mock, with the note one link away. Do',
+    '   this in the SAME iteration that produced the asset, while the files are in',
+    '   front of you.',
+    '',
+    '   The REPOSITORY stays the source of truth: the published result is the',
+    '   card’s view of the asset and is',
+    '   never a replacement for committing the two files.',
+    '',
+    '   And nothing else will make this call. A design card whose result never',
+    '   arrives looks exactly like one that succeeded — files written, commit',
+    '   landed, checks green, card empty — so the publish is a step of this run,',
+    '   not something to confirm afterwards. The call returns the evidence id:',
+    '   report it, and report that the card now awaits a person’s approval.',
+    '',
+    '   An area note routinely runs to hundreds of kilobytes, and you cannot emit',
+    '   that much base64 as a tool argument. For any file over roughly a megabyte,',
+    '   call create_design_upload with this card’s key and one entry per file, PUT',
+    '   each file’s bytes to the uploadUrl it returns',
+    '   (curl -X PUT --upload-file <file> -H "Content-Type: <type>" "<url>"),',
+    '   and then send each grant’s pathname to publish_design_result instead of',
+    '   contentBase64. One publish uses one form for all of its assets.',
+  ];
+}
+
+/**
  * THE ACCEPTANCE-RECEIPT STEPS (bug MOTIR-4704) — appended to a `type: test`
  * card's steps when, and only when, the card is the one that records a story's
  * acceptance video.
  *
- * ⚠️ WHY THIS IS CONDITIONAL WHERE THE DESIGN PUBLISH IS NOT. `type: design` IS
- * the design card, so `WHAT_TO_DO.design`'s publish step is unconditional and
- * correct. `type: test` is every test card there is, and the overwhelming
+ * ⚠️ WHY THIS IS CONDITIONAL. `type: test` is every test card there is, and the overwhelming
  * majority are ordinary regression work that must NOT be told to publish a
  * receipt — an instruction to publish something the run never recorded is worse
  * than silence, because the agent will go looking for a recording to satisfy it.
@@ -1823,6 +1870,12 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   // MANUAL_WHAT_TO_DO above and has no run to record anything in).
   if (!manual && recordsAcceptanceReceipt(src)) {
     whatToDo = [...whatToDo, ...ACCEPTANCE_PUBLISH_STEPS];
+  }
+  // The design-result step (MOTIR-5495) — appended, and chosen by the server's
+  // answer rather than by the card: publish when work waits, say not to when none
+  // does. A manual item never reaches it.
+  if (!manual && src.type === 'design') {
+    whatToDo = [...whatToDo, ...designResultSteps(src.openDependentKeys)];
   }
 
   // A MANUAL item gets neither the git workflow nor the outcome protocol: it is

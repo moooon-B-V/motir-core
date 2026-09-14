@@ -163,7 +163,7 @@ subject body. **No second vocabulary, no second control, no second decide door.*
 >
 > | kind                    | the port shows                                                            | fires when                           |
 > | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------ |
-> | `design_result`         | the mock, the notes, the screenshot                                       | a design with **no pull request**    |
+> | `design_result`         | the changed mock(s), the note as a link — `design-result.md` AMENDMENT 4  | a design with **no pull request**    |
 > | `decision_approval`     | the decision **document**                                                 | a decision with **no pull request**  |
 > | `pull_request_approval` | what the card produced — design assets, or **what changed + how to test** | **any** card **with a pull request** |
 > | `pull_request_merge`    | the same port; it is the second decision on the same subject (§8, row 4b) | **any** card **with a pull request** |
@@ -1267,8 +1267,10 @@ it**, and that is why §3's rule is conditional rather than simply reversed.
 | 6   | the merge lands                                                                                                     | webhook                            | **`done`**     |
 
 **Design and code take the SAME rows.** A design card that opened a pull request
-is Workflow B; only its PORT differs — it shows the mock, the notes and the
-screenshot instead of what changed and how to test it (§1's amendment).
+— one or many — is Workflow B; only its PORT differs: the Development block shows
+the design result once (the mock(s) with the note as a link), then How to test,
+then every pull-request row, and no `design_result` gate is raised for the card
+(`design-result.md` AMENDMENT 4 Q8).
 
 **Row 4b is WHY there are two gates rather than one.** A GitHub approval tells
 Motir the code was approved and **nothing else** — it is not a merge, and

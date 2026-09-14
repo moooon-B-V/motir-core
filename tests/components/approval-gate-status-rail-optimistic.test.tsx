@@ -203,16 +203,28 @@ function decided(state: ApprovalGateDTO['state'], outcomeRef: string | null): Ap
  * Approve button, and every test below fails on the button rather than on the
  * rail — a green-looking red that says nothing about this card.
  *
- * A NOTE and no assets is the smallest thing that satisfies it: it makes
- * `hasSubject` true without mounting a `MockFrame`, whose own sandboxed fetch
- * would report `rendering` and withhold the verbs for a second reason.
+ * An EARLIER-format result with a reachable note FILE and no mock is the
+ * smallest thing that satisfies it (MOTIR-5498 — an inline note no longer counts,
+ * because it is no longer rendered): it makes the panel report `rendered` without
+ * mounting a `MockFrame`, whose own sandboxed fetch would report `rendering` and
+ * withhold the verbs for a second reason.
  */
 const PUBLISHED: DesignEvidenceDTO = {
   id: 'ev-1',
   workItemId: 'wi_1',
   noteMd: '## The approvals room\n\nProse the reviewer reads.',
   noteTruncated: false,
-  assets: [],
+  assets: [
+    {
+      id: 'a-note',
+      kind: 'note_file',
+      url: '/api/attachments/att-note/content',
+      mimeType: 'text/markdown',
+      sizeBytes: 64,
+      sourcePath: 'design/approvals/design-notes.md',
+      position: 0,
+    },
+  ],
   commitSha: 'cafe1234567',
   ciRunUrl: null,
   producedByKey: 'MOTIR-4320',

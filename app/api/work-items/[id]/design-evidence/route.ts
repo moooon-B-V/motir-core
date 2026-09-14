@@ -23,8 +23,9 @@ import type { DesignAssetKindDTO } from '@/lib/dto/designEvidence';
 // a workflow decision: holding the dependents and asking a human to approve is
 // the runtime design-approval gate's call to make later (§7).
 //
-// JSON body: `assets` (required — `[{ kind, sourcePath, pathname }]`), `noteMd`,
-// `commitSha`, `ciRunUrl`, `producedByKey`, and — on a PARENT-RUN publish only —
+// JSON body: `assets` (required — `[{ kind, sourcePath, pathname }]`: one or more
+// `mock` and exactly one `note_file`, per design-result.md AMENDMENT 4, which also
+// retires `image` and `noteMd` — both refused by name, 422), `commitSha`, `ciRunUrl`, `producedByKey`, and — on a PARENT-RUN publish only —
 // `withinParentKey`, the container the target must be a child of (MOTIR-3177).
 // It gates the write and is not persisted.
 
@@ -81,7 +82,10 @@ export async function POST(
       {
         workItemId: item.id,
         assets,
-        noteMd: strOrNull(body.noteMd),
+        // AMENDMENT 4: `noteMd` is retired. Passed through AS SENT (an empty string
+        // included) so the service refuses its presence by name instead of this
+        // layer quietly dropping it.
+        noteMd: typeof body.noteMd === 'string' ? body.noteMd : null,
         commitSha: strOrNull(body.commitSha),
         ciRunUrl: strOrNull(body.ciRunUrl),
         producedByKey: strOrNull(body.producedByKey),

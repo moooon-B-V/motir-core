@@ -2,8 +2,6 @@ import { test, expect } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn, startSignedOut } from './_helpers/shell-session';
 import {
-  NOTE_BODY,
-  NOTE_HEADING,
   openAgentSession,
   publishDesignResult,
   seedDesignApproval,
@@ -146,7 +144,10 @@ test.describe('a published design waits, the control clears it, and the work it 
       // group is the frame's own landmark and belongs to nothing else.
       await expect(page.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
       await expect(page.getByText('Awaiting', { exact: true })).toBeVisible();
-      await expect(page.getByRole('heading', { name: NOTE_HEADING })).toBeVisible();
+      // The design inside the port: its mock frame. (AMENDMENT 4 — no inline note.)
+      await expect(
+        page.getByRole('group', { name: 'The subject being decided' }).locator('iframe').first(),
+      ).toBeVisible();
       // Since MOTIR-5191 the pending state NAMES the person it waits on — the
       // seed's routed reviewer — rather than "this work item's assignee".
       await expect(page.getByRole('main').getByText('Waiting on Robin Vale.')).toBeVisible();
@@ -177,8 +178,10 @@ test.describe('a published design waits, the control clears it, and the work it 
       await expect(page.getByText(`Approving moves ${seed.designKey} to Done.`)).toBeVisible();
 
       // The design itself, inside the port — the thing they are deciding ABOUT.
-      await expect(page.getByRole('heading', { name: NOTE_HEADING })).toBeVisible();
-      await expect(page.getByText(NOTE_BODY)).toBeVisible();
+      // Since AMENDMENT 4 that is the mock; the note is one link away.
+      await expect(
+        page.getByRole('group', { name: 'The subject being decided' }).locator('iframe').first(),
+      ).toBeVisible();
 
       await expect(page.getByRole('button', { name: 'Request changes' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();

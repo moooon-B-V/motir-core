@@ -24,13 +24,8 @@ vi.mock('@/lib/blob/uploader', () => ({
   mintPrivateUploadToken: vi.fn(async () => 'test-token'),
 }));
 
-const {
-  designEvidenceService,
-  designPrefix,
-  capNoteMd,
-  translateSupersedeConflict,
-  NOTE_MD_CAP_BYTES,
-} = await import('@/lib/services/designEvidenceService');
+const { designEvidenceService, designPrefix, translateSupersedeConflict } =
+  await import('@/lib/services/designEvidenceService');
 const { attachmentsService } = await import('@/lib/services/attachmentsService');
 const { designEvidenceRepository } = await import('@/lib/repositories/designEvidenceRepository');
 const {
@@ -41,7 +36,13 @@ const {
   DesignEvidenceSupersedeConflictError,
   DesignEvidenceNotFoundError,
   DesignEvidenceNoCurrentResultError,
+  DesignEvidenceImageRetiredError,
+  DesignEvidenceNoteMdRetiredError,
+  DesignEvidenceMockRequiredError,
+  DesignEvidenceNoteFileRequiredError,
+  DesignEvidenceNothingWaitsError,
 } = await import('@/lib/designEvidence/errors');
+const { makeWorkWaitOn } = await import('../helpers/designWaits');
 const { UnsupportedFileTypeError, FileTooLargeError } = await import('@/lib/blob/errors');
 const { isAllowedUploadType, isAllowedDesignAssetType } = await import('@/lib/blob/allowlist');
 
@@ -50,13 +51,17 @@ const { isAllowedUploadType, isAllowedDesignAssetType } = await import('@/lib/bl
  * kind-parent matrix is enforced by a DB TRIGGER (`WI_SUBTASK_NEEDS_PARENT`),
  * not just by the service — so the fixture builds the pair.
  */
-async function makeSubtask(fx: WorkItemFixture) {
+async function makeSubtask(fx: WorkItemFixture, { waits = true }: { waits?: boolean } = {}) {
   const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent story' });
-  return createTestWorkItem(fx, {
+  const card = await createTestWorkItem(fx, {
     kind: 'subtask',
     title: 'Design — the result panel',
     parentId: story.id,
   });
+  // AMENDMENT 4 Q2: a result is published only while an OPEN work item is
+  // `blocked_by` the design card, so the card under test has one by default.
+  if (waits) await makeWorkWaitOn(card.id, fx);
+  return card;
 }
 
 /** Put a fake object in the store and return the asset input pointing at it. */
@@ -80,6 +85,16 @@ function seedAsset(
   };
 }
 
+/** The one `note_file` a result carries (AMENDMENT 4 Q1), named after its mock. */
+function note(fx: WorkItemFixture, workItemId: string, mockName: string) {
+  return seedAsset(fx, workItemId, {
+    kind: 'note_file',
+    name: `${mockName}.design-notes.md`,
+    contentType: 'text/markdown',
+    sourcePath: 'design/work-items/design-notes.md',
+  });
+}
+
 beforeEach(async () => {
   store.clear();
   await adminDb.$executeRawUnsafe(
@@ -94,7 +109,7 @@ afterAll(async () => {
 });
 
 describe('designEvidenceService.recordFromPathnames', () => {
-  it('records the three-file result → evidence + ordered assets + linked design_asset attachments', async () => {
+  it('records the two-file result → evidence + ordered assets + linked design_asset attachments', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
 
@@ -108,17 +123,11 @@ describe('designEvidenceService.recordFromPathnames', () => {
             contentType: 'text/html',
           }),
           seedAsset(fx, card.id, {
-            kind: 'image',
-            name: 'design-result.png',
-            contentType: 'image/png',
-          }),
-          seedAsset(fx, card.id, {
             kind: 'note_file',
             name: 'design-notes.md',
             contentType: 'text/markdown',
           }),
         ],
-        noteMd: '## The Design result panel\n\nProse.',
         commitSha: 'abc1234',
         ciRunUrl: 'https://ci.example/run/1',
         producedByKey: 'MOTIR-2669',
@@ -127,14 +136,15 @@ describe('designEvidenceService.recordFromPathnames', () => {
     );
 
     expect(dto.workItemId).toBe(card.id);
-    expect(dto.noteMd).toContain('## The Design result panel');
+    // AMENDMENT 4: the note is the `note_file`, shown as a link — never inline.
+    expect(dto.noteMd).toBeNull();
     expect(dto.noteTruncated).toBe(false);
     expect(dto.commitSha).toBe('abc1234');
     expect(dto.producedByKey).toBe('MOTIR-2669');
 
     // Assets come back in render order, each with an authenticated content path.
-    expect(dto.assets.map((a) => a.kind)).toEqual(['mock', 'image', 'note_file']);
-    expect(dto.assets.map((a) => a.position)).toEqual([0, 1, 2]);
+    expect(dto.assets.map((a) => a.kind)).toEqual(['mock', 'note_file']);
+    expect(dto.assets.map((a) => a.position)).toEqual([0, 1]);
     for (const asset of dto.assets) {
       expect(asset.url).toContain('/api/attachments/');
       expect(asset.url).toContain('/content');
@@ -145,7 +155,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
     // Attachments are source design_asset and LINKED to the item, so the
     // orphan-GC leaves the current set alone.
     const atts = await adminDb.attachment.findMany({ where: { workItemId: card.id } });
-    expect(atts).toHaveLength(3);
+    expect(atts).toHaveLength(2);
     expect(new Set(atts.map((a) => a.source))).toEqual(new Set(['design_asset']));
 
     // Exactly one current evidence row.
@@ -154,7 +164,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
     ).toBe(1);
   });
 
-  it('a design result is a SET — a PR with two mocks and no PNG records both, no placeholder', async () => {
+  it('a design result is a SET — two delta mocks and their note record all three, no placeholder', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
 
@@ -164,16 +174,17 @@ describe('designEvidenceService.recordFromPathnames', () => {
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'a.mock.html', contentType: 'text/html' }),
           seedAsset(fx, card.id, { kind: 'mock', name: 'b.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'a.mock.html'),
         ],
       },
       fx.ctx,
     );
 
-    expect(dto.assets).toHaveLength(2);
-    expect(dto.assets.every((a) => a.kind === 'mock')).toBe(true);
+    expect(dto.assets).toHaveLength(3);
+    expect(dto.assets.filter((a) => a.kind === 'mock')).toHaveLength(2);
   });
 
-  it('records a MINIMAL publish — no note, no provenance — without inventing values', async () => {
+  it('records a MINIMAL publish — no provenance — without inventing values', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
 
@@ -182,20 +193,20 @@ describe('designEvidenceService.recordFromPathnames', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'm.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'm.mock.html'),
         ],
       },
       fx.ctx,
     );
 
-    // A PR that changed only a mock publishes exactly that: the note is ABSENT,
-    // not an empty string, and the provenance fields stay null rather than
-    // being back-filled with something plausible.
+    // The inline note is ABSENT, not an empty string, and the provenance fields
+    // stay null rather than being back-filled with something plausible.
     expect(dto.noteMd).toBeNull();
     expect(dto.noteTruncated).toBe(false);
     expect(dto.commitSha).toBeNull();
     expect(dto.ciRunUrl).toBeNull();
     expect(dto.producedByKey).toBeNull();
-    expect(dto.assets).toHaveLength(1);
+    expect(dto.assets).toHaveLength(2);
   });
 
   it('a publish with no commit sha is NOT idempotent — there is nothing to match on', async () => {
@@ -207,6 +218,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
           workItemId: card.id,
           assets: [
             seedAsset(fx, card.id, { kind: 'mock', name: 'q.mock.html', contentType: 'text/html' }),
+            note(fx, card.id, 'q.mock.html'),
           ],
         },
         fx.ctx,
@@ -231,6 +243,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'v1.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'v1.mock.html'),
         ],
         commitSha: 'sha-1',
       },
@@ -241,6 +254,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'v2.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'v2.mock.html'),
         ],
         commitSha: 'sha-2',
       },
@@ -264,8 +278,8 @@ describe('designEvidenceService.recordFromPathnames', () => {
     // The superseded asset's attachment is unlinked → GC-eligible; the current
     // one is still linked.
     const linked = await adminDb.attachment.findMany({ where: { workItemId: card.id } });
-    expect(linked).toHaveLength(1);
-    expect(linked[0]!.blobPathname).toContain('v2.mock.html');
+    expect(linked).toHaveLength(2);
+    expect(linked.every((a) => a.blobPathname.includes('v2.mock.html'))).toBe(true);
   });
 
   it('is IDEMPOTENT for the same commit + producer — a CI redelivery records nothing new', async () => {
@@ -275,6 +289,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
       workItemId: card.id,
       assets: [
         seedAsset(fx, card.id, { kind: 'mock', name: 'one.mock.html', contentType: 'text/html' }),
+        note(fx, card.id, 'one.mock.html'),
       ],
       commitSha: 'same-sha',
       producedByKey: 'MOTIR-2669',
@@ -291,7 +306,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
     const designAssetCount = await adminDb.designAsset.count({
       where: { designEvidenceId: first.id },
     });
-    expect(designAssetCount).toBe(1);
+    expect(designAssetCount).toBe(2);
   });
 
   it('never advances the item status — publishing is evidence, not a workflow decision', async () => {
@@ -304,6 +319,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'x.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'x.mock.html'),
         ],
       },
       fx.ctx,
@@ -330,6 +346,7 @@ describe('designEvidenceService — the gates', () => {
               name: 's.mock.html',
               contentType: 'text/html',
             }),
+            note(fx, story.id, 's.mock.html'),
           ],
         },
         fx.ctx,
@@ -360,6 +377,7 @@ describe('designEvidenceService — the gates', () => {
               name: 'b.mock.html',
               contentType: 'text/html',
             }),
+            note(fx, container.id, 'b.mock.html'),
           ],
         },
         fx.ctx,
@@ -372,6 +390,7 @@ describe('designEvidenceService — the gates', () => {
     // a logged bug that produced a design asset is a perfectly good target.
     const fx = await makeWorkItemFixture();
     const leafBug = await createTestWorkItem(fx, { kind: 'bug', title: 'A childless bug' });
+    await makeWorkWaitOn(leafBug.id, fx);
 
     const evidence = await designEvidenceService.recordFromPathnames(
       {
@@ -382,6 +401,7 @@ describe('designEvidenceService — the gates', () => {
             name: 'ok.mock.html',
             contentType: 'text/html',
           }),
+          note(fx, leafBug.id, 'ok.mock.html'),
         ],
       },
       fx.ctx,
@@ -399,7 +419,10 @@ describe('designEvidenceService — the gates', () => {
       designEvidenceService.recordFromPathnames(
         {
           workItemId: card.id,
-          assets: [{ kind: 'mock', sourcePath: 'design/x/evil.mock.html', pathname: foreign }],
+          assets: [
+            { kind: 'mock', sourcePath: 'design/x/evil.mock.html', pathname: foreign },
+            note(fx, card.id, 'evil.mock.html'),
+          ],
         },
         fx.ctx,
       ),
@@ -420,7 +443,10 @@ describe('designEvidenceService — the gates', () => {
       designEvidenceService.recordFromPathnames(
         {
           workItemId: card.id,
-          assets: [{ kind: 'mock', sourcePath: 'design/x/ghost.mock.html', pathname }],
+          assets: [
+            { kind: 'mock', sourcePath: 'design/x/ghost.mock.html', pathname },
+            note(fx, card.id, 'ghost.mock.html'),
+          ],
         },
         fx.ctx,
       ),
@@ -430,15 +456,18 @@ describe('designEvidenceService — the gates', () => {
   it('rejects on the ACTUAL content type, not the declared one — a mock that uploaded a script', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
-    // Declared as an image; the store holds something else entirely.
+    // Declared as a mock; the store holds something else entirely.
     const asset = seedAsset(fx, card.id, {
-      kind: 'image',
-      name: 'lie.png',
+      kind: 'mock',
+      name: 'lie.mock.html',
       contentType: 'application/javascript',
     });
 
     await expect(
-      designEvidenceService.recordFromPathnames({ workItemId: card.id, assets: [asset] }, fx.ctx),
+      designEvidenceService.recordFromPathnames(
+        { workItemId: card.id, assets: [asset, note(fx, card.id, 'lie.mock.html')] },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(UnsupportedFileTypeError);
 
     const designEvidenceCount = await adminDb.designEvidence.count();
@@ -473,7 +502,10 @@ describe('designEvidenceService — the gates', () => {
     });
 
     await expect(
-      designEvidenceService.recordFromPathnames({ workItemId: card.id, assets: [asset] }, fx.ctx),
+      designEvidenceService.recordFromPathnames(
+        { workItemId: card.id, assets: [asset, note(fx, card.id, 'huge.mock.html')] },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(FileTooLargeError);
 
     const designEvidenceCount = await adminDb.designEvidence.count();
@@ -495,7 +527,11 @@ describe('designEvidenceService — the gates', () => {
           workItemId: card.id,
           // A kind outside the enum — a caller (or a drifted publisher) sending
           // something the schema cannot store.
-          assets: [{ ...asset, kind: 'screenshot' as unknown as 'mock' }],
+          assets: [
+            asset,
+            note(fx, card.id, 'k.mock.html'),
+            { ...asset, kind: 'screenshot' as unknown as 'mock' },
+          ],
         },
         fx.ctx,
       ),
@@ -593,7 +629,7 @@ describe('designEvidenceService.createUploadTokens', () => {
       designEvidenceService.createUploadTokens(
         {
           workItemId: card.id,
-          files: [{ kind: 'image', sourcePath: 'design/x/a.svg', contentType: 'image/svg+xml' }],
+          files: [{ kind: 'mock', sourcePath: 'design/x/a.svg', contentType: 'image/svg+xml' }],
         },
         fx.ctx,
       ),
@@ -650,7 +686,7 @@ describe('the attachments panel excludes design assets', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'p.mock.html', contentType: 'text/html' }),
-          seedAsset(fx, card.id, { kind: 'image', name: 'p.png', contentType: 'image/png' }),
+          note(fx, card.id, 'p.mock.html'),
         ],
       },
       fx.ctx,
@@ -668,46 +704,6 @@ describe('the attachments panel excludes design assets', () => {
   });
 });
 
-describe('capNoteMd', () => {
-  it('leaves a note under the cap untouched', () => {
-    const note = '## A surface\n\nSome prose.';
-    expect(capNoteMd(note)).toEqual({ noteMd: note, noteTruncated: false });
-  });
-
-  it('treats an absent note as absent, not as empty text', () => {
-    expect(capNoteMd(null)).toEqual({ noteMd: null, noteTruncated: false });
-    expect(capNoteMd(undefined)).toEqual({ noteMd: null, noteTruncated: false });
-    expect(capNoteMd('')).toEqual({ noteMd: null, noteTruncated: false });
-  });
-
-  it('truncates at a ## BOUNDARY and names how many sections were dropped', () => {
-    // Three sections, each ~30 KB: two fit under 64 KiB, the third does not.
-    const body = 'x'.repeat(30 * 1024);
-    const note = ['## One', body, '## Two', body, '## Three', body].join('\n');
-    expect(Buffer.byteLength(note, 'utf8')).toBeGreaterThan(NOTE_MD_CAP_BYTES);
-
-    const { noteMd, noteTruncated } = capNoteMd(note);
-
-    expect(noteTruncated).toBe(true);
-    expect(noteMd).toContain('## One');
-    expect(noteMd).toContain('## Two');
-    // The dropped section is gone WHOLE — never half a section.
-    expect(noteMd).not.toContain('## Three');
-    expect(noteMd).toContain('1 of 3 section(s) omitted');
-    expect(noteMd).toContain('note_file');
-    expect(Buffer.byteLength(noteMd!, 'utf8')).toBeLessThan(NOTE_MD_CAP_BYTES + 512);
-  });
-
-  it('keeps a prefix when a SINGLE section is larger than the whole cap', () => {
-    const note = `## Huge\n${'y'.repeat(80 * 1024)}`;
-    const { noteMd, noteTruncated } = capNoteMd(note);
-
-    expect(noteTruncated).toBe(true);
-    expect(noteMd).toContain('## Huge');
-    expect(noteMd).toContain('note_file');
-  });
-});
-
 describe('the one-current invariant is enforced by the DATABASE', () => {
   it('a second is_current row for the same item violates the partial unique index', async () => {
     const fx = await makeWorkItemFixture();
@@ -718,6 +714,7 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'i.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'i.mock.html'),
         ],
       },
       fx.ctx,
@@ -754,6 +751,7 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
               name: `${sha}.mock.html`,
               contentType: 'text/html',
             }),
+            note(fx, card.id, `${sha}.mock.html`),
           ],
           commitSha: sha,
         },
@@ -790,6 +788,7 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
               name: `${sha}.mock.html`,
               contentType: 'text/html',
             }),
+            note(fx, card.id, `${sha}.mock.html`),
           ],
           commitSha: sha,
         },
@@ -822,6 +821,7 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'g.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'g.mock.html'),
         ],
       },
       fx.ctx,
@@ -832,7 +832,7 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
     await adminDb.attachment.deleteMany({ where: { workItemId: card.id } });
 
     const dto = await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx);
-    expect(dto!.assets).toHaveLength(1);
+    expect(dto!.assets).toHaveLength(2);
     expect(dto!.assets[0]!.url).toBeNull();
     expect(dto!.assets[0]!.mimeType).toBeNull();
     expect(dto!.assets[0]!.sizeBytes).toBeNull();
@@ -848,6 +848,7 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'n.mock.html', contentType: 'text/html' }),
+          note(fx, card.id, 'n.mock.html'),
         ],
       },
       fx.ctx,
@@ -859,7 +860,7 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
       designEvidenceRepository.findCurrentByWorkItem(card.id, tx),
     );
     expect(current!.id).toBe(created.id);
-    expect(current!.assets).toHaveLength(1);
+    expect(current!.assets).toHaveLength(2);
 
     const byId = await withWorkspaceServiceContext(fx.ctx.workspaceId, (tx) =>
       designEvidenceRepository.findById(created.id, tx),
@@ -875,17 +876,16 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
         workItemId: card.id,
         assets: [
           seedAsset(fx, card.id, { kind: 'mock', name: 'r.mock.html', contentType: 'text/html' }),
-          seedAsset(fx, card.id, { kind: 'image', name: 'r.png', contentType: 'image/png' }),
+          note(fx, card.id, 'r.mock.html'),
         ],
-        noteMd: '## R\n\nprose',
       },
       fx.ctx,
     );
 
     const dto = await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx);
     expect(dto).not.toBeNull();
-    expect(dto!.assets.map((a) => a.kind)).toEqual(['mock', 'image']);
-    expect(dto!.noteMd).toContain('## R');
+    expect(dto!.assets.map((a) => a.kind)).toEqual(['mock', 'note_file']);
+    expect(dto!.noteMd).toBeNull();
   });
 });
 
@@ -910,7 +910,10 @@ describe('designEvidenceService.withdrawCurrentForWorkItem', () => {
     return designEvidenceService.recordFromPathnames(
       {
         workItemId,
-        assets: [seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' })],
+        assets: [
+          seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' }),
+          note(fx, workItemId, name),
+        ],
         commitSha: `sha-${name}`,
         producedByKey: 'MOTIR-2669',
       },
@@ -952,15 +955,15 @@ describe('designEvidenceService.withdrawCurrentForWorkItem', () => {
     expect(row).not.toBeNull();
     expect(row!.isCurrent).toBe(false);
     expect(row!.withdrawnAt).toBeInstanceOf(Date);
-    expect(await adminDb.designAsset.count({ where: { designEvidenceId: published.id } })).toBe(1);
+    expect(await adminDb.designAsset.count({ where: { designEvidenceId: published.id } })).toBe(2);
 
     // ⚠️ The attachments stay LINKED, unlike a supersede — which unlinks them so
     // the orphan-GC reclaims the blobs, because a correct replacement has taken
     // over the record. Here the record IS the point: unlinking would destroy the
     // only evidence of what was wrongly published.
     const atts = await adminDb.attachment.findMany({ where: { workItemId: card.id } });
-    expect(atts).toHaveLength(1);
-    expect(atts[0]!.workItemId).toBe(card.id);
+    expect(atts).toHaveLength(2);
+    expect(atts.every((a) => a.workItemId === card.id)).toBe(true);
   });
 
   it('distinguishes the three histories — never designed vs superseded vs withdrawn', async () => {
@@ -1028,6 +1031,7 @@ describe('designEvidenceService.withdrawCurrentForWorkItem', () => {
       title: 'A leaf, for now',
       parentId: story.id,
     });
+    await makeWorkWaitOn(task.id, fx);
     await publish(fx, task.id);
 
     await createTestWorkItem(fx, { kind: 'subtask', title: 'A child arrives', parentId: task.id });
@@ -1071,5 +1075,308 @@ describe('designEvidenceService.withdrawCurrentForWorkItem', () => {
     const current = await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx);
     expect(current!.id).toBe(real.id);
     expect(await adminDb.designEvidence.count({ where: { workItemId: card.id } })).toBe(2);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AMENDMENT 4 (MOTIR-5491) — the service is the ONE place these refusals live
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AMENDMENT 4 — what a result IS', () => {
+  it('refuses an `image` asset from the SERVICE itself, before idempotency or the store', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await expect(
+      designEvidenceService.recordFromPathnames(
+        {
+          workItemId: card.id,
+          assets: [
+            seedAsset(fx, card.id, { kind: 'mock', name: 'm.mock.html', contentType: 'text/html' }),
+            seedAsset(fx, card.id, { kind: 'image', name: 'm.png', contentType: 'image/png' }),
+            note(fx, card.id, 'm.mock.html'),
+          ],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DesignEvidenceImageRetiredError);
+    expect(await adminDb.designEvidence.count()).toBe(0);
+  });
+
+  it('refuses `noteMd`, even an empty string — its presence is the old contract', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    for (const noteMd of ['## A\n\nprose', '']) {
+      await expect(
+        designEvidenceService.recordFromPathnames(
+          {
+            workItemId: card.id,
+            assets: [
+              seedAsset(fx, card.id, {
+                kind: 'mock',
+                name: 'm.mock.html',
+                contentType: 'text/html',
+              }),
+              note(fx, card.id, 'm.mock.html'),
+            ],
+            noteMd,
+          },
+          fx.ctx,
+        ),
+      ).rejects.toBeInstanceOf(DesignEvidenceNoteMdRetiredError);
+    }
+  });
+
+  it('refuses a result with no mock, and one with zero or two note files', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    const mock = seedAsset(fx, card.id, {
+      kind: 'mock',
+      name: 'm.mock.html',
+      contentType: 'text/html',
+    });
+
+    await expect(
+      designEvidenceService.recordFromPathnames(
+        { workItemId: card.id, assets: [note(fx, card.id, 'm.mock.html')] },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DesignEvidenceMockRequiredError);
+    await expect(
+      designEvidenceService.recordFromPathnames({ workItemId: card.id, assets: [mock] }, fx.ctx),
+    ).rejects.toBeInstanceOf(DesignEvidenceNoteFileRequiredError);
+    await expect(
+      designEvidenceService.recordFromPathnames(
+        {
+          workItemId: card.id,
+          assets: [mock, note(fx, card.id, 'one.mock.html'), note(fx, card.id, 'two.mock.html')],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DesignEvidenceNoteFileRequiredError);
+  });
+
+  it('the MINT refuses an `image` grant', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await expect(
+      designEvidenceService.createUploadTokens(
+        {
+          workItemId: card.id,
+          files: [{ kind: 'image', sourcePath: 'design/x/a.png', contentType: 'image/png' }],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DesignEvidenceImageRetiredError);
+  });
+});
+
+describe('AMENDMENT 4 — a result is published only while OPEN work waits on the design', () => {
+  const publishOnto = (fx: WorkItemFixture, workItemId: string, name = 'w.mock.html') =>
+    designEvidenceService.recordFromPathnames(
+      {
+        workItemId,
+        assets: [
+          seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' }),
+          note(fx, workItemId, name),
+        ],
+        commitSha: `sha-${name}`,
+      },
+      fx.ctx,
+    );
+
+  it('refuses a card nothing is blocked_by — at the mint and at the publish — and writes no gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx, { waits: false });
+
+    await expect(publishOnto(fx, card.id)).rejects.toBeInstanceOf(DesignEvidenceNothingWaitsError);
+    await expect(
+      designEvidenceService.createUploadTokens(
+        {
+          workItemId: card.id,
+          files: [{ kind: 'mock', sourcePath: 'design/x/a.mock.html', contentType: 'text/html' }],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DesignEvidenceNothingWaitsError);
+    expect(await adminDb.designEvidence.count()).toBe(0);
+    expect(await adminDb.approvalGate.count()).toBe(0);
+  });
+
+  it('`done` and `cancelled` dependents do not count; an archived one does not either', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx, { waits: false });
+    const done = await makeWorkWaitOn(card.id, fx);
+    const cancelled = await makeWorkWaitOn(card.id, fx);
+    const archived = await makeWorkWaitOn(card.id, fx);
+    await adminDb.workItem.update({ where: { id: done.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: cancelled.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({
+      where: { id: archived.id },
+      data: { archivedAt: new Date() },
+    });
+
+    expect(await designEvidenceService.findWaitingDependentIds(card.id, fx.ctx)).toEqual([]);
+    await expect(publishOnto(fx, card.id)).rejects.toBeInstanceOf(DesignEvidenceNothingWaitsError);
+  });
+
+  it('a dependent under ANOTHER story counts, and the exported read names it', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx, { waits: false });
+    const otherStory = await createTestWorkItem(fx, { kind: 'story', title: 'Another story' });
+    const dependent = await makeWorkWaitOn(card.id, fx, {
+      kind: 'subtask',
+      parentId: otherStory.id,
+    });
+
+    expect(await designEvidenceService.findWaitingDependentIds(card.id, fx.ctx)).toEqual([
+      dependent.id,
+    ]);
+    const evidence = await publishOnto(fx, card.id);
+    expect(evidence.id).toBeTruthy();
+  });
+
+  it('a republish after the last dependent closed is refused, and the earlier result stands', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx, { waits: false });
+    const dependent = await makeWorkWaitOn(card.id, fx);
+    const first = await publishOnto(fx, card.id, 'one.mock.html');
+
+    await adminDb.workItem.update({ where: { id: dependent.id }, data: { status: 'done' } });
+    await expect(publishOnto(fx, card.id, 'two.mock.html')).rejects.toBeInstanceOf(
+      DesignEvidenceNothingWaitsError,
+    );
+
+    const current = await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx);
+    expect(current!.id).toBe(first.id);
+    expect(await adminDb.approvalGate.count({ where: { state: 'awaiting' } })).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AMENDMENT 4 Q8 (MOTIR-5534) — no design gate while a pull request is open
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request raises no design gate', () => {
+  /** A connected repository per name, and a delivery of one pull request in it. */
+  async function deliver(
+    fx: WorkItemFixture,
+    workItemId: string,
+    opts: { repo: string; number: number; state: 'open' | 'closed'; merged?: boolean },
+  ) {
+    const installation = await adminDb.githubInstallation.upsert({
+      where: { installationId: `inst-${fx.workspaceId}` },
+      create: {
+        installationId: `inst-${fx.workspaceId}`,
+        workspaceId: fx.workspaceId,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+      update: {},
+    });
+    const repo =
+      (await adminDb.githubRepo.findFirst({
+        where: { workspaceId: fx.workspaceId, name: opts.repo },
+      })) ??
+      (await adminDb.githubRepo.create({
+        data: {
+          installationId: installation.id,
+          workspaceId: fx.workspaceId,
+          organizationId: fx.workspace.organizationId,
+          repoId: `repo-${fx.workspaceId}-${opts.repo}`,
+          owner: 'moooon',
+          name: opts.repo,
+          defaultBranch: 'main',
+          archived: false,
+          provider: 'github',
+        },
+      }));
+    const pr = await adminDb.githubPullRequest.create({
+      data: {
+        repoId: repo.id,
+        number: opts.number,
+        state: opts.state,
+        merged: opts.merged ?? false,
+        headRef: `design/${opts.number}`,
+        baseRef: 'main',
+      },
+    });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId,
+        githubPullRequestId: pr.id,
+        repoId: repo.id,
+      },
+    });
+  }
+
+  const publishOnto = (fx: WorkItemFixture, workItemId: string, name = 'q8.mock.html') =>
+    designEvidenceService.recordFromPathnames(
+      {
+        workItemId,
+        assets: [
+          seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' }),
+          note(fx, workItemId, name),
+        ],
+        commitSha: `sha-${name}`,
+      },
+      fx.ctx,
+    );
+
+  const designGates = (workItemId: string) =>
+    adminDb.approvalGate.count({ where: { workItemId, kind: 'design_result' } });
+
+  it('one open pull request: the evidence is recorded and NO design gate is raised', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await deliver(fx, card.id, { repo: 'core', number: 1, state: 'open' });
+
+    const evidence = await publishOnto(fx, card.id);
+
+    expect(evidence.id).toBeTruthy();
+    expect((await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx))!.id).toBe(
+      evidence.id,
+    );
+    expect(await designGates(card.id)).toBe(0);
+  });
+
+  it('TWO pull requests in two repositories, one open and one merged: still no design gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await deliver(fx, card.id, { repo: 'core', number: 2, state: 'open' });
+    await deliver(fx, card.id, { repo: 'marketing', number: 3, state: 'closed', merged: true });
+
+    await publishOnto(fx, card.id);
+
+    expect(await designGates(card.id)).toBe(0);
+  });
+
+  it('only MERGED or CLOSED pull requests: the design gate is raised as before', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await deliver(fx, card.id, { repo: 'core', number: 4, state: 'closed', merged: true });
+    await deliver(fx, card.id, { repo: 'marketing', number: 5, state: 'closed' });
+
+    await publishOnto(fx, card.id);
+
+    expect(await designGates(card.id)).toBe(1);
+  });
+
+  it('a republish while a pull request is open retires the earlier awaiting gate and raises none', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await publishOnto(fx, card.id, 'before.mock.html');
+    expect(
+      await adminDb.approvalGate.count({ where: { workItemId: card.id, state: 'awaiting' } }),
+    ).toBe(1);
+
+    await deliver(fx, card.id, { repo: 'core', number: 6, state: 'open' });
+    await publishOnto(fx, card.id, 'after.mock.html');
+
+    expect(
+      await adminDb.approvalGate.count({ where: { workItemId: card.id, state: 'awaiting' } }),
+    ).toBe(0);
+    expect(await designGates(card.id)).toBe(1);
   });
 });

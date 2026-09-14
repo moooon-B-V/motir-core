@@ -5,6 +5,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { withdrawMergeGateOnUnlink } from './mergeGates';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
@@ -40,6 +41,24 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 /** Picker candidate cap — a bounded, keystroke-driven read (mirrors the issue
  *  link picker's quick-search window). */
 const PR_CANDIDATE_LIMIT = 10;
+
+/**
+ * A pull request that is OPEN on a design card makes the card's decision the
+ * approve-to-merge gate, so a `design_result` gate still AWAITING on it is retired
+ * in the link's own transaction (MOTIR-5534; `docs/decisions/design-result.md`
+ * AMENDMENT 4 Q8). The first link and every later one run it — with no awaiting
+ * gate it matches nothing — and a DECIDED gate is never touched: an answer
+ * outlives its subject. A merged or closed pull request decides nothing, so its
+ * link retires nothing.
+ */
+async function retireDesignGateForOpenPullRequest(
+  workItemId: string,
+  pullRequestState: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (pullRequestState !== 'open') return;
+  await approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, 'design_result', tx);
+}
 
 export const githubPullRequestService = {
   /**
@@ -224,6 +243,7 @@ export const githubPullRequestService = {
         },
         tx,
       );
+      await retireDesignGateForOpenPullRequest(currentItemId, pr.state, tx);
       return toLinkedPullRequestDto(pr);
     }).then(async (dto) => {
       // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
@@ -420,6 +440,7 @@ export const githubPullRequestService = {
         },
         tx,
       );
+      await retireDesignGateForOpenPullRequest(input.workItemId, updated.state, tx);
 
       return {
         link: toLinkedPullRequestDto(updated),
