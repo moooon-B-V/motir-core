@@ -1392,11 +1392,12 @@ export interface WorkItemValidityDto {
   /** The in-subtree items gated by out-of-subtree, unsatisfied work; empty when valid. */
   blockers: SprintBlockerDto[];
   /**
-   * PROSE-vs-GRAPH advisories (MOTIR-1969) — a SEPARATE channel from `blockers`,
-   * and **never** a blocker. See {@link WorkItemProseAdvisoryDto}: `valid` and
-   * `blockers` are byte-identical whether or not this array is empty.
+   * PROSE-vs-GRAPH advisories (MOTIR-1969) plus the CONTAINER-COVERAGE family
+   * (MOTIR-5362) — a SEPARATE channel from `blockers`, and **never** a blocker.
+   * See {@link WorkItemValidityAdvisoryDto}: `valid` and `blockers` are
+   * byte-identical whether or not this array is empty.
    */
-  advisories: WorkItemProseAdvisoryDto[];
+  advisories: WorkItemValidityAdvisoryDto[];
 }
 
 /**
@@ -1815,6 +1816,67 @@ export type WorkItemProseAdvisoryDto =
   | WorkItemProseSubsumptionAdvisoryDto;
 
 /**
+ * A CONTAINER criterion that no child OWNS (MOTIR-5362): a container whose
+ * acceptance criteria name something none of its direct children's titles
+ * carry, reported only when at least one of those children was created BEFORE
+ * the container — ADOPTED, and so scoped and sealed against a different parent.
+ *
+ * ⚠️ **Its own family, not a `shape` severity, and not a `reference` one.** A
+ * shape finding is a card contradicting ITSELF with no second party; a reference
+ * finding is one card NAMING another. This one is a relationship between a
+ * container and the SET of its children, and its remedy is neither a cut nor an
+ * edge: widen the adopted child on the record, or file the sibling that covers
+ * the difference.
+ *
+ * ⚠️ **It rides `validate_work_item` ONLY.** The dispatch surfaces
+ * (`dispatch_prompt`, `claim_next_ready`, `/api/v1`) hand out leaves, and a leaf
+ * has no children to own anything — so this family never reaches the dispatch
+ * advisory union ({@link WorkItemProseAdvisoryDto}) and no wire schema grows.
+ *
+ * ⚠️ **Never a gate, and its false-positive class is real.** Ownership is read
+ * off child TITLES by noun overlap, so a child whose body delivers a criterion
+ * its title does not name is reported. That was measured and accepted on
+ * MOTIR-5362 against the opposite reading, which read child BODIES and was blind
+ * to the one genuine instance on the live tree.
+ */
+export interface WorkItemCoverageAdvisoryDto {
+  /** The union discriminant — see {@link WorkItemValidityAdvisoryDto}. */
+  kind: 'coverage';
+  /** The CONTAINER whose criterion has no owner. */
+  item: string;
+  severity: 'likely-unowned-criterion';
+  /** 1-based index of the unowned criterion, numbered as the shape checks number them. */
+  criterionIndex: number;
+  /** The children created BEFORE the container — the adopted ones that gated the finding. */
+  adoptedChildren: string[];
+}
+
+/**
+ * ONE advisory on `validate_work_item`'s verdict: every prose family the dispatch
+ * surfaces also carry, plus the container-only COVERAGE family (MOTIR-5362).
+ * Narrow positively — {@link isCoverageAdvisory} / {@link isProseAdvisory}.
+ */
+export type WorkItemValidityAdvisoryDto = WorkItemProseAdvisoryDto | WorkItemCoverageAdvisoryDto;
+
+/** Narrow an advisory to the CONTAINER-COVERAGE family (MOTIR-5362). */
+export function isCoverageAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemCoverageAdvisoryDto {
+  return a.kind === 'coverage';
+}
+
+/**
+ * Narrow an advisory to the families the DISPATCH surfaces share (MOTIR-5362).
+ * Positive, per the union note above: a family added later is excluded until it
+ * is named here, rather than swept in by a `kind !== 'coverage'` catch-all.
+ */
+export function isProseAdvisory(a: WorkItemValidityAdvisoryDto): a is WorkItemProseAdvisoryDto {
+  return (
+    a.kind === undefined || a.kind === 'reference' || a.kind === 'shape' || a.kind === 'subsumption'
+  );
+}
+
+/**
  * Narrow an advisory to the REFERENCE family (MOTIR-2903).
  *
  * The positive form of the `a.kind !== 'shape'` catch-all every renderer used
@@ -1824,14 +1886,14 @@ export type WorkItemProseAdvisoryDto =
  * before, while a NEWER family is no longer swept in.
  */
 export function isReferenceAdvisory(
-  a: WorkItemProseAdvisoryDto,
+  a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseReferenceAdvisoryDto {
   return a.kind === undefined || a.kind === 'reference';
 }
 
 /** Narrow an advisory to the SUBSUMPTION family (MOTIR-2903). */
 export function isSubsumptionAdvisory(
-  a: WorkItemProseAdvisoryDto,
+  a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseSubsumptionAdvisoryDto {
   return a.kind === 'subsumption';
 }
@@ -1847,14 +1909,14 @@ export function isSubsumptionAdvisory(
  * one of them failing to compile.
  */
 export function isOrderingAdvisory(
-  a: WorkItemProseAdvisoryDto,
+  a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseOrderingAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-ordering-violation';
 }
 
 /** Narrow an advisory to the REPO-STRADDLE shape (MOTIR-2177). */
 export function isRepoStraddleAdvisory(
-  a: WorkItemProseAdvisoryDto,
+  a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseRepoStraddleAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-repo-straddle';
 }
@@ -1866,7 +1928,9 @@ export function isRepoStraddleAdvisory(
  * member that has no `criterionIndex`, so a renderer that reached for the index
  * on the whole `shape` family stops compiling rather than printing `undefined`.
  */
-export function isSizingAdvisory(a: WorkItemProseAdvisoryDto): a is WorkItemProseSizingAdvisoryDto {
+export function isSizingAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseSizingAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-over-gate-sizing';
 }
 
@@ -1879,7 +1943,7 @@ export function isSizingAdvisory(a: WorkItemProseAdvisoryDto): a is WorkItemPros
  * compiling rather than printing `undefined`.
  */
 export function isSelfBlockingDesignAdvisory(
-  a: WorkItemProseAdvisoryDto,
+  a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseSelfBlockingDesignAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-self-blocking-design';
 }
