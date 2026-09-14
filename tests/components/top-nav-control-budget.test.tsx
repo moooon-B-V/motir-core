@@ -52,7 +52,10 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => navSearchParams,
 }));
 // The tenancy-tier nav is the left cluster's elastic element and owns none of
-// the budget; stubbing it keeps this file about the right cluster.
+// the BELOW-`md` budget; stubbing it keeps this file about the right cluster.
+// (At `xl` that stops being true — there the left cluster's WIDTH is what
+// overflows. That half is pinned in `shell-tier-nav.test.tsx` and in the `xl`
+// describe of `tests/e2e/cloud-top-bar-budget.spec.ts`, MOTIR-4897.)
 vi.mock('@/app/(authed)/_components/ShellTierNav', () => ({
   ShellTierNav: () => <nav data-testid="tier-nav">org / workspace</nav>,
 }));

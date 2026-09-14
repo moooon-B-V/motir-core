@@ -125,11 +125,17 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
             size="md"
             rightIcon={<ChevronDown className="h-4 w-4" />}
             aria-label={t('workspaceSwitcher.switch')}
+            // An ANCESTOR tier: it truncates, and yields width before the project
+            // does. See OrgControl's trigger (MOTIR-4897).
+            className="min-w-0 shrink-3 [&>span:not([aria-hidden])]:min-w-0"
           >
             {/* font-serif: the workspace name is a header IDENTITY label — headline
                 role so the `data-type` axis re-types the header chrome (see
                 ProjectSwitcher). */}
-            <span className="max-w-[24ch] truncate font-serif">
+            {/* `block`: this span sits directly in the Button's own label span,
+                not in a flex row, so it is INLINE — and `text-overflow` ignores an
+                inline box. Without it the name spills rather than ellipsizing. */}
+            <span className="block min-w-0 max-w-[24ch] truncate font-serif">
               {active?.name ?? t('workspaceSwitcher.select')}
             </span>
           </Button>
