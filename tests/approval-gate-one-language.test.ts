@@ -214,9 +214,13 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       callers: ['lib/services/designEvidenceService.ts'],
     },
     {
+      // The merge ENTRY POINT (MOTIR-5517) is the second caller, on the record: a
+      // press that finds its pull request moved, closed or unlinked WITHDRAWS the
+      // question instead of merging — the same `superseded` a webhook would write,
+      // reached a moment earlier by the person about to answer it.
       method: 'supersedeAwaitingBySubject',
       writes: 'superseded',
-      callers: ['lib/services/mergeGates.ts'],
+      callers: ['lib/services/mergeGates.ts', 'lib/services/pullRequestMergeService.ts'],
     },
   ] as const;
 

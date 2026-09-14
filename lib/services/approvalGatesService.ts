@@ -319,7 +319,7 @@ async function routingScope(
  * separately and FIRST by the decide door, and is what a project `viewer` who
  * happens to be the assignee fails; this function never sees it.
  */
-async function resolveGateAuthority(
+export async function resolveGateAuthority(
   item: { assigneeId: string | null; reporterId: string | null; projectId: string },
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
