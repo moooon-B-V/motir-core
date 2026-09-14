@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, RotateCw } from 'lucide-react';
+import { AlertTriangle, FolderX, RotateCw } from 'lucide-react';
 
 import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -13,6 +13,12 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOpDto } from '@/lib/dto/plans';
+import {
+  FolderPathLabel,
+  folderPathText,
+  isFolderPlacementChange,
+  PlacementSide,
+} from '@/components/planning/FolderPlacement';
 
 // The plan detail's LIST body (MOTIR-3239, built to
 // `design/ai-planning/design-notes.md` Part VIII §3 and
@@ -179,10 +185,31 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
       {changes.map((change) => (
         <div key={change.field} className="grid grid-cols-[6rem_1fr] items-baseline gap-2">
           <dt className="truncate font-medium tracking-wide text-(--el-text-secondary) uppercase">
-            {fieldLabel(t, change.field)}
+            {/* A move into or out of a FOLDER is `Placement`, not `Parent` — a
+                folder is not a parent (Part XVII §17.4). */}
+            {isFolderPlacementChange(change) ? t('field_placement') : fieldLabel(t, change.field)}
           </dt>
           <dd className="min-w-0">
-            {BODY_FIELDS.has(change.field) ? (
+            {isFolderPlacementChange(change) && change.placement ? (
+              <span className="inline-flex max-w-full min-w-0 items-baseline gap-1.5">
+                <PlacementSide
+                  side={change.placement.from}
+                  fallback={change.from}
+                  max={4}
+                  className="text-(--el-text-secondary)"
+                  segmentClassName="line-through"
+                />
+                <span className="shrink-0 text-(--el-text-secondary)" aria-hidden>
+                  →
+                </span>
+                <PlacementSide
+                  side={change.placement.to}
+                  fallback={change.to}
+                  max={4}
+                  className="font-semibold text-(--el-text-strong)"
+                />
+              </span>
+            ) : BODY_FIELDS.has(change.field) ? (
               <span className="font-semibold text-(--el-text-strong)">
                 {t('listBodyRewritten')}
               </span>
@@ -286,6 +313,25 @@ function ProposalRow({
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)">
           {facts.length > 0 ? <span>{facts.join(' · ')}</span> : null}
+          {/* WHERE it is FILED, where `under {parent}` sits — a fact on the row,
+              never a grouping (Part XVII §17.3); a deleted folder says so (§17.5). */}
+          {item.folderMissing ? (
+            <span className="inline-flex items-center gap-1" data-testid="list-folder-missing">
+              <FolderX className="h-3 w-3 shrink-0" aria-hidden />
+              {t('folderMissing')}
+            </span>
+          ) : item.op === 'add' && item.folderPath && item.folderPath.length > 0 ? (
+            <span className="inline-flex min-w-0 items-center gap-1" data-testid="list-folder-fact">
+              <span aria-hidden>{t('listInFolder', { path: '' }).trim()}</span>
+              <FolderPathLabel
+                path={item.folderPath}
+                max={4}
+                glyphClassName="h-3 w-3"
+                lastClassName=""
+                srText={t('listInFolder', { path: folderPathText(item.folderPath) })}
+              />
+            </span>
+          ) : null}
           {parent ? (
             <span>
               {t('listUnder', { parent })}
@@ -308,7 +354,7 @@ function ProposalRow({
             {t('listRevised')}
           </Pill>
         ) : null}
-        {item.stale ? (
+        {item.stale || item.folderMissing ? (
           <Pill severity="warning">
             <AlertTriangle className="h-3 w-3" aria-hidden />
             {t('listStale')}

@@ -11,6 +11,11 @@ import {
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import {
+  isFolderPlacementChange,
+  PlacementLine,
+  PlacementSide,
+} from '@/components/planning/FolderPlacement';
 import type { StaleReason } from '@/lib/dto/plans';
 
 // The CONTENT of a proposed PlanItem node on the plan-detail canvas (Subtask
@@ -103,6 +108,18 @@ export function PlanItemNode({
 }) {
   const t = useTranslations('planReview');
   const kind = toKind(item.kind);
+  // THE BOTTOM SLOT (Part XVII §17.2). A `modify` spends it on its diff line; a
+  // FILED `add` — which never has a diff — spends it on where it will be filed;
+  // a proposal naming a DELETED folder spends it on saying so. At most one tenant.
+  const showDiff = item.op === 'modify' && item.changes.length > 0;
+  const showPlacement =
+    !showDiff && (item.folderMissing || (item.op === 'add' && (item.folderPath?.length ?? 0) > 0));
+  const hasSlot = showDiff || showPlacement;
+  // A deleted folder is a STALE fact the staleness read does not report (MOTIR-5415
+  // carries it as `folderMissing`), so the node adds its reason beside the shipped ones.
+  const staleReasons = item.staleReasons.map((r) => staleReasonLabel(r, t));
+  if (item.folderMissing) staleReasons.push(t('staleFolderRemoved'));
+  const showStale = item.stale || item.folderMissing;
 
   // Op-specific frame. None reuses the cross-story red dashed/hatch language.
   const frame =
@@ -162,10 +179,10 @@ export function PlanItemNode({
       <div className="flex shrink-0 items-center gap-2">
         <OpBadge op={item.op} outcome={outcome} t={t} />
         <div className="ml-auto flex items-center gap-1.5">
-          {item.stale ? (
+          {showStale ? (
             <span
               data-testid="stale-badge"
-              title={item.staleReasons.map((r) => staleReasonLabel(r, t)).join(' · ')}
+              title={staleReasons.join(' · ')}
               className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-yellow) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-text-strong)"
             >
               <AlertTriangle className="size-3" aria-hidden="true" />
@@ -204,7 +221,14 @@ export function PlanItemNode({
             {item.identifier ?? t('newItem')}
           </span>
           <span
-            className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
+            // ⚠️ ONE LINE WHENEVER THE BOTTOM SLOT IS SPENT (Part XVII §17.2). The
+            // node is a fixed 280 × 124: a two-line title plus the key plus a 16px
+            // slot does not fit, and the body's `overflow-hidden` cut the second
+            // title line through its middle — which a `modify`'s diff line already
+            // did before any folder existed. One clean ellipsis, the full title in
+            // `title`.
+            title={hasSlot ? item.title : undefined}
+            className={`mt-0.5 block text-sm leading-snug font-semibold ${hasSlot ? 'truncate' : 'line-clamp-2'} ${
               // MOTIR-4260 — `--el-text-secondary`, not `--el-text-muted`: the
               // `remove` frame six elements up paints `bg-(--el-muted)`, where
               // the muted ink is 4.12:1 in light (AA is 4.5) and secondary is
@@ -223,8 +247,9 @@ export function PlanItemNode({
       </div>
 
       {/* MODIFY diff — a compact old→new line (the first change; "+N" when more). */}
-      {item.op === 'modify' && item.changes.length > 0 ? (
-        <DiffLine changes={item.changes} t={t} />
+      {showDiff ? <DiffLine changes={item.changes} t={t} /> : null}
+      {showPlacement ? (
+        <PlacementLine folderPath={item.folderPath} folderMissing={item.folderMissing} />
       ) : null}
     </div>
   );
@@ -327,19 +352,44 @@ function DiffLine({
 }) {
   const first = changes[0]!;
   const more = changes.length - 1;
+  // A move into or out of a FOLDER is labelled `Placement` and draws its folder
+  // side with the glyph and path (Part XVII §17.4); a work-item → work-item move
+  // keeps the shipped `Parent` row byte for byte.
+  const placement = isFolderPlacementChange(first) ? first.placement : undefined;
   return (
     <div
       data-testid="diff-line"
       className="mt-1.5 flex shrink-0 items-center gap-1 overflow-hidden text-xs text-(--el-text-secondary)"
     >
       <span className="shrink-0 font-medium text-(--el-text-secondary)">
-        {fieldLabel(t, first.field)}
+        {placement ? t('field_placement') : fieldLabel(t, first.field)}
       </span>
-      {first.from != null ? (
-        <span className="truncate text-(--el-text-secondary) line-through">{first.from}</span>
-      ) : null}
-      <ChevronRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
-      <span className="truncate font-medium text-(--el-text)">{first.to ?? '—'}</span>
+      {placement ? (
+        <>
+          <PlacementSide
+            side={placement.from}
+            fallback={first.from}
+            max={3}
+            className="text-(--el-text-secondary)"
+            segmentClassName="line-through"
+          />
+          <ChevronRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
+          <PlacementSide
+            side={placement.to}
+            fallback={first.to}
+            max={3}
+            className="font-medium text-(--el-text)"
+          />
+        </>
+      ) : (
+        <>
+          {first.from != null ? (
+            <span className="truncate text-(--el-text-secondary) line-through">{first.from}</span>
+          ) : null}
+          <ChevronRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
+          <span className="truncate font-medium text-(--el-text)">{first.to ?? '—'}</span>
+        </>
+      )}
       {more > 0 ? (
         <span className="ml-auto shrink-0 text-(--el-text-secondary)">
           {t('moreChanges', { n: more })}
