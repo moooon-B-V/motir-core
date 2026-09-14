@@ -119,6 +119,11 @@ async function badgeCount(page: Page): Promise<number> {
 
 const rows = (page: Page) => page.getByTestId(/^approval-row-/);
 
+/** The approval overlay (§ 22), named from its read answering — so waiting on the
+ *  NAMED dialog is the authoritative signal that the gate arrived. */
+const approvalDialog = (page: Page, key: string) =>
+  page.getByRole('dialog', { name: `Design result for ${key}` });
+
 test.describe('every decision waiting on you, in one place', () => {
   let seed: ApprovalsTabSeed;
 
@@ -170,28 +175,48 @@ test.describe('every decision waiting on you, in one place', () => {
     });
     await beat();
 
+    const dialog = approvalDialog(page, seed.designKey);
+
     await chapter(
-      'Opening the row shows the design itself — you decide from the list',
+      'Opening the row shows the design itself, full screen, over the tab',
       async () => {
-        // ⚠️ `exact`, because a substring match finds TWO things in this row:
-        // the whole-row overlay (labelled `Review <KEY> <title>`) and the
-        // visible control. Without it the locator resolves to two and dies on
-        // strict mode, for a reason that has nothing to do with the product.
+        // ⚠️ RE-SCOPED by MOTIR-5225 (Story MOTIR-5214): the row no longer
+        // discloses the frame inside the list, it opens the approval OVERLAY
+        // over the tab. `exact`, because a substring match finds TWO things in
+        // this row: the whole-row door (labelled `Review <KEY> <title>`) and the
+        // visible button.
         await rows(page).first().getByRole('button', { name: 'Review', exact: true }).click();
-        // The shipped frame, rendered INSIDE the list: its port carries the
-        // published design rather than a summary of it.
-        await expect(page.getByTestId(/^approval-frame-/)).toHaveCount(1);
-        await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+        await expect(dialog).toBeVisible();
+        // The tab is never left: the address only gains the overlay's two
+        // parameters.
+        await expect(page).toHaveURL(
+          (url) =>
+            url.pathname === '/workbench' &&
+            url.searchParams.get('tab') === 'approvals' &&
+            url.searchParams.get('approval') === seed.designKey &&
+            url.searchParams.get('approvalKind') === 'design_result',
+        );
+        await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
       },
     );
     await beat();
 
     await chapter('Approving it clears the row, the badge and the card together', async () => {
-      await page.getByRole('button', { name: 'Approve', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
       // The confirm band — approving a design is TERMINAL, so it asks once, and
       // says what it is about to do before it does it.
-      await expect(page.getByText('Approving this will:')).toBeVisible();
-      await page.getByRole('button', { name: 'Yes, Approve' }).click();
+      await expect(dialog.getByText('Approving this will:')).toBeVisible();
+      await dialog.getByRole('button', { name: 'Yes, Approve' }).click();
+      // AUTHORITATIVE: this pill is rendered from the gate row the decide action
+      // RETURNED — true only once the server has recorded the decision.
+      await expect(dialog.getByText('Approved', { exact: true })).toBeVisible();
+
+      // Back to the tab, through the overlay's one close.
+      await dialog.getByRole('button', { name: /^Close/ }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page).toHaveURL(
+        (url) => url.pathname === '/workbench' && url.search === '?tab=approvals',
+      );
 
       // AUTHORITATIVE: the row count reaching zero, never a timeout.
       await expect(rows(page)).toHaveCount(0, { timeout: 30_000 });
@@ -275,6 +300,18 @@ test.describe('every decision waiting on you, in one place', () => {
     // … and offers nothing to press, here or inside.
     await expect(rows(page).getByRole('button', { name: 'Review', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+
+    // ⚠️ But the LOOK is not withheld (MOTIR-5225): the row still opens the
+    // approval — here by keyboard, which takes the same path as a plain click —
+    // and the overlay draws the design with no verbs.
+    await rows(page)
+      .first()
+      .getByRole('link', { name: /^Review / })
+      .press('Enter');
+    const dialog = approvalDialog(page, viewerCard.identifier);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
   });
 
   test('past one page it inherits the shipped pager, and page two holds different rows', async ({

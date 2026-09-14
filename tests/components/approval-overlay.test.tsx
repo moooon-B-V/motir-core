@@ -43,6 +43,9 @@ vi.mock('@/lib/approvals/approvalOverlayClient', () => ({ fetchApprovalGateOverl
 const { decideApprovalGateAction } = vi.hoisted(() => ({ decideApprovalGateAction: vi.fn() }));
 vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({ decideApprovalGateAction }));
 
+const { announceGateDecided } = vi.hoisted(() => ({ announceGateDecided: vi.fn() }));
+vi.mock('@/lib/approvals/decidedGates', () => ({ announceGateDecided }));
+
 // The design port has its OWN suite (`design-result-panel.test.ts`); here it
 // stands in for itself so every assertion is about the OVERLAY.
 vi.mock('@/app/(authed)/items/[key]/_components/DesignResultPanel', () => ({
@@ -105,6 +108,7 @@ beforeEach(() => {
   pathname = '/workbench';
   fetchApprovalGateOverlay.mockReset();
   decideApprovalGateAction.mockReset();
+  announceGateDecided.mockReset();
   shallowPush.mockReset();
   push.mockReset();
   refresh.mockReset();
@@ -314,6 +318,8 @@ describe('the frame, composed at full size', () => {
     expect(screen.getByText(en.approvalGate.state.approved)).toBeTruthy();
     expect(screen.getByText(en.approvalGate.record.filesKept)).toBeTruthy();
     expect(refresh).toHaveBeenCalledTimes(1);
+    // …and the row underneath is TOLD, because a refresh cannot reach its island.
+    expect(announceGateDecided).toHaveBeenCalledWith('gate-1', 'approved');
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(shallowPush).not.toHaveBeenCalled();
   });
@@ -331,6 +337,7 @@ describe('the frame, composed at full size', () => {
     });
     expect(screen.getByRole('alert')).toBeTruthy();
     expect(refresh).not.toHaveBeenCalled();
+    expect(announceGateDecided).not.toHaveBeenCalled();
     expect(shallowPush).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeTruthy();
   });

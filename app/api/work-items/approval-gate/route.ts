@@ -25,10 +25,10 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // The overlay is mounted in the authed shell and opened by its URL, so it is a
 // client island, and no client component may reach the service layer
 // (CLAUDE.md's 4-layer rule) — the same reason `peek` and `planning-anchor` are
-// routes. The shipped `loadApprovalSubjectAction` cannot serve it: that action
-// is handed a `(workItemId, subjectId)` off a queue row the browser already
-// holds, and an overlay address can be pasted into a cold tab with no row
-// anywhere.
+// routes. The in-list disclosure's server action (deleted by MOTIR-5225) could
+// not serve it: that action was handed a `(workItemId, subjectId)` off a queue
+// row the browser already held, and an overlay address can be pasted into a cold
+// tab with no row anywhere.
 //
 // Built in the exact shape of `app/api/work-items/planning-anchor/route.ts`:
 // resolve against the actor's ACTIVE project, the 2FA hold AFTER the no-project
