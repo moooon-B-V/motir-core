@@ -291,7 +291,7 @@ export default async function IssueDetailPage({
     workItemTodosService.listTodos(item.id, ctx),
     // The UNDECIDED plans that name this card (bug MOTIR-4197 · design
     // MOTIR-4256 §2–§3). TIER TWO, IN THIS GROUP: the element is the first
-    // child of <main>, so arriving late would push Description down, and it
+    // child of the content column, so arriving late would push Description down, and it
     // renders on well under 1% of item pages, so it cannot reserve a box. A
     // read in this group costs max(), not sum(); a serial await here would
     // re-introduce exactly the shape MOTIR-3435 removed from this page. ONE
@@ -446,14 +446,18 @@ export default async function IssueDetailPage({
           </header>
 
           {/* Body — two columns; later subtasks fill the regions. The `1fr` track is
-          `minmax(auto, 1fr)`, so `min-w-0` on the <main> floors its min-content to
+          `minmax(auto, 1fr)`, so `min-w-0` on the content column floors its min-content to
           0 — otherwise a wide markdown child (a long unbroken URL, a code block, a
           wide table) blows the track past the viewport. The code block itself
           scrolls inside its own `.motir-prose pre` (overflow-x:auto), but only once
           this track is bounded. Sibling of the eyebrow fix above —
-          bug-issue-detail-eyebrow-overflows-viewport. */}
+          bug-issue-detail-eyebrow-overflows-viewport.
+          The content column is a `<div>`, NOT a `<main>`: `AppLayout` already renders
+          this document's one `main` landmark around the page, and a second nested
+          inside it gave assistive tech two main regions (MOTIR-5432, guarded by
+          `tests/navigation/shell-single-main-landmark.test.ts`). */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
-            <main className="flex min-w-0 flex-col gap-6">
+            <div className="flex min-w-0 flex-col gap-6">
               {/* 2.9.6: the archived banner is the FIRST element of the main column,
               above Description — the page's archived-state signal + Restore. */}
               {isArchived ? (
@@ -584,7 +588,7 @@ export default async function IssueDetailPage({
                   activityTab={activityTab}
                 />
               </Suspense>
-            </main>
+            </div>
 
             <aside className="flex flex-col gap-4">
               <CoreFieldsPanel
