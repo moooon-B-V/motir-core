@@ -206,6 +206,19 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'superseded',
       caller: 'lib/services/designEvidenceService.ts',
     },
+    // AMENDED ON THE RECORD — MOTIR-5527, 2026-09-14 (ADR `approval-gates.md` §6d
+    // AMENDMENT, rule 6). A hand move that pulls the work back out of review, or
+    // cancels it, WITHDRAWS every question on the item. That is a product-written
+    // `superseded`, exactly like the publish path's: no actor, no note, no
+    // decision — so it is a declared NON-decision writer, not a second door. It is
+    // a sibling method rather than a second caller of the one above, because it
+    // retires EVERY kind at once, and its one caller is the status funnel
+    // (`applyStatusTransition`), which every status door already passes through.
+    {
+      method: 'supersedeAllAwaitingByWorkItem',
+      writes: 'superseded',
+      caller: 'lib/services/workItemsService.ts',
+    },
   ] as const;
 
   it('routes every DECISION through `approvalGatesService.decide` — one call site', () => {

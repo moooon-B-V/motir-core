@@ -47,7 +47,11 @@ import { entitlementsService } from '@/lib/services/entitlementsService';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItems/artifactEvidence';
 import { isStatusTransitionRefusal } from '@/lib/workItems/statusTransitionRefusals';
-import { CONTAINER_CLAIM_STATUS_KEYS, childrenBelowClaimBar } from '@/lib/workItems/statusLadder';
+import {
+  CONTAINER_CLAIM_STATUS_KEYS,
+  childrenBelowClaimBar,
+  withdrawsPendingQuestion,
+} from '@/lib/workItems/statusLadder';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
@@ -2667,6 +2671,15 @@ export const workItemsService = {
     dto: WorkItemDto;
     transition: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
   }> {
+    // LOCK ORDER: the item's `awaiting` approval gates FIRST, then the item (ADR
+    // `approval-gates.md` §6d AMENDMENT, rule 8 · MOTIR-5527). The decide door
+    // locks its gate and then transitions the item through this method; a
+    // transition that locked the item first and then reached for a gate — to
+    // supersede it below, when the work is pulled back — would take the same two
+    // locks in the opposite order and deadlock against an approval pressed at the
+    // same moment. So EVERY transition, system writes included, takes them in the
+    // door's order. Re-locking the door's own gate is a no-op.
+    const awaitingGates = await approvalGateRepository.lockAwaitingByWorkItem(workItemId, tx);
     const locked = await workItemRepository.lockById(workItemId, tx);
     if (!locked) throw new WorkItemNotFoundError(workItemId);
     const current = await workItemRepository.findById(workItemId, tx);
@@ -2760,10 +2773,9 @@ export const workItemsService = {
     // `resolveStatusIntent`, so the door and the guard cannot disagree about what
     // a gate owns. The common card pays one indexed read
     // (`approval_gate_work_item_id_idx`) and no status read.
+    let statuses: WorkflowStatusDto[] | null = null;
     if (!opts.system) {
-      const awaiting = await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx);
-      let statuses: WorkflowStatusDto[] | null = null;
-      for (const gate of awaiting) {
+      for (const gate of awaitingGates) {
         if (gate.id === opts.decidingGateId || !isRegisteredGateKind(gate.kind)) continue;
         const intent = handlerFor(gate.kind).statusIntent;
         if (!intent) continue;
@@ -2781,6 +2793,40 @@ export const workItemsService = {
             workItemId,
           });
         }
+      }
+    }
+
+    // PULLING THE WORK BACK WITHDRAWS THE QUESTION (ADR `approval-gates.md` §6d
+    // AMENDMENT, rule 6 · MOTIR-5527). A hand move out of the review band — or to
+    // Cancelled — means what somebody was asked to approve is being reworked or
+    // abandoned, so every `awaiting` gate on the item is superseded in THIS
+    // transaction, under the lock taken at the top. `→ blocked` keeps the question
+    // (blocking pauses the work, it does not abandon it), and a system write
+    // withdraws nothing. The supersede writes `state` and nothing else (§6b), so
+    // the audit cannot read it as a decision; who pulled the work back is on this
+    // transition's own revision row. Placed AFTER the guard, which can only ever
+    // refuse a move INTO an owned status — never one of these.
+    if (awaitingGates.length > 0 && !opts.system) {
+      const projectStatuses = (statuses ??= await workflowsService.listStatusesByProject(
+        current.projectId,
+        ctx.workspaceId,
+        tx,
+      ));
+      const keyOf = (key: string) => projectStatuses.find((s) => s.key === key)?.key ?? null;
+      if (
+        withdrawsPendingQuestion({
+          fromKey,
+          toKey: toStatusKey,
+          statuses: projectStatuses,
+          keys: {
+            reviewKey: keyOf('in_review'),
+            implementedKey: keyOf('implemented'),
+            approvedKey: keyOf('approved'),
+          },
+          system: false,
+        })
+      ) {
+        await approvalGateRepository.supersedeAllAwaitingByWorkItem(workItemId, tx);
       }
     }
 
