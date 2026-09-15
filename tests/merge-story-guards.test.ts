@@ -18,6 +18,16 @@ function codeOf(source: string): string {
 const HOST_LAYERS = ['lib/git/providers/', 'lib/github/'];
 
 /**
+ * The E2E seam that IMPERSONATES GitHub's merge API for the acceptance lane
+ * (`E2E_TEST_GITHUB_MERGE`, Story MOTIR-4909 · MOTIR-5572). It is GitHub's side of the
+ * wire — `instrumentation.ts` mounts it on the MockAgent only under that flag, and it
+ * ANSWERS the merge path and the queue mutation rather than making either — so it speaks
+ * the dialect by construction. Named by exact path, never by a `lib/test-*` glob: any
+ * other file that learns the dialect is still an offence.
+ */
+const HOST_IMPERSONATORS = ['lib/test-github-merge-mock.ts'];
+
+/**
  * What a GitHub MERGE looks like in source: the REST merge path, the queue mutation, or
  * an import of the provider module (where GitHub's merge response shapes live).
  */
@@ -30,6 +40,7 @@ const HOST_MERGE_TELLS: ReadonlyArray<{ name: string; pattern: RegExp }> = [
 /** The offences in one file — the detector the guard runs, exported to its own control. */
 function hostMergeOffences(path: string, source: string): string[] {
   if (HOST_LAYERS.some((layer) => path.startsWith(layer))) return [];
+  if (HOST_IMPERSONATORS.includes(path)) return [];
   const code = codeOf(source);
   return HOST_MERGE_TELLS.filter((tell) => tell.pattern.test(code)).map(
     (tell) => `${path}: ${tell.name}`,
@@ -60,6 +71,12 @@ describe('guard (a) — no GitHub merge above the provider', () => {
     ]);
     // …and the same text is legitimate inside the provider.
     expect(hostMergeOffences('lib/git/providers/github.ts', planted)).toEqual([]);
+    // …and inside the ONE named impersonator, but not in any other test seam beside it.
+    const answered = `reply({ data: { enqueuePullRequest: { mergeQueueEntry: { id } } } });`;
+    expect(hostMergeOffences('lib/test-github-merge-mock.ts', answered)).toEqual([]);
+    expect(hostMergeOffences('lib/test-github-repos-mock.ts', answered)).toEqual([
+      'lib/test-github-repos-mock.ts: the enqueuePullRequest mutation',
+    ]);
     // A mention in prose is not an offence.
     expect(
       hostMergeOffences('lib/services/x.ts', '// calls pulls/1/merge through the seam'),

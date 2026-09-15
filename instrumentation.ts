@@ -45,6 +45,14 @@
 //     (scripts/worker.ts), not here. See that module's header for why the app
 //     server must not get MOTIR_AI_URL.
 //
+//   - E2E_TEST_GITHUB_MERGE=1 → lib/test-github-merge-mock intercepts the MERGE
+//     calls to api.github.com (the repository and pull request reads, the base
+//     branch's rules, the merge and the merge-queue enqueue), steered per pull
+//     request by a control file, so the approve-and-merge journey (MOTIR-5487)
+//     presses the real merge path and NO REAL PULL REQUEST IS EVER MERGED. It is
+//     registered BEFORE the repos seam and answers only the repositories its
+//     control names — see that module's header (MOTIR-5572).
+//
 //   - E2E_TEST_GITHUB_REPOS=1 → lib/test-github-repos-mock intercepts the
 //     repo-PROVISIONING and COLLABORATOR calls to api.github.com (create, the
 //     readiness read, the CI stub, the admin invite), so the repository-set
@@ -150,6 +158,17 @@ export async function register() {
       install: async (agent) => {
         const { installBillingBoundaryMock } = await import('@/lib/test-billing-mock');
         installBillingBoundaryMock(agent);
+      },
+    },
+    {
+      // ⚠️ BEFORE `E2E_TEST_GITHUB_REPOS`, and the order is load-bearing: both seams
+      // answer `GET /repos/{owner}/{name}`, undici tries intercepts in registration
+      // order, and this one claims only the repositories its control file names.
+      flag: 'E2E_TEST_GITHUB_MERGE',
+      message: 'GitHub merge + merge-queue API mocked.',
+      install: async (agent) => {
+        const { installGithubMergeMock } = await import('@/lib/test-github-merge-mock');
+        installGithubMergeMock(agent);
       },
     },
     {

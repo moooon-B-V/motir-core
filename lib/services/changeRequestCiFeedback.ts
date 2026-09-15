@@ -14,6 +14,7 @@ import { workItemsService } from './workItemsService';
 import { promoteDeliveredCardsOnGreen } from './ciPromotion';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { withdrawMergeGatesOnHeadMove } from './mergeGates';
+import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
 // The provider-agnostic CI / pipeline → work-item feedback consumer (Story 7.10 ·
 // MOTIR-894, generalized for GitLab in Story 7.23 · MOTIR-1477). This is THE ONE
@@ -276,6 +277,7 @@ export async function applyCiStatusFeedback(
       // too (MOTIR-5515). `approval_gate` has no system arm: bind the tenant.
       await bindWorkspaceContext(tx, resolved.workspaceId);
       await withdrawMergeGatesOnHeadMove(resolved.prId, tx);
+      await withdrawPullRequestApprovalGatesOnHeadMove(resolved.prId, tx);
     });
     return {
       event: 'ci',
@@ -366,6 +368,7 @@ export async function applyCiStatusFeedback(
     // the rule the gate's version was written with — so a late row for an OLD
     // commit withdraws nothing.
     await withdrawMergeGatesOnHeadMove(resolved.prId, tx);
+    await withdrawPullRequestApprovalGatesOnHeadMove(resolved.prId, tx);
     return githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx);
   });
 

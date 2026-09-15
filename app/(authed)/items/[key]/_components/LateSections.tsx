@@ -3,6 +3,11 @@ import { getTranslations } from 'next-intl/server';
 import { ContentSectionCard } from './ContentSectionCard';
 import { AcceptancePanel } from './AcceptancePanel';
 import { DesignResultSection } from './DesignResultSection';
+import {
+  approveAndMergeAction,
+  decideApprovalGateAction,
+  retryApproveAndMergeMemberAction,
+} from '../approvalGateActions';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
@@ -239,9 +244,17 @@ export async function LateUpperSections({
                     gate: r.mergeGate.gate,
                     canDecide: r.mergeGate.canDecide,
                     routedToLabel: r.mergeGate.routedToLabel,
+                    members: r.mergeGate.members,
                   }
                 : null
             }
+            // THE FRAME'S VERBS (MOTIR-5484): server actions, handed down as references
+            // so the shared block — also the read-only peek's — imports none of them.
+            gateActions={{
+              decide: decideApprovalGateAction,
+              approveAndMerge: approveAndMergeAction,
+              retryMember: retryApproveAndMergeMemberAction,
+            }}
           />
         </ContentSectionCard>
       </DevelopmentLinkProvider>

@@ -835,6 +835,14 @@ Say which card, say the evidence id the publish returned, and say that a person
 still has to press something. _"Design published, card done"_ is the sentence to
 never write.
 
+**The pull requests a run delivers are decided the same way (Story MOTIR-4909).**
+In a project whose merge mode is `manual`, once every pull request a run delivered
+to its run target has passed its checks, Motir raises ONE `pull_request_approval`
+gate on that run target, and a person presses **Approve and merge** in the item
+page's Development block; a push to any of them withdraws it. An agent cannot
+decide it either. So report a run's pull requests as **OPEN AND AWAITING
+APPROVAL**, never as merged, and never as a finished card.
+
 **Two consequences that bite in a run:**
 
 - **A `blocked_by` on a design card is not released by your publish.** Readiness

@@ -99,6 +99,24 @@ export const approvalGateRepository = {
   },
 
   /**
+   * Every gate of one KIND on one work item, whatever its state, oldest first — the
+   * approve-and-merge set's merge gates, read back after a reload so the Development frame
+   * can tell a member still waiting on its merge from one the press queued (MOTIR-5484).
+   * Served by `approval_gate_work_item_id_idx`.
+   */
+  async findByWorkItemAndKind(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalGate[]> {
+    const client = tx ?? dbRead;
+    return client.approvalGate.findMany({
+      where: { workItemId, kind },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
    * The gate the FRAME renders — whatever state it is in (Subtask MOTIR-5033).
    *
    * ⚠️ THIS IS NOT `findAwaitingByWorkItem` WITH THE FILTER DROPPED. The

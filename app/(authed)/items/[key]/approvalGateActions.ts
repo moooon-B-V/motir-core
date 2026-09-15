@@ -12,7 +12,7 @@ import { ApprovalGateAlreadyDecidedError } from '@/lib/approvalGates/errors';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, ApproveAndMergeMemberOutcomeDTO } from '@/lib/dto/approvalGate';
 
 // Server Action for the approval FRAME (Story MOTIR-4778 · Subtask MOTIR-4792),
 // beside the section that renders it — the shape `acceptanceActions.ts` ships,
@@ -116,35 +116,101 @@ export async function decideApprovalGateAction(input: {
     revalidatePath(AUTHED_LANDING_PATH);
     return { ok: true, gate, filesKept };
   } catch (err) {
-    // The shared project gate's two refusals. A non-browser reads NOT_FOUND and
-    // a browser without the kind's permission floor reads NOT_AUTHORISED, so
-    // neither leaks the other — the same posture the HTTP route takes.
-    if (err instanceof ProjectNotFoundError) {
-      return { ok: false, refusal: toGateRefusal('APPROVAL_GATE_NOT_FOUND') };
+    const refusal = refusalOf(err);
+    if (refusal) return { ok: false, refusal };
+    throw err;
+  }
+}
+
+/** A door's refusal in the frame's vocabulary, or null for an error that is not one. */
+function refusalOf(err: unknown): GateRefusal | null {
+  // The shared project gate's two refusals. A non-browser reads NOT_FOUND and
+  // a browser without the kind's permission floor reads NOT_AUTHORISED, so
+  // neither leaks the other — the same posture the HTTP route takes.
+  if (err instanceof ProjectNotFoundError) return toGateRefusal('APPROVAL_GATE_NOT_FOUND');
+  if (err instanceof PermissionDeniedError) return toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED');
+  if (err instanceof ApprovalGateMergeRefusedError) {
+    return toGateRefusal(err.tag, { permission: err.permission, reason: err.reason });
+  }
+  // The host did not answer the merge: nothing was decided, and there is no refusal
+  // of the host's to draw — the frame's unexpected arm, logged by the service.
+  if (err instanceof MergeChangeRequestError) return toGateRefusal('UNEXPECTED');
+  if (err instanceof ApprovalGateError) {
+    // ⚠️ The already-decided refusal is the one that can NAME the winner, and
+    // that is the whole reason the door locks and re-reads rather than
+    // guessing. Passing the label through is what lets the frame say "Mara
+    // approved this a moment ago" instead of a generic conflict.
+    const decidedByLabel =
+      err instanceof ApprovalGateAlreadyDecidedError ? err.decidedByLabel : null;
+    return toGateRefusal(err.tag, { decidedByLabel });
+  }
+  return null;
+}
+
+export type ApproveAndMergeActionResult =
+  | {
+      ok: true;
+      /** The APPROVAL, decided — it stands whatever the merges below did. */
+      gate: ApprovalGateDTO;
+      /** Each pull request of the set: merged, queued, refused, or no merge gate. */
+      members: ApproveAndMergeMemberOutcomeDTO[];
     }
-    if (err instanceof PermissionDeniedError) {
-      return { ok: false, refusal: toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED') };
-    }
-    if (err instanceof ApprovalGateMergeRefusedError) {
-      return {
-        ok: false,
-        refusal: toGateRefusal(err.tag, { permission: err.permission, reason: err.reason }),
-      };
-    }
-    // The host did not answer the merge: nothing was decided, and there is no refusal
-    // of the host's to draw — the frame's unexpected arm, logged by the service.
-    if (err instanceof MergeChangeRequestError) {
-      return { ok: false, refusal: toGateRefusal('UNEXPECTED') };
-    }
-    if (err instanceof ApprovalGateError) {
-      // ⚠️ The already-decided refusal is the one that can NAME the winner, and
-      // that is the whole reason the door locks and re-reads rather than
-      // guessing. Passing the label through is what lets the frame say "Mara
-      // approved this a moment ago" instead of a generic conflict.
-      const decidedByLabel =
-        err instanceof ApprovalGateAlreadyDecidedError ? err.decidedByLabel : null;
-      return { ok: false, refusal: toGateRefusal(err.tag, { decidedByLabel }) };
-    }
+  | { ok: false; refusal: GateRefusal };
+
+/**
+ * APPROVE AND MERGE (Story MOTIR-4909 · Subtask MOTIR-5484) — the Development frame's press,
+ * through `pullRequestMergeService.approveAndMerge` (MOTIR-5483): the approval commits first,
+ * then each pull request merges or joins its merge queue. A refusal of the APPROVAL returns
+ * here and merges nothing; a refused pull request is a MEMBER outcome of a successful press.
+ * Revalidates both halves exactly as `decideApprovalGateAction` does, for the same reasons.
+ */
+export async function approveAndMergeAction(input: {
+  gateId: string;
+  identifier: string;
+}): Promise<ApproveAndMergeActionResult> {
+  const ctx = await requireContext();
+  try {
+    const { approval, members } = await pullRequestMergeService.approveAndMerge(
+      { gateId: input.gateId, noteMd: null, source: 'ui' },
+      ctx,
+    );
+    revalidatePath(`/items/${input.identifier}`);
+    revalidatePath(AUTHED_LANDING_PATH);
+    return { ok: true, gate: approval.gate, members };
+  } catch (err) {
+    const refusal = refusalOf(err);
+    if (refusal) return { ok: false, refusal };
+    throw err;
+  }
+}
+
+export type RetryApproveAndMergeMemberActionResult =
+  | { ok: true; member: ApproveAndMergeMemberOutcomeDTO }
+  | { ok: false; refusal: GateRefusal };
+
+/** *Retry merge* on ONE refused member of an approved press (MOTIR-5484). */
+export async function retryApproveAndMergeMemberAction(input: {
+  approvalGateId: string;
+  mergeGateId: string;
+  identifier: string;
+}): Promise<RetryApproveAndMergeMemberActionResult> {
+  const ctx = await requireContext();
+  try {
+    const member = await pullRequestMergeService.retryApproveAndMergeMember(
+      {
+        approvalGateId: input.approvalGateId,
+        mergeGateId: input.mergeGateId,
+        noteMd: null,
+        source: 'ui',
+      },
+      ctx,
+    );
+    revalidatePath(`/items/${input.identifier}`);
+    revalidatePath(AUTHED_LANDING_PATH);
+    return { ok: true, member };
+  } catch (err) {
+    const refusal = refusalOf(err);
+    if (refusal) return { ok: false, refusal };
     throw err;
   }
 }

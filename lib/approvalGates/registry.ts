@@ -5,6 +5,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { pullRequestMergeGateHandler } from '@/lib/approvalGates/pullRequestMergeHandler';
+import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 
 // THE APPROVAL-GATE REGISTRY (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -54,7 +55,9 @@ import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
  */
 // MOTIR-4793 registers the SECOND: `pull_request_merge`, the kind Story MOTIR-4882
 // merges through (`approval-gates.md` §4 and its second amendment).
-export type RegisteredGateKind = 'design_result' | 'pull_request_merge';
+// MOTIR-5481 registers the THIRD: `pull_request_approval`, the approve-and-merge gate over a
+// card's delivery set that Story MOTIR-4909 decides (§8's amendment, decisions 2 and 6).
+export type RegisteredGateKind = 'design_result' | 'pull_request_merge' | 'pull_request_approval';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -63,7 +66,6 @@ export type RegisteredGateKind = 'design_result' | 'pull_request_merge';
  * | kind                    | owner                                              |
  * | ----------------------- | -------------------------------------------------- |
  * | `decision_approval`     | MOTIR-4907 — the DECISION gate                     |
- * | `pull_request_approval` | MOTIR-4909 / MOTIR-4910 — approve a PR in Motir    |
  *
  * ⚠️ The card's own text names ONE hole (`pull_request_merge`), because it was
  * written before MOTIR-4911's ADR amendment added `decision_approval` and split
@@ -83,7 +85,6 @@ export type UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>
  */
 export const UNREGISTERED_GATE_KINDS = [
   'decision_approval',
-  'pull_request_approval',
 ] as const satisfies readonly UnregisteredGateKind[];
 
 // TOTALITY, asserted at the type level. `Exclude` gives us the complement of the
@@ -301,6 +302,7 @@ export interface GateHandler<TSubject = unknown> {
 export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   design_result: designResultGateHandler,
   pull_request_merge: pullRequestMergeGateHandler,
+  pull_request_approval: pullRequestApprovalGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

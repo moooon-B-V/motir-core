@@ -54,7 +54,13 @@ export interface AutoMergeRequest {
  * over a non-empty set of rows at the latest sha, so the head is read from that same
  * set rather than checked for separately.
  */
-function mergeCandidateHead(pr: GithubPullRequestWithInstallation | null): string | null {
+export function mergeCandidateHead(
+  pr:
+    | (Pick<GithubPullRequestWithInstallation, 'state' | 'merged' | 'checkRuns'> & {
+        repo: { provider: string };
+      })
+    | null,
+): string | null {
   if (
     pr === null ||
     pr.state !== 'open' ||

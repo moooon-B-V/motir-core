@@ -38,6 +38,7 @@ import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { repoDeploymentService } from './repoDeploymentService';
 import { withdrawMergeGatesOnHeadMove } from './mergeGates';
+import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -857,7 +858,11 @@ async function withdrawMergeGatesOnSynchronize(body: Record<string, unknown>): P
       // `approval_gate` has no system arm — bind the repository's tenant first.
       await bindWorkspaceContext(tx, repo.workspaceId);
       const row = await githubPullRequestRepository.findByRepoAndNumber(repo.id, number, tx);
-      if (row) await withdrawMergeGatesOnHeadMove(row.id, tx, headSha);
+      if (row) {
+        await withdrawMergeGatesOnHeadMove(row.id, tx, headSha);
+        // The approve-and-merge gate over the set this pull request belongs to (MOTIR-5482).
+        await withdrawPullRequestApprovalGatesOnHeadMove(row.id, tx, headSha);
+      }
     });
   } catch (err) {
     console.warn('[githubWebhookService] could not withdraw merge gates on a push', {

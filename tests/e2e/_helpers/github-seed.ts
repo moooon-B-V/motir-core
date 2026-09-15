@@ -133,11 +133,14 @@ export function checkSuitePayload(args: {
   prNumber: number;
   headBranch: string;
   status?: 'queued' | 'in_progress' | 'completed';
+  /** WHICH repository the suite ran in (MOTIR-5487) — defaults to {@link E2E_REPO}, so
+   *  every existing caller produces the payload it always did. */
+  repo?: { providerRepoId: string };
 }): Record<string, unknown> {
   return {
     action: 'completed',
     installation: { id: Number(E2E_INSTALLATION_ID) },
-    repository: { id: Number(E2E_REPO.providerRepoId) },
+    repository: { id: Number((args.repo ?? E2E_REPO).providerRepoId) },
     check_suite: {
       status: args.status ?? 'completed',
       conclusion: args.conclusion,

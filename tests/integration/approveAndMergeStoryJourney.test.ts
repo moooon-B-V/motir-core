@@ -1,0 +1,474 @@
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github/appAuth')>()),
+  mintInstallationToken: vi.fn(async () => ({
+    token: 'ghs_test',
+    expiresAt: new Date(Date.now() + 3_600_000),
+  })),
+}));
+
+vi.mock('@/lib/jobs/sendEvent', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/jobs/sendEvent')>()),
+  sendEvent: async () => undefined,
+}));
+
+import { db } from '@/lib/db';
+import {
+  ApprovalGateNotAuthorisedError,
+  ApprovalGateSupersededError,
+} from '@/lib/approvalGates/errors';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import { projectsService } from '@/lib/services/projectsService';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import { usersService } from '@/lib/services/usersService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { linkPrByIdentifier } from '../helpers/prLink';
+
+// THE APPROVE-AND-MERGE STORY, ACROSS ITS SEAMS (Story MOTIR-4909 · MOTIR-5486, §2 and §3) —
+// real Postgres and the real webhook service, CI reports and the merge webhook, with GitHub
+// stubbed only at `fetch` and the App credential at `appAuth`: the seam MOTIR-4882's own
+// journey (`tests/integration/mergeStoryJourney.test.ts`) stubs, never above the press
+// service. Each child's suite mocks its neighbours; this is the one place the chain runs whole:
+//
+//   the whole set turns green → ONE question is raised → a person presses Approve and merge →
+//   the approval commits, then each pull request merges or joins its queue →
+//   the merge webhook, and nothing else, finishes the card.
+
+const PASSWORD = 'hunter2hunter2';
+const INSTALLATION_ID = 'inst-approve-and-merge-journey';
+const REPO_PROVIDER_ID = '994';
+const INSTALLATION = { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } };
+const APPROVAL = 'pull_request_approval' as const;
+const MERGE = 'pull_request_merge' as const;
+
+// ── the stubbed host ───────────────────────────────────────────────────────────
+
+interface Host {
+  heads: Record<number, string>;
+  /** The base branch's rules, answered IN ORDER per rules read — `[{ type: 'merge_queue' }]`
+   *  queues that merge. Past the end, no rules. */
+  rules: unknown[][];
+  merge: (n: number) => { status: number; body?: unknown };
+  reread: (n: number) => Record<string, unknown>;
+  calls: Array<{ method: string; url: string }>;
+}
+
+let host: Host;
+
+function resetHost(): void {
+  host = {
+    heads: {},
+    rules: [],
+    merge: (n) => ({ status: 200, body: { merged: true, sha: `merge-${n}` } }),
+    reread: () => ({}),
+    calls: [],
+  };
+  const reads = new Map<number, number>();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string, init?: RequestInit): Promise<Response> => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const json = (status: number, body: unknown) =>
+        new Response(JSON.stringify(body), { status });
+      const pull = url.match(/\/repos\/moooon\/acme\/pulls\/(\d+)(\/merge)?$/);
+      if (url.endsWith('/repos/moooon/acme') && method === 'GET') {
+        return json(200, { allow_squash_merge: true });
+      }
+      if (url.includes('/rules/branches/')) {
+        host.calls.push({ method, url });
+        return json(200, host.rules.shift() ?? []);
+      }
+      if (url.endsWith('/graphql')) {
+        host.calls.push({ method, url });
+        return json(200, { data: { enqueuePullRequest: { mergeQueueEntry: { id: 'MQE_1' } } } });
+      }
+      if (pull && pull[2] && method === 'PUT') {
+        host.calls.push({ method, url });
+        const answer = host.merge(Number(pull[1]));
+        return json(answer.status, answer.body ?? {});
+      }
+      if (pull && !pull[2]) {
+        const n = Number(pull[1]);
+        const count = (reads.get(n) ?? 0) + 1;
+        reads.set(n, count);
+        return json(200, {
+          node_id: `PR_${n}`,
+          merged: false,
+          state: 'open',
+          head: { sha: host.heads[n] ?? 'unknown' },
+          base: { ref: 'main' },
+          ...(count > 1 ? host.reread(n) : {}),
+        });
+      }
+      return json(404, {});
+    }),
+  );
+}
+
+const mergeCalls = () => host.calls.filter((c) => c.method === 'PUT' || c.url.endsWith('/graphql'));
+
+// ── the scenario ───────────────────────────────────────────────────────────────
+
+async function makeScenario(email: string) {
+  const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
+  const { workspace } = await workspacesService.createWorkspace({
+    name: 'Acme',
+    ownerUserId: user.id,
+  });
+  const project = await projectsService.createProject({
+    workspaceId: workspace.id,
+    actorUserId: user.id,
+    name: 'Acme',
+    identifier: 'ACME',
+  });
+  await adminDb.project.update({ where: { id: project.id }, data: { prMergeMode: 'manual' } });
+  await githubInstallationService.persistInstallation({
+    workspaceId: workspace.id,
+    installation: {
+      installationId: INSTALLATION_ID,
+      accountLogin: 'moooon',
+      accountType: 'Organization',
+    },
+    repos: [
+      {
+        providerRepoId: REPO_PROVIDER_ID,
+        owner: 'moooon',
+        name: 'acme',
+        defaultBranch: 'main',
+        archived: false,
+      },
+    ],
+  });
+  return { user, workspace, project, ctx: { userId: user.id, workspaceId: workspace.id } };
+}
+type Scenario = Awaited<ReturnType<typeof makeScenario>>;
+
+function prDelivery(action: string, number: number, headRef: string, merged = false) {
+  return githubWebhookService.handleEvent('pull_request', {
+    action,
+    installation: INSTALLATION,
+    repository: { id: Number(REPO_PROVIDER_ID) },
+    pull_request: {
+      number,
+      state: action === 'closed' ? 'closed' : 'open',
+      merged,
+      merged_at: merged ? new Date().toISOString() : null,
+      title: 'A change',
+      head: { ref: headRef },
+      base: { ref: 'main' },
+      user: { id: 4242 },
+    },
+  });
+}
+
+async function cardWithPrs(s: Scenario, numbers: number[]) {
+  const item = await workItemsService.createWorkItem(
+    { projectId: s.project.id, kind: 'task', title: 'Approve and merge, end to end' },
+    s.ctx,
+  );
+  await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+  for (const number of numbers) {
+    const headRef = `subtask/${item.identifier}-${number}`;
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number,
+      headRef,
+    });
+    await prDelivery('opened', number, headRef);
+  }
+  return item;
+}
+
+/** CI reports a verdict for one pull request at one head — and GitHub now reports it. */
+async function ci(conclusion: string | null, headSha: string, number: number) {
+  host.heads[number] = headSha;
+  return githubWebhookService.handleEvent('check_suite', {
+    action: 'completed',
+    installation: INSTALLATION,
+    repository: { id: Number(REPO_PROVIDER_ID) },
+    check_suite: {
+      head_sha: headSha,
+      head_branch: null,
+      status: conclusion === null ? 'in_progress' : 'completed',
+      conclusion,
+      app: { slug: 'github-actions' },
+      pull_requests: [{ number }],
+    },
+  });
+}
+
+const mergedWebhook = (identifier: string, number: number) =>
+  prDelivery('closed', number, `subtask/${identifier}-${number}`, true);
+
+const statusOf = async (id: string) =>
+  (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
+const prRow = (number: number) => adminDb.githubPullRequest.findFirstOrThrow({ where: { number } });
+const approvalGates = (workItemId: string) =>
+  adminDb.approvalGate.findMany({
+    where: { workItemId, kind: APPROVAL },
+    orderBy: { createdAt: 'asc' },
+  });
+const awaitingApproval = async (workItemId: string) =>
+  (await approvalGates(workItemId)).filter((g) => g.state === 'awaiting');
+const mergeGateFor = async (workItemId: string, number: number) =>
+  adminDb.approvalGate.findFirstOrThrow({
+    where: { workItemId, kind: MERGE, subjectId: (await prRow(number)).id },
+    orderBy: { createdAt: 'desc' },
+  });
+
+/** A card whose two pull requests are green, holding its ONE approve-and-merge gate. */
+async function greenCard(email: string) {
+  const s = await makeScenario(email);
+  const item = await cardWithPrs(s, [11, 12]);
+  await ci('success', 'sha-a', 11);
+  await ci('success', 'sha-b', 12);
+  const [gate, ...more] = await awaitingApproval(item.id);
+  expect(more).toEqual([]);
+  return { s, item, gate: gate! };
+}
+
+beforeEach(async () => {
+  await truncateAuthTables();
+  await truncateJobRuns();
+  resetHost();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
+
+describe('§2 seam 1 — green → raise → press → approved', () => {
+  it('the set turning green raises ONE gate over both heads; the press approves it and moves the card to approved', async () => {
+    const { s, item, gate } = await greenCard('seam-1@example.com');
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(gate.subjectVersion).toBe('moooon/acme#11@sha-a,moooon/acme#12@sha-b');
+
+    const { approval, members } = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect(approval.gate.state).toBe('approved');
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(members.map((m) => m.outcome)).toEqual(['merged', 'merged']);
+  });
+});
+
+describe('§2 seam 2 — press → merged → webhook → done', () => {
+  it('the card reaches done through the merge webhook, never through a gate write', async () => {
+    const { s, item, gate } = await greenCard('seam-2@example.com');
+    await pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, s.ctx);
+    expect(mergeCalls().filter((c) => c.method === 'PUT')).toHaveLength(2);
+    // Both merged on the host, and the card has NOT moved past approved: no gate writes done.
+    expect(await statusOf(item.id)).toBe('approved');
+
+    await mergedWebhook(item.identifier, 11);
+    expect(await statusOf(item.id)).toBe('approved'); // its other pull request is still open
+    await mergedWebhook(item.identifier, 12);
+    expect(await statusOf(item.id)).toBe('done');
+
+    // The approval's outcome is the status it wrote; the merges' live on the pull requests.
+    expect((await approvalGates(item.id))[0]!.outcomeRef).toBe('approved');
+    for (const n of [11, 12]) expect((await mergeGateFor(item.id, n)).outcomeRef).toBeNull();
+  });
+});
+
+describe('§2 seam 3 — press → enqueued → approved → webhook → done', () => {
+  it('the queued member keeps the card approved until the merge webhook lands it', async () => {
+    const { s, item, gate } = await greenCard('seam-3@example.com');
+    // #11's base branch has no rules; #12's requires a merge queue.
+    host.rules = [[], [{ type: 'merge_queue' }]];
+
+    const { members } = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect(members.map((m) => m.outcome)).toEqual(['merged', 'enqueued']);
+    const queued = await mergeGateFor(item.id, 12);
+    // Decided on the enqueue — the queue entry is recorded on the PULL REQUEST, and the merge
+    // gate's own outcome stays null (`approval-gates.md` §8's amendment, decision 5(d)).
+    expect(queued.state).toBe('approved');
+    expect(queued.outcomeRef).toBeNull();
+    expect((await prRow(12)).mergeOutcomeRef).toBe('queue:MQE_1');
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(
+      (
+        await pullRequestMergeService.listApprovalMembers(
+          { workItemId: item.id, approvalGateId: gate.id },
+          s.ctx,
+        )
+      ).map((m) => m.queued),
+    ).toEqual([false, true]);
+
+    await mergedWebhook(item.identifier, 11);
+    expect(await statusOf(item.id)).toBe('approved');
+    await mergedWebhook(item.identifier, 12);
+    expect(await statusOf(item.id)).toBe('done');
+  });
+});
+
+describe('§2 seam 4 — one refused', () => {
+  it('the approval and the card stay approved; the refused merge gate awaits; the other shares the approval’s actor and instant', async () => {
+    const { s, item, gate } = await greenCard('seam-4@example.com');
+    host.merge = (n) =>
+      n === 12
+        ? { status: 405, body: { message: 'Pull Request is not mergeable' } }
+        : { status: 200, body: { merged: true, sha: `merge-${n}` } };
+    host.reread = (n) => (n === 12 ? { mergeable_state: 'dirty' } : {});
+
+    const { members } = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect(members[1]).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    const approval = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    expect(approval.state).toBe('approved');
+    expect(await statusOf(item.id)).toBe('approved');
+    expect((await mergeGateFor(item.id, 12)).state).toBe('awaiting');
+    const merged = await mergeGateFor(item.id, 11);
+    expect(merged.state).toBe('approved');
+    expect(merged.decidedById).toBe(approval.decidedById);
+    expect(merged.decidedAt?.toISOString()).toBe(approval.decidedAt?.toISOString());
+  });
+});
+
+describe('§2 seam 5 — withdrawn by a push', () => {
+  it('a CI event at a new head supersedes the gate; the next all-green verdict raises a fresh one naming the new commit', async () => {
+    const { item, gate } = await greenCard('seam-5@example.com');
+
+    await ci(null, 'sha-a2', 11);
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
+      'superseded',
+    );
+    expect(await awaitingApproval(item.id)).toEqual([]);
+    expect(await statusOf(item.id)).toBe('in_review');
+
+    await ci('success', 'sha-a2', 11);
+    const [fresh] = await awaitingApproval(item.id);
+    expect(fresh?.subjectVersion).toBe('moooon/acme#11@sha-a2,moooon/acme#12@sha-b');
+  });
+});
+
+describe('§3 races', () => {
+  it('two green events for the two members, driven concurrently, leave exactly ONE gate and no error', async () => {
+    const s = await makeScenario('race-raise@example.com');
+    const item = await cardWithPrs(s, [11, 12]);
+    // Both heads already carry a green row, so EACH event, on its own, sees an all-green set.
+    for (const [n, sha] of [
+      [11, 'sha-a'],
+      [12, 'sha-b'],
+    ] as const) {
+      host.heads[n] = sha;
+      await adminDb.githubCheckRun.create({
+        data: {
+          pullRequestId: (await prRow(n)).id,
+          commitSha: sha,
+          checkName: 'ci',
+          conclusion: 'success',
+        },
+      });
+    }
+
+    const settled = await Promise.allSettled([
+      ci('success', 'sha-a', 11),
+      ci('success', 'sha-b', 12),
+    ]);
+
+    expect(settled.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+    expect(await awaitingApproval(item.id)).toHaveLength(1);
+    expect(await statusOf(item.id)).toBe('in_review');
+  });
+
+  it('a press racing a supersede ends in exactly ONE of the two legitimate outcomes', async () => {
+    const { s, item, gate } = await greenCard('race-press@example.com');
+
+    const [press] = await Promise.allSettled([
+      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, s.ctx),
+      ci(null, 'sha-a2', 11),
+    ]);
+
+    const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+    if (press.status === 'fulfilled') {
+      // The press won the row lock: approved, and the push found nothing awaiting to withdraw.
+      expect(row.state).toBe('approved');
+      expect(await statusOf(item.id)).toBe('approved');
+    } else {
+      // The push won: withdrawn, and the press was refused with the door's own error.
+      expect(press.reason).toBeInstanceOf(ApprovalGateSupersededError);
+      expect(row.state).toBe('superseded');
+      expect(row.decidedById).toBeNull();
+      expect(await statusOf(item.id)).toBe('in_review');
+    }
+    // Never both: no approval gate row reads decided AND withdrawn, and nothing new awaits.
+    expect(await awaitingApproval(item.id)).toEqual([]);
+  });
+});
+
+describe('§3 access', () => {
+  async function plainMember(workspaceId: string) {
+    const user = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: user.id, workspaceId, role: 'member' },
+    });
+    return user;
+  }
+
+  it('the REPORTER of a card with an assignee cannot decide it, and the press is refused before any merge', async () => {
+    const { s, item, gate } = await greenCard('access-reporter@example.com');
+    const reporter = await plainMember(s.workspace.id);
+    const assignee = await plainMember(s.workspace.id);
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { reporterId: reporter.id, assigneeId: assignee.id },
+    });
+    const asReporter = { userId: reporter.id, workspaceId: s.workspace.id };
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: APPROVAL },
+      asReporter,
+    );
+    expect(read.canDecide).toBe(false);
+    await expect(
+      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, asReporter),
+    ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
+    expect(mergeCalls()).toEqual([]);
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
+      'awaiting',
+    );
+  });
+
+  it('an actor holding approval:decide_any — the workspace owner — may press a card routed to somebody else', async () => {
+    const { s, item, gate } = await greenCard('access-admin@example.com');
+    const assignee = await plainMember(s.workspace.id);
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: assignee.id } });
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: APPROVAL },
+      s.ctx,
+    );
+    expect(read.canDecide).toBe(true);
+    const { approval } = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      s.ctx,
+    );
+    expect(approval.gate.state).toBe('approved');
+    expect(approval.gate.decidedUnderAuthority).toBe('admin');
+  });
+});

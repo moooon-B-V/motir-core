@@ -22,6 +22,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { settleGreenVerdict, type AutoMergeRequest } from './mergeGates';
+import { raisePullRequestApprovalGate } from './pullRequestApprovalGates';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ContainerHasOpenChildrenError,
@@ -435,7 +436,15 @@ async function settleMergesForCard(
   tx: Prisma.TransactionClient,
 ): Promise<AutoMergeRequest[]> {
   const members = await collectDeliveries(item, tx);
-  return settleGreenVerdict({ item, pullRequestIds: [...members.keys()] }, ctx, tx);
+  const autoMerges = await settleGreenVerdict(
+    { item, pullRequestIds: [...members.keys()] },
+    ctx,
+    tx,
+  );
+  // The approve-and-merge gate over the same green set, on the same card, in the same
+  // transaction and under the same row lock (MOTIR-5482) — `manual` projects only.
+  await raisePullRequestApprovalGate(item, tx);
+  return autoMerges;
 }
 
 /**

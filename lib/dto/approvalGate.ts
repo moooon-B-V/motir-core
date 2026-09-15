@@ -1,3 +1,4 @@
+import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 
@@ -224,18 +225,38 @@ export interface PullRequestMergeSubjectSummaryDTO {
 }
 
 /**
+ * WHICH PULL REQUESTS an approve-and-merge gate is asking about, at row scale (MOTIR-5481)
+ * — every member of the card's delivery set, in canonical order (`owner/name#number`),
+ * with the head its latest checks ran on and whether it is still open.
+ */
+export interface PullRequestApprovalSubjectSummaryDTO {
+  kind: 'pull_request_approval';
+  members: {
+    /** `owner/name`. */
+    repo: string;
+    number: number;
+    /** The head commit the latest recorded checks ran on, or null when none reported. */
+    headSha: string | null;
+    state: 'open' | 'closed' | 'merged';
+  }[];
+}
+
+/**
  * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
  * day this ships, not a defensive branch.
  *
- * `lib/approvalGates/registry.ts` registers two kinds and names the other two as
- * declared compile-time holes owned by MOTIR-4907 / 4909 / 4910.
+ * `lib/approvalGates/registry.ts` registers three kinds and names the fourth as a
+ * declared compile-time hole owned by MOTIR-4907.
  * A gate carrying one of them can exist — a fixture, a half-landed sibling, the
  * day the next story lands its creation path before its renderer — and the
  * honest answer is a row that SAYS the kind is not built yet, which is exactly
  * what `UNREGISTERED_GATE_KINDS` exists at runtime to let a surface do.
  */
 export interface UnregisteredSubjectSummaryDTO {
-  kind: Exclude<ApprovalGateKindDTO, 'design_result' | 'pull_request_merge'>;
+  kind: Exclude<
+    ApprovalGateKindDTO,
+    'design_result' | 'pull_request_merge' | 'pull_request_approval'
+  >;
 }
 
 /**
@@ -251,6 +272,7 @@ export interface UnregisteredSubjectSummaryDTO {
 export type ApprovalGateSubjectSummaryDTO =
   | DesignResultSubjectSummaryDTO
   | PullRequestMergeSubjectSummaryDTO
+  | PullRequestApprovalSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */
@@ -462,3 +484,44 @@ export interface ApprovalGateOverlayReadDTO {
   routedToLabel: string | null;
   subject: ApprovalGateOverlaySubjectDTO;
 }
+
+/**
+ * One member of an approve-and-merge set as the Development frame reads it BACK after a reload
+ * (Story MOTIR-4909 · Subtask MOTIR-5484) — the two facts that outlive the press's response.
+ *
+ * ⚠️ NO REFUSAL REASON. The press does not persist one, so a reloaded page can say a pull
+ * request has not merged yet and offer the retry, and must never say why.
+ */
+export interface PullRequestApprovalMemberDTO {
+  /** `owner/name#number@headSha`, as the approval named the member. */
+  subjectVersion: string;
+  /** The member's merge gate while it still AWAITS — what *Retry merge* presses. */
+  awaitingMergeGateId: string | null;
+  /** The press handed it to its repository's merge queue, and it has not merged yet. */
+  queued: boolean;
+}
+
+/** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */
+export type ApproveAndMergeMemberOutcomeDTO =
+  | {
+      /** The member as the approval named it: `owner/name#number@headSha`. */
+      subjectVersion: string;
+      mergeGateId: string;
+      pullRequestId: string;
+      outcome: 'merged' | 'enqueued';
+    }
+  | {
+      subjectVersion: string;
+      mergeGateId: string;
+      pullRequestId: string;
+      outcome: 'refused';
+      /** The refusal in the frame's vocabulary — MOTIR-4882's union for a host refusal. */
+      refusal: GateRefusal;
+    }
+  | {
+      subjectVersion: string;
+      mergeGateId: null;
+      pullRequestId: null;
+      /** No merge gate is awaiting for this member's exact head. */
+      outcome: 'no_merge_gate';
+    };
