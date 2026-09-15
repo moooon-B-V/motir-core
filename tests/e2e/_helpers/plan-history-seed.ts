@@ -1,4 +1,4 @@
-import { db } from './db-reset';
+import { adminDb } from './db-reset';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -64,7 +64,7 @@ export async function seedPlanHistory(slug: string): Promise<PlanHistorySeed> {
   const ctx = { userId: owner.id, workspaceId: workspace.id };
 
   const pin = (userId: string) =>
-    db.workspaceMembership.update({
+    adminDb.workspaceMembership.update({
       where: { userId_workspaceId: { userId, workspaceId: workspace.id } },
       data: { activeProjectId: project.id },
     });
@@ -76,7 +76,7 @@ export async function seedPlanHistory(slug: string): Promise<PlanHistorySeed> {
     name: 'Vic Viewer',
   });
   await workspacesService.addMember({ userId: viewer.id, workspaceId: workspace.id });
-  await db.projectMembership.create({
+  await adminDb.projectMembership.create({
     data: { userId: viewer.id, projectId: project.id, workspaceId: workspace.id, role: 'viewer' },
   });
   await pin(viewer.id);
@@ -108,7 +108,7 @@ export async function seedPlanHistory(slug: string): Promise<PlanHistorySeed> {
   const approvedA = await plansService.approvePlan(a.id, ctx);
   const storyId = approvedA.items.find((item) => item.op === 'add')?.workItemId;
   if (!storyId) throw new Error('plan A did not materialize its story');
-  const storyRow = await db.workItem.findUniqueOrThrow({ where: { id: storyId } });
+  const storyRow = await adminDb.workItem.findUniqueOrThrow({ where: { id: storyId } });
   const story = { id: storyId, identifier: `${PROJECT_KEY}-${storyRow.key}` };
 
   const decide = async (
