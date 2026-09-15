@@ -238,6 +238,32 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The DEPENDENTS of a work item — every non-archived item carrying an
+   * `is_blocked_by` edge TO it, with the `status` + `projectId` a caller needs to
+   * classify each against its own project's terminal set. The reverse of
+   * {@link findBlockerStates}, and the read the design-result publish gate asks
+   * "does any open work wait on this design?" with (MOTIR-5491;
+   * `docs/decisions/design-result.md` AMENDMENT 4 Q2). ARCHIVED dependents are
+   * EXCLUDED for the same reason archived blockers are: a person decided that
+   * work should not be done, so it waits on nothing. Takes the caller's `tx` when
+   * the answer gates a write in that transaction.
+   */
+  async findDependentStates(
+    workItemId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; status: string; projectId: string }>> {
+    const rows = await (tx ?? dbRead).workItemLink.findMany({
+      where: { toId: workItemId, kind: 'is_blocked_by', fromItem: { archivedAt: null } },
+      select: { fromItem: { select: { id: true, status: true, projectId: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.fromItem.id,
+      status: r.fromItem.status,
+      projectId: r.fromItem.projectId,
+    }));
+  },
+
+  /**
    * Batched form of {@link findBlockerStates} for MANY items at once — the board
    * projection (3.1.4) needs a ready flag per card without an N+1. Returns every
    * `is_blocked_by` blocker of any item in `fromIds`, each row carrying the

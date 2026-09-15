@@ -13,6 +13,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { makeWorkWaitOn } from '../helpers/designWaits';
 
 const store = new Map<string, { size: number; contentType: string }>();
 // The MINT half of the same store (bug MOTIR-4750) — faked as a GRANT rather
@@ -108,11 +109,14 @@ async function tokenWith(
   return token;
 }
 
+/** A design card with one open work item `blocked_by` it — AMENDMENT 4 publishes
+ *  a result only while work waits on the design. */
 async function makeItem(fx: WorkItemFixture, title: string): Promise<string> {
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'task', title },
     fx.ctx,
   );
+  await makeWorkWaitOn(item.id, fx);
   return item.identifier;
 }
 
@@ -135,13 +139,12 @@ function callPublish(
           contentBase64: b64('<p>detail</p>'),
         },
         {
-          kind: 'image',
-          sourcePath: 'design/work-items/detail.png',
-          contentType: 'image/png',
-          contentBase64: b64('PNG\r\n'),
+          kind: 'note_file',
+          sourcePath: 'design/work-items/design-notes.md',
+          contentType: 'text/markdown',
+          contentBase64: b64('## Detail\n\nWhat changed.\n'),
         },
       ],
-      noteMd: '## Detail\n\nWhat changed.\n',
       ...over,
     },
   });
@@ -267,7 +270,13 @@ describe('the DESCRIPTION states each rule this tool depends on', () => {
     // AMENDMENT 2 Q2 gives up the one property the CI heuristic had: it could
     // not be forgotten. The description is mitigation #1 of the three that
     // replace it, so it must actually carry the instruction.
-    expect(tool!.description, 'the operative instruction').toMatch(/Call it yourself/);
+    expect(tool!.description, 'the operative instruction').toMatch(/call it yourself/);
+  });
+
+  it('says to publish ONLY when work waits on the design — AMENDMENT 4 Q2', () => {
+    expect(tool!.description, 'the publish condition').toMatch(/PUBLISH ONLY WHEN WORK WAITS/);
+    expect(tool!.description).toMatch(/blocked_by/);
+    expect(tool!.description).toMatch(/DESIGN_EVIDENCE_NOTHING_WAITS/);
   });
 
   it('says a missing publish is INVISIBLE — the failure mode, not just the task', () => {
@@ -280,8 +289,13 @@ describe('the DESCRIPTION states each rule this tool depends on', () => {
     );
   });
 
-  it('says SECTIONS, not the whole note — the 396 KB trap', () => {
-    expect(tool!.description, 'the note-scoping half').toMatch(/never a whole area note/);
+  it('says the result is the mock(s) and ONE note file — no screenshot, no inline note', () => {
+    // AMENDMENT 4 Q1. The description is what an agent reads at the moment it
+    // assembles the call, so the retired inputs must be named there, not only in
+    // the refusal it would otherwise meet.
+    expect(tool!.description).toMatch(/note_file/);
+    expect(tool!.description, 'the retired inputs, by name').toMatch(/No "\.png" and no "noteMd"/);
+    expect(tool!.description, 'the delta-mock rule').toMatch(/delta mock/);
   });
 
   it('says it targets a LEAF, so a container publish is not attempted', () => {
@@ -345,14 +359,14 @@ describe('GRANTED: the sandboxed-run grant CAN call it', () => {
     const evidence = await adminDb.designEvidence.findFirstOrThrow({ include: { assets: true } });
     expect(evidence.isCurrent).toBe(true);
     expect(evidence.assets).toHaveLength(2);
-    expect(evidence.noteMd).toContain('What changed.');
+    expect(evidence.noteMd, 'AMENDMENT 4: no inline note').toBeNull();
 
     // …and `text/html` genuinely travelled this path, which is the whole
     // reason the tool exists rather than reusing `attach_file`.
     expect(
       [...store.values()].map((v) => v.contentType).sort(),
       'the mock must have reached the store as text/html',
-    ).toEqual(['image/png', 'text/html']);
+    ).toEqual(['text/html', 'text/markdown']);
 
     await client.close();
   });
@@ -371,9 +385,14 @@ describe('GRANTED: the sandboxed-run grant CAN call it', () => {
         key,
         files: [
           {
-            kind: 'image',
-            sourcePath: 'design/ai-chat/planning-workspace.png',
-            contentType: 'image/png',
+            kind: 'mock',
+            sourcePath: 'design/ai-chat/planning-workspace.mock.html',
+            contentType: 'text/html',
+          },
+          {
+            kind: 'note_file',
+            sourcePath: 'design/ai-chat/design-notes.md',
+            contentType: 'text/markdown',
           },
         ],
       },
@@ -382,13 +401,14 @@ describe('GRANTED: the sandboxed-run grant CAN call it', () => {
       grant.isError,
       `CLI_TOKEN_GRANT cannot call create_design_upload: ${JSON.stringify(grant)}`,
     ).toBeFalsy();
-    const [target] = (grant.structuredContent as { targets: Array<Record<string, unknown>> })
+    const [target, note] = (grant.structuredContent as { targets: Array<Record<string, unknown>> })
       .targets;
     expect(target!.uploadUrl).toContain('https://store.example/signed/');
 
-    // 3,929,899 bytes — the board measured on MOTIR-4742, which is 5.24 MB of
-    // base64 and cannot travel as a tool argument at all.
+    // 3,929,899 bytes — the size of the board measured on MOTIR-4742, which is
+    // 5.24 MB of base64 and cannot travel as a tool argument at all.
     putUploaded(target!.pathname as string, 3_929_899);
+    putUploaded(note!.pathname as string, 48_120);
 
     const published = await client.callTool({
       name: 'publish_design_result',
@@ -396,19 +416,23 @@ describe('GRANTED: the sandboxed-run grant CAN call it', () => {
         key,
         assets: [
           {
-            kind: 'image',
-            sourcePath: 'design/ai-chat/planning-workspace.png',
+            kind: 'mock',
+            sourcePath: 'design/ai-chat/planning-workspace.mock.html',
             pathname: target!.pathname as string,
           },
+          {
+            kind: 'note_file',
+            sourcePath: 'design/ai-chat/design-notes.md',
+            pathname: note!.pathname as string,
+          },
         ],
-        noteMd: '## The planning workspace\n\nWhat changed.\n',
       },
     });
     expect(published.isError, JSON.stringify(published)).toBeFalsy();
 
     const evidence = await adminDb.designEvidence.findFirstOrThrow({ include: { assets: true } });
     expect(evidence.isCurrent).toBe(true);
-    expect(evidence.assets).toHaveLength(1);
+    expect(evidence.assets).toHaveLength(2);
 
     await client.close();
   });

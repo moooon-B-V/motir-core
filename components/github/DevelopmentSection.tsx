@@ -332,6 +332,7 @@ export function DevelopmentSectionBody({
   deliveries = [],
   howToTest = null,
   mergeGate = null,
+  designResult = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -401,6 +402,20 @@ export function DevelopmentSectionBody({
    * MOTIR-4909, so no live tenant takes this arm yet.
    */
   mergeGate?: DevelopmentGateRead | null;
+  /**
+   * The card's DESIGN RESULT, rendered by the host as the Development block's
+   * slot (Story MOTIR-5488 · MOTIR-5498; `design-result.md` AMENDMENT 4 Q8,
+   * design `design-result--what-to-review.mock.html` states 7–8). Supplied only
+   * for a card whose open linked pull requests carry the design's decision.
+   *
+   * ⚠️ IT REORDERS THE BLOCK: the slot first, then How to test, then every row
+   * and the caption behind a soft rule — what to review and how to test it lead,
+   * the pull requests the approval merges follow. It renders ONCE however many
+   * pull requests the card links. Without it the block is exactly §20's: rows,
+   * caption, How to test. A `ReactNode` rather than the evidence because the
+   * panel lives in the item page's route folder and owns its own probes.
+   */
+  designResult?: ReactNode;
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
@@ -426,17 +441,7 @@ export function DevelopmentSectionBody({
       pullRequestRows={rows.map((row) => ({ id: row.pr.id, repo: row.repo, number: row.number }))}
     />
   ) : null;
-  const block = nothingLinked ? (
-    <>
-      <EmptyState
-        className="mt-2"
-        icon={<GitPullRequestArrow className="h-12 w-12" aria-hidden />}
-        title={t('development.emptyTitle')}
-        description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
-      />
-      {howToTestPart}
-    </>
-  ) : (
+  const rowsPart = (
     <>
       {/* `@container`: the rows wrap their pill group below a 30rem COLUMN, not a
           30rem viewport (MOTIR-5351, design/github Panel 12n) — a narrow late-stack
@@ -469,6 +474,44 @@ export function DevelopmentSectionBody({
           },
         )}
       </p>
+    </>
+  );
+  const block = designResult ? (
+    // THE DESIGN CARD'S ORDER (Q8, revised on review 2026-09-14): design result,
+    // How to test, then the pull requests behind the rule How to test used to carry.
+    <>
+      {designResult}
+      {howToTestPart}
+      <div
+        role="group"
+        aria-label={t('development.pullRequestsGroup')}
+        className="mt-4 min-w-0 border-t border-(--el-border-soft) pt-2"
+      >
+        {nothingLinked ? (
+          <EmptyState
+            className="mt-2"
+            icon={<GitPullRequestArrow className="h-12 w-12" aria-hidden />}
+            title={t('development.emptyTitle')}
+            description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
+          />
+        ) : (
+          rowsPart
+        )}
+      </div>
+    </>
+  ) : nothingLinked ? (
+    <>
+      <EmptyState
+        className="mt-2"
+        icon={<GitPullRequestArrow className="h-12 w-12" aria-hidden />}
+        title={t('development.emptyTitle')}
+        description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
+      />
+      {howToTestPart}
+    </>
+  ) : (
+    <>
+      {rowsPart}
       {howToTestPart}
     </>
   );
@@ -485,6 +528,21 @@ export function DevelopmentSectionBody({
   return block;
 }
 
+/**
+ * Does the card have an OPEN linked pull request — the condition under which its
+ * design result renders inside the Development block rather than as a section of
+ * its own (`design-result.md` AMENDMENT 4 Q8). Read over the SAME merged rows the
+ * block draws, so the slot and the rows can never disagree about it; the server
+ * side of the rule (`designEvidenceService`) reads the delivery set's
+ * `countOpenByWorkItem`, which those rows include.
+ */
+export function hasOpenPullRequest(
+  pullRequests: readonly LinkedPullRequestDto[],
+  deliveries: readonly WorkItemDeliveryDto[],
+): boolean {
+  return mergePullRequestRows(pullRequests, deliveries).some((row) => row.pr.state === 'open');
+}
+
 /** The PEEK host — SectionLabel header over the shared body (design Panel 3). */
 export function DevelopmentSection({
   pullRequests,
@@ -492,6 +550,7 @@ export function DevelopmentSection({
   className,
   repoDelivery = [],
   deliveries = [],
+  designResult = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
   itemIdentifier: string;
@@ -503,6 +562,10 @@ export function DevelopmentSection({
   /** The card's delivery set (MOTIR-3660) — passed straight through, so the peek
    *  draws the same rows and the same `Not on trunk` pill the detail page does. */
   deliveries?: WorkItemDeliveryDto[];
+  /** The design result's slot, when the card's open pull requests carry it (Q8)
+   *  — the same element the detail page passes, so the peek shows the design in
+   *  the same place. Read-only: the panel has no verbs of its own. */
+  designResult?: ReactNode;
 }) {
   const t = useTranslations('github');
   return (
@@ -513,6 +576,7 @@ export function DevelopmentSection({
         itemIdentifier={itemIdentifier}
         repoDelivery={repoDelivery}
         deliveries={deliveries}
+        designResult={designResult}
       />
     </section>
   );

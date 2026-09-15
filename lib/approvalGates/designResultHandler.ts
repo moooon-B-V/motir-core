@@ -77,6 +77,12 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
    * would a gate raised NOW ask about*, which is exactly the current version.
    */
   async currentSubject({ item, tx }: GateRoutingArgs): Promise<string | null> {
+    // A design card with an OPEN delivering pull request raises NO design gate
+    // (`design-result.md` AMENDMENT 4 Q8 · MOTIR-5534): the approve-to-merge gate
+    // decides it. The publish path asks exactly this question before it raises,
+    // so the re-ask must too, or returning to review would raise the very gate
+    // the publish declined to.
+    if ((await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) > 0) return null;
     const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, tx);
     return current?.id ?? null;
   },

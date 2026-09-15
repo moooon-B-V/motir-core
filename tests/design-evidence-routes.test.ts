@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { makeWorkWaitOn } from './helpers/designWaits';
 
 // POST /api/work-items/[id]/design-evidence{,/upload-token} (Story MOTIR-2664 ·
 // Subtask MOTIR-2667) — the CI publish seam for a design result. The blob
@@ -122,6 +123,9 @@ beforeEach(async () => {
     parentId: story.id,
   });
   workspaceCtx.current = { userId: fx.ctx.userId, workspaceId: fx.ctx.workspaceId };
+  // AMENDMENT 4 Q2: a design result is published only while an open work item is
+  // `blocked_by` the design card, so the card under test has one.
+  await makeWorkWaitOn(card.id, fx);
 });
 
 afterAll(async () => {
@@ -139,7 +143,11 @@ describe('POST /design-evidence/upload-token', () => {
         {
           files: [
             { kind: 'mock', sourcePath: 'design/work-items/p.mock.html', contentType: 'text/html' },
-            { kind: 'image', sourcePath: 'design/work-items/p.png', contentType: 'image/png' },
+            {
+              kind: 'note_file',
+              sourcePath: 'design/work-items/design-notes.md',
+              contentType: 'text/markdown',
+            },
           ],
         },
         card.identifier,
@@ -157,7 +165,7 @@ describe('POST /design-evidence/upload-token', () => {
       expect(t.maxBytes).toBeGreaterThan(0);
     }
     expect(body.targets[0].contentType).toBe('text/html');
-    expect(body.targets[1].contentType).toBe('image/png');
+    expect(body.targets[1].contentType).toBe('text/markdown');
     // The two grants are distinct objects, so same-basename files cannot collide.
     expect(body.targets[0].pathname).not.toBe(body.targets[1].pathname);
   });
@@ -353,7 +361,17 @@ describe('POST /design-evidence/upload-token', () => {
 describe('POST /design-evidence — auth', () => {
   it('401s with no credential at all', async () => {
     const res = await REGISTER(
-      req('', null, { assets: [seed('mock', 'a.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        null,
+        {
+          assets: [
+            seed('mock', 'a.mock.html', 'text/html'),
+            seed('note_file', 'a.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
     expect(res.status).toBe(401);
@@ -362,7 +380,17 @@ describe('POST /design-evidence — auth', () => {
   it('403s a token without the integration scope', async () => {
     const token = await integrationToken(fx, ['read']);
     const res = await REGISTER(
-      req('', token, { assets: [seed('mock', 'a.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'a.mock.html', 'text/html'),
+            seed('note_file', 'a.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
     expect(res.status).toBe(403);
@@ -387,7 +415,17 @@ describe('POST /design-evidence — auth', () => {
     // A perfectly valid token — for the WRONG workspace.
     const token = await integrationToken(fx);
     const res = await REGISTER(
-      req('', token, { assets: [seed('mock', 'a.mock.html', 'text/html')] }, otherCard.identifier),
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'a.mock.html', 'text/html'),
+            seed('note_file', 'a.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        otherCard.identifier,
+      ),
       params(otherCard.identifier),
     );
 
@@ -403,7 +441,17 @@ describe('POST /design-evidence — keyless GitHub OIDC (the PRIMARY auth path)'
     oidc.current = { ok: true, userId: fx.ownerId, workspaceId: fx.workspaceId };
 
     const res = await REGISTER(
-      req('', null, { assets: [seed('mock', 'o.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        null,
+        {
+          assets: [
+            seed('mock', 'o.mock.html', 'text/html'),
+            seed('note_file', 'o.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
 
@@ -414,7 +462,17 @@ describe('POST /design-evidence — keyless GitHub OIDC (the PRIMARY auth path)'
   it('401s an OIDC token that does not verify', async () => {
     oidc.current = { ok: false, status: 401, reason: 'missing_oidc_token' };
     const res = await REGISTER(
-      req('', null, { assets: [seed('mock', 'o.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        null,
+        {
+          assets: [
+            seed('mock', 'o.mock.html', 'text/html'),
+            seed('note_file', 'o.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
     expect(res.status).toBe(401);
@@ -424,7 +482,17 @@ describe('POST /design-evidence — keyless GitHub OIDC (the PRIMARY auth path)'
   it('403s a repo whose OIDC identity maps to no workspace', async () => {
     oidc.current = { ok: false, status: 403, reason: 'repository_not_connected' };
     const res = await REGISTER(
-      req('', null, { assets: [seed('mock', 'o.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        null,
+        {
+          assets: [
+            seed('mock', 'o.mock.html', 'text/html'),
+            seed('note_file', 'o.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
     expect(res.status).toBe(403);
@@ -459,8 +527,10 @@ describe('POST /design-evidence — register', () => {
         '',
         token,
         {
-          assets: [seed('mock', 'p.mock.html', 'text/html'), seed('image', 'p.png', 'image/png')],
-          noteMd: '## The panel\n\nprose',
+          assets: [
+            seed('mock', 'p.mock.html', 'text/html'),
+            seed('note_file', 'design-notes.md', 'text/markdown'),
+          ],
           commitSha: 'deadbee',
           ciRunUrl: 'https://ci.example/run/9',
           producedByKey: 'MOTIR-2669',
@@ -474,14 +544,24 @@ describe('POST /design-evidence — register', () => {
     const { evidence } = await res.json();
     expect(evidence.workItemId).toBe(card.id);
     expect(evidence.assets).toHaveLength(2);
-    expect(evidence.noteMd).toContain('## The panel');
+    expect(evidence.noteMd, 'AMENDMENT 4: the note is a link, never inline').toBeNull();
     expect(evidence.commitSha).toBe('deadbee');
   });
 
   it('does NOT roll up to the parent story — the result lands on the card that produced it', async () => {
     const token = await integrationToken(fx);
     await REGISTER(
-      req('', token, { assets: [seed('mock', 'r.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'r.mock.html', 'text/html'),
+            seed('note_file', 'r.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
 
@@ -550,7 +630,10 @@ describe('POST /design-evidence — register', () => {
         '',
         token,
         {
-          assets: [seed('mock', 'ok.mock.html', 'text/html')],
+          assets: [
+            seed('mock', 'ok.mock.html', 'text/html'),
+            seed('note_file', 'ok.mock.html.design-notes.md', 'text/markdown'),
+          ],
           withinParentKey: story.identifier.toLowerCase(),
         },
         card.identifier,
@@ -568,7 +651,10 @@ describe('POST /design-evidence — register', () => {
         '',
         token,
         {
-          assets: [seed('mock', 'nope.mock.html', 'text/html')],
+          assets: [
+            seed('mock', 'nope.mock.html', 'text/html'),
+            seed('note_file', 'nope.mock.html.design-notes.md', 'text/markdown'),
+          ],
           withinParentKey: `${fx.projectIdentifier}-999999`,
         },
         card.identifier,
@@ -589,7 +675,12 @@ describe('POST /design-evidence — register', () => {
       req(
         '',
         token,
-        { assets: [{ kind: 'mock', sourcePath: 'design/x/evil.mock.html', pathname: foreign }] },
+        {
+          assets: [
+            { kind: 'mock', sourcePath: 'design/x/evil.mock.html', pathname: foreign },
+            seed('note_file', 'evil.design-notes.md', 'text/markdown'),
+          ],
+        },
         card.identifier,
       ),
       params(card.identifier),
@@ -622,7 +713,17 @@ describe('POST /design-evidence — register', () => {
       .mockRejectedValueOnce(new PermissionDeniedError('proj-1', 'work_item:edit'));
 
     const res = await REGISTER(
-      req('', token, { assets: [seed('mock', 'd.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'd.mock.html', 'text/html'),
+            seed('note_file', 'd.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
 
@@ -640,7 +741,17 @@ describe('POST /design-evidence — register', () => {
 
     await expect(
       REGISTER(
-        req('', token, { assets: [seed('mock', 'a.mock.html', 'text/html')] }, card.identifier),
+        req(
+          '',
+          token,
+          {
+            assets: [
+              seed('mock', 'a.mock.html', 'text/html'),
+              seed('note_file', 'a.mock.html.design-notes.md', 'text/markdown'),
+            ],
+          },
+          card.identifier,
+        ),
         params(card.identifier),
       ),
     ).rejects.toThrow('db down');
@@ -660,7 +771,17 @@ describe('POST /design-evidence — register', () => {
   it('404s an identifier whose PROJECT does not exist', async () => {
     const token = await integrationToken(fx);
     const res = await REGISTER(
-      req('', token, { assets: [seed('mock', 'a.mock.html', 'text/html')] }, 'NOSUCHPROJ-9'),
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'a.mock.html', 'text/html'),
+            seed('note_file', 'a.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        'NOSUCHPROJ-9',
+      ),
       params('NOSUCHPROJ-9'),
     );
     expect(res.status).toBe(404);
@@ -669,6 +790,7 @@ describe('POST /design-evidence — register', () => {
   it('drops malformed asset entries rather than half-recording them', async () => {
     const token = await integrationToken(fx);
     const good = seed('mock', 'good.mock.html', 'text/html');
+    const note = seed('note_file', 'design-notes.md', 'text/markdown');
     const res = await REGISTER(
       req(
         '',
@@ -676,6 +798,7 @@ describe('POST /design-evidence — register', () => {
         {
           assets: [
             good,
+            note,
             { kind: 'mock' }, // no sourcePath / pathname
             { kind: 'image', sourcePath: '', pathname: '' }, // blank
             null,
@@ -688,8 +811,11 @@ describe('POST /design-evidence — register', () => {
 
     expect(res.status).toBe(201);
     const { evidence } = await res.json();
-    expect(evidence.assets).toHaveLength(1);
-    expect(evidence.assets[0].sourcePath).toBe(good.sourcePath);
+    expect(evidence.assets).toHaveLength(2);
+    expect(evidence.assets.map((a: { sourcePath: string }) => a.sourcePath)).toEqual([
+      good.sourcePath,
+      note.sourcePath,
+    ]);
   });
 
   it('re-throws an unexpected store failure rather than dressing it as a domain error', async () => {
@@ -699,7 +825,17 @@ describe('POST /design-evidence — register', () => {
 
     await expect(
       REGISTER(
-        req('', token, { assets: [seed('mock', 'boom.mock.html', 'text/html')] }, card.identifier),
+        req(
+          '',
+          token,
+          {
+            assets: [
+              seed('mock', 'boom.mock.html', 'text/html'),
+              seed('note_file', 'boom.mock.html.design-notes.md', 'text/markdown'),
+            ],
+          },
+          card.identifier,
+        ),
         params(card.identifier),
       ),
     ).rejects.toThrow('store unreachable');
@@ -710,12 +846,138 @@ describe('POST /design-evidence — register', () => {
     const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
 
     await REGISTER(
-      req('', token, { assets: [seed('mock', 'z.mock.html', 'text/html')] }, card.identifier),
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'z.mock.html', 'text/html'),
+            seed('note_file', 'z.mock.html.design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
       params(card.identifier),
     );
 
     const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
     expect(after.status).toBe(before.status);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AMENDMENT 4 (MOTIR-5491) — the SAME refusals the MCP tool answers, over HTTP
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /design-evidence — AMENDMENT 4 refusals', () => {
+  it('422s an `image` asset, naming the retired kind, recording nothing', async () => {
+    const token = await integrationToken(fx);
+    const res = await REGISTER(
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'p.mock.html', 'text/html'),
+            seed('image', 'p.png', 'image/png'),
+            seed('note_file', 'design-notes.md', 'text/markdown'),
+          ],
+        },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('DESIGN_EVIDENCE_IMAGE_RETIRED');
+    expect(await adminDb.designEvidence.count()).toBe(0);
+  });
+
+  it('422s a `noteMd` — the route passes it through rather than dropping it', async () => {
+    const token = await integrationToken(fx);
+    const res = await REGISTER(
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'p.mock.html', 'text/html'),
+            seed('note_file', 'design-notes.md', 'text/markdown'),
+          ],
+          noteMd: '',
+        },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('DESIGN_EVIDENCE_NOTE_MD_RETIRED');
+  });
+
+  it('422s a publish with no note file', async () => {
+    const token = await integrationToken(fx);
+    const res = await REGISTER(
+      req('', token, { assets: [seed('mock', 'p.mock.html', 'text/html')] }, card.identifier),
+      params(card.identifier),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('DESIGN_EVIDENCE_NOTE_FILE_REQUIRED');
+  });
+
+  it('409s a publish AND a mint for a card nothing waits on', async () => {
+    const token = await integrationToken(fx);
+    const lonely = await createTestWorkItem(fx, { kind: 'task', title: 'A design nothing needs' });
+    const pathname = (name: string) => `${designPrefix(fx.ctx.workspaceId, lonely.id)}${name}`;
+    store.set(pathname('l.mock.html'), { contentType: 'text/html', size: 10 });
+    store.set(pathname('design-notes.md'), { contentType: 'text/markdown', size: 10 });
+
+    const registered = await REGISTER(
+      req(
+        '',
+        token,
+        {
+          assets: [
+            { kind: 'mock', sourcePath: 'design/x/l.mock.html', pathname: pathname('l.mock.html') },
+            {
+              kind: 'note_file',
+              sourcePath: 'design/x/design-notes.md',
+              pathname: pathname('design-notes.md'),
+            },
+          ],
+        },
+        lonely.identifier,
+      ),
+      params(lonely.identifier),
+    );
+    expect(registered.status).toBe(409);
+    expect((await registered.json()).code).toBe('DESIGN_EVIDENCE_NOTHING_WAITS');
+
+    const minted = await MINT(
+      req(
+        '/upload-token',
+        token,
+        { files: [{ kind: 'mock', sourcePath: 'design/x/l.mock.html', contentType: 'text/html' }] },
+        lonely.identifier,
+      ),
+      params(lonely.identifier),
+    );
+    expect(minted.status).toBe(409);
+    expect((await minted.json()).code).toBe('DESIGN_EVIDENCE_NOTHING_WAITS');
+    expect(await adminDb.designEvidence.count()).toBe(0);
+  });
+
+  it('422s a mint for an `image` grant', async () => {
+    const token = await integrationToken(fx);
+    const res = await MINT(
+      req(
+        '/upload-token',
+        token,
+        { files: [{ kind: 'image', sourcePath: 'design/x/p.png', contentType: 'image/png' }] },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('DESIGN_EVIDENCE_IMAGE_RETIRED');
   });
 });
 
@@ -739,7 +1001,13 @@ describe('DELETE /design-evidence', () => {
       req(
         '',
         token,
-        { assets: [seed('mock', name, 'text/html')], commitSha: `sha-${name}` },
+        {
+          assets: [
+            seed('mock', name, 'text/html'),
+            seed('note_file', `${name}.design-notes.md`, 'text/markdown'),
+          ],
+          commitSha: `sha-${name}`,
+        },
         card.identifier,
       ),
       params(card.identifier),
@@ -767,7 +1035,7 @@ describe('DELETE /design-evidence', () => {
     ).toBe(0);
     // Not destroyed — the row and its asset survive the withdrawal.
     expect(await adminDb.designEvidence.count({ where: { workItemId: card.id } })).toBe(1);
-    expect(await adminDb.designAsset.count({ where: { designEvidenceId: published.id } })).toBe(1);
+    expect(await adminDb.designAsset.count({ where: { designEvidenceId: published.id } })).toBe(2);
   });
 
   it('accepts a request with NO body — the reason is optional, not a 400', async () => {

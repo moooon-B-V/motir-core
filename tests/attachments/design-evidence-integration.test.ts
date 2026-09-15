@@ -63,15 +63,24 @@ const { designEvidenceService, designPrefix } =
 const { designAssetContentPath } = await import('@/lib/mappers/designEvidenceMappers');
 const { headPrivateBlob } = await import('@/lib/blob/uploader');
 const { POST: uploadIssueAttachment } = await import('@/app/api/upload/issue-attachment/route');
+const { makeWorkWaitOn } = await import('../helpers/designWaits');
 
 /** A design subtask under a story — the kind-parent matrix is a DB trigger. */
 async function makeSubtask(fx: WorkItemFixture) {
   const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent story' });
-  return createTestWorkItem(fx, {
+  const card = await createTestWorkItem(fx, {
     kind: 'subtask',
     title: 'Design — the result panel',
     parentId: story.id,
   });
+  // AMENDMENT 4 Q2: a result is published only while open work waits on it.
+  await makeWorkWaitOn(card.id, fx);
+  return card;
+}
+
+/** The one `note_file` a result carries (AMENDMENT 4 Q1). */
+function noteAsset(fx: WorkItemFixture, workItemId: string, name = 'design-notes.md') {
+  return seedAsset(fx, workItemId, { kind: 'note_file', name, contentType: 'text/markdown' });
 }
 
 function seedAsset(
@@ -193,8 +202,8 @@ describe('tenant isolation is enforced by the RLS POLICY, not by the service', (
             name: 'panel.mock.html',
             contentType: 'text/html',
           }),
+          noteAsset(fixture, item.id),
         ],
-        noteMd: '## Panel\n\nThe note.',
         commitSha: 'abc1234',
       },
       fixture.ctx,
@@ -272,8 +281,7 @@ describe('the publish → read seam', () => {
     await designEvidenceService.recordFromPathnames(
       {
         workItemId: item.id,
-        // Deliberately NOT in render order: the note file is published last by
-        // the uploader, and the panel must still show mock → image → note.
+        // The note file is published last, and the panel shows mock → note.
         assets: [
           seedAsset(fx, item.id, {
             kind: 'mock',
@@ -282,19 +290,12 @@ describe('the publish → read seam', () => {
             size: 4096,
           }),
           seedAsset(fx, item.id, {
-            kind: 'image',
-            name: 'result.png',
-            contentType: 'image/png',
-            size: 8192,
-          }),
-          seedAsset(fx, item.id, {
             kind: 'note_file',
             name: 'design-notes.md',
             contentType: 'text/markdown',
             size: 512,
           }),
         ],
-        noteMd: '## The panel\n\nRendered note.',
         commitSha: 'c0389f2',
         ciRunUrl: 'https://github.com/x/y/actions/runs/1',
         producedByKey: 'MOTIR-2669',
@@ -310,26 +311,22 @@ describe('the publish → read seam', () => {
     // consumer wanted, rather than as an empty region of a rendered page.
     expect(read).toMatchObject({
       workItemId: item.id,
-      noteMd: '## The panel\n\nRendered note.',
+      // AMENDMENT 4: no inline note — the panel links to the `note_file`.
+      noteMd: null,
       noteTruncated: false,
       commitSha: 'c0389f2',
       ciRunUrl: 'https://github.com/x/y/actions/runs/1',
       producedByKey: 'MOTIR-2669',
     });
 
-    expect(read!.assets.map((a) => a.kind)).toEqual(['mock', 'image', 'note_file']);
-    expect(read!.assets.map((a) => a.position)).toEqual([0, 1, 2]);
+    expect(read!.assets.map((a) => a.kind)).toEqual(['mock', 'note_file']);
+    expect(read!.assets.map((a) => a.position)).toEqual([0, 1]);
     expect(read!.assets.map((a) => a.sourcePath)).toEqual([
       'design/work-items/result.mock.html',
-      'design/work-items/result.png',
       'design/work-items/design-notes.md',
     ]);
-    expect(read!.assets.map((a) => a.mimeType)).toEqual([
-      'text/html',
-      'image/png',
-      'text/markdown',
-    ]);
-    expect(read!.assets.map((a) => a.sizeBytes)).toEqual([4096, 8192, 512]);
+    expect(read!.assets.map((a) => a.mimeType)).toEqual(['text/html', 'text/markdown']);
+    expect(read!.assets.map((a) => a.sizeBytes)).toEqual([4096, 512]);
   });
 
   it('every asset url is the AUTHENTICATED content route — never a store URL', async () => {
@@ -343,12 +340,16 @@ describe('the publish → read seam', () => {
             name: 'a.mock.html',
             contentType: 'text/html',
           }),
+          noteAsset(fx, item.id),
         ],
       },
       fx.ctx,
     );
 
     const read = await designEvidenceService.getCurrentForWorkItem(item.id, fx.ctx);
+    for (const asset of read!.assets) {
+      expect(asset.url).toMatch(/^\/api\/attachments\/[^/]+\/content$/);
+    }
     const url = read!.assets[0]!.url!;
 
     // The panel puts this string in an <iframe src>. If it were ever a signed
@@ -357,15 +358,15 @@ describe('the publish → read seam', () => {
     expect(url).toMatch(/^\/api\/attachments\/[^/]+\/content$/);
     expect(url).not.toMatch(/^https?:/);
 
-    const rows = await adminDb.attachment.findMany({ where: { workItemId: item.id } });
-    expect(url).toBe(designAssetContentPath(rows[0]!.id));
+    const mockAsset = await adminDb.designAsset.findFirstOrThrow({ where: { kind: 'mock' } });
+    expect(url).toBe(designAssetContentPath(mockAsset.attachmentId!));
   });
 
   it('heads the store once per asset — the size and type are read, never taken on trust', async () => {
     const item = await makeSubtask(fx);
     const assets = [
       seedAsset(fx, item.id, { kind: 'mock', name: 'm.mock.html', contentType: 'text/html' }),
-      seedAsset(fx, item.id, { kind: 'image', name: 'm.png', contentType: 'image/png' }),
+      noteAsset(fx, item.id),
     ];
 
     await designEvidenceService.recordFromPathnames({ workItemId: item.id, assets }, fx.ctx);
@@ -382,7 +383,10 @@ describe('the publish → read seam', () => {
       await designEvidenceService.recordFromPathnames(
         {
           workItemId: item.id,
-          assets: [seedAsset(fx, item.id, { kind: 'mock', name, contentType: 'text/html' })],
+          assets: [
+            seedAsset(fx, item.id, { kind: 'mock', name, contentType: 'text/html' }),
+            noteAsset(fx, item.id, `${name}.design-notes.md`),
+          ],
           commitSha: `sha-${i}`,
         },
         fx.ctx,
@@ -392,7 +396,7 @@ describe('the publish → read seam', () => {
     const read = await designEvidenceService.getCurrentForWorkItem(item.id, fx.ctx);
 
     expect(read!.commitSha).toBe('sha-1');
-    expect(read!.assets).toHaveLength(1);
+    expect(read!.assets).toHaveLength(2);
     expect(read!.assets[0]!.sourcePath).toBe('design/work-items/second.mock.html');
   });
 });

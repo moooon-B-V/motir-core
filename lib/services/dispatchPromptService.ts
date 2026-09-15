@@ -2,6 +2,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import { assembleDispatchPrompt, type FindingsPolicy } from '@/lib/dispatch/promptTemplate';
 import type { DispatchPromptDto, DispatchRepoDto } from '@/lib/dto/dispatch';
@@ -44,6 +45,28 @@ async function resolveBlockerKeys(workItemId: string, workspaceId: string): Prom
       tx,
     );
   });
+  return rows
+    .slice()
+    .sort((a, b) => a.key - b.key)
+    .map((r) => r.identifier);
+}
+
+/**
+ * The OPEN work items `blocked_by` this one, resolved to their `PROD-<n>` keys in
+ * ascending key order (MOTIR-5495). The ids come from
+ * `designEvidenceService.findWaitingDependentIds` — the SAME read the design-result
+ * publish refuses on — so a design prompt carries the publish step exactly when
+ * the server would accept the publish, and there is no second done-category rule.
+ */
+async function resolveOpenDependentKeys(
+  workItemId: string,
+  ctx: ServiceContext,
+): Promise<string[]> {
+  const ids = await designEvidenceService.findWaitingDependentIds(workItemId, ctx);
+  if (ids.length === 0) return [];
+  const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findByIds(ids, tx),
+  );
   return rows
     .slice()
     .sort((a, b) => a.key - b.key)
@@ -178,34 +201,47 @@ export const dispatchPromptService = {
     // `listRepoDelivery` classifies rather than refuses. (The archived refusal
     // over the whole SET is raised AFTER this settles, in
     // `resolveDispatchRepos`, so no arm is ever abandoned mid-flight.)
-    const [parentRow, blockerKeys, readiness, dispatchRepo, advisories, repoDelivery, runScope] =
-      await Promise.all([
-        item.parentId
-          ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-              workItemRepository.findById(item.parentId as string, tx),
-            )
-          : Promise.resolve(null),
-        resolveBlockerKeys(item.id, ctx.workspaceId),
-        workItemsService.getReadiness(item.id, ctx),
-        resolveDispatchRepoForItem({ id: item.id, targetRepo: item.targetRepo, projectId }, ctx),
-        // The prose-vs-graph advisories (MOTIR-2079) — a SIBLING of the reads
-        // above, not a second pass, and deliberately independent of `readiness`:
-        // nothing below consults it when deciding the workflow variant, so the
-        // prompt an item gets is the same prompt whether or not it has one.
-        buildDispatchProseAdvisories(item, ctx),
-        // The per-repository DELIVERY state (MOTIR-3131) — a sixth peer read with
-        // no refusal path of its own, and the source `targetRepos` is built from.
-        // It resolves the set through the item's REFERENCES, so it is also what
-        // makes the array survive a repository rename on the host.
-        workItemsService.listRepoDelivery(item.id, item.targetRepos, ctx),
-        // The RUN TARGET (MOTIR-5334): the scope of the running run that carries
-        // this item, when there is one. It decides only WHO publishes How to test
-        // — this agent on its own key, or the run's close-out on the scope — and
-        // has no refusal path.
-        withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-          dispatchRunRepository.findRunningScopeForWorkItem(item.id, tx),
-        ),
-      ]);
+    const [
+      parentRow,
+      blockerKeys,
+      readiness,
+      dispatchRepo,
+      advisories,
+      repoDelivery,
+      runScope,
+      openDependentKeys,
+    ] = await Promise.all([
+      item.parentId
+        ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+            workItemRepository.findById(item.parentId as string, tx),
+          )
+        : Promise.resolve(null),
+      resolveBlockerKeys(item.id, ctx.workspaceId),
+      workItemsService.getReadiness(item.id, ctx),
+      resolveDispatchRepoForItem({ id: item.id, targetRepo: item.targetRepo, projectId }, ctx),
+      // The prose-vs-graph advisories (MOTIR-2079) — a SIBLING of the reads
+      // above, not a second pass, and deliberately independent of `readiness`:
+      // nothing below consults it when deciding the workflow variant, so the
+      // prompt an item gets is the same prompt whether or not it has one.
+      buildDispatchProseAdvisories(item, ctx),
+      // The per-repository DELIVERY state (MOTIR-3131) — a sixth peer read with
+      // no refusal path of its own, and the source `targetRepos` is built from.
+      // It resolves the set through the item's REFERENCES, so it is also what
+      // makes the array survive a repository rename on the host.
+      workItemsService.listRepoDelivery(item.id, item.targetRepos, ctx),
+      // The RUN TARGET (MOTIR-5334): the scope of the running run that carries
+      // this item, when there is one. It decides only WHO publishes How to test
+      // — this agent on its own key, or the run's close-out on the scope — and
+      // has no refusal path.
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        dispatchRunRepository.findRunningScopeForWorkItem(item.id, tx),
+      ),
+      // What waits on THIS item (MOTIR-5495) — read only for a design card, the
+      // one type whose prompt branches on it; no refusal path.
+      item.type === 'design'
+        ? resolveOpenDependentKeys(item.id, ctx)
+        : Promise.resolve([] as string[]),
+    ]);
 
     const targetRepo = dispatchRepo?.name ?? null;
     const targetRepos = await resolveDispatchRepos(repoDelivery, projectId, dispatchRepo, ctx);
@@ -220,6 +256,7 @@ export const dispatchPromptService = {
       estimateMinutes: item.estimateMinutes,
       descriptionMd: item.descriptionMd,
       blockerKeys,
+      openDependentKeys,
       advisories,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,

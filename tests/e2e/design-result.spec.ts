@@ -11,8 +11,8 @@ import { seedDesignResult, type DesignResultSeed } from './_helpers/design-resul
 //
 // Two tests, split by what each can honestly prove.
 //
-// The FIRST is the recording: the panel, the rendered note, the sandboxed frame
-// and the lightbox, driven the way a person drives them. Its artifact bytes are
+// The FIRST is the recording: the panel, the note and screenshot as file links
+// (MOTIR-5498), and the sandboxed frame, driven the way a person drives them. Its artifact bytes are
 // served at the app's own content route — see the block inside it for why a
 // sandboxed frame leaves no other option.
 //
@@ -114,11 +114,16 @@ test('a design result is published from CI and read on the work item', async ({
     await beat();
   });
 
-  await chapter('Read the design note, rendered as Markdown', async () => {
-    // The note goes through the single shipped Markdown renderer, so the `##`
-    // section arrives as a real heading rather than as literal hashes.
-    await expect(page.getByRole('heading', { name: seed.noteHeading })).toBeVisible();
-    await expect(page.getByText(seed.noteBody, { exact: false })).toBeVisible();
+  await chapter('An earlier result lists its note and screenshot as files', async () => {
+    // AMENDMENT 4 (MOTIR-5498): nothing renders inline any more. This seed is a
+    // result stored BEFORE that — inline note plus a screenshot — so it says it is
+    // an earlier format and lists both as links; the Markdown is not rendered and
+    // no thumbnail is drawn.
+    await expect(page.getByRole('main').getByText('Earlier format')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open note' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open file' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: seed.noteHeading })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /design-result\.png/ })).toHaveCount(0);
     await beat();
   });
 
@@ -174,18 +179,6 @@ test('a design result is published from CI and read on the work item', async ({
     // …and the document behind it did not move. A tall mock in an unbounded
     // container would have dragged the whole page instead.
     expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollBefore);
-    await beat();
-  });
-
-  await chapter('Open the screenshot in the lightbox, and close it', async () => {
-    await page.getByRole('button', { name: /design-result\.png/ }).click();
-    const lightbox = page.getByRole('dialog');
-    await expect(lightbox).toBeVisible();
-    await expect(lightbox.getByRole('img', { name: 'design-result.png' })).toBeVisible();
-    await beat();
-
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toHaveCount(0);
     await beat();
   });
 

@@ -5,6 +5,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { spyOnJobDispatch } from '../helpers/jobs';
+import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 
 // ENTERING REVIEW ASKS AGAIN (Story MOTIR-4887 · Subtask MOTIR-5532; ADR
 // `docs/decisions/approval-gates.md` §6d AMENDMENT, rule 7), against a REAL
@@ -65,10 +66,22 @@ afterAll(async () => {
 async function publish(label: string) {
   const pathname = `${designPrefix(fx.workspaceId, card.id)}${label}.mock.html`;
   store.set(pathname, { contentType: 'text/html', size: 2048 });
+  const notePathname = `${designPrefix(fx.workspaceId, card.id)}${label}.design-notes.md`;
+  store.set(notePathname, { contentType: 'text/markdown', size: 512 });
+  // `design-result.md` AMENDMENT 4: a result is the mock plus ONE note file, and is
+  // published only while an open work item is `blocked_by` the card.
+  await ensureWorkWaitsOn(card.id, fx);
   return designEvidenceService.recordFromPathnames(
     {
       workItemId: card.id,
-      assets: [{ kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname }],
+      assets: [
+        { kind: 'mock', sourcePath: `design/work-items/${label}.mock.html`, pathname },
+        {
+          kind: 'note_file',
+          sourcePath: 'design/work-items/design-notes.md',
+          pathname: notePathname,
+        },
+      ],
       commitSha: `sha-${label}`,
     },
     fx.ctx,
@@ -152,6 +165,58 @@ describe('a card returning to review is asked again', () => {
     const awaiting = (await gatesOf()).filter((g) => g.state === 'awaiting');
     expect(awaiting).toHaveLength(1);
     expect(awaiting[0]!.subjectId).toBe(evidence.id);
+  });
+
+  it('raises NO design gate on a card with an open pull request — the approve-to-merge gate decides it (MOTIR-5534)', async () => {
+    await publish('v1');
+    const [a] = await gatesOf();
+    await adminDb.approvalGate.update({ where: { id: a!.id }, data: { state: 'superseded' } });
+    const installation = await adminDb.githubInstallation.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        installationId: `inst-${card.id}`,
+        accountLogin: 'acme',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+    });
+    const repo = await adminDb.githubRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
+        installationId: installation.id,
+        repoId: `repo-${card.id}`,
+        owner: 'acme',
+        name: 'web',
+        defaultBranch: 'main',
+        provider: 'github',
+      },
+    });
+    const pr = await adminDb.githubPullRequest.create({
+      data: {
+        repoId: repo.id,
+        number: 5,
+        title: 'd',
+        state: 'open',
+        headRef: 'h',
+        baseRef: 'main',
+        provider: 'github',
+      },
+    });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: card.id,
+        githubPullRequestId: pr.id,
+        repoId: repo.id,
+      },
+    });
+
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemsService.applyStatusTransition(card.id, 'in_review', fx.ctx, tx, { system: true }),
+    );
+
+    expect((await gatesOf()).filter((g) => g.state === 'awaiting')).toHaveLength(0);
   });
 
   it('raises nothing on an item with no current design result', async () => {

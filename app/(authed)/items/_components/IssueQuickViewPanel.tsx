@@ -18,7 +18,8 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ArchivedNotice } from '@/components/issues/ArchivedNotice';
-import { DevelopmentSection } from '@/components/github/DevelopmentSection';
+import { DevelopmentSection, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
+import { DesignResultPanel } from '../[key]/_components/DesignResultPanel';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { TodoRowReadOnly } from '@/app/(authed)/items/[key]/_components/TodoListSection';
@@ -869,6 +870,19 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               // what made it say "No pull request yet" about a repository whose
               // pull request was on the row above (MOTIR-3036).
               repoDelivery={data.repoDelivery ?? []}
+              // The design result's SLOT (Q8): a card whose open pull requests
+              // carry its design shows it here, first in the block, exactly as
+              // the detail page does. The service reads it only in that case.
+              designResult={
+                data.designEvidence &&
+                hasOpenPullRequest(data.pullRequests, data.deliveries ?? []) ? (
+                  <DesignResultPanel
+                    evidence={data.designEvidence}
+                    isDesignCard={data.type === 'design'}
+                    placement="development"
+                  />
+                ) : undefined
+              }
             />
           )}
           {/* The shipped line — *"Explanation, relationships, attachments and

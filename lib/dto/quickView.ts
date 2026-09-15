@@ -1,4 +1,5 @@
 import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
+import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   ExecutorDto,
@@ -200,6 +201,12 @@ export interface QuickViewData {
    *  same rail caption the detail page does, from the same list. Empty on nearly
    *  every card, which is the shipped behaviour unchanged. */
   deliveries: WorkItemDeliveryDto[];
+  /**
+   * The card's CURRENT design result, read only when a linked pull request is
+   * open (`design-result.md` AMENDMENT 4 Q8) — the peek's Development block then
+   * shows it as its slot, as the detail page does. Absent or null otherwise.
+   */
+  designEvidence?: DesignEvidenceDTO | null;
   /**
    * Does the item already have children (MOTIR-910)? The peek header's
    * Plan / Re-plan entrance picks its face from this — an item with children is

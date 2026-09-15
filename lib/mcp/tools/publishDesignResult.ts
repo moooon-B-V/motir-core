@@ -12,15 +12,16 @@ import { exempt } from '../payloads/define';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `publish_design_result` (Story MOTIR-3780 · Subtask MOTIR-3782) — put a design
-// RESULT on a design card: the note's changed sections, the `*.mock.html` mock
-// and the `.png` export, in ONE call.
+// RESULT on a design card: the `*.mock.html` mock(s) and the area's notes file, in
+// ONE call. Since AMENDMENT 4 (MOTIR-5491) that is ALL a result is — the `.png`
+// export and the inline `noteMd` are retired and refused by name — and it is
+// published only while an open work item is `blocked_by` the card.
 //
 // A thin adapter over `designEvidenceService.recordFromBytes` — the same service
 // the HTTP register route reaches, with the upload half moved inside because the
 // caller is already on the server. The leaf check, the child check, the workspace
-// resolution, the media-type allowlist, the per-file cap, `capNoteMd`'s 64 KiB
-// section-boundary truncation and the `note_file` companion all run there, once;
-// nothing is re-implemented here.
+// resolution, the media-type allowlist, the per-file cap, and AMENDMENT 4's shape
+// and waiting-work refusals all run there, once; nothing is re-implemented here.
 //
 // ── ⚠️ WHY A TOOL AND NOT A SCRIPT ─────────────────────────────────────────
 // The publisher used to be `scripts/upload-design-assets.mjs`, a CI script that
@@ -90,21 +91,28 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 export const PUBLISH_DESIGN_RESULT_TOOL_NAME = 'publish_design_result';
 export const CREATE_DESIGN_UPLOAD_TOOL_NAME = 'create_design_upload';
 
-/** The kinds a caller may publish, mirroring `design_asset_kind`. */
+/**
+ * Every `design_asset_kind`. ⚠️ `image` STAYS in the schema although a new publish
+ * may not use it (AMENDMENT 4): removed from the enum, a `.png` would fail zod
+ * validation with a generic message; kept, it reaches the service and is refused
+ * as `DESIGN_EVIDENCE_IMAGE_RETIRED`, which says what to do instead. `noteMd`
+ * stays in the input schema for the same reason.
+ */
 const ASSET_KINDS = ['mock', 'image', 'note_file'] as const;
 
 const assetSchema = z.object({
   kind: z
     .enum(ASSET_KINDS)
     .describe(
-      'What this file IS: "mock" for the `*.mock.html`, "image" for the `.png` export, ' +
-        '"note_file" for the complete `design-notes.md` text.',
+      'What this file IS: "mock" for a `*.mock.html` (one or more), "note_file" for the ' +
+        'area’s `design-notes.md` (exactly one). "image" is RETIRED and refused — a design ' +
+        'result carries no screenshot.',
     ),
   sourcePath: z
     .string()
     .min(1)
     .describe(
-      'The path the file has IN THE REPOSITORY, e.g. "design/work-items/detail.png". The ' +
+      'The path the file has IN THE REPOSITORY, e.g. "design/work-items/detail.mock.html". The ' +
         'repository stays the source of truth; this records where the published copy came from.',
     ),
   contentType: z
@@ -112,8 +120,8 @@ const assetSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'The file’s media type — "text/html", "image/png" or "text/markdown". Anything else is ' +
-        'refused: this is the ONE path on which "text/html" is accepted at all. Required with ' +
+      'The file’s media type — "text/html" for a mock, "text/markdown" for the note file. ' +
+        'Anything else is refused: this is the ONE path on which "text/html" is accepted at all. Required with ' +
         '`contentBase64`; omit it with `pathname`, where the STORE’s own answer is authoritative.',
     ),
   contentBase64: z
@@ -138,21 +146,22 @@ const createUploadFileSchema = z.object({
   kind: z
     .enum(ASSET_KINDS)
     .describe(
-      'What this file IS: "mock" for the `*.mock.html`, "image" for the `.png` export, ' +
-        '"note_file" for the complete `design-notes.md` text.',
+      'What this file IS: "mock" for a `*.mock.html` (one or more), "note_file" for the ' +
+        'area’s `design-notes.md` (exactly one). "image" is RETIRED and refused — a design ' +
+        'result carries no screenshot.',
     ),
   sourcePath: z
     .string()
     .min(1)
     .describe(
-      'The path the file has IN THE REPOSITORY, e.g. "design/ai-chat/planning-workspace.png". ' +
+      'The path the file has IN THE REPOSITORY, e.g. "design/ai-chat/planning-workspace.mock.html". ' +
         'Its basename is carried into the minted key, so a grant stays recognisable.',
     ),
   contentType: z
     .string()
     .min(1)
     .describe(
-      'The media type you will PUT — "text/html", "image/png" or "text/markdown". The grant is ' +
+      'The media type you will PUT — "text/html" for a mock, "text/markdown" for the note file. The grant is ' +
         'BOUND to it: a PUT sending anything else is refused by the store.',
     ),
 });
@@ -178,8 +187,8 @@ const inputSchema = {
     .array(assetSchema)
     .min(1)
     .describe(
-      'The files to publish — normally three: the mock, the `.png`, and the note as a ' +
-        '"note_file". At least one is required. Each entry carries EITHER `contentBase64` (the ' +
+      'The files to publish: one or more mocks (for a change to an existing design, the NEW ' +
+        'delta mock(s) only) and exactly one "note_file". Each entry carries EITHER `contentBase64` (the ' +
         'bytes inline, for a small asset) OR the `pathname` of a `create_design_upload` grant ' +
         'you have already PUT to. One publish uses one of the two forms for ALL its assets.',
     ),
@@ -187,10 +196,10 @@ const inputSchema = {
     .string()
     .optional()
     .describe(
-      'The SECTIONS of the design note this work CHANGED, as Markdown — not the whole file. ' +
-        'You wrote them, so you know which they are; a whole area note runs to hundreds of ' +
-        'kilobytes and is not what a reviewer wants to read. Over 64 KiB it is truncated at a ' +
-        '"##" boundary for display, and the complete text still ships as the "note_file" asset.',
+      'RETIRED — do not send it. A design result no longer carries the note inline: publish ' +
+        'the notes file as the one "note_file" asset and the result links to it. Present only so ' +
+        'a caller still sending it is refused by name (DESIGN_EVIDENCE_NOTE_MD_RETIRED) rather ' +
+        'than silently ignored.',
     ),
   commitSha: z
     .string()
@@ -235,11 +244,11 @@ interface CreateUploadArgs {
 }
 
 /** Compact human-readable summary of a published design result. */
-function summarize(identifier: string, assetCount: number, truncated: boolean): string {
-  const note = truncated
-    ? ' The inline note was truncated for display; the full text is the `note_file`.'
-    : '';
-  return `Published a design result to ${identifier} with ${assetCount} asset(s).${note}`;
+function summarize(identifier: string, assetCount: number): string {
+  return (
+    `Published a design result to ${identifier} with ${assetCount} asset(s). An approval is now ` +
+    'awaiting a person on that card.'
+  );
 }
 
 /**
@@ -418,7 +427,7 @@ export async function runPublishDesignResult(
     }
 
     return toolOk(
-      summarize(item.identifier, evidence.assets.length, evidence.noteTruncated),
+      summarize(item.identifier, evidence.assets.length),
       exempt(PUBLISH_DESIGN_RESULT_TOOL_NAME, {
         id: evidence.id,
         workItemKey: item.identifier,
@@ -441,20 +450,22 @@ export function registerPublishDesignResult(
     {
       title: 'Publish design result',
       description:
-        'Put the DESIGN RESULT on a design work item (by identifier, e.g. "ACME-7") — the note ' +
-        'sections you changed, the "*.mock.html" mock and the ".png" export, in ONE call. This ' +
-        'is the last step of a design card and the deliverable a reviewer actually opens: the ' +
-        'pull request is not it, and a card whose panel is empty reads as a design nobody did. ' +
-        'Call it yourself once the three files are committed — nothing else will, and a missing ' +
-        'publish looks exactly like a successful run (files written, commit landed, checks ' +
-        'green, card empty). Send only the note SECTIONS this work changed, never a whole area ' +
-        'note. The REPOSITORY stays the source of truth: the published result is the card’s ' +
+        'Put the DESIGN RESULT on a design work item (by identifier, e.g. "ACME-7") — WHAT TO ' +
+        'REVIEW: the "*.mock.html" mock(s) as "mock" (for a change to an existing design, only ' +
+        'the NEW delta mock) and the area’s design-notes.md as the one "note_file", which the ' +
+        'result shows as a link. No ".png" and no "noteMd" — both are retired and refused by ' +
+        'name. PUBLISH ONLY WHEN WORK WAITS ON THE DESIGN: a card that no open work item is ' +
+        'blocked_by is refused (DESIGN_EVIDENCE_NOTHING_WAITS) — its pull request is its review. ' +
+        'When work does wait, call it yourself once both files are committed — nothing else ' +
+        'will, and a missing publish looks exactly like a successful run (files written, commit ' +
+        'landed, checks green, card empty). A publish raises an approval that waits on a ' +
+        'person. The REPOSITORY stays the source of truth: the published result is the card’s ' +
         'view of assets that are still committed. Targets a LEAF — a design result belongs to ' +
         'the card that produced it, so a container is refused. "text/html" is accepted HERE and ' +
         'only here; "attach_file" still refuses it. EACH ASSET CARRIES ONE OF TWO FORMS: ' +
         '"contentBase64" for a small file, or the "pathname" of a "create_design_upload" grant ' +
-        'you already PUT the bytes to — which is the form a real design board needs, because a ' +
-        'multi-megabyte .png is larger than a tool argument can carry. One publish uses one form ' +
+        'you already PUT the bytes to — the form for any asset too large to emit as a tool ' +
+        'argument. One publish uses one form ' +
         'for all of its assets. Honors the same access checks, media-type and size limits as the UI.',
       inputSchema,
     },
@@ -471,10 +482,11 @@ export function registerPublishDesignResult(
         'file’s bytes straight to its "uploadUrl" (a plain HTTP PUT with that "Content-Type" — ' +
         'nothing about that step goes through Motir), then call "publish_design_result" with the ' +
         '"pathname" each grant returned. THE BYTES NEVER PASS THROUGH A TOOL ARGUMENT, which is ' +
-        'the whole point: a design board is routinely several megabytes, base64 is 1.37x that, ' +
-        'and no agent can emit it — so for those assets the inline form is not slow, it is ' +
-        'impossible. Use the inline "contentBase64" form for a small file and this pair for ' +
-        'anything a full-page .png export produces. Targets a LEAF, exactly as the publish does. ' +
+        'the whole point: base64 is 1.37x a file and an agent must emit every byte, so for a ' +
+        'large asset the inline form is not slow, it is impossible. Use the inline ' +
+        '"contentBase64" form for a small file and this pair for anything over about a megabyte. ' +
+        'Refuses an "image" grant (screenshots are retired) and a card no open work item is ' +
+        'blocked_by, before any bytes move. Targets a LEAF, exactly as the publish does. ' +
         'Honors the same access checks, media-type allowlist and per-file cap as the UI.',
       inputSchema: createUploadInputSchema,
     },

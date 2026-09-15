@@ -67,13 +67,25 @@ const decided = (state: ApprovalGateDTO['state'], outcomeRef: string | null): Ap
   outcomeRef,
 });
 
-/** A note is the smallest subject the port can SHOW, so the verbs render. */
+/** A reachable note FILE (no mock) is the smallest subject the port can SHOW, so
+ *  the verbs render — an inline note no longer counts, as it is no longer rendered
+ *  (MOTIR-5498). */
 const PUBLISHED: DesignEvidenceDTO = {
   id: 'ev-1',
   workItemId: 'wi_1',
   noteMd: '## The approvals room\n\nProse the reviewer reads.',
   noteTruncated: false,
-  assets: [],
+  assets: [
+    {
+      id: 'a-note',
+      kind: 'note_file',
+      url: '/api/attachments/att-note/content',
+      mimeType: 'text/markdown',
+      sizeBytes: 64,
+      sourcePath: 'design/approvals/design-notes.md',
+      position: 0,
+    },
+  ],
   commitSha: 'cafe1234567',
   ciRunUrl: null,
   producedByKey: 'MOTIR-4320',

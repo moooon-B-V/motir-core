@@ -46,8 +46,18 @@ export function isOpenBlocker(
   blocker: BlockerReadinessState,
   terminalByProject: Map<string, Set<string>>,
 ): boolean {
-  const terminal = terminalByProject.get(blocker.projectId)?.has(blocker.status) ?? false;
-  return !terminal && !blocker.sessionBranch;
+  return !isTerminalStatus(blocker, terminalByProject) && !blocker.sessionBranch;
+}
+
+/** Whether a work item's status is in ITS project's `category=done` set — the one
+ *  done-category predicate. Readiness reads it off a blocker; the design-result
+ *  publish gate (MOTIR-5491) reads it off a DEPENDENT, the other end of the same
+ *  edge, and must reach the same answer for the same status. */
+export function isTerminalStatus(
+  item: { status: string; projectId: string },
+  terminalByProject: Map<string, Set<string>>,
+): boolean {
+  return terminalByProject.get(item.projectId)?.has(item.status) ?? false;
 }
 
 /**
@@ -76,8 +86,7 @@ export function classifyBlockerReadiness(
   let hasOpenBlocker = false;
   const branches = new Set<string>();
   for (const b of blockers) {
-    const terminal = terminalByProject.get(b.projectId)?.has(b.status) ?? false;
-    if (terminal) continue; // satisfied; a done blocker contributes no lineage
+    if (isTerminalStatus(b, terminalByProject)) continue; // satisfied; a done blocker contributes no lineage
     if (b.sessionBranch) {
       branches.add(b.sessionBranch); // integrated — satisfied, carries its lineage
       continue;
