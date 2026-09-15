@@ -96,6 +96,14 @@ async function resolveMod(page: Page): Promise<'Meta' | 'Control'> {
   return isMac ? 'Meta' : 'Control';
 }
 
+/**
+ * The page's MAIN landmark. ⚠️ Every text / test-id locator below is rooted here,
+ * never at `page` (MOTIR-5037): a page-rooted strict locator can match a node the
+ * author never put there — a hidden previous subtree React keeps mounted during a
+ * navigation — and fail strict mode. `tests/e2e-page-rooted-locators.test.ts` holds it.
+ */
+const main = (page: Page) => page.getByRole('main');
+
 /** The primary rail — scoped, because the mobile drawer carries the same row names. */
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Primary' });
 
@@ -138,17 +146,19 @@ test.describe('Approval records — a place you can go', () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       await openRoomFromRail(page, 'Approval records', 'Approval records');
       await expect(
-        page.getByText('Approvals waiting on you, and the ones you decided.'),
+        main(page).getByText('Approvals waiting on you, and the ones you decided.'),
       ).toBeVisible();
 
       const table = recordsTable(page);
       // Pending first: the design routed to them, under Awaiting a decision.
       await expect(
-        page.getByTestId('approval-records-awaiting').getByTestId(/^approval-row-/),
+        main(page)
+          .getByTestId('approval-records-awaiting')
+          .getByTestId(/^approval-row-/),
       ).toHaveCount(1);
       await expect(recordRow(table, seed.designTitle)).toBeVisible();
       await expect(
-        page
+        main(page)
           .getByTestId('approval-records-decided')
           .getByText('You have not decided an approval in this project yet.'),
       ).toBeVisible();
@@ -206,7 +216,7 @@ test.describe('Approval records — a place you can go', () => {
         await expect(page).toHaveURL((url) => url.pathname === '/approvals');
         await expect(palette).toBeHidden();
 
-        const decided = page.getByTestId('approval-records-decided');
+        const decided = main(page).getByTestId('approval-records-decided');
         const row = recordRow(decided, seed.designTitle);
         await expect(row).toBeVisible();
         await expect(row.getByText('Approved', { exact: true })).toBeVisible();
@@ -216,7 +226,7 @@ test.describe('Approval records — a place you can go', () => {
           /\d/,
         );
         // …and the pending section is empty now, in the reader's own words.
-        await expect(page.getByText('Nothing is waiting on you.')).toBeVisible();
+        await expect(main(page).getByText('Nothing is waiting on you.')).toBeVisible();
         // Still not the colleague's decision.
         await expect(recordRow(recordsTable(page), seed.readerDecisionTitle)).toHaveCount(0);
       },
@@ -227,9 +237,9 @@ test.describe('Approval records — a place you can go', () => {
       await signIn(page, seed.adminEmail, seed.password);
       await openRoomFromRail(page, 'Approval records', 'Approval records');
       await expect(
-        page.getByText('Every approval in this project — waiting first, then decided.'),
+        main(page).getByText('Every approval in this project — waiting first, then decided.'),
       ).toBeVisible();
-      const decided = page.getByTestId('approval-records-decided');
+      const decided = main(page).getByTestId('approval-records-decided');
       // Other people's decisions, each naming who made it.
       const readerRow = recordRow(decided, seed.readerDecisionTitle);
       await expect(readerRow).toBeVisible();
@@ -243,7 +253,7 @@ test.describe('Approval records — a place you can go', () => {
     await chapter('So does a custom role that holds only that one permission', async () => {
       await signIn(page, seed.customEmail, seed.password);
       await openRoomFromRail(page, 'Approval records', 'Approval records');
-      const decided = page.getByTestId('approval-records-decided');
+      const decided = main(page).getByTestId('approval-records-decided');
       await expect(recordRow(decided, seed.readerDecisionTitle)).toBeVisible();
       await expect(recordRow(decided, seed.designTitle)).toBeVisible();
     });
@@ -265,16 +275,16 @@ test.describe('Approval records — a place you can go', () => {
     await page.reload();
 
     await openRoomFromRail(page, '审批记录', '审批记录');
-    await expect(page.getByText('等待你处理的审批，以及你已决定的审批。')).toBeVisible();
+    await expect(main(page).getByText('等待你处理的审批，以及你已决定的审批。')).toBeVisible();
     // Asserted through the catalogue's own strings: both section headings, the
     // reviewer's pending row, and the decided section's empty line.
     const table = recordsTable(page, '审批记录');
     await expect(table.getByRole('columnheader', { name: /^等待决定/ })).toBeVisible();
     await expect(table.getByRole('columnheader', { name: /^已决定/ })).toBeVisible();
     await expect(recordRow(table, seed.designTitle)).toBeVisible();
-    await expect(page.getByText('你在本项目中还没有决定过审批。')).toBeVisible();
+    await expect(main(page).getByText('你在本项目中还没有决定过审批。')).toBeVisible();
     await expect(recordRow(table, seed.readerDecisionTitle)).toHaveCount(0);
     // Negatively too: the English literal must not be reachable on a `zh` page.
-    await expect(page.getByText('Approval records', { exact: true })).toHaveCount(0);
+    await expect(main(page).getByText('Approval records', { exact: true })).toHaveCount(0);
   });
 });
