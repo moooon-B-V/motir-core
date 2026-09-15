@@ -419,6 +419,13 @@ export const foldersService = {
         );
       }
 
+      // The BUG DESTINATION goes where the folder's contents just went
+      // (Story MOTIR-4927 · MOTIR-5537): the parent folder, or the project root.
+      // After every refusal above and in this transaction, under the structure
+      // lock — and before the delete, because `project.bug_destination_folder_id`
+      // is NoAction and a delete of the folder it names would otherwise fail.
+      // NULL here is reached by the same rule that moved the bugs, not chosen.
+      await projectRepository.carryBugDestination(folder.projectId, folder.id, destination, tx);
       await folderRepository.delete(folder.id, tx);
       return {
         deletedFolderId: folder.id,

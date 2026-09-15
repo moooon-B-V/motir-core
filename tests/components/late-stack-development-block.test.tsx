@@ -29,7 +29,8 @@ vi.mock('@/app/(authed)/items/[key]/_components/AcceptancePanel', () => ({
   AcceptancePanel: () => null,
 }));
 vi.mock('@/app/(authed)/items/[key]/_components/DesignResultSection', () => ({
-  DesignResultSection: () => null,
+  // A marker, so a test can see whether the STANDALONE section rendered.
+  DesignResultSection: () => <div data-testid="standalone-design-result" />,
 }));
 vi.mock('@/app/(authed)/items/[key]/_components/DevelopmentLinkControl', () => ({
   DevelopmentLinkProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -40,6 +41,7 @@ vi.mock('@/app/(authed)/items/[key]/_components/DevelopmentLinkControl', () => (
 
 import { LateUpperSections } from '@/app/(authed)/items/[key]/_components/LateSections';
 import type { LateReads } from '@/app/(authed)/items/[key]/_components/lateReads';
+import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 
 afterEach(cleanup);
 
@@ -115,5 +117,95 @@ describe('the late stack — How to test is part of the Development card (MOTIR-
     expect(messages.github.development.gloss).toBe(
       'Pull requests and how to test them · live PR and CI status',
     );
+  });
+});
+
+// ── Q8 (Story MOTIR-5488 · MOTIR-5498) ───────────────────────────────────────
+// A design card whose open linked pull requests carry the decision renders its
+// result INSIDE the Development card and no standalone Design result section;
+// the same card with no open pull request gets the section back.
+describe('the late stack — a design result with open linked pull requests (Q8)', () => {
+  const EVIDENCE: DesignEvidenceDTO = {
+    id: 'ev-1',
+    workItemId: 'wi-acme-12',
+    noteMd: null,
+    noteTruncated: false,
+    assets: [
+      {
+        id: 'a-mock',
+        kind: 'mock',
+        url: '/api/attachments/att-mock/content',
+        mimeType: 'text/html',
+        sizeBytes: 10,
+        sourcePath: 'design/work-items/x--change.mock.html',
+        position: 0,
+      },
+      {
+        id: 'a-note',
+        kind: 'note_file',
+        url: '/api/attachments/att-note/content',
+        mimeType: 'text/markdown',
+        sizeBytes: 10,
+        sourcePath: 'design/work-items/design-notes.md',
+        position: 1,
+      },
+    ],
+    commitSha: 'cafe1234567',
+    ciRunUrl: null,
+    producedByKey: 'ACME-12',
+    createdAt: '2026-09-14T00:00:00.000Z',
+    withdrawnAt: null,
+    withdrawnById: null,
+    withdrawnReason: null,
+  };
+
+  async function renderStack(pullRequests: LateReads['pullRequests']) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ type: 'opaqueredirect', ok: false, status: 0 })),
+    );
+    const ui = await LateUpperSections({
+      reads: Promise.resolve({
+        ...reads(),
+        pullRequests,
+        designEvidence: EVIDENCE,
+        isDesignCard: true,
+      }),
+      itemId: 'wi-acme-12',
+      itemIdentifier: 'ACME-12',
+      canEdit: true,
+      repoDelivery: [],
+      deliveries: [],
+    });
+    return render(ui);
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('two open pull requests in two repositories: ONE Development card holds the design once, no standalone section', async () => {
+    const { container } = await renderStack([CORE_PR, GATEWAY_PR]);
+    expect(screen.queryByTestId('standalone-design-result')).toBeNull();
+
+    const slots = screen.getAllByRole('group', { name: messages.designResult.title });
+    expect(slots).toHaveLength(1);
+    const card = slots[0]!.closest('[data-surface="card"]') as HTMLElement;
+    expect(
+      within(card).getByRole('heading', { level: 2, name: messages.github.development.title }),
+    ).toBeTruthy();
+    expect(within(card).getByRole('link', { name: /Open note/ })).toBeTruthy();
+    expect(within(card).getByText(CORE_PR.title)).toBeTruthy();
+    expect(within(card).getByText(GATEWAY_PR.title)).toBeTruthy();
+    expect(card.textContent).toContain(messages.github.development.glossWithDesign);
+    expect(container.querySelectorAll('[data-testid="development-design-result"]')).toHaveLength(1);
+  });
+
+  it('every pull request merged or closed: the standalone section is back, no slot', async () => {
+    await renderStack([
+      { ...CORE_PR, state: 'merged' },
+      { ...GATEWAY_PR, state: 'closed' },
+    ]);
+    expect(screen.getByTestId('standalone-design-result')).toBeTruthy();
+    expect(screen.queryByTestId('development-design-result')).toBeNull();
+    expect(document.body.textContent).toContain(messages.github.development.gloss);
   });
 });

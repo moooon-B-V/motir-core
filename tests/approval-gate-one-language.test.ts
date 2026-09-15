@@ -217,10 +217,15 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     {
       method: 'supersedeAwaitingByWorkItem',
       writes: 'superseded',
+      // The second caller is DECLARED (MOTIR-5534, `design-result.md` AMENDMENT 4
+      // Q8): linking an OPEN pull request withdraws an awaiting design question,
+      // because that card's pull requests now carry the decision. It writes
+      // `superseded` — a withdrawal with no actor — never a decision.
       // MOTIR-5482: the approve-and-merge gate is withdrawn BY CARD, because its subject is
       // the card's whole delivery set — a moved head, a closed member or a set change.
       callers: [
         'lib/services/designEvidenceService.ts',
+        'lib/services/githubPullRequestService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },

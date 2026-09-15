@@ -92,6 +92,23 @@ const ROOTS = '__roots__';
 const FOLDER_PREFIX = 'folder:';
 const folderKey = (folderId: string) => `${FOLDER_PREFIX}${folderId}`;
 
+/**
+ * Where a folder joins a loaded level — the slot the server's read would give it.
+ * After the level's last folder; and when the level holds no folder yet, after
+ * its EPICS at the project root, which reads epics, then folders, then the rest
+ * (MOTIR-5550), or first inside a folder, whose level leads with its folders.
+ */
+function folderInsertIndex(rows: ProjectTreeRowDto[], levelKey: string): number {
+  let lastFolder = -1;
+  let lastEpic = -1;
+  rows.forEach((r, i) => {
+    if (r.kind === 'folder') lastFolder = i;
+    else if (r.kind === 'epic') lastEpic = i;
+  });
+  if (lastFolder >= 0) return lastFolder + 1;
+  return levelKey === ROOTS ? lastEpic + 1 : 0;
+}
+
 /** A node the TreeTable renders: a real issue, a folder, or a synthetic status
  *  row — the lazy "loading…" placeholder, the "Load more children" affordance,
  *  or an expanded folder's "nothing filed here" row. */
@@ -178,6 +195,8 @@ function markWorkItemHasChildren(
 interface LevelState {
   rows: ProjectTreeRowDto[];
   total: number;
+  /** The level's work-item count without its folders, where the read reports one (MOTIR-5541). */
+  workItemTotal?: number | undefined;
   hasMore: boolean;
   loading: boolean;
 }
@@ -237,6 +256,7 @@ export function IssueTreeTable({
     [ROOTS]: {
       rows: initialLevel.rows,
       total: initialLevel.total,
+      workItemTotal: initialLevel.workItemTotal,
       hasMore: initialLevel.hasMore,
       loading: false,
     },
@@ -283,6 +303,7 @@ export function IssueTreeTable({
         [parentId]: {
           rows: prev[parentId]?.rows ?? [],
           total: prev[parentId]?.total ?? 0,
+          workItemTotal: prev[parentId]?.workItemTotal,
           hasMore: prev[parentId]?.hasMore ?? false,
           loading: true,
         },
@@ -311,6 +332,7 @@ export function IssueTreeTable({
             [parentId]: {
               rows,
               total: result.level.total,
+              workItemTotal: result.level.workItemTotal,
               hasMore: result.level.hasMore,
               loading: false,
             },
@@ -395,7 +417,8 @@ export function IssueTreeTable({
   }, [folderCommands, canEdit, startRootCreate]);
 
   // A created folder joins its level IN PLACE, after the level's last folder and
-  // before its work items — where the service appended it — and its parent folder
+  // before its other work items — where the service appended it
+  // ({@link folderInsertIndex}) — and its parent folder
   // now has children. Bumping the level's sequence retires any read of that level
   // still in flight, which was taken before the folder existed.
   const insertFolder = useCallback((levelKey: string, folder: FolderDto) => {
@@ -412,15 +435,12 @@ export function IssueTreeTable({
         position: folder.position,
         hasChildren: false,
       };
-      let lastFolder = -1;
-      level.rows.forEach((r, i) => {
-        if (r.kind === 'folder') lastFolder = i;
-      });
+      const at = folderInsertIndex(level.rows, levelKey);
       const next: Record<string, LevelState> = {
         ...prev,
         [levelKey]: {
           ...level,
-          rows: [...level.rows.slice(0, lastFolder + 1), row, ...level.rows.slice(lastFolder + 1)],
+          rows: [...level.rows.slice(0, at), row, ...level.rows.slice(at)],
           total: level.total + 1,
           loading: false,
         },
@@ -553,7 +573,7 @@ export function IssueTreeTable({
   }, []);
 
   // A MOVE leaves its source level and joins its destination IN PLACE when that
-  // level is loaded (after its last folder), and both parents' `hasChildren`
+  // level is loaded ({@link folderInsertIndex}), and both parents' `hasChildren`
   // follow. Both levels' sequences move on, so a read taken before the move
   // cannot put the row back.
   const applyFolderMove = useCallback((folder: FolderDto, fromLevelKey: string) => {
@@ -592,13 +612,10 @@ export function IssueTreeTable({
           position: folder.position,
           hasChildren: moved?.hasChildren ?? true,
         };
-        let lastFolder = -1;
-        to.rows.forEach((r, i) => {
-          if (r.kind === 'folder') lastFolder = i;
-        });
+        const at = folderInsertIndex(to.rows, toLevelKey);
         next[toLevelKey] = {
           ...to,
-          rows: [...to.rows.slice(0, lastFolder + 1), row, ...to.rows.slice(lastFolder + 1)],
+          rows: [...to.rows.slice(0, at), row, ...to.rows.slice(at)],
           total: to.total + 1,
           loading: false,
         };
@@ -636,7 +653,14 @@ export function IssueTreeTable({
           (r): r is WorkItemTreeRowDto => r.kind !== 'folder' && r.id === workItemId,
         );
         const rows = from.rows.filter((r) => !(r.kind !== 'folder' && r.id === workItemId));
-        next[fromLevelKey] = { ...from, rows, total: Math.max(0, from.total - 1), loading: false };
+        next[fromLevelKey] = {
+          ...from,
+          rows,
+          total: Math.max(0, from.total - 1),
+          workItemTotal:
+            from.workItemTotal === undefined ? undefined : Math.max(0, from.workItemTotal - 1),
+          loading: false,
+        };
         // The old container is childless only when its WHOLE level was loaded and is now empty.
         if (fromLevelKey !== ROOTS && rows.length === 0 && !from.hasMore) {
           if (fromLevelKey.startsWith(FOLDER_PREFIX)) {
@@ -652,6 +676,7 @@ export function IssueTreeTable({
           ...to,
           rows: [...to.rows, { ...moved, parentId }],
           total: to.total + 1,
+          workItemTotal: to.workItemTotal === undefined ? undefined : to.workItemTotal + 1,
           loading: false,
         };
       }
@@ -1005,8 +1030,9 @@ export function IssueTreeTable({
         : childRows;
     };
 
-    // A level is its FOLDERS, then its work items (MOTIR-5314's read order). An
-    // open NEW-folder name row sits between the two, where the folder will land.
+    // A level is its FOLDERS, then its work items (MOTIR-5314's read order) — and
+    // the project root leads with its epics (MOTIR-5550). An open NEW-folder name
+    // row sits where the folder will land.
     const buildLevel = (
       level: ProjectTreeRowDto[],
       total: number,
@@ -1049,11 +1075,7 @@ export function IssueTreeTable({
         return node;
       });
       if (draft?.mode === 'create' && draft.levelKey === levelKey) {
-        let lastFolder = -1;
-        level.forEach((r, i) => {
-          if (r.kind === 'folder') lastFolder = i;
-        });
-        nodes.splice(lastFolder + 1, 0, {
+        nodes.splice(folderInsertIndex(level, levelKey), 0, {
           id: `${levelKey}::new-folder`,
           data: { kind: 'folderDraft' },
         });
@@ -1251,9 +1273,17 @@ export function IssueTreeTable({
     ],
   );
 
-  // An empty project draws the section's empty state — unless a new root folder
-  // is being named, which is a row to draw.
-  if (emptyState && rows.length === 0) return <>{emptyState}</>;
+  // The /items FIRST RUN (MOTIR-5541, design/work-items/items-first-run.mock.html):
+  // the empty state shows when the ROOT holds no work items, whatever folders it
+  // holds — the count the level read reports, never inferred from the rows drawn.
+  // With nothing to draw it stands alone; with folder rows, or a new root folder
+  // being named, the tree draws them and the empty state sits below. A level that
+  // reports no count falls back to "nothing is drawn".
+  const rootLevel = levels[ROOTS];
+  const rootHoldsNoWorkItems =
+    rootLevel?.workItemTotal !== undefined ? rootLevel.workItemTotal === 0 : rows.length === 0;
+  const firstRun = emptyState && rootHoldsNoWorkItems ? emptyState : null;
+  if (firstRun && rows.length === 0) return <>{firstRun}</>;
 
   return (
     <IssueInlineEditProvider workflow={workflow} members={members}>
@@ -1282,6 +1312,7 @@ export function IssueTreeTable({
                 : undefined
         }
       />
+      {firstRun ? <div className="mt-4">{firstRun}</div> : null}
       {deleting ? (
         <FolderDeleteDialog
           folderName={deleting.name}

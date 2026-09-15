@@ -713,3 +713,130 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
     expect(await deliveredItemIds(prId)).toEqual([item.id]);
   });
 });
+
+// ── MOTIR-5534 (AMENDMENT 4 Q8): an OPEN pull request retires an awaiting design gate ──
+describe('linking an OPEN pull request retires an AWAITING design gate (MOTIR-5534)', () => {
+  async function designCardWithGate(
+    s: Awaited<ReturnType<typeof makeScenario>>,
+    state: 'awaiting' | 'approved',
+  ) {
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Draw the rail' },
+      s.ctx,
+    );
+    const gate = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: s.workspace.id,
+        projectId: s.project.id,
+        workItemId: item.id,
+        kind: 'design_result',
+        subjectId: `evidence-${item.id}`,
+        state,
+        ...(state === 'approved'
+          ? { decidedById: s.user.id, decidedAt: new Date(), decidedUnderAuthority: 'assignee' }
+          : {}),
+      },
+    });
+    return { item, gate };
+  }
+
+  it('a first link of an open pull request supersedes the awaiting gate, in the link itself', async () => {
+    const s = await makeScenario({
+      email: 'q8-link@example.com',
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+    });
+    const { item, gate } = await designCardWithGate(s, 'awaiting');
+    const prId = await ingestPr({
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+      number: 51,
+      headBranch: 'design/rail',
+      title: 'Draw the rail',
+    });
+
+    await githubPullRequestService.linkPullRequest(item.id, prId, s.ctx);
+
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
+      'superseded',
+    );
+  });
+
+  it('a DECIDED design gate is left alone — an answer outlives its subject', async () => {
+    const s = await makeScenario({
+      email: 'q8-decided@example.com',
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+    });
+    const { item, gate } = await designCardWithGate(s, 'approved');
+    const prId = await ingestPr({
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+      number: 52,
+      headBranch: 'design/rail',
+      title: 'Draw the rail',
+    });
+
+    await githubPullRequestService.linkPullRequest(item.id, prId, s.ctx);
+
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
+      'approved',
+    );
+  });
+
+  it('linking a MERGED pull request retires nothing — it decides nothing', async () => {
+    const s = await makeScenario({
+      email: 'q8-merged@example.com',
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+    });
+    const { item, gate } = await designCardWithGate(s, 'awaiting');
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prEvent({
+        installationId: INST_A,
+        repoProviderId: REPO_A,
+        number: 53,
+        headBranch: 'design/old',
+        title: 'An old merged design',
+        action: 'closed',
+        state: 'closed',
+        merged: true,
+      }),
+    );
+    const merged = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 53 } });
+
+    await githubPullRequestService.linkPullRequest(item.id, merged.id, s.ctx);
+
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
+      'awaiting',
+    );
+  });
+
+  it('the coordinates door (an agent after `gh pr create`) retires it the same way', async () => {
+    const s = await makeScenario({
+      email: 'q8-coords@example.com',
+      installationId: INST_A,
+      repoProviderId: REPO_A,
+    });
+    const { item, gate } = await designCardWithGate(s, 'awaiting');
+
+    await githubPullRequestService.linkPullRequestByCoordinates(
+      {
+        workItemId: item.id,
+        projectId: s.project.id,
+        owner: 'moooon',
+        name: 'acme',
+        number: 54,
+        headRef: 'design/rail',
+        baseRef: 'main',
+        title: 'Draw the rail',
+      },
+      s.ctx,
+    );
+
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
+      'superseded',
+    );
+  });
+});

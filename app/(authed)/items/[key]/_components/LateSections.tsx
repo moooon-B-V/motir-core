@@ -5,7 +5,8 @@ import { AcceptancePanel } from './AcceptancePanel';
 import { DesignResultSection } from './DesignResultSection';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
-import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
+import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
+import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
 import { formatRunTimes } from './runTimes';
 import { formatRunInstant } from '@/lib/runs/runClock';
@@ -154,7 +155,15 @@ export async function LateUpperSections({
     getTranslations('designResult'),
     getTranslations('runs'),
   ]);
-  const showDesignResult = r.designEvidence !== null || r.isDesignCard;
+  // ⚠️ A DESIGN RESULT ON A CARD WITH AN OPEN LINKED PULL REQUEST IS NOT A SECTION
+  // (`design-result.md` AMENDMENT 4 Q8). Those pull requests carry the decision —
+  // one approve-to-merge gate over all of them — so the result renders ONCE as
+  // the Development block's slot, and the standalone section (and its
+  // `design_result` frame) is not drawn. With no open pull request, or nothing
+  // published yet, the section renders exactly as before.
+  const designInDevelopment =
+    r.designEvidence !== null && hasOpenPullRequest(r.pullRequests, deliveries ?? []);
+  const showDesignResult = !designInDevelopment && (r.designEvidence !== null || r.isDesignCard);
   return (
     <>
       {/* THE RUN — above Development, because the run is what produced it. It
@@ -178,7 +187,9 @@ export async function LateUpperSections({
       <DevelopmentLinkProvider currentItemId={itemId} identifier={itemIdentifier}>
         <ContentSectionCard
           title={tGithub('development.title')}
-          subtitle={tGithub('development.gloss')}
+          subtitle={tGithub(
+            designInDevelopment ? 'development.glossWithDesign' : 'development.gloss',
+          )}
           headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
         >
           {canEdit ? <LinkPullRequestForm /> : null}
@@ -213,6 +224,15 @@ export async function LateUpperSections({
             // stack — and an awaiting approve-to-merge gate makes the rows plus
             // How to test the port of ONE frame, as Design result's gate does.
             howToTest={r.howToTest}
+            designResult={
+              designInDevelopment ? (
+                <DesignResultPanel
+                  evidence={r.designEvidence}
+                  isDesignCard={r.isDesignCard}
+                  placement="development"
+                />
+              ) : undefined
+            }
             mergeGate={
               r.mergeGate.gate
                 ? {

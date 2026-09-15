@@ -1735,15 +1735,24 @@ model Project {
   /// `SetNull` on the primary, `Cascade` on the list: removing the address a
   /// project is canonical at must NOT delete the project, it must fall back to
   /// the default; deleting the project takes its addresses with it.
-  primaryAddressId String?         @map("primary_address_id")
-  primaryAddress   PublicAddress?  @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
-  publicAddresses  PublicAddress[] @relation("ProjectPublicAddresses")
+  primaryAddressId       String?         @map("primary_address_id")
+  primaryAddress         PublicAddress?  @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
+  publicAddresses        PublicAddress[] @relation("ProjectPublicAddresses")
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
-  approvalGates    ApprovalGate[]
+  approvalGates          ApprovalGate[]
   /// The project's folders (Story MOTIR-5308) — named, nestable places in its
   /// tree that carry no workflow. Cascade.
-  folders          Folder[]
+  folders                Folder[]
+  /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
+  /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
+  /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
+  /// names is deleted only through `foldersService.deleteFolder`, which carries
+  /// the destination to the folder's parent first (MOTIR-5537); `SetNull` would
+  /// turn a deleted nested folder into a root nobody chose. Same-project is
+  /// enforced by `trg_project_bug_destination_folder_tenancy`.
+  bugDestinationFolderId String?         @map("bug_destination_folder_id")
+  bugDestinationFolder   Folder?         @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -1754,6 +1763,8 @@ model Project {
   /// the drift `CLAUDE.md`'s migration rules describe — the `build` job's
   /// `prisma migrate diff` assertion caught this one before it shipped.
   @@index([primaryAddressId])
+  /// A folder delete checks `project` for rows naming it (the NoAction FK above).
+  @@index([bugDestinationFolderId])
   // pg_trgm GIN over the public-project DIRECTORY's free-text contains-match
   // columns (Story 6.13 · Subtask 6.13.3, finding #57): the project-square
   // search compiles to ILIKE '%…%' over the project `name` + the public
@@ -9792,14 +9803,17 @@ model Folder {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace        Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   // NoAction, as `WorkItem.parent` is: a folder with child folders cannot be
   // deleted until the service has moved them up.
-  parentFolder Folder?    @relation("FolderParent", fields: [parentFolderId], references: [id], onDelete: NoAction)
-  childFolders Folder[]   @relation("FolderParent")
-  createdBy    User       @relation("FolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  workItems    WorkItem[] @relation("WorkItemFolder")
+  parentFolder     Folder?    @relation("FolderParent", fields: [parentFolderId], references: [id], onDelete: NoAction)
+  childFolders     Folder[]   @relation("FolderParent")
+  createdBy        User       @relation("FolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  workItems        WorkItem[] @relation("WorkItemFolder")
+  /// The project whose bug destination this folder is, if any (MOTIR-4934) —
+  /// at most its own project, by `trg_project_bug_destination_folder_tenancy`.
+  bugDestinationOf Project[]  @relation("ProjectBugDestinationFolder")
 
   @@index([projectId, parentFolderId, position])
   @@index([workspaceId])

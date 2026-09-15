@@ -615,19 +615,19 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               type: 'string',
               enum: ['mock', 'image', 'note_file'],
               description:
-                'What this file IS: "mock" for the `*.mock.html`, "image" for the `.png` export, "note_file" for the complete `design-notes.md` text.',
+                'What this file IS: "mock" for a `*.mock.html` (one or more), "note_file" for the area’s `design-notes.md` (exactly one). "image" is RETIRED and refused — a design result carries no screenshot.',
             },
             sourcePath: {
               type: 'string',
               minLength: 1,
               description:
-                'The path the file has IN THE REPOSITORY, e.g. "design/ai-chat/planning-workspace.png". Its basename is carried into the minted key, so a grant stays recognisable.',
+                'The path the file has IN THE REPOSITORY, e.g. "design/ai-chat/planning-workspace.mock.html". Its basename is carried into the minted key, so a grant stays recognisable.',
             },
             contentType: {
               type: 'string',
               minLength: 1,
               description:
-                'The media type you will PUT — "text/html", "image/png" or "text/markdown". The grant is BOUND to it: a PUT sending anything else is refused by the store.',
+                'The media type you will PUT — "text/html" for a mock, "text/markdown" for the note file. The grant is BOUND to it: a PUT sending anything else is refused by the store.',
             },
           },
           required: ['kind', 'sourcePath', 'contentType'],
@@ -1414,19 +1414,19 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               type: 'string',
               enum: ['mock', 'image', 'note_file'],
               description:
-                'What this file IS: "mock" for the `*.mock.html`, "image" for the `.png` export, "note_file" for the complete `design-notes.md` text.',
+                'What this file IS: "mock" for a `*.mock.html` (one or more), "note_file" for the area’s `design-notes.md` (exactly one). "image" is RETIRED and refused — a design result carries no screenshot.',
             },
             sourcePath: {
               type: 'string',
               minLength: 1,
               description:
-                'The path the file has IN THE REPOSITORY, e.g. "design/work-items/detail.png". The repository stays the source of truth; this records where the published copy came from.',
+                'The path the file has IN THE REPOSITORY, e.g. "design/work-items/detail.mock.html". The repository stays the source of truth; this records where the published copy came from.',
             },
             contentType: {
               type: 'string',
               minLength: 1,
               description:
-                'The file’s media type — "text/html", "image/png" or "text/markdown". Anything else is refused: this is the ONE path on which "text/html" is accepted at all. Required with `contentBase64`; omit it with `pathname`, where the STORE’s own answer is authoritative.',
+                'The file’s media type — "text/html" for a mock, "text/markdown" for the note file. Anything else is refused: this is the ONE path on which "text/html" is accepted at all. Required with `contentBase64`; omit it with `pathname`, where the STORE’s own answer is authoritative.',
             },
             contentBase64: {
               type: 'string',
@@ -1446,12 +1446,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         },
         minItems: 1,
         description:
-          'The files to publish — normally three: the mock, the `.png`, and the note as a "note_file". At least one is required. Each entry carries EITHER `contentBase64` (the bytes inline, for a small asset) OR the `pathname` of a `create_design_upload` grant you have already PUT to. One publish uses one of the two forms for ALL its assets.',
+          'The files to publish: one or more mocks (for a change to an existing design, the NEW delta mock(s) only) and exactly one "note_file". Each entry carries EITHER `contentBase64` (the bytes inline, for a small asset) OR the `pathname` of a `create_design_upload` grant you have already PUT to. One publish uses one of the two forms for ALL its assets.',
       },
       noteMd: {
         type: 'string',
         description:
-          'The SECTIONS of the design note this work CHANGED, as Markdown — not the whole file. You wrote them, so you know which they are; a whole area note runs to hundreds of kilobytes and is not what a reviewer wants to read. Over 64 KiB it is truncated at a "##" boundary for display, and the complete text still ships as the "note_file" asset.',
+          'RETIRED — do not send it. A design result no longer carries the note inline: publish the notes file as the one "note_file" asset and the result links to it. Present only so a caller still sending it is refused by name (DESIGN_EVIDENCE_NOTE_MD_RETIRED) rather than silently ignored.',
       },
       commitSha: {
         type: 'string',

@@ -1670,7 +1670,8 @@
       "rules": "规则",
       "repositories": "代码仓库",
       "monitoring": "监控",
-      "approvals": "审批"
+      "approvals": "审批",
+      "bugs": "缺陷"
     },
     "roles": {
       "admin": {
@@ -3609,6 +3610,7 @@
         "estimation": "本项目如何估算工作量，由项目管理员管理。如需调整估算方式，请联系管理员。",
         "fields": "自定义字段由项目管理员管理。如需新增或修改字段，请联系管理员。",
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
+        "bugs": "本项目缺陷的归档位置由项目管理员管理。如需更改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——节奏与规划模型——由项目管理员配置。如需调整，请联系管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
         "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。"
@@ -3659,6 +3661,29 @@
     "approvals": {
       "title": "审批",
       "pageDescription": "该项目在工作完成前需要由人做出哪些决定。"
+    },
+    "bugs": {
+      "title": "缺陷",
+      "pageDescription": "Motir 为此项目自动创建缺陷时的存放位置——例如来自已连接监控服务的问题。由人工提交的缺陷保留其选定的父项。",
+      "cardTitle": "缺陷去向",
+      "cardDescription": "新缺陷将归档到此文件夹。更改设置不会移动已提交的缺陷。删除该文件夹会将其中的缺陷和此去向一并移到其上级。",
+      "bugsFolderTitle": "本项目的缺陷文件夹",
+      "bugsFolderDescription": "随项目一同创建。重命名或移动后，它仍是缺陷去向。",
+      "open": "打开",
+      "openAria": "打开 {name}",
+      "anotherFolderTitle": "其他文件夹",
+      "anotherFolderDescription": "本项目中的任意文件夹。",
+      "projectRootTitle": "项目根级",
+      "projectRootDescription": "缺陷直接提交到项目顶层，不设父项——新缺陷与待办列表之间没有任何中间层。",
+      "save": "保存更改",
+      "saving": "正在保存…",
+      "savedTitle": "缺陷去向已保存",
+      "savedRoot": "新缺陷将提交到项目根级。",
+      "savedFolder": "新缺陷将归档到 {path}。",
+      "saveErrorTitle": "缺陷去向未保存",
+      "saveError": "出错了，请重试。",
+      "saveForbidden": "你已无法更改此项目缺陷的归档位置。",
+      "folderGone": "该文件夹已不存在，请选择其他文件夹。"
     }
   },
   "boards": {
@@ -6218,6 +6243,8 @@
     "development": {
       "title": "开发",
       "gloss": "拉取请求及其测试方法 · 实时 PR 与 CI 状态",
+      "glossWithDesign": "拉取请求、设计及其测试方法 · 实时 PR 与 CI 状态",
+      "pullRequestsGroup": "拉取请求",
       "howToTest": {
         "title": "如何测试",
         "writtenBy": "由 <b>{run}</b> 编写 · {time}",
@@ -7354,15 +7381,21 @@
     "frameFailed": "无法加载设计稿",
     "frameFailedBody": "预览链接可能已过期，文件本身没有问题。",
     "retry": "重试",
-    "screenshots": "截图",
-    "noteTruncated": "仅显示部分内容，完整说明已作为文件发布。",
-    "downloadNote": "下载 design-notes.md",
+    "openNote": "打开说明",
+    "noteGone": "已不再保存",
+    "mockCount": "{count} 个稿件 — 发生变更的面板",
+    "earlierFormat": "旧格式",
+    "earlierFormatBody": "发布于结果改为只展示待审内容之前 — 其说明和截图以文件形式保留。",
+    "files": "文件",
+    "screenshot": "截图",
+    "openFile": "打开文件",
+    "slotProvenance": "由 <b>{key}</b> 发布",
     "ciRun": "CI 运行",
     "publishedBy": "发布自",
     "empty": {
       "title": "尚未发布设计结果",
       "body": "当负责这个工作项的智能体发布后，设计结果会出现在这里。没有其他机制会发布它。",
-      "bodyDesign": "当这个工作项的智能体调用publish_design_result发布后，设计结果会出现在这里：说明、页面设计稿和截图一次提交。没有其他机制会发布它，面板为空即表示这次调用没有发生。"
+      "bodyDesign": "只有当其他工作等待此设计时才会发布设计结果 — 届时由其智能体发布稿件和说明。若没有等待的工作，设计在拉取请求中评审。"
     },
     "frameLoading": "正在加载设计稿…"
   },

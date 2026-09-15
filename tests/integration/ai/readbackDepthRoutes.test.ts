@@ -376,6 +376,7 @@ describe('GET /api/internal/ai/skeleton', () => {
       year.id,
     );
     expect(body.folders.map((f: { path: string[] }) => f.path)).toEqual([
+      ['Bugs'],
       ['Parked'],
       ['Parked', '2025'],
     ]);

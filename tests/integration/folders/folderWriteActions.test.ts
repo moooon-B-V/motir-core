@@ -80,7 +80,8 @@ describe('createFolderAction + renameFolderAction', () => {
         code: 'FOLDER_NAME_TAKEN',
       },
     );
-    await expect(adminDb.folder.count({ where: { projectId: fx.projectId } })).resolves.toBe(2);
+    // Two it made, plus the seeded Bugs folder (MOTIR-4935).
+    await expect(adminDb.folder.count({ where: { projectId: fx.projectId } })).resolves.toBe(3);
   });
 
   it('returns INVALID_FOLDER_NAME for a blank name and FOLDER_NOT_FOUND for a vanished folder', async () => {

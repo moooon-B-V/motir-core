@@ -1,3 +1,4 @@
+import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
   Prisma,
@@ -1088,18 +1089,56 @@ function buildTreeLevel(rows: WorkItemTreeRow[], take: number, total: number): T
   return { rows: page.map(toWorkItemTreeRowDto), hasMore, total };
 }
 
+/** One BAND of a folder-holding level: its full count, and a reader for a page inside it. */
+interface LevelBand {
+  total: number;
+  read: (page: { take: number; offset: number }) => Promise<TreeLevelDto['rows']>;
+}
+
+/**
+ * Serve ONE `take` / `offset` across a level's bands, in order. A band's count
+ * is consumed before the next band's offset begins, so a page that straddles a
+ * boundary takes the end of one band and the start of the next, and walking the
+ * level page by page visits every row exactly once.
+ */
+async function pageAcrossBands(
+  bands: LevelBand[],
+  take: number,
+  offset: number,
+): Promise<TreeLevelDto['rows']> {
+  const rows: TreeLevelDto['rows'] = [];
+  let bandStart = 0;
+  for (const band of bands) {
+    const remaining = take - rows.length;
+    if (remaining <= 0) break;
+    const bandOffset = Math.max(0, offset - bandStart);
+    if (bandOffset < band.total) {
+      const page = await band.read({ take: remaining, offset: bandOffset });
+      rows.push(...page.slice(0, remaining));
+    }
+    bandStart += band.total;
+  }
+  return rows;
+}
+
 /**
  * One page of a level that can hold FOLDERS — the project root, or one folder
- * (Story MOTIR-5308 · MOTIR-5314): the level's folders FIRST, by position, then
- * its work items, by the active sort.
+ * (Story MOTIR-5308 · MOTIR-5314), read in BANDS:
  *
- * ⚠️ ONE `take` / `offset` RUNS ACROSS BOTH, and the folder count is consumed
- * before any work-item offset begins. Offset `o` of a level with `F` folders is
- * folder `o` while `o < F`, and work item `o − F` after — so a page that
- * straddles the boundary takes the last folders and the first work items, and
- * walking the level page by page visits every row exactly once. `total` is
- * `F` plus the work-item count under the SAME folder treatment as the read, and
- * `hasMore` follows from it.
+ *   * **inside a folder** — its child folders, by position, then its work items,
+ *     by the active sort;
+ *   * **at the project root** — its EPICS, by the active sort, then its folders,
+ *     by position, then its OTHER work items, by the active sort (MOTIR-5550,
+ *     `design/work-items/design-notes.md` § `/items` first run › Root order). The
+ *     epics stay the project's first-order structure; a sort reorders inside the
+ *     epic band and the work-item band, never across them, and never the folders.
+ *
+ * ⚠️ ONE `take` / `offset` RUNS ACROSS EVERY BAND ({@link pageAcrossBands}). At
+ * the root, offset `o` is epic `o` while `o < E`, folder `o − E` while
+ * `o < E + F`, and work item `o − E − F` after. `total` is the sum of the bands'
+ * counts, each taken under the SAME predicate as its read, and `hasMore` follows
+ * from it. `workItemTotal` is that sum without the folders — the input to the
+ * /items first-run rule (MOTIR-5541).
  */
 async function readFolderLevel(
   projectId: string,
@@ -1108,12 +1147,16 @@ async function readFolderLevel(
   params: { sort: IssueSort; take?: number; offset?: number },
 ): Promise<TreeLevelDto> {
   const { take, offset } = clampTreePage(params);
-  const folderLevel: TreeFolderLevel =
-    folderId === null ? { kind: 'excludeFiled' } : { kind: 'folder', folderId };
   return withWorkspaceServiceContext(workspaceId, async (tx) => {
-    const [folderTotal, itemTotal] = await Promise.all([
-      folderRepository.countLevel(projectId, workspaceId, folderId, tx),
-      workItemRepository.countProjectTreeLevel(
+    const folderBand = async (): Promise<LevelBand> => ({
+      total: await folderRepository.countLevel(projectId, workspaceId, folderId, tx),
+      read: async (page) =>
+        (await folderRepository.findLevel(projectId, workspaceId, folderId, page, tx)).map(
+          toFolderTreeRowDto,
+        ),
+    });
+    const itemBand = async (folderLevel: TreeFolderLevel): Promise<LevelBand> => ({
+      total: await workItemRepository.countProjectTreeLevel(
         projectId,
         workspaceId,
         null,
@@ -1122,31 +1165,34 @@ async function readFolderLevel(
         undefined,
         folderLevel,
       ),
-    ]);
-    const folderRows =
-      offset < folderTotal
-        ? await folderRepository.findLevel(projectId, workspaceId, folderId, { take, offset }, tx)
-        : [];
-    const remaining = take - folderRows.length;
-    const itemRows =
-      remaining > 0
-        ? await workItemRepository.findProjectTreeLevel(
+      read: async (page) =>
+        (
+          await workItemRepository.findProjectTreeLevel(
             projectId,
             workspaceId,
             null,
             params.sort,
-            { take: remaining, offset: Math.max(0, offset - folderTotal) },
+            page,
             null,
             tx,
             folderLevel,
           )
-        : [];
-    const rows = [
-      ...folderRows.map(toFolderTreeRowDto),
-      ...itemRows.slice(0, remaining).map(toWorkItemTreeRowDto),
-    ];
-    const total = folderTotal + itemTotal;
-    return { rows, hasMore: offset + rows.length < total, total };
+        ).map(toWorkItemTreeRowDto),
+    });
+    const folders = folderBand();
+    const bands = await Promise.all(
+      folderId === null
+        ? [
+            itemBand({ kind: 'excludeFiled', band: 'epics' }),
+            folders,
+            itemBand({ kind: 'excludeFiled', band: 'others' }),
+          ]
+        : [folders, itemBand({ kind: 'folder', folderId })],
+    );
+    const rows = await pageAcrossBands(bands, take, offset);
+    const total = bands.reduce((sum, band) => sum + band.total, 0);
+    const workItemTotal = total - (await folders).total;
+    return { rows, hasMore: offset + rows.length < total, total, workItemTotal };
   });
 }
 
@@ -4488,8 +4534,9 @@ export const workItemsService = {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    // The root holds the project's root FOLDERS, then its unfiled work items; an
-    // item filed in a folder is shown inside that folder instead (MOTIR-5314).
+    // The root holds the project's unfiled EPICS, then its root FOLDERS, then its
+    // other unfiled work items (MOTIR-5550); an item filed in a folder is shown
+    // inside that folder instead (MOTIR-5314).
     return readFolderLevel(projectId, project.workspaceId, null, params);
   },
 
@@ -5565,6 +5612,17 @@ export const workItemsService = {
     // The filed item's folder PATH (MOTIR-5352) — one bounded chain read, and
     // none at all for an unfiled item: this payload is fetched on every row click.
     const folderPath = await this.getFolderPath(detail.folderId, ctx);
+    // The design result, for the Development block's slot (`design-result.md`
+    // AMENDMENT 4 Q8) — read ONLY when a linked pull request is open, which is the
+    // one case the peek draws it: without one the design is a section of the full
+    // page, which the peek does not render. The same open-row test the block
+    // applies (`hasOpenPullRequest`), over the same two lists.
+    const hasOpenPr =
+      pullRequests.some((pr) => pr.state === 'open') ||
+      deliveryView.deliveries.some((d) => d.pullRequest.state === 'open');
+    const designEvidence = hasOpenPr
+      ? await designEvidenceService.getCurrentForWorkItem(detail.item.id, ctx)
+      : null;
     return toQuickViewData(
       detail,
       members,
@@ -5580,6 +5638,7 @@ export const workItemsService = {
       repoDelivery,
       deliveryView.deliveries,
       folderPath,
+      designEvidence,
     );
   },
 

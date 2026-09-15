@@ -88,6 +88,9 @@ const SERVICE_OF: Record<string, string> = {
   estimation: 'lib/services/estimationService.ts',
   fields: 'lib/services/customFieldsService.ts',
   components: 'lib/services/componentsService.ts',
+  // MOTIR-4938 — the Bugs room's read and write both assert `project:administer`,
+  // spelled literally in `getSettings` / `setDestination`.
+  bugs: 'lib/services/bugDestinationService.ts',
   'ai-planning': 'lib/services/projectAiSettingsService.ts',
   automation: 'lib/services/automationRulesService.ts',
 };
