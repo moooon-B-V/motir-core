@@ -25,10 +25,10 @@ vi.mock('next/link', () => ({
 }));
 
 import {
-  PLAN_HISTORY_FIRST_PAGE,
   PlanHistorySection,
   relationSentence,
 } from '@/app/(authed)/items/[key]/_components/PlanHistorySection';
+import { PLAN_HISTORY_FIRST_PAGE } from '@/app/(authed)/items/[key]/_components/planHistoryPaging';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE STORY GATE — a work item shows every plan that shaped it

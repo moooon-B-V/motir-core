@@ -22,6 +22,7 @@ import type {
   WorkItemPlanHistoryPageDto,
 } from '@/lib/dto/plans';
 import { ContentSectionCard } from './ContentSectionCard';
+import { PLAN_HISTORY_FIRST_PAGE, PLAN_HISTORY_MORE_PAGE } from './planHistoryPaging';
 
 // The PLAN HISTORY section on the work-item detail page (Story MOTIR-5542 ·
 // MOTIR-5547), per design/work-items/plan-history.mock.html + design-notes
@@ -53,10 +54,6 @@ export interface PlanHistorySectionProps {
   identifier: string;
   initial: PlanHistoryInitial;
 }
-
-/** §6: the page reads the oldest 5; Show more appends pages of 20. */
-export const PLAN_HISTORY_FIRST_PAGE = 5;
-export const PLAN_HISTORY_MORE_PAGE = 20;
 
 // PlanRow's own glyph and square per status (`app/(authed)/plans/_components/
 // PlanRow.tsx`) — reused so a plan reads the same here as on /plans.
