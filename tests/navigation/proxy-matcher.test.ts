@@ -127,12 +127,14 @@ describe('proxy config.matcher', () => {
     expect(source).toContain('404-not-403');
   });
 
-  it('the nineteen (authed) segments are the ones measured, not a copied list', async () => {
+  it('the twenty (authed) segments are the ones measured, not a copied list', async () => {
     // A regression guard on the ENUMERATION, not on the matcher: if this number
     // moves, a segment was added or removed and the first test above is the one
     // that should have failed. Kept because the card's own measurement is the
     // thing a future reader will want to re-derive.
     expect(topLevelSegments('(authed)')).toEqual([
+      // MOTIR-5302 — the Approval records room, and the TWENTIETH segment.
+      'approvals',
       'backlog',
       'boards',
       // MOTIR-1768 — the Codebase room, and the NINETEENTH segment. `code-health`
