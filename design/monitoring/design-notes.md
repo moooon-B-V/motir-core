@@ -7,6 +7,7 @@ project, sees the connection's health, and disconnects one.
 | Surface                                               | Asset                                                                                                       | Card                                                                                 | Sections |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------- |
 | **The `Monitoring` room** and its settings-rail entry | [`monitoring-room.mock.html`](./monitoring-room.mock.html) + [`monitoring-room.png`](./monitoring-room.png) | MOTIR-5256 (design) · **MOTIR-5288** (revision) → **MOTIR-5262** (surface + locales) | §1–§11   |
+| **Ingestion on each connection row**                  | [`monitoring-room--ingestion.mock.html`](./monitoring-room--ingestion.mock.html)                            | **MOTIR-5575** (delta) → **MOTIR-5582** (surface + locales)                          | §12      |
 
 **Story MOTIR-4926 · subtask MOTIR-5256 (design gate, Principle #13).** This is the layout source
 of truth for **MOTIR-5262**, which builds the room, the rail entry and both locales, and the surface
@@ -317,3 +318,129 @@ any sentence after _"Sentry says:"_ on a Motir page.
 | **MOTIR-5260** | Nothing taken. **One defect found while reading its outcomes for panel 10**: the callback puts Sentry's reason in a response HEADER on a redirect, which the browser drops before the page loads — so the room could never have shown _"Sentry says: …"_ for a failed exchange. Fixed on the parent branch, and the banner copy above requires the server-delivered form.                                                                                                                                                                                                                                                                                            |
 | **MOTIR-5261** | Nothing taken; the degraded picker (panel 7) reads its stored reason.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **MOTIR-4929** | **GIVES** a boundary: the issue count and last-issue time are that story's to add, with the design line that shows them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+---
+
+## §12 · REVISION — ingestion on each connection row (MOTIR-5575)
+
+### Shipped reality and placement
+
+The existing `MonitoringRoom` was rendered from the **real component**, with the real
+`packages/design-system/theme.css`, `app/globals.css`, fonts and lucide icons, before this delta was
+drawn. At a 1100px viewport its content remains the shipped 46rem pane: a grant card, then
+`Monitored projects`, then 64px-high connection rows with the slug and `Bound …` line on the left,
+the destructive icon action on the right. The delta keeps that hierarchy, measure and primitive
+grammar. It adds content **inside each existing connection row** rather than creating a second
+ingestion panel or moving the setting into Automation.
+
+The minimum level is a property of **one binding**, so its `Select`/`Combobox` trigger sits on that
+binding's row, immediately before Disconnect. The settings-rail entrance is unchanged:
+`Monitoring` remains in **General**, directly below `Repositories`, under `integration:manage`.
+
+### The level control
+
+The closed trigger is labelled **Minimum level** and renders the stored value. Its values, in menu
+order, are:
+
+1. **Every level** — stored as `null`, the shipped default.
+2. `debug`
+3. `info`
+4. `warning`
+5. `error`
+6. `fatal`
+
+The open menu carries the helper: **“Choosing a lower level also checks earlier issues since this
+project was first monitored.”** This makes the rewind behavior from MOTIR-5579 visible at the action
+that causes it; lowering is not presented as merely prospective.
+
+While the write is in flight, the trigger is disabled and reads **Saving…** with the shipped spinner;
+the row's Disconnect action is disabled for the same interval. A refused write keeps the prior value
+and shows an inline filled warning beneath the control: **“Couldn't change level. Nothing changed —
+try again.”** The error is local to the row and does not turn the whole grant `degraded`.
+
+### Poll-outcome copy and state table
+
+The poll line sits below `Bound …`, because both are timestamps about the same binding. It is a quiet
+secondary line for healthy/initial states and a filled `--el-warning-surface` line for overdue or
+failed states. The exact state set is the implementation checklist:
+
+| Stored outcome                                | Row copy and treatment                                                                                                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Never polled                                  | **Waiting for the first check** — quiet secondary text. It cannot read as a quiet week.                                                                                                                     |
+| `ok`, recent, no new bugs                     | **Checked for new errors N min ago** — quiet secondary text.                                                                                                                                                |
+| `ok`, recent, bugs filed                      | **Checked for new errors N min ago · N bugs filed** — the count is strong within the same quiet line.                                                                                                       |
+| `ok`, older than two missed half-hourly ticks | **No check since `<time>`. Two scheduled checks were missed.** — filled warning line with `TriangleAlert`.                                                                                                  |
+| `failed`                                      | **Couldn't check for new errors: `<stored reason>`. Last successful check `<time>`.** — filled warning line; the stored reason is rendered verbatim.                                                        |
+| Grant `degraded`                              | The existing grant chip/banner stays the loudest state, and every connection row renders the `failed` line beneath it. Grant health and poll health answer different questions, so neither hides the other. |
+
+The overdue threshold comes from MOTIR-5581's half-hourly cadence: two missed ticks. Relative recent
+times and the last-success line are formatted from stored values; the error reason is never invented
+or summarized by the component.
+
+### Tokens, primitives and icon provenance
+
+- **Existing primitives reused:** the shipped room's `Card`, `SectionLabel`, `Button`, icon button,
+  grant health `Pill`, and connection-row grammar; the level control uses the design-system
+  `Select`/`Combobox` trigger and menu rather than a hand-rolled dropdown.
+- **Colour:** product elements consume only `--el-*`. Healthy text uses `--el-text-secondary`;
+  warning fills use `--el-warning-surface` + `--el-warning-text`, with the glyph on
+  `--el-warning`. No state is encoded by a dashed border.
+- **Shape:** cards, controls, inputs, chips, padding and heights use `--radius-*`,
+  `--spacing-*`, and `--height-*` element-semantic tokens.
+- **Icons:** `activity`, `bug`, `circle-check-big`, `triangle-alert`, `refresh-cw`, `trash-2`,
+  `chevron-down`, `check`, and `loader-circle` are extracted from the installed
+  `lucide-react@1.16.0`; every symbol in the delta carries its provenance comment.
+
+### Copy table
+
+| Element                  | English copy                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| Control label            | **Minimum level**                                                                         |
+| Null/default value       | **Every level**                                                                           |
+| Lowering helper          | Choosing a lower level also checks earlier issues since this project was first monitored. |
+| Saving                   | **Saving…**                                                                               |
+| Refused write            | **Couldn't change level. Nothing changed — try again.**                                   |
+| Never polled             | Waiting for the first check                                                               |
+| Recent success           | Checked for new errors N min ago                                                          |
+| Recent success with work | Checked for new errors N min ago · **N bugs filed**                                       |
+| Overdue                  | **No check since `<time>`.** Two scheduled checks were missed.                            |
+| Failed                   | **Couldn't check for new errors:** `<stored reason>`. Last successful check `<time>`.     |
+
+MOTIR-5582 owns every `en` string above and its locked-register `zh` twin.
+
+### Scope boundary
+
+- **No issue or bug list, and no Bugs-room link.** This row reports only what the last poll did.
+  The provenance surface remains MOTIR-4932's, and its stricter access gate means a link here would
+  lead some `integration:manage` readers to a refusal.
+- **No poll action.** Re-check remains the grant-health probe. The scheduled reconciler owns polling;
+  this room observes its stored outcome.
+- **No schedule control or bug-container picker.** Those belong to their existing stories.
+- **No change to the rail entrance, route, grant card, picker, disconnect flow, loading state, or
+  return banners.** `monitoring-room.mock.html` remains their design of record.
+
+### Workflow grounding
+
+| Behavior drawn                                                              | Defining card  |
+| --------------------------------------------------------------------------- | -------------- |
+| Stored watermark, minimum level, last-poll outcome/reason and binder fields | **MOTIR-5576** |
+| Lowering a level rewinds the watermark so skipped issues are reconsidered   | **MOTIR-5579** |
+| Per-connection poll result, verbatim failure reason and last-success state  | **MOTIR-5580** |
+| Half-hourly cadence and overdue after two missed ticks                      | **MOTIR-5581** |
+
+These are `relates_to` workflow specifications, not build prerequisites for a design artifact; wiring
+`blocked_by` from this design to them would invert the intended design-first chain. MOTIR-5582 is the
+consumer and is already `blocked_by` MOTIR-5575. MOTIR-4932 is named only to enforce the explicit
+scope boundary above.
+
+### GIVES / TAKES sweep
+
+| Key            | GIVES / TAKES                                                                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5582** | **GIVES** the complete build specification for the row control, every poll outcome, saving/refused states, degraded pairing, exact English copy, and token/primitive choices. **No TAKES:** its criteria already assign this whole surface and both locales to that card. |
+| **MOTIR-5576** | **GIVES** a visible consumer for the connection fields it stores. **No TAKES:** this delta does not change the store's ownership or schema.                                                                                                                               |
+| **MOTIR-5579** | **GIVES** the room placement and visible contract for its write, including the rewind helper and refused state. **No TAKES:** the route/service write remains entirely on that card.                                                                                      |
+| **MOTIR-5580** | **GIVES** the per-value rendering of its stored outcome and verbatim reason. **No TAKES:** polling and issue creation remain service work.                                                                                                                                |
+| **MOTIR-5581** | **GIVES** the overdue treatment derived from its half-hourly cadence. **No TAKES:** no schedule control is drawn.                                                                                                                                                         |
+| **MOTIR-4932** | Nothing drawn. **No TAKES:** the issue provenance panel is explicitly excluded.                                                                                                                                                                                           |
+| **MOTIR-5575** | This is the producing design card, not a consumer allocation. No self-edge is introduced.                                                                                                                                                                                 |

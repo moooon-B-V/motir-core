@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Monitoring room — ingestion delta (MOTIR-5575)</title>
+    <!--
+      DELTA MOCK — MOTIR-5575. It amends monitoring-room.mock.html and draws
+      ONLY the panels changed by ingestion. The original mock remains the record
+      of the room before polling and minimum-level controls existed.
+
+      SHIPPED REALITY FIRST. The real MonitoringRoom component was bundled from
+      its source with the real theme, fonts and lucide icons, then rendered in
+      Chromium with three connections. The row height, grant card, section
+      hierarchy, button treatment and 46rem content measure below mirror that
+      render; this delta adds content inside the existing row grammar.
+
+      PANELS (review every one):
+        1 · all stored poll outcomes, including recent-with-files and overdue;
+        2 · the minimum-level control open, with every stored value;
+        3 · saving and refused level changes;
+        4 · a degraded grant paired with failed poll lines on its rows.
+
+      The settings-rail entrance is unchanged: Monitoring remains in General,
+      directly below Repositories, gated by integration:manage. No issue list,
+      bug preview, provenance panel, or Bugs-room link is introduced here.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-mint: #d9f3e1;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-border: var(--color-hairline);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-card: var(--color-background);
+        --el-success: var(--color-success);
+        --el-success-surface: var(--color-tint-mint);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-steel);
+        --el-input-border: var(--color-hairline-strong);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      .sr {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .board {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+      .board-title {
+        margin: 0 0 5px;
+        font: 600 24px/1.2 var(--font-serif);
+      }
+      .board-subtitle,
+      .panel-note {
+        max-width: 72rem;
+        color: var(--el-text-secondary);
+      }
+      .board-subtitle {
+        margin: 0 0 30px;
+      }
+      .panel-block {
+        margin: 0 0 42px;
+      }
+      .panel-label {
+        margin-bottom: 6px;
+        font-weight: 650;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+      }
+      .panel {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 28px;
+        box-shadow: var(--shadow-subtle);
+      }
+      .panel.menu-open {
+        padding-bottom: 278px;
+      }
+      .room {
+        max-width: 736px;
+        margin: 0 auto;
+      }
+      .pane-head {
+        margin-bottom: 24px;
+      }
+      .eyebrow,
+      .section-label {
+        color: var(--el-text-secondary);
+        font: 650 11px/1.2 var(--font-mono);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .pane-head h2 {
+        margin: 5px 0 4px;
+        font: 600 30px/1.15 var(--font-serif);
+      }
+      .pane-head p,
+      .section-hint {
+        margin: 0;
+        color: var(--el-text-secondary);
+      }
+      .grant-card {
+        margin-bottom: 20px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      .grant-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .grant-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        flex: none;
+        place-items: center;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        color: var(--el-icon-muted);
+      }
+      .grant-copy {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .grant-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 650;
+      }
+      .grant-meta {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .mono {
+        font-family: var(--font-mono);
+      }
+      .health {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-success-surface);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .health.warning {
+        background: var(--el-warning-surface);
+      }
+      .health.ok .icon {
+        color: var(--el-success);
+      }
+      .health.warning .icon {
+        color: var(--el-warning);
+      }
+      .btn {
+        display: inline-flex;
+        min-height: var(--height-btn-sm);
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        padding: var(--spacing-btn-y-sm) var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .warning-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-warning-surface);
+        padding: 12px 14px;
+        color: var(--el-warning-text);
+      }
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .section-hint {
+        max-width: 68ch;
+        font-size: 13px;
+      }
+      .rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) 136px 34px;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        padding: 12px 14px;
+      }
+      .row-main {
+        min-width: 0;
+      }
+      .slug {
+        font: 650 14px/1.3 var(--font-mono);
+      }
+      .bound {
+        margin-top: 3px;
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .poll {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 7px;
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .poll.warning {
+        border-radius: var(--radius-control);
+        background: var(--el-warning-surface);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        color: var(--el-warning-text);
+      }
+      .poll strong {
+        font-weight: 650;
+      }
+      .level-field {
+        position: relative;
+        align-self: start;
+      }
+      .level-label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--el-text-secondary);
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+      .level-trigger {
+        display: flex;
+        width: 136px;
+        min-height: var(--height-control);
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 12px;
+      }
+      .level-trigger.saving {
+        color: var(--el-text-secondary);
+      }
+      .icon-btn {
+        display: inline-grid;
+        width: var(--height-control);
+        height: var(--height-control);
+        place-items: center;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-icon-muted);
+      }
+      .menu {
+        position: absolute;
+        z-index: 2;
+        top: 62px;
+        right: 0;
+        width: 220px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 6px;
+        box-shadow: var(--shadow-elevated);
+      }
+      .option {
+        display: flex;
+        min-height: var(--height-control);
+        align-items: center;
+        gap: 8px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 12px;
+      }
+      .option.selected {
+        background: var(--el-surface);
+        font-weight: 650;
+      }
+      .option .icon {
+        margin-left: auto;
+      }
+      .menu-help {
+        margin: 6px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 8px;
+        color: var(--el-text-secondary);
+        font-size: 11px;
+      }
+      .inline-error {
+        grid-column: 3 / 5;
+        margin-top: -6px;
+        border-radius: var(--radius-control);
+        background: var(--el-warning-surface);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        color: var(--el-warning-text);
+        font-size: 12px;
+      }
+      .icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+      }
+      .icon.sm {
+        width: 13px;
+        height: 13px;
+      }
+      .spin {
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sr" aria-hidden="true">
+      <defs>
+        <!-- lucide `activity` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-activity" viewBox="0 0 24 24">
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </symbol>
+        <!-- lucide `bug` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-bug" viewBox="0 0 24 24">
+          <path d="M12 20v-9" />
+          <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M21 21a4 4 0 0 0-3.81-4" />
+          <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+          <path d="M22 13h-4" />
+          <path d="M3 21a4 4 0 0 1 3.81-4" />
+          <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+          <path d="M6 13H2" />
+          <path d="m8 2 1.88 1.88" />
+          <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+        </symbol>
+        <!-- lucide `circle-check-big` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <!-- lucide `triangle-alert` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <!-- lucide `refresh-cw` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </symbol>
+        <!-- lucide `trash-2` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-trash-2" viewBox="0 0 24 24">
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </symbol>
+        <!-- lucide `chevron-down` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <!-- lucide `check` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+        <!-- lucide `loader-circle` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-loader-circle" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <main class="board">
+      <h1 class="board-title">Monitoring room · ingestion delta</h1>
+      <p class="board-subtitle">
+        MOTIR-5575 extends the shipped row instead of redrawing the room: a minimum-level control
+        and a legible poll outcome make background ingestion observable where the connection is
+        managed.
+      </p>
+
+      <section class="panel-block">
+        <div class="panel-label">Panel 1 · Every stored poll outcome</div>
+        <p class="panel-note">
+          Recent success stays quiet, a filed-work count is explicit, and two missed half-hourly
+          ticks cross into warning. “Never” cannot be mistaken for “quiet.”
+        </p>
+        <div class="panel">
+          <div class="room">
+            <header class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h2>Monitoring</h2>
+              <p>
+                Connect the error monitor your services already report to, and Motir turns its
+                issues into work items on this project's board.
+              </p>
+            </header>
+            <div class="grant-card">
+              <div class="grant-top">
+                <span class="grant-mark"
+                  ><svg class="icon"><use href="#i-activity" /></svg></span
+                ><span class="grant-copy"
+                  ><span class="grant-name"
+                    >Sentry
+                    <span class="health ok"
+                      ><svg class="icon sm"><use href="#i-circle-check-big" /></svg>Connected</span
+                    ></span
+                  ><span class="grant-meta"
+                    ><span class="mono">acme-inc</span> · checked 4 minutes ago</span
+                  ></span
+                ><button class="btn">
+                  <svg class="icon sm"><use href="#i-refresh-cw" /></svg>Re-check
+                </button>
+              </div>
+            </div>
+            <div class="section">
+              <div class="section-label">Monitored projects</div>
+              <p class="section-hint">
+                Issues from these Sentry projects become bug work items on this board.
+              </p>
+              <div class="rows">
+                <div class="row">
+                  <svg class="icon"><use href="#i-bug" /></svg>
+                  <div class="row-main">
+                    <div class="slug">web-app</div>
+                    <div class="bound">Bound 3 days ago</div>
+                    <div class="poll">Waiting for the first check</div>
+                  </div>
+                  <div class="level-field">
+                    <span class="level-label">Minimum level</span
+                    ><button class="level-trigger">
+                      Every level<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-btn" aria-label="Disconnect web-app">
+                    <svg class="icon"><use href="#i-trash-2" /></svg>
+                  </button>
+                </div>
+                <div class="row">
+                  <svg class="icon"><use href="#i-bug" /></svg>
+                  <div class="row-main">
+                    <div class="slug">worker</div>
+                    <div class="bound">Bound 3 days ago</div>
+                    <div class="poll">Checked for new errors 4 min ago</div>
+                  </div>
+                  <div class="level-field">
+                    <span class="level-label">Minimum level</span
+                    ><button class="level-trigger">
+                      warning<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-btn" aria-label="Disconnect worker">
+                    <svg class="icon"><use href="#i-trash-2" /></svg>
+                  </button>
+                </div>
+                <div class="row">
+                  <svg class="icon"><use href="#i-bug" /></svg>
+                  <div class="row-main">
+                    <div class="slug">payments</div>
+                    <div class="bound">Bound yesterday</div>
+                    <div class="poll">
+                      Checked for new errors 9 min ago · <strong>3 bugs filed</strong>
+                    </div>
+                  </div>
+                  <div class="level-field">
+                    <span class="level-label">Minimum level</span
+                    ><button class="level-trigger">
+                      error<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-btn" aria-label="Disconnect payments">
+                    <svg class="icon"><use href="#i-trash-2" /></svg>
+                  </button>
+                </div>
+                <div class="row">
+                  <svg class="icon"><use href="#i-bug" /></svg>
+                  <div class="row-main">
+                    <div class="slug">edge-api</div>
+                    <div class="bound">Bound 8 days ago</div>
+                    <div class="poll warning">
+                      <svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                      ><span
+                        ><strong>No check since 09:30.</strong> Two scheduled checks were
+                        missed.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="level-field">
+                    <span class="level-label">Minimum level</span
+                    ><button class="level-trigger">
+                      info<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-btn" aria-label="Disconnect edge-api">
+                    <svg class="icon"><use href="#i-trash-2" /></svg>
+                  </button>
+                </div>
+                <div class="row">
+                  <svg class="icon"><use href="#i-bug" /></svg>
+                  <div class="row-main">
+                    <div class="slug">checkout</div>
+                    <div class="bound">Bound 12 days ago</div>
+                    <div class="poll warning">
+                      <svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                      ><span
+                        ><strong>Couldn't check for new errors:</strong> Sentry returned 429. Last
+                        successful check yesterday at 16:42.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="level-field">
+                    <span class="level-label">Minimum level</span
+                    ><button class="level-trigger">
+                      fatal<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-btn" aria-label="Disconnect checkout">
+                    <svg class="icon"><use href="#i-trash-2" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div><button class="btn">Add a monitored project</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-block">
+        <div class="panel-label">Panel 2 · Minimum level, open</div>
+        <p class="panel-note">
+          The level belongs to one binding, so it lives on that row. Lowering is not only
+          prospective: the helper states that previously skipped issues are checked again.
+        </p>
+        <div class="panel menu-open">
+          <div class="room">
+            <div class="rows">
+              <div class="row">
+                <svg class="icon"><use href="#i-bug" /></svg>
+                <div class="row-main">
+                  <div class="slug">payments</div>
+                  <div class="bound">Bound yesterday</div>
+                  <div class="poll">
+                    Checked for new errors 9 min ago · <strong>3 bugs filed</strong>
+                  </div>
+                </div>
+                <div class="level-field">
+                  <span class="level-label">Minimum level</span
+                  ><button class="level-trigger">
+                    warning<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                  </button>
+                  <div class="menu">
+                    <div class="option">Every level</div>
+                    <div class="option">debug</div>
+                    <div class="option">info</div>
+                    <div class="option selected">
+                      warning<svg class="icon sm"><use href="#i-check" /></svg>
+                    </div>
+                    <div class="option">error</div>
+                    <div class="option">fatal</div>
+                    <p class="menu-help">
+                      Choosing a lower level also checks earlier issues since this project was first
+                      monitored.
+                    </p>
+                  </div>
+                </div>
+                <button class="icon-btn" aria-label="Disconnect payments">
+                  <svg class="icon"><use href="#i-trash-2" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-block">
+        <div class="panel-label">Panel 3 · Saving and refused</div>
+        <p class="panel-note">
+          The control owns its in-flight state. A refusal is inline on the row, keeps the stored
+          value, and says explicitly that nothing changed.
+        </p>
+        <div class="panel">
+          <div class="room">
+            <div class="rows">
+              <div class="row">
+                <svg class="icon"><use href="#i-bug" /></svg>
+                <div class="row-main">
+                  <div class="slug">worker</div>
+                  <div class="bound">Bound 3 days ago</div>
+                  <div class="poll">Checked for new errors 4 min ago</div>
+                </div>
+                <div class="level-field">
+                  <span class="level-label">Minimum level</span
+                  ><button class="level-trigger saving" disabled>
+                    <span
+                      ><svg class="icon sm spin"><use href="#i-loader-circle" /></svg> Saving…</span
+                    >
+                  </button>
+                </div>
+                <button class="icon-btn" aria-label="Disconnect worker" disabled>
+                  <svg class="icon"><use href="#i-trash-2" /></svg>
+                </button>
+              </div>
+              <div class="row">
+                <svg class="icon"><use href="#i-bug" /></svg>
+                <div class="row-main">
+                  <div class="slug">payments</div>
+                  <div class="bound">Bound yesterday</div>
+                  <div class="poll">
+                    Checked for new errors 9 min ago · <strong>3 bugs filed</strong>
+                  </div>
+                </div>
+                <div class="level-field">
+                  <span class="level-label">Minimum level</span
+                  ><button class="level-trigger">
+                    error<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <button class="icon-btn" aria-label="Disconnect payments">
+                  <svg class="icon"><use href="#i-trash-2" /></svg>
+                </button>
+                <div class="inline-error">
+                  <strong>Couldn't change level.</strong> Nothing changed — try again.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-block">
+        <div class="panel-label">Panel 4 · Degraded grant + failed polls</div>
+        <p class="panel-note">
+          The grant's provider failure remains the loudest state. Row-level poll failures stay
+          visible beneath it because they answer a different question: whether ingestion itself last
+          ran.
+        </p>
+        <div class="panel">
+          <div class="room">
+            <div class="grant-card">
+              <div class="grant-top">
+                <span class="grant-mark"
+                  ><svg class="icon"><use href="#i-activity" /></svg></span
+                ><span class="grant-copy"
+                  ><span class="grant-name"
+                    >Sentry
+                    <span class="health warning"
+                      ><svg class="icon sm"><use href="#i-triangle-alert" /></svg>Degraded</span
+                    ></span
+                  ><span class="grant-meta"
+                    ><span class="mono">acme-inc</span> · checked 2 minutes ago</span
+                  ></span
+                ><button class="btn">
+                  <svg class="icon sm"><use href="#i-refresh-cw" /></svg>Re-check
+                </button>
+              </div>
+              <div class="warning-banner">
+                <svg class="icon"><use href="#i-triangle-alert" /></svg
+                ><span
+                  ><strong>Sentry says:</strong> The authorization has been revoked. Motir cannot
+                  read this organisation's issues until somebody reconnects it — nothing new will
+                  reach the board in the meantime.</span
+                >
+              </div>
+            </div>
+            <div class="section">
+              <div class="section-label">Monitored projects</div>
+              <p class="section-hint">
+                Nothing new arrives from these while the connection is degraded.
+              </p>
+              <div class="rows">
+                <div class="row">
+                  <svg class="icon"><use href="#i-bug" /></svg>
+                  <div class="row-main">
+                    <div class="slug">web-app</div>
+                    <div class="bound">Bound 3 days ago</div>
+                    <div class="poll warning">
+                      <svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                      ><span
+                        ><strong>Couldn't check for new errors:</strong> Sentry refused this
+                        connection. Last successful check today at 09:30.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="level-field">
+                    <span class="level-label">Minimum level</span
+                    ><button class="level-trigger">
+                      Every level<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-btn" aria-label="Disconnect web-app">
+                    <svg class="icon"><use href="#i-trash-2" /></svg>
+                  </button>
+                </div>
+                <div class="row">
+                  <svg class="icon"><use href="#i-bug" /></svg>
+                  <div class="row-main">
+                    <div class="slug">worker</div>
+                    <div class="bound">Bound 3 days ago</div>
+                    <div class="poll warning">
+                      <svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                      ><span
+                        ><strong>Couldn't check for new errors:</strong> Sentry refused this
+                        connection. Last successful check today at 09:30.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="level-field">
+                    <span class="level-label">Minimum level</span
+                    ><button class="level-trigger">
+                      warning<svg class="icon sm"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </div>
+                  <button class="icon-btn" aria-label="Disconnect worker">
+                    <svg class="icon"><use href="#i-trash-2" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
