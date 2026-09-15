@@ -19,6 +19,7 @@ import {
   Sparkles,
   SunMoon,
   Users,
+  Stamp,
 } from 'lucide-react';
 import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
 import { PLAN_SPRINTS_HREF } from '../backlog/_components/aiSprintPlanShared';
@@ -315,6 +316,14 @@ export function AppCommandPalette({
         label: t('commandPalette.goToReports'),
         icon: <BarChart3 />,
         onSelect: () => go('/reports'),
+      }),
+      // Approval records (MOTIR-5302) — gated by the same `PROJECT_NAV_ACCESS`
+      // entry the rail reads, so the two cannot disagree about who is offered it.
+      ...offerNav('/approvals', {
+        id: 'nav-approval-records',
+        label: t('commandPalette.goToApprovalRecords'),
+        icon: <Stamp />,
+        onSelect: () => go('/approvals'),
       }),
       ...offerNav('/filters', {
         id: 'nav-filters',

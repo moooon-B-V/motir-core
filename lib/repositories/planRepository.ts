@@ -355,6 +355,70 @@ export const planRepository = {
   },
 
   /**
+   * ONE PAGE of the plans related to a work item — the paging half of the item
+   * page's PLAN HISTORY read (Story MOTIR-5542 · MOTIR-5546). Returns only each
+   * plan's `id` and `createdAt`: the page's order and its cursor, nothing else.
+   * The rows the page is folded from (and the plan fields it renders) are
+   * `planItemRepository.findHistoryByWorkItemId`, called with these ids.
+   *
+   * ⚠️ PAGINATION IS BY PLAN, NOT BY PROPOSAL, and that is why this is its own
+   * query. A plan expanding a story into eight subtasks holds eight `add` rows
+   * naming the story, so a row-level `take` would cut one plan across two pages
+   * and the fold would render it twice. Paging the DISTINCT plans first bounds
+   * the page in the unit the page shows.
+   *
+   * "Related" is the three arms the history read folds — see
+   * {@link planItemRepository.findHistoryByWorkItemId} for why each exists.
+   * Prisma renders `items: { some }` as `plan.id IN (SELECT plan_id FROM
+   * plan_item WHERE …)`, which the planner drives from the two plan_item
+   * indexes (`[workItemId, workspaceId]`, `[parentRef, workspaceId]`) rather
+   * than from the project's plan list; the page is then a sort of the related
+   * plans only. No further index is needed for the keyset below.
+   *
+   * ALL FIVE statuses — history is not only what landed. Keyset cursor on
+   * `(createdAt, id)` ascending; `workspaceId` is an explicit predicate because
+   * RLS is inert under the dev/CI superuser (finding #26), and `projectId`
+   * keeps a caller browsing one project out of another project's plans.
+   */
+  async findPageRelatedToWorkItem(
+    workItemId: string,
+    workspaceId: string,
+    projectId: string,
+    limit: number,
+    after: { createdAt: Date; id: string } | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Plan, 'id' | 'createdAt'>>> {
+    const client = tx ?? dbRead;
+    return client.plan.findMany({
+      where: {
+        workspaceId,
+        projectId,
+        items: {
+          some: {
+            workspaceId,
+            OR: [
+              { workItemId, op: 'add' },
+              { workItemId, op: { in: ['modify', 'remove'] } },
+              { parentRef: workItemId, op: 'add' },
+            ],
+          },
+        },
+        ...(after
+          ? {
+              OR: [
+                { createdAt: { gt: after.createdAt } },
+                { createdAt: after.createdAt, id: { gt: after.id } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, createdAt: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
+  /**
    * How many plans this project holds per lifecycle status, in ONE `groupBy`
    * (MOTIR-3235) — the numbers the tab strip renders beside its labels.
    *

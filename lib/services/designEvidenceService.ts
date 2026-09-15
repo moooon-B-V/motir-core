@@ -17,6 +17,7 @@ import { headPrivateBlob, mintPrivateUploadToken, putPrivateAttachment } from '@
 import { MAX_UPLOAD_BYTES, isAllowedDesignAssetType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
+  DesignCardClosedError,
   DesignEvidenceBlobMissingError,
   DesignEvidenceEmptyError,
   DesignEvidenceImageRetiredError,
@@ -316,6 +317,56 @@ async function assertSomethingWaits(
 }
 
 /**
+ * Refuse any change to the design result of a CLOSED card — one whose status is
+ * in its project's `done` category, `cancelled` included (MOTIR-5556; ADR §6c
+ * SECOND AMENDMENT). The category is resolved through the project's workflow by
+ * the same predicate readiness applies to a `blocked_by` edge, never by
+ * comparing a key to `'done'`, so a renamed done status is closed too.
+ *
+ * ⚠️ It reads the CARD's status, never a gate. A design approved through its
+ * pull request raises no `design_result` gate (AMENDMENT 4 Q8) and is closed
+ * exactly the same.
+ *
+ * Without a `tx` it tests the status the caller already read — the courtesy
+ * pre-check that stops a doomed publish uploading anything. With one it LOCKS
+ * the work item and re-reads it, which is the authoritative check; see the
+ * lock-order note in {@link persistEvidence}.
+ */
+async function assertCardOpen(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  // ⚠️ The status vocabulary is a policy-gated read, so it is ALWAYS given a bound
+  // transaction — the caller's, or one opened here. Unbound under the runtime role
+  // it returns no statuses and raises nothing, so every card would read as open
+  // and the refusal would never fire (`tests/rls/call-site-guard.test.ts`).
+  if (!tx) {
+    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (bound) =>
+      assertStatusOpen(item, ctx, bound),
+    );
+  }
+  await workItemRepository.lockById(item.id, tx);
+  const current = (await workItemRepository.findById(item.id, tx)) ?? item;
+  return assertStatusOpen(current, ctx, tx);
+}
+
+async function assertStatusOpen(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    [item.projectId],
+    ctx.workspaceId,
+    tx,
+  );
+  if (isTerminalStatus(item, terminalByProject)) {
+    throw new DesignCardClosedError(item.identifier, item.status);
+  }
+}
+
+/**
  * Idempotency: a CI redelivery of the SAME commit+producer is a no-op — the
  * current result already records it, so return it (no re-upload, no duplicate
  * history row). Null when there is no matching current result.
@@ -418,14 +469,33 @@ async function persistEvidence(
     // Lock BEFORE reading what to supersede — the decision is read-derived, so
     // an unlocked read lets two publishes both target the same current row.
     await designEvidenceRepository.lockCurrentByWorkItem(args.item.id, tx);
+
+    // ⚠️ A CLOSED CARD TAKES NO NEW VERSION — read HERE, under a `work_item` lock,
+    // and the POSITION is the contract (MOTIR-5556; ADR §6c SECOND AMENDMENT).
+    //
+    // LOCK ORDER on this path: `approval_gate` (the supersede above) →
+    // `design_evidence` (the line above) → `work_item` (this check). That is the
+    // order `approvalGatesService.decide` takes — the gate FOR UPDATE, then the
+    // pin's `design_evidence` lock, then the kind's effect, which transitions the
+    // card and locks its row. Locking `work_item` any earlier would take the last
+    // two in the opposite order and deadlock on exactly the race this check is
+    // for: an Approve that closes the card, landing while this publish runs.
+    // Resolved by waiting instead:
+    //
+    //   · the approval wins → this transaction waits on the gate (or on the row
+    //     the pin holds), then reads `done` here and is refused. Nothing written.
+    //   · the publish wins → it commits first; `decide` re-reads the gate the
+    //     supersede above retired and refuses it. The card never reaches `done`.
+    await assertCardOpen(args.item, ctx, tx);
+
     const prior = await designEvidenceRepository.findCurrentByWorkItem(args.item.id, tx);
     if (prior) {
       await designEvidenceRepository.markSupersededByWorkItem(args.item.id, tx);
-      // ⚠️ PIN, do NOT FREEZE (ADR §6c). The supersede ALWAYS proceeds — a design
-      // legitimately evolves after approval, and 9.2's revise loop depends on
-      // republishing, which is where this deliberately diverges from the
-      // acceptance domain's `AcceptanceEvidenceAlreadyApprovedError` (MOTIR-2764,
-      // `lib/acceptanceEvidence/errors.ts`). What the pin changes is ONE thing:
+      // ⚠️ THE PIN (ADR §6c). On a card that is still OPEN the supersede always
+      // proceeds — the revise loop depends on republishing, and a card reopened
+      // after approval is decided again. A CLOSED card never reaches this line
+      // (`assertCardOpen` above, MOTIR-5556): a design evolves after approval
+      // only once a person reopens its card. What the pin changes is ONE thing:
       // an approved version's attachments are not handed to the orphan-GC.
       //
       // ⚠️ The predicate reads `pinnedAt` ON THE ROW, and that is what makes it
@@ -609,6 +679,9 @@ export const designEvidenceService = {
     // whole publish and is checked there, not per grant.
     const image = input.files.find((file) => file.kind === 'image');
     if (image) throw new DesignEvidenceImageRetiredError(image.sourcePath);
+    // A grant for a closed card is a publish that can never succeed. The mint
+    // writes no row, so the unlocked read is the whole check here.
+    await assertCardOpen(item, ctx);
     await assertSomethingWaits(item, ctx);
 
     const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
@@ -662,8 +735,10 @@ export const designEvidenceService = {
 
     if (!input.assets || input.assets.length === 0) throw new DesignEvidenceEmptyError();
     assertResultShape(input.assets, input.noteMd);
-    // Before idempotency, so a redelivery after the last dependent closed is
-    // refused like any other publish rather than handed the stale result.
+    // Before idempotency, so a redelivery after the card closed or the last
+    // dependent closed is refused like any other publish rather than handed the
+    // stale result. `persistEvidence` re-reads both inside its transaction.
+    await assertCardOpen(item, ctx);
     await assertSomethingWaits(item, ctx);
 
     const idempotent = await findIdempotentExisting(
@@ -765,6 +840,7 @@ export const designEvidenceService = {
     // `recordFromPathnames` re-asserts both, and the in-transaction read is the
     // authoritative one.
     assertResultShape(input.assets, input.noteMd);
+    await assertCardOpen(item, ctx);
     await assertSomethingWaits(item, ctx);
 
     const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
@@ -869,6 +945,10 @@ export const designEvidenceService = {
         // CLAUDE.md). The lock is what makes "the row I read is the row I write"
         // true here.
         await designEvidenceRepository.lockCurrentByWorkItem(item.id, tx);
+        // A closed card gives up its result as little as it takes a new one
+        // (MOTIR-5556). Same lock order as the publish: `design_evidence`, then
+        // `work_item`.
+        await assertCardOpen(item, ctx, tx);
         const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, tx);
         if (!current) throw new DesignEvidenceNoCurrentResultError(item.identifier);
         return designEvidenceRepository.withdrawById(

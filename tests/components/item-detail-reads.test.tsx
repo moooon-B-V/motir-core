@@ -159,8 +159,14 @@ vi.mock('@/lib/services/sprintsService', () => ({
 // `ai:view_plan` — the one member whose condition is a PERMISSION rather than
 // the item's shape, so both arms are asserted below.
 const pendingPlans = deferred('pendingPlans', [], 'tierTwo');
+// The PLAN HISTORY read (MOTIR-5547 · design MOTIR-5545 § Plan history 1): tier
+// two, the same group and the same `ai:view_plan` condition as the pending read.
+const planHistory = deferred('planHistory', { items: [], nextCursor: null }, 'tierTwo');
 vi.mock('@/lib/services/plansService', () => ({
-  plansService: { listPendingProposalsForWorkItem: () => pendingPlans() },
+  plansService: {
+    listPendingProposalsForWorkItem: () => pendingPlans(),
+    listPlanHistoryForWorkItem: () => planHistory(),
+  },
 }));
 vi.mock('@/lib/services/workItemTodosService', () => ({
   workItemTodosService: {
@@ -297,6 +303,7 @@ beforeEach(() => {
   acceptanceResolve.mockClear();
   acceptanceEvidence.mockClear();
   pendingPlans.mockClear();
+  planHistory.mockClear();
   // One-shot: a queued `mockResolvedValueOnce` that a previous case did not
   // consume must not be waiting for this one. `mockReset` restores the
   // implementation `vi.fn()` was constructed with.
@@ -436,6 +443,9 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       // late, and it costs the group max() rather than sum() only while it is
       // IN the group — a serial await here is the shape MOTIR-3435 removed.
       'pendingPlans',
+      // The plan-history read (MOTIR-5547): the section renders with the first
+      // content, after Children, so it joins the group rather than trailing it.
+      'planHistory',
       // The held status moves (MOTIR-5528): the rail's status card draws them
       // under its value, so they are read with the rail, not after it.
       'heldTransitions',
@@ -479,6 +489,9 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     // the query is skipped rather than run-and-discarded, so the actor least
     // able to benefit from it never pays for it.
     expect(pendingPlans).not.toHaveBeenCalled();
+    // …and no plan-history read either (MOTIR-5547 AC 3): a row linking to a plan
+    // the viewer cannot open is worse than no row.
+    expect(planHistory).not.toHaveBeenCalled();
 
     releaseAll();
     await pending.catch(() => undefined);
@@ -496,6 +509,9 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     expect(pendingPlans).toHaveBeenCalledTimes(1);
     // It is IN the group: in flight while the deferred members are unresolved.
     expect(started).toContain('pendingPlans');
+    // The plan-history read rides the same condition, once (MOTIR-5547).
+    expect(planHistory).toHaveBeenCalledTimes(1);
+    expect(started).toContain('planHistory');
 
     releaseAll();
     await pending.catch(() => undefined);
