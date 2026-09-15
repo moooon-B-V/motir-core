@@ -199,6 +199,25 @@ describe('the call-to-action band (MOTIR-5229)', () => {
     expect(shallowPush).toHaveBeenCalledWith(link.getAttribute('href'));
   });
 
+  it('offers NO door when the result behind an awaiting gate was withdrawn — the empty state instead', () => {
+    renderWithIntl(
+      <DesignResultSection
+        evidence={null}
+        isDesignCard
+        gate={awaiting('band-withdrawn-result')}
+        canDecide
+        subject={null}
+        itemIdentifier="MOTIR-4321"
+        routedToLabel="Ada Lovelace"
+        routedToViewer
+      />,
+      { now: NOW },
+    );
+    expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
+    expect(screen.getByText(en.designResult.empty.title)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
+  });
+
   it('speaks zh', () => {
     const { container } = renderSection({ gate: awaiting('band-zh') }, 'zh');
     expect(screen.getByRole('link', { name: '审阅并批准' })).toBeTruthy();

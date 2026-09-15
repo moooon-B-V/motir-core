@@ -182,12 +182,26 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // rolled up to its story.
       await expect(page.getByText('Design result', { exact: false }).first()).toBeVisible();
 
-      // The mock, present as the sandboxed frame the sibling spec inspects in
-      // depth — asserted here only as ARRIVED, since what is new is that a tool
-      // put it there. (Since AMENDMENT 4 a result carries no screenshot and no
-      // inline note; the note as a LINK is MOTIR-5498's panel and MOTIR-5500's
-      // walk.)
-      await expect(page.locator('iframe').first()).toBeVisible();
+      // ⚠️ THE CARD INVITES; THE OVERLAY SHOWS IT (Story MOTIR-5215 · MOTIR-5229).
+      // The publish raised a gate this reviewer may decide, so the item page
+      // renders the call-to-action band with ONE door rather than the port —
+      // the design is reviewed full screen. The mock is therefore asserted as
+      // ARRIVED inside the approval overlay the door opens, which is still the
+      // point of this chapter: a tool call put it there. (Since AMENDMENT 4 a
+      // result carries no screenshot and no inline note; the note as a LINK is
+      // MOTIR-5498's panel and MOTIR-5500's walk.)
+      const door = page
+        .getByRole('main')
+        .locator('[data-surface="card"]')
+        .filter({ has: page.getByRole('heading', { level: 2, name: 'Design result' }) })
+        .getByRole('link', { name: 'Review & approve' });
+      await expect(door).toHaveCount(1);
+      await door.click();
+      const dialog = page.getByRole('dialog', { name: `Design result for ${seed.publishedKey}` });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('iframe').first()).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
       await beat();
     });
 

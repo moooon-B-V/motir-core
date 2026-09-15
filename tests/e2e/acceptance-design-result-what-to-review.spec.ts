@@ -91,8 +91,13 @@ test.describe('a design result shows only what to review', () => {
       // next chapter opens. What this story promised about WHAT TO REVIEW (the
       // mock, the note one link away, no screenshot) is asserted there, on the
       // surface that now shows it.
+      // Scoped to the Design result section: while this gate holds a move the
+      // status control carries a second door of the same name (MOTIR-5528).
+      const section = main(page)
+        .locator('[data-surface="card"]')
+        .filter({ has: page.getByRole('heading', { level: 2, name: en.designResult.title }) });
       await expect(
-        main(page).getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove }),
+        section.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove }),
       ).toHaveCount(1);
       await expect(main(page).getByRole('group', { name: PORT })).toHaveCount(0);
       await beat();

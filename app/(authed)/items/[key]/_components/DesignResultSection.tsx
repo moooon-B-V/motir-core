@@ -122,7 +122,14 @@ export function DesignResultSection({
 
   if (!shown) return <DesignResultPanel evidence={evidence} isDesignCard={isDesignCard} />;
 
-  if (shown.state === 'awaiting' && canDecide) {
+  // ⚠️ THE BAND INVITES A REVIEW ONLY WHEN THERE IS SOMETHING TO REVIEW. A gate
+  // can still read `awaiting` after its result was WITHDRAWN (the row survives;
+  // `evidence` is the CURRENT result, null once withdrawn). An invitation to
+  // review a design that is gone would be a door to nothing, so that case keeps
+  // the frame, flush, whose port draws the panel's own empty state and whose
+  // port-failed alert says why nothing is pressable — what the page drew before
+  // this story, minus the verbs.
+  if (shown.state === 'awaiting' && canDecide && evidence !== null) {
     return (
       <CallToActionBand
         version={shown.subjectVersion}
