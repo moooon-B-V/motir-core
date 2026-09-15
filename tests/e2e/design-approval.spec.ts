@@ -181,7 +181,13 @@ test.describe('a published design waits, the control clears it, and the work it 
       // ⚠️ THE PAGE INVITES AND SUBMITS NOTHING (MOTIR-5229). One control, and no
       // verb anywhere on the card: the decision is made in ONE place.
       await expect(page.getByText('Awaiting you', { exact: true })).toBeVisible();
-      const door = page.getByRole('link', { name: 'Review & approve' });
+      // Scoped to the Design result section: the status control carries a
+      // second door of the same name while this gate holds a move (MOTIR-5528).
+      const door = page
+        .getByRole('main')
+        .locator('[data-surface="card"]')
+        .filter({ has: page.getByRole('heading', { level: 2, name: 'Design result' }) })
+        .getByRole('link', { name: 'Review & approve' });
       await expect(door).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
@@ -236,6 +242,7 @@ test.describe('a published design waits, the control clears it, and the work it 
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+      // After the decision nothing holds a move, so neither door remains.
       await expect(page.getByRole('link', { name: 'Review & approve' })).toHaveCount(0);
     });
 

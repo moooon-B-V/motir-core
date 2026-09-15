@@ -117,9 +117,17 @@ function overlay(page: Page, seed: DesignApprovalSeed) {
 }
 
 /** Press the band's ONE control and wait for the design to be on screen in the
- *  overlay — the frame's port group, not merely a dialog. */
+ *  overlay — the frame's port group, not merely a dialog.
+ *
+ *  ⚠️ SCOPED TO THE DESIGN RESULT SECTION. The status control carries a second
+ *  door of the same name while this gate holds a move (MOTIR-5528), so a
+ *  page-rooted `Review & approve` matches two links. */
 async function openTheOverlay(page: Page, seed: DesignApprovalSeed) {
-  const door = page.getByRole('link', { name: 'Review & approve' });
+  const door = page
+    .getByRole('main')
+    .locator('[data-surface="card"]')
+    .filter({ has: page.getByRole('heading', { level: 2, name: 'Design result' }) })
+    .getByRole('link', { name: 'Review & approve' });
   await expect(door).toHaveCount(1);
   await door.click();
   const dialog = overlay(page, seed);
