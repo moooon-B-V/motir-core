@@ -1,4 +1,5 @@
 import {
+  ApprovalGatePendingError,
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
@@ -47,6 +48,9 @@ export const STATUS_TRANSITION_REFUSALS = [
   ProjectNotFoundError,
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
+  // MOTIR-5526 — an `awaiting` approval gate owns the target status. Cleared by a
+  // person deciding the gate, so a refusal and never a fault.
+  ApprovalGatePendingError,
 ] as const;
 
 /** An error `applyStatusTransition` raises as a REFUSAL — see the list above. */

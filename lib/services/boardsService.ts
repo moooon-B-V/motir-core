@@ -53,6 +53,7 @@ import type {
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
+  ApprovalGatePendingBoardMoveError,
   BoardColumnNotFoundError,
   BoardNotFoundError,
   ColumnNotEmptyError,
@@ -72,9 +73,11 @@ import {
   IllegalTransitionError,
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
+  ApprovalGatePendingError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
 // Boards service (Story 3.1) — business logic for the board entity. It hosts
@@ -503,8 +506,9 @@ export const boardsService = {
     target: MoveCardTarget,
     ctx: ServiceContext,
   ): Promise<MoveCardResultDto> {
-    const { row, appliedStatus, transition, columnName, swimlaneGroupBy } =
-      await withWorkspaceContext(ctx, async (tx) => {
+    let moved;
+    try {
+      moved = await withWorkspaceContext(ctx, async (tx) => {
         // Resolve + tenant-gate the board FIRST — before the card lock, and
         // deliberately (MOTIR-2952; the rule is docs/decisions/public-api-
         // conventions.md §4, the error-identity clause MOTIR-2919 added).
@@ -645,6 +649,21 @@ export const boardsService = {
           swimlaneGroupBy: board.swimlaneGroupBy,
         };
       });
+    } catch (err) {
+      // A move onto the column a pending approval owns (MOTIR-5526). Translated
+      // OUTSIDE the transaction, unlike the three translations inside it, because
+      // the board renders this refusal ON THE CARD with a door into the approval —
+      // so it needs the render payload, and that read must not run under the
+      // card's `FOR UPDATE` lock. The move itself has already rolled back.
+      if (err instanceof ApprovalGatePendingError) {
+        throw new ApprovalGatePendingBoardMoveError(
+          err.message,
+          await approvalGatesService.describePendingRefusal(err, ctx),
+        );
+      }
+      throw err;
+    }
+    const { row, appliedStatus, transition, columnName, swimlaneGroupBy } = moved;
 
     // A cross-column move IS a status transition — emit the same
     // `work-item/transitioned` event the direct updateStatus path emits

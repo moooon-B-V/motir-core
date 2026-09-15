@@ -150,7 +150,11 @@ test.describe('a published design waits, the control clears it, and the work it 
       ).toBeVisible();
       // Since MOTIR-5191 the pending state NAMES the person it waits on — the
       // seed's routed reviewer — rather than "this work item's assignee".
-      await expect(page.getByRole('main').getByText('Waiting on Robin Vale.')).toBeVisible();
+      // `exact`: since MOTIR-5528 the status control's held notice also says
+      // "…is waiting on Robin Vale.", and a substring match finds both.
+      await expect(
+        page.getByRole('main').getByText('Waiting on Robin Vale.', { exact: true }),
+      ).toBeVisible();
 
       // ⚠️ ABSENCE, NOT A DISABLED CONTROL — the card asks for exactly this
       // distinction. A disabled button still tells a reader the act is theirs

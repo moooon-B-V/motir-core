@@ -18,6 +18,7 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { readProjectForService } from '@/lib/workspaces/tenantRead';
+import { resolveStatusIntent } from '@/lib/workflows/statusIntent';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import {
   DEFAULT_STATUSES,
@@ -267,10 +268,10 @@ export const workflowsService = {
     target: { key: string; category: StatusCategoryDto },
   ): Promise<string | null> {
     const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
-    const byKey = statuses.find((s) => s.key === target.key);
-    if (byKey) return byKey.key;
-    const byCategory = statuses.find((s) => s.category === target.category);
-    return byCategory?.key ?? null;
+    // The rule itself is `resolveStatusIntent`, shared with the approval-gate
+    // guard in `applyStatusTransition`, which must apply it to statuses read
+    // inside a transaction already holding a row lock (MOTIR-5526).
+    return resolveStatusIntent(statuses, target);
   },
 
   /**

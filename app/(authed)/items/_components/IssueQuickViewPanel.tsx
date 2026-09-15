@@ -31,6 +31,8 @@ import { MultiSelectPicker, ValueChip } from '@/components/ui/MultiSelectPicker'
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
 import { StatusPicker } from '@/components/issues/StatusPicker';
+import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
+import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { SprintPicker } from '@/components/issues/SprintPicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
@@ -352,6 +354,13 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // the peek is `ready`. `active` is this surface's own open/closed state, which
   // is why the hook takes it rather than owning it.
   const ready = props.state === 'ready' ? props.data : null;
+  // The moves an approval HOLDS (MOTIR-5528) — above the early returns for the
+  // same hook-order reason; empty until the peek is `ready`.
+  const statusHeld = useStatusHeld(
+    ready?.heldTransitions,
+    ready?.workflow.statuses ?? [],
+    edit.effective?.status ?? ready?.status,
+  );
   const labelEdit = useLabelEditing({
     workItemId: ready?.id ?? '',
     projectKey: ready?.projectIdentifier ?? '',
@@ -944,9 +953,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                       statusLabel: next?.label ?? toStatusKey,
                       statusCategory: next?.category ?? view.statusCategory,
                     },
-                    () => changeStatusAction({ id: view.id, toStatusKey }),
+                    async () => {
+                      const res = await changeStatusAction({ id: view.id, toStatusKey });
+                      if (res.ok) statusHeld.onMoved(toStatusKey);
+                      else if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
+                        statusHeld.onRefused(toStatusKey, res.gate);
+                      }
+                      return res;
+                    },
                   );
                 }}
+                held={statusHeld.held}
               />
             }
           >
@@ -956,6 +973,13 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               label={view.statusLabel}
             />
           </EditableRailField>
+          {/* The held message under the status field (MOTIR-5528; design panel 13
+              of quick-view.mock.html) — visible without opening the picker. */}
+          {statusHeld.lines.length > 0 ? (
+            <div className="px-(--spacing-control-x)">
+              <StatusHeldNotice itemKey={view.identifier} lines={statusHeld.lines} />
+            </div>
+          ) : null}
 
           {/* Repositories (Story MOTIR-2725 · MOTIR-2416) — SECOND in the rail,
               immediately after Status, per design/work-items/

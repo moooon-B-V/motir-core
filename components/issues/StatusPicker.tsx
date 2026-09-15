@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
+import { GitMerge, Lock } from 'lucide-react';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { statusDotColor } from '@/lib/workflows/statusColor';
 import type {
@@ -45,6 +46,14 @@ export interface StatusPickerProps {
   autoOpen?: boolean;
   /** Fired when the picker menu closes without/after a pick (Subtask 2.5.5). */
   onClose?: () => void;
+  /**
+   * The targets an approval HOLDS (MOTIR-5528; ADR `approval-gates.md` §6d rules 1
+   * and 2b). Each stays in the list, locked, tagged *needs approval* (waiting on a
+   * decision) or *moves on merge* (waiting on the merge) — shown so the reader
+   * learns the move exists and why it is held, and never committable. Every other
+   * target is unchanged.
+   */
+  held?: ReadonlyArray<{ statusKey: string; waitingOn: 'decision' | 'merge' }>;
 }
 
 export function StatusPicker({
@@ -58,8 +67,10 @@ export function StatusPicker({
   disabled,
   autoOpen,
   onClose,
+  held,
 }: StatusPickerProps) {
   const t = useTranslations('ui');
+  const tHeld = useTranslations('approvalGate.statusHeld');
   const options = useMemo<ComboboxOption<string>[]>(() => {
     const byKey = new Map(statuses.map((s) => [s.key, s]));
     const current = byKey.get(value);
@@ -73,8 +84,27 @@ export function StatusPicker({
       );
       allowed = statuses.filter((s) => s.key === value || reachableIds.has(s.id));
     }
-    return allowed.map((s) => ({ value: s.key, label: s.label, icon: statusDot(s) }));
-  }, [statuses, transitions, policyMode, value]);
+    return allowed.map((s) => {
+      const hold = held?.find((h) => h.statusKey === s.key);
+      if (!hold) return { value: s.key, label: s.label, icon: statusDot(s) };
+      const Glyph = hold.waitingOn === 'merge' ? GitMerge : Lock;
+      return {
+        value: s.key,
+        label: s.label,
+        icon: statusDot(s),
+        disabled: true,
+        trailing: (
+          <span
+            data-held-tag={hold.waitingOn}
+            className="inline-flex items-center gap-1 text-xs text-(--el-text-secondary)"
+          >
+            <Glyph aria-hidden className="h-3 w-3" />
+            {tHeld(hold.waitingOn === 'merge' ? 'movesOnMerge' : 'needsApproval')}
+          </span>
+        ),
+      };
+    });
+  }, [statuses, transitions, policyMode, value, held, tHeld]);
 
   return (
     <div className="flex flex-col gap-1">

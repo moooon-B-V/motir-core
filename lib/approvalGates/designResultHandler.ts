@@ -67,6 +67,26 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     return subject?.commitSha ?? null;
   },
 
+  /**
+   * The card's CURRENT design result — the `design_evidence_one_current_per_item`
+   * row — or null when nothing has been published (ADR §6d AMENDMENT, rule 7).
+   *
+   * ⚠️ THE CURRENT ROW, which is the opposite of `resolveSubject`'s discipline and
+   * correct for the opposite reason. `resolveSubject` answers *what was THIS gate
+   * asked about* and must never re-point at a newer version. This answers *what
+   * would a gate raised NOW ask about*, which is exactly the current version.
+   */
+  async currentSubject({ item, tx }: GateRoutingArgs): Promise<string | null> {
+    // A design card with an OPEN delivering pull request raises NO design gate
+    // (`design-result.md` AMENDMENT 4 Q8 · MOTIR-5534): the approve-to-merge gate
+    // decides it. The publish path asks exactly this question before it raises,
+    // so the re-ask must too, or returning to review would raise the very gate
+    // the publish declined to.
+    if ((await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) > 0) return null;
+    const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, tx);
+    return current?.id ?? null;
+  },
+
   /** ADR §2: `assigneeId ?? reporterId` — exactly ONE recipient, assignee first.
    *
    *  Called by the PUBLISH path, which is where §6a says the answer is computed
@@ -168,7 +188,13 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
 
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx);
+    // `decidingGateId`: this gate is still `awaiting` here — the door writes the
+    // decision AFTER the effect — so without it the approval-gate guard would
+    // refuse the very move this approval exists to make (ADR §6d AMENDMENT,
+    // rule 5). It exempts THIS gate only.
+    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
+      decidingGateId: gate.id,
+    });
     return { statusWritten: resolvedStatusKey };
   },
 
