@@ -3,7 +3,7 @@
 import { useCallback, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { CircleDashed, Pencil } from 'lucide-react';
+import { CircleDashed, GitPullRequest, Pencil } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ import type {
   ApprovalGateStateDTO,
   ApprovalQueueRowDto,
   DesignResultSubjectSummaryDTO,
+  PullRequestApprovalSubjectSummaryDTO,
   PullRequestMergeSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
 
@@ -91,6 +92,14 @@ function useOpenApproval(): (row: ApprovalQueueRowDto) => void {
 
 /** A row's glyph: the shipped design-type mark for the one registered kind. */
 function KindGlyph({ row }: { row: ApprovalQueueRowDto }) {
+  if (row.kind === 'pull_request_approval') {
+    // A LIVE kind's mark (design-notes § 23, Story MOTIR-4909 · MOTIR-5485): the
+    // pull-request glyph in the accent ink — never the unregistered row's faint
+    // dashed circle, which says the kind is not built.
+    return (
+      <GitPullRequest className="h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
+    );
+  }
   return row.kind === 'design_result' ? (
     // `lib/issues/workItemTypeMeta.ts`'s own glyph + hue for `design` — a design
     // result IS a design, so the reader already knows this mark.
@@ -103,6 +112,24 @@ function KindGlyph({ row }: { row: ApprovalQueueRowDto }) {
   );
 }
 
+/**
+ * The pull-request SET an approve-and-merge gate asks about (design-notes § 23): one or
+ * two named in full, three or more the first two and then *+n more*. The cell's `title`
+ * carries the whole list, in the set's canonical order, so nothing is hidden from a
+ * reader who asks.
+ */
+function PullRequestSetLine({ subject }: { subject: PullRequestApprovalSubjectSummaryDTO }) {
+  const t = useTranslations('workbench.approvals.pullRequest');
+  const names = subject.members.map((member) => `${member.repo} · #${member.number}`);
+  const shown =
+    names.length > 2 ? [...names.slice(0, 2), t('more', { count: names.length - 2 })] : names;
+  return (
+    <span className="truncate text-xs text-(--el-text-secondary)" title={names.join(', ')}>
+      {shown.join(', ')}
+    </span>
+  );
+}
+
 /** What the row says about the thing being decided, per kind. */
 function SubjectMeta({ row }: { row: ApprovalQueueRowDto }) {
   const t = useTranslations('workbench.approvals');
@@ -112,6 +139,9 @@ function SubjectMeta({ row }: { row: ApprovalQueueRowDto }) {
     // second is a gate worth withdrawing, and collapsing them would report a
     // shipped kind as unbuilt.
     return <span className="truncate text-xs text-(--el-text-secondary)">{t('subjectGone')}</span>;
+  }
+  if (row.subject.kind === 'pull_request_approval') {
+    return <PullRequestSetLine subject={row.subject} />;
   }
   if (row.subject.kind === 'pull_request_merge') {
     // A REGISTERED kind with a real subject (MOTIR-4793): the row names the pull
@@ -172,14 +202,24 @@ function ApprovalRow({ row }: { row: ApprovalQueueRowDto }) {
   const waitedLabel = useWaitedLabel();
   const openApproval = useOpenApproval();
   const decidedState = useDecidedGateState(row.gateId);
+  const router = useRouter();
 
+  // ⚠️ AN APPROVE-AND-MERGE ROW LEADS TO THE CARD, NOT TO AN OVERLAY (§ 23, MOTIR-5485).
+  // The Development frame on the item page is where it is decided; the full-screen
+  // door for this kind is MOTIR-5437's, which swaps *Open work item* for *Review*. Until
+  // then the row is a plain link and opens nothing in the list.
+  const pullRequestSet = row.subject?.kind === 'pull_request_approval';
   // A kind with no renderer, or a subject that is gone, still HAS the door — the
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
   // decide, so their Decide cell keeps § 20's treatment.
-  const renderable = row.subject !== null && row.subject.kind === 'design_result';
+  const renderable =
+    row.subject !== null && (row.subject.kind === 'design_result' || pullRequestSet);
   const settled = decidedState !== null;
+  const cardHref = `/items/${row.workItem.identifier}`;
 
   function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
+    // The card itself — the browser's own navigation, nothing intercepted.
+    if (pullRequestSet) return;
     // `usePeekRowClick`'s exact condition (`IssueQuickView.tsx`): a modifier or
     // non-primary click keeps its native meaning — the card, in a new tab —
     // which is why the row's href has to be real. Keyboard Enter on the anchor
@@ -211,8 +251,11 @@ function ApprovalRow({ row }: { row: ApprovalQueueRowDto }) {
             with the item. */}
         <Link
           href={`/items/${row.workItem.identifier}`}
-          aria-haspopup="dialog"
-          aria-label={t('reviewRow', { key: row.workItem.identifier, title: row.workItem.title })}
+          aria-haspopup={pullRequestSet ? undefined : 'dialog'}
+          aria-label={t(pullRequestSet ? 'pullRequest.openRow' : 'reviewRow', {
+            key: row.workItem.identifier,
+            title: row.workItem.title,
+          })}
           onClick={onRowClick}
           className="absolute inset-0 z-0 focus:outline-none"
         />
@@ -230,7 +273,7 @@ function ApprovalRow({ row }: { row: ApprovalQueueRowDto }) {
             settled || !renderable ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
           )}
         >
-          {t(`kind.${row.kind}`)}
+          {pullRequestSet ? t('pullRequest.kindLabel') : t(`kind.${row.kind}`)}
         </span>
         <SubjectMeta row={row} />
       </div>
@@ -270,6 +313,21 @@ function ApprovalRow({ row }: { row: ApprovalQueueRowDto }) {
         <div role="cell" className="flex min-w-0 items-center md:justify-end">
           {settled ? (
             <StatePill state={decidedState} />
+          ) : pullRequestSet ? (
+            row.canDecide ? (
+              // The same page as the row — and no `aria-haspopup`, because nothing opens.
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="relative z-10"
+                onClick={() => router.push(cardHref)}
+              >
+                {t('pullRequest.openWorkItem')}
+              </Button>
+            ) : (
+              <Pill tone="awaiting">{tGate('state.awaiting')}</Pill>
+            )
           ) : !renderable ? (
             <Pill tone="archived">{t('notBuiltYet')}</Pill>
           ) : !row.canDecide ? (
