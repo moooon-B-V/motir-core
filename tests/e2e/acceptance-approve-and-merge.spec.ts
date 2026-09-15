@@ -273,13 +273,15 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
     await beat();
 
     await chapter('The card: one frame over both pull requests and How to test', async () => {
+      // The row's own decide-cell control, NOT the whole-row overlay link: that link is
+      // `absolute inset-0 z-0`, so the row's work-item link (`z-10`) covers its centre and a
+      // pointer click there never lands on it — CI run 34952412734 retried it to the timeout.
       await page
-        .getByRole('link', {
-          name: fill(en.workbench.approvals.pullRequest.openRow, {
-            key: seed.merged.identifier,
-            title: seed.merged.title,
-          }),
-        })
+        .getByRole('table', { name: 'To approve' })
+        .getByTestId(/^approval-row-/)
+        .filter({ hasText: en.workbench.approvals.pullRequest.kindLabel })
+        .filter({ hasText: seed.merged.identifier })
+        .getByRole('button', { name: en.workbench.approvals.pullRequest.openWorkItem, exact: true })
         .click();
       await expect(page).toHaveURL(new RegExp(`/items/${seed.merged.identifier}$`));
       const dev = developmentCard(page);
@@ -456,14 +458,11 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       await expect(row.getByText(zh.workbench.approvals.pullRequest.kindLabel)).toBeVisible({
         timeout: 60_000,
       });
-      await page
-        .getByRole('link', {
-          name: fill(zh.workbench.approvals.pullRequest.openRow, {
-            key: seed.zh.identifier,
-            title: seed.zh.title,
-          }),
-        })
+      // The row's decide-cell control, for the reason the English chapter gives.
+      await row
+        .getByRole('button', { name: zh.workbench.approvals.pullRequest.openWorkItem, exact: true })
         .click();
+      await expect(page).toHaveURL(new RegExp(`/items/${seed.zh.identifier}$`));
       const dev = developmentCard(page, zh.github.development.title);
       await expect(dev).toHaveCount(1, { timeout: 60_000 });
       await expect(dev.getByRole('button', { name: zpra.verb.approveAndMerge })).toBeVisible();
