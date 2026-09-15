@@ -235,7 +235,11 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // approve.
       const designSection = page.getByRole('heading', { name: 'Design result', level: 2 });
       await expect(designSection).toBeVisible();
-      await expect(page.getByText('No decision · no one to attribute')).toBeVisible();
+      // Scoped to the live `main` subtree, never page-rooted (MOTIR-5037): the
+      // record line carries no role of its own.
+      await expect(
+        page.getByRole('main').getByText('No decision · no one to attribute'),
+      ).toBeVisible();
       await expect(page.getByRole('link', { name: 'Review & approve' })).toHaveCount(0);
       await expect(page.locator('iframe')).toHaveCount(0);
 
