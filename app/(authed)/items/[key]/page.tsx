@@ -29,6 +29,7 @@ import { formatDate } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
 import { ArchivedBanner } from './_components/ArchivedBanner';
 import { PendingPlanNotice } from './_components/PendingPlanNotice';
+import { PlanHistorySection, PLAN_HISTORY_FIRST_PAGE } from './_components/PlanHistorySection';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
@@ -228,6 +229,7 @@ export default async function IssueDetailPage({
     workItemRefs,
     todoList,
     pendingPlans,
+    planHistory,
     heldTransitions,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
@@ -310,6 +312,26 @@ export default async function IssueDetailPage({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         })
+      : null,
+    // The PLAN HISTORY — every plan that created, changed, archived or expanded
+    // this card (Story MOTIR-5542 · MOTIR-5547 · design MOTIR-5545 § Plan
+    // history 1). TIER TWO, IN THIS GROUP: the section renders with the first
+    // content, after Children, so it moves nothing on arrival — and a tier-three
+    // read would re-run on every activity-tab switch (the lower boundary is keyed
+    // on it). One page of at most 5 plans over the two `plan_item` indexes; a card
+    // with no related plan pays the index probe only. CONDITIONAL on
+    // `ai:view_plan`, exactly as the pending read above. The CATCH is the page's
+    // own rule: a section whose read fails degrades to its own error and retry,
+    // it does not reject the group.
+    canViewPlans
+      ? plansService
+          .listPlanHistoryForWorkItem(
+            ctx.projectId,
+            item.id,
+            { limit: PLAN_HISTORY_FIRST_PAGE },
+            { userId: ctx.userId, workspaceId: ctx.workspaceId },
+          )
+          .catch(() => 'failed' as const)
       : null,
     // The moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528). TIER TWO, in
     // THIS group: the status control is in the rail the reader lands on, and its
@@ -590,6 +612,18 @@ export default async function IssueDetailPage({
                 >
                   <ChildList items={detail.children} workflow={detail.workflow} members={members} />
                 </ChildPanel>
+                {/* MOTIR-5547: the plan history — after Children (a plan that added
+              work items under this card reads right under them), before the late
+              stack's lower half. Renders nothing for an actor without
+              `ai:view_plan` (then `planHistory` is null: the read was skipped)
+              and nothing for a card no plan ever touched. */}
+                {planHistory ? (
+                  <PlanHistorySection
+                    itemId={item.id}
+                    identifier={item.identifier}
+                    initial={planHistory}
+                  />
+                ) : null}
                 {/* 5.2.5: the Attachments panel — after Children, before Activity
               (the reserved Epic-5 slot, per the attachments mockup's panel 0;
               content-width and multi-row, so the left column — the rail is
