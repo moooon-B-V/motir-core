@@ -297,6 +297,10 @@ rows record the iterations.
 > this very table. **Acceptance receipts are signed-and-frozen; design results
 > are superseded-by-design** — same storage shape, opposite lifecycle. See
 > `acceptance-receipt-lifecycle.md` §5.
+>
+> **⚠️ AMENDED (MOTIR-5554, 2026-09-15):** superseded-by-design holds for every
+> card that is not `done`. A design card in the `done` category is CLOSED — §7's
+> amendment and `approval-gates.md` §6c's second amendment.
 
 ### 5. The `text/html` serving posture — THREE layers, all required
 
@@ -970,6 +974,19 @@ left unsaid, and what the shipped publish contradicted (it raised a
 > `superseded` state is written by §4's own supersede path, so a gate whose
 > subject it retires is retired with it. `approval-gates.md` §6b / §6c carry the
 > shipped notes.
+
+> **⚠️ AMENDED (MOTIR-5554, 2026-09-15) — A DONE DESIGN CARD IS CLOSED, and §4's
+> _"A DESIGN RESULT IS NEVER FROZEN"_ no longer holds for one.** A publish (inline
+> or by pathnames), an upload-grant mint and a withdrawal on a design card whose
+> status is in the `done` category — `cancelled` included — are refused with
+> `DESIGN_CARD_CLOSED` (409), whose message names the two ways forward: reopen the
+> card by hand, or propose a new design card beside the one that needs it. The
+> check reads the CARD's status, never a gate, so a design approved through its
+> pull request is closed the same way. Every card that is not `done` — and so the
+> whole revise loop — supersedes exactly as §4 says. _PIN, do not FREEZE_ is
+> replaced by _a design evolves after approval only once a person reopens its
+> card_. Read `approval-gates.md` §6c's second amendment for the four acts, the
+> race and its lock order.
 
 ~~Story 9.2 keeps the runtime human-in-the-loop semantics in full: the "for
 review" state, HOLDING the `depends_on` dependents, the revise-chat re-dispatch,

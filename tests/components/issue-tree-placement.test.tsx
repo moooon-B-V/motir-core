@@ -287,4 +287,27 @@ describe('IssueTreeTable — a reported placement change', () => {
       commands!.reportWorkItemPlacement({ workItemId: 'w1', folderId: 'f1', parentId: null }),
     ).not.toThrow();
   });
+
+  // Unlike New folder (MOTIR-5573), a placement report is NOT held for a tree
+  // that has not registered: it is sent only after the write committed, so a
+  // tree that mounts later reads that placement from the server, and replaying
+  // the report would apply an old delta over a newer read.
+  it('a report sent before a tree registers is not replayed when one does', () => {
+    let commands: ReturnType<typeof useFolderCommands> = null;
+    function Caller() {
+      commands = useFolderCommands();
+      return null;
+    }
+    rtlRender(
+      <FolderCommandsProvider>
+        <Caller />
+      </FolderCommandsProvider>,
+    );
+    commands!.reportWorkItemPlacement({ workItemId: 'w1', folderId: 'f1', parentId: null });
+
+    const handler = vi.fn();
+    act(() => commands!.registerPlacementHandler(handler));
+
+    expect(handler).not.toHaveBeenCalled();
+  });
 });

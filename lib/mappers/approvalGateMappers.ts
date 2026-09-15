@@ -3,8 +3,9 @@ import type {
   ApprovalGateDTO,
   ApprovalGateSubjectSummaryDTO,
   ApprovalQueueRowDto,
+  ApprovalRecordDecidedRowDto,
 } from '@/lib/dto/approvalGate';
-import type { AwaitingGateRow } from '@/lib/repositories/approvalGateRepository';
+import type { AwaitingGateRow, RecordGateRow } from '@/lib/repositories/approvalGateRepository';
 
 // Prisma row → the wire DTO the decide control / Approvals tab reads (Story
 // MOTIR-4778 · Subtask MOTIR-4788, widened by MOTIR-4912 with the ADR §6a AUDIT
@@ -61,6 +62,39 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
  * type. If that predicate is ever widened this line is where the type-check
  * fails, which is the point of narrowing it.
  */
+/**
+ * ONE decided gate → the Approvals room's decided row (MOTIR-5301). The read
+ * selects only `approved` / `changes_requested`, so a row in any other state here
+ * is a predicate defect upstream, and this throws rather than drawing it.
+ */
+export function toApprovalRecordDecidedRowDto(
+  row: RecordGateRow,
+  subject: ApprovalGateSubjectSummaryDTO | null,
+): ApprovalRecordDecidedRowDto {
+  if (row.state !== 'approved' && row.state !== 'changes_requested') {
+    throw new Error(`approval gate ${row.id} is ${row.state}, not a decision`);
+  }
+  if (!row.decidedAt) throw new Error(`approval gate ${row.id} is ${row.state} with no decidedAt`);
+  return {
+    gateId: row.id,
+    kind: row.kind,
+    state: row.state,
+    decidedAt: row.decidedAt.toISOString(),
+    decidedByLabel: row.decidedByLabel,
+    subjectVersion: row.subjectVersion,
+    waitingSince: row.createdAt.toISOString(),
+    workItem: {
+      id: row.workItem.id,
+      key: row.workItem.key,
+      identifier: row.workItem.identifier,
+      title: row.workItem.title,
+      kind: row.workItem.kind,
+      type: row.workItem.type,
+    },
+    subject,
+  };
+}
+
 export function toApprovalQueueRowDto(
   row: AwaitingGateRow,
   subject: ApprovalGateSubjectSummaryDTO | null,

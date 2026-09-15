@@ -245,6 +245,8 @@ export const config = {
     '/docs/:path*',
     '/legal/:path*',
     '/p/:path*',
+    // The Approval records room (MOTIR-5302).
+    '/approvals/:path*',
     '/backlog/:path*',
     '/boards/:path*',
     // The Codebase room (MOTIR-1768), and the address it absorbed — which still

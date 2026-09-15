@@ -18,6 +18,7 @@ import {
   Settings,
   Sparkles,
   Waypoints,
+  Stamp,
 } from 'lucide-react';
 import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
 import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
@@ -518,6 +519,20 @@ export function SidebarNav({
         label: t('nav.reports'),
         href: '/reports',
         active: isActive(pathname, '/reports'),
+      },
+      {
+        // Approval records (Story MOTIR-5299 · MOTIR-5302) — every approval record
+        // the reader may see, pending first then decided. Placed after Reports
+        // on `design/approvals/design-notes.md` § The ENTRANCE's argument: beside
+        // the Workbench it would read as a second queue, and the Workbench's To
+        // approve tab already is that queue; down here it reads as a record you
+        // consult. `Stamp` is unused elsewhere — `Inbox`, `ClipboardCheck` and
+        // `ShieldCheck` each already point at another surface. No badge: the
+        // Workbench strip already counts what waits on you.
+        icon: <Stamp />,
+        label: t('nav.approvalRecords'),
+        href: '/approvals',
+        active: isActive(pathname, '/approvals'),
       },
       {
         // Code (MOTIR-1768 · MOTIR-4643) — the project's repository set and its

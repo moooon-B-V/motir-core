@@ -128,6 +128,22 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
     evidence: '`reportsService` and `sprintsService` both assert `report:view`.',
   },
   {
+    // ⚠️ A ROOM EVERYONE MAY ENTER THAT SHOWS DIFFERENT READERS DIFFERENT THINGS
+    // (Story MOTIR-5299 · MOTIR-5302). Every other permission in this map decides
+    // whether a room OPENS; `approval:view_any` decides only how much of this one a
+    // reader SEES. Gating the row on the key would hide a reader's own decisions
+    // from them, so the requirement is `browse-only` and the key is named in the
+    // evidence instead — the next reader looking for it here will find it there.
+    href: '/approvals',
+    requires: 'browse-only',
+    evidence:
+      '`app/(authed)/approvals/page.tsx` calls `approvalGatesService.listRecords`, which floors on ' +
+      'browsing the active project and asserts nothing further to enter. `approval:view_any` is a ' +
+      'CONTENT-WIDENING key, not an entry key: the read resolves it from `getPermissions` and widens ' +
+      'the room from the reader’s own records (routed to them, or decided by them) to every record ' +
+      'of the project.',
+  },
+  {
     // ⚠️ BROWSE-ONLY, AND IT USED TO BE `ai:configure` (MOTIR-1768). The
     // destination moved: `/code-health` was an admin-only audit and is now ONE
     // SECTION of `/code`, whose other section — the project's repository set and

@@ -119,6 +119,9 @@ test('a person re-points the Bugs destination to a folder and to Project root, a
 
   // 3 · A second folder made in /items, picked in the room, and still picked after a reload.
   await page.goto('/items');
+  // The toolbar is live before the streamed tree mounts (MOTIR-5573). The product
+  // now holds an early click, but the step asserts on the tree, so wait for it.
+  await expect(tree(page)).toBeVisible();
   await page.getByRole('button', { name: 'New folder', exact: true }).click();
   const nameField = page.getByRole('textbox', { name: 'Folder name', exact: true });
   await nameField.fill('Triage');

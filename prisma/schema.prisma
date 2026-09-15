@@ -4265,13 +4265,13 @@ model DesignEvidence {
   /// audit is a second thing to keep in agreement with the table an auditor
   /// trusts.
   ///
-  /// ⚠️ PIN, do NOT FREEZE. A pinned row still supersedes normally — a design
-  /// legitimately evolves after approval and 9.2's revise loop depends on
-  /// republishing. The only thing the pin changes is that the supersede stops
-  /// unlinking this row's attachments, so the orphan-GC never reaches them. The
-  /// acceptance domain took the opposite decision for a finished story
-  /// (`AcceptanceEvidenceAlreadyApprovedError`, MOTIR-2764) and that divergence
-  /// is on the record rather than an oversight.
+  /// ⚠️ THE PIN IS NOT THE FREEZE. A pinned row on a card that is still open
+  /// supersedes normally. The FREEZE is the card's status: a design card in the
+  /// `done` category accepts no new version at all (`DESIGN_CARD_CLOSED`,
+  /// MOTIR-5556, ADR §6c second amendment), so a design evolves after approval
+  /// only once a person reopens its card. The only thing the pin changes is that
+  /// the supersede stops unlinking this row's attachments, so the orphan-GC never
+  /// reaches them.
   ///
   /// ⚠️ PER APPROVED VERSION, never "the approved one" (§6d). Approvals
   /// accumulate: a card approved, reopened and approved again holds two pinned
@@ -4622,6 +4622,16 @@ model ApprovalGate {
   /// reporter_id`) lives on `work_item` and is reached from these rows by
   /// primary key, so narrowing the GATE side is what the plan needs.
   @@index([projectId, state])
+  /// THE APPROVALS ROOM's OWN-RECORDS decided read (MOTIR-5301) — *what did I
+  /// decide in this project*, `project_id = ? AND decided_by_id = ? AND state IN
+  /// (approved, changes_requested) ORDER BY decided_at DESC, id DESC`. Nothing
+  /// served it: the queue only ever asked what is WAITING, so `(projectId, state)`
+  /// narrows to one project's decided rows and then filters every other person's
+  /// decisions out of them. Equality on the first two columns and the sort on the
+  /// third lets the plan walk the index backwards and stop at `LIMIT` (only an
+  /// incremental sort on the `id` tie-break is left). Measured on 300k gates: 29
+  /// buffers with it, 4,641 without; the `EXPLAIN` is on MOTIR-5301's pull request.
+  @@index([projectId, decidedById, decidedAt])
   /// The per-card read: every gate on one work item.
   @@index([workItemId])
   @@map("approval_gate")

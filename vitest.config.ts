@@ -461,6 +461,24 @@ export default defineConfig({
         'lib/workItemTodos/errors.ts',
         'app/**/items/[key]/todoActions.ts',
         'app/**/items/[key]/_components/TodoListSection.tsx',
+        // Story MOTIR-5542 · Subtask MOTIR-5548 — the PLAN HISTORY section, the route
+        // behind its Show more, and the mapper that shapes its rows. Measured first
+        // against the story's own specs (`planHistoryRead`, `planHistoryStoryGate`,
+        // `plan-history-section`, `plan-history-catalog`): PlanHistorySection
+        // 92.66 / 90.82 / 100 / 93.68 (its three uncovered `never` arms are
+        // unreachable by construction), the route 100 / 100 / 100 / 100, the mapper
+        // 100 / 100 / 100 / 100 (stmts/branches/funcs/lines).
+        //
+        // ⚠️ `plansService`, `planItemRepository`, `planRepository`, `lib/plans/errors`
+        // and `approveRefusals` are ALSO story-changed and deliberately NOT here: each
+        // is a shared file whose other methods belong to other stories (measured
+        // 38–48% from these specs), so a per-file threshold would make this story
+        // cover code it did not write. The story's methods in them are held by
+        // `planHistoryRead` and `planHistoryStoryGate` instead. The page wiring is an
+        // async Server Component, asserted structurally by `item-detail-reads`.
+        'app/**/items/[key]/_components/PlanHistorySection.tsx',
+        'app/api/work-items/**/plans/route.ts',
+        'lib/mappers/planMappers.ts',
         'app/**/_components/RequireTwoFactorCard.tsx',
         'app/**/organization/security/actions.ts',
         // Story MOTIR-1215 · Subtask MOTIR-3647 — the workspace tier's action and
@@ -2120,6 +2138,20 @@ export default defineConfig({
         'lib/approvals/approvalOverlayClient.ts',
         'lib/approvals/decidedGates.ts',
         'app/api/work-items/approval-gate/route.ts',
+        // ── Story MOTIR-5299 · THE APPROVAL RECORDS ROOM ─────────────────────
+        // Subtask MOTIR-5303, the story's own vitest gate. The room's page, its
+        // list and the ONE approvals row MOTIR-5302 extracted were in no
+        // `include`. The service, repository and mapper the read extended are
+        // already reported and pinned above (Story MOTIR-4778), so they are not
+        // re-added here.
+        //
+        // ⚠️ `app/*/…`, NOT `app/**/…`, for the page. `app/**/approvals/page.tsx`
+        // ALSO matches `app/(authed)/settings/project/approvals/page.tsx` — the
+        // settings room of the same name — so the key would gate a file this story
+        // never touched. One `*` is exactly one segment, the `(authed)` group.
+        'app/*/approvals/page.tsx',
+        'app/*/approvals/_components/ApprovalRecordsList.tsx',
+        'components/approvals/ApprovalRow.tsx',
         // Bug MOTIR-5150 — the PR-REFERENCE parser the link picker's query
         // grammar gained. A pure function with one job, so it is measured and
         // pinned here, per the note at the top of this list.
@@ -2337,6 +2369,23 @@ export default defineConfig({
         // Report-only until this story rewrote its central interaction (the row
         // now OPENS the overlay; MOTIR-5225). 100 / 100 / 100 / 100 with
         // StatePill's unreachable `default` ignored, citing its invariant test.
+        // Story MOTIR-5299 (Subtask MOTIR-5303). MEASURED on the parent branch before
+        // being pinned, at 100 / 100 / 100 / 100 (stmts / branches / funcs / lines) on
+        // all three, over `tests/components/{approval-records-list,approval-records-page,
+        // workbench-approvals-list}` and `tests/approval-records-story-gate`.
+        'app/*/approvals/page.tsx': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/*/approvals/_components/ApprovalRecordsList.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/approvals/ApprovalRow.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'app/**/workbench/_components/ApprovalsList.tsx': {
           lines: 90,
           functions: 90,
@@ -2545,6 +2594,20 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-5542 · MOTIR-5548 — measured above, pinned at the floor.
+        'app/**/items/[key]/_components/PlanHistorySection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/work-items/**/plans/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/planMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'app/**/_components/RequireTwoFactorCard.tsx': {
           lines: 90,
           functions: 90,

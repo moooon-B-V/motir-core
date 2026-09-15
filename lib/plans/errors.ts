@@ -834,3 +834,16 @@ export class PlannerBugCapExceededError extends Error {
     this.name = 'PlannerBugCapExceededError';
   }
 }
+
+/**
+ * A plan-history `?cursor=` that is not one this read minted (Story MOTIR-5542 ·
+ * MOTIR-5546) — undecodable, or naming no `(createdAt, id)` pair. → 400: a
+ * cursor is opaque, so a malformed one is a client error, never an empty page.
+ */
+export class InvalidPlanHistoryCursorError extends Error {
+  readonly code = 'INVALID_PLAN_HISTORY_CURSOR' as const;
+  constructor() {
+    super('The plan history cursor is not valid. Request the first page again.');
+    this.name = 'InvalidPlanHistoryCursorError';
+  }
+}

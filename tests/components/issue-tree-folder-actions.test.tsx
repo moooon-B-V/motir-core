@@ -433,3 +433,78 @@ describe('IssueTreeTable — create and rename folders', () => {
     expect(screen.queryByRole('button', { name: /^Folder actions for/ })).toBeNull();
   });
 });
+
+// On /items the toolbar renders ABOVE the page's <Suspense> and the tree streams
+// in below it — and every re-keyed boundary unmounts the tree again — so the
+// button is live while no handler is registered (MOTIR-5573). A click in that
+// window is held and honoured when the tree mounts, never silently dropped.
+describe('New folder clicked before the tree registers', () => {
+  function Page({ button = true, tree }: { button?: boolean; tree: boolean }) {
+    return (
+      <FolderCommandsProvider>
+        {button ? <NewFolderButton /> : null}
+        {tree ? (
+          <IssueTreeTable
+            initialLevel={rootLevel}
+            sort={{ column: 'key', direction: 'asc' }}
+            filter={EMPTY_FILTER}
+            workflow={workflow}
+            members={members}
+            canEdit
+          />
+        ) : null}
+      </FolderCommandsProvider>
+    );
+  }
+
+  async function clickNewFolder() {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
+    });
+  }
+
+  it('a click before the tree mounts opens the name row as soon as it does', async () => {
+    const { rerender } = render(<Page tree={false} />);
+    await clickNewFolder();
+    expect(screen.queryByRole('textbox', { name: 'Folder name' })).toBeNull();
+
+    rerender(<Page tree />);
+
+    const input = await screen.findByRole('textbox', { name: 'Folder name' });
+    expect(rowIds()).toContain('folder-draft-row');
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('a click between two trees — a re-keyed boundary — opens on the next tree', async () => {
+    const { rerender } = render(<Page tree />);
+    rerender(<Page tree={false} />);
+    await clickNewFolder();
+
+    rerender(<Page tree />);
+
+    expect(await screen.findByRole('textbox', { name: 'Folder name' })).toBeTruthy();
+  });
+
+  it('a held click is dropped when the button leaves first, so a later tree opens no name row', async () => {
+    const { rerender } = render(<Page tree={false} />);
+    await clickNewFolder();
+    rerender(<Page button={false} tree={false} />);
+
+    rerender(<Page button={false} tree />);
+
+    expect(screen.getByTestId('folder-row-f1')).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Folder name' })).toBeNull();
+  });
+
+  it('a click the mounted tree answered is not replayed on the next mount', async () => {
+    const { rerender } = render(<Page tree />);
+    await clickNewFolder();
+    expect(await screen.findByRole('textbox', { name: 'Folder name' })).toBeTruthy();
+    rerender(<Page tree={false} />);
+
+    rerender(<Page tree />);
+
+    expect(screen.getByTestId('folder-row-f1')).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Folder name' })).toBeNull();
+  });
+});

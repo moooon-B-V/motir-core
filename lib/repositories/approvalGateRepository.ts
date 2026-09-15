@@ -627,6 +627,83 @@ export const approvalGateRepository = {
   ): Promise<number> {
     return tx.approvalGate.count({ where: awaitingRoutedToWhere(scope) });
   },
+
+  /**
+   * THE APPROVALS ROOM's PENDING half (Story MOTIR-5299 · MOTIR-5301) — one
+   * project's `awaiting` gates as a window, in `design/approvals/design-notes.md`'s
+   * order: `createdAt asc, id asc`.
+   *
+   * The ORDER is ADOPTED from {@link findAwaitingRoutedTo} (the notes' § The ORDER):
+   * a pending row in a record room is still work stalled behind a question, and in
+   * the own-records view this half IS the tab's rows, so it must list them in the
+   * tab's order. The `id` tie-break is the room's addition — two gates raised in one
+   * transaction share a `createdAt`, and a window over an unstable order serves a
+   * row twice across a page boundary.
+   *
+   * ⚠️ `tx` IS REQUIRED, for {@link findAwaitingRoutedTo}'s measured reason: without
+   * one this returns `[]` on a populated fixture and raises nothing.
+   */
+  async findRecordsAwaiting(
+    scope: ApprovalRecordsScope,
+    window: { skip: number; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<RecordGateRow[]> {
+    return tx.approvalGate.findMany({
+      where: recordsAwaitingWhere(scope),
+      select: RECORD_GATE_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      skip: window.skip,
+      take: window.take,
+    });
+  },
+
+  /** HOW MANY rows {@link findRecordsAwaiting} would return — the same `where` builder. */
+  async countRecordsAwaiting(
+    scope: ApprovalRecordsScope,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.approvalGate.count({ where: recordsAwaitingWhere(scope) });
+  },
+
+  /**
+   * THE APPROVALS ROOM's DECIDED half (MOTIR-5301) — one project's `approved` and
+   * `changes_requested` gates as a window, most recently decided first:
+   * `decidedAt desc, id desc` (the notes' § The ORDER).
+   *
+   * ⚠️ `superseded` IS NOT A DECISION AND IS NOT HERE, IN EITHER VIEW. ADR §6b writes
+   * a null `decidedById` to mean *the question was withdrawn and nobody decided it*,
+   * so the own-records arm excludes it for free — and the full view excludes it on
+   * purpose, because the design settles that a room of records must not list an
+   * abandoned question beside a decision (the notes' § `superseded` is NOT in the
+   * room). It is the STATE list that excludes it, not the decider test, so the
+   * full view does not depend on a column being null.
+   *
+   * Served by `approval_gate_project_id_decided_by_id_decided_at_idx` in the
+   * own-records view — see the index's own note in `prisma/schema.prisma`.
+   *
+   * ⚠️ `tx` IS REQUIRED, for the same reason as {@link findRecordsAwaiting}.
+   */
+  async findRecordsDecided(
+    scope: ApprovalRecordsScope,
+    window: { skip: number; take: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<RecordGateRow[]> {
+    return tx.approvalGate.findMany({
+      where: recordsDecidedWhere(scope),
+      select: RECORD_GATE_SELECT,
+      orderBy: [{ decidedAt: 'desc' }, { id: 'desc' }],
+      skip: window.skip,
+      take: window.take,
+    });
+  },
+
+  /** HOW MANY rows {@link findRecordsDecided} would return — the same `where` builder. */
+  async countRecordsDecided(
+    scope: ApprovalRecordsScope,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.approvalGate.count({ where: recordsDecidedWhere(scope) });
+  },
 };
 
 /**
@@ -660,6 +737,43 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
     workItem: {
       OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
     },
+  };
+}
+
+/**
+ * WHAT the Approvals room's read may see (MOTIR-5301).
+ *
+ * `projectIds` carries the ACCESS floor in, exactly as {@link AwaitingRoutingScope}
+ * does: `[]` for a reader who may not browse their active project, and the query
+ * returns nothing. `fullView` carries the SERVICE's answer to *does this reader
+ * hold `approval:view_any`* — decided there from `projectAccessService.getPermissions`
+ * and never by a caller, which is why this type is built only by the service.
+ */
+export interface ApprovalRecordsScope extends AwaitingRoutingScope {
+  fullView: boolean;
+}
+
+/**
+ * The room's PENDING predicate, written once. Without the key it IS §2's routing
+ * predicate — CALLED, never restated, so the room's first section and the
+ * Workbench tab cannot disagree about whose gate it is. With the key it is every
+ * `awaiting` gate of the project.
+ */
+function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
+  if (!scope.fullView) return awaitingRoutedToWhere(scope);
+  return { projectId: { in: scope.projectIds }, state: 'awaiting' };
+}
+
+/**
+ * The room's DECIDED predicate, written once. The two decision states only; without
+ * the key, only the ones this reader decided — `decidedById` records who actually
+ * pressed, whatever authority they held, so this arm needs no routing rule.
+ */
+function recordsDecidedWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
+  return {
+    projectId: { in: scope.projectIds },
+    state: { in: ['approved', 'changes_requested'] },
+    ...(scope.fullView ? {} : { decidedById: scope.userId }),
   };
 }
 
@@ -698,6 +812,25 @@ const AWAITING_GATE_SELECT = {
     },
   },
 } as const satisfies Prisma.ApprovalGateSelect;
+
+/**
+ * What ONE Approvals-room row reads — the queue row's projection plus the AUDIT
+ * fields a record renders (MOTIR-5301): WHEN it was decided, by WHOM as recorded at
+ * the decision (`decidedByLabel`, which survives the user's deletion where the FK
+ * does not), and ON WHICH BYTES (`subjectVersion`). A decided row that does not say
+ * which version was approved is a list entry, not a record.
+ */
+const RECORD_GATE_SELECT = {
+  ...AWAITING_GATE_SELECT,
+  decidedAt: true,
+  decidedByLabel: true,
+  subjectVersion: true,
+} as const satisfies Prisma.ApprovalGateSelect;
+
+/** One row of the Approvals room's read, as Prisma returns it. */
+export type RecordGateRow = Prisma.ApprovalGateGetPayload<{
+  select: typeof RECORD_GATE_SELECT;
+}>;
 
 /** One row of the routing read, as Prisma returns it. */
 export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
