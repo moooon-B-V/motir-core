@@ -14,18 +14,24 @@
 
       WHAT IT DRAWS. The item page's Design result section once deciding has moved
       off the page: while the gate is awaiting AND the reader may decide it, the
-      section holds a CALL-TO-ACTION BAND (band 1 of the frame plus ONE control,
-      Review & approve) that opens the approval overlay
-      (design/workbench/design-notes.md section 22). Every other state renders
-      exactly as today.
+      section holds a CALL-TO-ACTION BAND — the version, how long it has waited, the
+      state, and ONE control, Review & approve, that opens the approval overlay
+      (design/workbench/design-notes.md section 22). Every other state keeps its
+      content.
+
+      REVISED 2026-09-15 ON REVIEW: "doubled 'design result', a container inside a
+      container, that's not right." The section card is the ONLY container and its
+      title the ONLY label. Nothing inside it carries its own border or repeats
+      "Design result" — not the band, and not the kept states, which render the
+      frame's bands flush in the section body.
 
       RENDERED FIRST. The shipped DesignResultSection inside ContentSectionCard was
       rendered through the repo's vitest + RTL setup (renderWithIntl, the real en and
       zh catalogues) in every state, on origin/main after MOTIR-5488 merged. The
-      section card, the frame chrome, band 1 (FrameHeader), band 3's row, the port's
-      frame strip and note row, the record strip, the dead port and the empty state
-      below are transcribed from that render's emitted markup and classes; the band
-      adds one meta clause, one sentence and one control.
+      section card, band 1's meta and pill, band 3's row, the port's frame strip and
+      note row, the record strip, the dead port and the empty state below are
+      transcribed from that render's emitted markup and classes — minus the inner
+      frame's border and its repeated kind label, which is the revision.
 
       CITES, NEVER REDRAWS: approval-control.mock.html (the frame, nine states),
       design-result--what-to-review.mock.html (the port's contents), the workbench
@@ -101,6 +107,7 @@
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-mint: var(--color-tint-mint);
         --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-rose: var(--color-tint-rose);
         --el-tint-yellow: var(--color-tint-yellow);
         --el-archived-pill-bg: var(--color-muted);
         --el-archived-pill-text: var(--color-slate);
@@ -266,6 +273,29 @@
       .rowOn td {
         color: var(--el-text-strong);
       }
+      .was {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+        background: var(--el-surface-soft);
+      }
+      .wasTag {
+        display: inline-flex;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-rose);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin-bottom: 10px;
+      }
+      .wasBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
 
       /* ── The item page at 1280 (panel 1) — composed as ghosts, the band live ── */
       .pg {
@@ -326,7 +356,7 @@
         border-radius: var(--radius-card);
       }
 
-      /* ── ContentSectionCard (shipped: Card + header grammar) ─────────────── */
+      /* ── ContentSectionCard (shipped: Card + header grammar) — THE container ── */
       .sc {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -351,26 +381,14 @@
         color: var(--el-text-secondary);
       }
 
-      /* ── The frame's inline chrome + band 1 (shipped FrameHeader) ────────── */
-      .fr {
-        overflow: hidden;
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-      }
-      .frHead {
+      /* ── band 1, flush in the section body: meta + pill, no kind label, no border ── */
+      .meta {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 8px;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--el-border-soft);
       }
-      .frKind {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--el-text);
-      }
-      .frMeta {
+      .metaText {
         font-size: 12px;
         color: var(--el-text-secondary);
       }
@@ -406,18 +424,16 @@
         color: var(--el-archived-pill-text);
       }
 
-      /* ── band 3's row — the band's ONE row (sentence + control) ─────────── */
+      /* ── band 3's row — a hairline divider, never a box ─────────────────── */
       .row {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         column-gap: 12px;
         row-gap: 8px;
-        padding: 12px 16px;
+        margin-top: 12px;
+        padding-top: 12px;
         border-top: 1px solid var(--el-border-soft);
-      }
-      .fr .frHead + .row {
-        border-top: 0;
       }
       .rowText {
         font-size: 13px;
@@ -455,9 +471,9 @@
         flex: none;
       }
 
-      /* ── band 2 — the port, in the kept states (shipped DesignResultPanel, after MOTIR-5488) ── */
+      /* ── band 2 — the port, flush in the section body (shipped DesignResultPanel, after MOTIR-5488) ── */
       .port {
-        padding: 16px;
+        margin-top: 12px;
       }
       .strip {
         display: flex;
@@ -554,6 +570,8 @@
         align-items: center;
         justify-content: center;
         gap: 4px;
+        margin-top: 12px;
+        border-radius: var(--radius-input);
         background: var(--el-muted);
         padding: 40px 16px;
         text-align: center;
@@ -569,14 +587,15 @@
         color: var(--el-text-secondary);
       }
 
-      /* ── the decided record strip (shipped) ─────────────────────────────── */
+      /* ── the decided record strip (shipped), a hairline divider ─────────── */
       .rec {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         column-gap: 16px;
         row-gap: 6px;
-        padding: 12px 16px;
+        margin-top: 12px;
+        padding-top: 12px;
         border-top: 1px solid var(--el-border-soft);
         font-size: 12px;
         color: var(--el-text-secondary);
@@ -607,6 +626,9 @@
         border-radius: var(--radius-input);
         background: var(--el-surface-soft);
         padding: 16px;
+      }
+      .port .empty {
+        margin-top: 0;
       }
       .emptyIc {
         display: flex;
@@ -722,20 +744,55 @@
         <p class="boardLead">
           MOTIR-5228 (story MOTIR-5215). The Design result section stops holding a decision. While
           its gate is <strong>awaiting</strong> and the reader <strong>may decide it</strong>, the
-          section shows band 1 of the frame plus one control, <strong>Review &amp; approve</strong>,
-          which opens the full-screen approval overlay over this page. The decided, withdrawn and
-          look-only states, and a card with no gate, render exactly as they do today.
+          section shows the version, how long it has waited, the state, and one control,
+          <strong>Review &amp; approve</strong>, which opens the full-screen approval overlay over
+          this page. The decided, withdrawn and look-only states, and a card with no gate, keep
+          their content.
         </p>
         <p class="panelNote">
-          <strong>The rule the code card is closed against:</strong> the band replaces the frame
-          ONLY for <code>awaiting</code> + <code>canDecide</code>; every other state renders as
-          today. Every class is transcribed from a render of the shipped
-          <code>DesignResultSection</code>. The frame and its nine states stay
-          <code>approval-control.mock.html</code>'s. A <code>design_result</code> gate exists only
-          on a design card with no open linked pull request (<code>design-result.md</code> AMENDMENT
-          4 Q8), so that is the only card this band appears on.
+          <strong>Revised 2026-09-15 on review — one container, one label.</strong> The section card
+          is the only container and <em>Design result</em> is said once, in its title. Nothing
+          inside it has its own border or repeats the title — not the band, and not the kept states,
+          whose frame bands now sit flush in the section body. A <code>design_result</code> gate
+          exists only on a design card with no open linked pull request (<code
+            >design-result.md</code
+          >
+          AMENDMENT 4 Q8), so that is the only card this band appears on.
         </p>
       </header>
+
+      <!-- ═══════════════════════════ 0 · THE REVISION ═══════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">0 · The revision — what the first cut drew, and why it is gone</div>
+        <div class="grid2">
+          <div class="was">
+            <span class="wasTag">Rejected — a container inside a container</span>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="wasBox">
+                <strong>Design result</strong> · version 9840d00e · asked 2 days ago — the frame's
+                own bordered box and its own heading, inside a card that already says it
+              </div>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="panelNote">
+              The first cut composed the approval frame whole — its bordered box and its band-1
+              heading — inside <code>ContentSectionCard</code>, which already carries the border and
+              the title. The page said <em>Design result</em> twice, 30px apart, and drew a box
+              inside a box.
+              <strong>That nesting is what ships today for every gate state</strong> (the workbench
+              notes' § 22 recorded the double label and left it). This revision removes it
+              everywhere on the item page: the section is the container, and the frame renders
+              <strong>chromeless and unlabeled</strong> inside it. The frame keeps its chrome and
+              its heading only where it IS the container: the overlay and the To-approve row.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <!-- ═══════════════════════════ 1 · IN PLACE ═══════════════════════════ -->
       <section class="panel">
@@ -763,32 +820,27 @@
                 <span class="ghostTitle">Development</span> — no pull request linked
               </div>
               <div class="here">
-                <div class="sc">
+                <div class="sc" data-measure="section">
                   <div class="scHead">
                     <h2 class="scTitle">Design result</h2>
                     <span class="scGloss">— what this work item produced</span>
                   </div>
-                  <div class="fr" data-measure="band">
-                    <div class="frHead" data-measure="band1">
-                      <span class="frKind">Design result</span>
-                      <span class="frMeta">version 9840d00e · asked 2 days ago</span>
-                      <span class="pillSlot"
-                        ><span class="pill pill-await">Awaiting you</span></span
-                      >
-                    </div>
-                    <div class="row" data-measure="row">
-                      <span class="rowText"
-                        >Review the design full screen, then approve or request changes.</span
-                      >
-                      <a
-                        class="btn btn-primary rowPush"
-                        href="?approval=MOTIR-4321&amp;approvalKind=design_result"
-                        data-measure="control"
-                        ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                          <use href="#i-scan-eye" /></svg
-                        >Review &amp; approve</a
-                      >
-                    </div>
+                  <div class="meta" data-measure="meta">
+                    <span class="metaText">version 9840d00e · asked 2 days ago</span>
+                    <span class="pillSlot"><span class="pill pill-await">Awaiting you</span></span>
+                  </div>
+                  <div class="row" data-measure="row">
+                    <span class="rowText"
+                      >Review the design full screen, then approve or request changes.</span
+                    >
+                    <a
+                      class="btn btn-primary rowPush"
+                      href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                      data-measure="control"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
                   </div>
                 </div>
               </div>
@@ -814,42 +866,39 @@
       <!-- ═══════════════════════════ 2 · ANATOMY ═══════════════════════════ -->
       <section class="panel">
         <div class="panelLabel">
-          2 · Anatomy — band 1 of the frame, and ONE row in place of bands 2 and 3
+          2 · Anatomy — one container, one label: the section card holds band 1's meta and the row
         </div>
         <div class="grid2">
           <div class="spec">
             <p class="stateCap">2a · Routed to you</p>
             <div class="sc">
               <div class="scHead">
+                <span class="num">1</span>
                 <h2 class="scTitle">Design result</h2>
                 <span class="scGloss">— what this work item produced</span>
               </div>
-              <div class="fr">
-                <div class="frHead">
-                  <span class="num">1</span><span class="frKind">Design result</span>
-                  <span class="num">2</span><span class="frMeta">version 9840d00e</span>
-                  <span class="num">3</span><span class="frMeta">· asked 2 days ago</span>
-                  <span class="pillSlot"
-                    ><span class="num">4</span
-                    ><span class="pill pill-await">Awaiting you</span></span
-                  >
-                </div>
-                <div class="row">
-                  <span class="num">5</span>
-                  <span class="rowText"
-                    >Review the design full screen, then approve or request changes.</span
-                  >
-                  <span class="pillSlot"
-                    ><span class="num">6</span
-                    ><a
-                      class="btn btn-primary"
-                      href="?approval=MOTIR-4321&amp;approvalKind=design_result"
-                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-scan-eye" /></svg
-                      >Review &amp; approve</a
-                    ></span
-                  >
-                </div>
+              <div class="meta">
+                <span class="num">2</span><span class="metaText">version 9840d00e</span>
+                <span class="num">3</span><span class="metaText">· asked 2 days ago</span>
+                <span class="pillSlot"
+                  ><span class="num">4</span><span class="pill pill-await">Awaiting you</span></span
+                >
+              </div>
+              <div class="row">
+                <span class="num">5</span>
+                <span class="rowText"
+                  >Review the design full screen, then approve or request changes.</span
+                >
+                <span class="pillSlot"
+                  ><span class="num">6</span
+                  ><a
+                    class="btn btn-primary"
+                    href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-scan-eye" /></svg
+                    >Review &amp; approve</a
+                  ></span
+                >
               </div>
             </div>
 
@@ -861,25 +910,22 @@
                 <h2 class="scTitle">Design result</h2>
                 <span class="scGloss">— what this work item produced</span>
               </div>
-              <div class="fr">
-                <div class="frHead">
-                  <span class="frKind">Design result</span>
-                  <span class="frMeta">version 9840d00e · asked 2 days ago</span>
-                  <span class="pillSlot"><span class="pill pill-await">Awaiting you</span></span>
-                </div>
-                <div class="row">
-                  <span class="rowText"
-                    >Waiting on <span class="rowName">Ada Lovelace</span> — you can decide it too.
-                    Review it full screen first.</span
-                  >
-                  <a
-                    class="btn btn-primary rowPush"
-                    href="?approval=MOTIR-4321&amp;approvalKind=design_result"
-                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-scan-eye" /></svg
-                    >Review &amp; approve</a
-                  >
-                </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e · asked 2 days ago</span>
+                <span class="pillSlot"><span class="pill pill-await">Awaiting you</span></span>
+              </div>
+              <div class="row">
+                <span class="rowText"
+                  >Waiting on <span class="rowName">Ada Lovelace</span> — you can decide it too.
+                  Review it full screen first.</span
+                >
+                <a
+                  class="btn btn-primary rowPush"
+                  href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-scan-eye" /></svg
+                  >Review &amp; approve</a
+                >
               </div>
             </div>
           </div>
@@ -888,38 +934,39 @@
             <div class="anat">
               <span class="num">1</span
               ><span
-                ><strong>Kind</strong> — <code>approvalGate.designResult.kindLabel</code>. Band 1 is
-                <code>FrameHeader</code>, byte-identical to the frame on this page today and in the
-                overlay.</span
+                ><strong>The ONLY label</strong> — the section card's own title,
+                <code>designResult.title</code>. The kind is not repeated below it: on this page the
+                section already says what the decision is about.</span
               >
             </div>
             <div class="anat">
               <span class="num">2</span
               ><span
                 ><strong>Which version</strong> — <code>gate.subjectVersion</code>, sliced to 8,
-                through <code>approvalGate.designResult.meta.withVersion</code>.</span
+                through <code>approvalGate.designResult.meta.withVersion</code>. First in the body,
+                no box around it.</span
               >
             </div>
             <div class="anat">
               <span class="num">3</span
               ><span
                 ><strong>How long it has waited</strong> (NEW) — <code>gate.createdAt</code> as
-                <code>approvalGate.cta.asked</code>, in the same meta span after a middle dot. A
-                republish raises a new gate, so the clock restarts with the version.</span
+                <code>approvalGate.cta.asked</code>, after a middle dot. A republish raises a new
+                gate, so the clock restarts with the version.</span
               >
             </div>
             <div class="anat">
               <span class="num">4</span
               ><span
                 ><strong>State</strong> — <code>Pill tone="awaiting"</code>, <em>Awaiting you</em>,
-                exactly as the frame renders it for any reader who may decide.</span
+                right-aligned on the same line, exactly as the frame computes it.</span
               >
             </div>
             <div class="anat">
               <span class="num">5</span
               ><span
-                ><strong>The sentence</strong> (NEW) — band 3's own left-hand line. Two forms, keyed
-                on ROUTING: <code>cta.body</code> when <code>routedToId</code> is you,
+                ><strong>The sentence</strong> (NEW) — under a hairline divider, never a box. Two
+                forms, keyed on ROUTING: <code>cta.body</code> when <code>routedToId</code> is you,
                 <code>cta.bodyRoutedElsewhere</code> naming <code>routedToLabel</code> when it is
                 someone else (2b). A null label falls back to the first form.</span
               >
@@ -935,9 +982,9 @@
               >
             </div>
             <p class="panelNote">
-              <strong>No port, no verbs, no confirm band, no consequence line.</strong> Those are
-              the overlay's now. The band promises no data a read does not produce: kind, version
-              and asked-at are all on <code>ApprovalGateDTO</code>.
+              <strong>No inner border, no repeated title, no port, no verbs.</strong> The band is
+              the section's body. Kind, version and asked-at are all on
+              <code>ApprovalGateDTO</code>, so it promises no data a read does not produce.
             </p>
           </div>
         </div>
@@ -946,14 +993,14 @@
       <!-- ═══════════════════════ 3 · THE STATES THE PAGE KEEPS ═══════════════════════ -->
       <section class="panel">
         <div class="panelLabel">
-          3 · The states the page KEEPS — every ApprovalGateState, disposed
+          3 · The states the page KEEPS — every ApprovalGateState, flush in the section
         </div>
         <table class="tbl">
           <thead>
             <tr>
               <th>gate</th>
               <th>canDecide</th>
-              <th>the section renders</th>
+              <th>the section body renders</th>
             </tr>
           </thead>
           <tbody>
@@ -965,22 +1012,24 @@
             <tr>
               <td><code>awaiting</code></td>
               <td>false</td>
-              <td>the frame in state B — port shown, no verbs, the named waiting-on line</td>
+              <td>state B — meta + pill, the port, the named waiting-on line; no verbs</td>
             </tr>
             <tr>
               <td><code>approved</code></td>
               <td>either</td>
-              <td>the frame in state E — the pinned version, Files kept / not kept</td>
+              <td>
+                state E — meta + pill, the pinned version's port, the record, Files kept / not kept
+              </td>
             </tr>
             <tr>
               <td><code>changes_requested</code></td>
               <td>either</td>
-              <td>the frame in state F — the version sent back</td>
+              <td>state F — meta + pill, the port, the record</td>
             </tr>
             <tr>
               <td><code>superseded</code></td>
               <td>either</td>
-              <td>the frame in state G — dead port, colourless, no verb</td>
+              <td>state G — meta + pill, the dead port, colourless, no verb</td>
             </tr>
             <tr>
               <td>no gate</td>
@@ -990,10 +1039,12 @@
           </tbody>
         </table>
         <p class="panelNote">
-          C (confirming), D (in flight), H (refused) and X (port failed) no longer occur on the item
-          page, because they exist only between a press and its answer, and the only press left is
-          in the overlay. The ports below are the shipped panel as MOTIR-5488 left it, with the mock
-          frame shortened for the board.
+          The content of each state is unchanged, and so is its order: band 1 (without the kind),
+          the port, band 3. What changes is the CHROME: the frame's bordered box and its repeated
+          <em>Design result</em> are gone, and the bands sit flush in the section body, divided by
+          hairlines. C, D, H and X no longer occur on the item page, because the only press left is
+          in the overlay. The ports are the panel as MOTIR-5488 shipped it, with the mock frame
+          shortened for the board.
         </p>
         <div class="grid2">
           <div class="spec">
@@ -1003,44 +1054,41 @@
                 <h2 class="scTitle">Design result</h2>
                 <span class="scGloss">— what this work item produced</span>
               </div>
-              <div class="fr">
-                <div class="frHead">
-                  <span class="frKind">Design result</span>
-                  <span class="frMeta">version 9840d00e</span>
-                  <span class="pillSlot"><span class="pill pill-await">Awaiting</span></span>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"><span class="pill pill-await">Awaiting</span></span>
+              </div>
+              <div class="port">
+                <div class="strip">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                  ><a class="stripLink" href="#b-mock">Open in new tab</a>
                 </div>
-                <div class="port">
-                  <div class="strip">
-                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-file-text" /></svg
-                    ><span class="stripPath">design/work-items/approval-control.mock.html</span
-                    ><a class="stripLink" href="#b-mock">Open in new tab</a>
-                  </div>
-                  <div class="mockBox">the sandboxed mock, at its 32rem height</div>
-                  <div class="noteRow">
-                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-file-text" /></svg
-                    ><span class="noteLabel">Design note</span
-                    ><span class="notePath">design/work-items/design-notes.md</span
-                    ><a class="noteLink" href="#b-note">Open note</a>
-                  </div>
-                  <div class="chips">
-                    <span class="chip"
-                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-commit" /></svg
-                      ><span class="mono">cafe123</span></span
-                    >
-                    <span class="chip">published by <span class="mono">MOTIR-4320</span></span>
-                  </div>
+                <div class="mockBox">the sandboxed mock, at its 32rem height</div>
+                <div class="noteRow">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="noteLabel">Design note</span
+                  ><span class="notePath">design/work-items/design-notes.md</span
+                  ><a class="noteLink" href="#b-note">Open note</a>
                 </div>
-                <div class="row">
-                  <span class="rowText">Waiting on Ada Lovelace.</span>
+                <div class="chips">
+                  <span class="chip"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-commit" /></svg
+                    ><span class="mono">cafe123</span></span
+                  >
+                  <span class="chip">published by <span class="mono">MOTIR-4320</span></span>
                 </div>
+              </div>
+              <div class="row">
+                <span class="rowText">Waiting on Ada Lovelace.</span>
               </div>
             </div>
             <p class="panelNote" style="margin-top: 8px">
-              Unchanged. The line NAMES the approver on <code>origin/main</code> (MOTIR-5191); only
-              a routing that resolves to nobody reads <em>Waiting on this work item's assignee.</em>
+              The line NAMES the approver on <code>origin/main</code> (MOTIR-5191); only a routing
+              that resolves to nobody reads <em>Waiting on this work item's assignee.</em>
             </p>
           </div>
 
@@ -1051,44 +1099,41 @@
                 <h2 class="scTitle">Design result</h2>
                 <span class="scGloss">— what this work item produced</span>
               </div>
-              <div class="fr">
-                <div class="frHead">
-                  <span class="frKind">Design result</span>
-                  <span class="frMeta">version 9840d00e</span>
-                  <span class="pillSlot"><span class="pill pill-ok">Approved</span></span>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"><span class="pill pill-ok">Approved</span></span>
+              </div>
+              <div class="port">
+                <div class="strip">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                  ><a class="stripLink" href="#e-mock">Open in new tab</a>
                 </div>
-                <div class="port">
-                  <div class="strip">
-                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-file-text" /></svg
-                    ><span class="stripPath">design/work-items/approval-control.mock.html</span
-                    ><a class="stripLink" href="#e-mock">Open in new tab</a>
-                  </div>
-                  <div class="mockBox">
-                    the version that was approved — pinned, not the current one
-                  </div>
-                  <div class="noteRow">
-                    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-file-text" /></svg
-                    ><span class="noteLabel">Design note</span
-                    ><span class="notePath">design/work-items/design-notes.md</span
-                    ><a class="noteLink" href="#e-note">Open note</a>
-                  </div>
-                  <div class="chips">
-                    <span class="chip"
-                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-commit" /></svg
-                      ><span class="mono">cafe123</span></span
-                    >
-                    <span class="chip">published by <span class="mono">MOTIR-4320</span></span>
-                  </div>
+                <div class="mockBox">
+                  the version that was approved — pinned, not the current one
                 </div>
-                <div class="rec">
-                  <span class="recName">Ada Lovelace</span>
-                  <span>14/09/2026, 10:12</span>
-                  <span class="recVersion">version 9840d00e</span>
-                  <span class="kept">Files kept</span>
+                <div class="noteRow">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="noteLabel">Design note</span
+                  ><span class="notePath">design/work-items/design-notes.md</span
+                  ><a class="noteLink" href="#e-note">Open note</a>
                 </div>
+                <div class="chips">
+                  <span class="chip"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-commit" /></svg
+                    ><span class="mono">cafe123</span></span
+                  >
+                  <span class="chip">published by <span class="mono">MOTIR-4320</span></span>
+                </div>
+              </div>
+              <div class="rec">
+                <span class="recName">Ada Lovelace</span>
+                <span>14/09/2026, 10:12</span>
+                <span class="recVersion">version 9840d00e</span>
+                <span class="kept">Files kept</span>
               </div>
             </div>
             <p class="panelNote" style="margin-top: 8px">
@@ -1105,44 +1150,40 @@
                 <h2 class="scTitle">Design result</h2>
                 <span class="scGloss">— what this work item produced</span>
               </div>
-              <div class="fr">
-                <div class="frHead">
-                  <span class="frKind">Design result</span>
-                  <span class="frMeta">version 9840d00e</span>
-                  <span class="pillSlot"
-                    ><span class="pill pill-changes">Changes requested</span></span
-                  >
-                </div>
-                <div class="port">
-                  <div class="empty">
-                    <span class="emptyIc"
-                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-image-off" /></svg
-                    ></span>
-                    <div>
-                      <p class="emptyTitle">No design result published yet</p>
-                      <p class="emptyBody">
-                        A design result is published only when other work waits on this design — its
-                        agent then publishes the mock and the note. With nothing waiting, the pull
-                        request is where the design is reviewed.
-                      </p>
-                    </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"
+                  ><span class="pill pill-changes">Changes requested</span></span
+                >
+              </div>
+              <div class="port">
+                <div class="empty">
+                  <span class="emptyIc"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image-off" /></svg
+                  ></span>
+                  <div>
+                    <p class="emptyTitle">No design result published yet</p>
+                    <p class="emptyBody">
+                      A design result is published only when other work waits on this design — its
+                      agent then publishes the mock and the note. With nothing waiting, the pull
+                      request is where the design is reviewed.
+                    </p>
                   </div>
                 </div>
-                <div class="rec">
-                  <span class="recName">Ada Lovelace</span>
-                  <span>14/09/2026, 10:12</span>
-                  <span class="recVersion">version 9840d00e</span>
-                  <span>the agent will publish a new version</span>
-                </div>
+              </div>
+              <div class="rec">
+                <span class="recName">Ada Lovelace</span>
+                <span>14/09/2026, 10:12</span>
+                <span class="recVersion">version 9840d00e</span>
+                <span>the agent will publish a new version</span>
               </div>
             </div>
             <p class="panelNote" style="margin-top: 8px">
               The version that was sent back is not pinned, so once its bytes are reclaimed the port
               shows the panel's own empty state. <strong>Drawn as the target:</strong> the shipped
               frame also shows state X's <em>You cannot approve what cannot be shown.</em> under
-              this decided record. That is a defect, filed separately, and not something to
-              preserve.
+              this decided record — MOTIR-5551.
             </p>
           </div>
 
@@ -1153,26 +1194,23 @@
                 <h2 class="scTitle">Design result</h2>
                 <span class="scGloss">— what this work item produced</span>
               </div>
-              <div class="fr">
-                <div class="frHead">
-                  <span class="frKind">Design result</span>
-                  <span class="frMeta">version 9840d00e</span>
-                  <span class="pillSlot"><span class="pill pill-gone">Withdrawn</span></span>
-                </div>
-                <div class="dead">
-                  <p class="deadLine">
-                    A newer design was published, so this question was withdrawn.
-                  </p>
-                  <p class="deadCite">Nobody decided it. The current version is above.</p>
-                </div>
-                <div class="rec">
-                  <span>No decision · no one to attribute</span>
-                  <span>withdrawn 13/09/2026, 11:00</span>
-                </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"><span class="pill pill-gone">Withdrawn</span></span>
+              </div>
+              <div class="dead">
+                <p class="deadLine">
+                  A newer design was published, so this question was withdrawn.
+                </p>
+                <p class="deadCite">Nobody decided it. The current version is above.</p>
+              </div>
+              <div class="rec">
+                <span>No decision · no one to attribute</span>
+                <span>withdrawn 13/09/2026, 11:00</span>
               </div>
             </div>
             <p class="panelNote" style="margin-top: 8px">
-              Unchanged: colourless, verb-less, and never read as a decision somebody made.
+              Colourless, verb-less, and never read as a decision somebody made.
             </p>
           </div>
         </div>
@@ -1182,8 +1220,8 @@
       <section class="panel">
         <div class="panelLabel">4 · No gate at all — the shipped DesignResultPanel, unchanged</div>
         <p class="panelNote">
-          The no-gate path is untouched: nothing here changes until there is something to decide.
-          The panel is as MOTIR-5488 shipped it: the mock frame first, the note one link away
+          Already one container and one label, so nothing here changes. The panel is as MOTIR-5488
+          shipped it: the mock frame first, the note one link away
           (<code>design-result--what-to-review.mock.html</code>).
         </p>
         <div class="grid2">
@@ -1251,28 +1289,25 @@
         </div>
         <div class="grid2">
           <div class="narrow" data-measure="narrow">
-            <div class="sc">
+            <div class="sc" data-measure="narrowSection">
               <div class="scHead">
                 <h2 class="scTitle">设计结果</h2>
                 <span class="scGloss">— 这个工作项产出的内容</span>
               </div>
-              <div class="fr" data-measure="narrowBand">
-                <div class="frHead">
-                  <span class="frKind">设计成果</span>
-                  <span class="frMeta">版本 9840d00e · 2天前发起</span>
-                  <span class="pillSlot"><span class="pill pill-await">等待你处理</span></span>
-                </div>
-                <div class="row rowStack">
-                  <span class="rowText">全屏审阅设计后，再批准或要求修改。</span>
-                  <a
-                    class="btn btn-primary rowPush"
-                    href="?approval=MOTIR-4321&amp;approvalKind=design_result"
-                    data-measure="narrowControl"
-                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-scan-eye" /></svg
-                    >审阅并批准</a
-                  >
-                </div>
+              <div class="meta">
+                <span class="metaText">版本 9840d00e · 2天前发起</span>
+                <span class="pillSlot"><span class="pill pill-await">等待你处理</span></span>
+              </div>
+              <div class="row rowStack">
+                <span class="rowText">全屏审阅设计后，再批准或要求修改。</span>
+                <a
+                  class="btn btn-primary rowPush"
+                  href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                  data-measure="narrowControl"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-scan-eye" /></svg
+                  >审阅并批准</a
+                >
               </div>
             </div>
           </div>
@@ -1282,32 +1317,29 @@
                 <h2 class="scTitle">设计结果</h2>
                 <span class="scGloss">— 这个工作项产出的内容</span>
               </div>
-              <div class="fr">
-                <div class="frHead">
-                  <span class="frKind">设计成果</span>
-                  <span class="frMeta">版本 9840d00e · 2天前发起</span>
-                  <span class="pillSlot"><span class="pill pill-await">等待你处理</span></span>
-                </div>
-                <div class="row rowStack">
-                  <span class="rowText"
-                    >等待
-                    <span class="rowName">Ada Lovelace</span>
-                    处理——你也可以做出决定。请先全屏审阅。</span
-                  >
-                  <a
-                    class="btn btn-primary rowPush"
-                    href="?approval=MOTIR-4321&amp;approvalKind=design_result"
-                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-scan-eye" /></svg
-                    >审阅并批准</a
-                  >
-                </div>
+              <div class="meta">
+                <span class="metaText">版本 9840d00e · 2天前发起</span>
+                <span class="pillSlot"><span class="pill pill-await">等待你处理</span></span>
+              </div>
+              <div class="row rowStack">
+                <span class="rowText"
+                  >等待
+                  <span class="rowName">Ada Lovelace</span>
+                  处理——你也可以做出决定。请先全屏审阅。</span
+                >
+                <a
+                  class="btn btn-primary rowPush"
+                  href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-scan-eye" /></svg
+                  >审阅并批准</a
+                >
               </div>
             </div>
           </div>
         </div>
         <p class="panelNote">
-          Band 1 wraps as it already does. The sentence takes the full width and the control drops
+          The meta line wraps with its pill. The sentence takes the full width and the control drops
           to its own line, left-aligned (<code>md:ml-auto</code>), at its intrinsic width. It is not
           stretched, because a full-width primary on a phone reads as the page's main action.
         </p>
