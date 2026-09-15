@@ -224,7 +224,20 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // A withdrawn result is not current, so the panel falls back to the empty
       // state — the row survives, which is settled law in this domain, but the
       // card stops claiming a design it did not earn.
-      await expect(page.getByText('No design result published yet')).toBeVisible();
+      //
+      // ⚠️ AMENDED BY MOTIR-5574. This line used to assert the panel's empty state
+      // ('No design result published yet'). That held only because the gate stayed
+      // `awaiting` after the withdrawal and the frame's port drew the empty panel.
+      // With the gate retired, the section is state `G`, as
+      // `design/work-items/design-notes.md` § the state checklist draws for a
+      // `superseded` gate: the Withdrawn pill and the "no decision" record, with no
+      // verb and no port. What must hold is unchanged: the card offers no design to
+      // approve.
+      const designSection = page.getByRole('heading', { name: 'Design result', level: 2 });
+      await expect(designSection).toBeVisible();
+      await expect(page.getByText('No decision · no one to attribute')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Review & approve' })).toHaveCount(0);
+      await expect(page.locator('iframe')).toHaveCount(0);
 
       // MOTIR-5574: the withdrawal retires the question the publish raised, so
       // the reviewer is no longer asked to approve a design that is not there.
