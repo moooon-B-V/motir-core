@@ -2751,11 +2751,14 @@
         color: var(--el-text-secondary);
         cursor: pointer;
       }
+      /* Band 3, as ApprovalGateControl ships it and as § 22's overlay draws it:
+         `flex flex-wrap items-center gap-x-3 gap-y-2` with the verbs in
+         `ml-auto flex flex-wrap gap-2` — so the verbs stay RIGHT-aligned even
+         when the consequence line takes the whole first row and they wrap. */
       .af-foot {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        gap: 8px 12px;
         flex-wrap: wrap;
         padding: 12px 14px;
         background: var(--el-page-bg);
@@ -2767,9 +2770,10 @@
       }
       .af-verbs {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 8px;
-        flex: none;
+        margin-left: auto;
       }
       .af-btn {
         display: inline-flex;
