@@ -7,6 +7,7 @@ import {
   IllegalTransitionError,
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
+  ApprovalGatePendingError,
   ParentCycleError,
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
@@ -259,6 +260,11 @@ export function toToolError(err: unknown): CallToolResult {
     // so the agent lands them, re-parents them out, or reports, instead of seeing
     // an opaque internal error at the step it believed was the last one.
     err instanceof ContainerHasOpenChildrenError ||
+    // The approval-gate guard (MOTIR-5526). `transition_status` is how an agent
+    // closes a card, and the message names the pending decision and says that
+    // approving it is what makes the move — so the agent reports the gate rather
+    // than retrying or editing a workflow that is not wrong.
+    err instanceof ApprovalGatePendingError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
     // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's

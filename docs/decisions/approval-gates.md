@@ -1043,7 +1043,229 @@ The bound is human clicks, which is inherently small.
 **A guard on manual status changes keys on `awaiting`, not on "a gate exists"** —
 which is what makes the reopen legal: after approval the gate is `approved`, so
 a person reopening the card is not blocked by the decision that already
-happened. That guard is a sibling story, not this record's to ship.
+happened. ~~That guard is a sibling story, not this record's to ship.~~
+**AMENDED 2026-09-14 (MOTIR-5522):** the guard is still built by a sibling
+story (MOTIR-4887), but its RULES are now this record's, in the amendment
+directly below. Build to them.
+
+> ### §6d — AMENDMENT (MOTIR-5522, 2026-09-14): the manual-flip GUARD, the withdraw, the re-ask, and the lock order
+>
+> **Why the rules are written here and not on the cards.** Five cards under
+> MOTIR-4887 change `applyStatusTransition` — the funnel every status change
+> passes through — or render what it refuses. Each needs the same answers: which
+> move a gate holds, how its own approval gets through, when pulling work back
+> withdraws the question and when coming back asks it again, and in what order
+> rows are locked. Stated once, here, those cards build to one contract rather
+> than to each other's guesses. Read on `origin/main` @ `cc09db183`.
+>
+> #### 1. What a gate OWNS is the registry's answer, resolved per project
+>
+> A gate owns the status its kind's `GateHandler.statusIntent`
+> (`lib/approvalGates/registry.ts`) resolves to in the item's project — **key
+> first, then category**, the same rule `workflowsService.resolveStatusKey`
+> applies for the decide door. Three things own NOTHING:
+>
+> - **A `null` intent** — `pull_request_merge` (§4), where the webhook is the one
+>   writer of `done`.
+> - **A kind this build does not register** (`isRegisteredGateKind` false). Such
+>   a row has no door it can be decided through, so refusing its move would
+>   strand the card with no way forward.
+> - **An intent the project's workflow cannot resolve** — a custom workflow with
+>   no status of that key or category. There is nothing to hold.
+>
+> **Never a `design_result` literal.** The guard reads the handler, so the next
+> kind (`pull_request_approval`, the acceptance receipt) is covered the day it
+> registers, with no line of guard code.
+>
+> _Why:_ the kind already declares what approving it moves. A guard with its own
+> list of kinds and statuses is a second declaration, and the two drift.
+>
+> #### 2. The key is `awaiting`
+>
+> Only an `awaiting` gate refuses. `approved`, `changes_requested` and
+> `superseded` refuse nothing.
+>
+> _Why:_ this is what keeps the reopen path above legal. After approval the gate
+> is `approved`, so a person reopening the card is not blocked by a decision that
+> already happened; a `changes_requested` gate has already sent the work back;
+> a `superseded` one asks nothing.
+>
+> #### 2b. It is about whether there is a PULL REQUEST — with one open, `approved` and `done` each have ONE writer — ADDED 2026-09-14 (Yue)
+>
+> **Yue:** _"when the design work item has a linked PR, approve the design should
+> change the status to approved, and merge should be auto triggered or auto
+> enqueued, webhook changes approved to done after PR merge. if no PR, the work
+> item status will be changed to done after approving. so it's about if there's a
+> PR. if there's a PR, the design gate is actually gone, approval gate is the
+> trigger merge gate like any other regular PR"_ — and, of this story's guard:
+> _"not only done is blocked, approved manual set should be blocked too."_
+>
+> | the work item has…                  | the decision…                              | `approved` is written by                     | `done` is written by  |
+> | ----------------------------------- | ------------------------------------------ | -------------------------------------------- | --------------------- |
+> | **no open pull request**            | the kind's own gate (e.g. the design)      | —                                            | **approving**         |
+> | **an open delivering pull request** | the approve-to-merge gate (§1, MOTIR-4909) | **approving**, which also merges or enqueues | **the merge webhook** |
+>
+> So, beside rule 1's hold on an `awaiting` gate's owned status, **while the item
+> has an OPEN delivering pull request a hand move INTO `approved` is refused unless
+> it is the deciding gate's own write, and a hand move INTO the done category
+> (Cancelled excepted) is refused outright.** Same code, `APPROVAL_GATE_PENDING`:
+> `waitingOn: 'decision'` for `approved`, `waitingOn: 'merge'` for `done`. The
+> payload's `canDecide` is true only when a gate is actually awaiting a decision —
+> never for the merge wait, and never while the pull request is open but not yet
+> green, when no gate has been raised (the refusal then names the
+> `pull_request_approval` kind with no gate id).
+>
+> - **Checked BEFORE rule 1**, because with a pull request open the answer to
+>   "what is Done waiting for?" is the merge, whichever gate rows exist.
+> - **The merge itself passes.** The status sync commits its pull request as
+>   closed before it transitions the card, so it sees no open delivery (and a
+>   sibling still open is already `deferred_open_pr`).
+> - **System writes are exempt**, and the parent rollup treats the refusal as a
+>   logged no-op (`approval_pending`) — a derivation must not take either status
+>   from its writer, nor fail its job trying.
+> - **Every other move stays open**, as rule 3 says.
+> - **Not decided here:** the approve-to-merge gate itself, the `approved` write
+>   and the merge or enqueue (MOTIR-4909 / MOTIR-4882), and a design card with a
+>   pull request raising no `design_result` gate (MOTIR-5534). This rule is the
+>   guard's half of that model and holds whichever of them has landed.
+>
+> #### 3. Exactly ONE move is refused per gate: the move INTO the owned status
+>
+> Every other move the workflow declares stays legal — `→ in_progress`,
+> `→ blocked`, `→ cancelled` — and re-assignment and every field edit are
+> untouched. The refusal is placed with `applyStatusTransition`'s two sibling
+> gates (the artifact-evidence gate and the container-completeness gate), AFTER
+> the legal-edge check.
+>
+> _Why:_ a pending decision must not make the card unusable. A guard that holds
+> more than the one move the decision itself performs teaches people that
+> approvals get in the way, and the next request is to turn them off.
+>
+> #### 4. The refusal has its own code, `APPROVAL_GATE_PENDING`
+>
+> Not `ILLEGAL_TRANSITION`: the edge IS legal, and a caller told otherwise goes
+> and edits their workflow. `ContainerHasOpenChildrenError`
+> (`lib/workItems/errors.ts`) makes the same argument for its own code.
+>
+> - **`/api/v1`** answers **422**, beside the other refusal codes on the
+>   transitions sub-resource.
+> - **The board move** (`POST /api/board/move`) answers **409 carrying `code`**,
+>   so the board can tell it apart from an illegal edge and render it in place.
+> - **Every door carries one payload** — `{ itemKey, kind, canDecide,
+routedToLabel }` — with `canDecide` computed as the Approvals read computes
+>   it (the permission floor AND §2's authority), so a surface never offers a
+>   door that would refuse the person pressing it.
+>
+> #### 5. Two exemptions, and only two
+>
+> - **`opts.system` writes** — the importer, the downward cascade, the parent
+>   rollup — exactly as both sibling gates in `applyStatusTransition` are scoped.
+>   None of them is a person deciding the work is finished.
+> - **The deciding gate's OWN effect.** `approvalGatesService.decide` runs the
+>   kind's effect (step 5) BEFORE it writes the decision (step 6) — the order
+>   MOTIR-5046 set so `outcome_ref` is written in the deciding write. So the gate
+>   is still `awaiting` at the moment its own approval writes `done`. The door
+>   passes THAT gate's id (`decidingGateId`), and the guard skips that gate and
+>   no other: a second `awaiting` gate owning the same status still refuses.
+>
+> _Why:_ without the second exemption, approving a gate is refused by the guard
+> the gate exists to protect, and approval breaks the day the guard ships.
+>
+> **A consequence, not a third exemption (recorded by MOTIR-5526, 2026-09-14): a
+> MERGE is a door like any other.** `changeRequestStatusSync` moves a card
+> through `workItemsService.updateStatus`, which is neither `system` nor a
+> deciding gate, so a pull request that merges while a gate owning `done` is
+> still `awaiting` is HELD — outcome `approval_pending`, with a note on the card
+> saying so. Nothing is stranded: with the pull request merged, approving the
+> gate finds no open delivery and writes `done` itself (§8's first arm). That is
+> the order the gate exists to enforce — the decision, then the status — and a
+> merge that skipped it is exactly the walk-around this amendment closes.
+>
+> #### 6. Pulling the work back WITHDRAWS the question
+>
+> A move that is not `opts.system`, and is either of:
+>
+> - a move from a status ranked at or above `in_review` (`rankOfStatus`,
+>   `lib/workItems/statusLadder.ts`) to one ranked below it, other than the
+>   status keyed `blocked`; or
+> - any move to the cancelled status,
+>
+> **supersedes the item's `awaiting` gates**, in the same transaction as the
+> move. **A PERSON's move, not the product's lifecycle:** the merge status sync
+> moving a card out of review because one of its pull requests closed passes
+> `keepPendingQuestions` and withdraws nothing here — it withdraws merge gates BY
+> SUBJECT itself (MOTIR-4882), and a blanket withdraw would take a sibling pull
+> request's question with it. **`→ blocked` does not:** blocking pauses the work, it does not abandon
+> the question. The supersede writes `state` and nothing else, exactly as §6b's
+> publish-path supersede does — no actor, no note, no `decided_at` — so the audit
+> still cannot read a withdrawn question as a decision. Who pulled the work back
+> is recorded where it already is: the work item's own status revision.
+>
+> _Why:_ a person who takes the card out of review has answered the question by
+> other means. Leaving it `awaiting` would keep it in somebody's Approvals queue
+> asking about work that is no longer on offer — and, under rule 3, would hold a
+> move on a card that is no longer anywhere near it.
+>
+> #### 7. Entering review ASKS AGAIN
+>
+> **Any move INTO `in_review`**, whoever makes it, raises a fresh `awaiting`
+> gate when both hold:
+>
+> - the item's kind resolves a CURRENT subject (a registry seam every registered
+>   kind supplies; for `design_result`, the item's current design result); and
+> - that subject has no `awaiting` or `approved` gate.
+>
+> The CI-green promotion (`lib/services/ciPromotion.ts`, which moves a card to
+> `in_review` through `workItemsService.updateStatus`) is exactly the return to
+> review this rule is for. The importer and the rollup reach cards with no
+> current subject, so they raise nothing whatever their context.
+>
+> _Warrant:_ the story's own outcome. Without this rule, withdraw-then-re-enter
+> leaves a card with no gate, and that card can be moved to Done by hand — the
+> precise walk-around MOTIR-4887 exists to close.
+>
+> _Mirror, as corroboration only:_ Jira Service Management starts a new approval
+> round when an issue is transitioned back into its approval step — _"an approval
+> round is started and the approvers list is populated from the defined field
+> when the issue is subsequently transitioned to the 'Needs Approval' workflow
+> step"_ ([Atlassian Support — _How to automatically update Jira Service
+> Management Approvals when Assets approvers change_](https://support.atlassian.com/jira/kb/how-to-automatically-update-jira-service-management-approvals-when-assets-approvers-change/),
+> read 2026-09-14). The rule stands on the warrant above; the mirror agrees.
+>
+> **Rules 6 and 7 are ADDITIONAL triggers, not replacements.** MOTIR-5482
+> raises and withdraws the pull-request gate on its own triggers (a delivery set
+> turning green, a head moving); those stand.
+>
+> #### 8. Lock order: gate rows first, then the work item — on every transition
+>
+> The decide door locks the gate `FOR UPDATE` (step 1) and then, through the
+> kind's effect, transitions the item, which locks the work item
+> (`workItemRepository.lockById`). A funnel that locked the item first and then
+> reached for the gate to supersede it (rule 6) would take the same two locks in
+> the opposite order: a deadlock on exactly the interleaving where a person
+> approves while another pulls the card back. **So the funnel locks the item's
+> `awaiting` gate rows BEFORE the work item**, matching the door — the same
+> argument §6b's shipped note makes for the publish path's supersede preceding
+> the `design_evidence` lock. The race then resolves by waiting, onto one of two
+> legitimate outcomes: the approval wins and the pull-back is an ordinary move
+> off an approved card, or the pull-back wins and the decide door refuses a
+> `superseded` gate.
+>
+> #### 9. Deliberately NOT decided here
+>
+> - Any notification on a withdraw or a re-ask.
+> - Any new surface for a withdrawn record.
+> - The acceptance receipt, which inherits all of the above when MOTIR-4949
+>   registers its kind.
+>
+> #### Which card implements which rule
+>
+> | rules        | card                                                                                       |
+> | ------------ | ------------------------------------------------------------------------------------------ |
+> | 1–5, 2b      | MOTIR-5526 — the guard, `APPROVAL_GATE_PENDING` and its payload on every door              |
+> | 6 and 8      | MOTIR-5527 — the withdraw, and the lock order                                              |
+> | 7            | MOTIR-5532 — the re-ask, and the current-subject registry seam                             |
+> | the surfaces | MOTIR-5528 — the item page, quick view and edit page · MOTIR-5529 — the board and the list |
 
 ### 7. `prMergeMode` — DECIDED BY THE PLANNER, tier and rename BY THE REQUESTER (Yue, 2026-09-08)
 

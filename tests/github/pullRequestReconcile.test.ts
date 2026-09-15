@@ -4,6 +4,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
@@ -433,7 +434,13 @@ describe('the host calls are BOUNDED', () => {
     const s = await makeScenario('reconcile-terminal@example.com');
     const card = await linkedCard(s, 'closed by hand', [CORE]);
     await workItemsService.updateStatus(card.id, 'in_review', s.ctx);
-    await workItemsService.updateStatus(card.id, 'done', s.ctx);
+    // ⚠️ A SYSTEM write, since MOTIR-5526 (ADR `approval-gates.md` §6d AMENDMENT,
+    // rule 2b): with its pull request still open, a HAND move to Done is refused —
+    // the merge is Done's one writer. This fixture only needs a finished card, so
+    // it reaches Done the way the importer or the cascade would.
+    await withWorkspaceContext(s.ctx, (tx) =>
+      workItemsService.applyStatusTransition(card.id, 'done', s.ctx, tx, { system: true }),
+    );
     hostMerged(card, CORE);
 
     const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });

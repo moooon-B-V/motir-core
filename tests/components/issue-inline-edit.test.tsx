@@ -156,6 +156,77 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     await act(async () => {});
   });
 
+  it('a status move an approval HOLDS reverts and says so ON the status cell, with its door — not a toast (MOTIR-5529)', async () => {
+    statusSpy.mockResolvedValue({
+      ok: false,
+      error: 'held',
+      field: 'status',
+      code: 'APPROVAL_GATE_PENDING',
+      gate: {
+        itemKey: 'PROD-1',
+        kind: 'design_result',
+        waitingOn: 'decision',
+        gateRaised: true,
+        canDecide: true,
+        routedToLabel: 'Ada Lovelace',
+      },
+    });
+    renderTable([row({ identifier: 'PROD-1', id: 'wi_1', status: 'todo', statusLabel: 'To Do' })]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
+    await act(async () => {});
+
+    expect(toastSpy).not.toHaveBeenCalled();
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain("Status can't be moved to In Progress directly");
+    expect(screen.getByRole('link', { name: 'Review & approve' }).getAttribute('href')).toBe(
+      '/items?approval=PROD-1&approvalKind=design_result',
+    );
+    // Reverted: the cell reads its old status again.
+    expect(screen.getByRole('button', { name: 'Edit Status' }).textContent).toContain('To Do');
+
+    // Esc closes it.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+  });
+
+  it('a MERGE hold on the list row carries no door, and any OTHER refusal still toasts (MOTIR-5529)', async () => {
+    statusSpy.mockResolvedValueOnce({
+      ok: false,
+      error: 'held',
+      field: 'status',
+      code: 'APPROVAL_GATE_PENDING',
+      gate: {
+        itemKey: 'PROD-1',
+        kind: 'pull_request_approval',
+        waitingOn: 'merge',
+        gateRaised: false,
+        canDecide: false,
+        routedToLabel: null,
+      },
+    });
+    renderTable([row({ identifier: 'PROD-1', id: 'wi_1', status: 'todo', statusLabel: 'To Do' })]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
+    await act(async () => {});
+    expect(screen.getByTestId('status-held-notice').textContent).toContain(
+      'merging the pull request moves it.',
+    );
+    expect(screen.queryByRole('link', { name: 'Review & approve' })).toBeNull();
+
+    // A click outside closes it; an ordinary refusal then toasts, as before.
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+    statusSpy.mockResolvedValueOnce({ ok: false, error: 'Nope', field: 'status' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
+    await act(async () => {});
+    expect(toastSpy).toHaveBeenCalledWith({ variant: 'error', title: 'Nope' });
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+  });
+
   it('ASSIGNEE cell opens the shared AssigneePicker and reassigns via updateIssueAction (with expectedUpdatedAt)', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
     renderTable([row({ identifier: 'PROD-1', id: 'wi_1', updatedAt: '2026-06-01T00:00:00.000Z' })]);

@@ -10,6 +10,7 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { EditIssueForm } from './_components/EditIssueForm';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
 import { IssueQuickViewController } from '../../_components/IssueQuickViewController';
 
@@ -80,13 +81,16 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   // the read view pays one discarded read. That is deliberate: the redirect is
   // the rare path, and the alternative charges a second round trip to every
   // successful edit.
-  const [{ canEdit }, members] = await Promise.all([
+  const [{ canEdit }, members, heldTransitions] = await Promise.all([
     projectAccessService.getCapabilities(ctx.projectId, serviceCtx),
     assignableMembersService.list({
       projectId: ctx.projectId,
       accessLevel: ctx.project.accessLevel,
       ctx: serviceCtx,
     }),
+    // The moves an approval HOLDS (MOTIR-5528) — the status field says so here
+    // as on the detail page. Concurrent for the same reason as `members`.
+    approvalGatesService.listHeldTransitions(detail.item.id, serviceCtx),
   ]);
   if (!canEdit) {
     redirect(`/items/${detail.item.identifier}`);
@@ -99,6 +103,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         issue={detail.item}
         workflow={detail.workflow}
         members={members}
+        heldTransitions={heldTransitions}
         aiConfigured={isMotirAiConfigured()}
       />
       <RelationshipsPanel

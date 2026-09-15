@@ -7,6 +7,7 @@ import {
 } from '@/lib/workItems/statusTransitionRefusals';
 import { classifyTransitionError } from '@/lib/services/changeRequestStatusSync';
 import {
+  ApprovalGatePendingError,
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
@@ -53,6 +54,14 @@ const INSTANCES: Record<string, () => Error> = {
   ProjectNotFoundError: () => new ProjectNotFoundError('proj_1'),
   MissingArtifactEvidenceError: () => new MissingArtifactEvidenceError('done'),
   ContainerHasOpenChildrenError: () => new ContainerHasOpenChildrenError('in_review', ['ACME-2']),
+  ApprovalGatePendingError: () =>
+    new ApprovalGatePendingError({
+      statusKey: 'done',
+      gateId: 'gate_1',
+      gateKind: 'design_result',
+      itemKey: 'ACME-3',
+      workItemId: 'wi_1',
+    }),
 };
 
 /**

@@ -676,7 +676,9 @@
       "STALE_WORK_ITEM": "This work item was edited by someone else. Refresh and try again.",
       "TYPE_NOT_ALLOWED_ON_KIND": "A type and executor can only be set on a task, subtask, or bug — not on an epic or story.",
       "MISSING_ARTIFACT_EVIDENCE": "A \"deploy\" work item can't be closed until a comment on it records the artifact it published — a version (1.4.0), a registry digest (sha256:…) or an integrity hash (sha512-…). If this deliverable genuinely has no identifier, add a comment beginning \"NO ARTIFACT:\" with the reason.",
-      "CONTAINER_HAS_OPEN_CHILDREN": "This item can't reach that status while children of its own have not been implemented. A parent there claims everything under it is built, and its pull request is opened on that claim. Land the children, re-parent them out if they are no longer in scope, or move the item to Done — which completes them deliberately rather than as a side effect."
+      "CONTAINER_HAS_OPEN_CHILDREN": "This item can't reach that status while children of its own have not been implemented. A parent there claims everything under it is built, and its pull request is opened on that claim. Land the children, re-parent them out if they are no longer in scope, or move the item to Done — which completes them deliberately rather than as a side effect.",
+      "APPROVAL_GATE_PENDING": "This status can't be set directly — an approval on this item is waiting, and approving it is what makes this move. Every other move is still open.",
+      "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
@@ -3819,7 +3821,8 @@
     "sprintColumnPointsTitle": "{points} story points in this column",
     "noActiveSprintTitle": "No active sprint",
     "noActiveSprintDescription": "This board has no sprint in progress. Plan and start a sprint from the backlog, and its work items will appear here in workflow columns.",
-    "noActiveSprintCta": "Go to Backlog"
+    "noActiveSprintCta": "Go to Backlog",
+    "announcementHeld": "{key} returned. {line}"
   },
   "ready": {
     "heading": "Ready to start",
@@ -8332,6 +8335,21 @@
         "keepsFiles": "keep this version's files, so the decision stays checkable;",
         "movesToDone": "move {key} to Done, starting the work items waiting on it."
       }
+    },
+    "statusHeld": {
+      "decision": "Status can't be moved to <strong>{status}</strong> directly — a <strong>{decision}</strong> is waiting.",
+      "decisionSeeOnly": "Status can't be moved to <strong>{status}</strong> directly — a <strong>{decision}</strong> is waiting on {name}.",
+      "decisionNotRaised": "Status can't be moved to <strong>{status}</strong> directly — a <strong>{decision}</strong> is asked for once the pull request's checks pass.",
+      "merge": "Status can't be moved to <strong>{status}</strong> directly — merging the pull request moves it.",
+      "decisionNoun": {
+        "design_result": "design approval",
+        "pull_request_approval": "pull-request approval",
+        "decision_approval": "decision approval",
+        "pull_request_merge": "merge approval"
+      },
+      "reviewAndApprove": "Review & approve",
+      "needsApproval": "needs approval",
+      "movesOnMerge": "moves on merge"
     }
   },
   "approvalOverlay": {

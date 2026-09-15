@@ -13,6 +13,7 @@ import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActions
 import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 import { useNotifyIssuesChanged } from '../../_components/CreateIssueProvider';
+import { BoardCardHeldRefusal } from './BoardHeldRefusal';
 
 // BoardCard (Subtask 3.2.3 · drag wired in 3.2.4) — the compact issue card per
 // `design/boards/board.mock.html` (`.bcard`). It REUSES the shipped issue
@@ -236,6 +237,9 @@ export function BoardCard({
           triggerClassName="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) text-(--el-text-muted) shadow-(--shadow-subtle) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         />
       </div>
+      {/* A move an approval or a merge HOLDS, refused on THIS card (MOTIR-5529,
+          design panel 2b) — the line sits directly under the returned card. */}
+      <BoardCardHeldRefusal workItemId={card.id} />
     </div>
   );
 }
