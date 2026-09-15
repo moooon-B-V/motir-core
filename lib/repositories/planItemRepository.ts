@@ -15,6 +15,27 @@ export type PlanItemCreateInput = Prisma.PlanItemUncheckedCreateInput;
  */
 export type PlanItemUpdateInput = Prisma.PlanItemUncheckedUpdateInput;
 
+/**
+ * One row of {@link planItemRepository.findHistoryByWorkItemId}: the proposal's
+ * identity and the columns that say which relation it stands for, with the
+ * plan's display fields (and its decider's name) on the same row.
+ */
+export type PlanHistoryItemRow = Pick<PlanItem, 'id' | 'op' | 'workItemId' | 'parentRef'> & {
+  plan: Pick<
+    Plan,
+    | 'id'
+    | 'title'
+    | 'status'
+    | 'createdAt'
+    | 'plannedAt'
+    | 'decidedAt'
+    | 'decidedById'
+    | 'authorSource'
+    | 'authorHarness'
+    | 'authorModel'
+  > & { decidedBy: { name: string } | null };
+};
+
 // PlanItem repository — single Prisma operations on the `plan_item` table
 // (Story 7.21 · MOTIR-1336). Writes require `tx`; pure reads use the `db`
 // singleton. No business logic, no transactions, no DTO mapping.
@@ -116,6 +137,87 @@ export const planItemRepository = {
       },
       include: { plan: { select: { id: true, title: true, status: true } } },
       orderBy: [{ plan: { createdAt: 'asc' } }, { id: 'asc' }],
+    });
+  },
+
+  /**
+   * EVERY proposal, in a plan of ANY status, that relates to a given work item —
+   * the rows the item page's PLAN HISTORY is folded from (Story MOTIR-5542 ·
+   * MOTIR-5546). The pending read above, widened from two arms to THREE and
+   * with its status filter dropped:
+   *
+   *   * **created it** — an `add` whose `workItemId` is this card. An `add` is
+   *     born with a null `workItemId`; `plansService.materialize` writes the
+   *     created id back at approve, so this arm only ever matches an APPROVED
+   *     plan's `add`;
+   *   * **changed / archived it** — a `modify` / `remove` TARGETING the card;
+   *   * **added children under it** — an `add` whose `parentRef` is this card.
+   *
+   * Arms one and two share the `[workItemId, workspaceId]` index and arm three
+   * uses `[parentRef, workspaceId]`. They are written as three predicates rather
+   * than a bare `{ workItemId }` so the relation each row stands for is legible
+   * at the query, and so a fourth op can never slip into arm two unnoticed.
+   *
+   * ⚠️ KNOWN LIMITATION, stated rather than fixed: an `add` whose `parentRef` is
+   * an intra-plan `planItem:<id>` temp-ref (a child laid under a story the SAME
+   * plan adds) is NOT matched by arm three — the stored value names the parent
+   * PROPOSAL, not the card it became. No plan is lost by it: after approve the
+   * story's own `add` carries the story's id, so that plan still arrives for the
+   * story through arm one, as *created it* — only its child count reads 0.
+   *
+   * `planIds` narrows to one page of plans (`planRepository
+   * .findPageRelatedToWorkItem` pages them); `null` reads every related row.
+   * The plan's display fields — including the decider's NAME, through the
+   * `decidedBy` relation — ride back on this SAME query. Ordered by plan
+   * creation, then the row's own append order, so a caller folding in memory
+   * keeps the page's order without a second sort.
+   */
+  async findHistoryByWorkItemId(
+    workItemId: string,
+    workspaceId: string,
+    projectId: string,
+    planIds: readonly string[] | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PlanHistoryItemRow[]> {
+    const client = tx ?? dbRead;
+    return client.planItem.findMany({
+      where: {
+        workspaceId,
+        ...(planIds ? { planId: { in: [...planIds] } } : {}),
+        plan: { projectId },
+        OR: [
+          { workItemId, op: 'add' },
+          { workItemId, op: { in: ['modify', 'remove'] } },
+          { parentRef: workItemId, op: 'add' },
+        ],
+      },
+      select: {
+        id: true,
+        op: true,
+        workItemId: true,
+        parentRef: true,
+        plan: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            createdAt: true,
+            plannedAt: true,
+            decidedAt: true,
+            decidedById: true,
+            authorSource: true,
+            authorHarness: true,
+            authorModel: true,
+            decidedBy: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [
+        { plan: { createdAt: 'asc' } },
+        { planId: 'asc' },
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ],
     });
   },
 

@@ -3,12 +3,14 @@
 // the enum types, the raw Json columns) ever crosses the API boundary.
 
 import type { Plan, PlanItem } from '@/generated/prisma/client';
+import type { PlanHistoryItemRow } from '@/lib/repositories/planItemRepository';
 import type {
   PlanDto,
   PlanItemDto,
   PlanItemPatch,
   PlanItemProposedFields,
   PlanWithItemsDto,
+  WorkItemPlanHistoryEntryDto,
 } from '@/lib/dto/plans';
 
 export function toPlanItemDto(row: PlanItem): PlanItemDto {
@@ -65,5 +67,28 @@ export function toPlanWithItemsDto(row: Plan, items: PlanItem[]): PlanWithItemsD
   return {
     ...toPlanDto(row, items.length),
     items: items.map(toPlanItemDto),
+  };
+}
+
+/**
+ * A plan-history entry for the plan a history row belongs to, with an EMPTY
+ * relation — `plansService.listPlanHistoryForWorkItem` folds the plan's rows
+ * into `relation` / `proposalIds` (Story MOTIR-5542 · MOTIR-5546).
+ */
+export function toWorkItemPlanHistoryEntryDto(
+  plan: PlanHistoryItemRow['plan'],
+): WorkItemPlanHistoryEntryDto {
+  return {
+    planId: plan.id,
+    planTitle: plan.title,
+    planStatus: plan.status,
+    createdAt: plan.createdAt.toISOString(),
+    plannedAt: plan.plannedAt ? plan.plannedAt.toISOString() : null,
+    decidedAt: plan.decidedAt ? plan.decidedAt.toISOString() : null,
+    decidedById: plan.decidedById,
+    decidedByName: plan.decidedBy?.name ?? null,
+    author: { source: plan.authorSource, harness: plan.authorHarness, model: plan.authorModel },
+    relation: { op: null, childCount: 0 },
+    proposalIds: { self: null, children: [] },
   };
 }
