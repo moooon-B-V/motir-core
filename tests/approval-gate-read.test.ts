@@ -69,7 +69,7 @@ async function designSubtaskWithGate(
   opts: {
     assigneeId?: string | null;
     reporterId?: string;
-    kind?: 'design_result' | 'pull_request_merge' | 'pull_request_approval';
+    kind?: 'design_result' | 'pull_request_merge' | 'pull_request_approval' | 'decision_approval';
   } = {},
 ) {
   const story = await workItemsService.createWorkItem(
@@ -508,17 +508,17 @@ describe('getForWorkItem is TOTAL over ApprovalGateKind (MOTIR-5223)', () => {
     // The approval overlay asks this read about any kind its URL names, and
     // `handlerFor` refuses a kind with no handler. A render read must still
     // draw the row: the routed-to name falls back to §2's shared rule.
-    // `pull_request_approval` is still a registry hole (MOTIR-4909);
-    // `pull_request_merge` was registered by MOTIR-4793.
-    const { item, gate } = await designSubtaskWithGate({ kind: 'pull_request_approval' });
+    // `decision_approval` is still a registry hole (MOTIR-4907); both pull-request
+    // kinds are registered (MOTIR-4793, MOTIR-5481).
+    const { item, gate } = await designSubtaskWithGate({ kind: 'decision_approval' });
 
     const read = await approvalGatesService.getForWorkItem(
-      { workItemId: item.id, kind: 'pull_request_approval' },
+      { workItemId: item.id, kind: 'decision_approval' },
       fx.ctx,
     );
 
     expect(read.gate?.id).toBe(gate.id);
-    expect(read.gate?.kind).toBe('pull_request_approval');
+    expect(read.gate?.kind).toBe('decision_approval');
     expect(read.routedToLabel).not.toBeNull();
   });
 });
@@ -589,13 +589,13 @@ describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR
     // (MOTIR-5336), and a bystander still reads false.
     const assignee = await projectViewer();
     const { item } = await designSubtaskWithGate({
-      kind: 'pull_request_approval',
+      kind: 'decision_approval',
       assigneeId: assignee.id,
       reporterId: (await plainMember()).id,
     });
     const read = (userId: string) =>
       approvalGatesService.getForWorkItem(
-        { workItemId: item.id, kind: 'pull_request_approval' },
+        { workItemId: item.id, kind: 'decision_approval' },
         { userId, workspaceId: fx.workspaceId },
       );
 

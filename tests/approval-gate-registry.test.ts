@@ -47,19 +47,24 @@ describe('the approval-gate registry — totality at runtime', () => {
     expect(registered.filter((k) => unregistered.includes(k as never))).toEqual([]);
   });
 
-  it('registers `design_result` and `pull_request_merge` in this build (MOTIR-4793)', () => {
-    expect(Object.keys(APPROVAL_GATE_HANDLERS)).toEqual(['design_result', 'pull_request_merge']);
+  it('registers `design_result`, `pull_request_merge` and `pull_request_approval` (MOTIR-5481)', () => {
+    expect(Object.keys(APPROVAL_GATE_HANDLERS)).toEqual([
+      'design_result',
+      'pull_request_merge',
+      'pull_request_approval',
+    ]);
     expect(isRegisteredGateKind('design_result')).toBe(true);
     expect(isRegisteredGateKind('pull_request_merge')).toBe(true);
+    expect(isRegisteredGateKind('pull_request_approval')).toBe(true);
   });
 
-  it('leaves the other two as DECLARED holes, each owned by a named card', () => {
+  it('leaves the last kind as a DECLARED hole, owned by a named card', () => {
     // MOTIR-4907 · MOTIR-4909 / -4910 · MOTIR-4882. The card's own text names
     // ONE hole (`pull_request_merge`) because it predates MOTIR-4911's ADR
     // amendment, which added `decision_approval` and split the pull-request kind
     // in two; `prisma/schema.prisma`'s comment on the enum already says three.
-    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['decision_approval', 'pull_request_approval']);
-    // MOTIR-4793 filled the `pull_request_merge` hole.
+    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['decision_approval']);
+    // MOTIR-4793 filled the `pull_request_merge` hole, and MOTIR-5481 `pull_request_approval`.
   });
 
   it('a registered kind dispatches to a handler carrying the full contract', () => {
