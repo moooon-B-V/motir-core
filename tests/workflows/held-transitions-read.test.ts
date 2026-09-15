@@ -169,6 +169,23 @@ describe('listHeldTransitions', () => {
     ]);
   });
 
+  it('an open pull request with an UNREGISTERED gate awaiting → its rows carry that kind, routed by the card', async () => {
+    // With a pull request open the held moves carry the awaiting gate's kind, and a kind with
+    // no handler routes by the card itself. `pull_request_approval` walked this fallback until
+    // MOTIR-5481 registered it; `decision_approval` is the one kind still a hole (MOTIR-4907).
+    const item = await cardInReview({ gateKind: 'decision_approval' });
+    await openPullRequestOn(item.id);
+
+    const rows = await approvalGatesService.listHeldTransitions(item.id, fx.ctx);
+
+    expect(rows.map((r) => [r.statusKey, r.waitingOn, r.kind])).toEqual([
+      ['approved', 'decision', 'decision_approval'],
+      ['done', 'merge', 'decision_approval'],
+    ]);
+    expect(rows[0]!.gateId).not.toBeNull();
+    expect(rows[0]!.routedToLabel).not.toBeNull();
+  });
+
   it('never lists the status the card already has — at Approved, only Done is held', async () => {
     const item = await cardInReview();
     await openPullRequestOn(item.id);
