@@ -68,6 +68,10 @@ export interface DesignApprovalSeed {
   /** A project member who is neither assignee, reporter, nor a workspace
    *  manager — so `canDecide` is false and the frame draws no verbs. */
   readerEmail: string;
+  /** A project `admin` who is NOT the routed recipient — may decide through the
+   *  manager arm (`approval:decide_any`) while the gate is routed to the reviewer.
+   *  The item page's door serves AUTHORITY, not routing (MOTIR-5215). */
+  adminEmail: string;
   password: string;
   /** A token holding EXACTLY `CLI_TOKEN_GRANT` — a dispatched run's own grant. */
   token: string;
@@ -140,7 +144,7 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
     const user = await createTestPerson({
       email: `da-${label}-${slug}@example.com`,
       password: DESIGN_APPROVAL_PASSWORD,
-      name: label === 'reviewer' ? 'Robin Vale' : 'Sam Reader',
+      name: label === 'reviewer' ? 'Robin Vale' : label === 'admin' ? 'Avery Admin' : 'Sam Reader',
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
     await adminDb.projectMembership.create({
@@ -154,6 +158,9 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
   // The reader's id is never used again — they are defined entirely by what
   // they are NOT (assignee, reporter, workspace manager), which is the point.
   await member('reader', 'member');
+  // A project ADMIN, never assignee or reporter: the one reader the To-approve
+  // tab does not route this gate to and who may still decide it (MOTIR-5215).
+  await member('admin', 'admin');
   await pin(owner.id);
 
   const ctx = { userId: owner.id, workspaceId: workspace.id };
@@ -223,6 +230,7 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
     dependentTitle: DEPENDENT_TITLE,
     reviewerEmail: `da-reviewer-${slug}@example.com`,
     readerEmail: `da-reader-${slug}@example.com`,
+    adminEmail: `da-admin-${slug}@example.com`,
     password: DESIGN_APPROVAL_PASSWORD,
     token: minted.token,
   };

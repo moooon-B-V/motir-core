@@ -2,16 +2,63 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
-import { announceGateDecided, useDecidedGateState } from '@/lib/approvals/decidedGates';
+import {
+  announceGateDecided,
+  useDecidedGate,
+  useDecidedGateState,
+} from '@/lib/approvals/decidedGates';
+import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 // THE DECIDED-GATE SIGNAL (Story MOTIR-5214 · Subtask MOTIR-5225) — how a decision
 // made in the approval overlay reaches the To-approve row's client island
-// (`design/workbench/design-notes.md` § 22 planning flag 2). The store is
+// (`design/workbench/design-notes.md` § 22 planning flag 2), and since Story
+// MOTIR-5215 · Subtask MOTIR-5570 the item page underneath it too. The store is
 // module-level, as it is in the product, so every case uses its own gate id.
+
+const GATE: ApprovalGateDTO = {
+  id: 'gate-x',
+  workItemId: 'wi-1',
+  kind: 'design_result',
+  subjectId: 'ev-1',
+  state: 'awaiting',
+  decidedById: null,
+  decidedAt: null,
+  noteMd: null,
+  subjectVersion: '9840d00ea1b2',
+  decidedByLabel: null,
+  routedToId: 'user-2',
+  decidedUnderAuthority: null,
+  decisionSource: null,
+  outcomeRef: null,
+  createdAt: '2026-09-08T04:00:00.000Z',
+  updatedAt: '2026-09-08T04:00:00.000Z',
+};
+
+function decision(
+  id: string,
+  state: ApprovalGateDTO['state'],
+  extra: { outcomeRef?: string | null; filesKept?: boolean | null } = {},
+) {
+  return {
+    gate: { ...GATE, id, state, outcomeRef: extra.outcomeRef ?? null },
+    filesKept: extra.filesKept ?? null,
+  };
+}
 
 function Probe({ gateId }: { gateId: string }) {
   const state = useDecidedGateState(gateId);
   return <span data-testid={gateId}>{state ?? 'none'}</span>;
+}
+
+function WholeProbe({ gateId }: { gateId: string }) {
+  const entry = useDecidedGate(gateId);
+  return (
+    <span data-testid={`whole-${gateId}`}>
+      {entry
+        ? `${entry.gate.state}|${entry.gate.outcomeRef ?? 'null'}|${String(entry.filesKept)}`
+        : 'none'}
+    </span>
+  );
 }
 
 afterEach(cleanup);
@@ -30,7 +77,7 @@ describe('the decided-gate signal (MOTIR-5225)', () => {
       </>,
     );
 
-    act(() => announceGateDecided('g-a', 'approved'));
+    act(() => announceGateDecided(decision('g-a', 'approved')));
 
     expect(screen.getByTestId('g-a').textContent).toBe('approved');
     expect(screen.getByTestId('g-b').textContent).toBe('none');
@@ -38,12 +85,37 @@ describe('the decided-gate signal (MOTIR-5225)', () => {
 
   it('does not treat `awaiting` as a decision', () => {
     render(<Probe gateId="g-await" />);
-    act(() => announceGateDecided('g-await', 'awaiting'));
+    act(() => announceGateDecided(decision('g-await', 'awaiting')));
     expect(screen.getByTestId('g-await').textContent).toBe('none');
   });
 
   it('renders null on the server, whatever this tab has seen', () => {
-    act(() => announceGateDecided('g-server', 'changes_requested'));
+    act(() => announceGateDecided(decision('g-server', 'changes_requested')));
     expect(renderToString(<Probe gateId="g-server" />)).toContain('none');
+  });
+});
+
+describe('the decided-gate signal carries the WHOLE decision (MOTIR-5570)', () => {
+  it('hands the decided row, its outcomeRef and filesKept to a watcher', () => {
+    render(<WholeProbe gateId="g-whole" />);
+    expect(screen.getByTestId('whole-g-whole').textContent).toBe('none');
+
+    act(() =>
+      announceGateDecided(decision('g-whole', 'approved', { outcomeRef: 'done', filesKept: true })),
+    );
+
+    expect(screen.getByTestId('whole-g-whole').textContent).toBe('approved|done|true');
+  });
+
+  it('a repeat of the same decided state is not a change — the first entry stands', () => {
+    act(() => announceGateDecided(decision('g-repeat', 'approved', { filesKept: true })));
+    render(<WholeProbe gateId="g-repeat" />);
+    act(() => announceGateDecided(decision('g-repeat', 'approved', { filesKept: false })));
+    expect(screen.getByTestId('whole-g-repeat').textContent).toBe('approved|null|true');
+  });
+
+  it('renders null on the server for the whole decision too', () => {
+    act(() => announceGateDecided(decision('g-whole-server', 'approved')));
+    expect(renderToString(<WholeProbe gateId="g-whole-server" />)).toContain('none');
   });
 });

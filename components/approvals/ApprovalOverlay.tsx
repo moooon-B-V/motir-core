@@ -359,7 +359,10 @@ export function ApprovalOverlay() {
         // stays open over it.
         if (!result.ok) return result.refusal;
         setDecided({ token: token!, gate: result.gate, filesKept: result.filesKept });
-        announceGateDecided(result.gate.id, result.gate.state);
+        // The WHOLE decision, not only its state: the To-approve row reads the
+        // state, and the item page underneath reads `outcomeRef` for its status
+        // rail and `filesKept` for its record (MOTIR-5570).
+        announceGateDecided({ gate: result.gate, filesKept: result.filesKept });
         router.refresh();
         return null;
       };

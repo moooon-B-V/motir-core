@@ -1708,6 +1708,13 @@ export default defineConfig({
         'app/api/work-items/**/design-evidence/route.ts',
         'app/api/work-items/**/design-evidence/upload-token/route.ts',
         'app/**/_components/DesignResultPanel.tsx',
+        // Story MOTIR-5215 · Subtask MOTIR-5230 — the item page's Design result
+        // SECTION (the call-to-action band, the kept states, and no local gate
+        // state) and the island that carries an overlay decision to the status
+        // rail. Neither was in any coverage list before this story. Written
+        // `app/**/…` for the route-group reason recorded above (MOTIR-2449).
+        'app/**/_components/DesignResultSection.tsx',
+        'app/**/_components/DecidedGateStatusBridge.tsx',
         // Story MOTIR-2649 · Subtask MOTIR-2655 — every executable file the Home
         // story adds, named so the ≥90% per-file gate applies to code that is
         // brand new rather than only to code that was already reported.
@@ -4242,6 +4249,23 @@ export default defineConfig({
           lines: 90,
         },
         'app/**/_components/DesignResultPanel.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-5215 · Subtask MOTIR-5230 — MEASURED before being pinned, on
+        // the parent branch, over the story's own suites (the band, the story
+        // gate, the section layout, the re-homed rail and files-kept guards, the
+        // bridge): `DecidedGateStatusBridge.tsx` 100 on every axis;
+        // `DesignResultSection.tsx` 100 statements / 100 functions / 100 lines,
+        // and its branches at 100 once the story gate asserts the no-version
+        // meta line in both the band and a kept state. Its one unreachable arm —
+        // the frame's `onDecide` on a page with an empty verb set — carries a
+        // `v8 ignore` that cites `design-result-section-story-gate.test.tsx`,
+        // which asserts no verb exists for any state. Pinned at the repo's 90
+        // floor, not at the measured number.
+        'app/**/_components/DesignResultSection.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/_components/DecidedGateStatusBridge.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story MOTIR-2649 · Subtask MOTIR-2655 — MEASURED before being pinned,
         // on this branch, with `tests/integration/workbench/`: 100 branches /
         // 100 functions / 100 lines on the service and the mapper, and 100 /

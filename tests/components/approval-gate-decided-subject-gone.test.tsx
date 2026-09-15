@@ -136,6 +136,7 @@ describe.each(DECIDED_STATES)(
             subject={{ evidence: null, filesKept: false }}
             itemIdentifier="MOTIR-4321"
             routedToLabel={null}
+            routedToViewer={false}
           />
         </OptimisticStatusProvider>,
       );

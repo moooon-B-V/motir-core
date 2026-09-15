@@ -8385,6 +8385,11 @@
         "next": "请检查网络连接后重试。"
       }
     },
+    "cta": {
+      "asked": "{when}发起",
+      "body": "全屏审阅设计后，再批准或要求修改。",
+      "bodyRoutedElsewhere": "等待 <person>{name}</person> 处理——你也可以做出决定。请先全屏审阅。"
+    },
     "designResult": {
       "kindLabel": "设计成果",
       "meta": {

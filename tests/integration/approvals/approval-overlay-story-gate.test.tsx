@@ -434,16 +434,13 @@ describe('GUARD · ONE close seam', () => {
 });
 
 describe('GUARD · ONE decide path — no second approve control', () => {
-  it('the decide action is called from the item page’s section and the overlay, and nowhere else', () => {
+  it('the decide action is called from the overlay, and nowhere else — the item page hands it over (MOTIR-5229)', () => {
     const callers = ['app', 'components', 'lib']
       .flatMap(sourceFiles)
       .filter((f) => codeOf(f).includes('decideApprovalGateAction('))
       .filter((f) => !f.endsWith('approvalGateActions.ts'))
       .sort();
-    expect(callers).toEqual([
-      'app/(authed)/items/[key]/_components/DesignResultSection.tsx',
-      OVERLAY,
-    ]);
+    expect(callers).toEqual([OVERLAY]);
   });
 
   it('the Approvals list composes no frame of its own any more', () => {

@@ -600,6 +600,7 @@ export default async function IssueDetailPage({
                     reads={lateReads}
                     itemId={item.id}
                     itemIdentifier={item.identifier}
+                    currentUserId={ctx.userId}
                     canEdit={canEdit}
                     repoDelivery={deliveryView.repos}
                     deliveries={deliveryView.deliveries}

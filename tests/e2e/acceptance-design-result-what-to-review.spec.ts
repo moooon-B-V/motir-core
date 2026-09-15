@@ -81,28 +81,26 @@ test.describe('a design result shows only what to review', () => {
       await client.close();
     });
 
-    await chapter('The card leads with the mock; the note is one link away', async () => {
+    await chapter('The card says a decision is owed, and offers one door to it', async () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       await openCard(page, seed.designKey, TITLES.design);
 
-      const port = main(page).getByRole('group', { name: PORT });
-      await expect(port).toBeVisible();
-      await expect(port.locator('iframe').first()).toBeVisible();
-      const noteLink = port.getByRole('link', { name: en.designResult.openNote });
-      await expect(noteLink).toBeVisible();
-      // No inline note and no screenshot — only what there is to review.
-      await expect(port.getByRole('img')).toHaveCount(0);
-      await expect(port.getByText(en.designResult.earlierFormat)).toHaveCount(0);
+      // ⚠️ SINCE MOTIR-5229 THE ITEM PAGE HANDS THE DECISION OVER. The reviewer
+      // may decide this gate, so the card shows the call-to-action band — no port
+      // and no verbs — and the design is reviewed full screen, in the overlay the
+      // next chapter opens. What this story promised about WHAT TO REVIEW (the
+      // mock, the note one link away, no screenshot) is asserted there, on the
+      // surface that now shows it.
+      // Scoped to the Design result section: while this gate holds a move the
+      // status control carries a second door of the same name (MOTIR-5528).
+      const section = main(page)
+        .locator('[data-surface="card"]')
+        .filter({ has: page.getByRole('heading', { level: 2, name: en.designResult.title }) });
+      await expect(
+        section.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove }),
+      ).toHaveCount(1);
+      await expect(main(page).getByRole('group', { name: PORT })).toHaveCount(0);
       await beat();
-
-      // The link is the AUTHENTICATED content route, which answers with a signed
-      // redirect to the note file itself.
-      const href = (await noteLink.getAttribute('href'))!;
-      expect(href).toMatch(/^\/api\/attachments\/[^/]+\/content$/);
-      const res = await page.request.get(href, { maxRedirects: 0 });
-      expect(res.status()).toBe(302);
-      expect(res.headers()['location']).toContain('design-notes');
-      expect(res.headers()['location']).toContain('X-Amz-Signature');
     });
 
     await chapter('Approve it from the Workbench, full screen', async () => {
@@ -123,7 +121,20 @@ test.describe('a design result shows only what to review', () => {
       await expect(dialog).toBeVisible();
       const port = dialog.getByRole('group', { name: PORT });
       await expect(port.locator('iframe').first()).toBeVisible();
-      await expect(port.getByRole('link', { name: en.designResult.openNote })).toBeVisible();
+      const noteLink = port.getByRole('link', { name: en.designResult.openNote });
+      await expect(noteLink).toBeVisible();
+      // No inline note and no screenshot — only what there is to review.
+      await expect(port.getByRole('img')).toHaveCount(0);
+      await expect(port.getByText(en.designResult.earlierFormat)).toHaveCount(0);
+
+      // The link is the AUTHENTICATED content route, which answers with a signed
+      // redirect to the note file itself.
+      const href = (await noteLink.getAttribute('href'))!;
+      expect(href).toMatch(/^\/api\/attachments\/[^/]+\/content$/);
+      const res = await page.request.get(href, { maxRedirects: 0 });
+      expect(res.status()).toBe(302);
+      expect(res.headers()['location']).toContain('design-notes');
+      expect(res.headers()['location']).toContain('X-Amz-Signature');
       await beat();
 
       await dialog.getByRole('button', { name: en.approvalGate.verb.approve, exact: true }).click();

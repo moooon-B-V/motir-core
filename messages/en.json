@@ -8389,6 +8389,11 @@
         "next": "Check your connection and try again."
       }
     },
+    "cta": {
+      "asked": "asked {when}",
+      "body": "Review the design full screen, then approve or request changes.",
+      "bodyRoutedElsewhere": "Waiting on <person>{name}</person> — you can decide it too. Review it full screen first."
+    },
     "designResult": {
       "kindLabel": "Design result",
       "meta": {

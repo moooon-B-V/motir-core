@@ -32,6 +32,12 @@ vi.mock('@/app/(authed)/items/[key]/_components/DesignResultSection', () => ({
   // A marker, so a test can see whether the STANDALONE section rendered.
   DesignResultSection: () => <div data-testid="standalone-design-result" />,
 }));
+vi.mock('@/app/(authed)/items/[key]/_components/DecidedGateStatusBridge', () => ({
+  // A marker, so a test can see whether the page listens for an overlay decision.
+  DecidedGateStatusBridge: ({ gateId }: { gateId: string }) => (
+    <div data-testid="decided-gate-status-bridge" data-gate-id={gateId} />
+  ),
+}));
 vi.mock('@/app/(authed)/items/[key]/_components/DevelopmentLinkControl', () => ({
   DevelopmentLinkProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   LinkPullRequestDoor: () => null,
@@ -42,6 +48,7 @@ vi.mock('@/app/(authed)/items/[key]/_components/DevelopmentLinkControl', () => (
 import { LateUpperSections } from '@/app/(authed)/items/[key]/_components/LateSections';
 import type { LateReads } from '@/app/(authed)/items/[key]/_components/lateReads';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
+import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 afterEach(cleanup);
 
@@ -90,6 +97,7 @@ describe('the late stack — How to test is part of the Development card (MOTIR-
       reads: Promise.resolve(reads()),
       itemId: 'wi-acme-12',
       itemIdentifier: 'ACME-12',
+      currentUserId: 'u-viewer',
       canEdit: true,
       repoDelivery: [],
       deliveries: [],
@@ -179,6 +187,7 @@ describe('the late stack — a design result with open linked pull requests (Q8)
       }),
       itemId: 'wi-acme-12',
       itemIdentifier: 'ACME-12',
+      currentUserId: 'u-viewer',
       canEdit: true,
       repoDelivery: [],
       deliveries: [],
@@ -213,5 +222,47 @@ describe('the late stack — a design result with open linked pull requests (Q8)
     expect(screen.getByTestId('standalone-design-result')).toBeTruthy();
     expect(screen.queryByTestId('development-design-result')).toBeNull();
     expect(document.body.textContent).toContain(messages.github.development.gloss);
+  });
+});
+
+// ── MOTIR-5570 ────────────────────────────────────────────────────────────────
+// The approval overlay decides outside this page's optimistic status provider, so
+// the page mounts a listener beside the Design result section whenever it has a
+// `design_result` gate to hear about — and none when it has no gate.
+describe('the late stack — the page listens for a decision made in the overlay (MOTIR-5570)', () => {
+  function designCard(gate: ApprovalGateDTO | null): LateReads {
+    const base = reads();
+    return {
+      ...base,
+      pullRequests: [],
+      isDesignCard: true,
+      designGate: { ...base.designGate, gate },
+    };
+  }
+
+  async function renderStack(r: LateReads) {
+    const ui = await LateUpperSections({
+      reads: Promise.resolve(r),
+      itemId: 'wi-acme-12',
+      itemIdentifier: 'ACME-12',
+      currentUserId: 'u-viewer',
+      canEdit: true,
+      repoDelivery: [],
+      deliveries: [],
+    });
+    return render(ui);
+  }
+
+  it('mounts the listener for the card’s design gate, beside the section', async () => {
+    await renderStack(designCard({ id: 'gate-42', state: 'awaiting' } as ApprovalGateDTO));
+    const bridge = screen.getByTestId('decided-gate-status-bridge');
+    expect(bridge.getAttribute('data-gate-id')).toBe('gate-42');
+    expect(screen.getByTestId('standalone-design-result')).toBeTruthy();
+  });
+
+  it('mounts no listener on a design card with no gate', async () => {
+    await renderStack(designCard(null));
+    expect(screen.getByTestId('standalone-design-result')).toBeTruthy();
+    expect(screen.queryByTestId('decided-gate-status-bridge')).toBeNull();
   });
 });
