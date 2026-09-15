@@ -189,6 +189,19 @@ export class InvalidPrMergeModeError extends Error {
   }
 }
 
+/**
+ * A bug-destination write carrying something other than a folder id or `null`
+ * (Story MOTIR-4927 · MOTIR-4938). `null` is a CHOICE — the project root — so it
+ * is valid; a missing key, a number or an empty string is not. → 400.
+ */
+export class InvalidBugDestinationError extends Error {
+  readonly code = 'INVALID_BUG_DESTINATION' as const;
+  constructor(readonly value: unknown) {
+    super('A bug destination is a folder id, or null for the project root.');
+    this.name = 'InvalidBugDestinationError';
+  }
+}
+
 export class ProjectNotFoundError extends Error {
   readonly code = 'PROJECT_NOT_FOUND' as const;
   constructor(projectId: string) {

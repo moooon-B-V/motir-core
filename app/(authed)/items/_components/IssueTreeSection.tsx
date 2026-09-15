@@ -113,10 +113,12 @@ export async function IssueTreeSection({
     ) : filtered ? (
       <EmptyState title={t('noMatchingTitle')} description={t('noMatchingDescription')} />
     ) : (
+      // A member who cannot create keeps the title and sentence and loses the
+      // action they cannot take (design/work-items/items-first-run.mock.html panel 3).
       <EmptyState
         title={t('noIssuesTitle')}
         description={t('noIssuesDescription')}
-        action={<NewIssueButton />}
+        action={caps.canEdit ? <NewIssueButton /> : undefined}
       />
     );
 
@@ -189,6 +191,9 @@ export async function IssueTreeSection({
   const initialLevel = await workItemsService.listRootIssues(projectId, { sort }, ctx);
   // An EDITOR's empty project still mounts the tree (which draws the same empty
   // state) so the toolbar's "New folder" has a level to create into (MOTIR-5344).
+  // A root holding folders but no work items mounts it for EVERY member: the tree
+  // draws the folder rows and the same empty state below them, decided by the
+  // read's `workItemTotal` rather than by counting rows (MOTIR-5541).
   if (initialLevel.total === 0 && !caps.canEdit) return empty;
   return withEstimation(
     <IssueTreeTable

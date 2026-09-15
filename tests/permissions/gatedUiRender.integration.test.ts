@@ -121,9 +121,13 @@ describe('a seeded role renders exactly what it holds', () => {
     //
     // 13 → 14 (MOTIR-4928 · MOTIR-5262): the `monitoring` room joined `general`,
     // gated on `integration:manage`, which an admin holds.
-    expect(shell.settingsEntries.length).toBe(14);
+    //
+    // 14 → 15 (MOTIR-4927 · MOTIR-4938): the `bugs` room joined `work`, gated on
+    // `project:administer`, which an admin holds.
+    expect(shell.settingsEntries.length).toBe(15);
     expect(shell.settingsEntries).toContain('approvals');
     expect(shell.settingsEntries).toContain('monitoring');
+    expect(shell.settingsEntries).toContain('bugs');
     expect(shell.settingsGroups).toEqual(['general', 'access', 'work', 'automation']);
     expect(shell.areaDoor).toBe(true);
     expect(shell.navRows).toEqual(PROJECT_NAV_ACCESS.map((e) => e.href));

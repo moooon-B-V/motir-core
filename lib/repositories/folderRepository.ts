@@ -93,6 +93,29 @@ export const folderRepository = {
     return tx.folder.findUnique({ where: { id } });
   },
 
+  /**
+   * A project's ROOT folder with this name, ignoring case — the Bugs room's LABEL
+   * match for "this project's Bugs folder" (Story MOTIR-4927 · MOTIR-4938). For
+   * DISPLAY only: nothing resolves a bug destination by a folder's name
+   * (`lib/projects/bugDestination.ts`). Root sibling names are unique ignoring
+   * case, so there is at most one.
+   */
+  async findRootByName(
+    projectId: string,
+    workspaceId: string,
+    name: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Folder | null> {
+    return tx.folder.findFirst({
+      where: {
+        projectId,
+        workspaceId,
+        parentFolderId: null,
+        name: { equals: name, mode: 'insensitive' },
+      },
+    });
+  },
+
   async findByIds(ids: string[], tx: Prisma.TransactionClient): Promise<Folder[]> {
     if (ids.length === 0) return [];
     return tx.folder.findMany({ where: { id: { in: ids } } });

@@ -2,6 +2,7 @@ import {
   Activity,
   Bot,
   Box,
+  Bug,
   Columns3,
   FolderGit2,
   Gauge,
@@ -520,6 +521,22 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // VERIFIED: `componentsService`'s module-private `assertCanManage` asserts
     // `component:manage`.
     permission: 'component:manage',
+  },
+  {
+    id: 'bugs',
+    group: 'work',
+    href: '/settings/project/bugs',
+    icon: Bug,
+    labelKey: 'nav.bugs',
+    // Story MOTIR-4927 · MOTIR-4938 — where Motir files the bugs it creates on its
+    // own (`design/projects/design-notes.md` § Bugs). LAST in `work`, directly
+    // under `components`: like `fields` and `components` it shapes where in the
+    // tree a kind of work item is created, which is neither a credential
+    // (`general`) nor Motir's own behaviour (`automation`) — §3.
+    //
+    // VERIFIED: `bugDestinationService.getSettings` and `setDestination` both
+    // assert `project:administer` (§4 — there is no `bug:*` key to take).
+    permission: 'project:administer',
   },
   {
     id: 'ai-planning',

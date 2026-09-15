@@ -236,6 +236,17 @@ const ROUTES: { route: string; call: Call }[] = [
       ),
   },
   {
+    // MOTIR-4938: the Bugs room's write door. `null` is a valid destination (the
+    // project root), and the route resolves the key before the service reads the
+    // value, so the request reaches the lookup rather than 400ing on the body.
+    route: 'PATCH bug-destination',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/bug-destination/route')).PATCH(
+        json('PATCH', { folderId: null }),
+        p({ key }),
+      ),
+  },
+  {
     route: 'GET repositories',
     call: async (key) =>
       (await import('@/app/api/projects/[key]/repositories/route')).GET(get(), p({ key })),

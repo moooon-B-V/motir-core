@@ -108,7 +108,8 @@ describe('deleteFolderAction', () => {
     await expect(
       adminDb.workItem.findUniqueOrThrow({ where: { id: untouched } }),
     ).resolves.toMatchObject({ folderId: bystander.id });
-    await expect(adminDb.folder.count({ where: { projectId: fx.projectId } })).resolves.toBe(5);
+    // Five it made, plus the seeded Bugs folder (MOTIR-4935).
+    await expect(adminDb.folder.count({ where: { projectId: fx.projectId } })).resolves.toBe(6);
   });
 
   it('returns FOLDER_NAME_TAKEN, naming the child, when a child folder name is already at the destination — and deletes nothing', async () => {

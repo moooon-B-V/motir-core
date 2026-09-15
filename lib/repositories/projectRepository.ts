@@ -976,6 +976,45 @@ export const projectRepository = {
   },
 
   /**
+   * Point the project's BUG DESTINATION at a folder, or at `null` — the project
+   * ROOT, chosen (Story MOTIR-4927 · MOTIR-4934). Unconditional; `tx` REQUIRED.
+   * The same-project rule is the database's
+   * (`trg_project_bug_destination_folder_tenancy`), so a folder of another
+   * project surfaces as a refused write, never as a stored pointer.
+   */
+  async setBugDestinationFolder(
+    id: string,
+    folderId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({
+      where: { id },
+      data: { bugDestinationFolderId: folderId },
+    });
+  },
+
+  /**
+   * CARRY a bug destination off a folder that is about to be deleted
+   * (MOTIR-5537): if `projectId`'s destination names `fromFolderId`, point it at
+   * `toFolderId` — the deleted folder's parent, or `null` for the project root.
+   * Conditional in the WHERE, so a project whose destination is elsewhere is not
+   * written. Returns the rows written (0 or 1). `tx` REQUIRED — it runs inside
+   * the delete's own transaction, under its structure lock.
+   */
+  async carryBugDestination(
+    projectId: string,
+    fromFolderId: string,
+    toFolderId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.project.updateMany({
+      where: { id: projectId, bugDestinationFolderId: fromFolderId },
+      data: { bugDestinationFolderId: toFolderId },
+    });
+    return result.count;
+  },
+
+  /**
    * Write the ESTABLISHMENT default and stamp it — SET-ONCE at the database level
    * (MOTIR-5178). The NULL-guarded `updateMany` writes only a row whose
    * `prMergeModeDecidedAt` is still null, so a value a person already decided is

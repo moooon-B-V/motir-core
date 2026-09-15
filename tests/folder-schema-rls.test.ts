@@ -1,4 +1,5 @@
 import type { Prisma, WorkItemKind } from '@/generated/prisma/client';
+import { seededBugsFolderIds } from './fixtures/projectFixtures';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
@@ -446,11 +447,13 @@ describe('folder — RLS under the non-bypass role', () => {
     const t = await makeTenants();
     const mine = await makeFolder({ workspaceId: t.w1, projectId: t.p1, createdById: t.userAId });
     const theirs = await makeFolder({ workspaceId: t.w2, projectId: t.p2, createdById: t.userBId });
+    // Every project is born with a Bugs folder (MOTIR-4935); this test is about the ones it made.
+    const seeded = await seededBugsFolderIds();
 
     const visible = await asAppRole({ userId: t.userAId, workspaceId: t.w1 }, (tx) =>
       tx.folder.findMany({ select: { id: true } }),
     );
-    expect(visible.map((f) => f.id)).toEqual([mine]);
+    expect(visible.map((f) => f.id).filter((id) => !seeded.has(id))).toEqual([mine]);
 
     // Invisible, so an update addresses no row.
     await expect(
@@ -479,16 +482,23 @@ describe('folder — RLS under the non-bypass role', () => {
     const t = await makeTenants();
     const inP1 = await makeFolder({ workspaceId: t.w1, projectId: t.p1, createdById: t.userAId });
     const inP1b = await makeFolder({ workspaceId: t.w1, projectId: t.p1b, createdById: t.userAId });
+    // Every project is born with a Bugs folder (MOTIR-4935); this test is about the ones it made.
+    const seeded = await seededBugsFolderIds();
 
     const narrowed = await asAppRole(
       { userId: t.userAId, workspaceId: t.w1, projectId: t.p1 },
       (tx) => tx.folder.findMany({ select: { id: true } }),
     );
-    expect(narrowed.map((f) => f.id)).toEqual([inP1]);
+    expect(narrowed.map((f) => f.id).filter((id) => !seeded.has(id))).toEqual([inP1]);
 
     const wide = await asAppRole({ userId: t.userAId, workspaceId: t.w1 }, (tx) =>
       tx.folder.findMany({ select: { id: true }, orderBy: { position: 'asc' } }),
     );
-    expect(wide.map((f) => f.id).sort()).toEqual([inP1, inP1b].sort());
+    expect(
+      wide
+        .map((f) => f.id)
+        .filter((id) => !seeded.has(id))
+        .sort(),
+    ).toEqual([inP1, inP1b].sort());
   });
 });
