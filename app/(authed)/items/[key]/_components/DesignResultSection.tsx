@@ -192,6 +192,13 @@ export function DesignResultSection({
 
   return (
     <ApprovalGateControl
+      // FLUSH IN THE SECTION (Story MOTIR-5215 · Subtask MOTIR-5569). This
+      // section is mounted inside `ContentSectionCard`, which already carries the
+      // border and the title *Design result*; the frame drawing its own box and
+      // its own kind label inside it was the container-in-a-container the design
+      // was sent back for (`design/work-items/design-notes.md` § *The item page
+      // HANDS THE DECISION OVER*). One container, one label.
+      layout="section"
       gate={current}
       canDecide={canDecide}
       kindLabel={tDesign('kindLabel')}
