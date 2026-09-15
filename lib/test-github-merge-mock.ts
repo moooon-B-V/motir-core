@@ -16,6 +16,7 @@
 //   - GET  /repos/{owner}/{name}/rules/branches/{base}  → does the base require a merge queue?
 //   - PUT  /repos/{owner}/{name}/pulls/{number}/merge   → the merge, or the host's refusal
 //   - POST /graphql (`enqueuePullRequest`)              → the queue entry
+//   - GET  /repos/{owner}/{name}/pulls/{number}/files   → the merged pull request's paths (empty)
 //   - POST /app/installations/{id}/access_tokens        → ONLY when E2E_TEST_GITHUB_REPOS is
 //                                                         off (that seam already answers it,
 //                                                         and journals it for its own spec)
@@ -150,6 +151,7 @@ const REPO_PATH = /^\/repos\/([^/]+)\/([^/?]+)$/;
 const PULL_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/;
 const MERGE_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/merge$/;
 const RULES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/rules\/branches\/[^?]+$/;
+const FILES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files(?:\?.*)?$/;
 
 /** A path's repository and pull request, when this seam answers for that repository. */
 function scoped(pattern: RegExp, path: string): { repository: string; key: string | null } | null {
@@ -288,6 +290,20 @@ export function installGithubMergeMock(agent: MockAgent): void {
         default:
           return reply(405, { message: REFUSED_MERGE[answer.refusal].message });
       }
+    })
+    .persist();
+
+  // ── The merged pull request's changed files ────────────────────────────────
+  // The merge WEBHOOK the spec drives afterwards captures a merged pull request's changed
+  // paths (`githubWebhookService`, best-effort). Answered here so that capture reads an
+  // empty list rather than leaving for the real host with a synthetic token.
+  pool
+    .intercept({ path: (p) => scoped(FILES_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { key } = scoped(FILES_PATH, path)!;
+      journal({ method: 'GET', path, body: null, pullRequest: key });
+      return reply(200, []);
     })
     .persist();
 

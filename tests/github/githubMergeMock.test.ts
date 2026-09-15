@@ -269,3 +269,17 @@ describe('the answers the provider short-circuits before the merge call', () => 
     expect(journal()).toEqual([expect.objectContaining({ body: null, pullRequest: 'acme/web#8' })]);
   });
 });
+
+describe('the merge webhook afterwards', () => {
+  it('reads an empty changed-file list for a pull request of a listed repository', async () => {
+    control({ repositories: ['acme/web'] });
+
+    const res = await fetch('https://api.github.com/repos/acme/web/pulls/7/files?per_page=100');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+    expect(journal()).toEqual([
+      expect.objectContaining({ method: 'GET', pullRequest: 'acme/web#7' }),
+    ]);
+  });
+});
