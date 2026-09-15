@@ -4,7 +4,7 @@ import type {
   GateHandler,
   GateRoutingArgs,
 } from '@/lib/approvalGates/registry';
-import { pullRequestSubjectVersion } from '@/lib/approvalGates/pullRequestMergeHandler';
+import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import {
   workItemDeliveryRepository,
@@ -34,29 +34,9 @@ export const PULL_REQUEST_APPROVAL_TARGET = { key: 'approved', category: 'in_pro
  *  request's check rows (its head) and repository. */
 export type PullRequestApprovalSubject = WorkItemDeliveryWithChecks[];
 
-/**
- * The delivery set's canonical VERSION (decision 2): each member as
- * `owner/name#number@headSha`, sorted, comma-joined — so the same set always gives the
- * same string, whatever order its rows were read in.
- *
- * Null for an empty set, and null when ANY member has no known head: a set version
- * with a hole in it would claim commits nobody can name, and an approval whose version
- * is unknown is weaker evidence rather than a refusal (the door records null).
- */
-export function deliverySetVersion(members: readonly (string | null)[]): string | null {
-  if (members.length === 0 || members.some((member) => member === null)) return null;
-  return [...(members as string[])].sort().join(',');
-}
-
-/** One delivery row's member version — the merge handler's own spelling, so a member of
- *  the set and that pull request's merge gate can never disagree about its head. */
-function memberVersion(delivery: WorkItemDeliveryWithChecks): string | null {
-  return pullRequestSubjectVersion({
-    number: delivery.pullRequest.number,
-    repo: delivery.repo,
-    checkRuns: delivery.pullRequest.checkRuns,
-  });
-}
+// The set version lives in `deliverySetVersion.ts`, which imports no service, because the
+// raise and the head-move withdrawal compute it inside the CI promotion too (MOTIR-5482).
+export { deliverySetVersion };
 
 export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubject> = {
   /**
@@ -65,7 +45,7 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
    *
    * `github_pull_request` stores no head sha of its own: a member's head is its latest
    * check run's commit, which is exactly the window the all-green verdict (and so the
-   * gate) was formed over. {@link memberVersion} reads it the merge handler's way.
+   * gate) was formed over. `deliveryMemberVersion` reads it the merge handler's way.
    */
   async resolveSubject({ gate, tx }: GateEffectArgs): Promise<PullRequestApprovalSubject | null> {
     const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
@@ -78,7 +58,9 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
   /** WHICH commits were approved — the set's canonical string (decision 2). */
   async subjectVersion(args: GateEffectArgs): Promise<string | null> {
     const deliveries = await this.resolveSubject(args);
-    return deliveries ? deliverySetVersion(deliveries.map(memberVersion)) : null;
+    return deliveries
+      ? deliverySetVersion(deliveries.map((delivery) => deliveryMemberVersion(delivery)))
+      : null;
   },
 
   /** ADR §2: `assigneeId ?? reporterId` — the routing rule every kind shares. */
