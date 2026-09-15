@@ -1313,3 +1313,82 @@ export interface WorkItemPendingProposalDto {
   /** How many `add`s in this plan name this card as their parent; `0` when none. */
   childCount: number;
 }
+
+/**
+ * What ONE plan did — or proposed — to ONE work item, as the item page's PLAN
+ * HISTORY reads it (Story MOTIR-5542 · MOTIR-5546).
+ *
+ * `op` is the plan's claim ON the card: `add` means *created this item* (the
+ * `add` whose materialized id is this card, so only an approved plan carries
+ * it), `modify` *changed it*, `remove` *archived it*. `@@unique([planId,
+ * workItemId])` caps a plan at one of the three for a card. `childCount` is how
+ * many `add`s in the plan are parented on the card, and may combine with any
+ * `op`. The invariant `op !== null || childCount > 0` holds on every row: a plan
+ * that did nothing to the card is not in its history.
+ *
+ * The TENSE is not here, deliberately: the same `modify` is *proposes to change*
+ * on a `planned` plan and *changed* on an `approved` one, and that sentence is
+ * the renderer's to build from `planStatus`.
+ */
+export interface WorkItemPlanHistoryRelationDto {
+  op: PlanItemOpDto | null;
+  childCount: number;
+}
+
+/**
+ * The proposal ids behind a {@link WorkItemPlanHistoryRelationDto}, per
+ * relation — `self` is the one `add` / `modify` / `remove` naming the card,
+ * `children` the `add`s parented on it, in append order. A consumer comparing a
+ * card against the plan that shaped it names the exact proposal with these,
+ * without a second read.
+ */
+export interface WorkItemPlanHistoryProposalIdsDto {
+  self: string | null;
+  children: string[];
+}
+
+/**
+ * ONE plan in a work item's PLAN HISTORY (Story MOTIR-5542 · MOTIR-5546) — every
+ * status, not only the pending pair {@link WorkItemPendingProposalDto} covers, so
+ * a DECLINED plan that proposed archiving the card is part of how the card came
+ * to be. Deliberately a POINTER plus the relation: the proposed VALUES are read
+ * on the plan's own page (`/plans/<planId>`).
+ */
+export interface WorkItemPlanHistoryEntryDto {
+  planId: string;
+  /** `Plan.title` is nullable; the page falls back to `planReview.untitledPlan`. */
+  planTitle: string | null;
+  planStatus: PlanStatusDto;
+  createdAt: string;
+  plannedAt: string | null;
+  decidedAt: string | null;
+  decidedById: string | null;
+  /** The decider's display name, read on the same query through `Plan.decidedBy`.
+   *  Null while undecided, and on a plan nobody decided (an abandoned plan the
+   *  sweep ended carries no `decidedById`). */
+  decidedByName: string | null;
+  /** WHO authored the plan — see {@link PlanDto.authorSource}. All three null on a
+   *  plan Motir's own generator wrote. */
+  author: {
+    source: PlanAuthorSourceDto | null;
+    harness: string | null;
+    model: string | null;
+  };
+  relation: WorkItemPlanHistoryRelationDto;
+  proposalIds: WorkItemPlanHistoryProposalIdsDto;
+}
+
+/** One page of a work item's plan history, oldest plan first. */
+export interface WorkItemPlanHistoryPageDto {
+  items: WorkItemPlanHistoryEntryDto[];
+  /** Opaque cursor for the next page, or `null` when this is the last. */
+  nextCursor: string | null;
+}
+
+/** Options for `plansService.listPlanHistoryForWorkItem`. */
+export interface PlanHistoryListOptions {
+  /** A `nextCursor` a previous page returned; malformed → 400. */
+  cursor?: string | null;
+  /** Plans per page; clamped server-side. */
+  limit?: number;
+}

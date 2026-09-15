@@ -563,6 +563,15 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'implemented-lifecycle.spec.ts': 16.0,
   'issue-create-edit-flow.spec.ts': 16.7,
   'issue-detail-flow.spec.ts': 51.7,
+  // MOTIR-5547 AC 7 — the plan-history section's smoke on `/items/<key>`. A
+  // brand-new spec, ESTIMATED rather than measured: it runs the same
+  // `seedPlanShapes` as `plan-shapes.spec.ts` (14.0 s) plus three page loads, so
+  // 16.0, rounded UP because under-estimating unbalances the bin-packer.
+  // Re-measure from the first green CI run that includes it.
+  // MOTIR-5549 adds a second test (its `seedPlanHistory` approves and declines
+  // six plans, then three page loads across two sign-ins), ESTIMATED at +14 s on
+  // the same basis — so 30.0, again rounded up.
+  'item-plan-history.spec.ts': 30.0,
   'issue-list-flow.spec.ts': 51.7,
   'jobs-dashboard.spec.ts': 8.6,
   'jobs-fanout-engine.spec.ts': 11.7,

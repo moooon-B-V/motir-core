@@ -223,6 +223,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The correction doors' status refusal — a plan already `approved` or `declined` cannot be corrected. Approve does not edit proposals.",
   },
+  INVALID_PLAN_HISTORY_CURSOR: {
+    cause: 'not-approve',
+    justification:
+      "The work-item plan-history read's refusal of a malformed page cursor (MOTIR-5546). Approve takes a plan id and pages nothing.",
+  },
 } as const;
 
 /** The refusal ids the CLOSE must also raise — the card's invariant, as a set. */
