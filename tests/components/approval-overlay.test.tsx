@@ -319,7 +319,12 @@ describe('the frame, composed at full size', () => {
     expect(screen.getByText(en.approvalGate.record.filesKept)).toBeTruthy();
     expect(refresh).toHaveBeenCalledTimes(1);
     // …and the row underneath is TOLD, because a refresh cannot reach its island.
-    expect(announceGateDecided).toHaveBeenCalledWith('gate-1', 'approved');
+    // The WHOLE decision: the item page underneath reads its `outcomeRef` and
+    // `filesKept` (MOTIR-5570).
+    expect(announceGateDecided).toHaveBeenCalledWith({
+      gate: expect.objectContaining({ id: 'gate-1', state: 'approved' }),
+      filesKept: true,
+    });
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(shallowPush).not.toHaveBeenCalled();
   });

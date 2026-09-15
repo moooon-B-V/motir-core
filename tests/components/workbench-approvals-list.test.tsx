@@ -4,7 +4,11 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
 import { announceGateDecided } from '@/lib/approvals/decidedGates';
-import type { ApprovalQueueRowDto, DesignResultSubjectSummaryDTO } from '@/lib/dto/approvalGate';
+import type {
+  ApprovalGateDTO,
+  ApprovalQueueRowDto,
+  DesignResultSubjectSummaryDTO,
+} from '@/lib/dto/approvalGate';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), RE-SCOPED by
 // Subtask MOTIR-5225 (Story MOTIR-5214): the row no longer discloses a frame, it
@@ -290,6 +294,29 @@ describe('the Approvals list — SEE but not DECIDE', () => {
   });
 });
 
+/** A decision as the overlay announces it (MOTIR-5570). The row reads only its state. */
+function decision(id: string, state: ApprovalGateDTO['state']) {
+  const gate: ApprovalGateDTO = {
+    id,
+    workItemId: 'wi-1',
+    kind: 'design_result',
+    subjectId: 'ev-1',
+    state,
+    decidedById: null,
+    decidedAt: null,
+    noteMd: null,
+    subjectVersion: null,
+    decidedByLabel: null,
+    routedToId: null,
+    decidedUnderAuthority: null,
+    decisionSource: null,
+    outcomeRef: null,
+    createdAt: '2026-09-08T04:00:00.000Z',
+    updatedAt: '2026-09-08T04:00:00.000Z',
+  };
+  return { gate, filesKept: null };
+}
+
 describe('the Approvals list — a gate decided in the OVERLAY settles its row', () => {
   // The store outlives a render, as it does in the product, so each case decides
   // a gate no other case uses.
@@ -303,7 +330,7 @@ describe('the Approvals list — a gate decided in the OVERLAY settles its row',
     renderRows([decided, other]);
     expect(screen.getAllByRole('button', { name: 'Review' })).toHaveLength(2);
 
-    act(() => announceGateDecided('gate-settle-a', 'approved'));
+    act(() => announceGateDecided(decision('gate-settle-a', 'approved')));
 
     expect(screen.getByText(en.approvalGate.state.approved)).toBeTruthy();
     const rows = screen.getAllByTestId(/^approval-row-/).map((el) => el.dataset['testid']);
@@ -317,7 +344,7 @@ describe('the Approvals list — a gate decided in the OVERLAY settles its row',
   it('draws Changes requested for a gate sent back', () => {
     renderRows([designRow({ gateId: 'gate-settle-c' })]);
 
-    act(() => announceGateDecided('gate-settle-c', 'changes_requested'));
+    act(() => announceGateDecided(decision('gate-settle-c', 'changes_requested')));
 
     expect(screen.getByText(en.approvalGate.state.changesRequested)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
@@ -326,7 +353,7 @@ describe('the Approvals list — a gate decided in the OVERLAY settles its row',
   it('draws a WITHDRAWN question colourless — `superseded` is the product’s write, not a person’s', () => {
     renderRows([designRow({ gateId: 'gate-settle-f' })]);
 
-    act(() => announceGateDecided('gate-settle-f', 'superseded'));
+    act(() => announceGateDecided(decision('gate-settle-f', 'superseded')));
 
     expect(screen.getByText(en.approvalGate.state.withdrawn)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
@@ -335,13 +362,13 @@ describe('the Approvals list — a gate decided in the OVERLAY settles its row',
   it('ignores `awaiting` — it is not a decision', () => {
     renderRows([designRow({ gateId: 'gate-settle-d' })]);
 
-    act(() => announceGateDecided('gate-settle-d', 'awaiting'));
+    act(() => announceGateDecided(decision('gate-settle-d', 'awaiting')));
 
     expect(screen.getByRole('button', { name: 'Review' })).toBeTruthy();
   });
 
   it('settles a row that mounts AFTER the decision, too', () => {
-    act(() => announceGateDecided('gate-settle-e', 'approved'));
+    act(() => announceGateDecided(decision('gate-settle-e', 'approved')));
 
     renderRows([designRow({ gateId: 'gate-settle-e' })]);
 

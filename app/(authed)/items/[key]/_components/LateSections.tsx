@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { ContentSectionCard } from './ContentSectionCard';
 import { AcceptancePanel } from './AcceptancePanel';
 import { DesignResultSection } from './DesignResultSection';
+import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
@@ -259,6 +260,10 @@ export async function LateUpperSections({
       ) : null}
       {showDesignResult ? (
         <ContentSectionCard title={tDesignResult('title')} subtitle={tDesignResult('gloss')}>
+          {/* A decision made in the approval OVERLAY (mounted in the shell, outside
+              this page's optimistic status provider) reaches the status rail
+              through here — MOTIR-5570. */}
+          {r.designGate.gate ? <DecidedGateStatusBridge gateId={r.designGate.gate.id} /> : null}
           <DesignResultSection
             evidence={r.designEvidence}
             isDesignCard={r.isDesignCard}

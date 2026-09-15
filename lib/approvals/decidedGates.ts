@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import type { ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
 
 // A GATE DECIDED ELSEWHERE ON THIS PAGE (Story MOTIR-5214 · Subtask MOTIR-5225) —
 // the signal the To-approve row's CLIENT island watches, so a decision made in the
@@ -20,11 +20,24 @@ import type { ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
 // gate reached, keyed by gate. Holding that for the life of the tab is safe
 // because a decided gate is immutable (ADR §6a), so an entry never goes stale.
 //
-// It carries the decided STATE and nothing else: a settled row's Decide cell
-// renders a state pill and reads nothing more from the gate.
+// ⚠️ IT CARRIES THE WHOLE DECISION, NOT ONLY ITS STATE (Story MOTIR-5215 ·
+// Subtask MOTIR-5570). The item page is the second listener, and it needs more
+// than a row does: the status the decision WROTE (`gate.outcomeRef`), so its
+// status rail moves without waiting for a server render (Bug MOTIR-5212's
+// channel), and whether the approved files were KEPT, so its record says so
+// (Bug MOTIR-5265). Both used to arrive from the section's own decide call,
+// which that story removes — the decision is now made in the overlay, outside
+// the page's optimistic status provider, and this store is the only thing both
+// can reach. The row still reads only the state (`useDecidedGateState`).
+
+/** What the overlay announces: the decided row, and the kind's files-kept answer. */
+export interface DecidedGate {
+  gate: ApprovalGateDTO;
+  filesKept: boolean | null;
+}
 
 const listeners = new Set<() => void>();
-let decided: ReadonlyMap<string, ApprovalGateStateDTO> = new Map();
+let decided: ReadonlyMap<string, DecidedGate> = new Map();
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -33,11 +46,12 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** Record that `gateId` was decided to `state`, and wake every row watching it. */
-export function announceGateDecided(gateId: string, state: ApprovalGateStateDTO): void {
+/** Record a decision, and wake every surface watching its gate. */
+export function announceGateDecided(decision: DecidedGate): void {
+  const { gate } = decision;
   // `awaiting` is not a decision; a repeat is not a change.
-  if (state === 'awaiting' || decided.get(gateId) === state) return;
-  decided = new Map(decided).set(gateId, state);
+  if (gate.state === 'awaiting' || decided.get(gate.id)?.gate.state === gate.state) return;
+  decided = new Map(decided).set(gate.id, decision);
   for (const listener of listeners) listener();
 }
 
@@ -45,8 +59,21 @@ export function announceGateDecided(gateId: string, state: ApprovalGateStateDTO)
 export function useDecidedGateState(gateId: string): ApprovalGateStateDTO | null {
   return useSyncExternalStore(
     subscribe,
-    () => decided.get(gateId) ?? null,
+    () => decided.get(gateId)?.gate.state ?? null,
     // The server render has seen no decision, and the page hydrates from it.
+    () => null,
+  );
+}
+
+/**
+ * The whole decision announced for `gateId` on this page, or `null` while there
+ * has been none. The entry object is stable until the gate is announced again,
+ * so it is safe as an effect dependency.
+ */
+export function useDecidedGate(gateId: string): DecidedGate | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => decided.get(gateId) ?? null,
     () => null,
   );
 }
