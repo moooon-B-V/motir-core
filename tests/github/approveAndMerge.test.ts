@@ -2,11 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { MergeChangeRequestError } from '@/lib/git/errors';
 import { getGitProvider } from '@/lib/git';
 import type { GitProvider } from '@/lib/git/provider';
 import type { MergeChangeRequestResult } from '@/lib/git/types';
 import {
   ApprovalGateAlreadyDecidedError,
+  ApprovalGateNotFoundError,
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -418,5 +421,155 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         fx.ctx,
       ),
     ).toEqual([]);
+  });
+});
+
+describe('the press and its retry refuse what they were not handed (MOTIR-5486 coverage floor)', () => {
+  const pressed = async () => {
+    const fixture = await pressable();
+    stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+    await pullRequestMergeService.approveAndMerge(
+      { gateId: fixture.approval.id, source: 'ui' },
+      fx.ctx,
+    );
+    vi.restoreAllMocks();
+    return fixture;
+  };
+
+  it('approveAndMerge handed a MERGE gate is a programming error, and decides nothing', async () => {
+    const { web } = await pressable();
+    await expect(
+      pullRequestMergeService.approveAndMerge({ gateId: web.mergeGateId, source: 'ui' }, fx.ctx),
+    ).rejects.toThrow(/handed a pull_request_merge gate/);
+    expect((await gateRow(web.mergeGateId)).state).toBe('awaiting');
+  });
+
+  it('a retry names a gate it cannot act on as not found — unknown, undecided, another kind, another card', async () => {
+    const { approval, api } = await pressable();
+    const retry = (approvalGateId: string, mergeGateId: string) =>
+      pullRequestMergeService.retryApproveAndMergeMember(
+        { approvalGateId, mergeGateId, source: 'ui' },
+        fx.ctx,
+      );
+    // The approval still awaits: there is no press to retry a member of.
+    await expect(retry(approval.id, api.mergeGateId)).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
+    await expect(retry('no-such-gate', api.mergeGateId)).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
+
+    const other = await pressed();
+    await expect(retry(other.approval.id, 'no-such-gate')).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
+    // The approval gate itself is not a merge gate.
+    await expect(retry(other.approval.id, other.approval.id)).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
+    // A merge gate from ANOTHER card is never merged on this approval.
+    await expect(retry(other.approval.id, api.mergeGateId)).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
+  });
+
+  it('a retried merge gate with no recorded head is a withdrawn question, reported as a refusal', async () => {
+    const { item, approval } = await pressed();
+    const webPrId = (await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } })).id;
+    const headless = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.create(
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: item.id,
+          kind: 'pull_request_merge',
+          subjectId: webPrId,
+        },
+        tx,
+      ),
+    );
+    const member = await pullRequestMergeService.retryApproveAndMergeMember(
+      { approvalGateId: approval.id, mergeGateId: headless.id, source: 'ui' },
+      fx.ctx,
+    );
+    expect(member).toMatchObject({ outcome: 'refused', subjectVersion: '' });
+  });
+
+  it.each([
+    [
+      'an already-decided merge gate names its decider',
+      () => new ApprovalGateAlreadyDecidedError('g', 'approved', 'u', new Date(), 'Ada L.'),
+      { tag: 'APPROVAL_GATE_ALREADY_DECIDED', decidedByLabel: 'Ada L.' },
+    ],
+    [
+      'a missing permission is not authorised',
+      () => new PermissionDeniedError('p', 'approval:decide_any'),
+      { tag: 'APPROVAL_GATE_NOT_AUTHORISED' },
+    ],
+    [
+      'a project out of reach is not found',
+      () => new ProjectNotFoundError('p'),
+      { tag: 'APPROVAL_GATE_NOT_FOUND' },
+    ],
+    [
+      'a host that did not answer is unexpected',
+      () => new MergeChangeRequestError('github', 'timeout'),
+      { tag: 'UNEXPECTED' },
+    ],
+  ])('a member refusal maps into the frame’s vocabulary: %s', async (_label, error, refusal) => {
+    const { approval, api } = await pressable();
+    stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'refused', refusal: { code: 'conflict' } },
+    });
+    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    vi.spyOn(pullRequestMergeService, 'approveMergeGate').mockRejectedValue(error());
+
+    const member = await pullRequestMergeService.retryApproveAndMergeMember(
+      { approvalGateId: approval.id, mergeGateId: api.mergeGateId, source: 'ui' },
+      fx.ctx,
+    );
+    expect(member).toMatchObject({ outcome: 'refused', refusal });
+  });
+
+  it('an error that is not a refusal of the member is rethrown, not swallowed', async () => {
+    const { approval, api } = await pressable();
+    stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'refused', refusal: { code: 'conflict' } },
+    });
+    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    vi.spyOn(pullRequestMergeService, 'approveMergeGate').mockRejectedValue(
+      new Error('the database fell over'),
+    );
+
+    await expect(
+      pullRequestMergeService.retryApproveAndMergeMember(
+        { approvalGateId: approval.id, mergeGateId: api.mergeGateId, source: 'ui' },
+        fx.ctx,
+      ),
+    ).rejects.toThrow('the database fell over');
+  });
+
+  it('the members read: a decided merge gate with no merge record, or whose pull request is gone, is not queued', async () => {
+    const { item, approval, web, api } = await pressable();
+    // Decided straight through the door — no merge was recorded on the pull request.
+    await approvalGatesService.decide(
+      { gateId: web.mergeGateId, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+    stubHost({ 12: { outcome: 'enqueued', entryId: 'MQE_11' } });
+    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    // #12's pull request row disappears after it was queued.
+    await adminDb.githubPullRequest.delete({ where: { id: api.prId } });
+
+    const members = await pullRequestMergeService.listApprovalMembers(
+      { workItemId: item.id, approvalGateId: approval.id },
+      fx.ctx,
+    );
+    expect(members.map((m) => m.queued)).toEqual([false, false]);
   });
 });

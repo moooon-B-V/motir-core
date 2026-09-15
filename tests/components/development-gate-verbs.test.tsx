@@ -342,3 +342,206 @@ describe('who else sees it (Panels 12w, 12v)', () => {
     expect(screen.queryByRole('button', { name: pra.verb.approveAndMerge })).toBeNull();
   });
 });
+
+describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
+  it('Request changes decides through the door, repaints from the response and presses no merge', async () => {
+    const actions = fakeActions({
+      decide: vi.fn().mockResolvedValue({
+        ok: true,
+        gate: { ...AWAITING, state: 'changes_requested', decidedByLabel: 'Ada L.' },
+        filesKept: null,
+      }),
+    });
+    renderFrame({ gate: AWAITING }, actions);
+
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+
+    await waitFor(() =>
+      expect(screen.getByText(en.approvalGate.state.changesRequested)).toBeTruthy(),
+    );
+    expect(actions.decide).toHaveBeenCalledWith({
+      gateId: AWAITING.id,
+      decision: 'request_changes',
+      identifier: 'ACME-12',
+    });
+    expect(actions.approveAndMerge).not.toHaveBeenCalled();
+    expect(refreshSpy).toHaveBeenCalled();
+    // Nothing was merged, so no row reports anything.
+    expect(screen.queryByText(pra.outcome.merged)).toBeNull();
+  });
+
+  it('a Request changes the door refuses is drawn by the frame, and nothing repaints', async () => {
+    const actions = fakeActions({
+      decide: vi
+        .fn()
+        .mockResolvedValue({ ok: false, refusal: { tag: 'APPROVAL_GATE_SUPERSEDED' } }),
+    });
+    renderFrame({ gate: AWAITING }, actions);
+
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByRole('alert').textContent).toContain(
+      en.approvalGate.refusal.superseded.title,
+    );
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('a member the press found NO merge gate for keeps its row unchanged, CI pill and all', async () => {
+    const actions = fakeActions({
+      approveAndMerge: vi.fn().mockResolvedValue({
+        ok: true,
+        gate: APPROVED,
+        members: [
+          {
+            subjectVersion: CORE_V,
+            mergeGateId: 'mg-1',
+            pullRequestId: CORE_PR.id,
+            outcome: 'merged',
+          },
+          {
+            subjectVersion: GATEWAY_V,
+            mergeGateId: null,
+            pullRequestId: null,
+            outcome: 'no_merge_gate',
+          },
+        ],
+      }),
+    });
+    renderFrame({ gate: AWAITING }, actions);
+    await pressApproveAndMerge();
+
+    expect(within(rowOf(CORE_PR.title)).getByText(pra.outcome.merged)).toBeTruthy();
+    const gateway = rowOf(GATEWAY_PR.title);
+    for (const label of Object.values(pra.outcome)) {
+      expect(within(gateway).queryByText(label)).toBeNull();
+    }
+    // Neither every-merged nor anything-waiting: the record names no reason.
+    expect(screen.queryByText(fill(pra.merged.why, { key: 'ACME-12', host: pra.host }))).toBeNull();
+  });
+
+  it('every member merged: the record says the card waits on the host, and a merged row empties its slot', async () => {
+    const actions = fakeActions({
+      approveAndMerge: vi.fn().mockResolvedValue({
+        ok: true,
+        gate: APPROVED,
+        members: [
+          {
+            subjectVersion: CORE_V,
+            mergeGateId: 'mg-1',
+            pullRequestId: CORE_PR.id,
+            outcome: 'merged',
+          },
+          {
+            subjectVersion: GATEWAY_V,
+            mergeGateId: 'mg-2',
+            pullRequestId: GATEWAY_PR.id,
+            outcome: 'merged',
+          },
+        ],
+      }),
+    });
+    render(
+      <DevelopmentSectionBody
+        // The host already reports the core pull request merged.
+        pullRequests={[{ ...CORE_PR, state: 'merged' }, GATEWAY_PR]}
+        itemIdentifier="ACME-12"
+        manualLinkable
+        howToTest={TWO_REPO_STORY}
+        mergeGate={{ gate: AWAITING, canDecide: true, routedToLabel: 'Mara S.', members: [] }}
+        gateActions={actions}
+      />,
+    );
+    await pressApproveAndMerge();
+
+    expect(screen.getByText(fill(pra.merged.why, { key: 'ACME-12', host: pra.host }))).toBeTruthy();
+    const core = rowOf(CORE_PR.title);
+    // The derived state pill says Merged; the slot adds nothing and the CI pill is gone.
+    expect(within(core).getAllByText(en.github.development.prState.merged)).toHaveLength(1);
+    expect(within(core).queryByText(en.github.development.ciState.passing)).toBeNull();
+    expect(within(rowOf(GATEWAY_PR.title)).getByText(pra.outcome.merged)).toBeTruthy();
+  });
+
+  it('an approved member a reload knows nothing pending about reports nothing', () => {
+    renderFrame(
+      {
+        gate: APPROVED,
+        members: [{ subjectVersion: CORE_V, awaitingMergeGateId: null, queued: false }],
+      },
+      fakeActions(),
+    );
+    expect(
+      within(rowOf(CORE_PR.title)).getByText(en.github.development.ciState.passing),
+    ).toBeTruthy();
+    expect(screen.queryByText(pra.outcome.notMergedYet)).toBeNull();
+    expect(screen.queryByText(pra.outcome.queued)).toBeNull();
+  });
+
+  it('a withdrawal with no moved head says the set changed', () => {
+    renderFrame({ gate: { ...AWAITING, state: 'superseded' } }, fakeActions());
+    expect(screen.getByText(pra.withdrawn.portSet)).toBeTruthy();
+  });
+});
+
+describe('the remaining frame arms (MOTIR-5486 coverage floor)', () => {
+  it('a retry the DOOR refuses keeps the row refused, with that refusal named, and repaints nothing', async () => {
+    const actions = fakeActions({
+      approveAndMerge: vi.fn().mockResolvedValue({
+        ok: true,
+        gate: APPROVED,
+        members: [
+          {
+            subjectVersion: CORE_V,
+            mergeGateId: 'mg-1',
+            pullRequestId: CORE_PR.id,
+            outcome: 'refused',
+            refusal: { tag: 'MERGE_CONFLICT' },
+          },
+          {
+            subjectVersion: GATEWAY_V,
+            mergeGateId: 'mg-2',
+            pullRequestId: GATEWAY_PR.id,
+            outcome: 'refused',
+            refusal: { tag: 'MERGE_CONFLICT' },
+          },
+        ],
+      }),
+      retryMember: vi.fn().mockResolvedValue({
+        ok: false,
+        refusal: { tag: 'APPROVAL_GATE_NOT_AUTHORISED' },
+      }),
+    });
+    renderFrame({ gate: AWAITING }, actions);
+    await pressApproveAndMerge();
+    // Nothing merged: the approval stands alone.
+    expect(screen.getByRole('alert').textContent).toContain(pra.refused.standsAlone);
+    refreshSpy.mockClear();
+
+    fireEvent.click(within(rowOf(CORE_PR.title)).getByRole('button', { name: pra.outcome.retry }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        en.approvalGate.refusal.notAuthorised.title,
+      ),
+    );
+    expect(within(rowOf(CORE_PR.title)).getByText(pra.outcome.refused)).toBeTruthy();
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('band 1 counts the set when no run is named, and after a sending-back', () => {
+    render(
+      <DevelopmentSectionBody
+        pullRequests={[CORE_PR, GATEWAY_PR]}
+        itemIdentifier="ACME-12"
+        manualLinkable
+        mergeGate={{
+          gate: { ...AWAITING, state: 'changes_requested' },
+          canDecide: true,
+          routedToLabel: null,
+          members: [],
+        }}
+      />,
+    );
+    expect(screen.getByText('2 pull requests')).toBeTruthy();
+  });
+});

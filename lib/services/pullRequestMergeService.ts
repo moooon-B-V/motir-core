@@ -22,7 +22,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
-import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
+import { membersOf } from '@/lib/approvalGates/memberVersion';
 import type {
   ApproveAndMergeMemberOutcomeDTO,
   PullRequestApprovalMemberDTO,
@@ -328,21 +328,18 @@ export const pullRequestMergeService = {
         [...new Set(mergeGates.map((gate) => gate.subjectId))],
         tx,
       );
-      return (approval.subjectVersion ?? '')
-        .split(',')
-        .filter((version) => parseMemberVersion(version) !== null)
-        .map((subjectVersion) => {
-          const gates = mergeGates.filter((gate) => gate.subjectVersion === subjectVersion);
-          const awaiting = gates.find((gate) => gate.state === 'awaiting') ?? null;
-          const approved = gates.find((gate) => gate.state === 'approved') ?? null;
-          const pr = approved ? pullRequests.get(approved.subjectId) : undefined;
-          return {
-            subjectVersion,
-            awaitingMergeGateId: awaiting?.id ?? null,
-            queued:
-              pr !== undefined && !pr.merged && (pr.mergeOutcomeRef?.startsWith('queue:') ?? false),
-          };
-        });
+      return membersOf(approval.subjectVersion).map(({ subjectVersion }) => {
+        const gates = mergeGates.filter((gate) => gate.subjectVersion === subjectVersion);
+        const awaiting = gates.find((gate) => gate.state === 'awaiting') ?? null;
+        const approved = gates.find((gate) => gate.state === 'approved') ?? null;
+        const pr = approved ? pullRequests.get(approved.subjectId) : undefined;
+        return {
+          subjectVersion,
+          awaitingMergeGateId: awaiting?.id ?? null,
+          queued:
+            pr !== undefined && !pr.merged && (pr.mergeOutcomeRef?.startsWith('queue:') ?? false),
+        };
+      });
     });
   },
 
@@ -394,7 +391,7 @@ export const pullRequestMergeService = {
         .map((row) => [row.subjectVersion!, row]),
     );
     const members: ApproveAndMergeMemberOutcome[] = [];
-    for (const subjectVersion of (approval.gate.subjectVersion ?? '').split(',').filter(Boolean)) {
+    for (const { subjectVersion } of membersOf(approval.gate.subjectVersion)) {
       const mergeGate = mergeGateByVersion.get(subjectVersion);
       members.push(
         mergeGate

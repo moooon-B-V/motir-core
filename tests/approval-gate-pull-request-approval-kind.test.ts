@@ -276,6 +276,27 @@ describe('the Approvals queue summarises the set', () => {
     });
   });
 
+  it('names a CLOSED member and one no check has reported on, in canonical order however they were delivered (MOTIR-5486)', async () => {
+    const { item, gate } = await storyWithGate({ deliveries: false });
+    // Delivered out of canonical order: `web`, then `api`, then `admin`.
+    await deliver(item, { name: 'web', number: 7, head: HEAD_WEB });
+    const closed = await deliver(item, { name: 'api', number: 12, head: HEAD_API });
+    const unchecked = await deliver(item, { name: 'admin', number: 2, head: HEAD_API });
+    await adminDb.githubPullRequest.update({ where: { id: closed.id }, data: { state: 'closed' } });
+    await adminDb.githubCheckRun.deleteMany({ where: { pullRequestId: unchecked.id } });
+
+    const summaries = await withWorkspaceContext(fx.ctx, (tx) => summarizeGateSubjects([gate], tx));
+
+    expect(summaries.get(gate.id)).toEqual({
+      kind: 'pull_request_approval',
+      members: [
+        { repo: 'acme/admin', number: 2, headSha: null, state: 'open' },
+        { repo: 'acme/api', number: 12, headSha: HEAD_API, state: 'closed' },
+        { repo: 'acme/web', number: 7, headSha: HEAD_WEB, state: 'open' },
+      ],
+    });
+  });
+
   it('a gate whose card delivers nothing summarises as NULL — the subject no longer resolves', async () => {
     const { gate } = await storyWithGate({ deliveries: false });
 
