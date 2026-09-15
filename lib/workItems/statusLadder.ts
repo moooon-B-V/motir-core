@@ -135,6 +135,45 @@ export function rankOfStatus(
 }
 
 /**
+ * WHETHER A MOVE PULLS THE WORK BACK — and so WITHDRAWS the question an
+ * `awaiting` approval gate is asking (Story MOTIR-4887 · Subtask MOTIR-5527; ADR
+ * `docs/decisions/approval-gates.md` §6d AMENDMENT, rule 6).
+ *
+ * True when the move is not a system write and EITHER lands on the cancelled
+ * status, OR leaves the review band — from a status ranked at or above In Review
+ * to one ranked below it — for anything but the status keyed `blocked`.
+ *
+ * ⚠️ `blocked` IS THE ONE DOWNWARD MOVE THAT KEEPS THE QUESTION. Blocking pauses
+ * the work; it does not abandon what was offered for review. Every other move out
+ * of the band means the thing somebody was asked about is being reworked, so the
+ * question in their queue no longer points at anything real.
+ *
+ * PURE, like {@link rankOfStatus}: the caller reads the statuses once, on its own
+ * transaction.
+ */
+export function withdrawsPendingQuestion(args: {
+  fromKey: string;
+  toKey: string;
+  statuses: ReadonlyArray<{ key: string; category: StatusCategoryDto }>;
+  keys: LadderKeys;
+  system: boolean;
+}): boolean {
+  if (args.system) return false;
+  if (args.toKey === WITHDRAW_CANCELLED_KEY) return true;
+  if (args.toKey === WITHDRAW_KEEPS_QUESTION_KEY) return false;
+  return (
+    rankOfStatus(args.fromKey, args.statuses, args.keys) >= RUNG_RANK.in_review &&
+    rankOfStatus(args.toKey, args.statuses, args.keys) < RUNG_RANK.in_review
+  );
+}
+
+/** The cancelled status's key — the same literal `applyStatusTransition` already
+ *  exempts from its done-category gates as `ROADMAP_CANCELLED_KEY`. */
+const WITHDRAW_CANCELLED_KEY = 'cancelled';
+/** The status that pauses work without abandoning it (rule 6's one exception). */
+const WITHDRAW_KEEPS_QUESTION_KEY = 'blocked';
+
+/**
  * THE CONTAINER-COMPLETENESS BAR (MOTIR-3229) — the two status KEYS at which an
  * item CLAIMS its own work is built, and therefore the two a container may not
  * reach while a child of its own is not.

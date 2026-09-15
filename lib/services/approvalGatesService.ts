@@ -1,9 +1,11 @@
-import type { ApprovalGateState, Prisma } from '@/generated/prisma/client';
+import type { ApprovalGateState, Prisma, WorkItem } from '@/generated/prisma/client';
 import type {
   ApprovalGateAuthorityDTO,
   ApprovalGateDTO,
   ApprovalGateDecisionSourceDTO,
   ApprovalGateKindDTO,
+  ApprovalGatePendingPayloadDTO,
+  HeldTransitionDTO,
   ApprovalQueuePageDto,
   ApprovalQueueRowDto,
   ApprovalRecordsPageDto,
@@ -12,7 +14,13 @@ import type {
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
+import type { ApprovalGatePendingError } from '@/lib/workItems/errors';
+import {
+  APPROVAL_GATE_HANDLERS,
+  handlerFor,
+  isRegisteredGateKind,
+  type RegisteredGateKind,
+} from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import { settingsDoorFor, type GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 import {
@@ -40,6 +48,8 @@ import {
   toApprovalRecordDecidedRowDto,
 } from '@/lib/mappers/approvalGateMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { heldMoves } from '@/lib/approvalGates/heldMoves';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -463,6 +473,182 @@ export const approvalGatesService = {
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
           held,
         ),
+      };
+    });
+  },
+
+  /**
+   * THE MOVES AN APPROVAL HOLDS on one work item, for the status control (Story
+   * MOTIR-4887 · Subtask MOTIR-5528; ADR `approval-gates.md` §6d AMENDMENT rules 1
+   * and 2b; design § _The status control says so_).
+   *
+   * ⚠️ THE GUARD'S OWN RULE, NOT A SECOND ONE. It hands this item's statuses, its
+   * open-pull-request fact and its awaiting gates to `heldMoves` — the function
+   * `applyStatusTransition` refuses with — so the item page, quick view and edit
+   * page lock exactly the moves the door would refuse, and nothing else.
+   *
+   * The move INTO the item's CURRENT status is never listed: nothing is held about
+   * a status the card already has. A render read — no lock, one transaction.
+   */
+  async listHeldTransitions(workItemId: string, ctx: ServiceContext): Promise<HeldTransitionDTO[]> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) return [];
+      const [statuses, openPullRequests, awaiting] = await Promise.all([
+        workflowsService.listStatusesByProject(item.projectId, ctx.workspaceId, tx),
+        workItemDeliveryRepository.countOpenByWorkItem(item.id, tx),
+        approvalGateRepository.findAwaitingByWorkItem(item.id, tx),
+      ]);
+      const moves = heldMoves({
+        statuses,
+        hasOpenPullRequest: openPullRequests > 0,
+        awaitingGates: awaiting,
+        intentOf: (kind) =>
+          isRegisteredGateKind(kind as ApprovalGateKindDTO)
+            ? handlerFor(kind as ApprovalGateKindDTO).statusIntent
+            : null,
+      }).filter((move) => move.statusKey !== item.status);
+      if (moves.length === 0) return [];
+
+      const out: HeldTransitionDTO[] = [];
+      // The actor's permissions, read ONCE for every held move — `canDecideGate`
+      // takes them rather than re-reading per call (this is a render path).
+      const permissions = moves.some((m) => m.waitingOn === 'decision' && m.gateId !== null)
+        ? await projectAccessService.getPermissions(item.projectId, ctx, tx)
+        : null;
+      for (const move of moves) {
+        const kind = move.gateKind as ApprovalGateKindDTO;
+        const canDecide =
+          permissions && move.waitingOn === 'decision' && move.gateId !== null
+            ? await canDecideGate(item, kind, ctx, tx, permissions)
+            : false;
+        const routedToId = isRegisteredGateKind(kind)
+          ? handlerFor(kind).routeTo({ item, ctx, tx })
+          : routingTargetId(item);
+        const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
+        out.push({
+          statusKey: move.statusKey,
+          statusLabel: statuses.find((s) => s.key === move.statusKey)?.label ?? move.statusKey,
+          waitingOn: move.waitingOn,
+          kind,
+          gateId: move.gateId,
+          canDecide,
+          routedToLabel: routedToDisplayName(routedTo),
+        });
+      }
+      return out;
+    });
+  },
+
+  /**
+   * ENTERING REVIEW ASKS AGAIN (Story MOTIR-4887 · Subtask MOTIR-5532; ADR
+   * `approval-gates.md` §6d AMENDMENT, rule 7). Called by `applyStatusTransition`
+   * when an item moves into `in_review`, IN that transaction, after the funnel has
+   * taken the item's gate locks — so it never opens a transaction of its own.
+   *
+   * For every REGISTERED kind: ask the kind for its CURRENT subject; when there is
+   * one and no gate on that subject is `awaiting` or `approved`, raise a fresh
+   * `awaiting` gate routed the way the kind routes, the same row the publish path
+   * writes. Returns how many were raised.
+   *
+   * ⚠️ WHY THIS EXISTS. Pulling work back withdraws the question (rule 6). Without
+   * a re-ask, withdraw-then-return leaves a card in review with no gate, which the
+   * guard then has nothing to hold — a quiet way around every approval.
+   *
+   * ⚠️ SYSTEM MOVES INCLUDED, unlike the guard and the withdraw. The CI-green
+   * promotion into `in_review` is exactly the return to review that must ask
+   * again. The importer and the rollup reach cards with no current subject, so
+   * they raise nothing on their own.
+   *
+   * ⚠️ A CONCURRENT DOUBLE RAISE IS "ALREADY RAISED", not an error — resolved in
+   * the insert itself (`createAwaitingIfAbsent`), because a caught unique
+   * violation would have aborted the transition's transaction.
+   */
+  async raiseOnReviewEntry(
+    item: WorkItem,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    let raised = 0;
+    for (const kind of Object.keys(APPROVAL_GATE_HANDLERS) as RegisteredGateKind[]) {
+      const handler = handlerFor(kind);
+      const subjectId = await handler.currentSubject({ item, ctx, tx });
+      if (!subjectId) continue;
+      if (await approvalGateRepository.hasLiveGateForSubject(item.id, kind, subjectId, tx)) {
+        continue;
+      }
+      const inserted = await approvalGateRepository.createAwaitingIfAbsent(
+        {
+          workspaceId: item.workspaceId,
+          projectId: item.projectId,
+          workItemId: item.id,
+          kind,
+          subjectId,
+          routedToId: handler.routeTo({ item, ctx, tx }),
+        },
+        tx,
+      );
+      if (inserted) raised += 1;
+    }
+    return raised;
+  },
+
+  /**
+   * The render payload for an `APPROVAL_GATE_PENDING` refusal (Story MOTIR-4887 ·
+   * Subtask MOTIR-5526) — what every status door hands its surface.
+   *
+   * ⚠️ CALLED AFTER THE REFUSED TRANSACTION HAS ROLLED BACK, never inside it. The
+   * guard throws from `applyStatusTransition` while that transaction holds the
+   * item `FOR UPDATE`; computing authority there would widen the lock for a
+   * render concern. So the error carries ids and this read resolves the rest in
+   * a context of its own.
+   *
+   * `canDecide` is `canDecideGate` — the SAME function the approval frame's read
+   * uses, floor first then authority — and `routedToLabel` is the kind's own live
+   * routing answer, exactly as `getForWorkItem` computes both. A gate that has
+   * vanished in between (decided, superseded) still answers: the refusal already
+   * happened, and the surface re-reads the item on its next render.
+   */
+  async describePendingRefusal(
+    err: ApprovalGatePendingError,
+    ctx: ServiceContext,
+  ): Promise<ApprovalGatePendingPayloadDTO> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const kind = err.gateKind as ApprovalGateKindDTO;
+      const item = await workItemRepository.findById(err.workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) {
+        return {
+          itemKey: err.itemKey,
+          kind,
+          waitingOn: err.waitingOn,
+          gateRaised: err.gateId !== null,
+          canDecide: false,
+          routedToLabel: null,
+        };
+      }
+      const canDecide = await canDecideGate(
+        item,
+        kind,
+        ctx,
+        tx,
+        await projectAccessService.getPermissions(item.projectId, ctx, tx),
+      );
+      const routedToId = isRegisteredGateKind(kind)
+        ? handlerFor(kind).routeTo({ item, ctx, tx })
+        : routingTargetId(item);
+      const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
+      return {
+        itemKey: err.itemKey,
+        kind,
+        waitingOn: err.waitingOn,
+        gateRaised: err.gateId !== null,
+        // Nothing is left to decide on an approved gate awaiting its merge, so no
+        // surface may offer an approve door for it.
+        // A door is offered only when a gate is actually waiting on a decision:
+        // not while the merge is what the move waits for, and not while the pull
+        // request is open but no gate has been raised yet.
+        canDecide: err.waitingOn === 'decision' && err.gateId !== null && canDecide,
+        routedToLabel: routedToDisplayName(routedTo),
       };
     });
   },

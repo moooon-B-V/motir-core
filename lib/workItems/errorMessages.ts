@@ -3,6 +3,7 @@ import {
   WorkItemNotFoundError,
   UnknownStatusError,
   IllegalTransitionError,
+  ApprovalGatePendingError,
 } from '@/lib/workItems/errors';
 
 // A minimal translator shape — satisfied by next-intl's `getTranslations('errors')`
@@ -24,6 +25,11 @@ export function workItemErrorMessage(err: WorkItemError, t: ErrorTranslator): st
   }
   if (err instanceof IllegalTransitionError) {
     return t('workItems.ILLEGAL_TRANSITION', { from: err.fromKey, to: err.toKey });
+  }
+  // An approval-gate hold has two sentences (MOTIR-5526): waiting on the DECISION,
+  // or — already approved — waiting on the pull request's MERGE.
+  if (err instanceof ApprovalGatePendingError && err.waitingOn === 'merge') {
+    return t('workItems.APPROVAL_GATE_PENDING_MERGE');
   }
   // The remaining tags carry no interpolated values — key straight off `code`.
   return t(`workItems.${err.code}`);

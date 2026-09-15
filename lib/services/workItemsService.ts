@@ -6,6 +6,7 @@ import {
   type WorkItemKind,
   type WorkItemLink,
   type WorkItemPriority,
+  type ApprovalGateKind,
 } from '@/generated/prisma/client';
 import {
   astHasEpic5Conditions,
@@ -48,7 +49,15 @@ import { entitlementsService } from '@/lib/services/entitlementsService';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItems/artifactEvidence';
 import { isStatusTransitionRefusal } from '@/lib/workItems/statusTransitionRefusals';
-import { CONTAINER_CLAIM_STATUS_KEYS, childrenBelowClaimBar } from '@/lib/workItems/statusLadder';
+import {
+  CONTAINER_CLAIM_STATUS_KEYS,
+  childrenBelowClaimBar,
+  withdrawsPendingQuestion,
+} from '@/lib/workItems/statusLadder';
+import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
+import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -98,6 +107,7 @@ import {
   IllegalTransitionError,
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
+  ApprovalGatePendingError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
   NotEpicError,
@@ -1040,6 +1050,9 @@ function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkI
  * is not implemented, so neither counts a cancelled card as finished work.
  */
 const ROADMAP_CANCELLED_KEY = 'cancelled';
+/** The status an item enters to be reviewed — the one whose entry re-asks its
+ *  pending questions (ADR `approval-gates.md` §6d AMENDMENT, rule 7). */
+const REVIEW_STATUS_KEY = 'in_review';
 
 /** The status keys that count as DONE on a roadmap meter: every `done`-category
  *  status except `cancelled`. */
@@ -2558,6 +2571,9 @@ export const workItemsService = {
        * unchanged by it.
        */
       inTransaction?: (tx: Prisma.TransactionClient) => Promise<void>;
+      /** See `applyStatusTransition`'s `keepPendingQuestions` — the merge sync's
+       *  lifecycle moves (MOTIR-5527 · MOTIR-4882). */
+      keepPendingQuestions?: boolean;
     } = {},
   ): Promise<WorkItemDto> {
     // MOTIR-2846: `withWorkspaceContext`, not a bare `db.$transaction`. A bare
@@ -2570,6 +2586,7 @@ export const workItemsService = {
         toStatusKey,
         ctx,
         tx,
+        opts.keepPendingQuestions ? { keepPendingQuestions: true } : {},
       );
       if (opts.inTransaction) await opts.inTransaction(tx);
       return applied;
@@ -2710,11 +2727,41 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
-    opts: { sessionBranch?: string; system?: boolean } = {},
+    opts: {
+      sessionBranch?: string;
+      system?: boolean;
+      /**
+       * The approval gate whose OWN decision is making this move (ADR
+       * `approval-gates.md` §6d AMENDMENT, rule 5). `approvalGatesService.decide`
+       * runs the kind's effect BEFORE it writes the decision, so that gate is
+       * still `awaiting` while its approval writes the status it owns. The
+       * approval-gate guard skips THIS gate and no other.
+       */
+      decidingGateId?: string;
+      /**
+       * The move is the PRODUCT's own lifecycle, not a person pulling work back —
+       * the merge sync moving a card out of review because one of its pull
+       * requests closed (MOTIR-4882). Rule 6's withdraw (ADR §6d AMENDMENT) is for
+       * a person abandoning the question; the sync withdraws exactly the gates
+       * whose subject changed, BY SUBJECT (`mergeGates`), and a blanket withdraw
+       * here would take the OTHER pull request's question with it. The guard still
+       * applies — this exempts nothing it refuses.
+       */
+      keepPendingQuestions?: boolean;
+    } = {},
   ): Promise<{
     dto: WorkItemDto;
     transition: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
   }> {
+    // LOCK ORDER: the item's `awaiting` approval gates FIRST, then the item (ADR
+    // `approval-gates.md` §6d AMENDMENT, rule 8 · MOTIR-5527). The decide door
+    // locks its gate and then transitions the item through this method; a
+    // transition that locked the item first and then reached for a gate — to
+    // supersede it below, when the work is pulled back — would take the same two
+    // locks in the opposite order and deadlock against an approval pressed at the
+    // same moment. So EVERY transition, system writes included, takes them in the
+    // door's order. Re-locking the door's own gate is a no-op.
+    const awaitingGates = await approvalGateRepository.lockAwaitingByWorkItem(workItemId, tx);
     const locked = await workItemRepository.lockById(workItemId, tx);
     if (!locked) throw new WorkItemNotFoundError(workItemId);
     const current = await workItemRepository.findById(workItemId, tx);
@@ -2779,6 +2826,120 @@ export const workItemsService = {
         ctx.workspaceId,
       );
       if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+    }
+
+    // THE APPROVAL-GATE GUARD (Story MOTIR-4887 · MOTIR-5526; ADR
+    // `docs/decisions/approval-gates.md` §6d AMENDMENT, rules 1–5). An `awaiting`
+    // gate OWNS one status — the one approving it would write — and a move INTO
+    // that status by hand would skip the decision the gate exists to record. So
+    // exactly that move is refused; every other move the workflow allows stays
+    // legal, because a pending decision must not make the card unusable.
+    //
+    //   • WHAT a gate owns is its kind's `statusIntent`, read from the REGISTRY
+    //     and resolved against this project's own statuses — never a kind or a
+    //     status literal here. A `null` intent, a kind this build does not
+    //     register (it has no door to be decided through, so refusing its move
+    //     would strand the card), and an intent the workflow cannot resolve all
+    //     own NOTHING.
+    //   • ONLY `awaiting` refuses (the query's own predicate). `approved`,
+    //     `changes_requested` and `superseded` hold nothing, which is what keeps
+    //     §6d's reopen path legal.
+    //   • `opts.system` is EXEMPT, like both sibling gates below.
+    //   • `opts.decidingGateId` is EXEMPT for that ONE gate: the decide door runs
+    //     the effect before it writes the decision, so its own approval would
+    //     otherwise be refused by the guard it exists to protect.
+    //
+    // ⚠️ THE STATUSES ARE READ ON `tx`, NEVER THROUGH `resolveStatusKey`, which
+    // reads in a context of its own — a second pooled connection while this
+    // transaction holds the item `FOR UPDATE`. The rule is shared through the pure
+    // `resolveStatusIntent`, so the door and the guard cannot disagree about what
+    // a gate owns. The common card pays one indexed read
+    // (`approval_gate_work_item_id_idx`) and no status read.
+    let statuses: WorkflowStatusDto[] | null = null;
+
+    // THE HELD MOVES — rule 2b and rule 1, stated ONCE in `heldMoves`
+    // (`lib/approvalGates/heldMoves.ts`), the same function the status control
+    // reads to lock these moves before anyone tries them.
+    //
+    //   · RULE 2b — "it's about if there's a PR" (Yue, 2026-09-14). With an OPEN
+    //     delivering pull request, `approved` is written only by the approval (a
+    //     hand move there is refused unless it IS that approval's own write) and
+    //     every done-category status but Cancelled only by the merge webhook. The
+    //     merge itself passes: the sync commits its pull request as closed before
+    //     it transitions the card.
+    //   · RULE 1 — an `awaiting` gate holds the status its kind's intent resolves
+    //     to, and the deciding gate never holds its own write.
+    //
+    // Cost: the delivery read is paid only by a move INTO one of the statuses rule
+    // 2b can hold, and the status list only when there is something to resolve.
+    if (!opts.system) {
+      const candidateFor2b =
+        toStatusKey === APPROVED_STATUS_KEY ||
+        (target.category === 'done' && toStatusKey !== ROADMAP_CANCELLED_KEY);
+      const hasOpenPullRequest =
+        candidateFor2b &&
+        (await workItemDeliveryRepository.countOpenByWorkItem(workItemId, tx)) > 0;
+      if (hasOpenPullRequest || awaitingGates.length > 0) {
+        statuses ??= await workflowsService.listStatusesByProject(
+          current.projectId,
+          ctx.workspaceId,
+          tx,
+        );
+        const held = heldMoves({
+          statuses,
+          hasOpenPullRequest,
+          awaitingGates,
+          intentOf: (kind) =>
+            isRegisteredGateKind(kind as ApprovalGateKind)
+              ? handlerFor(kind as ApprovalGateKind).statusIntent
+              : null,
+          decidingGateId: opts.decidingGateId,
+        }).find((move) => move.statusKey === toStatusKey);
+        if (held) {
+          throw new ApprovalGatePendingError({
+            statusKey: toStatusKey,
+            gateId: held.gateId,
+            gateKind: held.gateKind,
+            itemKey: current.identifier,
+            workItemId,
+            waitingOn: held.waitingOn,
+          });
+        }
+      }
+    }
+
+    // PULLING THE WORK BACK WITHDRAWS THE QUESTION (ADR `approval-gates.md` §6d
+    // AMENDMENT, rule 6 · MOTIR-5527). A hand move out of the review band — or to
+    // Cancelled — means what somebody was asked to approve is being reworked or
+    // abandoned, so every `awaiting` gate on the item is superseded in THIS
+    // transaction, under the lock taken at the top. `→ blocked` keeps the question
+    // (blocking pauses the work, it does not abandon it), and a system write
+    // withdraws nothing. The supersede writes `state` and nothing else (§6b), so
+    // the audit cannot read it as a decision; who pulled the work back is on this
+    // transition's own revision row. Placed AFTER the guard, which can only ever
+    // refuse a move INTO an owned status — never one of these.
+    if (awaitingGates.length > 0 && !opts.system && !opts.keepPendingQuestions) {
+      const projectStatuses = (statuses ??= await workflowsService.listStatusesByProject(
+        current.projectId,
+        ctx.workspaceId,
+        tx,
+      ));
+      const keyOf = (key: string) => projectStatuses.find((s) => s.key === key)?.key ?? null;
+      if (
+        withdrawsPendingQuestion({
+          fromKey,
+          toKey: toStatusKey,
+          statuses: projectStatuses,
+          keys: {
+            reviewKey: keyOf('in_review'),
+            implementedKey: keyOf('implemented'),
+            approvedKey: keyOf('approved'),
+          },
+          system: false,
+        })
+      ) {
+        await approvalGateRepository.supersedeAllAwaitingByWorkItem(workItemId, tx);
+      }
     }
 
     // THE CLOSE-OUT ARTIFACT-EVIDENCE GATE (MOTIR-2709). A `type: 'deploy'`
@@ -2994,6 +3155,18 @@ export const workItemsService = {
       },
       tx,
     );
+
+    // ENTERING REVIEW ASKS AGAIN (ADR `approval-gates.md` §6d AMENDMENT, rule 7 ·
+    // MOTIR-5532). The mirror of the withdraw above: a card coming back into
+    // review has its question raised again over its CURRENT subject, unless that
+    // subject already has an awaiting or approved gate. Without it, pulling the
+    // work back and returning it would leave a gate-less card the guard cannot
+    // hold. SYSTEM moves are included — the CI-green promotion is the ordinary
+    // return to review — and the gate locks were taken at the top of this method.
+    if (toStatusKey === REVIEW_STATUS_KEY) {
+      await approvalGatesService.raiseOnReviewEntry(row, ctx, tx);
+    }
+
     return {
       dto: toWorkItemDto(row),
       transition: { fromStatusKey: fromKey, toStatusKey, revisionId },
@@ -5623,7 +5796,10 @@ export const workItemsService = {
     const designEvidence = hasOpenPr
       ? await designEvidenceService.getCurrentForWorkItem(detail.item.id, ctx)
       : null;
-    return toQuickViewData(
+    // The moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528) — the peek's
+    // status field says so the way the detail page's does, from the same read.
+    const heldTransitions = await approvalGatesService.listHeldTransitions(detail.item.id, ctx);
+    const view = toQuickViewData(
       detail,
       members,
       locale,
@@ -5640,6 +5816,7 @@ export const workItemsService = {
       folderPath,
       designEvidence,
     );
+    return { ...view, heldTransitions };
   },
 
   /**

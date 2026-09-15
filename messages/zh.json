@@ -680,7 +680,9 @@
       "STALE_WORK_ITEM": "此工作项已被他人编辑。请刷新后重试。",
       "TYPE_NOT_ALLOWED_ON_KIND": "只能为任务、子任务或缺陷设置类型和执行者，史诗和故事不可设置。",
       "MISSING_ARTIFACT_EVIDENCE": "“部署”类型的工作项必须先有评论记录已发布的产物，才能关闭——版本号（1.4.0）、镜像摘要（sha256:…）或完整性哈希（sha512-…）均可。如果该交付确实没有可记录的标识，请添加以“NO ARTIFACT:”开头并写明原因的评论。",
-      "CONTAINER_HAS_OPEN_CHILDREN": "该工作项还有子项尚未达到“已实现”，因此无法进入该状态。父项处于该状态，即声明其下的全部工作都已构建完成，其拉取请求也是基于这一声明才打开的。请先完成这些子项、把已不属于本次范围的子项移到别处，或将该工作项移到“已完成”——那是有意地一并关闭它们，而不是作为副作用。"
+      "CONTAINER_HAS_OPEN_CHILDREN": "该工作项还有子项尚未达到“已实现”，因此无法进入该状态。父项处于该状态，即声明其下的全部工作都已构建完成，其拉取请求也是基于这一声明才打开的。请先完成这些子项、把已不属于本次范围的子项移到别处，或将该工作项移到“已完成”——那是有意地一并关闭它们，而不是作为副作用。",
+      "APPROVAL_GATE_PENDING": "该状态无法直接设置——此工作项有一个待处理的审批，批准它才会完成这一移动。其他移动仍然可以进行。",
+      "APPROVAL_GATE_PENDING_MERGE": "该状态无法直接设置——此工作项有未合并的拉取请求，合并它才会完成这一移动。其他移动仍然可以进行。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",
@@ -3825,7 +3827,8 @@
     "sprintColumnPointsTitle": "此列共 {points} 个故事点",
     "noActiveSprintTitle": "没有进行中的 Sprint",
     "noActiveSprintDescription": "此看板当前没有进行中的 Sprint。在待办列表中规划并开始一个 Sprint，其事项将在此处的工作流列中显示。",
-    "noActiveSprintCta": "前往待办列表"
+    "noActiveSprintCta": "前往待办列表",
+    "announcementHeld": "{key} 已退回。{line}"
   },
   "ready": {
     "heading": "可开始",
@@ -8364,6 +8367,21 @@
         "keepsFiles": "保留该版本的文件，使该决定始终可核查；",
         "movesToDone": "将 {key} 标记为已完成，并解除对其等待中的工作项的阻塞。"
       }
+    },
+    "statusHeld": {
+      "decision": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待。",
+      "decisionSeeOnly": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待 {name} 处理。",
+      "decisionNotRaised": "无法直接将状态改为<strong>{status}</strong>——合并请求的检查通过后才会发起<strong>{decision}</strong>。",
+      "merge": "无法直接将状态改为<strong>{status}</strong>——合并该合并请求后会自动变更。",
+      "decisionNoun": {
+        "design_result": "设计审批",
+        "pull_request_approval": "合并请求审批",
+        "decision_approval": "决策审批",
+        "pull_request_merge": "合并审批"
+      },
+      "reviewAndApprove": "审阅并批准",
+      "needsApproval": "需要审批",
+      "movesOnMerge": "合并后变更"
     }
   },
   "approvalOverlay": {

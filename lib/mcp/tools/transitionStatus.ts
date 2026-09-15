@@ -4,7 +4,8 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { IllegalTransitionError } from '@/lib/workItems/errors';
+import { ApprovalGatePendingError, IllegalTransitionError } from '@/lib/workItems/errors';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, WorkflowStatusDto } from '@/lib/dto/workflows';
@@ -78,6 +79,19 @@ function illegalTransitionResult(
   return toolError(err.code, `${err.message} ${allowed}`);
 }
 
+/** Build the enriched APPROVAL_GATE_PENDING tool error naming who decides. */
+function approvalPendingResult(
+  err: ApprovalGatePendingError,
+  gate: { canDecide: boolean; routedToLabel: string | null },
+): CallToolResult {
+  const who = gate.canDecide
+    ? 'The account this call acts as may decide it, in Motir.'
+    : gate.routedToLabel
+      ? `It is waiting on ${gate.routedToLabel}.`
+      : 'It is waiting on a person in Motir.';
+  return toolError(err.code, `${err.message} ${who}`);
+}
+
 /** The adapter: resolve project + item + target status, then transition. */
 export async function runTransitionStatus(
   args: { key: string; status: string },
@@ -106,6 +120,15 @@ export async function runTransitionStatus(
     // Enrich an illegal move with the legal targets so the agent self-corrects.
     if (err instanceof IllegalTransitionError && workflow) {
       return illegalTransitionResult(err, workflow);
+    }
+    // A pending approval owns the target (MOTIR-5526): enrich with WHOSE decision
+    // it is, from the same payload every other door carries, so an agent can say
+    // who has to act instead of reporting a bare refusal. Other moves stay open.
+    if (err instanceof ApprovalGatePendingError) {
+      return approvalPendingResult(
+        err,
+        await approvalGatesService.describePendingRefusal(err, ctx),
+      );
     }
     return toToolError(err);
   }

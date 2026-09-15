@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -14,6 +22,8 @@ import { cn } from '@/lib/utils/cn';
 import { useToast } from '@/components/ui/Toast';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
+import { StatusHeldNotice, type StatusHeldLine } from '@/components/issues/StatusHeldNotice';
+import { heldLineFromRefusal, useDismissOnEscapeOrOutside } from '@/components/issues/heldRefusal';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import {
@@ -336,6 +346,13 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
   const ledger = useIssueInlineEdit()?.ledger;
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
+  // A move an approval or a merge HOLDS (MOTIR-5529; the status-control design's
+  // list-row panel): the ONE refused line, anchored on this row's status cell with
+  // its door — not a toast. The list reads no gate per row; this is the refusal.
+  const [held, setHeld] = useState<StatusHeldLine | null>(null);
+  const heldRef = useRef<HTMLSpanElement>(null);
+  const closeHeld = useCallback(() => setHeld(null), []);
+  useDismissOnEscapeOrOutside(heldRef, held !== null, closeHeld);
   // Optimistic override: the just-picked key, confirmed by the action response
   // (see useConvergingOverride — the success response IS the confirmation; no
   // refresh follows). On failure the override is dropped and the cell reverts.
@@ -367,6 +384,10 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
         // no token itself — later token-carrying edits on this row need it.
         ledger?.acknowledge(row.id, res.updatedAt);
         status.confirm(token, res.updatedAt);
+      } else if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
+        status.fail(token);
+        const target = workflow.statuses.find((s) => s.key === toStatusKey);
+        setHeld(heldLineFromRefusal(toStatusKey, target?.label ?? toStatusKey, res.gate));
       } else {
         status.fail(token);
         toast({ variant: 'error', title: res.error });
@@ -391,14 +412,31 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
     );
   }
 
-  return (
+  const trigger = (
     <EditTrigger
       label={`${t('edit')} ${t('status')}`}
-      onOpen={() => setEditing(true)}
+      onOpen={() => {
+        setHeld(null);
+        setEditing(true);
+      }}
       disabled={pending}
     >
       <StatusValue category={category} label={label} />
     </EditTrigger>
+  );
+  if (!held) return trigger;
+  return (
+    // The anchored line sits under the status cell, above the rows below it (the
+    // same `z-30` the open editor takes), and never navigates the row.
+    <span ref={heldRef} className="relative z-30 inline-block" onClick={(e) => e.stopPropagation()}>
+      {trigger}
+      <span
+        data-list-held=""
+        className="absolute top-full left-0 mt-1.5 block w-[18.75rem] rounded-(--radius-control) shadow-(--shadow-elevated)"
+      >
+        <StatusHeldNotice itemKey={row.identifier} lines={[held]} />
+      </span>
+    </span>
   );
 }
 

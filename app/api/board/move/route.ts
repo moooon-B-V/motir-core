@@ -3,6 +3,7 @@ import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
 import {
+  ApprovalGatePendingBoardMoveError,
   BoardColumnNotFoundError,
   BoardNotFoundError,
   IllegalBoardMoveError,
@@ -18,6 +19,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 //
 // Typed errors → the status codes the 3.2 UI branches on:
 //   IllegalBoardMoveError    → 409  (illegal transition — the snap-back signal)
+//   ApprovalGatePendingBoardMoveError → 409 `{ code: 'APPROVAL_GATE_PENDING', gate }` (MOTIR-5526)
 //   UnmappedColumnTargetError → 422 (the target column maps no live status)
 //   Board/Column/WorkItem not found → 404
 // `boardId` rides in the body (the client holds it from the projection — the
@@ -73,6 +75,16 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json(result);
   } catch (err) {
+    // A pending approval owns the target column's status (MOTIR-5526). 409 like
+    // an illegal move — the card goes back — but its own `code` and the `gate`
+    // payload, because the board renders THIS refusal on the card with a door
+    // into the approval instead of the snap-back toast.
+    if (err instanceof ApprovalGatePendingBoardMoveError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, gate: err.gate },
+        { status: 409 },
+      );
+    }
     if (err instanceof IllegalBoardMoveError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
