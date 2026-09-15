@@ -1,3 +1,4 @@
+import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 
@@ -355,3 +356,44 @@ export interface ApprovalGateOverlayReadDTO {
   routedToLabel: string | null;
   subject: ApprovalGateOverlaySubjectDTO;
 }
+
+/**
+ * One member of an approve-and-merge set as the Development frame reads it BACK after a reload
+ * (Story MOTIR-4909 · Subtask MOTIR-5484) — the two facts that outlive the press's response.
+ *
+ * ⚠️ NO REFUSAL REASON. The press does not persist one, so a reloaded page can say a pull
+ * request has not merged yet and offer the retry, and must never say why.
+ */
+export interface PullRequestApprovalMemberDTO {
+  /** `owner/name#number@headSha`, as the approval named the member. */
+  subjectVersion: string;
+  /** The member's merge gate while it still AWAITS — what *Retry merge* presses. */
+  awaitingMergeGateId: string | null;
+  /** The press handed it to its repository's merge queue, and it has not merged yet. */
+  queued: boolean;
+}
+
+/** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */
+export type ApproveAndMergeMemberOutcomeDTO =
+  | {
+      /** The member as the approval named it: `owner/name#number@headSha`. */
+      subjectVersion: string;
+      mergeGateId: string;
+      pullRequestId: string;
+      outcome: 'merged' | 'enqueued';
+    }
+  | {
+      subjectVersion: string;
+      mergeGateId: string;
+      pullRequestId: string;
+      outcome: 'refused';
+      /** The refusal in the frame's vocabulary — MOTIR-4882's union for a host refusal. */
+      refusal: GateRefusal;
+    }
+  | {
+      subjectVersion: string;
+      mergeGateId: null;
+      pullRequestId: null;
+      /** No merge gate is awaiting for this member's exact head. */
+      outcome: 'no_merge_gate';
+    };

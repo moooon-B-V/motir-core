@@ -8332,6 +8332,64 @@
         "keepsFiles": "keep this version's files, so the decision stays checkable;",
         "movesToDone": "move {key} to Done, starting the work items waiting on it."
       }
+    },
+    "pullRequestApproval": {
+      "kindLabel": "Pull requests",
+      "meta": {
+        "count": "{count, plural, one {# pull request} other {# pull requests}}",
+        "delivered": "{count, plural, one {# pull request} other {# pull requests}} · delivered by {run}",
+        "approved": "Approved by {name} · {count, plural, one {# pull request} other {# pull requests}}",
+        "approvedByYou": "Approved by you just now · {count, plural, one {# pull request} other {# pull requests}}",
+        "withdrawn": "{count, plural, one {# pull request} other {# pull requests}} · the head of {pr} moved",
+        "withdrawnSet": "{count, plural, one {# pull request} other {# pull requests}} · the set changed"
+      },
+      "verb": {
+        "approveAndMerge": "Approve and merge"
+      },
+      "consequence": {
+        "named": "Approving merges {prs} — each now, or through its repository's merge queue where one is required — then moves {key} to Approved.",
+        "counted": "Approving merges {count} pull requests — each now, or through its repository's merge queue where one is required — then moves {key} to Approved."
+      },
+      "confirm": {
+        "records": "record that you approved these {count, plural, one {# commit} other {# commits}}, with the time;",
+        "mergeOrQueue": "merge {pr} now, or add it to its repository's merge queue if the repository requires one;",
+        "movesToApproved": "move {key} to Approved. It moves to Done when every merge lands."
+      },
+      "record": {
+        "commits": "{count, plural, one {# commit} other {# commits}}"
+      },
+      "queued": {
+        "why": "{key} stays Approved until the merge queue lands {pr}."
+      },
+      "merged": {
+        "why": "Every pull request merged. {key} moves to Done when {host} reports the merges."
+      },
+      "notMergedYet": {
+        "why": "{pr} has not merged yet. Retry it, or open it on {host} to see why."
+      },
+      "outcome": {
+        "merging": "Merging",
+        "merged": "Merged",
+        "queued": "Queued to merge",
+        "refused": "Not merged",
+        "notMergedYet": "Not merged yet",
+        "retry": "Retry merge"
+      },
+      "refused": {
+        "title": "{pr} was not merged.",
+        "stands": "Your approval stands, and {other} merged.",
+        "standsAlone": "Your approval stands."
+      },
+      "withdrawn": {
+        "port": "A push moved the head of {pr}, so this question was withdrawn.",
+        "portSet": "The pull requests changed, so this question was withdrawn.",
+        "portCite": "Nobody decided it. Motir asks again when every check is green."
+      },
+      "list": {
+        "pair": "{a} and {b}",
+        "separator": ", "
+      },
+      "host": "GitHub"
     }
   },
   "approvalOverlay": {

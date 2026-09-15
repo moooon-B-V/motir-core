@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
@@ -22,6 +22,9 @@ import messages from '@/messages/en.json';
 //
 // The gate kind is unregistered until MOTIR-4909, so no live tenant reaches the
 // frame arm; these fixtures are the only proof it is built.
+
+// The frame reads the router for its post-decision refresh (MOTIR-5484); nothing here presses.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 afterEach(cleanup);
 
@@ -58,13 +61,14 @@ describe('no gate ⇒ no frame (Panels 12a / 12b)', () => {
     expect(container.textContent).toContain(GATEWAY_PR.title);
   });
 
-  it('a DECIDED gate draws no frame either — only an awaiting one does', () => {
+  it('a DECIDED gate KEEPS its frame — what the merges did is drawn after the decision (MOTIR-5484)', () => {
     renderBlock({
       gate: { ...AWAITING_MERGE_GATE, state: 'approved', decidedAt: '2026-09-13T15:00:00.000Z' },
       canDecide: true,
     });
-    expect(screen.queryByRole('group', { name: PORT_LABEL })).toBeNull();
-    expect(screen.getByRole('group', { name: htt.title })).toBeTruthy();
+    const port = screen.getByRole('group', { name: PORT_LABEL });
+    expect(within(port).getByRole('group', { name: htt.title })).toBeTruthy();
+    expect(screen.getByText(messages.approvalGate.state.approved)).toBeTruthy();
   });
 
   it("re-inks the rows' caption to --el-text-secondary (AA on the port's surface)", () => {
@@ -88,7 +92,7 @@ describe('an awaiting approve-and-merge gate on a two-repository story (Panel 12
     expect(screen.getAllByText(messages.approvalGate.state.awaitingYou)).toHaveLength(1);
   });
 
-  it('renders NO verb — none inside How to test, and none in the frame until MOTIR-4909', () => {
+  it('renders NO verb — none inside How to test, and none in a frame handed no actions', () => {
     renderBlock({ gate: AWAITING_MERGE_GATE, canDecide: true });
     const part = screen.getByRole('group', { name: htt.title });
     const verbish = /approve|merge|request changes/i;

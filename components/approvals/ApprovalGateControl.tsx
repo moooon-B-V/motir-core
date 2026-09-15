@@ -155,8 +155,34 @@ export interface ApprovalGateControlProps {
    * already is the expanded form. Band 1, band 3, every state, every verb, the
    * confirm band and the refusal are byte-identical, and `inline` renders exactly
    * what every call site rendered before this input existed.
+   *
+   * `flush` (Story MOTIR-4909 · Subtask MOTIR-5484; `design/github/design-notes.md` §20
+   * *No card inside a card*): the frame sits INSIDE a section card that is already the
+   * container — the item page's Development block. The card chrome comes off, as in
+   * `fill`; the port keeps its floor, its ceiling and Expand, as in `inline`, because a
+   * page card is not the viewport. Nothing inside the box changes either.
    */
-  layout?: 'inline' | 'fill';
+  layout?: 'inline' | 'fill' | 'flush';
+  /**
+   * A KIND-SUPPLIED alert band, drawn between the port and band 3 (MOTIR-5484). It is
+   * state `H` for a refusal the decide call did NOT return: the approve-and-merge press
+   * commits the approval and then reports a pull request the host refused, so there is
+   * no refused PHASE to draw, and the kind names that pull request itself. Absent,
+   * nothing renders.
+   */
+  alert?: ReactNode;
+  /**
+   * More of the DECIDED record strip, after who and when — the kind's own facts about
+   * what the decision covered (MOTIR-5484: the commit count, and what the merges still
+   * wait on). Absent, the strip is unchanged.
+   */
+  recordDetail?: ReactNode;
+  /**
+   * State `G`'s dead-port words, when the KIND withdraws for its own reason (MOTIR-5484:
+   * a push moved a pull request's head, not a newer design). Absent, the frame's own
+   * words render.
+   */
+  withdrawnPort?: { port: ReactNode; cite: ReactNode };
   /**
    * Record the decision. Resolves to a refusal the frame draws IN PLACE, or
    * null on success — at which point the caller has already reconciled.
@@ -357,6 +383,31 @@ function RecordStrip({ children }: { children: ReactNode }) {
  * ink FOR a danger fill and renders white-on-white here (CLAUDE.md's danger rule).
  */
 function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
+  const { headline, nextAction } = useRefusalCopy(refusal);
+
+  return (
+    <div
+      role="alert"
+      className="flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3"
+    >
+      <AlertTriangle
+        className="mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"
+        aria-hidden
+      />
+      <p className="text-[13px] leading-snug text-(--el-text-strong)">
+        <b>{headline}</b> <span className="text-(--el-text-secondary)">{nextAction}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A refusal's WORDS — its headline and its next action — in the frame's one vocabulary.
+ * Exported for a kind that names a refusal inside its own alert (MOTIR-5484: a pull
+ * request the approve-and-merge press could not merge), so the words stay these and a
+ * second copy of them never exists.
+ */
+export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAction: string } {
   const t = useTranslations('approvalGate.refusal');
 
   // ⚠️ EXHAUSTIVE over `GateRefusal`, which is itself total over the service's
@@ -442,20 +493,7 @@ function RefusalAlert({ refusal }: { refusal: GateRefusal }) {
         : t('mergeAppPermissionMissing.nextUnnamed')
       : t(`${nextActionKey}.next`);
 
-  return (
-    <div
-      role="alert"
-      className="flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3"
-    >
-      <AlertTriangle
-        className="mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"
-        aria-hidden
-      />
-      <p className="text-[13px] leading-snug text-(--el-text-strong)">
-        <b>{headline}</b> <span className="text-(--el-text-secondary)">{nextAction}</span>
-      </p>
-    </div>
-  );
+  return { headline, nextAction };
 }
 
 /**
@@ -543,6 +581,9 @@ export function ApprovalGateControl({
   routedToLabel,
   filesKept = null,
   layout = 'inline',
+  alert,
+  recordDetail,
+  withdrawnPort,
   onDecide,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
@@ -550,6 +591,7 @@ export function ApprovalGateControl({
   const [phase, setPhase] = useState<Phase>({ kind: 'awaiting' });
   const [expanded, setExpanded] = useState(false);
   const fill = layout === 'fill';
+  const flush = layout === 'flush';
 
   // MOTIR-5032 — the port's own report, and the gate on band 3 that follows from
   // it. `usePortRenderStatus` defaults to `'rendered'` when NOTHING reports, so
@@ -652,7 +694,11 @@ export function ApprovalGateControl({
               // The recipe (scrim token, panel token, the `max-h`/flex column)
               // mirrors `Modal` so the two read as one language.
               'fixed top-1/2 left-1/2 z-50 flex max-h-[90vh] w-[90vw] max-w-[72rem] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-(--radius-modal) border border-(--el-border) bg-(--el-page-bg)'
-            : 'overflow-hidden rounded-(--radius-card) border border-(--el-border)'
+            : flush
+              ? // THE FLUSH FORM (MOTIR-5484): the host card is the container, so no
+                // radius and no border of its own — the bands run edge to edge in it.
+                'flex flex-col overflow-hidden'
+              : 'overflow-hidden rounded-(--radius-card) border border-(--el-border)'
       }
       onKeyDown={(event) => {
         if (expanded && event.key === 'Escape') setExpanded(false);
@@ -699,8 +745,12 @@ export function ApprovalGateControl({
         >
           {withdrawn ? (
             <div className="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center">
-              <p className="text-[13px] text-(--el-text-secondary)">{t('withdrawn.port')}</p>
-              <p className="text-xs text-(--el-text-secondary)">{t('withdrawn.portCite')}</p>
+              <p className="text-[13px] text-(--el-text-secondary)">
+                {withdrawnPort ? withdrawnPort.port : t('withdrawn.port')}
+              </p>
+              <p className="text-xs text-(--el-text-secondary)">
+                {withdrawnPort ? withdrawnPort.cite : t('withdrawn.portCite')}
+              </p>
             </div>
           ) : (
             port
@@ -715,6 +765,8 @@ export function ApprovalGateControl({
           belt that stops a later `G` port which DOES render something from
           accidentally inheriting `X`'s alert. */}
       {portFailed && !withdrawn ? <PortFailedAlert /> : null}
+
+      {alert ?? null}
 
       {phase.kind === 'refused' ? <RefusalAlert refusal={phase.refusal} /> : null}
 
@@ -766,6 +818,7 @@ export function ApprovalGateControl({
               </span>
             )
           ) : null}
+          {recordDetail ?? null}
         </RecordStrip>
       ) : phase.kind === 'confirming' ? (
         // ⚠️ AN INLINE BAND OVER THE VERBS, NEVER A MODAL — a modal would take

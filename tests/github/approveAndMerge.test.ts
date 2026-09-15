@@ -370,3 +370,53 @@ describe('boundaries', () => {
     }
   });
 });
+
+describe('the members read — what a reload still knows (MOTIR-5484)', () => {
+  it('reads a queued member as queued, and a refused one as awaiting its merge — with no reason', async () => {
+    const { item, approval, web, api } = await pressable();
+    stubHost({
+      7: { outcome: 'enqueued', entryId: 'MQE_9' },
+      12: { outcome: 'refused', refusal: { code: 'conflict' } },
+    });
+    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+
+    const members = await pullRequestMergeService.listApprovalMembers(
+      { workItemId: item.id, approvalGateId: approval.id },
+      fx.ctx,
+    );
+    // In the set's own order, and nothing a refusal said survives into the read.
+    expect(members).toEqual([
+      { subjectVersion: api.version, awaitingMergeGateId: api.mergeGateId, queued: false },
+      { subjectVersion: web.version, awaitingMergeGateId: null, queued: true },
+    ]);
+  });
+
+  it('stops reading a member as queued once its pull request has merged', async () => {
+    const { item, approval, web } = await pressable();
+    stubHost({
+      7: { outcome: 'enqueued', entryId: 'MQE_10' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    await adminDb.githubPullRequest.update({
+      where: { id: web.prId },
+      data: { merged: true, state: 'closed' },
+    });
+
+    const members = await pullRequestMergeService.listApprovalMembers(
+      { workItemId: item.id, approvalGateId: approval.id },
+      fx.ctx,
+    );
+    expect(members.map((m) => m.queued)).toEqual([false, false]);
+  });
+
+  it('is empty for an approval gate that has not been approved', async () => {
+    const { item, approval } = await pressable();
+    expect(
+      await pullRequestMergeService.listApprovalMembers(
+        { workItemId: item.id, approvalGateId: approval.id },
+        fx.ctx,
+      ),
+    ).toEqual([]);
+  });
+});

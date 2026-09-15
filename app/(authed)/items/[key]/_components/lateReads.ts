@@ -8,6 +8,8 @@ import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceServ
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
@@ -114,13 +116,18 @@ export interface LateReads {
    */
   howToTest: HowToTestDto | null;
   /**
-   * The card's AWAITING approve-to-merge gate (`pull_request_approval`), or
-   * `gate: null`. Read exactly as `designGate` is — the same service, the same
-   * containment — and only its awaiting answer, because only an awaiting gate
-   * draws the frame (design §20). The kind is unregistered until MOTIR-4909, so
-   * on a live tenant this is always `gate: null`.
+   * The card's approve-and-merge gate (`pull_request_approval`) WHATEVER ITS STATE, or
+   * `gate: null` — read exactly as `designGate` is, the same service and the same
+   * containment (Story MOTIR-4909 · MOTIR-5484). A decided gate keeps its frame: the
+   * merging, queued, merged, refused and withdrawn states all come after the decision,
+   * and an awaiting-only read made the frame vanish the moment it was pressed.
+   *
+   * `members` — once the gate is APPROVED — is what a reload still knows about each pull
+   * request of its set: whether its merge gate awaits, and whether the press queued it.
    */
-  mergeGate: Awaited<ReturnType<typeof approvalGatesService.getAwaitingForWorkItem>>;
+  mergeGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
+    members: PullRequestApprovalMemberDTO[];
+  };
 }
 
 export interface LateReadsInput {
@@ -291,12 +298,28 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       })(),
       (async () => {
         try {
-          return await approvalGatesService.getAwaitingForWorkItem(
+          const read = await approvalGatesService.getForWorkItem(
             { workItemId: itemId, kind: 'pull_request_approval' },
             ctx,
           );
+          // The members are read ONLY for an APPROVED gate: before the press there is
+          // nothing a merge could have done, and a withdrawn question merged nothing.
+          const members =
+            read.gate?.state === 'approved'
+              ? await pullRequestMergeService.listApprovalMembers(
+                  { workItemId: itemId, approvalGateId: read.gate.id },
+                  ctx,
+                )
+              : [];
+          return { ...read, members };
         } catch {
-          return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
+          return {
+            gate: null,
+            canDecide: false,
+            routedToLabel: null,
+            settingsDoor: null,
+            members: [],
+          };
         }
       })(),
     ]);

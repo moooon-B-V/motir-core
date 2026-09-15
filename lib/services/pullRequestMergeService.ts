@@ -22,6 +22,11 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
+import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
+import type {
+  ApproveAndMergeMemberOutcomeDTO,
+  PullRequestApprovalMemberDTO,
+} from '@/lib/dto/approvalGate';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from './projectAccessService';
 import {
@@ -180,30 +185,9 @@ const APPROVAL_KIND = 'pull_request_approval' as const;
  *  host merged the pull request or added it to its merge queue. */
 export type ApproveMergeGateResult = DecideGateResult & { mergeOutcome: 'merged' | 'enqueued' };
 
-/** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */
-export type ApproveAndMergeMemberOutcome =
-  | {
-      /** The member as the approval named it: `owner/name#number@headSha`. */
-      subjectVersion: string;
-      mergeGateId: string;
-      pullRequestId: string;
-      outcome: 'merged' | 'enqueued';
-    }
-  | {
-      subjectVersion: string;
-      mergeGateId: string;
-      pullRequestId: string;
-      outcome: 'refused';
-      /** The refusal in the frame's vocabulary — MOTIR-4882's union for a host refusal. */
-      refusal: GateRefusal;
-    }
-  | {
-      subjectVersion: string;
-      mergeGateId: null;
-      pullRequestId: null;
-      /** No merge gate is awaiting for this member's exact head. */
-      outcome: 'no_merge_gate';
-    };
+/** One member of an approve-and-merge press, and what happened to it (MOTIR-5483) — the
+ *  DTO the Development frame reads it as (MOTIR-5484). */
+export type ApproveAndMergeMemberOutcome = ApproveAndMergeMemberOutcomeDTO;
 
 /** The press's answer: the approval, which stands in every case, and every member's outcome. */
 export interface ApproveAndMergeResult {
@@ -306,6 +290,60 @@ export const pullRequestMergeService = {
       ),
     );
     return { ...decided, mergeOutcome: result.outcome };
+  },
+
+  /**
+   * The approve-and-merge set as the Development frame draws it on a READ (Story MOTIR-4909 ·
+   * MOTIR-5484): each member of one APPROVED `pull_request_approval` gate, with the two facts
+   * a reload still has once the press's response is gone —
+   *
+   *   · whether the member's merge gate still AWAITS, so *Retry merge* has a gate to press;
+   *   · whether the press QUEUED it — its merge gate was decided and the pull request carries a
+   *     `queue:` outcome and has not merged — so the row reads *Queued to merge* for as long as
+   *     that is true.
+   *
+   * ⚠️ NO REFUSAL REASON: the press does not persist one. Empty for a gate that is not an
+   * approved approval gate on this card.
+   */
+  async listApprovalMembers(
+    input: { workItemId: string; approvalGateId: string },
+    ctx: ServiceContext,
+  ): Promise<PullRequestApprovalMemberDTO[]> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const approval = await approvalGateRepository.findById(input.approvalGateId, tx);
+      if (
+        !approval ||
+        approval.kind !== APPROVAL_KIND ||
+        approval.state !== 'approved' ||
+        approval.workItemId !== input.workItemId
+      ) {
+        return [];
+      }
+      const mergeGates = await approvalGateRepository.findByWorkItemAndKind(
+        input.workItemId,
+        KIND,
+        tx,
+      );
+      const pullRequests = await githubPullRequestRepository.findManyByIdsForSummary(
+        [...new Set(mergeGates.map((gate) => gate.subjectId))],
+        tx,
+      );
+      return (approval.subjectVersion ?? '')
+        .split(',')
+        .filter((version) => parseMemberVersion(version) !== null)
+        .map((subjectVersion) => {
+          const gates = mergeGates.filter((gate) => gate.subjectVersion === subjectVersion);
+          const awaiting = gates.find((gate) => gate.state === 'awaiting') ?? null;
+          const approved = gates.find((gate) => gate.state === 'approved') ?? null;
+          const pr = approved ? pullRequests.get(approved.subjectId) : undefined;
+          return {
+            subjectVersion,
+            awaitingMergeGateId: awaiting?.id ?? null,
+            queued:
+              pr !== undefined && !pr.merged && (pr.mergeOutcomeRef?.startsWith('queue:') ?? false),
+          };
+        });
+    });
   },
 
   /**
