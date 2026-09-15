@@ -1160,9 +1160,10 @@ amendment below, which retires this divergence. The pin itself is unchanged.
 >
 > - **A card at `approved` with an open pull request** — decided, but not yet
 >   `done` until the merge (§2b). This rule closes the `done` category and nothing
->   else, so a publish in that window still supersedes. Whoever reads
->   _the approved design_ off such a card after the merge must read the PINNED
->   version, not assume the current one is it.
+>   else, so a publish in that window still supersedes, and after the merge the
+>   card can be `done` with a current version nobody approved. Which version a run
+>   is handed as _the approved design_ — the pinned one, or a closed `approved`
+>   window — is MOTIR-5555's to decide; the finding is on that card.
 > - **What an agent is handed from an approved design** — MOTIR-5553's own
 >   decision card.
 >
