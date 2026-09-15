@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import en from '@/messages/en.json';
 import { adminDb } from '@/tests/helpers/adminDb';
 import { resetDatabase } from './_helpers/db-reset';
@@ -47,6 +47,22 @@ import {
 // response. No `waitForTimeout`.
 
 test.describe.configure({ timeout: 240_000 });
+
+/** The Design result section's ONE door (Story MOTIR-5215 · MOTIR-5229). Scoped to the
+ *  section: while this gate holds a move the status control carries a second
+ *  `Review & approve` (MOTIR-5528). */
+function designDoor(page: Page) {
+  return page
+    .getByRole('main')
+    .locator('[data-surface="card"]')
+    .filter({ has: page.getByRole('heading', { level: 2, name: 'Design result' }) })
+    .getByRole('link', { name: 'Review & approve' });
+}
+
+/** The approval overlay the door opens, named for the card it decides. */
+function overlay(page: Page, seed: DesignApprovalSeed) {
+  return page.getByRole('dialog', { name: `Design result for ${seed.designKey}` });
+}
 
 async function designItem(seed: DesignApprovalSeed) {
   return adminDb.workItem.findFirstOrThrow({
@@ -111,12 +127,20 @@ test.describe('a done design is final until a person reopens it', () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       await page.goto(`/items/${seed.designKey}`);
       await expect(page.getByRole('heading', { name: seed.designTitle })).toBeVisible();
-      await expect(page.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
+      // ⚠️ THE ITEM PAGE HANDS THE DECISION OVER (MOTIR-5215): the card shows the
+      // band's one door, and the design is decided in the overlay it opens.
+      await expect(designDoor(page)).toHaveCount(1);
+      await designDoor(page).click();
+      const dialog = overlay(page, seed);
+      await expect(dialog.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
 
-      await page.getByRole('button', { name: 'Approve' }).click();
-      await page.getByRole('button', { name: 'Yes, Approve' }).click();
+      await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Yes, Approve' }).click();
       // Rendered from the gate row the decide action RETURNED — the authoritative
       // signal that the decision is recorded.
+      await expect(dialog.getByText('Approved', { exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
       await expect(page.getByRole('main').getByText('Approved', { exact: true })).toBeVisible();
       await expect(page.getByRole('main').getByText('Done', { exact: true })).toBeVisible();
       await expect
@@ -161,14 +185,21 @@ test.describe('a done design is final until a person reopens it', () => {
 
       await page.goto(`/items/${seed.designKey}`);
       await expect(page.getByRole('heading', { name: seed.designTitle })).toBeVisible();
-      // The panel is MOUNTED before anything is said about its contents, so the
-      // assertions below cannot pass against an absent frame.
-      const port = page.getByRole('group', { name: 'The subject being decided' });
+      // A new question, routed to the reviewer again — on the card as the band's
+      // one door (MOTIR-5215), so the door is MOUNTED before anything is said
+      // about the question behind it.
+      await expect(designDoor(page)).toHaveCount(1);
+      await expect(page.getByRole('main').getByText('Awaiting you', { exact: true })).toBeVisible();
+      // …and decidable again, as the first was: the new version's design and the
+      // verb, in the overlay the door opens.
+      await designDoor(page).click();
+      const dialog = overlay(page, seed);
+      const port = dialog.getByRole('group', { name: 'The subject being decided' });
       await expect(port).toBeVisible();
       await expect(port.locator('iframe').first()).toBeVisible();
-      // A new question, routed to the reviewer again — decided again, as the first was.
-      await expect(page.getByRole('main').getByText('Awaiting you', { exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
     });
   });
 });
