@@ -615,3 +615,116 @@ describe('the existing WITHDRAW behaviour is untouched (MOTIR-3215)', () => {
     expect(row.pinnedAt).toBeNull();
   });
 });
+
+describe('WITHDRAWING the current result retires its AWAITING gate (MOTIR-5574; ADR §6b)', () => {
+  // The republish path retires the prior version's question (the §6b block
+  // above). A withdrawal takes the subject away with NOTHING in its place, so it
+  // owes the same write — without it the gate stayed `awaiting`, routed to the
+  // reviewer, about bytes nobody should approve.
+  //
+  // ⚠️ The decided and racing cases use `request_changes`, not `approve`, on
+  // purpose: an approval with no open pull request moves the card to `done`, and
+  // what a withdrawal on a closed card does is a different card's question.
+  // `request_changes` moves nothing, so these assertions are about the gate alone.
+
+  async function withdraw() {
+    return designEvidenceService.withdrawCurrentForWorkItem(
+      { workItemId: card.id, reason: 'Published onto the wrong card.' },
+      fx.ctx,
+    );
+  }
+
+  it('the gate becomes `superseded` with no decider, and leaves the routing read the Approvals tab makes', async () => {
+    const v1 = await publish('v1');
+    const v1Gate = await gateFor(v1.id);
+    expect(v1Gate.state).toBe('awaiting');
+
+    await withdraw();
+
+    const retired = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: v1Gate.id } });
+    expect(retired.state).toBe('superseded');
+    expect(retired.decidedById).toBeNull();
+    expect(retired.decidedAt).toBeNull();
+    expect(retired.noteMd).toBeNull();
+    expect(retired.subjectId).toBe(v1.id);
+
+    const byRouting = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.findAwaitingRoutedTo(
+        { projectIds: [fx.projectId], userId: fx.ctx.userId },
+        { skip: 0, take: 50 },
+        tx,
+      ),
+    );
+    expect(byRouting).toEqual([]);
+
+    // And the decide door refuses it as a withdrawn question.
+    await expect(
+      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+    ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
+  });
+
+  it('leaves a DECIDED gate alone — an answer outlives the subject it was about', async () => {
+    const v1 = await publish('v1');
+    const v1Gate = await gateFor(v1.id);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'request_changes', source: 'ui', noteMd: 'Too short.' },
+      fx.ctx,
+    );
+
+    await withdraw();
+
+    const decided = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: v1Gate.id } });
+    expect(decided.state).toBe('changes_requested');
+    expect(decided.decidedById).toBe(fx.ownerId);
+    expect(decided.noteMd).toBe('Too short.');
+  });
+
+  it('touches no OTHER kind’s gate on the same card', async () => {
+    await publish('v1');
+    const merge = await gateOfKind('pull_request_merge', 'github-pull-request-1');
+
+    await withdraw();
+
+    const untouched = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: merge.id } });
+    expect(untouched.state).toBe('awaiting');
+  });
+
+  it('a withdrawal REFUSED for having no current result retires nothing — the write shares its transaction', async () => {
+    // An awaiting design gate with no current evidence behind it: the refusal is
+    // thrown inside the same transaction as the supersede, so it must roll back.
+    const orphan = await gateOfKind('design_result', 'no-such-evidence');
+
+    await expect(withdraw()).rejects.toThrow();
+
+    const still = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: orphan.id } });
+    expect(still.state).toBe('awaiting');
+  });
+
+  it('genuine concurrency with a decision: both settle, and the gate is never left `awaiting`', async () => {
+    const v1 = await publish('v1');
+    const v1Gate = await gateFor(v1.id);
+
+    // A warm pool, not two serial calls. Both paths now take `approval_gate`
+    // before `design_evidence`, so the race resolves by WAITING — a deadlock
+    // would surface here as a rejected withdrawal.
+    const [decided, withdrawn] = await Promise.allSettled([
+      approvalGatesService.decide(
+        { gateId: v1Gate.id, decision: 'request_changes', source: 'ui', noteMd: 'Racing.' },
+        fx.ctx,
+      ),
+      withdraw(),
+    ]);
+
+    expect(withdrawn.status).toBe('fulfilled');
+    const gateRow = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: v1Gate.id } });
+    if (decided.status === 'fulfilled') {
+      // The decision won the gate row: an answer, which the withdrawal leaves alone.
+      expect(gateRow.state).toBe('changes_requested');
+    } else {
+      // The withdrawal won: the question was retired, so the decision was refused.
+      expect(decided.reason).toBeInstanceOf(ApprovalGateSupersededError);
+      expect(gateRow.state).toBe('superseded');
+      expect(gateRow.decidedById).toBeNull();
+    }
+  });
+});

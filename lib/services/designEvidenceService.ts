@@ -827,6 +827,14 @@ export const designEvidenceService = {
    *
    * **Never advances the item's status**, for the same reason the publish path
    * does not: this is evidence, not a workflow decision.
+   *
+   * **It DOES retire the question the result raised (MOTIR-5574; ADR §6b).** A
+   * withdrawal is the second product write that takes a gate's subject away, and
+   * the first — a republish — already marks the prior version's `awaiting`
+   * `design_result` gate `superseded`. Without the same write here the gate
+   * outlives its subject: the To-approve tab keeps asking about bytes nobody
+   * should approve, and the held transitions that read an awaiting gate keep
+   * holding the card.
    */
   async withdrawCurrentForWorkItem(
     input: { workItemId: string; reason?: string | null },
@@ -837,6 +845,23 @@ export const designEvidenceService = {
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        // ⚠️ RETIRE THE AWAITING `design_result` GATE **FIRST**, before the
+        // `design_evidence` lock (MOTIR-5574; ADR §6b AMENDMENT). This is the
+        // publish path's lock order, for the publish path's reason:
+        // `approvalGatesService.decide` locks the gate row and then writes
+        // `design_evidence` (the pin), so taking the evidence lock first and the
+        // gate second would deadlock a withdrawal against a decision. Gate first,
+        // and the race resolves by waiting:
+        //
+        //   · the withdrawal wins → the gate is `superseded`, and the decide door
+        //     re-reads it under its lock and refuses with `ApprovalGateSupersededError`.
+        //   · the decision wins → this statement waits on the gate row, finds it
+        //     decided, matches nothing, and the answer outlives its subject.
+        //
+        // If there turns out to be no current result, the refusal below rolls
+        // this back with everything else, so a refused withdrawal retires nothing.
+        await approvalGateRepository.supersedeAwaitingByWorkItem(item.id, 'design_result', tx);
+
         // Lock BEFORE reading which row to withdraw — the decision is
         // read-derived exactly as the supersede's is, so an unlocked read lets a
         // concurrent publish insert a new current row that this withdrawal then

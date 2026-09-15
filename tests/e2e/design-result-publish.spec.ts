@@ -197,6 +197,18 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // withdrawing is a judgement somebody MAKES, so the record must be able
       // to name a person. `page.request` carries the signed-in context's
       // cookies, which is exactly that person.
+      //
+      // The publish raised a question routed to this reviewer (the card's
+      // reporter). Assert it is on the To-approve tab FIRST, so the absence
+      // asserted after the withdrawal cannot pass on an empty queue.
+      const toApproveTab = page.getByRole('link', { name: /To approve/ });
+      const queuedRow = page
+        .getByRole('table', { name: 'To approve' })
+        .getByRole('link', { name: new RegExp(`^${seed.publishedKey}`) });
+      await page.goto('/workbench?tab=approvals');
+      await expect(toApproveTab).toHaveAttribute('aria-current', 'page');
+      await expect(queuedRow).toBeVisible();
+
       const response = await page.request.delete(
         `/api/work-items/${seed.publishedKey}/design-evidence`,
         { data: { reason: 'Published against the wrong card.' } },
@@ -209,6 +221,17 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // state — the row survives, which is settled law in this domain, but the
       // card stops claiming a design it did not earn.
       await expect(page.getByText('No design result published yet')).toBeVisible();
+
+      // MOTIR-5574: the withdrawal retires the question the publish raised, so
+      // the reviewer is no longer asked to approve a design that is not there.
+      // The empty-state heading is the authoritative signal that the tab's
+      // streamed body has rendered, so the absent row is a real absence.
+      await page.goto('/workbench?tab=approvals');
+      await expect(toApproveTab).toHaveAttribute('aria-current', 'page');
+      await expect(
+        page.getByRole('heading', { name: 'Nothing is waiting on your approval' }),
+      ).toBeVisible();
+      await expect(queuedRow).toHaveCount(0);
       await beat();
     });
   });
