@@ -208,6 +208,10 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       await page.goto('/workbench?tab=approvals');
       await expect(toApproveTab).toHaveAttribute('aria-current', 'page');
       await expect(queuedRow).toBeVisible();
+      // Back onto the card, so the `reload()` below reloads the card the
+      // withdrawal empties rather than the workbench.
+      await page.goto(`/items/${seed.publishedKey}`);
+      await expect(page.getByRole('heading', { name: seed.publishedTitle })).toBeVisible();
 
       const response = await page.request.delete(
         `/api/work-items/${seed.publishedKey}/design-evidence`,
