@@ -1670,3 +1670,55 @@ this section and the mock's prose, on the ELEMENT, STRUCTURE and PREMISE axes.
 3. **Whether the Approvals room's rows open this overlay** is
    [MOTIR-5300](motir:cmtyy44gy01mshvtx6hmyi1r3)'s decision. This asset gives it a
    surface to compose; it does not decide it.
+
+## 23 · The `pull_request_approval` row AT REST — MOTIR-5480
+
+**AMENDS § 20** (`approvals-row.mock.html`, **Panel 9**) for Story
+[MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2), card
+[MOTIR-5480](motir:cmu1aj15k00gchyoidbhlbomo). It is the layout source of truth for
+[MOTIR-5485](motir:cmu1aj1d000gmhyoic2qrsb4v), which builds it.
+
+**What changes, and for which kind.** Once `pull_request_approval` registers
+(MOTIR-5481) and gates are raised (MOTIR-5482), a real, decidable gate would reach
+Panel 7's _Not built yet_ row. Panel 9 draws its row instead. **`decision_approval`
+and `pull_request_merge` keep Panel 7's row**, unchanged, and Panel 7's note says so.
+
+| element           | treatment                                                                                                                              | field                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| kind glyph        | lucide `git-pull-request`, `h-4 w-4`, **`--el-accent-on-surface`** (a live kind's mark, never the unregistered `--el-text-faint`)      | `row.kind`                                             |
+| kind label        | **Pull requests**, `text-sm font-medium text-(--el-text)`                                                                              | `row.kind`                                             |
+| subject line      | each `owner/name · #n` in the set's canonical order, `text-xs text-(--el-text-secondary)`, truncating                                  | the `pull_request_approval` arm of the subject summary |
+| the pill          | **none** — _Not built yet_ goes for this kind only                                                                                     | —                                                      |
+| whole-row control | a link to **the work item's page** (`/items/{key}`), where the Development frame decides it; no chevron, because nothing opens in-list | `row.workItem.identifier`                              |
+| decide cell       | **Open card** (the shipped secondary `sm` button), to the same page                                                                    | —                                                      |
+| waited, work item | unchanged from § 20                                                                                                                    | unchanged                                              |
+
+**The truncation rule for the subject line.** One or two pull requests are listed in
+full, comma-separated. **Three or more list the first two, then _+n more_**, and the
+cell's `title` attribute carries the whole list. Past that the line truncates with an
+ellipsis like every other subject line. Panel 9 draws one, two and three pull requests.
+
+**Why _Open card_ and not _Review_.** The full-screen door for this kind is
+[MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4)'s. Until it lands, this row takes the
+reader to the item page, where the gate is decided; when it lands, 5437 swaps the
+decide cell for _Review_ exactly as design rows have it. **Narrow** follows Panel 8
+unchanged.
+
+**Copy — `en` + `zh`**, keyed for MOTIR-5485 under `workbench.approvals.pullRequest`:
+
+| key         | en                                            | zh              |
+| ----------- | --------------------------------------------- | --------------- |
+| `kindLabel` | Pull requests                                 | 拉取请求        |
+| `more`      | +{count} more                                 | 另有 {count} 个 |
+| `openCard`  | the shipped _Open card_ string — not re-keyed | —               |
+
+### GIVES / TAKES
+
+`grep -o 'MOTIR-[0-9]*' approvals-row.mock.html | sort -u` goes from 19 keys at `HEAD`
+to 21: MOTIR-5480 and MOTIR-5437 are new. The row's SAMPLE keys are `ACME-n`.
+
+| card                                          | GIVES                                                                               | TAKES                                                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [MOTIR-5485](motir:cmu1aj1d000gmhyoic2qrsb4v) | The row: glyph, label, subject line and its truncation rule, the link, and the copy | Nothing. Its criteria (glyph, every pull request named, no pill, reaches the page) all hold |
+| [MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4) | The row its _Review_ door replaces _Open card_ on                                   | Nothing                                                                                     |
+| MOTIR-5481 / MOTIR-5482                       | Nothing — named as what puts a gate in this row                                     | Nothing                                                                                     |
