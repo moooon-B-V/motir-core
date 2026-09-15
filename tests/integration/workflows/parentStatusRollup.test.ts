@@ -525,6 +525,61 @@ describe('gates and no-ops', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('a container with an OPEN linked pull request is NOT rolled to Done — the approval-gate guard holds it, logged as `approval_pending` (MOTIR-5526)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done', 'done']);
+    await setStatus(story.id, 'in_review');
+    // A parent run's pull request, linked to the STORY and still open: with it
+    // open, Done is the merge's to write (ADR §6d AMENDMENT, rule 2b), so the
+    // derivation must stand down rather than take it — or fail its job.
+    const installation = await adminDb.githubInstallation.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        installationId: 'inst-rollup-5526',
+        accountLogin: 'acme',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+    });
+    const repo = await adminDb.githubRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
+        installationId: installation.id,
+        repoId: 'repo-rollup-5526',
+        owner: 'acme',
+        name: 'web',
+        defaultBranch: 'main',
+        provider: 'github',
+      },
+    });
+    const pr = await adminDb.githubPullRequest.create({
+      data: {
+        repoId: repo.id,
+        number: 11,
+        title: 'parent run',
+        state: 'open',
+        headRef: 'parent/story',
+        baseRef: 'main',
+        provider: 'github',
+      },
+    });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: story.id,
+        githubPullRequestId: pr.id,
+        repoId: repo.id,
+      },
+    });
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'approval_pending', toStatus: 'done' });
+    expect(await statusOf(story.id)).toBe('in_review');
+    expect(sent).toHaveLength(0);
+  });
+
   it('WALKS to the highest rung when the direct edge is missing', async () => {
     const fx = await makeWorkItemFixture();
     // A todo parent whose only child jumps straight to review. The in-review rung

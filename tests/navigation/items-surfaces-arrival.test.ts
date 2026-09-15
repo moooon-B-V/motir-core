@@ -82,15 +82,21 @@ describe('/items/[key]/edit — the form WAITS (MOTIR-3444)', () => {
   // The one read genuinely behind the gate is the assignee picker's option
   // list. It is made concurrent with the capability read rather than streamed:
   // one round trip instead of two, and the form still arrives complete.
+  //
+  // AMENDED ON THE RECORD — MOTIR-5528, 2026-09-14: the held status moves joined
+  // the SAME wave (the status field's held message renders with the form), so the
+  // destructuring may name further members after `members`. What is asserted is
+  // unchanged — one Promise.all, carrying both reads.
   it('issues the capability read and the member list in ONE wave', () => {
     const wave = src.match(
-      /const \[\{ canEdit \}, members\] = await Promise\.all\(\[[\s\S]*?\]\);/,
+      /const \[\{ canEdit \}, members(?:, \w+)*\] = await Promise\.all\(\[[\s\S]*?\]\);/,
     );
     expect(wave, 'canEdit and members must resolve in one Promise.all').not.toBeNull();
 
     const block = wave![0];
     expect(block).toContain('projectAccessService.getCapabilities');
     expect(block).toContain('assignableMembersService.list');
+    expect(block).toContain('approvalGatesService.listHeldTransitions');
   });
 
   // The gate itself must stay ahead of that wave: the 404 and the 308 are

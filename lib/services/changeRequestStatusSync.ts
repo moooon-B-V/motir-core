@@ -41,6 +41,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { CompleteSessionItemResultDto } from '@/lib/dto/workItems';
 import {
   ContainerHasOpenChildrenError,
+  ApprovalGatePendingError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
   UnknownStatusError,
@@ -135,6 +136,7 @@ export type ChangeRequestSyncResult = {
     | 'no_matching_status'
     | 'illegal_transition'
     | 'open_children' // the item is a CONTAINER whose own children are not landed — it stays where it is (MOTIR-3229)
+    | 'approval_pending' // an `awaiting` approval gate owns the target status — the merge waits for the decision (MOTIR-5526)
     | 'access_denied'
     | 'unknown_installation'
     | 'unknown_repo'
@@ -888,6 +890,31 @@ async function reportTransitionRefusal(
   targetKey: string,
 ): Promise<ChangeRequestSyncResult> {
   const result = classifyTransitionError(err, resolved.workItemId, targetKey);
+  if (
+    result.outcome === 'approval_pending' &&
+    err instanceof ApprovalGatePendingError &&
+    !resolved.mergeAlreadyRecorded
+  ) {
+    try {
+      await commentsService.addComment(
+        resolved.workItemId,
+        {
+          bodyMd: approvalPendingCommentBody({
+            noun: changeRequestNoun(resolved.provider),
+            number: cr.number,
+            gateKind: err.gateKind,
+          }),
+        },
+        { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
+      );
+    } catch (noteErr) {
+      console.error('[changeRequestStatusSync] approval-pending note failed; item still held', {
+        workItemId: resolved.workItemId,
+        number: cr.number,
+        error: noteErr instanceof Error ? noteErr.message : 'unknown',
+      });
+    }
+  }
   if (result.outcome === 'missing_artifact_evidence' && !resolved.mergeAlreadyRecorded) {
     try {
       await commentsService.addComment(
@@ -947,6 +974,27 @@ function missingArtifactEvidenceCommentBody(args: { noun: string; number: number
     `integrity hash (\`sha512-\` followed by the hash). If this deliverable genuinely has no ` +
     `identifier (a DNS cutover, a console toggle), say so in a comment beginning ` +
     `\`${NO_ARTIFACT_MARKER}\` followed by the reason.`
+  );
+}
+
+/** The approval-pending note (MOTIR-5526) — posted on the linked item when a
+ *  merge lands while an approval on it is still waiting, so the approval-gate
+ *  guard holds the move to Done.
+ *
+ *  Same two obligations as its siblings: name the fact that answers *"why isn't
+ *  this Done?"*, and state the condition that WILL complete the item. It
+ *  describes what did NOT happen; the sync leaves the item where it was. */
+function approvalPendingCommentBody(args: {
+  noun: string;
+  number: number;
+  gateKind: string;
+}): string {
+  return (
+    `⚠️ **Merged, but an approval is still waiting** — ${args.noun} #${args.number} merged ` +
+    `while a ${args.gateKind.replace(/_/g, ' ')} approval on this item had not been decided, ` +
+    `so the merge does **not** move it to **Done** — its status is left unchanged.\n\n` +
+    `It completes when that approval is approved in Motir: with the ${args.noun} merged, ` +
+    `approving is what moves the item to Done.`
   );
 }
 
@@ -1187,7 +1235,10 @@ async function applyTransition(
   toStatusKey: string,
   ctx: { userId: string; workspaceId: string },
 ): Promise<void> {
-  await workItemsService.updateStatus(workItemId, toStatusKey, ctx);
+  // `keepPendingQuestions`: a lifecycle move is not a person pulling the work back.
+  // This sync withdraws merge gates BY SUBJECT (`withdrawMergeGatesOnClose`), so the
+  // funnel's blanket rule-6 withdraw must not take a sibling pull request's question.
+  await workItemsService.updateStatus(workItemId, toStatusKey, ctx, { keepPendingQuestions: true });
 }
 
 /** Map a transition failure to a logged no-op outcome — the webhook never crashes
@@ -1231,6 +1282,14 @@ export function classifyTransitionError(
   // Review with nothing on it to say why. `reportTransitionRefusal` posts that note.
   if (err instanceof MissingArtifactEvidenceError)
     return { event: 'pull_request', outcome: 'missing_artifact_evidence', workItemId, toStatus };
+  // The approval-gate guard (MOTIR-5526; ADR `approval-gates.md` §6d AMENDMENT).
+  // A merge that lands while a decision on the card is still `awaiting` is the
+  // walk-around the guard exists to close: the sync is not `system` and is not
+  // the deciding gate, so it is held like any other door. A REFUSAL, not a
+  // fault — a person approving the gate clears it, and the approval then writes
+  // the status itself, because no open pull request is left to defer to.
+  if (err instanceof ApprovalGatePendingError)
+    return { event: 'pull_request', outcome: 'approval_pending', workItemId, toStatus };
   throw err;
 }
 

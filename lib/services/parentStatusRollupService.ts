@@ -6,7 +6,11 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
-import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
+import {
+  ApprovalGatePendingError,
+  IllegalTransitionError,
+  UnknownStatusError,
+} from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   LADDER as SHARED_LADDER,
@@ -161,6 +165,7 @@ export type RollupOutcome =
   | { outcome: 'stale_backward'; parentId: string; toStatus: string }
   | { outcome: 'no_matching_status'; parentId: string }
   | { outcome: 'illegal_transition'; parentId: string; toStatus: string }
+  | { outcome: 'approval_pending'; parentId: string; toStatus: string }
   | { outcome: 'access_denied'; parentId: string }
   | { outcome: 'unresolvable' };
 
@@ -610,6 +615,16 @@ export const parentStatusRollupService = {
         }
         if (err instanceof UnknownStatusError) {
           return { outcome: { outcome: 'no_matching_status', parentId }, emit: null };
+        }
+        // The approval-gate guard (MOTIR-5526, rule 2b): a container with an OPEN
+        // linked pull request — a parent run's draft, typically — reaches
+        // `approved` only through its approval and `done` only through its merge.
+        // A derivation must not take either, and must not fail its job trying.
+        if (err instanceof ApprovalGatePendingError) {
+          return {
+            outcome: { outcome: 'approval_pending', parentId, toStatus: toStatusKey },
+            emit: null,
+          };
         }
         if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError) {
           return { outcome: { outcome: 'access_denied', parentId }, emit: null };

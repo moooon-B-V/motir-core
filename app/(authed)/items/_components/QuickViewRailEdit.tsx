@@ -176,7 +176,9 @@ export function useQuickViewRailEdit(
         for (const k of Object.keys(optimistic)) delete next[k as keyof QuickViewData];
         return next;
       });
-      setErrorFor({ key, message: res.error });
+      // An approval-gate hold is said ON the status control, with its door, by
+      // the held notice (MOTIR-5528) — not as a row error beside it.
+      if (res.code !== 'APPROVAL_GATE_PENDING') setErrorFor({ key, message: res.error });
       // A stale conflict is not a field error — the whole payload is behind, so
       // the rail says so at the top and the driver re-reads.
       if (res.stale) setStale(true);

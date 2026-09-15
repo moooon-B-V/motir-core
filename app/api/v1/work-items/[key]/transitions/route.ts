@@ -10,7 +10,8 @@ import {
   presentWorkItemDetail,
 } from '@/lib/api/v1/workItems/schema';
 import { readChildDependencyEdges } from '@/lib/api/v1/workItems/childEdges';
-import { IllegalTransitionError } from '@/lib/workItems/errors';
+import { ApprovalGatePendingError, IllegalTransitionError } from '@/lib/workItems/errors';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { commentsService } from '@/lib/services/commentsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -64,6 +65,19 @@ export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' 
           code: err.code,
           error: err.message,
           allowedTransitions: presentTransitionTargets(workflow, item.status),
+        },
+        { status: 422 },
+      );
+    }
+    // A pending approval owns the target (MOTIR-5526). The same additive-field
+    // treatment as the illegal move above: WHOSE decision it is, and whether this
+    // caller may make it, as data — the one payload every status door carries.
+    if (err instanceof ApprovalGatePendingError) {
+      return NextResponse.json(
+        {
+          code: err.code,
+          error: err.message,
+          gate: await approvalGatesService.describePendingRefusal(err, ctx.service),
         },
         { status: 422 },
       );

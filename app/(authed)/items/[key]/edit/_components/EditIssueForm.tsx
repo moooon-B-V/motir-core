@@ -13,6 +13,9 @@ import { searchWorkItemMentions } from '@/lib/mentions/workItemMentionSearch';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
+import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
+import { useStatusHeld } from '@/components/issues/useStatusHeld';
+import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
@@ -51,6 +54,9 @@ export interface EditIssueFormProps {
    * AI" affordance. Defaults to false (safe disabled state) for test mounts.
    */
   aiConfigured?: boolean;
+  /** The status moves an approval HOLDS (MOTIR-5528) — the status field says so
+   *  and locks them. Defaults to `[]`. */
+  heldTransitions?: HeldTransitionDTO[];
 }
 
 export function EditIssueForm({
@@ -58,7 +64,9 @@ export function EditIssueForm({
   workflow,
   members,
   aiConfigured = false,
+  heldTransitions,
 }: EditIssueFormProps) {
+  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, issue.status);
   const router = useRouter();
   const t = useTranslations('issueViews');
   const tc = useTranslations('common');
@@ -169,7 +177,12 @@ export function EditIssueForm({
       if (statusDirty) {
         const res = await changeStatusAction({ id: issue.id, toStatusKey: status });
         if (!res.ok) {
-          if (res.field === 'status') setStatusError(res.error);
+          // A hold that arrived after render (MOTIR-5528): put the status back and
+          // say so on the status field with its door, not as a field error.
+          if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
+            statusHeld.onRefused(status, res.gate);
+            setStatus(issue.status);
+          } else if (res.field === 'status') setStatusError(res.error);
           else toast({ variant: 'error', title: res.error });
           return;
         }
@@ -252,7 +265,9 @@ export function EditIssueForm({
             }}
             error={statusError}
             disabled={isPending}
+            held={statusHeld.held}
           />
+          <StatusHeldNotice itemKey={issue.identifier} lines={statusHeld.lines} />
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">
