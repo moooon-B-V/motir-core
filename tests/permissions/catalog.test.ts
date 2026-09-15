@@ -297,11 +297,14 @@ const REMOVAL_SPLIT_ENFORCED: PermissionKey[] = ['work_item:archive'];
 const INTEGRATION_ENFORCED: PermissionKey[] = ['integration:manage'];
 
 /**
- * MOTIR-5292's approval key — deciding a gate routed to somebody else. Enforced
- * in the same pull request that consults it (`resolveGateAuthority`), so it
- * never sat `planned`; its own list for the reason every list above gives.
+ * The approval domain's keys. MOTIR-5292's `approval:decide_any` — deciding a gate
+ * routed to somebody else — was enforced in the pull request that consults it
+ * (`resolveGateAuthority`). MOTIR-5305's `approval:view_any` — seeing every
+ * approval record of a project — was named `planned` and enforced by MOTIR-5301,
+ * whose `approvalGatesService.listRecords` consults it. Their own list for the
+ * reason every list above gives.
  */
-const APPROVAL_ENFORCED: PermissionKey[] = ['approval:decide_any'];
+const APPROVAL_ENFORCED: PermissionKey[] = ['approval:decide_any', 'approval:view_any'];
 
 /**
  * MOTIR-5293's saved-filter "anyone's" key — its own list on the same terms as
@@ -329,24 +332,13 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => PLANNED_PERMISSIONS.includes(k))).toEqual([]);
   });
 
-  it('`PLANNED_PERMISSIONS` holds ONLY the keys named ahead of their gate, each with its wiring card', () => {
-    // MOTIR-2356 emptied this set, and the emptiness was that story's definition
-    // of done. The seam it describes is what lets the NEXT key be named in one
-    // change and enforced in another, and MOTIR-5305 is that next key:
-    // `approval:view_any`, named with the Approvals room's permission card and
-    // consulted by MOTIR-5301's records read, which flips it to `enforced` and
-    // deletes it from this list in the same change. Asserted as a SET rather than
-    // a count: a length constant would pass just as happily if a key were deleted
-    // from the catalog as if its gate were wired.
-    const PLANNED_AHEAD_OF_THEIR_GATE: Record<string, string> = {
-      'approval:view_any': 'MOTIR-5301',
-    };
-    expect([...PLANNED_PERMISSIONS].sort()).toEqual(
-      Object.keys(PLANNED_AHEAD_OF_THEIR_GATE).sort(),
-    );
-    expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
-      [...PERMISSIONS].sort(),
-    );
+  it('THE MODEL IS FULLY ENFORCED — `PLANNED_PERMISSIONS` is empty (MOTIR-2356)', () => {
+    // The machine-readable definition `catalog.ts` gives itself, asserted as a
+    // SET rather than a count: a length constant would pass just as happily if a
+    // key were deleted from the catalog as if its gate were wired. (MOTIR-5305
+    // named `approval:view_any` `planned` for one commit; MOTIR-5301 wired it.)
+    expect([...PLANNED_PERMISSIONS]).toEqual([]);
+    expect([...ENFORCED_PERMISSIONS].sort()).toEqual([...PERMISSIONS].sort());
   });
 
   it('marks every key with a known enforcement value', () => {

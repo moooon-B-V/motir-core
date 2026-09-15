@@ -5,6 +5,8 @@ import type {
   ApprovalGateDecisionSourceDTO,
   ApprovalGateKindDTO,
   ApprovalQueuePageDto,
+  ApprovalQueueRowDto,
+  ApprovalRecordsPageDto,
   GateDecision,
 } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
@@ -21,6 +23,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import {
   approvalGateRepository,
+  type ApprovalRecordsScope,
   type AwaitingRoutingScope,
 } from '@/lib/repositories/approvalGateRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -31,7 +34,11 @@ import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { toApprovalGateDto, toApprovalQueueRowDto } from '@/lib/mappers/approvalGateMappers';
+import {
+  toApprovalGateDto,
+  toApprovalQueueRowDto,
+  toApprovalRecordDecidedRowDto,
+} from '@/lib/mappers/approvalGateMappers';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -593,6 +600,140 @@ export const approvalGatesService = {
     return withWorkspaceContext(ctx, async (tx) =>
       approvalGateRepository.countAwaitingRoutedTo(await routingScope(ctx, tx), tx),
     );
+  },
+
+  /**
+   * THE APPROVALS ROOM's READ (Story MOTIR-5299 · MOTIR-5301) — the approval
+   * records of the ACTIVE project this reader may see, pending first then decided,
+   * as ONE page over both sections.
+   *
+   * ⚠️ ONE METHOD, AND THE SCOPE IS NOT A PARAMETER. The obvious shape is two reads
+   * — everyone's records, and mine — with the page picking. That makes the PAGE a
+   * policy path: a rule outside the catalog is invisible in the grid, un-grantable
+   * to a custom role and un-auditable by the guard, and a caller that can pick its
+   * own scope can pick the wrong one. So this read RESOLVES the scope: it asks
+   * `projectAccessService.getPermissions` for the reader's set and widens to the
+   * whole project on **`approval:view_any`** alone. `fullView` comes back as a
+   * fact about the answer, and nothing a caller passes can change it.
+   *
+   * ⚠️ A PERMISSION, NEVER A ROLE. Not the workspace-manager helper on
+   * `projectAccessService` — that is `owner || admin`, a role check, and a room
+   * scoped on it could never be opened to a custom role. No membership row is read and no role compared here.
+   *
+   * THE TWO VIEWS (`design/approvals/design-notes.md` § The two views):
+   *   · WITHOUT the key — the gates ROUTED TO this reader and still `awaiting` (§2's
+   *     routing predicate, CALLED in the repository, so this section and the
+   *     Workbench tab cannot disagree), plus the gates this reader DECIDED.
+   *   · WITH the key — every `awaiting` gate of the project, and every decided one.
+   *   · IN NEITHER — `superseded`: withdrawn, not decided, and the design lists it
+   *     nowhere.
+   * Both are floored by `project:browse`: a reader who may not browse the active
+   * project gets two empty sections and `fullView: false`, not an error.
+   *
+   * ⚠️ HOW THE WINDOW RUNS ACROSS TWO SECTIONS. The page windows the CONCATENATION
+   * *awaiting-then-decided* as one ordered list, with the shipped clamp rule
+   * (`approvalQueueWindow`: an out-of-range page serves the last page, never an
+   * empty one). Both totals are counted FIRST, so the denominator is known before
+   * a row is read. A window starting at `skip` takes `awaiting` rows from `skip`
+   * while any remain, and fills the rest of the page from `decided` starting at
+   * `max(0, skip - awaitingTotal)`. `total` is the sum of the two section totals
+   * the same counts produced, so the pager cannot disagree with the rows.
+   *
+   * `canDecide` on a pending row is `canDecideGate` — the decide door's two checks
+   * in the door's order, off the ONE permission set read for the page — because in
+   * the full view a row is not necessarily routed to the reader, so
+   * `listAwaitingMe`'s routed-only shortcut does not hold here.
+   *
+   * ⚠️ EVERY READ TAKES `tx`, threaded from `withWorkspaceContext` exactly as
+   * `listAwaitingMe` does: without one the repository reads return `[]` on a
+   * populated database and raise nothing.
+   */
+  async listRecords(
+    ctx: HomeActorContext,
+    options: ApprovalQueueListOptions = {},
+  ): Promise<ApprovalRecordsPageDto> {
+    const pageSize = clampApprovalQueueLimit(options.limit);
+    return withWorkspaceContext(ctx, async (tx) => {
+      const routing = await routingScope(ctx, tx);
+      const browsable = routing.projectIds.length > 0;
+      const held = browsable
+        ? await projectAccessService.getPermissions(ctx.projectId, ctx, tx)
+        : new Set<PermissionKey>();
+      const scope: ApprovalRecordsScope = {
+        ...routing,
+        fullView: held.has('approval:view_any'),
+      };
+
+      const awaitingTotal = await approvalGateRepository.countRecordsAwaiting(scope, tx);
+      const decidedTotal = await approvalGateRepository.countRecordsDecided(scope, tx);
+      const total = awaitingTotal + decidedTotal;
+      const { page, skip } = approvalQueueWindow(total, options.page, pageSize);
+
+      const awaitingTake = Math.max(0, Math.min(pageSize, awaitingTotal - skip));
+      const decidedTake = pageSize - awaitingTake;
+      const [awaitingRows, decidedRows] = await Promise.all([
+        awaitingTake > 0
+          ? approvalGateRepository.findRecordsAwaiting(scope, { skip, take: awaitingTake }, tx)
+          : Promise.resolve([]),
+        decidedTake > 0 && decidedTotal > 0
+          ? approvalGateRepository.findRecordsDecided(
+              scope,
+              { skip: Math.max(0, skip - awaitingTotal), take: decidedTake },
+              tx,
+            )
+          : Promise.resolve([]),
+      ]);
+
+      // ONE subject query per KIND on the page, across BOTH sections.
+      const subjects = await summarizeGateSubjects([...awaitingRows, ...decidedRows], tx);
+
+      const awaitingItems: ApprovalQueueRowDto[] = [];
+      if (awaitingRows.length > 0) {
+        const routedToIds = awaitingRows.map((row) => routingTargetId(row.workItem));
+        const namesById = new Map(
+          (
+            await userRepository.findByIds(
+              [...new Set(routedToIds.filter((id) => id !== null))],
+              tx,
+            )
+          )
+            .map((user) => [user.id, routedToDisplayName(user)] as const)
+            .filter((entry): entry is readonly [string, string] => entry[1] !== null),
+        );
+        // `canDecideGate` is handed the page's permission set, so it reads nothing.
+        const canDecide = await Promise.all(
+          awaitingRows.map((row) =>
+            canDecideGate({ ...row.workItem, projectId: ctx.projectId }, row.kind, ctx, tx, held),
+          ),
+        );
+        awaitingRows.forEach((row, index) => {
+          awaitingItems.push(
+            toApprovalQueueRowDto(
+              row,
+              subjects.get(row.id) ?? null,
+              canDecide[index] ?? false,
+              namesById.get(routedToIds[index] ?? '') ?? null,
+            ),
+          );
+        });
+      }
+
+      return {
+        fullView: scope.fullView,
+        sections: {
+          awaiting: { items: awaitingItems, total: awaitingTotal },
+          decided: {
+            items: decidedRows.map((row) =>
+              toApprovalRecordDecidedRowDto(row, subjects.get(row.id) ?? null),
+            ),
+            total: decidedTotal,
+          },
+        },
+        total,
+        page,
+        pageSize,
+      };
+    });
   },
 
   /**

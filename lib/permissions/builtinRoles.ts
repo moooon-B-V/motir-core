@@ -107,9 +107,8 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // through the always-pass rail, and a custom role can be granted it. `member`,
   // `viewer` and the implicit workspace-member grant do NOT — a member sees the
   // records routed to them and the ones they decided, which is a RELATIONSHIP to
-  // a row and needs no key. It is `planned` until MOTIR-5301's read consults it;
-  // membership here is inert until then (the note above), and the role screens
-  // list only enforced keys, so no switch renders in the gap.
+  // a row and needs no key. MOTIR-5305 named it `planned` while nothing consulted
+  // it; MOTIR-5301's records read (`approvalGatesService.listRecords`) enforces it.
   'approval:view_any',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split

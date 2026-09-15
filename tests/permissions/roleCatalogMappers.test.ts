@@ -36,20 +36,6 @@ describe('toPermissionDomainDTOs draws the ROLE-GATED rows, not the whole catalo
     expect([...keys].sort()).toEqual([...OFFERED].sort());
   });
 
-  it('draws no row for a role-gated key that is still `planned` (MOTIR-5305)', () => {
-    const keys = toPermissionDomainDTOs().flatMap((group) => group.permissions.map((p) => p.key));
-    const plannedRoleGated = ROLE_GATED_PERMISSIONS.filter((key) => !isEnforced(key));
-    expect(plannedRoleGated).toContain('approval:view_any');
-    expect(keys.filter((key) => plannedRoleGated.includes(key))).toEqual([]);
-    // …and no ROLE lists one either, the admin set included, which holds it.
-    expect(BUILTIN_ROLE_PERMISSIONS.admin.has('approval:view_any')).toBe(true);
-    for (const role of toRoleCatalogDTO().roles) {
-      expect(role.permissions, `${role.key} lists a planned key`).not.toContain(
-        'approval:view_any',
-      );
-    }
-  });
-
   it('omits the level-gated public_request keys and their heading', () => {
     const groups = toPermissionDomainDTOs();
     expect(groups.map((g) => g.domain)).not.toContain('public_request');

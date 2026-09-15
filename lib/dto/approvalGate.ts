@@ -291,6 +291,84 @@ export interface ApprovalQueuePageDto {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// THE APPROVALS ROOM's READ (Story MOTIR-5299 · MOTIR-5301) — every approval
+// record a reader may see in the active project, pending first then decided.
+// The shape is `design/approvals/design-notes.md` § GIVES / TAKES's requirements
+// on this read, not a choice made here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ONE decided record: the question, the card, and the AUDIT set that makes it a
+ * record rather than a list entry — who decided, when, and on which bytes.
+ *
+ * `state` is narrowed to the two DECISIONS. `superseded` is neither pending nor
+ * decided (ADR §6b: nobody decided it), and the room lists it nowhere, so a row
+ * that could carry it would invite a renderer to draw a state this read cannot
+ * produce.
+ */
+export interface ApprovalRecordDecidedRowDto {
+  gateId: string;
+  kind: ApprovalGateKindDTO;
+  state: Extract<ApprovalGateStateDTO, 'approved' | 'changes_requested'>;
+  /** ISO-8601 — when the decision was recorded. The section's sort key. */
+  decidedAt: string;
+  /**
+   * WHO decided, as recorded AT the decision (`Name <email>`) — the column that
+   * survives the user's deletion where `decidedById`'s `SetNull` FK does not.
+   * Null only on a row decided before the audit columns existed.
+   */
+  decidedByLabel: string | null;
+  /**
+   * The immutable version the decision was made against — ADR §6a's field that
+   * *carries the whole claim*. Null where the kind records none.
+   */
+  subjectVersion: string | null;
+  /** ISO-8601 — when the question was asked. */
+  waitingSince: string;
+  workItem: ApprovalQueueWorkItemRefDto;
+  /** What was decided, or NULL when the gate's subject no longer resolves. */
+  subject: ApprovalGateSubjectSummaryDTO | null;
+}
+
+/** One SECTION of the room: its rows on this page, and its total over every page. */
+export interface ApprovalRecordsSectionDto<Row> {
+  items: Row[];
+  /**
+   * The section's total across the whole list, not this page's count — the section
+   * heading carries it, so a reader on page 3 still knows how many are waiting.
+   */
+  total: number;
+}
+
+/**
+ * The room's one page.
+ *
+ * ⚠️ THE SECTION BOUNDARY IS HERE, NOT INFERRED DOWNSTREAM. `awaiting` precedes
+ * `decided`, and a surface renders the two sections rather than grouping rows by a
+ * state field.
+ *
+ * ⚠️ ONE WINDOW OVER THE CONCATENATION. `page` / `pageSize` window the ordered list
+ * *pending-then-decided*, and `total` is `sections.awaiting.total +
+ * sections.decided.total` — the pager's denominator, which therefore cannot
+ * disagree with the rows. A page can hold rows of both sections, or of only one.
+ */
+export interface ApprovalRecordsPageDto {
+  /**
+   * Whether this reader holds `approval:view_any` — a FACT ABOUT THE ANSWER, which
+   * the surface reads for copy and for the person column. It is never an input: no
+   * caller can ask the read for the wider view.
+   */
+  fullView: boolean;
+  sections: {
+    awaiting: ApprovalRecordsSectionDto<ApprovalQueueRowDto>;
+    decided: ApprovalRecordsSectionDto<ApprovalRecordDecidedRowDto>;
+  };
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // THE APPROVAL OVERLAY's READ (Story MOTIR-5214 · Subtask MOTIR-5223) — what
 // `GET /api/work-items/approval-gate` answers for ONE work item and ONE kind.
 //

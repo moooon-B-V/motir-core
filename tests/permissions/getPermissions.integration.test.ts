@@ -343,22 +343,19 @@ describe('the rails, resolved through the database', () => {
     expect(await holds('viewer')).toBe(false);
   });
 
-  it('while `planned`, `approval:view_any` is on NO role screen and grantable to NO custom role', async () => {
-    const s = await buildScenario('open', 'view-any-planned');
-    expect(ENFORCED_PERMISSIONS).not.toContain('approval:view_any');
+  it('`approval:view_any` is OFFERED once enforced — on the role screens, and grantable to a custom role (MOTIR-5301)', async () => {
+    const s = await buildScenario('open', 'view-any-offered');
+    expect(ENFORCED_PERMISSIONS).toContain('approval:view_any');
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
     const rows = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
-    const levelRows = catalog.levelGatedDomains.flatMap((d) => d.permissions.map((p) => p.key));
-    expect(rows, 'a planned key would render as a switch that controls nothing').not.toContain(
+    expect(rows).toContain('approval:view_any');
+    expect(catalog.roles.find((r) => r.key === 'admin')?.permissions).toContain(
       'approval:view_any',
     );
-    expect(levelRows).not.toContain('approval:view_any');
-    for (const role of catalog.roles) {
-      expect(role.permissions, `${role.key} lists a planned key`).not.toContain(
-        'approval:view_any',
-      );
-    }
-    expect(grantablePermissionKeys().has('approval:view_any')).toBe(false);
+    expect(catalog.roles.find((r) => r.key === 'member')?.permissions).not.toContain(
+      'approval:view_any',
+    );
+    expect(grantablePermissionKeys().has('approval:view_any')).toBe(true);
   });
 
   it('an actor with no workspace membership holds nothing on a non-public project', async () => {

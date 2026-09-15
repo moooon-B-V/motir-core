@@ -401,14 +401,10 @@ describe('the story leaves nothing behind', () => {
     // in the same change — `sprint:manage` (2350), `report:view` (2351),
     // `saved_filter:manage` (2352), `import:run` (2353), `work_item:triage` +
     // `work_item:delete` (2354), `ai:view_plan` (2363), and `ai:plan` across
-    // 2355/2357/2358/2359 with the flag flipped here. It emptied, and the
-    // emptiness was the story's definition of done.
-    //
-    // ⚠️ ONE LATER KEY SITS HERE, AND IT IS NOT A LEFTOVER OF EITHER STORY.
-    // MOTIR-5305 names `approval:view_any` ahead of its gate, using the very seam
-    // this story built; MOTIR-5301's records read consults it and deletes it from
-    // this list in the same change. Nothing from MOTIR-2256 / MOTIR-2291 may appear.
-    expect(stillPlanned).toEqual(['approval:view_any']);
+    // 2355/2357/2358/2359 with the flag flipped here. It is empty, and the
+    // emptiness is the story's definition of done. (MOTIR-5305 parked
+    // `approval:view_any` here for one commit; MOTIR-5301 wired it and emptied it.)
+    expect(stillPlanned).toEqual([]);
   });
 });
 
