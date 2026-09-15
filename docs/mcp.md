@@ -1481,6 +1481,14 @@ archived and not in the `done` category is `blocked_by` the design card — read
 an approval gate, and a gate is only worth a person's time when work is held up by
 its answer; a design nothing waits on is reviewed on its pull request.
 
+⚠️ **A done design card is CLOSED.** A design card whose status is in the `done`
+category — `cancelled` included — accepts no new version: the publish, the
+`create_design_upload` mint and the HTTP withdrawal are all refused with
+`DESIGN_CARD_CLOSED` (409), read off the card's status inside the publish
+transaction. To change an approved design, reopen the card by hand, or propose a
+new design card beside the card that needs it, `relates_to` this one
+(`docs/decisions/approval-gates.md` §6c second amendment).
+
 ⚠️ **When work does wait, nothing else publishes it.** There is no CI lane, no
 check and no background job behind this call. A design card that something is
 `blocked_by`, that commits its two files and never makes it looks _identical_ to
@@ -1566,6 +1574,7 @@ tool and the HTTP publish route answer one rule:
 | `DESIGN_EVIDENCE_MOCK_REQUIRED` (422)                                     | No `mock` asset.                                                                                                                                                          |
 | `DESIGN_EVIDENCE_NOTE_FILE_REQUIRED` (422)                                | Zero, or more than one, `note_file` asset.                                                                                                                                |
 | `DESIGN_EVIDENCE_NOTHING_WAITS` (409)                                     | No open (not archived, not `done`-category) work item is `blocked_by` the card. Its pull request is its review.                                                           |
+| `DESIGN_CARD_CLOSED` (409)                                                | The design card itself is in the `done` category (`cancelled` included). Reopen it by hand, or propose a new design card beside the card that needs it.                   |
 | container target                                                          | `key` names an epic / story / task with children. A design result belongs to the LEAF that produced it.                                                                   |
 | not a child                                                               | `withinParentKey` is given and `key` is not one of that container's children. One transposed digit once addressed 126 artifacts to a manual billing task in another epic. |
 | disallowed media type                                                     | A `contentType` outside the design-asset allowlist.                                                                                                                       |
@@ -1588,8 +1597,8 @@ one media type; you PUT the bytes straight to the store and then name the
 and `withinParentKey` asserts the child relationship), same design-asset
 allowlist, same per-file cap — it is the same service call the CI-authed HTTP
 mint route makes. It refuses an `image` grant (`DESIGN_EVIDENCE_IMAGE_RETIRED`)
-and a card no open work item is `blocked_by` (`DESIGN_EVIDENCE_NOTHING_WAITS`)
-**before** any bytes move; the mock / note-file count is a property of the whole
+a card no open work item is `blocked_by` (`DESIGN_EVIDENCE_NOTHING_WAITS`) and a
+done design card (`DESIGN_CARD_CLOSED`) **before** any bytes move; the mock / note-file count is a property of the whole
 publish and is checked there.
 
 **WHICH DOOR AT WHICH SIZE — and the second limit is the binding one.**

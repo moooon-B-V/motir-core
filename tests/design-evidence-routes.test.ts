@@ -1086,3 +1086,79 @@ describe('DELETE /design-evidence', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A DONE DESIGN CARD IS CLOSED (MOTIR-5556; ADR approval-gates.md §6c SECOND
+// AMENDMENT) — all three HTTP doors answer 409 `DESIGN_CARD_CLOSED`
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('a done design card is CLOSED on every HTTP door', () => {
+  it('409s the register, the mint and the withdrawal, and writes nothing', async () => {
+    const token = await integrationToken(fx);
+    const published = await REGISTER(
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'v1.mock.html', 'text/html'),
+            seed('note_file', 'v1.design-notes.md', 'text/markdown'),
+          ],
+          commitSha: 'sha-v1',
+        },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+    expect(published.status).toBe(201);
+    const { evidence } = (await published.json()) as { evidence: { id: string } };
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
+
+    const registered = await REGISTER(
+      req(
+        '',
+        token,
+        {
+          assets: [
+            seed('mock', 'v2.mock.html', 'text/html'),
+            seed('note_file', 'v2.design-notes.md', 'text/markdown'),
+          ],
+          commitSha: 'sha-v2',
+        },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+    expect(registered.status).toBe(409);
+    const body = (await registered.json()) as { code: string; error: string };
+    expect(body.code).toBe('DESIGN_CARD_CLOSED');
+    expect(body.error).toMatch(/reopen the card by hand/);
+
+    const minted = await MINT(
+      req(
+        '/upload-token',
+        token,
+        {
+          files: [{ kind: 'mock', sourcePath: 'design/x/v2.mock.html', contentType: 'text/html' }],
+        },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+    expect(minted.status).toBe(409);
+    expect((await minted.json()).code).toBe('DESIGN_CARD_CLOSED');
+
+    const withdrawn = await WITHDRAW(
+      new Request(`http://localhost/api/work-items/${card.identifier}/design-evidence`, {
+        method: 'DELETE',
+      }),
+      params(card.identifier),
+    );
+    expect(withdrawn.status).toBe(409);
+    expect((await withdrawn.json()).code).toBe('DESIGN_CARD_CLOSED');
+
+    const rows = await adminDb.designEvidence.findMany({ where: { workItemId: card.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: evidence.id, isCurrent: true, withdrawnAt: null });
+  });
+});

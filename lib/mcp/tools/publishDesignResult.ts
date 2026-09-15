@@ -459,7 +459,9 @@ export function registerPublishDesignResult(
         'When work does wait, call it yourself once both files are committed — nothing else ' +
         'will, and a missing publish looks exactly like a successful run (files written, commit ' +
         'landed, checks green, card empty). A publish raises an approval that waits on a ' +
-        'person. The REPOSITORY stays the source of truth: the published result is the card’s ' +
+        'person. A DONE DESIGN CARD IS CLOSED: a card in the done status category accepts no new ' +
+        'version (DESIGN_CARD_CLOSED) — reopen it by hand, or propose a new design card beside ' +
+        'the card that needs it. The REPOSITORY stays the source of truth: the published result is the card’s ' +
         'view of assets that are still committed. Targets a LEAF — a design result belongs to ' +
         'the card that produced it, so a container is refused. "text/html" is accepted HERE and ' +
         'only here; "attach_file" still refuses it. EACH ASSET CARRIES ONE OF TWO FORMS: ' +
@@ -485,8 +487,9 @@ export function registerPublishDesignResult(
         'the whole point: base64 is 1.37x a file and an agent must emit every byte, so for a ' +
         'large asset the inline form is not slow, it is impossible. Use the inline ' +
         '"contentBase64" form for a small file and this pair for anything over about a megabyte. ' +
-        'Refuses an "image" grant (screenshots are retired) and a card no open work item is ' +
-        'blocked_by, before any bytes move. Targets a LEAF, exactly as the publish does. ' +
+        'Refuses an "image" grant (screenshots are retired), a card no open work item is ' +
+        'blocked_by, and a DONE design card, which accepts no new version (DESIGN_CARD_CLOSED), ' +
+        'before any bytes move. Targets a LEAF, exactly as the publish does. ' +
         'Honors the same access checks, media-type allowlist and per-file cap as the UI.',
       inputSchema: createUploadInputSchema,
     },
