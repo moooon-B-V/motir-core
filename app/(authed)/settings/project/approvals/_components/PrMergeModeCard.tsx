@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
-import { GitMerge, Info, User, Zap, type LucideIcon } from 'lucide-react';
+import { GitMerge, User, Zap, type LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { useToast } from '@/components/ui/Toast';
 import { PR_MERGE_MODE_VALUES, type PrMergeModeValue } from '@/lib/dto/projects';
@@ -23,8 +23,12 @@ import { PR_MERGE_MODE_VALUES, type PrMergeModeValue } from '@/lib/dto/projects'
 // establishment default never overwrites it.
 //
 // ⚠️ INK. Title `--el-text`; description and hints `--el-text-secondary`, never
-// `--el-text-muted` (fails AA on these surfaces); the notice `--el-text-strong` on
-// `--el-tint-sky`.
+// `--el-text-muted` (fails AA on these surfaces).
+//
+// NO NOT-YET NOTICE (MOTIR-5539). The card once carried "Motir does not merge pull
+// requests yet"; MOTIR-4882 made Motir merge on this setting, so it was removed as
+// the design notes (§ Approvals §7) always said it would be. The two hints are the
+// whole account — do not add a caveat back without a design.
 //
 // MANAGE-ONLY. There is no read-only state (Yue, 2026-09-13): the room admits only
 // `workflow:manage`, so every actor who renders this card may change it.
@@ -111,11 +115,6 @@ export function PrMergeModeCard({ projectKey, initialMode }: PrMergeModeCardProp
         }
       >
         <div className="flex flex-col gap-3">
-          <div className="flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-sky) p-(--spacing-card-padding)">
-            <Info className="mt-0.5 size-4 shrink-0 text-(--el-text-strong)" aria-hidden />
-            <p className="font-sans text-xs text-(--el-text-strong)">{t('notYet')}</p>
-          </div>
-
           <div role="radiogroup" aria-label={t('title')} className="flex flex-col gap-2">
             {PR_MERGE_MODE_VALUES.map((value) => {
               const Icon = OPTION_ICON[value];

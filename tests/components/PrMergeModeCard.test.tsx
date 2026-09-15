@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 describe('PrMergeModeCard — the two described modes', () => {
-  it('offers EXACTLY the two values, each with the label and hint from the asset, and the not-yet notice', () => {
+  it('offers EXACTLY the two values, each with the label and hint from the asset, and no not-yet notice', () => {
     renderCard('manual');
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(2);
@@ -45,7 +45,9 @@ describe('PrMergeModeCard — the two described modes', () => {
     expect(radios[1]!.textContent).toContain(
       'When its checks pass, Motir merges the pull request without asking anyone. The record says this setting allowed it — not that a person approved it.',
     );
-    expect(screen.getByText(/Motir does not merge pull requests yet/)).toBeTruthy();
+    // MOTIR-5539: the not-yet notice was removed once Motir merges on this
+    // setting (MOTIR-4882). The hints above are the whole account of both modes.
+    expect(screen.queryByText(/does not merge pull requests yet/)).toBeNull();
     expect(screen.getByRole('radiogroup', { name: 'Merging pull requests' })).toBeTruthy();
   });
 
@@ -166,7 +168,6 @@ describe('the merge-mode copy ships in BOTH locales', () => {
       expect.arrayContaining([
         'title',
         'desc',
-        'notYet',
         'manual.label',
         'manual.hint',
         'auto.label',
