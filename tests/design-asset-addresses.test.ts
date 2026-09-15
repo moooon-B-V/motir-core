@@ -259,6 +259,17 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  a failing test rather than a silent row nobody re-reads — so this note is
   //  kept only as the evidence that it fired once, and is itself deletable.
   //
+  // ── FORWARD-LOOKING: the Approval records room (MOTIR-5300, Story MOTIR-5299) ──
+  //  The design draws the room's rail row with its address before MOTIR-5302
+  //  builds `app/(authed)/approvals/page.tsx`. This row DELETES ITSELF when that
+  //  page lands: the `carries no KNOWN entry that has stopped applying` arm below
+  //  goes red in the pull request that adds the route, exactly as the retired
+  //  `/settings/project/approvals` rows above did.
+  {
+    file: 'design/approvals/approvals-room.mock.html',
+    address: '/approvals',
+    why: 'The rail row of a room drawn before it is built. MOTIR-5302 adds the route and removes this row in the same pull request.',
+  },
   // ── An address named as HISTORY, by the asset that retires it ─────────────
   // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
   // Code health, the code index and Git were three things in two rail sections

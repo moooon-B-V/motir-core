@@ -17,6 +17,12 @@ built by **MOTIR-5005**.
   ([`github.png`](./github.png)) is the board/PR-visible face.
 - **Definition of done (three files):** `design-notes.md` + `github.mock.html` +
   `github.png`. All three are committed.
+- **Second sheet (MOTIR-5480, 2026-09-15):**
+  [`approve-and-merge.mock.html`](./approve-and-merge.mock.html) +
+  [`approve-and-merge.png`](./approve-and-merge.png) +
+  [`approve-and-merge.dark.png`](./approve-and-merge.dark.png) — the approve-and-merge verbs and
+  their states (Panels 12p–12w), specified in §20 _The verbs and their states_. It carries
+  `github.mock.html`'s own tokens, primitives and sprite sheet verbatim.
 
 ---
 
@@ -1483,3 +1489,155 @@ frame's bands (composed, not redrawn); a diff inside Motir; a Motir-created prev
 Fixture items on the board use `ACME-n` keys and `acme-n-…` branches, so they link to nothing. Every
 other `MOTIR-n` in the two amended mocks is provenance the asset already carried, and GIVES or TAKES
 nothing here.
+
+### The verbs and their states — MOTIR-5480 (2026-09-15)
+
+Story [MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2) · card
+[MOTIR-5480](motir:cmu1aj15k00gchyoidbhlbomo). Board: **Panels 12p–12w** in
+**`approve-and-merge.mock.html`** (+ `approve-and-merge.png`, `approve-and-merge.dark.png`), one row
+per state: **desktop · dark · ~400px**.
+
+**The contract these panels draw** is `docs/decisions/approval-gates.md` §8's amendment
+([MOTIR-5479](motir:cmu1aj13z00gahyoip0mfmjqw)), decisions 3–5: the gate is raised only on an
+all-green set in a `manual` project; a moved head withdraws it; _Approve and merge_ commits the
+approval FIRST, then merges or enqueues each pull request outside the transaction, and a refused one
+writes no decision. **In `prMergeMode` `auto` no gate is raised, and the card renders Panel 12a.**
+
+**Why a second sheet.** `github.mock.html` was already 42,482px tall at 2×. With these 27 panels
+added it measured 65,948px, and the full-page export came out **blank below ~48,000px**: both columns
+cut off at the same height, mid-Panel 12r, while the file wrote without an error. A state nobody can
+see in the PNG is not drawn, so the states moved to their own sheet. It carries `github.mock.html`'s
+tokens, primitives and sprite sheet verbatim (`audit-mock-sprites --strict`: 44 symbols, 0 drifted),
+at a 1740px viewport so each state's three variants sit in one row. `github.mock.html` keeps a
+pointer after Panel 12o.
+
+**One correction to the older sheet.** Panels 12c and 12o drew the second pull request's checks as
+_running_ under an awaiting gate. Under decision 3 that cannot happen, so both now draw it green
+(_Checks passing_, _3 of 3 checks passed_). 12b, which has no gate, is unchanged.
+
+**The fixture.** One story run, two pull requests: `moooon/motir-core · #131` merges now, and
+`moooon/motir-ai · #88`'s repository has a merge queue. The port abbreviates How to test to its head
+line; Panel 12b draws it in full, and nothing in it changes with these states.
+
+#### No card inside a card — the frame sits FLUSH in the Development card (Yue, 2026-09-15)
+
+The first cut drew the approval frame as a bordered, rounded, shadowed card inside the Development
+section card, itself inside the card body's padding. **A container does not go inside a container.**
+The Development card is the container, so every frame on both sheets (12c, 12o, 12p–12w) now sits
+flush in it:
+
+| element                                                | before                                                    | now                                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| the frame's box                                        | `overflow-hidden rounded-(--radius-card) border` + shadow | **no border, no radius, no shadow, no fill** — `flex flex-col overflow-hidden`   |
+| the card body around the frame                         | `--spacing-card-padding` on every side                    | **no padding** — band 1 starts directly under the card head's divider            |
+| the bands (header, port, foot, confirm, record, alert) | inside the inner card                                     | **edge to edge in the section card**, separated by their own dividers, unchanged |
+| the port                                               | floor, `34rem` ceiling, its own scroll, Expand            | **unchanged** — a page card is not the viewport, so the ceiling and Expand stay  |
+
+**The component contract.** `ApprovalGateControl` has `layout: 'inline' | 'fill'`. `inline` draws
+the boxed card; `fill` (the overlay, § 22 in `design/workbench/design-notes.md`) drops the box but
+also drops the port's floor, ceiling and Expand, because there the viewport is the box. Neither fits a
+frame inside a section card. So the frame gains a third value, **`layout: 'flush'`**: `fill`'s box
+(no chrome) with `inline`'s port. It is a presentational input like `fill` — no state, verb, band or
+decide path — and `DevelopmentGateFrame` passes it, with the section card rendering the frame with no
+body padding. This is a TAKES on [MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy), amended on that
+card.
+
+**Not changed here:** the pull-request rows keep the shipped `PullRequestRow` treatment (§19), and
+the Design result section's own frame (`DesignResultSection`) is outside this card.
+
+#### The panels, and the card that implements each
+
+| panel | state                                                                                   | implemented by                                                               |
+| ----- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 12p   | **rest** — _Approve and merge_ · _Request changes_, and the consequence line            | [MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy)                                |
+| 12q   | **confirm** — state `C`: every pull request, and whether it merges now or joins a queue | MOTIR-5484                                                                   |
+| 12r   | **merging** — approval recorded (card _Approved_), each row on its way                  | [MOTIR-5483](motir:cmu1aj19x00gihyoi0b6lixcm) (outcomes) · MOTIR-5484 (rows) |
+| 12s   | **queued to merge** — one merged, one _Queued to merge_, the card stays _Approved_      | MOTIR-5483 · MOTIR-5484                                                      |
+| 12t   | **all merged** — the card waits for the host's webhook                                  | MOTIR-5484                                                                   |
+| 12u   | **one refused** — the approval stands, the refusal in place, _Retry merge_ on that row  | MOTIR-5483 · MOTIR-5484                                                      |
+| 12u′  | **one refused, after a reload** — _Not merged yet_ with _Retry merge_ and no reason     | MOTIR-5484                                                                   |
+| 12v   | **withdrawn by a push** — state `G`, naming the pull request whose head moved           | [MOTIR-5482](motir:cmu1aj18f00gghyoik41ycibt) (withdraw) · MOTIR-5484        |
+| 12w   | **bystander** — state `B`: the port live, no verbs, who it waits on                     | MOTIR-5484                                                                   |
+
+#### Decisions
+
+| decision                             | chosen                                                                                                                                                                                                                                                                         | why                                                                                                                                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where a row's outcome shows          | in the row's **second pill slot**, beside its derived state pill. It carries _Merging_ / _Joining the merge queue_ / _Queued to merge_ / _Not merged_ while the press has one to report; once the host says merged, the derived state pill reads _Merged_ and the slot empties | every member was green by construction, so the CI pill has nothing left to say after the press; the row stays `PullRequestRow`, derived and unchanged (§19)                         |
+| the consequence line                 | **names each pull request for one or two, and counts them for three or more**: _Approving merges 2 pull requests and adds 1 to a merge queue, then moves {key} to Approved._ The confirm step **always** lists every one                                                       | band 3 is one line; an unbounded list pushes the verbs off the frame. The confirm step is where the full list is read, one last time, before the press. TAKES on MOTIR-5484 (below) |
+| which member queues                  | **read before the press** and stated in the confirm step, per member                                                                                                                                                                                                           | the person approves knowing what will happen to each; the answer is 4882's (the repository's rules)                                                                                 |
+| after the press                      | the **decided record band** (state `E`) replaces the verbs, with a progress line while members are in flight                                                                                                                                                                   | the approval is already committed (decision 5(a)), so there is nothing left to press but a Retry                                                                                    |
+| a refusal                            | a **rose alert band** (state `H`) naming the pull request, its words a **labelled slot**, then _Your approval stands, and {other} merged._                                                                                                                                     | the approval must not look undone by one refusal, and a refusal must not look like success                                                                                          |
+| a refusal after a reload             | **_Not merged yet_** (neutral) with _Retry merge_, **no reason**                                                                                                                                                                                                               | the press does not persist the reason, so the page must never show one it no longer has                                                                                             |
+| the refusal's words                  | **not written here** — the slot shows `mergeConflict` as an example and cites MOTIR-4882's union (`lib/approvalGates/refusals.ts`)                                                                                                                                             | one vocabulary of failures; `refusals.ts`'s header forbids a second                                                                                                                 |
+| the card's status beside the title   | **In Review** until the press, **Approved** from the press until the webhook writes Done                                                                                                                                                                                       | `approved` is `in_progress`-category (ADR §6b); nothing here writes Done                                                                                                            |
+| a member with no awaiting merge gate | **its row is unchanged** — no outcome pill                                                                                                                                                                                                                                     | MOTIR-5483 returns `no_merge_gate` for it; there was no press to report on                                                                                                          |
+
+#### Tokens
+
+`--el-*` and element-semantic shape tokens only, each rule quoting the class string it maps to.
+Header pills: _Awaiting you_ `--el-tint-yellow` · _Approved_ `--el-tint-mint` · _Withdrawn_
+`--el-muted` + `--el-text-secondary`, all with `--el-text-strong` on a tint. Confirm band
+`--el-tint-lavender`. Record band `--el-surface-soft`, ink `--el-text-secondary`. Alert band
+`--el-danger-surface`, ink `--el-danger-on-surface`, its next-action line `--el-text-secondary`, the
+slot a dashed `--el-border-strong` box. Withdrawn port `--el-muted` + `--el-text-secondary`. Row
+outcome pills: _Merging_ / _Joining the merge queue_ sky + `dots` · _Queued to merge_ peach + `clock`
+· _Merged_ mint + `git-merge` · _Not merged_ rose + `x` · _Not merged yet_ neutral + `git-pr`.
+
+#### Copy — `en` + `zh`
+
+The kind's words, keyed under `approvalGate.pullRequestApproval` for
+[MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy) to ship. _Cancel_, _Yes, {verb}_, _Approving this will:_,
+_Awaiting you_, _Awaiting_, _Approved_, _Withdrawn_, _Waiting on {name}._ and every refusal are the
+frame's shipped `approvalGate.*` strings and are not re-keyed.
+
+| key                         | en                                                                                                                | zh                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `kindLabel`                 | Pull requests                                                                                                     | 拉取请求                                                                                            |
+| `meta.delivered`            | {count} pull requests · delivered by {run}                                                                        | {count} 个拉取请求 · 由 {run} 交付                                                                  |
+| `meta.approved`             | Approved by {name} · {count} pull requests                                                                        | 由 {name} 批准 · {count} 个拉取请求                                                                 |
+| `meta.approvedByYou`        | Approved by you just now · {count} pull requests                                                                  | 刚刚由你批准 · {count} 个拉取请求                                                                   |
+| `meta.withdrawn`            | {count} pull requests · the head of {pr} moved                                                                    | {count} 个拉取请求 · {pr} 的最新提交已变更                                                          |
+| `verb.approveAndMerge`      | Approve and merge                                                                                                 | 批准并合并                                                                                          |
+| `consequence.named`         | Approving merges {merged} and adds {queued} to its merge queue, then moves {key} to Approved.                     | 批准后将合并 {merged}，并将 {queued} 加入其合并队列，然后将 {key} 标记为已批准。                    |
+| `consequence.namedAllMerge` | Approving merges {prs}, then moves {key} to Approved.                                                             | 批准后将合并 {prs}，然后将 {key} 标记为已批准。                                                     |
+| `consequence.counted`       | Approving merges {mergeCount} pull requests and adds {queueCount} to a merge queue, then moves {key} to Approved. | 批准后将合并 {mergeCount} 个拉取请求，并将 {queueCount} 个加入合并队列，然后将 {key} 标记为已批准。 |
+| `confirm.records`           | record that you approved these {count} commits, with the time;                                                    | 记录你已批准这 {count} 个提交，连同时间；                                                           |
+| `confirm.mergeNow`          | merge {pr} now;                                                                                                   | 立即合并 {pr}；                                                                                     |
+| `confirm.joinQueue`         | add {pr} to its repository's merge queue, which merges it when the queue's checks pass;                           | 将 {pr} 加入其仓库的合并队列，队列检查通过后由其合并；                                              |
+| `confirm.movesToApproved`   | move {key} to Approved. It moves to Done when every merge lands.                                                  | 将 {key} 标记为已批准。所有合并完成后将标记为已完成。                                               |
+| `record.approved`           | Approved by {name} · {time} · {count} commits                                                                     | 由 {name} 批准 · {time} · {count} 个提交                                                            |
+| `progress`                  | Merging {merged} and adding {queued} to its merge queue…                                                          | 正在合并 {merged}，并将 {queued} 加入其合并队列…                                                    |
+| `queued.why`                | {key} stays Approved until the merge queue lands {pr}.                                                            | 在合并队列合入 {pr} 之前，{key} 保持已批准状态。                                                    |
+| `merged.why`                | Every pull request merged. {key} moves to Done when {host} reports the merges.                                    | 所有拉取请求均已合并。{host} 报告合并后，{key} 将标记为已完成。                                     |
+| `outcome.merging`           | Merging                                                                                                           | 合并中                                                                                              |
+| `outcome.joiningQueue`      | Joining the merge queue                                                                                           | 正在加入合并队列                                                                                    |
+| `outcome.queued`            | Queued to merge                                                                                                   | 已加入合并队列                                                                                      |
+| `outcome.refused`           | Not merged                                                                                                        | 未合并                                                                                              |
+| `outcome.notMergedYet`      | Not merged yet                                                                                                    | 尚未合并                                                                                            |
+| `outcome.retry`             | Retry merge                                                                                                       | 重试合并                                                                                            |
+| `refused.title`             | {pr} was not merged.                                                                                              | {pr} 未合并。                                                                                       |
+| `refused.stands`            | Your approval stands, and {other} merged.                                                                         | 你的批准仍然有效，{other} 已合并。                                                                  |
+| `notMergedYet.why`          | {pr} has not merged yet. Retry it, or open it on {host} to see why.                                               | {pr} 尚未合并。请重试，或在 {host} 上打开查看原因。                                                 |
+| `withdrawn.port`            | A push moved the head of {pr}, so this question was withdrawn.                                                    | 一次推送变更了 {pr} 的最新提交，因此该问题已被撤回。                                                |
+| `withdrawn.portCite`        | Nobody decided it. Motir asks again when every check is green.                                                    | 没有人对它做出决定。所有检查通过后，Motir 会再次请求审批。                                          |
+
+#### GIVES / TAKES
+
+Scope: every `MOTIR-n` this card's text introduces into an asset it edits, measured with
+`grep -o 'MOTIR-[0-9]*' <asset> | sort -u` against `HEAD`. `approve-and-merge.mock.html` carries 26
+keys: six are this card's (MOTIR-4882, 5479, 5480, 5482, 5483, 5484), and the other twenty are
+`github.mock.html`'s own sprite and token provenance, carried verbatim and GIVING or TAKING nothing.
+`github.mock.html` gains MOTIR-5480 only (41 → 42), and `approvals-row.mock.html` gains MOTIR-5437
+and MOTIR-5480 (19 → 21).
+
+| key                                           | GIVES / TAKES                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy) | **GIVES** every panel above, the copy and the flush frame. **TAKES** its first criterion's _"the consequence line … names each `owner/name · #n`"_ for three or more, and its _"`ApprovalGateControl.tsx` is unchanged"_ (the frame gains `layout: 'flush'`) — **both amended on the card, 2026-09-15** |
+| [MOTIR-5483](motir:cmu1aj19x00gihyoi0b6lixcm) | **GIVES** the four outcomes it returns a drawing each (`merged` 12s/12t · `enqueued` 12s · `refused` 12u · `no_merge_gate` a row left unchanged). **TAKES** nothing                                                                                                                                     |
+| [MOTIR-5482](motir:cmu1aj18f00gghyoik41ycibt) | **GIVES** the withdrawn state (12v). **TAKES** nothing                                                                                                                                                                                                                                                  |
+| [MOTIR-5479](motir:cmu1aj13z00gahyoip0mfmjqw) | **TAKES** decisions 3–5, which these panels draw. Nothing either way beyond that                                                                                                                                                                                                                        |
+| [MOTIR-4882](motir:cmtrwx3580055hxph0vfamj1l) | **TAKES** its refusal union, cited in 12u's slot and not re-worded, and which member queues. Nothing given                                                                                                                                                                                              |
+| [MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4) | **GIVES** these states for its overlay to compose, and the To-approve row it later gives a _Review_ door (workbench § 23). **TAKES** nothing                                                                                                                                                            |
+| [MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2) | done; its Panels 12c and 12o are **corrected on the sheet** (the running row turned green). No criterion of its changes                                                                                                                                                                                 |
+| MOTIR-5461 (the ejection story)               | **nothing either way** — what a row shows after a queue EJECTS its pull request is its own design                                                                                                                                                                                                       |

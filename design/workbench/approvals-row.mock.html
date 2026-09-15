@@ -3818,6 +3818,10 @@
       .text-\(--el-type-design\) {
         color: var(--el-type-design);
       }
+      /* MOTIR-5480 — the pull_request_approval kind's glyph ink */
+      .text-\(--el-accent-on-surface\) {
+        color: var(--el-accent-on-surface);
+      }
       .h-\[9\.5rem\] {
         height: 9.5rem;
       }
@@ -7091,7 +7095,9 @@
       <em>Review</em> — there is nothing to review, and the card is where somebody can withdraw or
       republish.<br /><br /><strong>Neither row offers a verb</strong>, which follows from the frame
       rather than from a rule this asset invents: band 3 sits below the port, and a row with no port
-      has nothing to decide after.
+      has nothing to decide after.<br /><br /><strong>AMENDED 2026-09-15 (MOTIR-5480):</strong>
+      <code>pull_request_approval</code> no longer draws this row; its row at rest is Panel 9. The
+      other holes keep it.
     </p>
     <p class="panel-label">
       Panel 8 — NARROW (&lt; md): the strip scrolls, the row keeps its subject and its wait, and the
@@ -7367,6 +7373,265 @@
       column is worse than no header at all. The strip above already scrolls at this width rather
       than wrapping or shrinking (<code>design/workbench/design-notes.md</code> §
       <em>Narrow: the strip SCROLLS</em>), which is why a fifth tab costs this surface nothing.
+    </p>
+
+    <p class="panel-label">
+      Panel 9 — MOTIR-5480: the <code>pull_request_approval</code> row AT REST — the kind's glyph, a
+      subject line naming each pull request, and no <em>Not built yet</em>
+    </p>
+    <div class="panel">
+      <div class="frame">
+        <div class="frame-bar">
+          <span>viewport 1200 · rail 240 · content 896px · the tab strip and pager as Panel 1</span>
+        </div>
+        <div class="shell" style="grid-template-columns: 1fr">
+          <div class="content">
+            <div
+              data-tilt=""
+              data-surface="card"
+              class="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
+            >
+              <div role="table" aria-label="To approve" class="w-full text-sm">
+                <div role="rowgroup">
+                  <div
+                    role="row"
+                    class="grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-4 pl-4"
+                    style="grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px; height: 40px"
+                  >
+                    <div role="columnheader" class="flex min-w-0 items-center">
+                      <span
+                        class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                        >Waiting on</span
+                      >
+                    </div>
+                    <div role="columnheader" class="flex min-w-0 items-center">
+                      <span
+                        class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                        >Work item</span
+                      >
+                    </div>
+                    <div role="columnheader" class="flex min-w-0 items-center">
+                      <span
+                        class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                        >Waited</span
+                      >
+                    </div>
+                    <div role="columnheader" class="flex min-w-0 items-center">
+                      <span
+                        class="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+                <div role="rowgroup">
+                  <div
+                    role="row"
+                    class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-4 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+                    style="grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px; height: 44px"
+                  >
+                    <div role="cell" class="flex min-w-0 items-center gap-2">
+                      <a
+                        href="/items/ACME-12"
+                        aria-label="Open ACME-12"
+                        class="absolute inset-0 z-0 focus:outline-none"
+                      ></a>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-git-pull-request h-4 w-4 shrink-0 text-(--el-accent-on-surface)"
+                        aria-hidden="true"
+                      >
+                        <circle cx="18" cy="18" r="3" />
+                        <circle cx="6" cy="6" r="3" />
+                        <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                        <line x1="6" x2="6" y1="9" y2="21" /></svg
+                      ><span class="shrink-0 text-sm font-medium text-(--el-text)"
+                        >Pull requests</span
+                      ><span class="truncate text-xs text-(--el-text-secondary)"
+                        >moooon/motir-core · #131, moooon/motir-ai · #88</span
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center gap-2">
+                      <a
+                        href="/items/ACME-12"
+                        class="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
+                        ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                          >ACME-12</span
+                        ><span class="truncate text-sm text-(--el-text)"
+                          >Throttle the public API end to end</span
+                        ></a
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center">
+                      <span
+                        class="truncate text-xs text-(--el-text-secondary)"
+                        title="Asked 2026-09-15 12:10"
+                        >2 hours</span
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center justify-end">
+                      <button
+                        type="button"
+                        class="relative z-10 inline-flex items-center justify-center gap-1.5 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-transparent text-(--el-text) border border-(--el-button-secondary-border) hover:bg-(--el-surface) h-[26px] px-2.5 text-xs"
+                      >
+                        Open card
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    role="row"
+                    class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-4 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+                    style="grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px; height: 44px"
+                  >
+                    <div role="cell" class="flex min-w-0 items-center gap-2">
+                      <a
+                        href="/items/ACME-31"
+                        aria-label="Open ACME-31"
+                        class="absolute inset-0 z-0 focus:outline-none"
+                      ></a>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-git-pull-request h-4 w-4 shrink-0 text-(--el-accent-on-surface)"
+                        aria-hidden="true"
+                      >
+                        <circle cx="18" cy="18" r="3" />
+                        <circle cx="6" cy="6" r="3" />
+                        <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                        <line x1="6" x2="6" y1="9" y2="21" /></svg
+                      ><span class="shrink-0 text-sm font-medium text-(--el-text)"
+                        >Pull requests</span
+                      ><span
+                        class="truncate text-xs text-(--el-text-secondary)"
+                        title="moooon/motir-core · #140, moooon/motir-ai · #91, moooon/motir-gateway · #60"
+                        >moooon/motir-core · #140, moooon/motir-ai · #91, +1 more</span
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center gap-2">
+                      <a
+                        href="/items/ACME-31"
+                        class="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
+                        ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                          >ACME-31</span
+                        ><span class="truncate text-sm text-(--el-text)"
+                          >Show the retry budget on the usage page</span
+                        ></a
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center">
+                      <span
+                        class="truncate text-xs text-(--el-text-secondary)"
+                        title="Asked 2026-09-15 12:10"
+                        >40 minutes</span
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center justify-end">
+                      <button
+                        type="button"
+                        class="relative z-10 inline-flex items-center justify-center gap-1.5 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-transparent text-(--el-text) border border-(--el-button-secondary-border) hover:bg-(--el-surface) h-[26px] px-2.5 text-xs"
+                      >
+                        Open card
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    role="row"
+                    class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-4 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+                    style="grid-template-columns: minmax(10rem, 1fr) 268px 88px 132px; height: 44px"
+                  >
+                    <div role="cell" class="flex min-w-0 items-center gap-2">
+                      <a
+                        href="/items/ACME-7"
+                        aria-label="Open ACME-7"
+                        class="absolute inset-0 z-0 focus:outline-none"
+                      ></a>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-git-pull-request h-4 w-4 shrink-0 text-(--el-accent-on-surface)"
+                        aria-hidden="true"
+                      >
+                        <circle cx="18" cy="18" r="3" />
+                        <circle cx="6" cy="6" r="3" />
+                        <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                        <line x1="6" x2="6" y1="9" y2="21" /></svg
+                      ><span class="shrink-0 text-sm font-medium text-(--el-text)"
+                        >Pull requests</span
+                      ><span class="truncate text-xs text-(--el-text-secondary)"
+                        >moooon/motir-core · #127</span
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center gap-2">
+                      <a
+                        href="/items/ACME-7"
+                        class="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
+                        ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                          >ACME-7</span
+                        ><span class="truncate text-sm text-(--el-text)"
+                          >Fix the empty state on the keys page</span
+                        ></a
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center">
+                      <span
+                        class="truncate text-xs text-(--el-text-secondary)"
+                        title="Asked 2026-09-15 12:10"
+                        >1 day</span
+                      >
+                    </div>
+                    <div role="cell" class="flex min-w-0 items-center justify-end">
+                      <button
+                        type="button"
+                        class="relative z-10 inline-flex items-center justify-center gap-1.5 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-transparent text-(--el-text) border border-(--el-button-secondary-border) hover:bg-(--el-surface) h-[26px] px-2.5 text-xs"
+                      >
+                        Open card
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      <strong>A pull-request gate is a real row now, not an unbuilt one.</strong> Once
+      <code>pull_request_approval</code> registers, the row takes the kind's
+      <code>git-pull-request</code> glyph in <code>--el-accent-on-surface</code>, the label
+      <strong>Pull requests</strong>, and a subject line naming each <code>owner/name · #n</code> in
+      the set's canonical order. <strong>The truncation rule:</strong> one or two pull requests are
+      listed in full; three or more list the first two and <em>+n more</em>, and the cell's
+      <code>title</code> carries the whole list. The line still truncates with an ellipsis when the
+      column is narrower than the names. <em>Not built yet</em> is removed for THIS kind only —
+      <code>decision_approval</code> and <code>pull_request_merge</code> keep Panel 7's row.<br /><br />
+      <strong>The row leads to the work item's page</strong>, where the Development frame decides
+      it: the whole-row control and <strong>Open card</strong> both go to
+      <code>/items/ACME-12</code>, and there is no chevron because nothing opens in the list. The
+      full-screen door for this kind is MOTIR-5437's, which swaps <strong>Open card</strong> for
+      <strong>Review</strong> when it lands. At <code>&lt; md</code> the row reflows exactly as
+      Panel 8 draws.
     </p>
   </body>
 </html>

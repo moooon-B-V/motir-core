@@ -1,0 +1,1349 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The item page hands the decision over — the call-to-action band (MOTIR-5215 ·
+      MOTIR-5228)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — Story MOTIR-5215, design subtask MOTIR-5228.
+      Gates MOTIR-5229 (the band and its one door); asserted by MOTIR-5230 and
+      MOTIR-5231.
+
+      WHAT IT DRAWS. The item page's Design result section once deciding has moved
+      off the page: while the gate is awaiting AND the reader may decide it, the
+      section holds a CALL-TO-ACTION BAND — the version, how long it has waited, the
+      state, and ONE control, Review & approve, that opens the approval overlay
+      (design/workbench/design-notes.md section 22). Every other state keeps its
+      content.
+
+      REVISED 2026-09-15 ON REVIEW: "doubled 'design result', a container inside a
+      container, that's not right." The section card is the ONLY container and its
+      title the ONLY label. Nothing inside it carries its own border or repeats
+      "Design result" — not the band, and not the kept states, which render the
+      frame's bands flush in the section body.
+
+      RENDERED FIRST. The shipped DesignResultSection inside ContentSectionCard was
+      rendered through the repo's vitest + RTL setup (renderWithIntl, the real en and
+      zh catalogues) in every state, on origin/main after MOTIR-5488 merged. The
+      section card, band 1's meta and pill, band 3's row, the port's frame strip and
+      note row, the record strip, the dead port and the empty state below are
+      transcribed from that render's emitted markup and classes — minus the inner
+      frame's border and its repeated kind label, which is the revision.
+
+      CITES, NEVER REDRAWS: approval-control.mock.html (the frame, nine states),
+      design-result--what-to-review.mock.html (the port's contents), the workbench
+      notes' section 22 (the overlay), status-held-by-decision.mock.html (the same
+      control's string and glyph).
+
+      See design-notes.md section "The item page HANDS THE DECISION OVER".
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied from packages/design-system/theme.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-link: #0075de;
+
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-card: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-identifier: var(--color-slate);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+      }
+
+      /* ── Board chrome (NOT part of the design — the review page) ─────────── */
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .sprite {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .board {
+        max-width: 1328px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+        display: flex;
+        flex-direction: column;
+        gap: 36px;
+      }
+      .boardTitle {
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      .boardLead {
+        margin: 0;
+        color: var(--el-text-secondary);
+        max-width: 86ch;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panelLabel {
+        font-size: 12px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .panelNote {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        max-width: 90ch;
+      }
+      .stateCap {
+        font-size: 13px;
+        font-weight: 650;
+        margin: 0 0 8px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+        align-items: start;
+      }
+      .spec {
+        min-width: 0;
+      }
+      .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 10.5px;
+        font-weight: 700;
+        flex: none;
+      }
+      .anatList {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .anat {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .anat code,
+      .panelNote code,
+      .tbl code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .tbl {
+        border-collapse: collapse;
+        font-size: 13px;
+        width: 100%;
+        max-width: 1100px;
+      }
+      .tbl th,
+      .tbl td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+      }
+      .tbl th {
+        font-size: 12px;
+        font-weight: 650;
+        color: var(--el-text-secondary);
+      }
+      .rowOn {
+        background: var(--el-tint-lavender);
+      }
+      .rowOn td {
+        color: var(--el-text-strong);
+      }
+      .was {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+        background: var(--el-surface-soft);
+      }
+      .wasTag {
+        display: inline-flex;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-rose);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin-bottom: 10px;
+      }
+      .wasBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The item page at 1280 (panel 1) — composed as ghosts, the band live ── */
+      .pg {
+        width: 1280px;
+        box-sizing: border-box;
+        padding: 20px 24px 28px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .pgHead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .pgKey {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        color: var(--el-text-identifier);
+      }
+      .pgTitle {
+        font-size: 20px;
+        font-weight: 650;
+      }
+      .pgGrid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 18rem;
+        gap: 24px;
+        align-items: start;
+      }
+      .pgCol {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        min-width: 0;
+      }
+      .pgRail {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .ghost {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 14px 18px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .ghostTitle {
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .here {
+        outline: 2px solid var(--el-accent);
+        outline-offset: 4px;
+        border-radius: var(--radius-card);
+      }
+
+      /* ── ContentSectionCard (shipped: Card + header grammar) — THE container ── */
+      .sc {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+      }
+      .scHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: var(--spacing-md);
+      }
+      .scTitle {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .scGloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── band 1, flush in the section body: meta + pill, no kind label, no border ── */
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .metaText {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pillSlot {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill-await {
+        background: var(--el-tint-yellow);
+      }
+      .pill-ok {
+        background: var(--el-tint-mint);
+      }
+      .pill-changes {
+        background: var(--el-tint-peach);
+      }
+      .pill-gone {
+        background: var(--el-archived-pill-bg);
+        color: var(--el-archived-pill-text);
+      }
+
+      /* ── band 3's row — a hairline divider, never a box ─────────────────── */
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 12px;
+        row-gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .rowText {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .rowName {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .rowPush {
+        margin-left: auto;
+      }
+      .btn {
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        font-size: 14px;
+        font-weight: 500;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      /* ── band 2 — the port, flush in the section body (shipped DesignResultPanel, after MOTIR-5488) ── */
+      .port {
+        margin-top: 12px;
+      }
+      .strip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--el-border);
+        border-bottom: 0;
+        border-radius: var(--radius-input) var(--radius-input) 0 0;
+        background: var(--el-surface-soft);
+        padding: 6px 10px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .stripPath {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .stripLink {
+        margin-left: auto;
+        color: var(--el-text);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .mockBox {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 150px;
+        border: 1px solid var(--el-border);
+        border-radius: 0 0 var(--radius-input) var(--radius-input);
+        background: var(--el-muted);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-align: center;
+      }
+      .noteRow {
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .noteLabel {
+        flex: none;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .notePath {
+        min-width: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .noteLink {
+        margin-left: auto;
+        flex: none;
+        color: var(--el-link);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .chips {
+        margin-top: 20px;
+        padding-top: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .dead {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        margin-top: 12px;
+        border-radius: var(--radius-input);
+        background: var(--el-muted);
+        padding: 40px 16px;
+        text-align: center;
+      }
+      .deadLine {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .deadCite {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── the decided record strip (shipped), a hairline divider ─────────── */
+      .rec {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 16px;
+        row-gap: 6px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .recName {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .recVersion {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--el-text-identifier);
+      }
+      .kept {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        padding: 2px 8px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+
+      /* ── the empty state (shipped DesignResultPanel, no result) ──────────── */
+      .empty {
+        display: flex;
+        gap: 14px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+        padding: 16px;
+      }
+      .port .empty {
+        margin-top: 0;
+      }
+      .emptyIc {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+      }
+      .emptyTitle {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .emptyBody {
+        margin: 2px 0 0;
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── narrow (< md) ──────────────────────────────────────────────────── */
+      .narrow {
+        width: 390px;
+        box-sizing: border-box;
+        padding: 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .narrow .sc {
+        padding: 16px;
+      }
+      .rowStack .rowPush {
+        margin-left: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sprite" aria-hidden="true" focusable="false">
+      <defs>
+        <g
+          id="i-scan-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+          <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+          <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+          <circle cx="12" cy="12" r="1" />
+          <path
+            d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"
+          />
+        </g>
+        <g
+          id="i-file-text"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </g>
+        <g
+          id="i-commit"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <line x1="3" x2="9" y1="12" y2="12" />
+          <line x1="15" x2="21" y1="12" y2="12" />
+        </g>
+        <g
+          id="i-image-off"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="2" x2="22" y1="2" y2="22" />
+          <path d="M10.41 10.41a2 2 0 1 1-2.83-2.83" />
+          <line x1="13.5" x2="6" y1="13.5" y2="21" />
+          <line x1="18" x2="21" y1="12" y2="15" />
+          <path d="M3.59 3.59A1.99 1.99 0 0 0 3 5v14a2 2 0 0 0 2 2h14c.55 0 1.052-.22 1.41-.59" />
+          <path d="M21 15V5a2 2 0 0 0-2-2H9" />
+        </g>
+      </defs>
+    </svg>
+
+    <main class="board">
+      <header class="panel">
+        <h1 class="boardTitle">
+          The item page hands the decision over — a call-to-action band with ONE control
+        </h1>
+        <p class="boardLead">
+          MOTIR-5228 (story MOTIR-5215). The Design result section stops holding a decision. While
+          its gate is <strong>awaiting</strong> and the reader <strong>may decide it</strong>, the
+          section shows the version, how long it has waited, the state, and one control,
+          <strong>Review &amp; approve</strong>, which opens the full-screen approval overlay over
+          this page. The decided, withdrawn and look-only states, and a card with no gate, keep
+          their content.
+        </p>
+        <p class="panelNote">
+          <strong>Revised 2026-09-15 on review — one container, one label.</strong> The section card
+          is the only container and <em>Design result</em> is said once, in its title. Nothing
+          inside it has its own border or repeats the title — not the band, and not the kept states,
+          whose frame bands now sit flush in the section body. A <code>design_result</code> gate
+          exists only on a design card with no open linked pull request (<code
+            >design-result.md</code
+          >
+          AMENDMENT 4 Q8), so that is the only card this band appears on.
+        </p>
+      </header>
+
+      <!-- ═══════════════════════════ 0 · THE REVISION ═══════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">0 · The revision — what the first cut drew, and why it is gone</div>
+        <div class="grid2">
+          <div class="was">
+            <span class="wasTag">Rejected — a container inside a container</span>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="wasBox">
+                <strong>Design result</strong> · version 9840d00e · asked 2 days ago — the frame's
+                own bordered box and its own heading, inside a card that already says it
+              </div>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="panelNote">
+              The first cut composed the approval frame whole — its bordered box and its band-1
+              heading — inside <code>ContentSectionCard</code>, which already carries the border and
+              the title. The page said <em>Design result</em> twice, 30px apart, and drew a box
+              inside a box.
+              <strong>That nesting is what ships today for every gate state</strong> (the workbench
+              notes' § 22 recorded the double label and left it). This revision removes it
+              everywhere on the item page: the section is the container, and the frame renders
+              <strong>chromeless and unlabeled</strong> inside it. The frame keeps its chrome and
+              its heading only where it IS the container: the overlay and the To-approve row.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════ 1 · IN PLACE ═══════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          1 · In place — /items/[key] at 1280, the late stack, after Development
+        </div>
+        <p class="panelNote">
+          The page's own <code>grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]</code>, main column 918px.
+          The band sits in the Design result section's existing slot. It moves nothing and adds no
+          navigation. The sections around it are ghosts, and only the band is drawn live.
+        </p>
+        <div class="pg" data-measure="page">
+          <div class="pgHead">
+            <span class="pgKey">MOTIR-4321</span>
+            <span class="pgTitle">Design the approvals row treatment</span>
+          </div>
+          <div class="pgGrid">
+            <div class="pgCol" data-measure="main">
+              <div class="ghost"><span class="ghostTitle">Description</span> — what to do</div>
+              <div class="ghost"><span class="ghostTitle">Explanation</span> — why it matters</div>
+              <div class="ghost">
+                <span class="ghostTitle">Run</span> — what ran on this work item
+              </div>
+              <div class="ghost">
+                <span class="ghostTitle">Development</span> — no pull request linked
+              </div>
+              <div class="here">
+                <div class="sc" data-measure="section">
+                  <div class="scHead">
+                    <h2 class="scTitle">Design result</h2>
+                    <span class="scGloss">— what this work item produced</span>
+                  </div>
+                  <div class="meta" data-measure="meta">
+                    <span class="metaText">version 9840d00e · asked 2 days ago</span>
+                    <span class="pillSlot"><span class="pill pill-await">Awaiting you</span></span>
+                  </div>
+                  <div class="row" data-measure="row">
+                    <span class="rowText"
+                      >Review the design full screen, then approve or request changes.</span
+                    >
+                    <a
+                      class="btn btn-primary rowPush"
+                      href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                      data-measure="control"
+                      ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-scan-eye" /></svg
+                      >Review &amp; approve</a
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="ghost"><span class="ghostTitle">Children</span></div>
+              <div class="ghost">
+                <span class="ghostTitle">Attachments</span> ·
+                <span class="ghostTitle">Activity</span>
+              </div>
+            </div>
+            <div class="pgRail">
+              <div class="ghost">
+                <span class="ghostTitle">Status</span> — In Review, with its held line and its own
+                door into the same overlay (§ The status control says so)
+              </div>
+              <div class="ghost"><span class="ghostTitle">Assignee</span> — Ada Lovelace</div>
+              <div class="ghost"><span class="ghostTitle">Reporter</span> — Zhu Yue</div>
+              <div class="ghost"><span class="ghostTitle">Priority</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════ 2 · ANATOMY ═══════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          2 · Anatomy — one container, one label: the section card holds band 1's meta and the row
+        </div>
+        <div class="grid2">
+          <div class="spec">
+            <p class="stateCap">2a · Routed to you</p>
+            <div class="sc">
+              <div class="scHead">
+                <span class="num">1</span>
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="meta">
+                <span class="num">2</span><span class="metaText">version 9840d00e</span>
+                <span class="num">3</span><span class="metaText">· asked 2 days ago</span>
+                <span class="pillSlot"
+                  ><span class="num">4</span><span class="pill pill-await">Awaiting you</span></span
+                >
+              </div>
+              <div class="row">
+                <span class="num">5</span>
+                <span class="rowText"
+                  >Review the design full screen, then approve or request changes.</span
+                >
+                <span class="pillSlot"
+                  ><span class="num">6</span
+                  ><a
+                    class="btn btn-primary"
+                    href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-scan-eye" /></svg
+                    >Review &amp; approve</a
+                  ></span
+                >
+              </div>
+            </div>
+
+            <p class="stateCap" style="margin-top: 20px">
+              2b · Routed to someone else — you may still decide it (reporter, or an admin)
+            </p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e · asked 2 days ago</span>
+                <span class="pillSlot"><span class="pill pill-await">Awaiting you</span></span>
+              </div>
+              <div class="row">
+                <span class="rowText"
+                  >Waiting on <span class="rowName">Ada Lovelace</span> — you can decide it too.
+                  Review it full screen first.</span
+                >
+                <a
+                  class="btn btn-primary rowPush"
+                  href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-scan-eye" /></svg
+                  >Review &amp; approve</a
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="anatList">
+            <div class="anat">
+              <span class="num">1</span
+              ><span
+                ><strong>The ONLY label</strong> — the section card's own title,
+                <code>designResult.title</code>. The kind is not repeated below it: on this page the
+                section already says what the decision is about.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">2</span
+              ><span
+                ><strong>Which version</strong> — <code>gate.subjectVersion</code>, sliced to 8,
+                through <code>approvalGate.designResult.meta.withVersion</code>. First in the body,
+                no box around it.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">3</span
+              ><span
+                ><strong>How long it has waited</strong> (NEW) — <code>gate.createdAt</code> as
+                <code>approvalGate.cta.asked</code>, after a middle dot. A republish raises a new
+                gate, so the clock restarts with the version.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">4</span
+              ><span
+                ><strong>State</strong> — <code>Pill tone="awaiting"</code>, <em>Awaiting you</em>,
+                right-aligned on the same line, exactly as the frame computes it.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">5</span
+              ><span
+                ><strong>The sentence</strong> (NEW) — under a hairline divider, never a box. Two
+                forms, keyed on ROUTING: <code>cta.body</code> when <code>routedToId</code> is you,
+                <code>cta.bodyRoutedElsewhere</code> naming <code>routedToLabel</code> when it is
+                someone else (2b). A null label falls back to the first form.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">6</span
+              ><span
+                ><strong>The ONE control</strong> (NEW) — <code>Button</code> primary sm as a
+                <code>Link</code>, <code>ScanEye</code> glyph, to
+                <code>withApprovalOverlay(here, &#123; itemKey, kind: 'design_result' &#125;)</code>
+                via <code>shallowPush</code>. It opens the overlay over this page; Close returns
+                here at the same scroll.</span
+              >
+            </div>
+            <p class="panelNote">
+              <strong>No inner border, no repeated title, no port, no verbs.</strong> The band is
+              the section's body. Kind, version and asked-at are all on
+              <code>ApprovalGateDTO</code>, so it promises no data a read does not produce.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════ 3 · THE STATES THE PAGE KEEPS ═══════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          3 · The states the page KEEPS — every ApprovalGateState, flush in the section
+        </div>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>gate</th>
+              <th>canDecide</th>
+              <th>the section body renders</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="rowOn">
+              <td><code>awaiting</code></td>
+              <td>true</td>
+              <td><strong>the call-to-action band</strong> (panels 1, 2, 5)</td>
+            </tr>
+            <tr>
+              <td><code>awaiting</code></td>
+              <td>false</td>
+              <td>state B — meta + pill, the port, the named waiting-on line; no verbs</td>
+            </tr>
+            <tr>
+              <td><code>approved</code></td>
+              <td>either</td>
+              <td>
+                state E — meta + pill, the pinned version's port, the record, Files kept / not kept
+              </td>
+            </tr>
+            <tr>
+              <td><code>changes_requested</code></td>
+              <td>either</td>
+              <td>state F — meta + pill, the port, the record</td>
+            </tr>
+            <tr>
+              <td><code>superseded</code></td>
+              <td>either</td>
+              <td>state G — meta + pill, the dead port, colourless, no verb</td>
+            </tr>
+            <tr>
+              <td>no gate</td>
+              <td>—</td>
+              <td>the shipped <code>DesignResultPanel</code>, unchanged (panel 4)</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="panelNote">
+          The content of each state is unchanged, and so is its order: band 1 (without the kind),
+          the port, band 3. What changes is the CHROME: the frame's bordered box and its repeated
+          <em>Design result</em> are gone, and the bands sit flush in the section body, divided by
+          hairlines. C, D, H and X no longer occur on the item page, because the only press left is
+          in the overlay. The ports are the panel as MOTIR-5488 shipped it, with the mock frame
+          shortened for the board.
+        </p>
+        <div class="grid2">
+          <div class="spec">
+            <p class="stateCap">B · awaiting — you may look, not decide</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"><span class="pill pill-await">Awaiting</span></span>
+              </div>
+              <div class="port">
+                <div class="strip">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                  ><a class="stripLink" href="#b-mock">Open in new tab</a>
+                </div>
+                <div class="mockBox">the sandboxed mock, at its 32rem height</div>
+                <div class="noteRow">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="noteLabel">Design note</span
+                  ><span class="notePath">design/work-items/design-notes.md</span
+                  ><a class="noteLink" href="#b-note">Open note</a>
+                </div>
+                <div class="chips">
+                  <span class="chip"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-commit" /></svg
+                    ><span class="mono">cafe123</span></span
+                  >
+                  <span class="chip">published by <span class="mono">MOTIR-4320</span></span>
+                </div>
+              </div>
+              <div class="row">
+                <span class="rowText">Waiting on Ada Lovelace.</span>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 8px">
+              The line NAMES the approver on <code>origin/main</code> (MOTIR-5191); only a routing
+              that resolves to nobody reads <em>Waiting on this work item's assignee.</em>
+            </p>
+          </div>
+
+          <div class="spec">
+            <p class="stateCap">E · approved — the record, in place</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"><span class="pill pill-ok">Approved</span></span>
+              </div>
+              <div class="port">
+                <div class="strip">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                  ><a class="stripLink" href="#e-mock">Open in new tab</a>
+                </div>
+                <div class="mockBox">
+                  the version that was approved — pinned, not the current one
+                </div>
+                <div class="noteRow">
+                  <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-file-text" /></svg
+                  ><span class="noteLabel">Design note</span
+                  ><span class="notePath">design/work-items/design-notes.md</span
+                  ><a class="noteLink" href="#e-note">Open note</a>
+                </div>
+                <div class="chips">
+                  <span class="chip"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-commit" /></svg
+                    ><span class="mono">cafe123</span></span
+                  >
+                  <span class="chip">published by <span class="mono">MOTIR-4320</span></span>
+                </div>
+              </div>
+              <div class="rec">
+                <span class="recName">Ada Lovelace</span>
+                <span>14/09/2026, 10:12</span>
+                <span class="recVersion">version 9840d00e</span>
+                <span class="kept">Files kept</span>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 8px">
+              <strong>This is where the page lands after a decision made in the overlay</strong>,
+              with no reload. See the notes' planning flag 1 for what must reach this section and
+              the status rail.
+            </p>
+          </div>
+
+          <div class="spec">
+            <p class="stateCap">F · changes requested — the record, in place</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"
+                  ><span class="pill pill-changes">Changes requested</span></span
+                >
+              </div>
+              <div class="port">
+                <div class="empty">
+                  <span class="emptyIc"
+                    ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-image-off" /></svg
+                  ></span>
+                  <div>
+                    <p class="emptyTitle">No design result published yet</p>
+                    <p class="emptyBody">
+                      A design result is published only when other work waits on this design — its
+                      agent then publishes the mock and the note. With nothing waiting, the pull
+                      request is where the design is reviewed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="rec">
+                <span class="recName">Ada Lovelace</span>
+                <span>14/09/2026, 10:12</span>
+                <span class="recVersion">version 9840d00e</span>
+                <span>the agent will publish a new version</span>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 8px">
+              The version that was sent back is not pinned, so once its bytes are reclaimed the port
+              shows the panel's own empty state. <strong>Drawn as the target:</strong> the shipped
+              frame also shows state X's <em>You cannot approve what cannot be shown.</em> under
+              this decided record — MOTIR-5551.
+            </p>
+          </div>
+
+          <div class="spec">
+            <p class="stateCap">G · superseded — the question was withdrawn</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="meta">
+                <span class="metaText">version 9840d00e</span>
+                <span class="pillSlot"><span class="pill pill-gone">Withdrawn</span></span>
+              </div>
+              <div class="dead">
+                <p class="deadLine">
+                  A newer design was published, so this question was withdrawn.
+                </p>
+                <p class="deadCite">Nobody decided it. The current version is above.</p>
+              </div>
+              <div class="rec">
+                <span>No decision · no one to attribute</span>
+                <span>withdrawn 13/09/2026, 11:00</span>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 8px">
+              Colourless, verb-less, and never read as a decision somebody made.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════ 4 · NO GATE ═══════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">4 · No gate at all — the shipped DesignResultPanel, unchanged</div>
+        <p class="panelNote">
+          Already one container and one label, so nothing here changes. The panel is as MOTIR-5488
+          shipped it: the mock frame first, the note one link away
+          (<code>design-result--what-to-review.mock.html</code>).
+        </p>
+        <div class="grid2">
+          <div class="spec">
+            <p class="stateCap">4a · A result, no gate</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="strip">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="stripPath">design/work-items/approval-control.mock.html</span
+                ><a class="stripLink" href="#n-mock">Open in new tab</a>
+              </div>
+              <div class="mockBox">the sandboxed mock, at its 32rem height</div>
+              <div class="noteRow">
+                <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-file-text" /></svg
+                ><span class="noteLabel">Design note</span
+                ><span class="notePath">design/work-items/design-notes.md</span
+                ><a class="noteLink" href="#n-note">Open note</a>
+              </div>
+              <div class="chips">
+                <span class="chip"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-commit" /></svg
+                  ><span class="mono">cafe123</span></span
+                >
+                <span class="chip">published by <span class="mono">MOTIR-4320</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="stateCap">4b · A design card with nothing published</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Design result</h2>
+                <span class="scGloss">— what this work item produced</span>
+              </div>
+              <div class="empty">
+                <span class="emptyIc"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-image-off" /></svg
+                ></span>
+                <div>
+                  <p class="emptyTitle">No design result published yet</p>
+                  <p class="emptyBody">
+                    A design result is published only when other work waits on this design — its
+                    agent then publishes the mock and the note. With nothing waiting, the pull
+                    request is where the design is reviewed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════ 5 · NARROW ═══════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          5 · Narrow (&lt; md), in zh — the row stacks, the control keeps its width
+        </div>
+        <div class="grid2">
+          <div class="narrow" data-measure="narrow">
+            <div class="sc" data-measure="narrowSection">
+              <div class="scHead">
+                <h2 class="scTitle">设计结果</h2>
+                <span class="scGloss">— 这个工作项产出的内容</span>
+              </div>
+              <div class="meta">
+                <span class="metaText">版本 9840d00e · 2天前发起</span>
+                <span class="pillSlot"><span class="pill pill-await">等待你处理</span></span>
+              </div>
+              <div class="row rowStack">
+                <span class="rowText">全屏审阅设计后，再批准或要求修改。</span>
+                <a
+                  class="btn btn-primary rowPush"
+                  href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                  data-measure="narrowControl"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-scan-eye" /></svg
+                  >审阅并批准</a
+                >
+              </div>
+            </div>
+          </div>
+          <div class="narrow">
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">设计结果</h2>
+                <span class="scGloss">— 这个工作项产出的内容</span>
+              </div>
+              <div class="meta">
+                <span class="metaText">版本 9840d00e · 2天前发起</span>
+                <span class="pillSlot"><span class="pill pill-await">等待你处理</span></span>
+              </div>
+              <div class="row rowStack">
+                <span class="rowText"
+                  >等待
+                  <span class="rowName">Ada Lovelace</span>
+                  处理——你也可以做出决定。请先全屏审阅。</span
+                >
+                <a
+                  class="btn btn-primary rowPush"
+                  href="?approval=MOTIR-4321&amp;approvalKind=design_result"
+                  ><svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-scan-eye" /></svg
+                  >审阅并批准</a
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panelNote">
+          The meta line wraps with its pill. The sentence takes the full width and the control drops
+          to its own line, left-aligned (<code>md:ml-auto</code>), at its intrinsic width. It is not
+          stretched, because a full-width primary on a phone reads as the page's main action.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
