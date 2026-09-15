@@ -122,13 +122,14 @@ export function DesignResultSection({
 
   if (!shown) return <DesignResultPanel evidence={evidence} isDesignCard={isDesignCard} />;
 
-  // ⚠️ THE BAND INVITES A REVIEW ONLY WHEN THERE IS SOMETHING TO REVIEW. A gate
-  // can still read `awaiting` after its result was WITHDRAWN (the row survives;
-  // `evidence` is the CURRENT result, null once withdrawn). An invitation to
-  // review a design that is gone would be a door to nothing, so that case keeps
-  // the frame, flush, whose port draws the panel's own empty state and whose
-  // port-failed alert says why nothing is pressable — what the page drew before
-  // this story, minus the verbs.
+  // ⚠️ THE BAND INVITES A REVIEW ONLY WHEN THERE IS SOMETHING TO REVIEW.
+  // `evidence` is the CURRENT result, null once withdrawn. Since MOTIR-5574 a
+  // withdrawal retires its awaiting gate in the same transaction, so this case
+  // should no longer arise from the withdraw route — the guard stays because an
+  // invitation to review a design that is gone would be a door to nothing, and a
+  // stale read or any future path that leaves the two out of step must not draw
+  // one. It keeps the frame, flush, whose port draws the panel's own empty state
+  // and whose port-failed alert says why nothing is pressable.
   if (shown.state === 'awaiting' && canDecide && evidence !== null) {
     return (
       <CallToActionBand

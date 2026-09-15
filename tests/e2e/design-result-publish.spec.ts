@@ -211,6 +211,22 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // withdrawing is a judgement somebody MAKES, so the record must be able
       // to name a person. `page.request` carries the signed-in context's
       // cookies, which is exactly that person.
+      //
+      // The publish raised a question routed to this reviewer (the card's
+      // reporter). Assert it is on the To-approve tab FIRST, so the absence
+      // asserted after the withdrawal cannot pass on an empty queue.
+      const toApproveTab = page.getByRole('link', { name: /To approve/ });
+      const queuedRow = page
+        .getByRole('table', { name: 'To approve' })
+        .getByRole('link', { name: new RegExp(`^${seed.publishedKey}`) });
+      await page.goto('/workbench?tab=approvals');
+      await expect(toApproveTab).toHaveAttribute('aria-current', 'page');
+      await expect(queuedRow).toBeVisible();
+      // Back onto the card, so the `reload()` below reloads the card the
+      // withdrawal empties rather than the workbench.
+      await page.goto(`/items/${seed.publishedKey}`);
+      await expect(page.getByRole('heading', { name: seed.publishedTitle })).toBeVisible();
+
       const response = await page.request.delete(
         `/api/work-items/${seed.publishedKey}/design-evidence`,
         { data: { reason: 'Published against the wrong card.' } },
@@ -222,7 +238,35 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // A withdrawn result is not current, so the panel falls back to the empty
       // state — the row survives, which is settled law in this domain, but the
       // card stops claiming a design it did not earn.
-      await expect(page.getByText('No design result published yet')).toBeVisible();
+      //
+      // ⚠️ AMENDED BY MOTIR-5574. This line used to assert the panel's empty state
+      // ('No design result published yet'). That held only because the gate stayed
+      // `awaiting` after the withdrawal and the frame's port drew the empty panel.
+      // With the gate retired, the section is state `G`, as
+      // `design/work-items/design-notes.md` § the state checklist draws for a
+      // `superseded` gate: the Withdrawn pill and the "no decision" record, with no
+      // verb and no port. What must hold is unchanged: the card offers no design to
+      // approve.
+      const designSection = page.getByRole('heading', { name: 'Design result', level: 2 });
+      await expect(designSection).toBeVisible();
+      // Scoped to the live `main` subtree, never page-rooted (MOTIR-5037): the
+      // record line carries no role of its own.
+      await expect(
+        page.getByRole('main').getByText('No decision · no one to attribute'),
+      ).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Review & approve' })).toHaveCount(0);
+      await expect(page.locator('iframe')).toHaveCount(0);
+
+      // MOTIR-5574: the withdrawal retires the question the publish raised, so
+      // the reviewer is no longer asked to approve a design that is not there.
+      // The empty-state heading is the authoritative signal that the tab's
+      // streamed body has rendered, so the absent row is a real absence.
+      await page.goto('/workbench?tab=approvals');
+      await expect(toApproveTab).toHaveAttribute('aria-current', 'page');
+      await expect(
+        page.getByRole('heading', { name: 'Nothing is waiting on your approval' }),
+      ).toBeVisible();
+      await expect(queuedRow).toHaveCount(0);
       await beat();
     });
   });
