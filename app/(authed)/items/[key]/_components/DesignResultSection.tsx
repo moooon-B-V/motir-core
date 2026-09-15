@@ -170,7 +170,14 @@ export function DesignResultSection({
 }
 
 /** The frame's `onDecide` slot is required, and on this page nothing can call it:
- *  the verb set is empty. It answers nothing rather than pretending to decide. */
+ *  the verb set is empty. It answers nothing rather than pretending to decide.
+ *
+ *  ⚠️ UNREACHABLE BY CONSTRUCTION, SO ITS COVERAGE IS AN IGNORE THAT NAMES ITS
+ *  INVARIANT. The invariant — no approve and no request-changes control exists in
+ *  this section for ANY gate state × `canDecide` — is asserted over the whole
+ *  enum by `tests/components/design-result-section-story-gate.test.tsx`
+ *  (MOTIR-5230). A test that could call this would be a test that found a verb. */
+/* v8 ignore next 3 */
 async function noDecisionHere(): Promise<null> {
   return null;
 }
