@@ -117,8 +117,8 @@ test.describe('a done design is final until a person reopens it', () => {
       await page.getByRole('button', { name: 'Yes, Approve' }).click();
       // Rendered from the gate row the decide action RETURNED — the authoritative
       // signal that the decision is recorded.
-      await expect(page.getByText('Approved', { exact: true })).toBeVisible();
-      await expect(page.getByText('Done', { exact: true })).toBeVisible();
+      await expect(page.getByRole('main').getByText('Approved', { exact: true })).toBeVisible();
+      await expect(page.getByRole('main').getByText('Done', { exact: true })).toBeVisible();
       await expect
         .poll(async () => (await designItem(seed)).status, { message: 'the approval commits' })
         .toBe('done');
@@ -167,7 +167,7 @@ test.describe('a done design is final until a person reopens it', () => {
       await expect(port).toBeVisible();
       await expect(port.locator('iframe').first()).toBeVisible();
       // A new question, routed to the reviewer again — decided again, as the first was.
-      await expect(page.getByText('Awaiting you', { exact: true })).toBeVisible();
+      await expect(page.getByRole('main').getByText('Awaiting you', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
     });
   });

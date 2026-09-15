@@ -248,7 +248,7 @@ describe('(3) door parity — every door that reaches the guard answers DESIGN_C
     });
     const mcpCode = (result: Awaited<ReturnType<typeof runPublishDesignResult>>) => ({
       status: result.isError ? 409 : 200,
-      code: toolText(result).split(':')[0],
+      code: toolText(result).split(':')[0] ?? '',
     });
 
     const doors: Array<[string, () => Promise<{ status: number; code: string }>]> = [

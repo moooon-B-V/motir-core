@@ -337,18 +337,32 @@ async function assertCardOpen(
   ctx: ServiceContext,
   tx?: Prisma.TransactionClient,
 ): Promise<void> {
-  let current: WorkItem = item;
-  if (tx) {
-    await workItemRepository.lockById(item.id, tx);
-    current = (await workItemRepository.findById(item.id, tx)) ?? item;
+  // ⚠️ The status vocabulary is a policy-gated read, so it is ALWAYS given a bound
+  // transaction — the caller's, or one opened here. Unbound under the runtime role
+  // it returns no statuses and raises nothing, so every card would read as open
+  // and the refusal would never fire (`tests/rls/call-site-guard.test.ts`).
+  if (!tx) {
+    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (bound) =>
+      assertStatusOpen(item, ctx, bound),
+    );
   }
+  await workItemRepository.lockById(item.id, tx);
+  const current = (await workItemRepository.findById(item.id, tx)) ?? item;
+  return assertStatusOpen(current, ctx, tx);
+}
+
+async function assertStatusOpen(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
   const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-    [current.projectId],
+    [item.projectId],
     ctx.workspaceId,
     tx,
   );
-  if (isTerminalStatus(current, terminalByProject)) {
-    throw new DesignCardClosedError(current.identifier, current.status);
+  if (isTerminalStatus(item, terminalByProject)) {
+    throw new DesignCardClosedError(item.identifier, item.status);
   }
 }
 
