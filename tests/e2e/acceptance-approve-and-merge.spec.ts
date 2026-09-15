@@ -456,14 +456,22 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
         .context()
         .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
       await page.goto('/workbench?tab=approvals');
+      // Picked by its Open work item button, NOT by the kind label: in zh each merge gate's
+      // subject line reads `… · 拉取请求`, so the label is a substring of all three of the
+      // card's rows (CI run 34979375067) — only the approve-and-merge row has the button.
       const row = page
         .getByRole('main')
         .getByTestId(/^approval-row-/)
         .filter({ hasText: seed.zh.identifier })
-        .filter({ hasText: zh.workbench.approvals.pullRequest.kindLabel });
-      await expect(row.getByText(zh.workbench.approvals.pullRequest.kindLabel)).toBeVisible({
-        timeout: 60_000,
-      });
+        .filter({
+          has: page.getByRole('button', {
+            name: zh.workbench.approvals.pullRequest.openWorkItem,
+            exact: true,
+          }),
+        });
+      await expect(
+        row.getByText(zh.workbench.approvals.pullRequest.kindLabel, { exact: true }),
+      ).toBeVisible({ timeout: 60_000 });
       // The row's decide-cell control, for the reason the English chapter gives.
       await row
         .getByRole('button', { name: zh.workbench.approvals.pullRequest.openWorkItem, exact: true })
