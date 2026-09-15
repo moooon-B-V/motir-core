@@ -1,5 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
@@ -11,10 +10,23 @@ import {
   type HowToTestSeed,
 } from './_helpers/how-to-test-seed';
 
-// A STORY'S PULL REQUESTS AND ITS RICH-TEXT HOW TO TEST, AS ONE GATE BLOCK —
-// AND THE ACCEPTANCE RECEIPT FOR IT (Story MOTIR-4906 · Subtask MOTIR-5338).
+// A STORY'S PULL REQUESTS AND ITS RICH-TEXT HOW TO TEST, AS ONE GATE BLOCK
+// (Story MOTIR-4906 · Subtask MOTIR-5338).
 //
-// ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
+// ── PROMOTED FROM THE ACCEPTANCE LANE (MOTIR-5487) ──────────────────────────
+//
+// This was `acceptance-how-to-test.spec.ts`, the receipt for MOTIR-4906. That
+// story is `done`, so its receipt is frozen and, per
+// docs/decisions/acceptance-receipt-lifecycle.md §3, the spec leaves the lane
+// rather than being edited in place. It went RED when Story MOTIR-4909
+// registered `pull_request_approval` and gave the Development frame its verbs —
+// the one stale assertion, "no decision verb exists anywhere in the card", now
+// reads what the frame offers the person it is routed to. Every other
+// assertion is kept; the receipt's `chapter()` / `beat()` pacing and its
+// `acceptanceStory()` tag are gone (`test.step` keeps the structure).
+// Disposition recorded in docs/acceptance-lane-triage.md.
+//
+// ── WHAT IT PROTECTS ────────────────────────────────────────────────────────
 //
 // A person about to approve a story's merge has ONE place to look: the
 // Development block. It holds the story's pull requests and, in the same card,
@@ -27,14 +39,14 @@ import {
 //
 // ── SCOPE ───────────────────────────────────────────────────────────────────
 //
-// No overlay is opened (MOTIR-5214 / 5215) and nothing is approved or merged
-// from the frame (MOTIR-4909). The `pull_request_approval` kind is unregistered,
-// so its gate row is seeded — see `how-to-test-seed.ts` for the full ledger of
-// what is a service call and what is a row.
+// No overlay is opened (MOTIR-5214 / 5215), and nothing is pressed: the frame's
+// verbs are asserted present, never used. Approving and merging from the frame
+// is `acceptance-approve-and-merge.spec.ts` (MOTIR-4909). The gate row is still
+// seeded — see `how-to-test-seed.ts` for the full ledger of what is a service
+// call and what is a row.
 //
 // ⚠️ EVERY WAIT IS AUTHORITATIVE — a role, a count, a URL, the copy control's
-// own `data-state`. No timed wait and no fixed sleep anywhere in this
-// file; the holds are `chapter()` / `beat()`'s, taken after the assertion.
+// own `data-state`. No timed wait and no fixed sleep anywhere in this file.
 
 test.describe.configure({ timeout: 180_000 });
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
@@ -67,16 +79,10 @@ test.describe('a story is tested from one Development block', () => {
 
   test("a story's pull requests and How to test are one gate block, a command copies, a child points to its story", async ({
     page,
-    chapter,
-    beat,
-    acceptanceStory,
   }) => {
-    // The receipt belongs to the STORY, not to this subtask.
-    acceptanceStory('MOTIR-4906');
-
     await signIn(page, seed.email, seed.password);
 
-    await chapter('The block: pull requests and How to test in one Development card', async () => {
+    await test.step('The block: pull requests and How to test in one Development card', async () => {
       await page.goto(`/items/${seed.story.identifier}`);
       const card = developmentCard(page);
       await expect(card).toHaveCount(1, { timeout: 60_000 });
@@ -113,35 +119,29 @@ test.describe('a story is tested from one Development block', () => {
       // The other reported none, and says so.
       await expect(api.getByText('No preview reported', { exact: true })).toBeVisible();
       await expect(api.getByRole('link', { name: previewHref })).toHaveCount(0);
-      await part.scrollIntoViewIfNeeded();
     });
-    await beat();
 
-    await chapter(
-      'Click to copy: a command in the body, then a repository fetch line',
-      async () => {
-        const part = howToTest(page);
-        const body = part.locator('.motir-how-to-test');
-        const bodyControls = body.getByRole('button', { name: 'Copy code', exact: true });
-        await expect(bodyControls).toHaveCount(2);
+    await test.step('Click to copy: a command in the body, then a repository fetch line', async () => {
+      const part = howToTest(page);
+      const body = part.locator('.motir-how-to-test');
+      const bodyControls = body.getByRole('button', { name: 'Copy code', exact: true });
+      await expect(bodyControls).toHaveCount(2);
 
-        await bodyControls.nth(1).scrollIntoViewIfNeeded();
-        // EXACT strings — the tab, the quotes, the arrow and the newlines included.
-        expect(await copyVia(page, bodyControls.nth(1))).toBe(COMMAND_RUN);
-        expect(await copyVia(page, bodyControls.nth(0))).toBe(COMMAND_SETUP);
+      await bodyControls.nth(1).scrollIntoViewIfNeeded();
+      // EXACT strings — the tab, the quotes, the arrow and the newlines included.
+      expect(await copyVia(page, bodyControls.nth(1))).toBe(COMMAND_RUN);
+      expect(await copyVia(page, bodyControls.nth(0))).toBe(COMMAND_SETUP);
 
-        const web = part.getByRole('group', { name: `${seed.webPr.repo} · #${seed.webPr.number}` });
-        const fetchControl = web.getByRole('button', { name: 'Copy code', exact: true });
-        await expect(fetchControl).toHaveCount(1);
-        await fetchControl.scrollIntoViewIfNeeded();
-        expect(await copyVia(page, fetchControl)).toBe(
-          'git fetch origin motir/run-20260913-120000 && git checkout motir/run-20260913-120000',
-        );
-      },
-    );
-    await beat();
+      const web = part.getByRole('group', { name: `${seed.webPr.repo} · #${seed.webPr.number}` });
+      const fetchControl = web.getByRole('button', { name: 'Copy code', exact: true });
+      await expect(fetchControl).toHaveCount(1);
+      await fetchControl.scrollIntoViewIfNeeded();
+      expect(await copyVia(page, fetchControl)).toBe(
+        'git fetch origin motir/run-20260913-120000 && git checkout motir/run-20260913-120000',
+      );
+    });
 
-    await chapter('The one gate: both pull requests and How to test under one frame', async () => {
+    await test.step('The one gate: both pull requests and How to test under one frame', async () => {
       await openMergeGate(seed);
       await page.reload();
 
@@ -160,22 +160,27 @@ test.describe('a story is tested from one Development block', () => {
       await expect(card.getByText('Awaiting you', { exact: true })).toBeVisible();
 
       // How to test carries NO control of its own: every button in it is a copy
-      // control, and no decision verb exists anywhere in the card.
+      // control.
       const part = howToTest(page);
       const buttons = part.getByRole('button');
       const copies = part.getByRole('button', { name: 'Copy code', exact: true });
       await expect(copies).toHaveCount(4);
       await expect(buttons).toHaveCount(4);
-      await expect(card.getByRole('button', { name: /^(Approve|Request changes)$/ })).toHaveCount(
-        0,
+      // The decision verbs belong to the FRAME, once each, for the person it is
+      // routed to (MOTIR-4909 registered the kind). Until then this read "no
+      // decision verb exists anywhere in the card"; that is the one assertion
+      // the promotion changed.
+      await expect(
+        card.getByRole('button', { name: 'Approve and merge', exact: true }),
+      ).toHaveCount(1);
+      await expect(card.getByRole('button', { name: 'Request changes', exact: true })).toHaveCount(
+        1,
       );
       // No overlay is opened.
       await expect(page.getByRole('dialog')).toHaveCount(0);
-      await port.scrollIntoViewIfNeeded();
     });
-    await beat();
 
-    await chapter('A child card points to the story it was tested as part of', async () => {
+    await test.step('A child card points to the story it was tested as part of', async () => {
       await page.goto(`/items/${seed.child.identifier}`);
       const card = developmentCard(page);
       await expect(card).toHaveCount(1, { timeout: 60_000 });
@@ -183,34 +188,28 @@ test.describe('a story is tested from one Development block', () => {
       // The child repeats nothing: no How to test part of its own.
       await expect(howToTest(page)).toHaveCount(0);
       const pointer = card.getByRole('link', { name: seed.story.identifier, exact: true });
-      await pointer.scrollIntoViewIfNeeded();
-      await beat();
 
       await pointer.click();
       await expect(page).toHaveURL(new RegExp(`/items/${seed.story.identifier}$`));
       await expect(howToTest(page)).toHaveCount(1, { timeout: 60_000 });
     });
 
-    await chapter(
-      'One section: no How to test heading of its own, no pull-request link inside it',
-      async () => {
-        // No section in the stack is headed How to test — it is a part of Development.
-        await expect(
-          page.getByRole('heading', { level: 2, name: 'How to test', exact: true }),
-        ).toHaveCount(0);
-        const part = howToTest(page);
-        await expect(page.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
+    await test.step('One section: no How to test heading of its own, no pull-request link inside it', async () => {
+      // No section in the stack is headed How to test — it is a part of Development.
+      await expect(
+        page.getByRole('heading', { level: 2, name: 'How to test', exact: true }),
+      ).toHaveCount(0);
+      const part = howToTest(page);
+      await expect(page.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
 
-        // The pull-request links live on the rows, once each — never inside How to test.
-        for (const pr of [seed.webPr, seed.apiPr]) {
-          await expect(developmentCard(page).locator(`a[href="${pr.url}"]`)).toHaveCount(1);
-          await expect(part.locator(`a[href="${pr.url}"]`)).toHaveCount(0);
-        }
-        await part.scrollIntoViewIfNeeded();
-      },
-    );
+      // The pull-request links live on the rows, once each — never inside How to test.
+      for (const pr of [seed.webPr, seed.apiPr]) {
+        await expect(developmentCard(page).locator(`a[href="${pr.url}"]`)).toHaveCount(1);
+        await expect(part.locator(`a[href="${pr.url}"]`)).toHaveCount(0);
+      }
+    });
 
-    await chapter('Record missing: the empty state names the run that owes it', async () => {
+    await test.step('Record missing: the empty state names the run that owes it', async () => {
       await page.goto(`/items/${seed.owing.identifier}`);
       const card = developmentCard(page);
       await expect(card).toHaveCount(1, { timeout: 60_000 });
@@ -224,8 +223,6 @@ test.describe('a story is tested from one Development block', () => {
       );
       // It reads differently from a repository that reported no deployment.
       await expect(part.getByText('No preview reported')).toHaveCount(0);
-      await part.scrollIntoViewIfNeeded();
     });
-    await beat();
   });
 });
