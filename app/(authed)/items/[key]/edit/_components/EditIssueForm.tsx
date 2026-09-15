@@ -66,7 +66,7 @@ export function EditIssueForm({
   aiConfigured = false,
   heldTransitions,
 }: EditIssueFormProps) {
-  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses);
+  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, issue.status);
   const router = useRouter();
   const t = useTranslations('issueViews');
   const tc = useTranslations('common');

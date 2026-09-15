@@ -121,4 +121,17 @@ describe('useStatusHeld', () => {
       expect.objectContaining({ statusKey: 'approved', gateRaised: false }),
     ]);
   });
+
+  it('never shows a line for the status the card ALREADY has, whatever moved it', () => {
+    const read = [held({}), held({ statusKey: 'approved', statusLabel: 'Approved' })];
+    const { result, rerender } = renderHook(({ status }) => useStatusHeld(read, statuses, status), {
+      initialProps: { status: 'in_review' },
+    });
+    expect(result.current.lines.map((l) => l.statusKey)).toEqual(['done', 'approved']);
+
+    // An approval repaints the page to Done in place — no call through the hook.
+    rerender({ status: 'done' });
+    expect(result.current.lines.map((l) => l.statusKey)).toEqual(['approved']);
+    expect(result.current.held).toEqual([{ statusKey: 'approved', waitingOn: 'decision' }]);
+  });
 });

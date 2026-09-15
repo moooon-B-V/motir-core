@@ -199,7 +199,6 @@ export function CoreFieldsPanel({
   const { can } = useProjectAccess();
   const canEdit = can('work_item:edit');
   const readOnly = !canEdit;
-  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses);
   const [editing, setEditing] = useState<EditableKey | null>(null);
   const [updatedAt, setUpdatedAt] = useState(item.updatedAt);
   const [dueDate, setDueDate] = useState(item.dueDate ? item.dueDate.slice(0, 10) : '');
@@ -234,6 +233,9 @@ export function CoreFieldsPanel({
   // pull that value out from under them; the reconcile above settles both the
   // instant a server render lands.
   const eff = { ...item, status: pageStatus, ...overrides };
+  // The held moves, filtered by the status the card shows NOW — an approval that
+  // repaints the page in place moves it without going through this panel.
+  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, eff.status);
   const effParent = parentOverride !== undefined ? parentOverride : parent;
 
   // THE FOLDER FIELD (Story MOTIR-5309 · MOTIR-5377). Its value is the page's

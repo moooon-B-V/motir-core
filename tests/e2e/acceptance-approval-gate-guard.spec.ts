@@ -225,8 +225,10 @@ test.describe('a pending approval holds the move it performs, and says so where 
 
     await chapter('The approval already happened, so a person can reopen it by hand', async () => {
       await page.goto(`/items/${seed.designKey}`);
-      const card = statusCard(page);
-      await expect(card.getByRole('status')).toHaveCount(0);
+      // Nothing is held any more: the approval was decided, so no held line renders.
+      await expect(
+        page.getByRole('main').getByRole('status').filter({ hasText: heldDone }),
+      ).toHaveCount(0);
       await page
         .getByRole('main')
         .getByRole('button', { name: `Edit ${en.issueViews.status}`, exact: true })

@@ -48,6 +48,12 @@ function seedSignature(held: HeldTransitionDTO[]): string {
 export function useStatusHeld(
   initial: HeldTransitionDTO[] | undefined,
   statuses: WorkflowStatusDto[],
+  /**
+   * The status the card has NOW, whatever moved it — this control, an approval
+   * repainting the page in place, a server refresh. Nothing is held about a status
+   * the card already has, so its line never renders.
+   */
+  currentStatus?: string,
 ) {
   const seed = initial ?? EMPTY;
   const [lines, setLines] = useState<StatusHeldLine[]>(() => toLines(seed));
@@ -90,10 +96,18 @@ export function useStatusHeld(
     setLines((prev) => prev.filter((l) => l.statusKey !== toStatusKey));
   }, []);
 
+  // ⚠️ Filtered at READ time, not only on this control's own moves: an approval
+  // decided in the overlay repaints the status in place with no call through here,
+  // and a line left for the status the card now has reads as a held move it has
+  // already made (`approval-gate-repaint.spec.ts`).
+  const visible = useMemo(
+    () => (currentStatus ? lines.filter((l) => l.statusKey !== currentStatus) : lines),
+    [lines, currentStatus],
+  );
   const held = useMemo(
-    () => lines.map((l) => ({ statusKey: l.statusKey, waitingOn: l.waitingOn })),
-    [lines],
+    () => visible.map((l) => ({ statusKey: l.statusKey, waitingOn: l.waitingOn })),
+    [visible],
   );
 
-  return { lines, held, onRefused, onMoved };
+  return { lines: visible, held, onRefused, onMoved };
 }

@@ -356,7 +356,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const ready = props.state === 'ready' ? props.data : null;
   // The moves an approval HOLDS (MOTIR-5528) — above the early returns for the
   // same hook-order reason; empty until the peek is `ready`.
-  const statusHeld = useStatusHeld(ready?.heldTransitions, ready?.workflow.statuses ?? []);
+  const statusHeld = useStatusHeld(
+    ready?.heldTransitions,
+    ready?.workflow.statuses ?? [],
+    edit.effective?.status ?? ready?.status,
+  );
   const labelEdit = useLabelEditing({
     workItemId: ready?.id ?? '',
     projectKey: ready?.projectIdentifier ?? '',
