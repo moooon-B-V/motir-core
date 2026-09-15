@@ -601,6 +601,15 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'plan-timeline.spec.ts': 14.0,
   'planning-anchor-level.spec.ts': 11.0,
   'plans-review.spec.ts': 14.8,
+  // MOTIR-5539. Promoted from the acceptance lane (it was
+  // `acceptance-pr-merge-mode.spec.ts`). ESTIMATED, not measured — it has never
+  // run in this lane, and its acceptance-lane runtime is the receipt's `beat()`
+  // pacing, which the promotion removed. One test: two sign-ins, three reloads or
+  // navigations, three PATCHes and one routed failure — heavier than
+  // `design-approval.spec.ts` (4.2), so recorded at 12.0 as a conservative
+  // first-run cost. Re-measure from the first green `playwright-report-bulk-*`
+  // artifact that includes it.
+  'pr-merge-mode.spec.ts': 12.0,
   'profile.spec.ts': 11.4,
   'project-access.spec.ts': 9.7,
   'project-details.spec.ts': 7.7,

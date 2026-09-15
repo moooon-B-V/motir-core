@@ -1,14 +1,26 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './_helpers/acceptance-video';
+import { expect, test } from './_helpers/promoted-regression';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 
-// THE MERGE SETTING A PERSON CAN FIND AND CHANGE — THE ACCEPTANCE RECEIPT
+// THE MERGE SETTING A PERSON CAN FIND AND CHANGE — the story's end-to-end walk
 // (Story MOTIR-4880 · Subtask MOTIR-5183), walking
 // `design/projects/approvals.mock.html` panels 6–8.
+//
+// ⚠️ PROMOTED OUT OF THE ACCEPTANCE LANE (Bug MOTIR-5539, 2026-09-15). This was
+// `acceptance-pr-merge-mode.spec.ts`, the story's acceptance RECEIPT. The story is
+// `done`, so its receipt is frozen and — per
+// `docs/decisions/acceptance-receipt-lifecycle.md` §3 — the spec leaves that lane.
+// It is PROMOTED rather than retired because no main-lane spec walks the merge
+// setting, and nothing it asserts needs a cloud-on flag: the Approvals room reads
+// none. The promotion is the one-line import swap (`_helpers/promoted-regression`),
+// so every `chapter()` and `beat()` stands and the MOVE touched no assertion. The
+// one that had gone stale — the "Motir does not merge pull requests yet" notice,
+// false since MOTIR-4882 merged — was updated AFTER the move, as a regression
+// test, which is the ordering MOTIR-3009 set.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -130,11 +142,13 @@ test('a manager finds the merge setting, changes it and it holds — and a membe
     await expect(option(page, AUTO)).toContainText(
       'When its checks pass, Motir merges the pull request without asking anyone.',
     );
-    // `getByRole`, not a page-rooted `getByText`: the accessibility tree excludes a
-    // streamed or outgoing subtree, so the notice cannot match twice (MOTIR-5037).
+    // MOTIR-5539: the not-yet notice is GONE. Motir merges on this setting since
+    // MOTIR-4882, so the hints above are the whole account. (Updated after the
+    // promotion, as a regression test — the receipt asserted it was visible.)
+    // `getByRole`, not a page-rooted `getByText` (MOTIR-5037).
     await expect(
-      page.getByRole('paragraph').filter({ hasText: /Motir does not merge pull requests yet/ }),
-    ).toBeVisible();
+      page.getByRole('paragraph').filter({ hasText: /does not merge pull requests yet/ }),
+    ).toHaveCount(0);
     await expect(option(page, ASK)).toHaveAttribute('aria-checked', 'true');
     await beat();
   });

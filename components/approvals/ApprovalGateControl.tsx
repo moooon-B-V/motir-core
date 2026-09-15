@@ -755,8 +755,14 @@ export function ApprovalGateControl({
           is not a subject that failed to draw. Nothing reports from inside the
           dead port, so this is belt-and-braces today — and it is the kind of
           belt that stops a later `G` port which DOES render something from
-          accidentally inheriting `X`'s alert. */}
-      {portFailed && !withdrawn ? <PortFailedAlert flush={flush} /> : null}
+          accidentally inheriting `X`'s alert.
+          ⚠️ AND SUPPRESSED UNDER `E` / `F` (Bug MOTIR-5551). The alert's whole
+          meaning is *the verbs are withheld*, and a decided frame has none to
+          withhold. This one is NOT belt-and-braces: a decided version's bytes
+          are routinely gone (only an approval pins, §6c), the panel then
+          reports `failed` over its own empty state, and the alert told a
+          reader they could not approve what had already been decided. */}
+      {portFailed && !decided && !withdrawn ? <PortFailedAlert flush={flush} /> : null}
 
       {phase.kind === 'refused' ? <RefusalAlert refusal={phase.refusal} flush={flush} /> : null}
 

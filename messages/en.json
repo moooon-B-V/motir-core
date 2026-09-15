@@ -8391,7 +8391,6 @@
     "mergeMode": {
       "title": "Merging pull requests",
       "desc": "What happens when a pull request for this project’s work is ready to merge. A project whose repositories Motir hosts starts at <strong>Merge automatically</strong>; a project holding any repository of your own starts at <strong>Ask before merging</strong>.",
-      "notYet": "Motir does not merge pull requests yet. Until it does, every pull request is merged on your git host by a person, whichever option is chosen here.",
       "manual": {
         "label": "Ask before merging",
         "hint": "When its checks pass, a person approves the pull request in Motir before it is merged. Nothing reaches your default branch without that yes."
