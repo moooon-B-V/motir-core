@@ -7632,3 +7632,309 @@ and records the item page's double label as outside its surface — resolved her
    `tests/approval-gate-one-language.test.ts` is unaffected. **MOTIR-5229** names the input in its
    criteria, and **MOTIR-5215**'s _"does not modify `ApprovalGateControl`"_ reads as _no new state, verb,
    band or decide path_. The Workbench row and the overlay keep `inline` and `fill`.
+
+---
+
+## ⭐ Plan history — every plan that shaped this item, oldest first (Story MOTIR-5542 · MOTIR-5545 — `plan-history.mock.html`)
+
+**The asset:** `plan-history.mock.html`, a two-file set (`docs/decisions/design-result.md` AMENDMENT 4 —
+no `.png`; the card's original three-file criterion was amended on the record, 2026-09-15). **Cards:**
+MOTIR-5545 draws it. **MOTIR-5547** builds the section and is `blocked_by` this card. **MOTIR-5546**
+builds the read it renders. **MOTIR-5549** walks it end to end. Drawn against `origin/main` @ `34c8aa442`.
+
+**What it draws.** A new section on `/items/<key>` that lists every plan related to THIS item: the plans
+that created it, changed it, archived it, or added work items under it. Every `PlanStatus` is listed,
+one row per plan, oldest first. Each row says what that plan did to the item and opens `/plans/<id>`.
+Until now the page showed a plan only while it was undecided (the pending-plan notice above). Once a plan
+was decided, the page kept no trace of it.
+
+**Why it is a design card.** No asset in `design/work-items/` draws a decided plan on the item page. The
+pending-plan indicator (§ _The PENDING-PLAN indicator_, above) rules `approved` and `declined` OUT of its
+element by design. This is the NONE-exists case: an element no mock depicts.
+
+**Panels:** 0 the item page at 1280, the section in its slot with the pending notice above ·
+1 anatomy of one row · 2 one row per `PlanStatus` · 3 every reachable relation, by tense ·
+4 the bound and **Show more plans**: at rest, loading, the last page landed, a failed load ·
+5 the absences: no plan, no `ai:view_plan`, the first read failed · 6 dark (panel 2's rows) ·
+7 narrow (`< md`), in `zh`.
+
+### 0. Rendered first — what the render settled
+
+These shipped components were rendered through the repo's vitest + RTL setup (`renderWithIntl`, the real
+`messages/en.json` and `messages/zh.json`), under a throwaway config with no `globalSetup`, so no database
+was touched: `PlanRow` in all five statuses in both locales, `PendingPlanNotice` (one plan),
+`ContentSectionCard`, `ErrorState` and `ActivitySkeleton`. The row's status square, status pill, meta
+line, glyphs and class strings are transcribed from that emitted markup. Icon paths come from the render's
+own SVGs, and none is drawn by hand. The harness was deleted before this asset landed. Three facts from the
+render shape the design:
+
+- **`PlanRow` is a bordered card of its own** (`rounded-(--radius-card) border bg-(--el-surface)
+shadow-(--shadow-subtle)`). It is the right row for `/plans`, where the page is the container. Inside
+  `ContentSectionCard` it would be a container inside a container, which the call-to-action band's
+  review rejected on 2026-09-15 (§ _The item page HANDS THE DECISION OVER_). **The history row therefore
+  keeps `PlanRow`'s ANATOMY (square · title · meta · pill) and drops its BOX.** Rows are divided by a
+  hairline, and none has a border, radius or shadow of its own.
+- **`PlanRow` gives a `planned` plan an accent border**, meaning _awaiting your approval_. The history row
+  does NOT inherit it: on this page the pending notice is the one call to action (§5).
+- **The pill tones and the square tints ship already**: generating `--el-tint-sky`, planned
+  `--el-tint-lavender`, stale `--el-tint-rose`, approved `--el-tint-mint`, declined `--el-muted` square
+  with the `archived` pill. The history row reuses them unchanged and adds no tone.
+
+### 1. The SLOT and the TIER — after Children, in tier 2
+
+**The slot:** in the content column, **directly after `ChildPanel` and before the late stack's lower
+half** (Attachments · Activity). Two neighbours decide it:
+
+- **Children, above:** the commonest plan in this project adds work items under a card. A row reading
+  _Added 5 work items under this item_ sits right under the list of those work items.
+- **Activity, below:** the page's change history. Plans are the planned half of how a card came to look
+  like this, and Activity is the edited half. The two sit next to each other without being merged.
+
+**Rejected on the record:**
+
+| candidate                                      | verdict                                                                                                                                                                                                                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| first in the column, beside the pending notice | **Rejected.** That slot is for whole-item state announcements (archived, pending). A history list is not an announcement, and putting a list above Description would push the item's own content below the fold on every card that has one                    |
+| the core-fields rail, beside Provenance        | **Rejected.** The rail holds scalar facts about the card. Provenance already names the planning HARNESS, which is a scalar. A list of plans with sentences and a pager is content, and the rail is 18rem wide                                                 |
+| a tab inside Activity                          | **Rejected.** The Activity section is one `<Suspense>` keyed on `?activity=`, so every tab switch re-suspends it. A Plans tab would re-fetch plans on each switch. It would also hide the history behind a control, while this story asks the page to show it |
+
+**The tier: 2, inside the page's existing concurrent group** (`page.tsx`'s `Promise.all`). The read
+joins it the same way `listPendingProposalsForWorkItem` does, conditional on `canViewPlans`. It is never a
+serial `await`, which would re-introduce the shape MOTIR-3435 removed (§ _The item page at ARRIVAL_).
+
+- **Why not tier 3.** The late stack's two halves share one promise, and the lower half's boundary is
+  keyed on the activity tab. A plans read in `lateReads` would either re-run on every tab switch (lower
+  half) or have to render above Children (upper half), which is the wrong slot.
+- **What tier 2 costs.** One page of at most 5 plans (§6), served by the two existing `plan_item`
+  indexes (`[workItemId, workspaceId]`, `[parentRef, workspaceId]`). A card with no related plan pays the
+  index probes only. That is `max()` inside a group that already awaits nine reads. MOTIR-5546 states
+  the exact query count.
+- **It never resizes a box above the fold on arrival.** A tier-2 region renders WITH the first content,
+  so nothing moves when it arrives. Like `ChildPanel` today, it sits below the upper late-stack boundary,
+  and that boundary's fallback reserves its own box (§ _The item page at ARRIVAL_). **So the section has
+  no loading state of its own.** The only loading state is Show more's (§6).
+
+### 2. The ROW — anatomy (panel 1)
+
+The whole row is ONE link to `/plans/<id>`, as `PlanRow` is. It uses `PlanRow`'s grammar without the box.
+
+| #   | element                         | composes (as shipped)                                                                                                                | colour                                                               | shape                                        |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------------------- |
+| 1   | the container and its label     | `ContentSectionCard` — title **Plans**, gloss **— how this item came to be** (the ONLY container)                                    | `--el-card` · `--el-border` · `--shadow-card`; title `--el-text`     | `--radius-card` · `--spacing-card-padding`   |
+| 2   | the list                        | `<ul aria-label>`; rows divided by `border-t border-(--el-border-soft)` (the first row has none)                                     | divider `--el-border-soft`                                           | —                                            |
+| 3   | status square                   | `PlanRow`'s `h-8 w-8` square + `STATUS_ICON` glyph, `aria-hidden`                                                                    | `STATUS_TINT[status]` fill · glyph `--el-text-strong`                | `--radius-control`                           |
+| 4   | plan title                      | `PlanRow`'s title line, `truncate`; `planReview.untitledPlan` when `Plan.title` is null                                              | `--el-text`                                                          | —                                            |
+| 5   | **the relation sentence** (NEW) | one line under the title, `text-[13px]`, keyed by status × relation (§3)                                                             | `--el-text-secondary`                                                | —                                            |
+| 6   | meta line                       | `PlanRow`'s meta grammar (`text-xs`, `gap-x-3`): **created {when}** · **approved/declined {when} by {name}** (decided only) · author | `--el-text-secondary`; author glyph `--el-text-faint`, `aria-hidden` | —                                            |
+| 7   | status pill                     | `PlanRow`'s `StatusPill`, label `aiPlanning.status.*`                                                                                | the shipped tone per status                                          | `--radius-badge` · `--spacing-chip-x/y`      |
+| —   | row hit area                    | the `<a>`; hover and focus fill the row                                                                                              | hover `--el-surface`; focus ring `--focus-ring-color`                | `--radius-control` · `--spacing-control-x/y` |
+
+**The author** reads `authorSource` the way `PlanAttribution` does. `mcp` + a harness gives **via {harness} ·
+{model}** (NEW key; without a model it falls back to the shipped `aiPlanning.viaHarness`). `native` gives
+the shipped **via Motir AI**. `null` renders nothing, because an unattributed plan is an absence, not a
+placeholder (Part III §3 of `design/ai-planning/design-notes.md`). **The requester is not drawn.** The
+history asks what a plan DID, and who asked for it is one click away on `/plans/<id>`. Leaving it out also
+keeps the meta line to one line at 918px.
+
+**The decider** rides the WHEN entry exactly as `PlanRow`'s `WhenEntry` does, reusing `aiPlanning.approvedByName`
+/ `declinedByName`. When the plan was abandoned (`decidedById` null) it falls back to `approvedAt` /
+`declinedAt`. **This needs `decidedByName` on the DTO**, which MOTIR-5546's card did not list. It was
+requested on that card's in-flight run (§10).
+
+### 3. The RELATION COPY — total over status × relation
+
+**What a plan can hold for one item.** `@@unique([planId, workItemId])` lets a plan hold at most ONE of
+_created_ (an `add` whose materialized id is this item), _changed_ (`modify`) and _archived_ (`remove`).
+Any of those can combine with _added N under it_ (`add`s whose `parentRef` is this item's id). The DTO
+carries that as `relation: { op: 'add' | 'modify' | 'remove' | null, childCount }`, with the invariant
+`op !== null || childCount > 0`.
+
+**The tense is set by status, and a sentence must never claim a change that did not happen**
+(MOTIR-4472's defect on the peek):
+
+- `generating` · `planned` · `stale` → **proposes** (present). The plan is live.
+- `approved` → **did** (past). The proposals are the card now.
+- `declined` → **proposed … — not applied**. The chip already says _Declined_. The sentence also says it,
+  in words, so the row reads correctly without colour.
+
+**`op: 'add'` (created this item) occurs only on an `approved` plan.** The id is written back to the
+proposal only at approve (`plansService.materialize`), so no undecided or declined plan can hold it.
+`created + added N` is unreachable too: children laid under a card added in the SAME plan carry a
+`planItem:` temp-ref, not the card's id (MOTIR-5546's stated limitation). **Both are still given a key,
+so the component's `switch` stays total**, the same argument `PendingPlanNotice` makes for
+`remove + add`. The component renders the _approved_ sentence for `op: 'add'` whatever the status, and a
+code comment says why.
+
+Namespace **`issueViews`**, beside the pending notice's strings: these are the item page's sentences about
+itself. `zh` has one plural arm, so every `zh` twin is `other` only, as the shipped `pendingPlan*` twins are.
+
+| key                            | status    | English                                                                                                                                                                     | 中文                                                                         |
+| ------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `planHistoryTitle`             | —         | Plans                                                                                                                                                                       | 计划                                                                         |
+| `planHistoryGloss`             | —         | how this item came to be                                                                                                                                                    | 此工作项的由来                                                               |
+| `planHistoryListAria`          | —         | Plans that shaped {key}                                                                                                                                                     | 塑造 {key} 的计划                                                            |
+| `planHistoryProposesModify`    | proposing | Proposes changes to this item                                                                                                                                               | 提议修改此工作项                                                             |
+| `planHistoryProposesRemove`    | proposing | Proposes to archive this item                                                                                                                                               | 提议归档此工作项                                                             |
+| `planHistoryProposesAdd`       | proposing | {count, plural, one {Proposes # work item under this item} other {Proposes # work items under this item}}                                                                   | {count, plural, other {提议在此工作项下新增 # 个工作项}}                     |
+| `planHistoryProposesModifyAdd` | proposing | {count, plural, one {Proposes changes to this item, and # work item under it} other {Proposes changes to this item, and # work items under it}}                             | {count, plural, other {提议修改此工作项，并在其下新增 # 个工作项}}           |
+| `planHistoryProposesRemoveAdd` | proposing | {count, plural, one {Proposes to archive this item, and # work item under it} other {Proposes to archive this item, and # work items under it}}                             | {count, plural, other {提议归档此工作项，并在其下新增 # 个工作项}}           |
+| `planHistoryCreated`           | approved  | Created this item                                                                                                                                                           | 创建了此工作项                                                               |
+| `planHistoryCreatedAdded`      | approved  | {count, plural, one {Created this item, and # work item under it} other {Created this item, and # work items under it}} — _unreachable, for totality_                       | {count, plural, other {创建了此工作项，并在其下新增了 # 个工作项}}           |
+| `planHistoryChanged`           | approved  | Changed this item                                                                                                                                                           | 修改了此工作项                                                               |
+| `planHistoryArchived`          | approved  | Archived this item                                                                                                                                                          | 归档了此工作项                                                               |
+| `planHistoryAdded`             | approved  | {count, plural, one {Added # work item under this item} other {Added # work items under this item}}                                                                         | {count, plural, other {在此工作项下新增了 # 个工作项}}                       |
+| `planHistoryChangedAdded`      | approved  | {count, plural, one {Changed this item, and added # work item under it} other {Changed this item, and added # work items under it}}                                         | {count, plural, other {修改了此工作项，并在其下新增了 # 个工作项}}           |
+| `planHistoryArchivedAdded`     | approved  | {count, plural, one {Archived this item, and added # work item under it} other {Archived this item, and added # work items under it}}                                       | {count, plural, other {归档了此工作项，并在其下新增了 # 个工作项}}           |
+| `planHistoryDeclinedModify`    | declined  | Proposed changes to this item — not applied                                                                                                                                 | 曾提议修改此工作项——未应用                                                   |
+| `planHistoryDeclinedRemove`    | declined  | Proposed to archive this item — not applied                                                                                                                                 | 曾提议归档此工作项——未应用                                                   |
+| `planHistoryDeclinedAdd`       | declined  | {count, plural, one {Proposed # work item under this item — not added} other {Proposed # work items under this item — not added}}                                           | {count, plural, other {曾提议在此工作项下新增 # 个工作项——未新增}}           |
+| `planHistoryDeclinedModifyAdd` | declined  | {count, plural, one {Proposed changes to this item, and # work item under it — not applied} other {Proposed changes to this item, and # work items under it — not applied}} | {count, plural, other {曾提议修改此工作项，并在其下新增 # 个工作项——未应用}} |
+| `planHistoryDeclinedRemoveAdd` | declined  | {count, plural, one {Proposed to archive this item, and # work item under it — not applied} other {Proposed to archive this item, and # work items under it — not applied}} | {count, plural, other {曾提议归档此工作项，并在其下新增 # 个工作项——未应用}} |
+| `planHistoryViaHarnessModel`   | —         | via {harness} · {model}                                                                                                                                                     | 由 {harness} · {model} 撰写                                                  |
+| `planHistoryShowMore`          | —         | Show more plans                                                                                                                                                             | 显示更多计划                                                                 |
+| `planHistoryError`             | —         | Couldn't load plans.                                                                                                                                                        | 无法加载计划。                                                               |
+| `planHistoryLoadMoreError`     | —         | Couldn't load more plans.                                                                                                                                                   | 无法加载更多计划。                                                           |
+
+**24 new keys, each with its `zh` twin in `messages/zh.json` in the same pull request.** **Reused, not
+added:** `planReview.untitledPlan`, `aiPlanning.status.*`, `aiPlanning.createdAt`,
+`aiPlanning.approvedAt` / `approvedByName`, `aiPlanning.declinedAt` / `declinedByName`,
+`aiPlanning.viaHarness`, `aiPlanning.viaMotir`, `common.retry` (_Try again_).
+
+### 4. PER `PlanStatus` — all five, and the enum is the checklist (panel 2)
+
+| value        | listed? | sentence tense         | pill / square                     | note                                                                                                                                                                             |
+| ------------ | ------- | ---------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generating` | **yes** | proposes               | sky · `LoaderCircle`              | Unlike the pending notice, which skips it: history lists what exists. The square's spin is drawn frozen, because a board is a still. The meta line shows **created {when}** only |
+| `planned`    | **yes** | proposes               | lavender · `Clock`                | **No accent border and no second call to action** (§5)                                                                                                                           |
+| `stale`      | **yes** | proposes               | rose · `OctagonAlert`             | Live and awaiting action, per the schema. The same row as `planned`                                                                                                              |
+| `approved`   | **yes** | did                    | mint · `CircleCheck`              | The meta line adds **approved {when} by {name}**                                                                                                                                 |
+| `declined`   | **yes** | proposed … not applied | muted · `CircleX` · archived pill | The meta line adds **declined {when} by {name}**, or **declined {when}** for a sweep-abandoned plan with no decider                                                              |
+
+**Declare no status set for this element.** The pending notice needed its own set (`planned` + `stale`)
+beside a totality assertion. History has no filter, so the component's `switch` over `PlanStatusDto` is
+the totality check, and a sixth member turns its `never` arm red. MOTIR-5546's card already says not to
+reuse `WORK_ITEM_PENDING_PLAN_STATUSES`.
+
+### 5. COEXISTENCE with `PendingPlanNotice` (panel 0)
+
+**An undecided plan appears in BOTH places, and the notice keeps the only call to action.**
+
+- The notice stays exactly as shipped: first in the column, lavender, **Review plan**. Nothing about it
+  changes.
+- The history row for a `planned` / `stale` plan is an ordinary row: the whole row is a link, with no button,
+  no accent border and no lavender fill. It says what the plan proposes, in the proposal tense.
+- **Why both, rather than hiding undecided plans from the history:** the history's promise is _every plan,
+  oldest first_. Hiding the newest ones would make the list look complete while missing the plans most
+  likely to change the card, and it would reorder the list when a plan is decided. **Why no second
+  call to action:** two differently styled doors to the same plan, one screen apart, raise the question of
+  whether they do different things. They do not.
+- Order does not change on decision: a row keeps its place (creation order), and only its pill, square,
+  tense and meta line change.
+
+### 6. SCALE — the bound and Show more (panel 4)
+
+**The first page shows the OLDEST 5 plans. Show more plans appends the next 20, oldest first, until the
+read's `nextCursor` is null.** The route clamps the page size (MOTIR-5546).
+
+**Why oldest-first with the pager at the NEWER edge, set against Activity.** Activity lists newest first by
+default and pages at the OLDER edge (_Show more changes (N older)_): its reader wants what just happened.
+This list answers _how did this card come to look like this?_, so it reads in chronological order, and the
+pager sits where that order leads, at the bottom. The newest plan a person most needs is an undecided one,
+and the pending notice at the top of the page already names it, so hiding it behind the pager hides no
+open decision.
+
+**Why 5.** A card collects one plan that created it and usually one that expanded it. Five covers nearly
+every card with no pager, keeps the tier-2 read to a very small page, and fits the section above
+Attachments without a scroll's worth of rows.
+
+**The control** reuses the Activity pager's shipped class string (`HistorySection`'s show-more: dashed
+`--el-border-strong`, `--el-surface-soft`, `--height-control`, full width, `text-xs`
+`--el-text-secondary`). **It carries no count**, because the read returns `{ items, nextCursor }` and no
+total. Adding a count query to show _(N more)_ is not worth a second query on every card with more than
+five plans.
+
+**States:**
+
+- **At rest:** 5 rows, then the control.
+- **Loading:** the control is disabled (`disabled:opacity-60`, as shipped) and two row-shaped skeleton rows
+  pulse at the newer edge (`--el-muted` fills, `animate-pulse`, `aria-busy`, which is the shipped pulse
+  vocabulary, shaped like this row: a `h-8 w-8` square and two bars).
+- **The last page landed:** the new rows are appended in place, the control is gone, and the scroll
+  position is kept.
+- **A failed load:** the rows already shown stay. Where the control was, a flush line reads **Couldn't
+  load more plans.** in `--el-text-secondary`, with a secondary `sm` **Try again** button. The line has no
+  box.
+
+**Page state:** this is a client island that owns its appended rows. It reads nothing another mutation on
+this page changes, and it keeps no optimistic state, so no tick is owed (CLAUDE.md § _Page state after a
+mutation_).
+
+### 7. The ABSENCES (panel 5)
+
+- **(a) No related plan ⇒ NOTHING renders**, with no section and no reserved box. Children is followed by
+  Attachments exactly as today. This is most cards.
+- **(b) No `ai:view_plan` ⇒ NOTHING renders, and the read is skipped** (the `canViewPlans` conditional the
+  pending notice already uses). A row that links to a plan the viewer cannot open would be worse than no row.
+- **(c) The first read failed ⇒ the section renders, and its body is one flush line**: **Couldn't load
+  plans.** plus a secondary `sm` **Try again** button that re-reads through the route. It is NOT the
+  `ErrorState` card: `ErrorState` is itself a `Card`, so placing it inside `ContentSectionCard` would put a
+  container inside a container (§0). The section still renders on a failed read because an absent section
+  would claim _no plan ever touched this card_, which the page does not know. The read's arm catches its
+  own error inside the group, as the page's other arms already do (the `page.tsx` comment above the group).
+- **(d) Loading:** none for the section (§1). Show more has its own (§6).
+
+### 8. BOTH THEMES — inks on their grounds (panels 2 and 6)
+
+| ink                                     | ground                             | light                     | dark       |
+| --------------------------------------- | ---------------------------------- | ------------------------- | ---------- |
+| title `--el-text`                       | `--el-card` / hover `--el-surface` | ≥ 15 : 1                  | AA ✓       |
+| sentence + meta `--el-text-secondary`   | `--el-card`                        | **6.80**                  | AA ✓       |
+| sentence + meta `--el-text-secondary`   | hover `--el-surface`               | **6.24**                  | AA ✓       |
+| pill label `--el-text-strong`           | its tint                           | ≥ 9 : 1                   | AA ✓       |
+| declined pill `--el-archived-pill-text` | `--el-archived-pill-bg`            | as shipped                | as shipped |
+| author glyph `--el-text-faint`          | —                                  | decorative, `aria-hidden` | —          |
+
+**`--el-text-muted` is used nowhere.** It fails on `--el-surface` (4.17), which is the hover ground
+(CLAUDE.md's pair table). The pending notice's notes record the same trap on lavender. The dark numbers
+follow CLAUDE.md's measurement that every ink clears AA on every dark surface. Panel 6 draws the dark
+board by re-emitting the Tier-3 block under `[data-theme='dark']`, so the nested element actually
+recomputes (`tests/design-dark-parity.test.ts`).
+
+### 9. a11y
+
+- The list is a `<ul>` labelled **Plans that shaped {key}**. Each row is one `<a>`, whose accessible name
+  reads title → sentence → meta → status. The status is also in words, so neither the tint nor the glyph
+  carries it alone.
+- Glyphs are `aria-hidden`. The frozen spinner on a `generating` square is decorative.
+- Show more is a real `<button>`. While loading it is `disabled` and the skeleton is `aria-busy`. A failed
+  load's line is `role="status"`, not an alert, because nothing is lost.
+- Focus: rows take the shipped `focus-visible:ring-2 ring-(--focus-ring-color)`. After a page lands, focus
+  stays on the control's position, which moves to the first new row.
+
+### 10. The READ this renders — MOTIR-5546, and one field added to it
+
+The row reads `planId`, `planTitle`, `planStatus`, `createdAt`, `decidedAt`, `author { source, harness,
+model }` and `relation { op, childCount }`, all of which the card already lists. **One field is added:
+`decidedByName`**, resolved on the same query through `Plan.decidedBy`. The row names the decider the way
+`/plans` does, and the component stays presentational. It was requested on MOTIR-5546's in-flight run and
+belongs to that card's deliverable. **Deliberately NOT requested:** a total count (§6) and the requester's
+name (§2).
+
+### 11. GIVES / TAKES
+
+| card                                 | GIVES / TAKES | what                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5547** — the section         | **GIVES**     | the slot (after `ChildPanel`), the tier (2, the existing group), the flush row with every token, the 24 keys with `zh`, the bound (5, then pages of 20), the pager's states, the three absences, and the no-second-CTA rule                                                                                                                                                                       |
+| **MOTIR-5547**                       | **SIZE**      | re-run against the asset: one presentational section plus one small client island (Show more: fetch, append, skeleton, error line) plus 24 keys × 2 catalogues plus the page wiring. **5 points / 65 minutes still fits**, because the 17 relation keys are mechanical and the switch mirrors `PendingPlanNotice`'s. Recorded because a silent "no change" and an unasked question look identical |
+| **MOTIR-5546** — the read            | **GIVES**     | `decidedByName` on the DTO (§10), requested on its run; no count; page sizes 5 and 20 against a clamped limit                                                                                                                                                                                                                                                                                     |
+| **MOTIR-5549** — the E2E             | **GIVES**     | what to walk: rows oldest first, each row opens its plan, Show more reaches the sixth plan, an untouched card renders no section                                                                                                                                                                                                                                                                  |
+| **MOTIR-5548** — the vitest gate     | **GIVES**     | the no-plan (no section) and no-capability (read skipped) guards, and that the first-read failure renders the flush line rather than throwing the page                                                                                                                                                                                                                                            |
+| MOTIR-4256 / MOTIR-4364 — the notice | **TAKES**     | the notice's slot, tone and copy, unchanged, and its rule that `ai:view_plan` suppresses the read                                                                                                                                                                                                                                                                                                 |
+| MOTIR-5228 — the call-to-action band | **TAKES**     | one container, one label: why the row drops `PlanRow`'s box and why the error is not the `ErrorState` card                                                                                                                                                                                                                                                                                        |
+
+### 12. What this asset does NOT draw
+
+The pending notice (unchanged), `/plans/<id>`, the plan canvas, the peek, and Provenance. It renders no
+proposed VALUES, since a row names the relation and never the diff (MOTIR-4197's boundary). It draws no
+plan that touched only a descendant, because the relations are direct only. It changes nothing else about
+the arrived page.
