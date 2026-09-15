@@ -261,6 +261,39 @@ describe('the overlay is TOTAL over what the read can answer', () => {
     });
   }
 
+  it('keeps "not built yet" for a RESOLVED approve-and-merge subject until its port is mounted (MOTIR-5439 → MOTIR-5440)', async () => {
+    // The read answers the Development block's data now; this host renders it only
+    // once MOTIR-5440 lands. Until then it must not mount the design frame over it.
+    openAt('GATE-1', 'pull_request_approval');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: { ...GATE, kind: 'pull_request_approval', subjectId: 'wi-1' },
+        subject: {
+          state: 'resolved',
+          kind: 'pull_request_approval',
+          pullRequests: [],
+          repoDelivery: [],
+          deliveries: [],
+          howToTest: {
+            state: 'record_missing',
+            runTarget: null,
+            owedBy: null,
+            record: null,
+            repos: [],
+            history: [],
+          },
+          designEvidence: null,
+          isDesignCard: false,
+          members: [],
+        },
+      }),
+    );
+    await renderOverlay();
+    expect(screen.getByText(en.workbench.approvals.notBuiltYet)).toBeTruthy();
+    expect(screen.queryByTestId('design-port')).toBeNull();
+    expect(screen.queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
+  });
+
   it('draws "the design is gone" for a subject that no longer resolves', async () => {
     openAt('GATE-1', 'design_result');
     fetchApprovalGateOverlay.mockResolvedValue(readOf({ subject: { state: 'gone' } }));

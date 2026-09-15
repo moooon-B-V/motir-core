@@ -300,7 +300,14 @@ export function ApprovalOverlay() {
     );
     const subject = read.subject;
 
-    if (subject.state === 'kind_not_built') {
+    if (
+      subject.state === 'kind_not_built' ||
+      // The read resolves the approve-and-merge port now (MOTIR-5439), and this host
+      // does not render it yet — MOTIR-5440 mounts the Development block here. Until
+      // then the overlay keeps drawing what it drew for this kind before the read
+      // learned it, rather than a design frame over a subject that is not a design.
+      (subject.state === 'resolved' && subject.kind !== 'design_result')
+    ) {
       // Panel 4a — a feature that has not shipped. Opposite in meaning to 4b,
       // which is a gate worth withdrawing, however alike they look.
       body = (

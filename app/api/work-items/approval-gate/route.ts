@@ -4,6 +4,8 @@ import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
+import { howToTestService } from '@/lib/services/howToTestService';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
@@ -32,8 +34,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //
 // Built in the exact shape of `app/api/work-items/planning-anchor/route.ts`:
 // resolve against the actor's ACTIVE project, the 2FA hold AFTER the no-project
-// arm, and the no-existence-leak 404. Thin HTTP over three SHIPPED service reads
-// and no new one:
+// arm, and the no-existence-leak 404. Thin HTTP over SHIPPED service reads and no
+// new one:
 //
 //   1. `workItemsService.getWorkItemByIdentifier` — the key → item resolution,
 //      and the BROWSE gate. `getForWorkItem` binds the workspace but asserts no
@@ -42,8 +44,14 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //   2. `approvalGatesService.getForWorkItem` — the frame's own read: the gate of
 //      that kind in whatever state, `canDecide` as the AUTHORITY answer, and the
 //      live *waiting on* name. Nothing here re-derives any of it.
-//   3. `designEvidenceService.getForGateSubject` — the port, read by the gate's
-//      own `subjectId`, only for a kind this build registers.
+//   3. THE PORT, per kind, only for a kind this build registers:
+//      - `design_result` — `designEvidenceService.getForGateSubject`, read by the
+//        gate's own `subjectId`;
+//      - `pull_request_approval` (MOTIR-5439) — the Development block, read by the
+//        SAME calls the item page's late stack makes (`lateReads.ts`):
+//        `workItemsService.listLinkedPullRequests` + `getDeliveryView`,
+//        `howToTestService.getForWorkItem`, `designEvidenceService.getCurrentForWorkItem`,
+//        and — for an approved gate only — `pullRequestMergeService.listApprovalMembers`.
 //
 // No `db` / no `$transaction` here.
 //
@@ -85,6 +93,7 @@ function isNotAvailable(err: unknown): boolean {
 async function readSubject(
   kind: ApprovalGateKindDTO,
   gate: ApprovalGateDTO | null,
+  item: { id: string; type: string | null; targetRepos: readonly string[] },
   ctx: ServiceContext,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
   if (!gate) return { state: 'no_gate' };
@@ -100,15 +109,44 @@ async function readSubject(
         : { state: 'gone' };
     }
     case 'pull_request_merge':
-      // REGISTERED (MOTIR-4793) but with no overlay PORT yet: the approve-and-merge
-      // port is MOTIR-5437 / MOTIR-4909's. Until it lands the overlay draws the
-      // not-built arm — the same answer the Approvals list's Decide cell gives a
-      // merge row — rather than a resolved subject nothing can render.
+      // REGISTERED (MOTIR-4793) but with no overlay PORT: the ONE approve-to-merge
+      // gate a person decides is `pull_request_approval` (MOTIR-4909), whose port is
+      // below. A per-PR merge gate is pressed through that gate, so the overlay draws
+      // the not-built arm for it — the same answer the Approvals list's Decide cell
+      // gives a merge row — rather than a resolved subject nothing can render.
       return { state: 'kind_not_built' };
-    case 'pull_request_approval':
-      // REGISTERED (MOTIR-5481); its overlay PORT — the Development block — is
-      // MOTIR-5437's. Until it lands the overlay draws the not-built arm, as for merge.
-      return { state: 'kind_not_built' };
+    case 'pull_request_approval': {
+      // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
+      // is the card's DELIVERY SET (`pullRequestApprovalHandler.resolveSubject`), so a
+      // set that has emptied — every pull request unlinked — is GONE, exactly as the
+      // handler answers null for it. Nothing is read by `subjectId` beyond that: the
+      // gate's `subjectId` IS the work item's id.
+      const [pullRequests, deliveryView, howToTest, designEvidence, members] = await Promise.all([
+        workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
+        workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
+        howToTestService.getForWorkItem(gate.workItemId, ctx),
+        designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
+        // Read ONLY for an approved gate, as the item page reads it.
+        gate.state === 'approved'
+          ? pullRequestMergeService.listApprovalMembers(
+              { workItemId: gate.workItemId, approvalGateId: gate.id },
+              ctx,
+            )
+          : Promise.resolve([]),
+      ]);
+      if (deliveryView.deliveries.length === 0) return { state: 'gone' };
+      return {
+        state: 'resolved',
+        kind: 'pull_request_approval',
+        pullRequests,
+        repoDelivery: deliveryView.repos,
+        deliveries: deliveryView.deliveries,
+        howToTest,
+        designEvidence,
+        isDesignCard: item.type === 'design',
+        members,
+      };
+    }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */
@@ -153,7 +191,7 @@ export async function GET(req: Request): Promise<Response> {
       gate: read.gate,
       canDecide: read.canDecide,
       routedToLabel: read.routedToLabel,
-      subject: await readSubject(kind, read.gate, ctx),
+      subject: await readSubject(kind, read.gate, item, ctx),
     };
     return NextResponse.json(body, {
       // A gate's state changes under the reader by design — never serve a
