@@ -1006,6 +1006,7 @@
       "runs": "运行",
       "boards": "面板",
       "reports": "报表",
+      "approvalRecords": "审批记录",
       "code": "代码库",
       "settings": "设置",
       "git": "Git",
@@ -1122,6 +1123,7 @@
       "goToIssues": "前往工作项",
       "goToBoards": "前往面板",
       "goToReports": "前往报表",
+      "goToApprovalRecords": "前往审批记录",
       "goToSettings": "前往设置",
       "switchTo": "切换到 {name}",
       "current": "当前",
@@ -7465,6 +7467,7 @@
       "review": "查看",
       "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
       "noVersion": "无版本号",
+      "decidedOn": "基于 <mono>{version}</mono>",
       "mergeSubjectMeta": "{pr} · 拉取请求",
       "subjectGone": "此项针对的设计已不存在",
       "notRenderable": "Motir 暂不支持展示此类型",
@@ -7476,6 +7479,35 @@
         "pull_request_merge": "合并请求合并"
       },
       "reviewRow": "查看 {key} {title}"
+    }
+  },
+  "approvalRecords": {
+    "heading": "审批记录",
+    "subtitle": {
+      "full": "本项目的全部审批——先列等待中的，再列已决定的。",
+      "own": "等待你处理的审批，以及你已决定的审批。"
+    },
+    "tableLabel": "审批记录",
+    "sections": {
+      "awaiting": "等待决定",
+      "decided": "已决定"
+    },
+    "columns": {
+      "workItem": "工作项",
+      "waited": "已等待",
+      "decided": "决定时间",
+      "askedOf": "请谁处理",
+      "decidedBy": "决定人"
+    },
+    "noOne": "无人",
+    "empty": {
+      "title": "还没有审批",
+      "bodyFull": "本项目中等待决定的工作项会出现在这里，决定之后也会保留。",
+      "bodyOwn": "请你处理的审批，以及你决定的审批，都会出现在这里。",
+      "awaitingFull": "本项目中没有等待决定的审批。",
+      "awaitingOwn": "没有等待你处理的审批。",
+      "decidedFull": "本项目中还没有已决定的审批。",
+      "decidedOwn": "你在本项目中还没有决定过审批。"
     }
   },
   "platformAdmin": {

@@ -74,6 +74,10 @@ const EXPECTED_PRIMARY_ORDER = [
   '/dashboard',
   '/triage',
   '/reports',
+  // Approval records (MOTIR-5302) — after Reports and before Code, the position
+  // `design/approvals/design-notes.md` § The ENTRANCE argues: a record you consult,
+  // not a second queue beside the Workbench.
+  '/approvals',
   // ⚠️ `/code`, not `/code-health` (MOTIR-1768). The row's ADDRESS moved — the
   // audit is one section of the Code room now — while its POSITION in the order
   // did not. MOTIR-4643 owns the rest of this row: collapsing the rail's `Git`
