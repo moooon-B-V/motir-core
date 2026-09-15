@@ -1,5 +1,6 @@
 import {
   PERMISSIONS,
+  isEnforced,
   permissionsByDomain,
   sortByCatalogOrder,
   type PermissionDescriptor,
@@ -40,7 +41,23 @@ export interface CustomRoleRow {
  * {@link toLevelGatedDomainDTOs}, which is this function's exact complement.
  */
 export function toPermissionDomainDTOs(): PermissionDomainDTO[] {
-  return groupsToDTOs(permissionsByDomain({ include: ROLE_GATED_PERMISSIONS }));
+  return groupsToDTOs(permissionsByDomain({ include: offeredRoleGatedPermissions() }));
+}
+
+/**
+ * The role-gated keys a ROLE SCREEN may draw: role-gated AND `enforced`.
+ *
+ * ⚠️ A `planned` key can be role-HOLDABLE — membership is inert until a gate
+ * consults it (`lib/permissions/builtinRoles.ts`) — and must still never render
+ * as a row, because a row on a role screen reads as a switch and a `planned` key
+ * controls nothing. `catalog.ts`'s header promises exactly that exclusion; before
+ * MOTIR-5305 this set was `ROLE_GATED_PERMISSIONS` unfiltered, which kept the
+ * promise only while no role-gated key was planned. Derived from the constants,
+ * the same expression `grantablePermissionKeys` uses for the role EDITOR, so the
+ * screen and the editor cannot disagree about which keys exist.
+ */
+function offeredRoleGatedPermissions(): PermissionKey[] {
+  return ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key));
 }
 
 /**
@@ -56,7 +73,7 @@ export function toPermissionDomainDTOs(): PermissionDomainDTO[] {
  */
 export function toLevelGatedDomainDTOs(): PermissionDomainDTO[] {
   const roleGated = new Set<PermissionKey>(ROLE_GATED_PERMISSIONS);
-  const levelGated = PERMISSIONS.filter((key) => !roleGated.has(key));
+  const levelGated = PERMISSIONS.filter((key) => !roleGated.has(key) && isEnforced(key));
   return groupsToDTOs(permissionsByDomain({ include: levelGated }));
 }
 
@@ -90,7 +107,9 @@ export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDT
     name: null,
     description: null,
     builtIn: true,
-    permissions: sortByCatalogOrder(BUILTIN_ROLE_PERMISSIONS[role]),
+    permissions: sortByCatalogOrder(
+      [...BUILTIN_ROLE_PERMISSIONS[role]].filter((key) => isEnforced(key)),
+    ),
     memberCount,
   };
 }
@@ -119,7 +138,7 @@ export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDT
  * neither counted nor shown.
  */
 export function toCustomRoleDTO(row: CustomRoleRow, memberCount: number): RoleDTO {
-  const roleGated = new Set<string>(ROLE_GATED_PERMISSIONS);
+  const roleGated = new Set<string>(offeredRoleGatedPermissions());
   const held = sortByCatalogOrder(
     row.permissions.filter((key): key is PermissionKey => roleGated.has(key)),
   );

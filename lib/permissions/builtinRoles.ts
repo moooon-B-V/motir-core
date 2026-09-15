@@ -101,6 +101,15 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // `viewer` and the implicit workspace-member grant do not take it: deciding
   // work that is not yours is an act of ownership over the project.
   'approval:decide_any',
+  // MOTIR-5305 — SEEING every approval record of the project, not only your own.
+  // Role-gated beside its `decide_any` sibling and on the same terms: the built-in
+  // `admin` holds it through this whole set, workspace owners/admins hold it
+  // through the always-pass rail, and a custom role can be granted it. `member`,
+  // `viewer` and the implicit workspace-member grant do NOT — a member sees the
+  // records routed to them and the ones they decided, which is a RELATIONSHIP to
+  // a row and needs no key. MOTIR-5305 named it `planned` while nothing consulted
+  // it; MOTIR-5301's records read (`approvalGatesService.listRecords`) enforces it.
+  'approval:view_any',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split
   // neutral wherever the umbrella already stood.

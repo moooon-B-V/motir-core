@@ -429,6 +429,10 @@
       "label": "Decide any approval",
       "description": "Approve or request changes on an approval routed to someone else, not only one routed to you."
     },
+    "approval_view_any": {
+      "label": "See every approval",
+      "description": "See all of the project's approval records, including other people's. Without it you see the approvals routed to you and the ones you decided."
+    },
     "public_request_comment": {
       "label": "Comment on requests",
       "description": "Reply on a public request's thread. Public projects only."
@@ -1004,6 +1008,7 @@
       "runs": "Runs",
       "boards": "Boards",
       "reports": "Reports",
+      "approvalRecords": "Approval records",
       "code": "Codebase",
       "settings": "Settings",
       "git": "Git",
@@ -1120,6 +1125,7 @@
       "goToIssues": "Go to Work Items",
       "goToBoards": "Go to Boards",
       "goToReports": "Go to Reports",
+      "goToApprovalRecords": "Go to Approval records",
       "goToSettings": "Go to Settings",
       "switchTo": "Switch to {name}",
       "current": "Current",
@@ -7468,6 +7474,7 @@
       "review": "Review",
       "subjectMeta": "{files, plural, =1 {# file} other {# files}} · {version}",
       "noVersion": "no version",
+      "decidedOn": "on <mono>{version}</mono>",
       "mergeSubjectMeta": "{pr} · pull request",
       "subjectGone": "The design this asked about is gone",
       "notRenderable": "Motir cannot show this kind yet",
@@ -7479,6 +7486,35 @@
         "pull_request_merge": "Pull-request merge"
       },
       "reviewRow": "Review {key} {title}"
+    }
+  },
+  "approvalRecords": {
+    "heading": "Approval records",
+    "subtitle": {
+      "full": "Every approval in this project — waiting first, then decided.",
+      "own": "Approvals waiting on you, and the ones you decided."
+    },
+    "tableLabel": "Approval records",
+    "sections": {
+      "awaiting": "Awaiting a decision",
+      "decided": "Decided"
+    },
+    "columns": {
+      "workItem": "Work item",
+      "waited": "Waited",
+      "decided": "Decided",
+      "askedOf": "Asked of",
+      "decidedBy": "Decided by"
+    },
+    "noOne": "No one",
+    "empty": {
+      "title": "No approvals yet",
+      "bodyFull": "When a work item in this project waits on a decision, it appears here, and it stays here once it is decided.",
+      "bodyOwn": "Approvals asked of you, and the ones you decide, will appear here.",
+      "awaitingFull": "Nothing in this project is waiting on a decision.",
+      "awaitingOwn": "Nothing is waiting on you.",
+      "decidedFull": "No approval in this project has been decided yet.",
+      "decidedOwn": "You have not decided an approval in this project yet."
     }
   },
   "platformAdmin": {

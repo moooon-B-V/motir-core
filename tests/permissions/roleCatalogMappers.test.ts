@@ -7,7 +7,12 @@ import {
   toRoleCatalogDTO,
 } from '@/lib/mappers/permissionMappers';
 import { BUILTIN_ROLE_PERMISSIONS, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
-import { PERMISSIONS, PERMISSION_DOMAINS } from '@/lib/permissions/catalog';
+import {
+  ENFORCED_PERMISSIONS,
+  PERMISSIONS,
+  PERMISSION_DOMAINS,
+  isEnforced,
+} from '@/lib/permissions/catalog';
 import { PROJECT_ASSIGNABLE_ROLES } from '@/lib/projects/roles';
 
 // The widened role-catalog mapping (Subtask MOTIR-2439) — the three values the
@@ -19,10 +24,16 @@ import { PROJECT_ASSIGNABLE_ROLES } from '@/lib/projects/roles';
 // planned and will grow again; an assertion spelling out `28` would be wrong
 // today and right by accident tomorrow.
 
+// The role screens draw the role-gated keys a gate CONSULTS — role-gated AND
+// `enforced`. A `planned` key may already be role-holdable (membership is inert
+// until a gate reads it), and must still never render as a row that reads as a
+// switch (MOTIR-5305, whose `approval:view_any` is the first such key).
+const OFFERED = ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key));
+
 describe('toPermissionDomainDTOs draws the ROLE-GATED rows, not the whole catalog', () => {
-  it('contains exactly the keys in ROLE_GATED_PERMISSIONS', () => {
+  it('contains exactly the ENFORCED keys in ROLE_GATED_PERMISSIONS', () => {
     const keys = toPermissionDomainDTOs().flatMap((group) => group.permissions.map((p) => p.key));
-    expect([...keys].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+    expect([...keys].sort()).toEqual([...OFFERED].sort());
   });
 
   it('omits the level-gated public_request keys and their heading', () => {
@@ -91,7 +102,7 @@ describe('toRoleCatalogDTO', () => {
 
   it('carries the role-gated TOTAL, and it agrees with the rows it renders', () => {
     const catalog = toRoleCatalogDTO();
-    expect(catalog.roleGatedPermissionCount).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(catalog.roleGatedPermissionCount).toBe(OFFERED.length);
     // Derived from the very groups the screens draw, so `M` can never disagree
     // with the rows above it.
     expect(catalog.roleGatedPermissionCount).toBe(
@@ -126,7 +137,8 @@ describe('toLevelGatedDomainDTOs is the exact complement of the role rows', () =
     const catalog = toRoleCatalogDTO();
     const roleGated = catalog.domains.flatMap((g) => g.permissions.map((p) => p.key));
     const levelGated = catalog.levelGatedDomains.flatMap((g) => g.permissions.map((p) => p.key));
-    expect([...roleGated, ...levelGated].sort()).toEqual([...PERMISSIONS].sort());
+    // The whole ENFORCED catalog — a `planned` key is on neither screen.
+    expect([...roleGated, ...levelGated].sort()).toEqual([...ENFORCED_PERMISSIONS].sort());
     // Disjoint — a key on both screens would be described twice, once wrongly.
     expect(roleGated.filter((k) => levelGated.includes(k))).toEqual([]);
   });
@@ -134,7 +146,7 @@ describe('toLevelGatedDomainDTOs is the exact complement of the role rows', () =
   it('is exactly the keys no role can hold, derived rather than re-listed', () => {
     const levelGated = toLevelGatedDomainDTOs().flatMap((g) => g.permissions.map((p) => p.key));
     expect([...levelGated].sort()).toEqual(
-      PERMISSIONS.filter((key) => !ROLE_GATED_PERMISSIONS.includes(key)).sort(),
+      PERMISSIONS.filter((key) => !ROLE_GATED_PERMISSIONS.includes(key) && isEnforced(key)).sort(),
     );
   });
 

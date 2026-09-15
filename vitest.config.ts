@@ -2113,6 +2113,20 @@ export default defineConfig({
         'lib/approvals/approvalOverlayClient.ts',
         'lib/approvals/decidedGates.ts',
         'app/api/work-items/approval-gate/route.ts',
+        // ── Story MOTIR-5299 · THE APPROVAL RECORDS ROOM ─────────────────────
+        // Subtask MOTIR-5303, the story's own vitest gate. The room's page, its
+        // list and the ONE approvals row MOTIR-5302 extracted were in no
+        // `include`. The service, repository and mapper the read extended are
+        // already reported and pinned above (Story MOTIR-4778), so they are not
+        // re-added here.
+        //
+        // ⚠️ `app/*/…`, NOT `app/**/…`, for the page. `app/**/approvals/page.tsx`
+        // ALSO matches `app/(authed)/settings/project/approvals/page.tsx` — the
+        // settings room of the same name — so the key would gate a file this story
+        // never touched. One `*` is exactly one segment, the `(authed)` group.
+        'app/*/approvals/page.tsx',
+        'app/*/approvals/_components/ApprovalRecordsList.tsx',
+        'components/approvals/ApprovalRow.tsx',
         // Bug MOTIR-5150 — the PR-REFERENCE parser the link picker's query
         // grammar gained. A pure function with one job, so it is measured and
         // pinned here, per the note at the top of this list.
@@ -2330,6 +2344,23 @@ export default defineConfig({
         // Report-only until this story rewrote its central interaction (the row
         // now OPENS the overlay; MOTIR-5225). 100 / 100 / 100 / 100 with
         // StatePill's unreachable `default` ignored, citing its invariant test.
+        // Story MOTIR-5299 (Subtask MOTIR-5303). MEASURED on the parent branch before
+        // being pinned, at 100 / 100 / 100 / 100 (stmts / branches / funcs / lines) on
+        // all three, over `tests/components/{approval-records-list,approval-records-page,
+        // workbench-approvals-list}` and `tests/approval-records-story-gate`.
+        'app/*/approvals/page.tsx': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/*/approvals/_components/ApprovalRecordsList.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/approvals/ApprovalRow.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'app/**/workbench/_components/ApprovalsList.tsx': {
           lines: 90,
           functions: 90,

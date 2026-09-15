@@ -4622,6 +4622,16 @@ model ApprovalGate {
   /// reporter_id`) lives on `work_item` and is reached from these rows by
   /// primary key, so narrowing the GATE side is what the plan needs.
   @@index([projectId, state])
+  /// THE APPROVALS ROOM's OWN-RECORDS decided read (MOTIR-5301) — *what did I
+  /// decide in this project*, `project_id = ? AND decided_by_id = ? AND state IN
+  /// (approved, changes_requested) ORDER BY decided_at DESC, id DESC`. Nothing
+  /// served it: the queue only ever asked what is WAITING, so `(projectId, state)`
+  /// narrows to one project's decided rows and then filters every other person's
+  /// decisions out of them. Equality on the first two columns and the sort on the
+  /// third lets the plan walk the index backwards and stop at `LIMIT` (only an
+  /// incremental sort on the `id` tie-break is left). Measured on 300k gates: 29
+  /// buffers with it, 4,641 without; the `EXPLAIN` is on MOTIR-5301's pull request.
+  @@index([projectId, decidedById, decidedAt])
   /// The per-card read: every gate on one work item.
   @@index([workItemId])
   @@map("approval_gate")
