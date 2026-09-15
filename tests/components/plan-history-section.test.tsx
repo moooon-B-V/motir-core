@@ -259,6 +259,34 @@ describe('the absences', () => {
   });
 });
 
+describe('the branches the story gate measured (MOTIR-5548)', () => {
+  it('an APPROVED plan nobody decided reads "approved {when}" — no name, no placeholder', () => {
+    renderSection({
+      items: [entry({ planStatus: 'approved', decidedById: null, decidedByName: null })],
+      nextCursor: null,
+    });
+    expect(screen.getByText('approved 2 days ago')).toBeTruthy();
+    expect(screen.queryByText(/by Zhu Yue/)).toBeNull();
+  });
+
+  it('a first-read retry that fails AGAIN keeps the error line and a usable Try again', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderSection('failed');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: 'Try again' }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+    expect(screen.getByText("Couldn't load plans.")).toBeTruthy();
+    expect(screen.queryByRole('list')).toBeNull();
+  });
+});
+
 describe('Show more plans', () => {
   it('appends the next page through the route without duplicating a plan, then disappears', async () => {
     let resolveFetch: (value: unknown) => void = () => {};

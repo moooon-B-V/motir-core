@@ -554,4 +554,24 @@ describe('GET /api/work-items/[id]/plans', () => {
     expect(res.status).toBe(400);
     expect((await res.json()).code).toBe('INVALID_PLAN_HISTORY_CURSOR');
   });
+
+  // MOTIR-5548 — the route's two remaining branches, measured by the story gate.
+  it('answers the compliance gate’s own response when the session does not pass it', async () => {
+    const refused = new Response(null, { status: 401 });
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: false, response: refused });
+    const listed = vi.spyOn(plansService, 'listPlanHistoryByWorkItemId');
+    expect(await call(seedlessId())).toBe(refused);
+    expect(listed).not.toHaveBeenCalled();
+    listed.mockRestore();
+  });
+
+  it('rethrows an error it has no status for — a 500, never a silent empty page', async () => {
+    const fx = await makeWorkItemFixture();
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: fx.ctx });
+    const listed = vi
+      .spyOn(plansService, 'listPlanHistoryByWorkItemId')
+      .mockRejectedValueOnce(new Error('boom'));
+    await expect(call(seedlessId())).rejects.toThrow('boom');
+    listed.mockRestore();
+  });
 });
