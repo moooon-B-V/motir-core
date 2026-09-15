@@ -63,6 +63,21 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
       : null;
   },
 
+  /**
+   * NO re-ask on review entry (ADR `approval-gates.md` §6d AMENDMENT, rule 7 ·
+   * MOTIR-5532): always `null` — the merge kind's answer, for the same reason.
+   *
+   * ⚠️ NOT an omission. This kind already asks again on its OWN trigger: the card's
+   * WHOLE delivery set turning green raises the gate in the same transaction as the
+   * `implemented → in_review` promotion, and re-raises it on the next green after a
+   * withdrawal (MOTIR-5482, `pullRequestApprovalGates.ts`). A review-entry raise would
+   * be a second writer of the same question — and one that could ask about a set whose
+   * checks are not green, which decision 3 forbids.
+   */
+  async currentSubject(): Promise<string | null> {
+    return null;
+  },
+
   /** ADR §2: `assigneeId ?? reporterId` — the routing rule every kind shares. */
   routeTo({ item }: GateRoutingArgs): string | null {
     return routingTargetId(item);
@@ -91,12 +106,20 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
    *
    * The transition goes through `workItemsService.applyStatusTransition` in the door's
    * transaction — the one status funnel — never a raw column write.
+   *
+   * `decidingGateId`: this gate is still `awaiting` here (the door writes the decision
+   * AFTER the effect), and `approved` is exactly the move an awaiting gate — and an open
+   * delivering pull request — holds (`heldMoves`, ADR §6d AMENDMENT rules 1, 2b and 5).
+   * Without it the guard would refuse the very move this approval exists to make. It
+   * exempts THIS gate only.
    */
   async approve({ gate, ctx, tx, resolvedStatusKey }: GateEffectArgs): Promise<GateEffect> {
     if (resolvedStatusKey !== PULL_REQUEST_APPROVAL_TARGET.key) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx);
+    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
+      decidingGateId: gate.id,
+    });
     return { statusWritten: resolvedStatusKey };
   },
 

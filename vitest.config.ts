@@ -2199,7 +2199,6 @@ export default defineConfig({
         'app/api/v1/work-items/[key]/how-to-test/route.ts',
         'components/howToTest/HowToTestBlock.tsx',
         'components/markdown/CopyableCodeBlock.tsx',
-        'components/github/DevelopmentGateFrame.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -4571,20 +4570,6 @@ export default defineConfig({
           functions: 90,
           branches: 90,
           statements: 90,
-        },
-        // ⚠️ PINNED BELOW THE FLOOR, at what it measures (75 / 100 / 50 / 75). The
-        // file is ONE function plus ONE closure, and the closure is the frame's
-        // `onDecide` — unreachable by construction while it passes `verbs={[]}`:
-        // `ApprovalGateControl` calls `onDecide` only from a verb, and the
-        // `pull_request_approval` kind has none until MOTIR-4909 registers it.
-        // Covering it would mean a verb this story deliberately does not draw
-        // (`tests/components/development-block.test.tsx` asserts there is none).
-        // MOTIR-4909 raises this to the floor when it supplies the verbs.
-        'components/github/DevelopmentGateFrame.tsx': {
-          lines: 75,
-          functions: 50,
-          branches: 90,
-          statements: 75,
         },
       },
     },
