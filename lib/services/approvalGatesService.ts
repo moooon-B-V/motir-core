@@ -873,36 +873,37 @@ export const approvalGatesService = {
       // ONE subject query per KIND on the page, across BOTH sections.
       const subjects = await summarizeGateSubjects([...awaitingRows, ...decidedRows], tx);
 
-      const awaitingItems: ApprovalQueueRowDto[] = [];
-      if (awaitingRows.length > 0) {
-        const routedToIds = awaitingRows.map((row) => routingTargetId(row.workItem));
-        const namesById = new Map(
-          (
-            await userRepository.findByIds(
-              [...new Set(routedToIds.filter((id) => id !== null))],
-              tx,
-            )
-          )
-            .map((user) => [user.id, routedToDisplayName(user)] as const)
-            .filter((entry): entry is readonly [string, string] => entry[1] !== null),
-        );
-        // `canDecideGate` is handed the page's permission set, so it reads nothing.
-        const canDecide = await Promise.all(
-          awaitingRows.map((row) =>
-            canDecideGate({ ...row.workItem, projectId: ctx.projectId }, row.kind, ctx, tx, held),
-          ),
-        );
-        awaitingRows.forEach((row, index) => {
-          awaitingItems.push(
-            toApprovalQueueRowDto(
-              row,
-              subjects.get(row.id) ?? null,
-              canDecide[index] ?? false,
-              namesById.get(routedToIds[index] ?? '') ?? null,
+      // THE ROUTED-TO NAMES, read ONCE for the page (never one read per row), keyed
+      // by user id. Each row then resolves its own name and its own decide flag
+      // directly, so there is no index-aligned array whose fallback no row can reach.
+      const usersById = new Map<string | null, Parameters<typeof routedToDisplayName>[0]>(
+        (
+          await userRepository.findByIds(
+            [...new Set(awaitingRows.map((row) => routingTargetId(row.workItem)))].filter(
+              (id): id is string => id !== null,
             ),
-          );
-        });
-      }
+            tx,
+          )
+        ).map((user) => [user.id, user] as const),
+      );
+      // `canDecideGate` is handed the page's permission set, so it reads nothing.
+      const awaitingItems: ApprovalQueueRowDto[] = await Promise.all(
+        awaitingRows.map(async (row) =>
+          toApprovalQueueRowDto(
+            row,
+            subjects.get(row.id) ?? null,
+            await canDecideGate(
+              { ...row.workItem, projectId: ctx.projectId },
+              row.kind,
+              ctx,
+              tx,
+              held,
+            ),
+            // A routed user whose row has gone resolves to nothing, as on the item page.
+            routedToDisplayName(usersById.get(routingTargetId(row.workItem)) ?? null),
+          ),
+        ),
+      );
 
       return {
         fullView: scope.fullView,
