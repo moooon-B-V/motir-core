@@ -235,6 +235,9 @@ describe('the MINT half is registered too (bug MOTIR-4750)', () => {
       /never pass through a tool argument/i,
     );
     expect(tool!.description, 'the target rule it shares with the publish').toMatch(/LEAF/);
+    expect(tool!.description, 'a done design card mints nothing (MOTIR-5556)').toMatch(
+      /DESIGN_CARD_CLOSED/,
+    );
 
     // And the published catalogue carries it — home #6, which no `tsc` error
     // reaches.
@@ -277,6 +280,13 @@ describe('the DESCRIPTION states each rule this tool depends on', () => {
     expect(tool!.description, 'the publish condition').toMatch(/PUBLISH ONLY WHEN WORK WAITS/);
     expect(tool!.description).toMatch(/blocked_by/);
     expect(tool!.description).toMatch(/DESIGN_EVIDENCE_NOTHING_WAITS/);
+  });
+
+  it('says a DONE design card is closed, and both ways forward — MOTIR-5556', () => {
+    expect(tool!.description, 'the rule').toMatch(/DONE DESIGN CARD IS CLOSED/);
+    expect(tool!.description, 'the refusal code').toMatch(/DESIGN_CARD_CLOSED/);
+    expect(tool!.description, 'way forward 1').toMatch(/reopen it by hand/);
+    expect(tool!.description, 'way forward 2').toMatch(/propose a new design card/);
   });
 
   it('says a missing publish is INVISIBLE — the failure mode, not just the task', () => {

@@ -429,6 +429,10 @@
       "label": "决定任意审批",
       "description": "对分派给他人的审批作出批准或要求修改，而不仅是分派给自己的审批。"
     },
+    "approval_view_any": {
+      "label": "查看所有审批",
+      "description": "查看项目的全部审批记录，包括他人的记录。没有此权限时，只能看到分派给你的审批和你作出决定的审批。"
+    },
     "public_request_comment": {
       "label": "评论请求",
       "description": "在公开请求的讨论串中回复。仅适用于公开项目。"
@@ -1004,6 +1008,7 @@
       "runs": "运行",
       "boards": "面板",
       "reports": "报表",
+      "approvalRecords": "审批记录",
       "code": "代码库",
       "settings": "设置",
       "git": "Git",
@@ -1120,6 +1125,7 @@
       "goToIssues": "前往工作项",
       "goToBoards": "前往面板",
       "goToReports": "前往报表",
+      "goToApprovalRecords": "前往审批记录",
       "goToSettings": "前往设置",
       "switchTo": "切换到 {name}",
       "current": "当前",
@@ -1254,6 +1260,30 @@
     "pendingPlanRowAdd": "{count, plural, other {——提议在其下新增 # 个工作项}}",
     "pendingPlanRowModifyAdd": "{count, plural, other {——提议修改，并在其下新增 # 个工作项}}",
     "pendingPlanRowRemoveAdd": "{count, plural, other {——提议将其归档，并在其下新增 # 个工作项}}",
+    "planHistoryTitle": "计划",
+    "planHistoryGloss": "此工作项的由来",
+    "planHistoryListAria": "塑造 {key} 的计划",
+    "planHistoryProposesModify": "提议修改此工作项",
+    "planHistoryProposesRemove": "提议归档此工作项",
+    "planHistoryProposesAdd": "{count, plural, other {提议在此工作项下新增 # 个工作项}}",
+    "planHistoryProposesModifyAdd": "{count, plural, other {提议修改此工作项，并在其下新增 # 个工作项}}",
+    "planHistoryProposesRemoveAdd": "{count, plural, other {提议归档此工作项，并在其下新增 # 个工作项}}",
+    "planHistoryCreated": "创建了此工作项",
+    "planHistoryCreatedAdded": "{count, plural, other {创建了此工作项，并在其下新增了 # 个工作项}}",
+    "planHistoryChanged": "修改了此工作项",
+    "planHistoryArchived": "归档了此工作项",
+    "planHistoryAdded": "{count, plural, other {在此工作项下新增了 # 个工作项}}",
+    "planHistoryChangedAdded": "{count, plural, other {修改了此工作项，并在其下新增了 # 个工作项}}",
+    "planHistoryArchivedAdded": "{count, plural, other {归档了此工作项，并在其下新增了 # 个工作项}}",
+    "planHistoryDeclinedModify": "曾提议修改此工作项——未应用",
+    "planHistoryDeclinedRemove": "曾提议归档此工作项——未应用",
+    "planHistoryDeclinedAdd": "{count, plural, other {曾提议在此工作项下新增 # 个工作项——未新增}}",
+    "planHistoryDeclinedModifyAdd": "{count, plural, other {曾提议修改此工作项，并在其下新增 # 个工作项——未应用}}",
+    "planHistoryDeclinedRemoveAdd": "{count, plural, other {曾提议归档此工作项，并在其下新增 # 个工作项——未应用}}",
+    "planHistoryViaHarnessModel": "由 {harness} · {model} 撰写",
+    "planHistoryShowMore": "显示更多计划",
+    "planHistoryError": "无法加载计划。",
+    "planHistoryLoadMoreError": "无法加载更多计划。",
     "edit": "编辑",
     "description": "描述",
     "descriptionGloss": "做什么",
@@ -7464,6 +7494,7 @@
       "review": "查看",
       "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
       "noVersion": "无版本号",
+      "decidedOn": "基于 <mono>{version}</mono>",
       "mergeSubjectMeta": "{pr} · 拉取请求",
       "subjectGone": "此项针对的设计已不存在",
       "notRenderable": "Motir 暂不支持展示此类型",
@@ -7481,6 +7512,35 @@
         "openRow": "打开 {key} {title}",
         "openWorkItem": "打开工作项"
       }
+    }
+  },
+  "approvalRecords": {
+    "heading": "审批记录",
+    "subtitle": {
+      "full": "本项目的全部审批——先列等待中的，再列已决定的。",
+      "own": "等待你处理的审批，以及你已决定的审批。"
+    },
+    "tableLabel": "审批记录",
+    "sections": {
+      "awaiting": "等待决定",
+      "decided": "已决定"
+    },
+    "columns": {
+      "workItem": "工作项",
+      "waited": "已等待",
+      "decided": "决定时间",
+      "askedOf": "请谁处理",
+      "decidedBy": "决定人"
+    },
+    "noOne": "无人",
+    "empty": {
+      "title": "还没有审批",
+      "bodyFull": "本项目中等待决定的工作项会出现在这里，决定之后也会保留。",
+      "bodyOwn": "请你处理的审批，以及你决定的审批，都会出现在这里。",
+      "awaitingFull": "本项目中没有等待决定的审批。",
+      "awaitingOwn": "没有等待你处理的审批。",
+      "decidedFull": "本项目中还没有已决定的审批。",
+      "decidedOwn": "你在本项目中还没有决定过审批。"
     }
   },
   "platformAdmin": {
@@ -8446,7 +8506,6 @@
     "mergeMode": {
       "title": "合并拉取请求",
       "desc": "当该项目工作的拉取请求可以合并时会发生什么。仓库由 Motir 托管的项目默认为<strong>自动合并</strong>；包含任何你自己仓库的项目默认为<strong>合并前询问</strong>。",
-      "notYet": "Motir 目前还不会合并拉取请求。在此之前，无论这里选择哪个选项，每个拉取请求都由人在你的 Git 托管平台上合并。",
       "manual": {
         "label": "合并前询问",
         "hint": "检查通过后，需要有人在 Motir 中批准该拉取请求，然后才会合并。未经这一批准，任何内容都不会进入你的默认分支。"

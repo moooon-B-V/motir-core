@@ -3807,11 +3807,19 @@ offered for merging; it stays with the run that is fixing it.
   pull request for this project's work is ready to merge. A project whose
   repositories Motir hosts starts at **Merge automatically**; a project holding
   any repository of your own starts at **Ask before merging**._
-- **The not-yet notice** (`--el-tint-sky` callout, `info` glyph, ink
+- ~~**The not-yet notice** (`--el-tint-sky` callout, `info` glyph, ink
   `--el-text-strong`): _Motir does not merge pull requests yet. Until it does,
   every pull request is merged on your git host by a person, whichever option is
   chosen here._ It is honest about today: nothing reads the value until
-  MOTIR-4882, which removes the notice in the change that makes it false.
+  MOTIR-4882, which removes the notice in the change that makes it false.~~
+  **REMOVED 2026-09-15 (MOTIR-5539).** MOTIR-4882 merged (#2898) without taking
+  it, so for a day the card said the opposite of what the product did: a `manual`
+  project's approval merges the pull request, and an `auto` project's green pull
+  requests are merged with no person. Nothing replaces it — the two hints already
+  say what happens when checks pass, and that is now true in both modes. Panels
+  6–8 of `approvals.mock.html` still draw the callout; they are the record of
+  2026-09-13, when it was true, and are not redrawn (a notice removed on the
+  schedule this note set is not a change to the design).
 - **No enum member or column name is ever shown.**
 
 #### Decisions, each with its reason
@@ -3839,9 +3847,10 @@ offered for merging; it stays with the run that is fixing it.
 - ~~**Out of step with this decision:** §6 / panel 4 (MOTIR-5190) and open PR #2843
   (MOTIR-5278) both open the room to `project:browse`.~~ **RESOLVED 2026-09-13:**
   MOTIR-5393 amends §6 and withdraws panel 4; MOTIR-5394 reverts the merged #2843.
-- **MOTIR-4882 removes the not-yet notice** and builds the approval frame's
+- **MOTIR-4882 ~~removes the not-yet notice and~~** builds the approval frame's
   settings door (`design/work-items/design-notes.md`, the UNIVERSAL APPROVAL
-  FRAME's 2026-09-13 amendment).
+  FRAME's 2026-09-13 amendment). **The notice's removal landed in MOTIR-5539
+  (2026-09-15)** — MOTIR-4882 merged without it.
 - **MOTIR-5183 walks** panels 6, 7 and 8, and asserts a member without
   `workflow:manage` is refused the route.
 
@@ -3850,7 +3859,7 @@ offered for merging; it stays with the run that is fixing it.
 | work item                    | GIVES / TAKES                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | **MOTIR-5181** (the control) | **GIVES** the copy, the grammar, the three states, the anchor. **TAKES** — its criteria drop `review_on_fail` (amended on the card). |
-| **MOTIR-4882** (the merge)   | **GIVES** the room its door lands in. **TAKES** the notice's removal.                                                                |
+| **MOTIR-4882** (the merge)   | **GIVES** the room its door lands in. ~~**TAKES** the notice's removal.~~ Merged without it; **MOTIR-5539** took it (2026-09-15).    |
 | **MOTIR-5183** (E2E)         | **GIVES** the walk's surfaces. **TAKES nothing.**                                                                                    |
 | **MOTIR-4942 / MOTIR-5190**  | **neither** — `done`; §5's stale attribution corrected on the record above.                                                          |
 

@@ -229,8 +229,15 @@ describe('a permission no gate consults can never be granted', () => {
 
     // And with today's real predicate — `PLANNED_PERMISSIONS` is empty on
     // `origin/main` — the grantable set IS the whole role-gated set, so the
-    // check refuses nothing in practice today.
+    // check refuses nothing in practice today. (MOTIR-5305 parked
+    // `approval:view_any` here as the first real refusal; MOTIR-5301 enforced it.)
     expect([...grantablePermissionKeys()].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+  });
+
+  it('a custom role may be granted `approval:view_any` — the room follows the key, not a role (MOTIR-5301)', async () => {
+    const fx = await build('perm-view-any');
+    const role = await createRole(fx, 'Approvals lead', ['project:browse', 'approval:view_any']);
+    expect(role.permissions).toEqual(['project:browse', 'approval:view_any']);
   });
 
   it('every role-gated key IS accepted, so the guard is not over-broad', async () => {

@@ -926,13 +926,16 @@ references.** The pin is written **in the same transaction as the decision** —
 written afterwards, a republish racing an approval re-opens the window it exists
 to close.
 
-**⚠️ PIN, do NOT FREEZE — this is where we deliberately diverge from
+~~**⚠️ PIN, do NOT FREEZE — this is where we deliberately diverge from
 `acceptance-receipt-lifecycle.md`.** The acceptance gate refuses to supersede an
 approved receipt at all (`AcceptanceEvidenceAlreadyApprovedError`, 409,
 MOTIR-2764). That is right for a story that is finished and **wrong here**: a
 design legitimately evolves after approval, and 9.2's revise loop depends on
 republishing. The design path keeps superseding; it simply stops feeding
-approved blobs to the GC.
+approved blobs to the GC.~~ **AMENDED 2026-09-15 (MOTIR-5554):** a design
+evolves after approval only once a person reopens its card. A design card in the
+`done` status category is CLOSED — read the _A DONE DESIGN CARD IS CLOSED_
+amendment below, which retires this divergence. The pin itself is unchanged.
 
 > ### §6c — AMENDMENT (MOTIR-4911, 2026-09-08): the pin is keyed on the SUBJECT, never on the gate KIND
 >
@@ -1022,6 +1025,161 @@ approved blobs to the GC.
 > **First pin wins on any one row.** §6d's _per approved version_ accumulates
 > across DIFFERENT rows; re-approving the SAME version keeps the timestamp of the
 > decision that first bought the retention, rather than quietly re-dating it.
+
+> ### §6c — SECOND AMENDMENT (MOTIR-5554, 2026-09-15): a DONE design card is CLOSED — it accepts no new version and gives up none
+>
+> **Decided by the requester (Yue, 2026-09-15).** Read on `origin/main` @
+> `570ecd199`.
+>
+> **The question.** What happens when a design result is published, an upload
+> grant is minted, or the current result is withdrawn, on a design card that is
+> already `done`?
+>
+> **The options.**
+>
+> 1. **Keep _pin, do not freeze_.** The supersede always proceeds, so a `done`
+>    card's current design can change. That was this section's rule, restated in
+>    the comment above `DesignEvidence.pinnedAt` in `prisma/schema.prisma` and in
+>    `designEvidenceService`'s supersede comments.
+> 2. **A publish onto a `done` card moves it back to review.** Rejected: it puts a
+>    status write on the publish path, and it lets an agent silently reopen a
+>    decision a person made.
+> 3. **Close the `done` card — CHOSEN.** The publish, the mint and the withdrawal
+>    are refused. The way back is a person reopening the card by hand; after that,
+>    today's behaviour applies.
+>
+> #### 1. The rule and its scope
+>
+> **A design card whose status is in the `done` CATEGORY accepts no new design
+> result and gives up none.**
+>
+> - **The category, not the key.** `cancelled` is in the done category, so a
+>   cancelled design card is closed too. A project that renamed its done status is
+>   covered, because the category is resolved through the project's workflow and
+>   never by comparing a key to the string `'done'` — the same predicate readiness
+>   applies to a `blocked_by` edge (`isTerminalStatus`).
+> - **The card's STATUS, never a gate.** A `done` design card whose result was
+>   approved through a pull request raises no `design_result` gate at all
+>   (`design-result.md` AMENDMENT 4 Q8), and it is closed exactly the same. A rule
+>   keyed on the gate would miss the common case — the failure this section's
+>   first amendment already recorded once.
+>
+> #### 2. The four acts, and the one refusal
+>
+> Each of these is refused on a closed card, and nothing is written — no evidence
+> row, no asset row, no gate row, no supersede, no upload grant:
+>
+> | act                         | service method               | doors                                                           |
+> | --------------------------- | ---------------------------- | --------------------------------------------------------------- |
+> | publish inline              | `recordFromBytes`            | `publish_design_result` (`contentBase64`)                       |
+> | publish by upload pathnames | `recordFromPathnames`        | `publish_design_result` (`pathname`) · `POST …/design-evidence` |
+> | mint an upload grant        | `createUploadTokens`         | `create_design_upload` · `POST …/design-evidence/upload-token`  |
+> | withdraw the current result | `withdrawCurrentForWorkItem` | `DELETE …/design-evidence`                                      |
+>
+> **One typed error, code `DESIGN_CARD_CLOSED`, HTTP 409** on the routes and a
+> tool error carrying the same code on the MCP tools. Its message names **both
+> ways forward**:
+>
+> - **reopen the card by hand** — the default workflow's `done → in_progress`
+>   edge, a status change the card's history records; or
+> - **propose a new design card beside the card that needs it, `relates_to` this
+>   one** — when the old design did not cover something, rather than being wrong.
+>   The closed card then stays as the record of what was decided.
+>
+> An agent told only _not allowed_ retries or improvises. One told these two
+> things has two moves, and both leave a visible record.
+>
+> **The upload-grant mint is refused as well, although it writes no row**, for
+> the reason the mint already refuses a card nothing waits on: a grant for a
+> publish that can never succeed is bytes uploaded for nothing.
+>
+> #### 3. The race: a publish against the approval that closes the card
+>
+> A person can press Approve while an agent is still publishing. **The outcome is
+> exactly one of the two, never both a new current version and a `done` status**,
+> and it is reached by waiting under the lock order the two paths already share:
+>
+> **`approval_gate` → `design_evidence` → `work_item`.** That is the order
+> `approvalGatesService.decide` takes — the gate `FOR UPDATE` (step 1), the pin's
+> `design_evidence` lock (step 4), then the kind's effect, which transitions the
+> card and locks the `work_item` row — and the publish path already takes the
+> first two in that order (§6b's shipped note, the comment above
+> `supersedeAwaitingByWorkItem`). **So the closed check reads the card's status
+> AFTER the `design_evidence` lock, under a `work_item` row lock**, inside the
+> publish's own transaction. Taking the `work_item` lock any earlier would
+> reverse the last two locks against `decide` and deadlock precisely on the
+> interleaving this rule exists for. The existing order is unchanged.
+>
+> The approval that CLOSES a card is §8's first arm — no open pull request, so
+> approving writes `done`. (With a pull request open, approving writes `approved`
+> and the merge writes `done`; part 7 below.)
+>
+> - **The approval wins** → the publish waits on the gate row (or on the
+>   `design_evidence` row the pin holds), then reads a `done` status and is
+>   refused. Nothing is written.
+> - **The publish wins** → it commits a new version and supersedes the prior
+>   version's `awaiting` `design_result` gate; `decide` then re-reads that gate
+>   under its own lock and refuses it as `superseded`. The card is not `done`.
+>
+> The pre-checks the publish makes before it uploads are courtesies that stop a
+> doomed publish writing orphan objects. **The read inside the transaction is the
+> authoritative one**, exactly as for _does work wait on this?_. The withdrawal
+> takes the same order — `design_evidence`, then `work_item`. The mint writes
+> nothing, so its check needs no lock.
+>
+> #### 4. What is unchanged
+>
+> - **Every card that is NOT `done`.** Supersede, pin, retention, idempotency and
+>   the gate lifecycle behave exactly as before. **The revise loop is untouched**
+>   — publish, changes requested, publish again — because it runs before
+>   approval.
+> - **The pin.** An approval still pins the version it was given on; §6d's
+>   _approvals accumulate_ still holds. A card approved, reopened and approved
+>   again holds two pinned versions.
+> - **Reopening.** §6d's lifecycle step 4 is now the ONLY way back: after a
+>   person moves the card `done → in_progress`, it is open, a new version
+>   publishes as it does today, and it is decided again.
+> - **No status, no column, no migration.**
+>
+> #### 5. What it supersedes
+>
+> - **_PIN, do NOT FREEZE — a design legitimately evolves after approval_** —
+>   struck above. Its replacement: **a design evolves after approval only once a
+>   person reopens its card.**
+> - **The divergence from the acceptance domain is RETIRED.** This section called
+>   it deliberate: the acceptance gate refuses a republish over an approved
+>   receipt (`AcceptanceEvidenceAlreadyApprovedError`, 409, MOTIR-2764) while the
+>   design path kept superseding. The two now agree that a decided subject is not
+>   silently replaced. They still differ in WHAT they key on — the receipt on its
+>   own `approved` status, the design on its CARD's status — because a design
+>   result has no status of its own, and a card can be reopened while a receipt
+>   cannot.
+>
+> #### 6. Why
+>
+> The next story in this epic (MOTIR-5553) hands every agent run the current
+> result of a `done` design card as _the approved design_. That reading is true
+> only if the result cannot change while the card is `done`. Under _pin, do not
+> freeze_ it could, and the card would still say the decision was made.
+>
+> #### 7. Deliberately NOT decided here
+>
+> - **A card at `approved` with an open pull request** — decided, but not yet
+>   `done` until the merge (§2b). This rule closes the `done` category and nothing
+>   else, so a publish in that window still supersedes, and after the merge the
+>   card can be `done` with a current version nobody approved. Which version a run
+>   is handed as _the approved design_ — the pinned one, or a closed `approved`
+>   window — is MOTIR-5555's to decide; the finding is on that card.
+> - **What an agent is handed from an approved design** — MOTIR-5553's own
+>   decision card.
+>
+> #### Which card implements which part
+>
+> | part     | card                                                                                |
+> | -------- | ----------------------------------------------------------------------------------- |
+> | 1–3      | MOTIR-5556 — the refusal, `DESIGN_CARD_CLOSED`, every door, the in-transaction read |
+> | 3, 4     | MOTIR-5558 — the approve → refuse → reopen → accept seam and the race, on Postgres  |
+> | the walk | MOTIR-5559 — the browser E2E                                                        |
 
 #### 6d. The reopen lifecycle, and why the guard keys on `awaiting`
 

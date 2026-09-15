@@ -547,6 +547,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // receipt's `beat()` pacing, which the promotion removed. Re-measure from the
   // first green `playwright-report-bulk-*` artifact that includes it.
   'design-approval.spec.ts': 4.2,
+  // MOTIR-5559 — a done design is final: approve, republish refused, reopen,
+  // republish accepted. Measured LOCALLY against a production build (5.0 s cold,
+  // then 2.9 s and 2.4 s; one test), not from a green CI run — there is none yet.
+  // Re-measure from the first green `playwright-report-bulk-*` artifact with it.
+  'design-card-closed.spec.ts': 5.0,
   'design-result.spec.ts': 9.2,
   'design-result-publish.spec.ts': 8.0,
   'epic2-acceptance.spec.ts': 7.4,
@@ -570,6 +575,15 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'implemented-lifecycle.spec.ts': 16.0,
   'issue-create-edit-flow.spec.ts': 16.7,
   'issue-detail-flow.spec.ts': 51.7,
+  // MOTIR-5547 AC 7 — the plan-history section's smoke on `/items/<key>`. A
+  // brand-new spec, ESTIMATED rather than measured: it runs the same
+  // `seedPlanShapes` as `plan-shapes.spec.ts` (14.0 s) plus three page loads, so
+  // 16.0, rounded UP because under-estimating unbalances the bin-packer.
+  // Re-measure from the first green CI run that includes it.
+  // MOTIR-5549 adds a second test (its `seedPlanHistory` approves and declines
+  // six plans, then three page loads across two sign-ins), ESTIMATED at +14 s on
+  // the same basis — so 30.0, again rounded up.
+  'item-plan-history.spec.ts': 30.0,
   'issue-list-flow.spec.ts': 51.7,
   'jobs-dashboard.spec.ts': 8.6,
   'jobs-fanout-engine.spec.ts': 11.7,
@@ -608,6 +622,15 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'plan-timeline.spec.ts': 14.0,
   'planning-anchor-level.spec.ts': 11.0,
   'plans-review.spec.ts': 14.8,
+  // MOTIR-5539. Promoted from the acceptance lane (it was
+  // `acceptance-pr-merge-mode.spec.ts`). ESTIMATED, not measured — it has never
+  // run in this lane, and its acceptance-lane runtime is the receipt's `beat()`
+  // pacing, which the promotion removed. One test: two sign-ins, three reloads or
+  // navigations, three PATCHes and one routed failure — heavier than
+  // `design-approval.spec.ts` (4.2), so recorded at 12.0 as a conservative
+  // first-run cost. Re-measure from the first green `playwright-report-bulk-*`
+  // artifact that includes it.
+  'pr-merge-mode.spec.ts': 12.0,
   'profile.spec.ts': 11.4,
   'project-access.spec.ts': 9.7,
   'project-details.spec.ts': 7.7,

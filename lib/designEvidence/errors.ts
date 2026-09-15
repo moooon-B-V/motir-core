@@ -248,3 +248,28 @@ export class DesignEvidenceNothingWaitsError extends DesignEvidenceError {
     this.name = 'DesignEvidenceNothingWaitsError';
   }
 }
+
+/**
+ * The design card is CLOSED — its status is in the `done` category (`cancelled`
+ * included), so it accepts no new design result and gives up none: a publish, an
+ * upload-grant mint and a withdrawal are all refused (MOTIR-5556;
+ * `docs/decisions/approval-gates.md` §6c SECOND AMENDMENT). → 409.
+ *
+ * The message names BOTH ways forward, because the one who hits this is usually
+ * an agent, and an agent told only "not allowed" retries or improvises. Each way
+ * leaves a visible record: reopening is a status change the card's history
+ * keeps, and a new design card leaves this one standing as what was decided.
+ */
+export class DesignCardClosedError extends DesignEvidenceError {
+  readonly code = 'DESIGN_CARD_CLOSED' as const;
+  readonly status = 409;
+  constructor(identifier: string, statusKey: string) {
+    super(
+      `${identifier} is ${statusKey}, so its design is decided and it accepts no new design ` +
+        'result, upload or withdrawal. To change it, either reopen the card by hand (move it ' +
+        `out of ${statusKey}), or propose a new design card beside the card that needs it, ` +
+        `relates_to ${identifier}.`,
+    );
+    this.name = 'DesignCardClosedError';
+  }
+}

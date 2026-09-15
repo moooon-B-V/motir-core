@@ -81,6 +81,8 @@ import type { MetadataRoute } from 'next';
  * `(admin)` is excluded on purpose; see the module note above.
  */
 export const SIGNED_IN_SEGMENTS = [
+  // MOTIR-5302 — the Approval records room.
+  'approvals',
   'backlog',
   'boards',
   // The Codebase room (MOTIR-1768). `code-health` stays beside it: that address

@@ -429,6 +429,10 @@
       "label": "Decide any approval",
       "description": "Approve or request changes on an approval routed to someone else, not only one routed to you."
     },
+    "approval_view_any": {
+      "label": "See every approval",
+      "description": "See all of the project's approval records, including other people's. Without it you see the approvals routed to you and the ones you decided."
+    },
     "public_request_comment": {
       "label": "Comment on requests",
       "description": "Reply on a public request's thread. Public projects only."
@@ -1004,6 +1008,7 @@
       "runs": "Runs",
       "boards": "Boards",
       "reports": "Reports",
+      "approvalRecords": "Approval records",
       "code": "Codebase",
       "settings": "Settings",
       "git": "Git",
@@ -1120,6 +1125,7 @@
       "goToIssues": "Go to Work Items",
       "goToBoards": "Go to Boards",
       "goToReports": "Go to Reports",
+      "goToApprovalRecords": "Go to Approval records",
       "goToSettings": "Go to Settings",
       "switchTo": "Switch to {name}",
       "current": "Current",
@@ -1254,6 +1260,30 @@
     "pendingPlanRowAdd": "{count, plural, one {— proposes # work item under it} other {— proposes # work items under it}}",
     "pendingPlanRowModifyAdd": "{count, plural, one {— proposes changes, and # work item under it} other {— proposes changes, and # work items under it}}",
     "pendingPlanRowRemoveAdd": "{count, plural, one {— proposes to archive it, and # work item under it} other {— proposes to archive it, and # work items under it}}",
+    "planHistoryTitle": "Plans",
+    "planHistoryGloss": "how this item came to be",
+    "planHistoryListAria": "Plans that shaped {key}",
+    "planHistoryProposesModify": "Proposes changes to this item",
+    "planHistoryProposesRemove": "Proposes to archive this item",
+    "planHistoryProposesAdd": "{count, plural, one {Proposes # work item under this item} other {Proposes # work items under this item}}",
+    "planHistoryProposesModifyAdd": "{count, plural, one {Proposes changes to this item, and # work item under it} other {Proposes changes to this item, and # work items under it}}",
+    "planHistoryProposesRemoveAdd": "{count, plural, one {Proposes to archive this item, and # work item under it} other {Proposes to archive this item, and # work items under it}}",
+    "planHistoryCreated": "Created this item",
+    "planHistoryCreatedAdded": "{count, plural, one {Created this item, and # work item under it} other {Created this item, and # work items under it}}",
+    "planHistoryChanged": "Changed this item",
+    "planHistoryArchived": "Archived this item",
+    "planHistoryAdded": "{count, plural, one {Added # work item under this item} other {Added # work items under this item}}",
+    "planHistoryChangedAdded": "{count, plural, one {Changed this item, and added # work item under it} other {Changed this item, and added # work items under it}}",
+    "planHistoryArchivedAdded": "{count, plural, one {Archived this item, and added # work item under it} other {Archived this item, and added # work items under it}}",
+    "planHistoryDeclinedModify": "Proposed changes to this item — not applied",
+    "planHistoryDeclinedRemove": "Proposed to archive this item — not applied",
+    "planHistoryDeclinedAdd": "{count, plural, one {Proposed # work item under this item — not added} other {Proposed # work items under this item — not added}}",
+    "planHistoryDeclinedModifyAdd": "{count, plural, one {Proposed changes to this item, and # work item under it — not applied} other {Proposed changes to this item, and # work items under it — not applied}}",
+    "planHistoryDeclinedRemoveAdd": "{count, plural, one {Proposed to archive this item, and # work item under it — not applied} other {Proposed to archive this item, and # work items under it — not applied}}",
+    "planHistoryViaHarnessModel": "via {harness} · {model}",
+    "planHistoryShowMore": "Show more plans",
+    "planHistoryError": "Couldn't load plans.",
+    "planHistoryLoadMoreError": "Couldn't load more plans.",
     "edit": "Edit",
     "description": "Description",
     "descriptionGloss": "what to do",
@@ -7468,6 +7498,7 @@
       "review": "Review",
       "subjectMeta": "{files, plural, =1 {# file} other {# files}} · {version}",
       "noVersion": "no version",
+      "decidedOn": "on <mono>{version}</mono>",
       "mergeSubjectMeta": "{pr} · pull request",
       "subjectGone": "The design this asked about is gone",
       "notRenderable": "Motir cannot show this kind yet",
@@ -7485,6 +7516,35 @@
         "openRow": "Open {key} {title}",
         "openWorkItem": "Open work item"
       }
+    }
+  },
+  "approvalRecords": {
+    "heading": "Approval records",
+    "subtitle": {
+      "full": "Every approval in this project — waiting first, then decided.",
+      "own": "Approvals waiting on you, and the ones you decided."
+    },
+    "tableLabel": "Approval records",
+    "sections": {
+      "awaiting": "Awaiting a decision",
+      "decided": "Decided"
+    },
+    "columns": {
+      "workItem": "Work item",
+      "waited": "Waited",
+      "decided": "Decided",
+      "askedOf": "Asked of",
+      "decidedBy": "Decided by"
+    },
+    "noOne": "No one",
+    "empty": {
+      "title": "No approvals yet",
+      "bodyFull": "When a work item in this project waits on a decision, it appears here, and it stays here once it is decided.",
+      "bodyOwn": "Approvals asked of you, and the ones you decide, will appear here.",
+      "awaitingFull": "Nothing in this project is waiting on a decision.",
+      "awaitingOwn": "Nothing is waiting on you.",
+      "decidedFull": "No approval in this project has been decided yet.",
+      "decidedOwn": "You have not decided an approval in this project yet."
     }
   },
   "platformAdmin": {
@@ -8450,7 +8510,6 @@
     "mergeMode": {
       "title": "Merging pull requests",
       "desc": "What happens when a pull request for this project’s work is ready to merge. A project whose repositories Motir hosts starts at <strong>Merge automatically</strong>; a project holding any repository of your own starts at <strong>Ask before merging</strong>.",
-      "notYet": "Motir does not merge pull requests yet. Until it does, every pull request is merged on your git host by a person, whichever option is chosen here.",
       "manual": {
         "label": "Ask before merging",
         "hint": "When its checks pass, a person approves the pull request in Motir before it is merged. Nothing reaches your default branch without that yes."

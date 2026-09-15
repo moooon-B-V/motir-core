@@ -105,6 +105,7 @@ import {
   PlanTargetImmutableError,
   type PlanTargetOp,
   UnresolvedPlanRefError,
+  InvalidPlanHistoryCursorError,
 } from '@/lib/plans/errors';
 import {
   PLAN_REVISION_LEASE_MS,
@@ -121,7 +122,12 @@ import {
   // `{ refs, names, scope }` for ONE item. Two different things, one good name.
   type ResolvedRepoPins as ResolvedRepoSet,
 } from '@/lib/workItems/dispatchRepo';
-import { UnknownProjectRepoRefError, UnknownTargetRepoError } from '@/lib/workItems/errors';
+import {
+  UnknownProjectRepoRefError,
+  UnknownTargetRepoError,
+  WorkItemNotFoundError,
+} from '@/lib/workItems/errors';
+import { readWorkItem } from '@/lib/workspaces/tenantRead';
 import { assertSingleTargetRepoInput, primaryTargetRepo } from '@/lib/workItems/targetRepo';
 import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 
@@ -142,11 +148,19 @@ import type {
   CorrectPlanBriefInput,
   CorrectPlanBriefKey,
   PlanItemOpDto,
+  PlanHistoryListOptions,
   WorkItemPendingPlanStatusDto,
   WorkItemPendingProposalDto,
+  WorkItemPlanHistoryEntryDto,
+  WorkItemPlanHistoryPageDto,
 } from '@/lib/dto/plans';
 import { PLAN_STATUS_DTO_VALUES, WORK_ITEM_PENDING_PLAN_STATUSES } from '@/lib/dto/plans';
-import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
+import {
+  toPlanDto,
+  toPlanItemDto,
+  toPlanWithItemsDto,
+  toWorkItemPlanHistoryEntryDto,
+} from '@/lib/mappers/planMappers';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { buildScope } from '@/lib/planChange/scope';
@@ -192,6 +206,37 @@ const MAX_PAGE_LIMIT = 100;
 function clampLimit(limit: number | undefined): number {
   if (limit == null || !Number.isFinite(limit)) return DEFAULT_PAGE_LIMIT;
   return Math.max(1, Math.min(MAX_PAGE_LIMIT, Math.floor(limit)));
+}
+
+// The item page's PLAN HISTORY pages (Story MOTIR-5542 · MOTIR-5546). Its own
+// pair rather than the Plans list's: that surface streams ten newest-first rows,
+// this one lists a single card's plans oldest-first and a card rarely has more
+// than a handful. The cap keeps "show all" a bounded read.
+const PLAN_HISTORY_DEFAULT_LIMIT = 20;
+const PLAN_HISTORY_MAX_LIMIT = 50;
+
+function clampPlanHistoryLimit(limit: number | undefined): number {
+  if (limit == null || !Number.isFinite(limit)) return PLAN_HISTORY_DEFAULT_LIMIT;
+  return Math.max(1, Math.min(PLAN_HISTORY_MAX_LIMIT, Math.floor(limit)));
+}
+
+/** The plan-history cursor: the last plan's `(createdAt, id)`, base64url. */
+function encodePlanHistoryCursor(plan: { createdAt: Date; id: string }): string {
+  return Buffer.from(`${plan.createdAt.toISOString()}|${plan.id}`, 'utf8').toString('base64url');
+}
+
+function decodePlanHistoryCursor(
+  cursor: string | null | undefined,
+): { createdAt: Date; id: string } | null {
+  if (cursor == null || cursor === '') return null;
+  const raw = Buffer.from(cursor, 'base64url').toString('utf8');
+  const bar = raw.indexOf('|');
+  const createdAt = new Date(raw.slice(0, bar));
+  const id = raw.slice(bar + 1);
+  if (bar <= 0 || !id || Number.isNaN(createdAt.getTime())) {
+    throw new InvalidPlanHistoryCursorError();
+  }
+  return { createdAt, id };
 }
 
 // The intra-plan temp-ref prefix: a `parentRef` / `blockedByRef` of the form
@@ -4867,6 +4912,118 @@ export const plansService = {
       else claim.op = row.op as Exclude<PlanItemOpDto, 'add'>;
     }
     return [...byPlan.values()];
+  },
+
+  /**
+   * EVERY plan related to ONE work item, oldest first — the item page's PLAN
+   * HISTORY (Story MOTIR-5542 · MOTIR-5546). Related means the plan created the
+   * card, changed it, archived it, or added children under it; every
+   * `PlanStatus` is listed, because a declined plan is part of how a card came to
+   * look the way it does.
+   *
+   * ⚠️ ONE ROW PER PLAN, folded in memory exactly as
+   * `listPendingProposalsForWorkItem` folds — but the page is bounded BY PLAN
+   * first (`planRepository.findPageRelatedToWorkItem`), so a plan with more
+   * child `add`s than the page size is never split across two pages.
+   *
+   * QUERY COUNT, inside ONE bound transaction, after the permission reads: a
+   * page with plans costs TWO queries — the plan page, then that page's rows —
+   * and a card NO plan relates to costs exactly ONE, the plan page's
+   * index-driven `IN (SELECT … FROM plan_item …)` probe, because the row read is
+   * skipped when the page is empty. Nearly every card is that case.
+   *
+   * Gated on `ai:view_plan`, the key every plan read on a card asks: an entry
+   * naming a plan the viewer cannot open is worse than none. The page skips the
+   * call for an actor without it; the route relies on this assertion. The card
+   * is NOT re-read here — the page passes the project of the card it already
+   * holds, and a work item from another project simply has no rows under this
+   * one. The route's by-id entrance below is what answers 404.
+   */
+  async listPlanHistoryForWorkItem(
+    projectId: string,
+    workItemId: string,
+    options: PlanHistoryListOptions,
+    ctx: ServiceContext,
+  ): Promise<WorkItemPlanHistoryPageDto> {
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
+    const limit = clampPlanHistoryLimit(options.limit);
+    const after = decodePlanHistoryCursor(options.cursor);
+
+    const { page, hasMore, rows } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
+        const plans = await planRepository.findPageRelatedToWorkItem(
+          workItemId,
+          ctx.workspaceId,
+          projectId,
+          limit + 1,
+          after,
+          tx,
+        );
+        const page = plans.slice(0, limit);
+        if (page.length === 0) return { page, hasMore: false, rows: [] };
+        const rows = await planItemRepository.findHistoryByWorkItemId(
+          workItemId,
+          ctx.workspaceId,
+          projectId,
+          page.map((plan) => plan.id),
+          tx,
+        );
+        return { page, hasMore: plans.length > limit, rows };
+      },
+    );
+
+    const byPlan = new Map<string, WorkItemPlanHistoryEntryDto>();
+    for (const row of rows) {
+      let entry = byPlan.get(row.plan.id);
+      if (!entry) {
+        entry = toWorkItemPlanHistoryEntryDto(row.plan);
+        byPlan.set(row.plan.id, entry);
+      }
+      // An `add` reaches this read through ONE of two columns, and which one is
+      // the whole difference: its `workItemId` is this card (materialize wrote
+      // the created id back — the plan CREATED it) or its `parentRef` is (a
+      // CHILD under it). A `modify` / `remove` only ever targets.
+      if (row.op === 'add' && row.workItemId !== workItemId) {
+        entry.relation.childCount += 1;
+        entry.proposalIds.children.push(row.id);
+      } else {
+        entry.relation.op = row.op;
+        entry.proposalIds.self = row.id;
+      }
+    }
+
+    // Emitted in the PAGE's order. A plan on the page with no folded row lost
+    // its last related proposal between the two reads (a withdraw); it is
+    // omitted rather than rendered claiming nothing, and the cursor still
+    // advances past it.
+    const items = page.flatMap((plan) => {
+      const entry = byPlan.get(plan.id);
+      return entry ? [entry] : [];
+    });
+    return {
+      items,
+      nextCursor: hasMore ? encodePlanHistoryCursor(page[page.length - 1]!) : null,
+    };
+  },
+
+  /**
+   * {@link plansService.listPlanHistoryForWorkItem} addressed by the work item
+   * ALONE — the `GET /api/work-items/[id]/plans` entrance, which has no project
+   * in hand. Resolves the card through the tenant read and answers
+   * {@link WorkItemNotFoundError} for an unknown or cross-workspace id (no
+   * existence leak), then asks for the history under the card's OWN project.
+   */
+  async listPlanHistoryByWorkItemId(
+    workItemId: string,
+    options: PlanHistoryListOptions,
+    ctx: ServiceContext,
+  ): Promise<WorkItemPlanHistoryPageDto> {
+    const item = await readWorkItem(workItemId, ctx);
+    if (!item || item.workspaceId !== ctx.workspaceId) {
+      throw new WorkItemNotFoundError(workItemId);
+    }
+    return plansService.listPlanHistoryForWorkItem(item.projectId, workItemId, options, ctx);
   },
 
   /**
