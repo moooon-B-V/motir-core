@@ -405,19 +405,20 @@ describe('approvalGatesService.listAwaitingMe — the subject summary', () => {
   });
 
   it('says a kind is NOT BUILT YET rather than erroring on it — a real row the day this ships', async () => {
-    // `pull_request_approval` is a declared registry HOLE (MOTIR-4909 owns it), so
+    // `decision_approval` is a declared registry HOLE (MOTIR-4907 owns it), so
     // there is no handler and no summariser. The honest row names the kind. (This
-    // used `pull_request_merge` until MOTIR-4793 registered that kind.)
+    // used `pull_request_merge` until MOTIR-4793 registered that kind, then
+    // `pull_request_approval` until MOTIR-5481 did.)
     await gateOn({
       title: 'An approval waiting',
       assigneeId: meCtx.userId,
-      kind: 'pull_request_approval',
+      kind: 'decision_approval',
     });
 
     const [row] = (await approvalGatesService.listAwaitingMe(meCtx)).items;
 
-    expect(row!.kind).toBe('pull_request_approval');
-    expect(row!.subject).toEqual({ kind: 'pull_request_approval' });
+    expect(row!.kind).toBe('decision_approval');
+    expect(row!.subject).toEqual({ kind: 'decision_approval' });
   });
 
   it('carries a NULL subject when the gate’s subject no longer resolves — distinct from not-built-yet', async () => {

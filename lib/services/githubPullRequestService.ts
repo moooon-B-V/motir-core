@@ -7,6 +7,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { withdrawMergeGateOnUnlink } from './mergeGates';
+import { withdrawPullRequestApprovalGateOnSetChange } from './pullRequestApprovalGates';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -234,6 +235,11 @@ export const githubPullRequestService = {
       // several cards is a real thing (a `motir auto` run is exactly it). Taking
       // an association back is `unlinkPullRequest`, not a side effect of linking
       // somewhere else.
+      // Read BEFORE the idempotent add, so a re-link — which changes nothing — withdraws
+      // nothing either (MOTIR-5482).
+      const alreadyDelivered = (
+        await workItemDeliveryRepository.listByPullRequest(pullRequestId, tx)
+      ).some((row) => row.workItemId === currentItemId);
       await workItemDeliveryRepository.add(
         {
           workspaceId: ctx.workspaceId,
@@ -243,6 +249,8 @@ export const githubPullRequestService = {
         },
         tx,
       );
+      // A NEW member changes the set an approve-and-merge gate asked about.
+      if (!alreadyDelivered) await withdrawPullRequestApprovalGateOnSetChange(currentItemId, tx);
       await retireDesignGateForOpenPullRequest(currentItemId, pr.state, tx);
       return toLinkedPullRequestDto(pr);
     }).then(async (dto) => {
@@ -431,6 +439,10 @@ export const githubPullRequestService = {
       // re-read: this arm already resolved the repository row, and the gate
       // compares each member's merge against THAT repository's own default
       // branch, so the column is stored rather than joined for per member.
+      // The same set-change withdrawal the sibling arm makes (MOTIR-5482).
+      const alreadyDelivered = (await workItemDeliveryRepository.listByPullRequest(prId, tx)).some(
+        (row) => row.workItemId === input.workItemId,
+      );
       await workItemDeliveryRepository.add(
         {
           workspaceId: ctx.workspaceId,
@@ -440,6 +452,9 @@ export const githubPullRequestService = {
         },
         tx,
       );
+      if (!alreadyDelivered) {
+        await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
+      }
       await retireDesignGateForOpenPullRequest(input.workItemId, updated.state, tx);
 
       return {
@@ -509,7 +524,11 @@ export const githubPullRequestService = {
       const count = await workItemDeliveryRepository.remove(workItemId, pullRequestId, tx);
       // The row left the card, so the card's merge question about it goes too, in
       // the same transaction (MOTIR-5515).
-      if (count > 0) await withdrawMergeGateOnUnlink(workItemId, pullRequestId, tx);
+      if (count > 0) {
+        await withdrawMergeGateOnUnlink(workItemId, pullRequestId, tx);
+        // A member left the set the approve-and-merge gate asked about (MOTIR-5482).
+        await withdrawPullRequestApprovalGateOnSetChange(workItemId, tx);
+      }
       return { removed: count > 0 };
     }).then(async (result) => {
       // The mirror of the link arm (MOTIR-3675): removing the last delivery makes
@@ -589,7 +608,10 @@ export const githubPullRequestService = {
       // between a correction and a retraction.
       const count = await workItemDeliveryRepository.remove(input.workItemId, pr.id, tx);
       // The same withdrawal the sibling arm makes (MOTIR-5515).
-      if (count > 0) await withdrawMergeGateOnUnlink(input.workItemId, pr.id, tx);
+      if (count > 0) {
+        await withdrawMergeGateOnUnlink(input.workItemId, pr.id, tx);
+        await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
+      }
       return { removed: count > 0, pullRequestId: pr.id };
     }).then(async (result) => {
       // The same post-commit refresh both other arms do (MOTIR-3675): removing the

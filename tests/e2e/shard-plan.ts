@@ -563,6 +563,13 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'general-attachment.spec.ts': 8.0,
   'gitlab.spec.ts': 6.1,
   'hero-ai-control-styles.spec.ts': 12.0,
+  // MOTIR-5487. Promoted from the acceptance lane (it was
+  // `acceptance-how-to-test.spec.ts`). NOT measured in this lane: estimated from the
+  // acceptance run's per-step timings (CI run 34950375290) with the receipt's
+  // `beat()` holds removed — ~2.4 s seed, ~1.4 s sign-in, ~2.4 s over the first
+  // three steps, ~3 s for the last three. Re-measure from the first green
+  // `playwright-report-bulk-*` artifact that includes it.
+  'how-to-test.spec.ts': 9.2,
   'workbench.spec.ts': 10.9,
   'import.spec.ts': 9.1,
   'implemented-lifecycle.spec.ts': 16.0,

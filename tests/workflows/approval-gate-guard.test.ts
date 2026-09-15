@@ -402,6 +402,28 @@ describe('WITH AN OPEN PULL REQUEST, `approved` and `done` have one writer each 
     expect(gate).toMatchObject({ waitingOn: 'decision', canDecide: false });
   });
 
+  it('a refusal on an UNREGISTERED gate kind still names its routed-to person, routed by the card', async () => {
+    // With a pull request open the refusal carries the awaiting gate's kind; a kind with no
+    // handler routes by the card itself. `pull_request_approval` walked this fallback until
+    // MOTIR-5481 registered it; `decision_approval` is the one kind still a hole (MOTIR-4907).
+    const { itemId, identifier } = await gatedItem({ kind: 'decision_approval' });
+    await linkPullRequest(itemId, 'open');
+
+    const err = (await workItemsService
+      .updateStatus(itemId, 'approved', fx.ctx)
+      .catch((e) => e)) as ApprovalGatePendingError;
+
+    expect(err).toBeInstanceOf(ApprovalGatePendingError);
+    expect(err.gateKind).toBe('decision_approval');
+    const gate = await approvalGatesService.describePendingRefusal(err, fx.ctx);
+    expect(gate).toMatchObject({
+      itemKey: identifier,
+      kind: 'decision_approval',
+      waitingOn: 'decision',
+    });
+    expect(typeof gate.routedToLabel).toBe('string');
+  });
+
   it('the approval’s OWN write into `approved` passes (decidingGateId)', async () => {
     const { itemId, gateId } = await gatedItem();
     await linkPullRequest(itemId, 'open');

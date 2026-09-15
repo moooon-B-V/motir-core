@@ -228,13 +228,13 @@ describe('the Approvals list — rows with no subject to show', () => {
   it('says a kind is NOT BUILT YET, offers nothing to decide, and still opens — on its own kind', () => {
     const row = designRow({
       gateId: 'gate-approval',
-      // Still a declared hole (MOTIR-4909); the merge kind is registered (MOTIR-4793).
-      kind: 'pull_request_approval',
-      subject: { kind: 'pull_request_approval' },
+      // Still a declared hole (MOTIR-4907); both pull-request kinds are registered.
+      kind: 'decision_approval',
+      subject: { kind: 'decision_approval' },
     });
     renderRows([row]);
 
-    expect(screen.getByText('Pull-request approval')).toBeTruthy();
+    expect(screen.getByText('Decision approval')).toBeTruthy();
     expect(screen.getByText('Not built yet')).toBeTruthy();
     expect(screen.getByText('Motir cannot show this kind yet')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
@@ -242,7 +242,7 @@ describe('the Approvals list — rows with no subject to show', () => {
     // The overlay draws this arm (§ 22 Panel 4a), so the row has the door.
     fireEvent.click(rowDoor());
     expect(shallowPush).toHaveBeenCalledWith(
-      '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=pull_request_approval',
+      '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=decision_approval',
     );
   });
 
@@ -389,5 +389,90 @@ describe('the Approvals list — the pager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
 
     expect(push).toHaveBeenCalledWith('/workbench?tab=approvals&page=2');
+  });
+});
+
+describe('the Approvals list — the PULL-REQUEST row (MOTIR-5485, design-notes § 23)', () => {
+  const MEMBERS = [
+    { repo: 'moooon/motir-core', number: 140 },
+    { repo: 'moooon/motir-ai', number: 91 },
+    { repo: 'moooon/motir-gateway', number: 12 },
+  ];
+
+  function pullRequestRow(count: number, over: Partial<ApprovalQueueRowDto> = {}) {
+    return designRow({
+      gateId: `gate-pr-${count}`,
+      kind: 'pull_request_approval',
+      workItem: {
+        ...designRow().workItem,
+        identifier: 'ACME-12',
+        title: 'Throttle the public API',
+        kind: 'story',
+        type: null,
+      },
+      subject: {
+        kind: 'pull_request_approval',
+        members: MEMBERS.slice(0, count).map((m) => ({
+          ...m,
+          headSha: 'abc123',
+          state: 'open' as const,
+        })),
+      },
+      ...over,
+    });
+  }
+
+  it.each([
+    [1, 'moooon/motir-core · #140'],
+    [2, 'moooon/motir-core · #140, moooon/motir-ai · #91'],
+    [3, 'moooon/motir-core · #140, moooon/motir-ai · #91, +1 more'],
+  ])('a %i-repository set reads its subject line by the truncation rule', (count, line) => {
+    renderRows([pullRequestRow(count)]);
+
+    const subject = screen.getByText(line);
+    // The whole list is always in the cell's title.
+    expect(subject.getAttribute('title')).toBe(
+      MEMBERS.slice(0, count)
+        .map((m) => `${m.repo} · #${m.number}`)
+        .join(', '),
+    );
+  });
+
+  it("shows the kind's LIVE glyph and label, and no Not built yet pill", () => {
+    renderRows([pullRequestRow(2)]);
+
+    const row = screen.getByTestId('approval-row-gate-pr-2');
+    expect(screen.getByText(en.workbench.approvals.pullRequest.kindLabel)).toBeTruthy();
+    expect(row.querySelector('svg')!.getAttribute('class')).toContain('--el-accent-on-surface');
+    expect(screen.queryByText('Not built yet')).toBeNull();
+    expect(screen.queryByText('Motir cannot show this kind yet')).toBeNull();
+  });
+
+  it("the row and Open work item both lead to the work item's page — nothing opens in the list", () => {
+    renderRows([pullRequestRow(2)]);
+
+    const door = screen.getByRole('link', { name: /^Open ACME-12 / });
+    expect(door.getAttribute('href')).toBe('/items/ACME-12');
+    expect(door.getAttribute('aria-haspopup')).toBeNull();
+    expect(fireEvent.click(door, { button: 0 })).toBe(true);
+    expect(shallowPush).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: en.workbench.approvals.pullRequest.openWorkItem }),
+    );
+    expect(push).toHaveBeenCalledWith('/items/ACME-12');
+  });
+
+  it('a reader who may not decide sees Awaiting and no Open work item — and the row still leads to the card', () => {
+    renderRows([pullRequestRow(1, { canDecide: false })]);
+
+    expect(screen.getByText('Awaiting')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: en.workbench.approvals.pullRequest.openWorkItem }),
+    ).toBeNull();
+    expect(screen.getByRole('link', { name: /^Open ACME-12 / }).getAttribute('href')).toBe(
+      '/items/ACME-12',
+    );
   });
 });

@@ -2,6 +2,7 @@ import type { ApprovalGateKind, Prisma } from '@/generated/prisma/client';
 import type {
   ApprovalGateSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
+  PullRequestApprovalSubjectSummaryDTO,
   PullRequestMergeSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
@@ -9,6 +10,7 @@ import type { RegisteredGateKind, UnregisteredGateKind } from '@/lib/approvalGat
 import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 
 // THE SUBJECT SUMMARY — what a QUEUE ROW says about the thing being decided,
@@ -137,6 +139,33 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
         headSha: liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null,
       };
       out.set(id, summary);
+    }
+    return out;
+  },
+  // MOTIR-5481 — the approve-and-merge kind's row names EVERY pull request in the card's
+  // delivery set. `subjectId` is the work item's own id, so one batched delivery read
+  // answers every gate of the kind on the page; a card that delivers nothing is absent,
+  // and its row says the subject no longer resolves.
+  async pull_request_approval(subjectIds, tx) {
+    const deliveries = await workItemDeliveryRepository.listByWorkItemsWithChecks(subjectIds, tx);
+    const membersByItem = new Map<string, PullRequestApprovalSubjectSummaryDTO['members']>();
+    for (const delivery of deliveries) {
+      const pr = delivery.pullRequest;
+      const member = {
+        repo: `${delivery.repo.owner}/${delivery.repo.name}`,
+        number: pr.number,
+        headSha: liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha ?? null,
+        state: pr.merged ? 'merged' : pr.state === 'open' ? 'open' : 'closed',
+      } satisfies PullRequestApprovalSubjectSummaryDTO['members'][number];
+      const members = membersByItem.get(delivery.workItemId);
+      if (members) members.push(member);
+      else membersByItem.set(delivery.workItemId, [member]);
+    }
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const [workItemId, members] of membersByItem) {
+      // The set's canonical order — the order its version string is written in.
+      members.sort((a, b) => (`${a.repo}#${a.number}` < `${b.repo}#${b.number}` ? -1 : 1));
+      out.set(workItemId, { kind: 'pull_request_approval', members });
     }
     return out;
   },

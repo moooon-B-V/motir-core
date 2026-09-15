@@ -25,6 +25,19 @@ to decide, and after it the card is waiting on a person rather than on an agent.
 
 You will find it on the work item's page, in the **Design result** section.
 
+### Approve and merge
+
+In a project set to ask before merging, **Motir raises one approve-and-merge gate
+on the work item a run delivered, once every pull request that run opened for it
+has passed its checks** — one gate over all of them, whichever repositories they
+are in. You will find it in the work item's **Development** section, where the
+subject is the pull requests themselves and the run's **How to test**.
+
+A push to any of those pull requests **withdraws** the question: you would
+otherwise be approving commits that are no longer the ones that merge. Nobody
+decided it, and Motir asks again when every check is green. In a project set to
+merge automatically, no gate is raised at all.
+
 ## What you see
 
 The gate always renders as the same three bands, in the same order, and the order
@@ -67,6 +80,22 @@ rather than the last step. The board keeps the card open until you do.
 The rule underneath is worth knowing because it explains a board that looks
 still: **exactly one thing ever writes Done.** Either the approval does, because
 no merge is coming, or the merge does. Never both.
+
+### Approve and merge, and what it does
+
+On the approve-and-merge gate the verbs are **Approve and merge** and **Request
+changes**.
+
+- **Approve and merge** asks you to confirm, and lists every pull request first.
+  It **records your approval before anything merges**, and the work item moves to
+  **Approved**. Then each pull request merges — or, where its repository requires
+  a merge queue, joins that queue and merges when the queue's checks pass. The
+  work item moves to **Done** when every merge lands.
+- **If one pull request cannot be merged**, the Development section says which
+  and why, **your approval stands**, and that pull request offers **Retry merge**.
+  After a reload it reads _Not merged yet_: the reason is not kept, so open the
+  pull request to see it.
+- **Request changes** records your note and moves nothing, as on every gate.
 
 ## Who is asked, and who may answer
 
@@ -137,11 +166,11 @@ guessing about the rest:
   a pull request whose checks all pass gets a merge gate, and approving it merges the
   pull request (or adds it to the repository's merge queue). In a project set to merge
   automatically, Motir merges it with no gate and records on the pull request that the
-  setting allowed it; a refusal is posted as one comment on the work item. The
-  Development section's control for the gate is not built yet, and GitLab merge
-  requests are not merged from Motir.
-- **Motir does not review pull requests**: there is no gate for approving a pull
-  request's changes, and outside a merge gate, merging still happens on GitHub.
+  setting allowed it; a refusal is posted as one comment on the work item. GitLab
+  merge requests are not merged from Motir.
+- **Motir does not review a pull request's diff.** The approve-and-merge gate
+  asks you to approve the commits whose checks passed, and links out to each pull
+  request; outside a gate, merging still happens on GitHub.
 - **There is no per-project setting** that turns any of this on or off.
 - **There is no gate for approving a decision document**, though the language is
   built to take one.

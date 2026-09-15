@@ -128,6 +128,22 @@ const MOTIR_GITHUB_JOURNAL_PATH = path.resolve('/tmp/motir-acceptance-github-jou
 process.env['MOTIR_GITHUB_CONTROL_PATH'] ??= MOTIR_GITHUB_CONTROL_PATH;
 process.env['MOTIR_GITHUB_JOURNAL_PATH'] ??= MOTIR_GITHUB_JOURNAL_PATH;
 
+// ── The GitHub MERGE seam (MOTIR-5572) ───────────────────────────────────────
+//
+// *Approve and merge* merges server-side, so the fake GitHub merge lives in the Next
+// process too (lib/test-github-merge-mock.ts, behind E2E_TEST_GITHUB_MERGE=1). NO REAL
+// PULL REQUEST IS EVER MERGED. Its own control and journal, on the runner as well as
+// the server, for the same reason as the repos seam's: the spec WRITES what GitHub
+// answers per pull request and READS the calls the press made.
+const MOTIR_GITHUB_MERGE_CONTROL_PATH = path.resolve(
+  '/tmp/motir-acceptance-github-merge-control.json',
+);
+const MOTIR_GITHUB_MERGE_JOURNAL_PATH = path.resolve(
+  '/tmp/motir-acceptance-github-merge-journal.jsonl',
+);
+process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH'] ??= MOTIR_GITHUB_MERGE_CONTROL_PATH;
+process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PATH;
+
 /** The Studio App's credentials. The private key is GENERATED per run rather than
  *  committed: `createAppJwt` really signs RS256 with it (the shipped path runs
  *  unchanged), and a PEM in the repo is a secret-scanner finding for no benefit. */
@@ -314,6 +330,9 @@ export default defineConfig({
         E2E_TEST_GITHUB_REPOS: '1',
         MOTIR_GITHUB_CONTROL_PATH,
         MOTIR_GITHUB_JOURNAL_PATH,
+        E2E_TEST_GITHUB_MERGE: '1',
+        MOTIR_GITHUB_MERGE_CONTROL_PATH,
+        MOTIR_GITHUB_MERGE_JOURNAL_PATH,
         GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
         GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
         GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,

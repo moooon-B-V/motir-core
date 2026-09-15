@@ -1,0 +1,347 @@
+// Node-only GitHub MERGE boundary mock for E2E (Story MOTIR-4909 · MOTIR-5572).
+//
+// *Approve and merge* merges each pull request SERVER-side: the press reaches
+// `pullRequestMergeService.approveMergeGate`, which calls the GitHub provider's
+// `mergeChangeRequest` (`lib/git/providers/github.ts`), which `fetch`es api.github.com
+// through `githubMergeFetch`. None of that leaves the Next process for the browser, so
+// Playwright's `page.route` cannot see it — this seam stands in for GitHub the SAME way
+// `test-github-repos-mock` does: an undici intercept on the ONE shared `MockAgent`,
+// installed by instrumentation.ts behind `E2E_TEST_GITHUB_MERGE=1`, dormant everywhere
+// else. The REAL `mergeChangeRequest` runs against it, so the lane exercises the shipped
+// classification of every answer rather than a stub of it.
+//
+// What it intercepts (every call `mergeChangeRequest` makes for a pull request):
+//   - GET  /repos/{owner}/{name}                        → the allowed merge methods
+//   - GET  /repos/{owner}/{name}/pulls/{number}         → the pull request, and its re-read
+//   - GET  /repos/{owner}/{name}/rules/branches/{base}  → does the base require a merge queue?
+//   - PUT  /repos/{owner}/{name}/pulls/{number}/merge   → the merge, or the host's refusal
+//   - POST /graphql (`enqueuePullRequest`)              → the queue entry
+//   - GET  /repos/{owner}/{name}/pulls/{number}/files   → the merged pull request's paths (empty)
+//   - POST /app/installations/{id}/access_tokens        → ONLY when E2E_TEST_GITHUB_REPOS is
+//                                                         off (that seam already answers it,
+//                                                         and journals it for its own spec)
+//
+// ⚠️ SCOPED TO THE REPOSITORIES THE CONTROL NAMES, AND REGISTERED BEFORE THE REPOS SEAM.
+// The acceptance lane runs every `acceptance*.spec.ts` in ONE server with both GitHub seams
+// on, and both answer `GET /repos/{owner}/{name}`. Undici tries intercepts in REGISTRATION
+// order and falls through a path predicate that answers false, so this seam claims a path
+// only for a repository its control file lists (`repositories`, or the repository half of a
+// `pullRequests` key) and every other repository reaches the repos seam untouched. An
+// unscoped intercept here would shadow the repository-set journey's readiness read and
+// quietly change what that spec asserts.
+//
+// TWO FILES, exactly as the repos seam has them and for the same reason:
+//   * the CONTROL file (MOTIR_GITHUB_MERGE_CONTROL_PATH) — the spec WRITES, the mock READS,
+//     re-read on every request, so a spec can refuse a press and then let the retry merge;
+//   * the JOURNAL file (MOTIR_GITHUB_MERGE_JOURNAL_PATH) — the mock WRITES, the spec READS,
+//     which is how a runner in another process proves the press reached THIS seam at all.
+//
+// ⚠️ The installation token the merge needs is minted by `lib/github/appAuth.ts`, which
+// signs an App JWT first — so the lane must carry the App credentials for the role the
+// repository's owner selects (`githubAppRoleForRepo`). That is the lane's wiring, not
+// this seam's.
+
+import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
+import type { MockAgent } from 'undici';
+
+const GITHUB_ORIGIN = 'https://api.github.com';
+
+/** The typed refusals `mergeChangeRequest` classifies a host answer into. */
+export type GithubMergeRefusal =
+  | 'checks_not_green'
+  | 'conflict'
+  | 'branch_protected'
+  | 'already_merged'
+  | 'app_permission_missing'
+  | 'subject_changed';
+
+/** What GitHub does with one pull request. */
+export type GithubMergeAnswer =
+  | { outcome: 'merged' }
+  | { outcome: 'enqueued' }
+  | { outcome: 'refused'; refusal: GithubMergeRefusal };
+
+/** What the spec tells the fake GitHub to do. The empty control answers for no repository. */
+export interface GithubMergeControl {
+  /** `owner/name` of each repository this seam answers for. A pull request of a listed
+   *  repository with no entry of its own MERGES. */
+  repositories?: string[];
+  /** `owner/name` of each listed repository whose base branch REQUIRES a merge queue, so
+   *  every pull request in it is enqueued through the rules read. */
+  mergeQueueRepositories?: string[];
+  /** `owner/name#number` → GitHub's answer. `headSha` is the head the pull request read
+   *  reports; omitted, the read reports no head and the merge's head check is skipped. */
+  pullRequests?: Record<string, GithubMergeAnswer & { headSha?: string }>;
+}
+
+/** One outbound call the fake answered — the journal's line shape (JSONL). */
+export interface GithubMergeCall {
+  method: string;
+  path: string;
+  body: Record<string, unknown> | null;
+  /** `owner/name#number`, when the call is about one pull request. */
+  pullRequest: string | null;
+}
+
+function readControl(): GithubMergeControl {
+  const path = process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH'];
+  if (!path) return {};
+  try {
+    return JSON.parse(readFixtureFileSync(path)) as GithubMergeControl;
+  } catch {
+    // No file yet, or a half-written one: this seam then answers for no repository.
+    return {};
+  }
+}
+
+/** JSONL, so a concurrent append can never truncate an earlier line. */
+function journal(call: GithubMergeCall): void {
+  const path = process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'];
+  if (!path) return;
+  try {
+    appendFixtureFileSync(path, `${JSON.stringify(call)}\n`);
+  } catch {
+    /* the journal is evidence, not behaviour — never fail a request over it */
+  }
+}
+
+interface MockReply {
+  statusCode: number;
+  data: object | string;
+  responseOptions: { headers: Record<string, string> };
+}
+
+interface MockRequest {
+  path: string;
+  body?: unknown;
+}
+
+const reply = (
+  statusCode: number,
+  data: object | string,
+  headers: Record<string, string> = {},
+): MockReply => ({
+  statusCode,
+  data,
+  responseOptions: { headers: { 'content-type': 'application/json', ...headers } },
+});
+
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/** Does this seam answer for `owner/name`? */
+function answersFor(control: GithubMergeControl, repository: string): boolean {
+  return (
+    (control.repositories ?? []).some((r) => same(r, repository)) ||
+    Object.keys(control.pullRequests ?? {}).some((key) =>
+      same(key.slice(0, key.lastIndexOf('#')), repository),
+    )
+  );
+}
+
+/** The answer for one pull request: its own entry, else a merge. */
+function answerFor(
+  control: GithubMergeControl,
+  key: string,
+): GithubMergeAnswer & { headSha?: string } {
+  const entry = Object.entries(control.pullRequests ?? {}).find(([k]) => same(k, key));
+  return entry?.[1] ?? { outcome: 'merged' };
+}
+
+const REPO_PATH = /^\/repos\/([^/]+)\/([^/?]+)$/;
+const PULL_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/;
+const MERGE_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/merge$/;
+const RULES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/rules\/branches\/[^?]+$/;
+const FILES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files(?:\?.*)?$/;
+
+/** A path's repository and pull request, when this seam answers for that repository. */
+function scoped(pattern: RegExp, path: string): { repository: string; key: string | null } | null {
+  const m = pattern.exec(path);
+  if (!m) return null;
+  const repository = `${m[1]}/${m[2]}`;
+  if (!answersFor(readControl(), repository)) return null;
+  return { repository, key: m[3] ? `${repository}#${m[3]}` : null };
+}
+
+const NODE_ID_PREFIX = 'E2E_MERGE_PR_';
+
+/** The GraphQL node id this seam hands out for a pull request, and reads back on an enqueue. */
+export function mergeMockNodeId(key: string): string {
+  return `${NODE_ID_PREFIX}${Buffer.from(key, 'utf8').toString('base64url')}`;
+}
+
+function keyOfNodeId(body: string): string | null {
+  const m = new RegExp(`${NODE_ID_PREFIX}([A-Za-z0-9_-]+)`).exec(body);
+  return m ? Buffer.from(m[1]!, 'base64url').toString('utf8') : null;
+}
+
+/** The host's wording and the pull request's `mergeable_state` for each 405 refusal — the two
+ *  facts `mergeChangeRequest` classifies a refused merge by. */
+const REFUSED_MERGE: Record<
+  'checks_not_green' | 'conflict' | 'branch_protected',
+  { message: string; mergeableState: string }
+> = {
+  checks_not_green: {
+    message: 'Required status check "ci" is expected.',
+    mergeableState: 'blocked',
+  },
+  conflict: { message: 'Pull Request is not mergeable', mergeableState: 'dirty' },
+  branch_protected: {
+    message: 'At least 1 approving review is required by reviewers with write access.',
+    mergeableState: 'blocked',
+  },
+};
+
+function mergeableStateOf(answer: GithubMergeAnswer): string {
+  if (answer.outcome !== 'refused') return 'clean';
+  const refused = REFUSED_MERGE[answer.refusal as keyof typeof REFUSED_MERGE];
+  return refused?.mergeableState ?? 'clean';
+}
+
+function parseBody(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function installGithubMergeMock(agent: MockAgent): void {
+  const pool = agent.get(GITHUB_ORIGIN);
+
+  // ── The repository read: the allowed merge methods ─────────────────────────
+  pool
+    .intercept({ path: (p) => scoped(REPO_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { repository } = scoped(REPO_PATH, path)!;
+      journal({ method: 'GET', path, body: null, pullRequest: null });
+      return reply(200, { full_name: repository, allow_squash_merge: true });
+    })
+    .persist();
+
+  // ── The pull request, as it stands (the first read and the re-read after a 405) ──
+  pool
+    .intercept({ path: (p) => scoped(PULL_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { key } = scoped(PULL_PATH, path)!;
+      journal({ method: 'GET', path, body: null, pullRequest: key });
+      const answer = answerFor(readControl(), key!);
+      const refusal = answer.outcome === 'refused' ? answer.refusal : null;
+      return reply(200, {
+        node_id: mergeMockNodeId(key!),
+        number: Number(key!.slice(key!.lastIndexOf('#') + 1)),
+        merged: refusal === 'already_merged',
+        state: refusal === 'already_merged' || refusal === 'subject_changed' ? 'closed' : 'open',
+        head: answer.headSha ? { sha: answer.headSha } : {},
+        base: { ref: 'main' },
+        mergeable_state: mergeableStateOf(answer),
+      });
+    })
+    .persist();
+
+  // ── Does the base branch require a merge queue? ────────────────────────────
+  pool
+    .intercept({ path: (p) => scoped(RULES_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { repository } = scoped(RULES_PATH, path)!;
+      journal({ method: 'GET', path, body: null, pullRequest: null });
+      const queued = (readControl().mergeQueueRepositories ?? []).some((r) => same(r, repository));
+      return reply(200, queued ? [{ type: 'merge_queue', parameters: {} }] : []);
+    })
+    .persist();
+
+  // ── The merge ──────────────────────────────────────────────────────────────
+  pool
+    .intercept({ path: (p) => scoped(MERGE_PATH, p) !== null, method: 'PUT' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { key } = scoped(MERGE_PATH, path)!;
+      journal({ method: 'PUT', path, body: parseBody(req.body), pullRequest: key });
+      const answer = answerFor(readControl(), key!);
+      const number = key!.slice(key!.lastIndexOf('#') + 1);
+
+      if (answer.outcome === 'merged') {
+        return reply(200, { merged: true, sha: `e2e-merge-${number}`, message: 'Merged' });
+      }
+      // A branch that must be merged through its queue refuses the direct merge with this
+      // wording, which routes `mergeChangeRequest` to the enqueue.
+      if (answer.outcome === 'enqueued') {
+        return reply(405, { message: 'Changes must be made through the merge queue' });
+      }
+      switch (answer.refusal) {
+        case 'app_permission_missing':
+          return reply(
+            403,
+            { message: 'Resource not accessible by integration' },
+            { 'x-accepted-github-permissions': 'contents=write' },
+          );
+        case 'subject_changed':
+          return reply(409, {
+            message: 'Head branch was modified. Review and try the merge again.',
+          });
+        case 'already_merged':
+          return reply(405, { message: 'Pull Request is not mergeable' });
+        default:
+          return reply(405, { message: REFUSED_MERGE[answer.refusal].message });
+      }
+    })
+    .persist();
+
+  // ── The merged pull request's changed files ────────────────────────────────
+  // The merge WEBHOOK the spec drives afterwards captures a merged pull request's changed
+  // paths (`githubWebhookService`, best-effort). Answered here so that capture reads an
+  // empty list rather than leaving for the real host with a synthetic token.
+  pool
+    .intercept({ path: (p) => scoped(FILES_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { key } = scoped(FILES_PATH, path)!;
+      journal({ method: 'GET', path, body: null, pullRequest: key });
+      return reply(200, []);
+    })
+    .persist();
+
+  // ── The enqueue, for a pull request whose node id this seam handed out ─────
+  pool
+    .intercept({
+      path: '/graphql',
+      method: 'POST',
+      body: (body) => typeof body === 'string' && body.includes(NODE_ID_PREFIX),
+    })
+    .reply((req: MockRequest): MockReply => {
+      const raw = typeof req.body === 'string' ? req.body : '';
+      const key = keyOfNodeId(raw);
+      journal({ method: 'POST', path: '/graphql', body: parseBody(raw), pullRequest: key });
+      const number = key ? key.slice(key.lastIndexOf('#') + 1) : '0';
+      return reply(200, {
+        data: { enqueuePullRequest: { mergeQueueEntry: { id: `MQE_e2e_${number}` } } },
+      });
+    })
+    .persist();
+
+  // ── The installation token — unless the repos seam already answers it ──────
+  // Both seams on at once is the acceptance lane's normal state, and that seam journals
+  // the mint for its own spec; answering it here first would take the line out of its
+  // journal.
+  if (process.env['E2E_TEST_GITHUB_REPOS'] !== '1') {
+    pool
+      .intercept({
+        path: (p) => /^\/app\/installations\/[^/]+\/access_tokens$/.test(p),
+        method: 'POST',
+      })
+      .reply((req: MockRequest): MockReply => {
+        journal({ method: 'POST', path: String(req.path), body: null, pullRequest: null });
+        return reply(201, {
+          token: 'ghs_e2e_merge_token',
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        });
+      })
+      .persist();
+  }
+}

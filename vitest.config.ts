@@ -2125,6 +2125,29 @@ export default defineConfig({
         'lib/jobs/definitions/pullRequestAutoMerge.ts',
         'components/approvals/ApprovalGateControl.tsx',
         'components/approvals/portRenderStatus.tsx',
+        // ── Story MOTIR-4909 · MOTIR-5486 — APPROVE AND MERGE, the story's own vitest gate.
+        // The `pull_request_approval` handler and its set version, the raise/withdraw
+        // service, the member-version parser the frame reads, and the Development frame and
+        // its outcome slot. `pullRequestMergeService.ts`, `mergeGates.ts`,
+        // `ApprovalGateControl.tsx` and `ApprovalsList.tsx` — which this story also widened —
+        // are already pinned above. MEASURED on the parent branch before being pinned, over
+        // `tests/github/{pullRequestApprovalGates,approveAndMerge}`,
+        // `tests/integration/approveAndMergeStoryJourney`, `tests/approvalGates/memberVersion`,
+        // `tests/approval-gate-pull-request-approval-kind` and
+        // `tests/components/{development-gate-verbs,development-block,approval-gate-flush-layout}`:
+        // 100 / 100 / 100 / 100 on every file except `DevelopmentGateFrame.tsx`, whose two
+        // `!actions` guards and one empty-name fallback are unreachable from any caller
+        // (a frame handed no actions renders no verb and no Retry to press).
+        //
+        // `lib/approvalGates/subjectSummary.ts` is deliberately NOT added: it is the Approvals
+        // queue's pre-existing loader file, and this story added only its `pull_request_approval`
+        // loader, whose arms `approval-gate-pull-request-approval-kind` covers.
+        'lib/approvalGates/pullRequestApprovalHandler.ts',
+        'lib/approvalGates/deliverySetVersion.ts',
+        'lib/approvalGates/memberVersion.ts',
+        'lib/services/pullRequestApprovalGates.ts',
+        'components/github/DevelopmentGateFrame.tsx',
+        'components/github/MergeOutcomeSlot.tsx',
         // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN — the approval overlay ───
         // Subtask MOTIR-5226, the story's own vitest gate. The overlay, its
         // address and client read, the row's settle signal and the route were in
@@ -2215,7 +2238,6 @@ export default defineConfig({
         'app/api/v1/work-items/[key]/how-to-test/route.ts',
         'components/howToTest/HowToTestBlock.tsx',
         'components/markdown/CopyableCodeBlock.tsx',
-        'components/github/DevelopmentGateFrame.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2304,6 +2326,42 @@ export default defineConfig({
           statements: 90,
         },
         'lib/jobs/definitions/pullRequestAutoMerge.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/pullRequestApprovalHandler.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/deliverySetVersion.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/memberVersion.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/pullRequestApprovalGates.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/DevelopmentGateFrame.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/MergeOutcomeSlot.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -4599,20 +4657,6 @@ export default defineConfig({
           functions: 90,
           branches: 90,
           statements: 90,
-        },
-        // ⚠️ PINNED BELOW THE FLOOR, at what it measures (75 / 100 / 50 / 75). The
-        // file is ONE function plus ONE closure, and the closure is the frame's
-        // `onDecide` — unreachable by construction while it passes `verbs={[]}`:
-        // `ApprovalGateControl` calls `onDecide` only from a verb, and the
-        // `pull_request_approval` kind has none until MOTIR-4909 registers it.
-        // Covering it would mean a verb this story deliberately does not draw
-        // (`tests/components/development-block.test.tsx` asserts there is none).
-        // MOTIR-4909 raises this to the floor when it supplies the verbs.
-        'components/github/DevelopmentGateFrame.tsx': {
-          lines: 75,
-          functions: 50,
-          branches: 90,
-          statements: 75,
         },
       },
     },

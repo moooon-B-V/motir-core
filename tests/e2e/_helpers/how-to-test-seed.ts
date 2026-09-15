@@ -11,7 +11,7 @@ import { createTestPerson } from './testPerson';
 
 // THE STORY GATE'S E2E SEED (Story MOTIR-4906 · Subtask MOTIR-5338) — a scoped
 // story run as the server records it, for the acceptance receipt
-// `acceptance-how-to-test.spec.ts` records.
+// `how-to-test.spec.ts` walks (promoted from the acceptance lane by MOTIR-5487).
 //
 // It mirrors `tests/howToTest/storyGateScenario.ts` (the real-Postgres scenario
 // the Vitest gate uses) rather than importing it: that builder stands on the
@@ -25,9 +25,10 @@ import { createTestPerson } from './testPerson';
 //     the running dispatch run, exactly the call `publish_test_instructions` lands on;
 //   * the deployment — `repoDeploymentService.record`, the call both hosts'
 //     deployment hooks land on;
-//   * the gate — `approvalGateRepository.create`. `pull_request_approval` is
-//     UNREGISTERED until MOTIR-4909, so no service opens one yet; the row is what
-//     that service will write, and the frame is what this story ships for it.
+//   * the gate — `approvalGateRepository.create`. It was seeded as a row while
+//     `pull_request_approval` was unregistered; MOTIR-4909 registered it and now
+//     raises it from green webhooks, but this walk asserts the FRAME, not the
+//     raise, so the row stays the cheapest honest way to put one on the card.
 //   * the connection, repositories, session pull requests, their deliveries and
 //     check rows, and the dispatch run itself — ROWS, the ones the webhooks and
 //     the CLI leave behind (the same trade `storyGateScenario.ts` states). Nothing

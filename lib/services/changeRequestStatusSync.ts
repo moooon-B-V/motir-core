@@ -21,6 +21,7 @@ import {
 } from '@/lib/workItems/deliverySet';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { withdrawMergeGatesOnClose } from './mergeGates';
+import { withdrawPullRequestApprovalGatesOnClose } from './pullRequestApprovalGates';
 import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
@@ -341,7 +342,11 @@ export async function syncChangeRequestStatus(
     // any more, so its awaiting merge gates are withdrawn in the transaction that
     // records the close (MOTIR-5515). This is also what retires a gate a crash left
     // awaiting between a merge and its decision: the merge delivery lands here.
-    if (cr.state === 'closed') await withdrawMergeGatesOnClose(prId, tx);
+    if (cr.state === 'closed') {
+      await withdrawMergeGatesOnClose(prId, tx);
+      // A closed member changes the set every card it delivers asked about (MOTIR-5482).
+      await withdrawPullRequestApprovalGatesOnClose(prId, tx);
+    }
 
     // MOTIR-3007 · MOTIR-3721 — WHICH ITEMS does this delivery carry? A `motir
     // auto` run integrates every card onto ONE session branch and opens ONE pull

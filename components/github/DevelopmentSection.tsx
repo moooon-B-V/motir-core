@@ -19,7 +19,12 @@ import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github
 import { awaitingRepoRows, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
-import { DevelopmentGateFrame, type DevelopmentGateRead } from './DevelopmentGateFrame';
+import {
+  DevelopmentGateFrame,
+  type DevelopmentGateActions,
+  type DevelopmentGateRead,
+} from './DevelopmentGateFrame';
+import { MergeOutcomeSlot } from './MergeOutcomeSlot';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
 // design/github Panels 3 + 4a: linked-PR rows — PR glyph + title +
@@ -147,12 +152,16 @@ function PullRequestRow({
             {t('development.notOnTrunk')}
           </Pill>
         ) : null}
-        {ci ? (
-          <Pill {...ci.pill}>
-            <ci.icon className="h-3 w-3" aria-hidden />
-            {t(`development.ciState.${pr.ci!}`)}
-          </Pill>
-        ) : null}
+        {/* The SECOND pill slot (MOTIR-5484, §20): the CI pill, until an approve-and-merge
+            press has something to say about this pull request. */}
+        <MergeOutcomeSlot repo={pr.repo} number={pr.number} merged={pr.state === 'merged'}>
+          {ci ? (
+            <Pill {...ci.pill}>
+              <ci.icon className="h-3 w-3" aria-hidden />
+              {t(`development.ciState.${pr.ci!}`)}
+            </Pill>
+          ) : null}
+        </MergeOutcomeSlot>
       </span>
       {/* aria-label, NOT an sr-only span (the shipped icon-only convention —
           RemoveLinkButton / QuickViewCloseButton): an sr-only span is
@@ -332,6 +341,7 @@ export function DevelopmentSectionBody({
   deliveries = [],
   howToTest = null,
   mergeGate = null,
+  gateActions,
   designResult = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
@@ -395,13 +405,17 @@ export function DevelopmentSectionBody({
    */
   howToTest?: HowToTestDto | null;
   /**
-   * The card's approve-to-merge gate read (`pull_request_approval`). When it is
-   * AWAITING, the rows plus How to test become the PORT of ONE
-   * `ApprovalGateControl` — Panel 12c. NO GATE ⇒ NO FRAME: null, or any other
-   * state, renders exactly the block. The kind is unregistered until
-   * MOTIR-4909, so no live tenant takes this arm yet.
+   * The card's approve-and-merge gate read (`pull_request_approval`), in ANY state.
+   * The rows plus How to test become the PORT of ONE `ApprovalGateControl` —
+   * Panel 12c, and Panels 12p–12w once it is pressed or withdrawn (MOTIR-5484).
+   * NO GATE ⇒ NO FRAME: null renders exactly the block.
    */
   mergeGate?: DevelopmentGateRead | null;
+  /**
+   * The item page's server actions for that frame's verbs (MOTIR-5484). Omitted, the
+   * frame draws no verbs — which is every host but the detail page.
+   */
+  gateActions?: DevelopmentGateActions;
   /**
    * The card's DESIGN RESULT, rendered by the host as the Development block's
    * slot (Story MOTIR-5488 · MOTIR-5498; `design-result.md` AMENDMENT 4 Q8,
@@ -515,12 +529,28 @@ export function DevelopmentSectionBody({
       {howToTestPart}
     </>
   );
-  // NO GATE ⇒ NO FRAME (the `DesignResultSection` rule): only an AWAITING
-  // approve-to-merge gate wraps the block, and it wraps ALL of it — one frame for
-  // every pull request the run delivered, never one per row.
-  if (mergeGate && mergeGate.gate.state === 'awaiting') {
+  // NO GATE ⇒ NO FRAME (the `DesignResultSection` rule): a card's approve-and-merge
+  // gate wraps the block in every state, and it wraps ALL of it — one frame for every
+  // pull request the run delivered, never one per row. A decided gate keeps its frame,
+  // because what the merges did is drawn after the decision (MOTIR-5484).
+  if (mergeGate) {
+    // The head each row's pull request is at NOW, from How to test's own read — what
+    // names the member a push moved when the question is withdrawn (state `G`).
+    const currentHeads = (howToTest?.repos ?? []).flatMap((repo) => {
+      const ref = repo.pullRequest;
+      const row = ref ? rows.find((r) => r.pr.id === ref.id) : undefined;
+      return row && ref?.headSha
+        ? [{ repo: row.repo, number: row.number, headSha: ref.headSha }]
+        : [];
+    });
     return (
-      <DevelopmentGateFrame read={mergeGate} subjectMeta={howToTest?.record?.run?.label ?? null}>
+      <DevelopmentGateFrame
+        read={mergeGate}
+        itemIdentifier={itemIdentifier}
+        runLabel={howToTest?.record?.run?.label ?? null}
+        currentHeads={currentHeads}
+        actions={gateActions}
+      >
         {block}
       </DevelopmentGateFrame>
     );

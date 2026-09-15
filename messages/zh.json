@@ -7505,7 +7505,13 @@
         "pull_request_approval": "合并请求审批",
         "pull_request_merge": "合并请求合并"
       },
-      "reviewRow": "查看 {key} {title}"
+      "reviewRow": "查看 {key} {title}",
+      "pullRequest": {
+        "kindLabel": "拉取请求",
+        "more": "另有 {count} 个",
+        "openRow": "打开 {key} {title}",
+        "openWorkItem": "打开工作项"
+      }
     }
   },
   "approvalRecords": {
@@ -8396,6 +8402,64 @@
         "keepsFiles": "保留该版本的文件，使该决定始终可核查；",
         "movesToDone": "将 {key} 标记为已完成，并解除对其等待中的工作项的阻塞。"
       }
+    },
+    "pullRequestApproval": {
+      "kindLabel": "拉取请求",
+      "meta": {
+        "count": "{count} 个拉取请求",
+        "delivered": "{count} 个拉取请求 · 由 {run} 交付",
+        "approved": "由 {name} 批准 · {count} 个拉取请求",
+        "approvedByYou": "刚刚由你批准 · {count} 个拉取请求",
+        "withdrawn": "{count} 个拉取请求 · {pr} 的最新提交已变更",
+        "withdrawnSet": "{count} 个拉取请求 · 集合已变更"
+      },
+      "verb": {
+        "approveAndMerge": "批准并合并"
+      },
+      "consequence": {
+        "named": "批准后将合并 {prs}——立即合并，或在仓库要求时通过其合并队列——然后将 {key} 标记为已批准。",
+        "counted": "批准后将合并 {count} 个拉取请求——立即合并，或在仓库要求时通过其合并队列——然后将 {key} 标记为已批准。"
+      },
+      "confirm": {
+        "records": "记录你已批准这 {count} 个提交，连同时间；",
+        "mergeOrQueue": "立即合并 {pr}，或在其仓库要求时将其加入合并队列；",
+        "movesToApproved": "将 {key} 标记为已批准。所有合并完成后将标记为已完成。"
+      },
+      "record": {
+        "commits": "{count} 个提交"
+      },
+      "queued": {
+        "why": "在合并队列合入 {pr} 之前，{key} 保持已批准状态。"
+      },
+      "merged": {
+        "why": "所有拉取请求均已合并。{host} 报告合并后，{key} 将标记为已完成。"
+      },
+      "notMergedYet": {
+        "why": "{pr} 尚未合并。请重试，或在 {host} 上打开查看原因。"
+      },
+      "outcome": {
+        "merging": "合并中",
+        "merged": "已合并",
+        "queued": "已加入合并队列",
+        "refused": "未合并",
+        "notMergedYet": "尚未合并",
+        "retry": "重试合并"
+      },
+      "refused": {
+        "title": "{pr} 未合并。",
+        "stands": "你的批准仍然有效，{other} 已合并。",
+        "standsAlone": "你的批准仍然有效。"
+      },
+      "withdrawn": {
+        "port": "一次推送变更了 {pr} 的最新提交，因此该问题已被撤回。",
+        "portSet": "拉取请求已变更，因此该问题已被撤回。",
+        "portCite": "没有人对它做出决定。所有检查通过后，Motir 会再次请求审批。"
+      },
+      "list": {
+        "pair": "{a} 和 {b}",
+        "separator": "、"
+      },
+      "host": "GitHub"
     },
     "statusHeld": {
       "decision": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待。",

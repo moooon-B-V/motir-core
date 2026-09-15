@@ -105,6 +105,10 @@ async function readSubject(
       // not-built arm — the same answer the Approvals list's Decide cell gives a
       // merge row — rather than a resolved subject nothing can render.
       return { state: 'kind_not_built' };
+    case 'pull_request_approval':
+      // REGISTERED (MOTIR-5481); its overlay PORT — the Development block — is
+      // MOTIR-5437's. Until it lands the overlay draws the not-built arm, as for merge.
+      return { state: 'kind_not_built' };
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */

@@ -167,8 +167,34 @@ export interface ApprovalGateControlProps {
    * Same rule as `fill`: states, verbs, the confirm band, the refusal and the
    * record are byte-identical, and Expand is still offered — expanded, the frame
    * takes its own chrome back, because it is no longer inside the host.
+   *
+   * `flush` (Story MOTIR-4909 · Subtask MOTIR-5484; `design/github/design-notes.md` §20
+   * *No card inside a card*): the frame sits INSIDE a section card that is already the
+   * container — the item page's Development block. The card chrome comes off, as in
+   * `fill`; the port keeps its floor, its ceiling and Expand, as in `inline`, because a
+   * page card is not the viewport. Nothing inside the box changes either.
    */
-  layout?: 'inline' | 'fill' | 'section';
+  layout?: 'inline' | 'fill' | 'flush' | 'section';
+  /**
+   * A KIND-SUPPLIED alert band, drawn between the port and band 3 (MOTIR-5484). It is
+   * state `H` for a refusal the decide call did NOT return: the approve-and-merge press
+   * commits the approval and then reports a pull request the host refused, so there is
+   * no refused PHASE to draw, and the kind names that pull request itself. Absent,
+   * nothing renders.
+   */
+  alert?: ReactNode;
+  /**
+   * More of the DECIDED record strip, after who and when — the kind's own facts about
+   * what the decision covered (MOTIR-5484: the commit count, and what the merges still
+   * wait on). Absent, the strip is unchanged.
+   */
+  recordDetail?: ReactNode;
+  /**
+   * State `G`'s dead-port words, when the KIND withdraws for its own reason (MOTIR-5484:
+   * a push moved a pull request's head, not a newer design). Absent, the frame's own
+   * words render.
+   */
+  withdrawnPort?: { port: ReactNode; cite: ReactNode };
   /**
    * Record the decision. Resolves to a refusal the frame draws IN PLACE, or
    * null on success — at which point the caller has already reconciled.
@@ -188,24 +214,26 @@ function FrameHeader({
   subjectMeta,
   pillProps,
   stateLabel,
-  flush,
+  sectioned,
 }: {
   kindLabel: string;
   subjectMeta: ReactNode;
   pillProps: PillProps;
   stateLabel: string;
   /** The `section` form: the host's title names the kind, so band 1 does not. */
-  flush: boolean;
+  sectioned: boolean;
 }) {
   return (
     <div
       className={
-        flush
+        sectioned
           ? 'flex flex-wrap items-center gap-2'
           : 'flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-4 py-3'
       }
     >
-      {flush ? null : <span className="text-sm font-semibold text-(--el-text)">{kindLabel}</span>}
+      {sectioned ? null : (
+        <span className="text-sm font-semibold text-(--el-text)">{kindLabel}</span>
+      )}
       <span className="text-xs text-(--el-text-secondary)">{subjectMeta}</span>
       <span className="ml-auto">
         <Pill {...pillProps}>{stateLabel}</Pill>
@@ -255,7 +283,7 @@ function PortBox({
   children,
   expanded,
   fill,
-  flush,
+  sectioned,
   showExpand,
   onToggleExpanded,
 }: {
@@ -263,7 +291,7 @@ function PortBox({
   expanded: boolean;
   /** The `section` form — the floor, ceiling and scroll stay; the side padding
    *  is the host's, and a hairline above divides it from band 1. */
-  flush: boolean;
+  sectioned: boolean;
   /** The frame's FILL form (MOTIR-5224) — the expanded recipe without its
    *  wrapper, and never an Expand/Collapse control, because there is nothing
    *  to expand into. */
@@ -314,7 +342,7 @@ function PortBox({
             // is arranged to prevent. The floor and ceiling are DROPPED here on
             // purpose — expanded, the viewport is the ceiling.
             'relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4'
-          : flush
+          : sectioned
             ? `relative mt-3 ${PORT_FLOOR} ${PORT_CEILING} overflow-y-auto border-t border-(--el-border-soft) pt-3`
             : `relative ${PORT_FLOOR} ${PORT_CEILING} overflow-y-auto px-4 py-4`
       }
@@ -366,11 +394,11 @@ function PortBox({
  * Band 3's decided form — the provenance strip, carried from the shipped
  * acceptance panel so the two read as one gesture rather than two features.
  */
-function RecordStrip({ children, flush }: { children: ReactNode; flush: boolean }) {
+function RecordStrip({ children, sectioned }: { children: ReactNode; sectioned: boolean }) {
   return (
     <div
       className={
-        flush
+        sectioned
           ? 'mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)'
           : 'flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)'
       }
@@ -389,7 +417,32 @@ function RecordStrip({ children, flush }: { children: ReactNode; flush: boolean 
  * `--el-danger-on-surface` for the ink, never `--el-danger-text`, which is the
  * ink FOR a danger fill and renders white-on-white here (CLAUDE.md's danger rule).
  */
-function RefusalAlert({ refusal, flush }: { refusal: GateRefusal; flush: boolean }) {
+function RefusalAlert({ refusal, sectioned }: { refusal: GateRefusal; sectioned: boolean }) {
+  const { headline, nextAction } = useRefusalCopy(refusal);
+
+  return (
+    <div
+      role="alert"
+      className={`${sectioned ? 'mt-3 ' : ''}flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3`}
+    >
+      <AlertTriangle
+        className="mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"
+        aria-hidden
+      />
+      <p className="text-[13px] leading-snug text-(--el-text-strong)">
+        <b>{headline}</b> <span className="text-(--el-text-secondary)">{nextAction}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A refusal's WORDS — its headline and its next action — in the frame's one vocabulary.
+ * Exported for a kind that names a refusal inside its own alert (MOTIR-5484: a pull
+ * request the approve-and-merge press could not merge), so the words stay these and a
+ * second copy of them never exists.
+ */
+export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAction: string } {
   const t = useTranslations('approvalGate.refusal');
 
   // ⚠️ EXHAUSTIVE over `GateRefusal`, which is itself total over the service's
@@ -475,20 +528,7 @@ function RefusalAlert({ refusal, flush }: { refusal: GateRefusal; flush: boolean
         : t('mergeAppPermissionMissing.nextUnnamed')
       : t(`${nextActionKey}.next`);
 
-  return (
-    <div
-      role="alert"
-      className={`${flush ? 'mt-3 ' : ''}flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3`}
-    >
-      <AlertTriangle
-        className="mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"
-        aria-hidden
-      />
-      <p className="text-[13px] leading-snug text-(--el-text-strong)">
-        <b>{headline}</b> <span className="text-(--el-text-secondary)">{nextAction}</span>
-      </p>
-    </div>
-  );
+  return { headline, nextAction };
 }
 
 /**
@@ -514,13 +554,13 @@ function RefusalAlert({ refusal, flush }: { refusal: GateRefusal; flush: boolean
  * Same ink rule as `RefusalAlert`: `--el-danger-on-surface`, never
  * `--el-danger-text`, which is the ink FOR a danger fill (CLAUDE.md).
  */
-function PortFailedAlert({ flush }: { flush: boolean }) {
+function PortFailedAlert({ sectioned }: { sectioned: boolean }) {
   const t = useTranslations('approvalGate.port.failed');
 
   return (
     <div
       role="alert"
-      className={`${flush ? 'mt-3 ' : ''}flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3`}
+      className={`${sectioned ? 'mt-3 ' : ''}flex gap-2.5 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3`}
     >
       <AlertTriangle
         className="mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"
@@ -576,6 +616,9 @@ export function ApprovalGateControl({
   routedToLabel,
   filesKept = null,
   layout = 'inline',
+  alert,
+  recordDetail,
+  withdrawnPort,
   onDecide,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
@@ -583,9 +626,10 @@ export function ApprovalGateControl({
   const [phase, setPhase] = useState<Phase>({ kind: 'awaiting' });
   const [expanded, setExpanded] = useState(false);
   const fill = layout === 'fill';
+  const flush = layout === 'flush';
   // Expanded, the frame leaves its host for the viewport, so it takes its own
-  // chrome back — `flush` holds only while it is still inside the section.
-  const flush = layout === 'section' && !expanded;
+  // chrome back — `sectioned` holds only while it is still inside the section.
+  const sectioned = layout === 'section' && !expanded;
 
   // MOTIR-5032 — the port's own report, and the gate on band 3 that follows from
   // it. `usePortRenderStatus` defaults to `'rendered'` when NOTHING reports, so
@@ -689,10 +733,14 @@ export function ApprovalGateControl({
               // mirrors `Modal` so the two read as one language.
               'fixed top-1/2 left-1/2 z-50 flex max-h-[90vh] w-[90vw] max-w-[72rem] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-(--radius-modal) border border-(--el-border) bg-(--el-page-bg)'
             : flush
-              ? // THE SECTION FORM (MOTIR-5569): the host card is the container,
-                // so the frame draws no box of its own at all.
-                'min-w-0'
-              : 'overflow-hidden rounded-(--radius-card) border border-(--el-border)'
+              ? // THE FLUSH FORM (MOTIR-5484): the host card is the container, so no
+                // radius and no border of its own — the bands run edge to edge in it.
+                'flex flex-col overflow-hidden'
+              : sectioned
+                ? // THE SECTION FORM (MOTIR-5569): the host card is the container,
+                  // so the frame draws no box of its own at all.
+                  'min-w-0'
+                : 'overflow-hidden rounded-(--radius-card) border border-(--el-border)'
       }
       onKeyDown={(event) => {
         if (expanded && event.key === 'Escape') setExpanded(false);
@@ -703,7 +751,7 @@ export function ApprovalGateControl({
         subjectMeta={subjectMeta}
         pillProps={pillProps}
         stateLabel={stateLabel}
-        flush={flush}
+        sectioned={sectioned}
       />
 
       {/* BAND 2 — THE PORT: one BOX (MOTIR-5032's floor, ceiling-with-own-scroll
@@ -732,7 +780,7 @@ export function ApprovalGateControl({
         <PortBox
           expanded={expanded}
           fill={fill}
-          flush={flush}
+          sectioned={sectioned}
           // Drawn where the asset draws it: a decision that is YOURS to make,
           // not yet made, over a subject that actually rendered — and never
           // over `G`'s dead port, which has nothing to expand.
@@ -741,8 +789,12 @@ export function ApprovalGateControl({
         >
           {withdrawn ? (
             <div className="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center">
-              <p className="text-[13px] text-(--el-text-secondary)">{t('withdrawn.port')}</p>
-              <p className="text-xs text-(--el-text-secondary)">{t('withdrawn.portCite')}</p>
+              <p className="text-[13px] text-(--el-text-secondary)">
+                {withdrawnPort ? withdrawnPort.port : t('withdrawn.port')}
+              </p>
+              <p className="text-xs text-(--el-text-secondary)">
+                {withdrawnPort ? withdrawnPort.cite : t('withdrawn.portCite')}
+              </p>
             </div>
           ) : (
             port
@@ -762,9 +814,13 @@ export function ApprovalGateControl({
           are routinely gone (only an approval pins, §6c), the panel then
           reports `failed` over its own empty state, and the alert told a
           reader they could not approve what had already been decided. */}
-      {portFailed && !decided && !withdrawn ? <PortFailedAlert flush={flush} /> : null}
+      {portFailed && !decided && !withdrawn ? <PortFailedAlert sectioned={sectioned} /> : null}
 
-      {phase.kind === 'refused' ? <RefusalAlert refusal={phase.refusal} flush={flush} /> : null}
+      {alert ?? null}
+
+      {phase.kind === 'refused' ? (
+        <RefusalAlert refusal={phase.refusal} sectioned={sectioned} />
+      ) : null}
 
       {/* BAND 3 — withdrawn: no decision at all. Decided: the record. Awaiting:
           the verbs, or who it waits on. */}
@@ -777,12 +833,12 @@ export function ApprovalGateControl({
         // opposite is true and the audit turns on the difference. The time
         // shown is when the question was WITHDRAWN (the row's own clock), said
         // in those words: it is not a decision time, and there is no decision.
-        <RecordStrip flush={flush}>
+        <RecordStrip sectioned={sectioned}>
           <span>{t('withdrawn.record')}</span>
           <span>{t('withdrawn.at', { when: new Date(gate.updatedAt).toLocaleString() })}</span>
         </RecordStrip>
       ) : decided ? (
-        <RecordStrip flush={flush}>
+        <RecordStrip sectioned={sectioned}>
           <span className="font-medium text-(--el-text)">
             {gate.decidedByLabel ?? t('record.unattributed')}
           </span>
@@ -814,13 +870,14 @@ export function ApprovalGateControl({
               </span>
             )
           ) : null}
+          {recordDetail ?? null}
         </RecordStrip>
       ) : phase.kind === 'confirming' ? (
         // ⚠️ AN INLINE BAND OVER THE VERBS, NEVER A MODAL — a modal would take
         // the port off screen at exactly the moment the reader wants one last
         // look, which is the thing the whole frame is arranged to prevent.
         <div
-          className={`${flush ? 'mt-3 ' : ''}border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3`}
+          className={`${sectioned ? 'mt-3 ' : ''}border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3`}
         >
           <p className="text-[13px] font-semibold text-(--el-text)">{t('confirm.title')}</p>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
@@ -845,7 +902,7 @@ export function ApprovalGateControl({
       ) : (
         <div
           className={
-            flush
+            sectioned
               ? 'mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) pt-3'
               : 'flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3'
           }

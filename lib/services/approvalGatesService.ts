@@ -102,6 +102,20 @@ export interface DecideGateInput {
   source: ApprovalGateDecisionSourceDTO;
 }
 
+/**
+ * INTERNAL options a composing SERVICE may pass to the door — never a route, a server action
+ * or an MCP tool, none of which accepts them (Story MOTIR-4909 · MOTIR-5483).
+ */
+export interface DecideGateOptions {
+  /**
+   * The instant to record as `decidedAt`, instead of the door's own clock. The approve-and-merge
+   * PRESS passes the approval's `decidedAt` to every merge gate it decides afterwards, so the
+   * approval and each merge it caused read as ONE person's decision at ONE instant
+   * (`approval-gates.md` §8's amendment, decision 5(c)).
+   */
+  decidedAt?: Date;
+}
+
 export interface DecideGateResult {
   gate: ApprovalGateDTO;
   /** What the decision DID — the status it wrote, or why it wrote none. */
@@ -1011,7 +1025,11 @@ export const approvalGatesService = {
    * current. This door has always REFUSED a `superseded` gate; what changed is
    * that a republish now writes that state.
    */
-  async decide(input: DecideGateInput, ctx: ServiceContext): Promise<DecideGateResult> {
+  async decide(
+    input: DecideGateInput,
+    ctx: ServiceContext,
+    options: DecideGateOptions = {},
+  ): Promise<DecideGateResult> {
     // ── BEFORE THE TRANSACTION ────────────────────────────────────────────────
     // Two reads that must NOT hold the gate's row lock:
     //
@@ -1231,7 +1249,7 @@ export const approvalGatesService = {
         {
           state: DECISION_STATE[input.decision],
           decidedById: ctx.userId,
-          decidedAt: new Date(),
+          decidedAt: options.decidedAt ?? new Date(),
           noteMd: input.noteMd?.trim() ? input.noteMd : null,
           // §6a's first row, answered by the KIND — never by this door. Read
           // under the lock, so it is the version the subject had at the decision.

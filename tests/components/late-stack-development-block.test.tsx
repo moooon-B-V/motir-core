@@ -81,7 +81,13 @@ function reads(): LateReads {
     // mocked here, and `null` is what the read answers for such an item.
     scopeRun: null,
     howToTest: recordDto({ repos: [coreRepo(), gatewayRepo()] }),
-    mergeGate: { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null },
+    mergeGate: {
+      gate: null,
+      canDecide: false,
+      routedToLabel: null,
+      settingsDoor: null,
+      members: [],
+    },
   };
 }
 
