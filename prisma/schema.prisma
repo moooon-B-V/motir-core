@@ -4265,13 +4265,13 @@ model DesignEvidence {
   /// audit is a second thing to keep in agreement with the table an auditor
   /// trusts.
   ///
-  /// ⚠️ PIN, do NOT FREEZE. A pinned row still supersedes normally — a design
-  /// legitimately evolves after approval and 9.2's revise loop depends on
-  /// republishing. The only thing the pin changes is that the supersede stops
-  /// unlinking this row's attachments, so the orphan-GC never reaches them. The
-  /// acceptance domain took the opposite decision for a finished story
-  /// (`AcceptanceEvidenceAlreadyApprovedError`, MOTIR-2764) and that divergence
-  /// is on the record rather than an oversight.
+  /// ⚠️ THE PIN IS NOT THE FREEZE. A pinned row on a card that is still open
+  /// supersedes normally. The FREEZE is the card's status: a design card in the
+  /// `done` category accepts no new version at all (`DESIGN_CARD_CLOSED`,
+  /// MOTIR-5556, ADR §6c second amendment), so a design evolves after approval
+  /// only once a person reopens its card. The only thing the pin changes is that
+  /// the supersede stops unlinking this row's attachments, so the orphan-GC never
+  /// reaches them.
   ///
   /// ⚠️ PER APPROVED VERSION, never "the approved one" (§6d). Approvals
   /// accumulate: a card approved, reopened and approved again holds two pinned

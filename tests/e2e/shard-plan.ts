@@ -547,6 +547,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // receipt's `beat()` pacing, which the promotion removed. Re-measure from the
   // first green `playwright-report-bulk-*` artifact that includes it.
   'design-approval.spec.ts': 4.2,
+  // MOTIR-5559 — a done design is final: approve, republish refused, reopen,
+  // republish accepted. Measured LOCALLY against a production build (5.0 s cold,
+  // then 2.9 s and 2.4 s; one test), not from a green CI run — there is none yet.
+  // Re-measure from the first green `playwright-report-bulk-*` artifact with it.
+  'design-card-closed.spec.ts': 5.0,
   'design-result.spec.ts': 9.2,
   'design-result-publish.spec.ts': 8.0,
   'epic2-acceptance.spec.ts': 7.4,

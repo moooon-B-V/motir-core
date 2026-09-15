@@ -125,6 +125,7 @@ const { designEvidenceRepository } = await import('@/lib/repositories/designEvid
 const { toDesignEvidenceDto } = await import('@/lib/mappers/designEvidenceMappers');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { ApprovalGateSupersededError } = await import('@/lib/approvalGates/errors');
+const { DesignCardClosedError } = await import('@/lib/designEvidence/errors');
 
 let fx: WorkItemFixture;
 let card: WorkItem;
@@ -185,6 +186,17 @@ async function publish(label: string) {
   );
 }
 
+/**
+ * A PERSON reopens the approved card — `done → in_progress`, the declared edge.
+ * Approving a design with no pull request moves its card to `done`, and a done
+ * design card is CLOSED (MOTIR-5556; ADR §6c SECOND AMENDMENT), so a republish
+ * after an approval is only possible once somebody has done this. §6d's
+ * lifecycle, step 4.
+ */
+async function reopen() {
+  await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
+}
+
 /** The `awaiting` gate the publish path wrote for a given version. */
 async function gateFor(evidenceId: string) {
   return adminDb.approvalGate.findFirstOrThrow({ where: { subjectId: evidenceId } });
@@ -240,6 +252,7 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
       { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
+    await reopen();
     await publish('v2');
 
     const summary = await ageAndSweep();
@@ -259,7 +272,8 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     expect(summary.deleted).toBe(0);
     expect(deletedBlobs).toEqual([]);
 
-    // PIN, not FREEZE (§6c): the supersede still happened.
+    // The pin is not the freeze (§6c): on the REOPENED card the supersede still
+    // happened.
     const superseded = await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } });
     expect(superseded.isCurrent).toBe(false);
     expect(superseded.pinnedAt).not.toBeNull();
@@ -315,11 +329,13 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
 
     // Approvals ACCUMULATE across versions: reopen, republish, approve again, and
     // BOTH versions are pinned — never "the approved one".
+    await reopen();
     const v2 = await publish('v2');
     await approvalGatesService.decide(
       { gateId: (await gateFor(v2.id)).id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
+    await reopen();
     const v3 = await publish('v3');
     await ageAndSweep();
 
@@ -462,6 +478,7 @@ describe('a SUPERSEDED subject retires its AWAITING gate (ADR §6b)', () => {
       fx.ctx,
     );
 
+    await reopen();
     await publish('v2');
 
     const decided = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: v1Gate.id } });
@@ -497,9 +514,10 @@ describe('a publish RACING an approval cannot strand the approved bytes (ADR §6
       publish('v2'),
     ]);
 
-    // The publish always lands: PIN, not FREEZE — an approval never refuses a
-    // republish (the divergence from MOTIR-2764 this card is built on).
-    expect(published.status).toBe('fulfilled');
+    // EXACTLY ONE lands (MOTIR-5556; ADR §6c SECOND AMENDMENT). The approval
+    // closes the card, and a closed card takes no new version — so an approval
+    // that wins refuses the publish, and a publish that wins retires the gate.
+    expect([decided.status, published.status].filter((s) => s === 'fulfilled')).toHaveLength(1);
 
     await ageAndSweep();
     const v1Row = await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } });
@@ -515,6 +533,12 @@ describe('a publish RACING an approval cannot strand the approved bytes (ADR §6
       expect(decided.value.filesKept).toBe(true);
       expect(v1Row.pinnedAt).not.toBeNull();
       expect(v1Dto!.assets[0]!.url).not.toBeNull();
+      // …and the publish found the card closed, so v1 is still the current,
+      // approved version — never a done card whose design changed underneath it.
+      expect(published.status === 'rejected' && published.reason).toBeInstanceOf(
+        DesignCardClosedError,
+      );
+      expect(v1Row.isCurrent).toBe(true);
     } else {
       // The publish won: it retired v1's gate before touching the evidence, so
       // the decision was refused as a WITHDRAWN QUESTION. Nothing was approved,

@@ -439,17 +439,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   publish_design_result: {
     summary:
-      'Put the design RESULT on a design work item — the mock(s) and the area note as a link, what a reviewer opens — only when an open work item is blocked_by the design. No .png and no inline note: both are refused. Each asset arrives inline as base64, or as the pathname of a create_design_upload grant when it is too large to send.',
+      'Put the design RESULT on a design work item — the mock(s) and the area note as a link, what a reviewer opens — only when an open work item is blocked_by the design. No .png and no inline note: both are refused, and so is a done design card, which accepts no new version. Each asset arrives inline as base64, or as the pathname of a create_design_upload grant when it is too large to send.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '2ca4f9adc6f9',
+    descriptionFingerprint: '77de91cc8fd8',
   },
   create_design_upload: {
     summary:
       'Mint a short-lived presigned PUT for a design asset too large to send inline \u2014 step 1 ' +
       'of 2, because a large asset is more than a tool argument can carry. Upload the bytes ' +
-      'straight to the store, then publish the pathname. Refuses a screenshot, and a card nothing waits on.',
+      'straight to the store, then publish the pathname. Refuses a screenshot, a card nothing waits on, and a done design card.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'd434b9035979',
+    descriptionFingerprint: 'd7ce4c5ca8d2',
   },
   create_acceptance_upload: {
     summary:
