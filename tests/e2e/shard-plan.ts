@@ -568,7 +568,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // `seedPlanShapes` as `plan-shapes.spec.ts` (14.0 s) plus three page loads, so
   // 16.0, rounded UP because under-estimating unbalances the bin-packer.
   // Re-measure from the first green CI run that includes it.
-  'item-plan-history.spec.ts': 16.0,
+  // MOTIR-5549 adds a second test (its `seedPlanHistory` approves and declines
+  // six plans, then three page loads across two sign-ins), ESTIMATED at +14 s on
+  // the same basis — so 30.0, again rounded up.
+  'item-plan-history.spec.ts': 30.0,
   'issue-list-flow.spec.ts': 51.7,
   'jobs-dashboard.spec.ts': 8.6,
   'jobs-fanout-engine.spec.ts': 11.7,
