@@ -30,6 +30,7 @@ import type { Locale } from '@/lib/i18n/locales';
 import { ArchivedBanner } from './_components/ArchivedBanner';
 import { PendingPlanNotice } from './_components/PendingPlanNotice';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { WatchControl } from './_components/WatchControl';
@@ -227,6 +228,7 @@ export default async function IssueDetailPage({
     workItemRefs,
     todoList,
     pendingPlans,
+    heldTransitions,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -309,6 +311,14 @@ export default async function IssueDetailPage({
           workspaceId: ctx.workspaceId,
         })
       : null,
+    // The moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528). TIER TWO, in
+    // THIS group: the status control is in the rail the reader lands on, and its
+    // held message sits UNDER the value — arriving late would push the rail down.
+    // Empty on almost every card; one small read that costs the group nothing.
+    approvalGatesService.listHeldTransitions(item.id, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -608,6 +618,7 @@ export default async function IssueDetailPage({
               <aside className="flex flex-col gap-4">
                 <CoreFieldsPanel
                   item={item}
+                  heldTransitions={heldTransitions}
                   members={members}
                   workflow={detail.workflow}
                   parent={detail.parent}

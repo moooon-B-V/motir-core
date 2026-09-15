@@ -31,6 +31,56 @@ export type ApprovalGateKindDTO =
   | 'pull_request_approval'
   | 'pull_request_merge';
 
+/**
+ * The payload every status door carries when the approval-gate guard refuses a
+ * move (`APPROVAL_GATE_PENDING` — Story MOTIR-4887 · Subtask MOTIR-5526; ADR
+ * `approval-gates.md` §6d AMENDMENT, rule 4). ONE shape on the board move, the
+ * status server action, `/api/v1` and MCP, so a surface renders the refusal
+ * without re-deriving any of it.
+ *
+ * - `itemKey` + `kind` address the approval overlay (`overlayAddress.ts`).
+ * - `canDecide` is the same answer the approval frame draws its verbs from — the
+ *   kind's permission floor AND §2's authority — so a surface never offers a
+ *   Review & approve button the door would then refuse.
+ * - `routedToLabel` names whose decision it is, for the reader who may only look.
+ */
+export interface ApprovalGatePendingPayloadDTO {
+  itemKey: string;
+  kind: ApprovalGateKindDTO;
+  /** `decision` — the gate awaits a person, and the surface offers Review &
+   *  approve to one who may decide. `merge` — it is already approved and the
+   *  item's pull request is still open, so the surface offers no approve door:
+   *  the merge makes the move (ADR §6d AMENDMENT, rule 2b). */
+  waitingOn: 'decision' | 'merge';
+  /** False while a pull request is open and no gate has been raised yet (its
+   *  checks are not green) — the status control then says the approval is
+   *  asked for once they pass, rather than naming someone it is waiting on. */
+  gateRaised: boolean;
+  canDecide: boolean;
+  routedToLabel: string | null;
+}
+
+/**
+ * One status move an approval holds on a work item, as the STATUS CONTROL draws it
+ * before anyone tries the move (Story MOTIR-4887 · Subtask MOTIR-5528; design
+ * `design/work-items/design-notes.md` § _The status control says so_). The same
+ * rule the guard refuses with — `heldMoves` — read outside any lock.
+ */
+export interface HeldTransitionDTO {
+  statusKey: string;
+  /** The held status's own label, for the sentence. */
+  statusLabel: string;
+  waitingOn: 'decision' | 'merge';
+  /** The kind whose decision this is — addresses the overlay. */
+  kind: ApprovalGateKindDTO;
+  /** Null while a pull request is open and no gate has been raised yet. */
+  gateId: string | null;
+  /** A Review & approve door is drawn only when true: a `decision` move with a gate
+   *  actually awaiting, and this reader holding the floor AND the authority. */
+  canDecide: boolean;
+  routedToLabel: string | null;
+}
+
 /** Where a gate's decision stands (ADR §6b). Mirrors the `ApprovalGateState`
  *  Prisma enum. */
 export type ApprovalGateStateDTO = 'awaiting' | 'approved' | 'changes_requested' | 'superseded';

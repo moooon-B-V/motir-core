@@ -95,6 +95,14 @@ export interface ComboboxOption<T extends string> {
    * the listbox's option indices, so keyboard nav is unaffected.
    */
   group?: string;
+  /**
+   * The option is shown but cannot be picked (MOTIR-5528 — a status move an
+   * approval holds). It stays FOCUSABLE and is announced as unavailable
+   * (`aria-disabled`), rather than skipped, so a keyboard reader learns the move
+   * exists and why it is held; a click or Enter on it does nothing. Its label
+   * reads in `--el-text-secondary`, never an opacity dim, which keeps AA.
+   */
+  disabled?: boolean;
 }
 
 export interface ComboboxProps<T extends string> {
@@ -389,7 +397,7 @@ export function Combobox<T extends string>({
 
   function commit(i: number) {
     const opt = filtered[i];
-    if (!opt) return;
+    if (!opt || opt.disabled) return;
     onChange(opt.value);
     closeAndRefocus();
   }
@@ -518,11 +526,14 @@ export function Combobox<T extends string>({
                   id={optionId(i)}
                   role="option"
                   aria-selected={isSelected}
+                  aria-disabled={opt.disabled ? true : undefined}
                   onMouseEnter={() => setActiveIndex(i)}
                   onClick={() => commit(i)}
                   className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
-                    isActive ? 'bg-(--el-option-active-bg) text-(--el-text)' : 'text-(--el-text)',
+                    'flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
+                    opt.disabled ? 'cursor-default' : 'cursor-pointer',
+                    isActive ? 'bg-(--el-option-active-bg)' : '',
+                    opt.disabled ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
                   )}
                 >
                   {opt.icon ? (

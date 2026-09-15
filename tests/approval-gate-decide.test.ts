@@ -190,7 +190,16 @@ describe('approvalGatesService.decide — approve, the terminal act (ADR §8 Wor
     const { item, gate } = await designSubtaskWithGate();
     // Cancel the card: `cancelled` is terminal and the default workflow has no
     // `cancelled → done` edge, so the effect's transition is refused.
-    await workItemsService.updateStatus(item.id, 'cancelled', fx.ctx);
+    //
+    // ⚠️ AS A SYSTEM WRITE, since MOTIR-5527 (ADR `approval-gates.md` §6d
+    // AMENDMENT, rule 6): a HAND move to Cancelled now withdraws the question, so
+    // the gate would be `superseded` and the door would refuse it before ever
+    // running the effect — a different refusal from the rollback this test is
+    // about. A system write withdraws nothing, which keeps the gate `awaiting`
+    // and the effect the thing that fails.
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemsService.applyStatusTransition(item.id, 'cancelled', fx.ctx, tx, { system: true }),
+    );
 
     await expect(
       approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),

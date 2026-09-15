@@ -383,6 +383,68 @@ export const approvalGateRepository = {
   },
 
   /**
+   * LOCK every `awaiting` gate row on one work item, in id order (Story MOTIR-4887
+   * · Subtask MOTIR-5527; ADR `approval-gates.md` §6d AMENDMENT, rule 8).
+   *
+   * ⚠️ A LOCK-ORDER TOOL, and the order is the whole of its purpose. The decide
+   * door locks a GATE ({@link lockById}) and then, through the kind's effect,
+   * transitions the item — which locks the WORK ITEM. `applyStatusTransition`
+   * calls this BEFORE it locks the item, so every transition takes gate rows
+   * first and the item second. A funnel that locked the item first and reached
+   * for the gate afterwards (to supersede it) would take the same two locks in
+   * the opposite order, and a person approving while another pulls the card back
+   * would deadlock.
+   *
+   * Re-locking a row this transaction already holds is a no-op in Postgres, so the
+   * decide door's own call into the funnel does not wait on itself. `ORDER BY id`
+   * keeps two transitions on one item taking a multi-gate set in the same order.
+   * Under READ COMMITTED a row decided while this waited is re-checked against
+   * `state = 'awaiting'` and dropped from the result — so the rows it returns ARE
+   * the item's awaiting set as of the lock, which is what the approval-gate guard
+   * reads (`id` and `kind` are the two fields it needs).
+   */
+  async lockAwaitingByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; kind: ApprovalGateKind }>> {
+    return tx.$queryRaw<Array<{ id: string; kind: ApprovalGateKind }>>`
+      SELECT "id", "kind"
+      FROM "approval_gate"
+      WHERE "work_item_id" = ${workItemId} AND "state" = 'awaiting'
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+  },
+
+  /**
+   * RETIRE every `awaiting` gate on one work item, WHATEVER ITS KIND — the
+   * withdraw a hand move that pulls the work back performs (Story MOTIR-4887 ·
+   * Subtask MOTIR-5527; ADR `approval-gates.md` §6d AMENDMENT, rule 6).
+   *
+   * The sibling of {@link supersedeAwaitingByWorkItem}, and not that method called
+   * once per kind, because the question is different: a republish retires ONE
+   * kind's question about a subject that changed, while pulling the work back
+   * withdraws EVERY question anyone was asked about this item. A per-kind loop
+   * would have to enumerate the kinds, and a kind added later would silently stay
+   * `awaiting` on a card nobody is offering for review.
+   *
+   * Writes `state` and nothing else, exactly as the publish-path supersede does —
+   * no actor, no note, no `decided_at` — so the audit cannot read a withdrawn
+   * question as a decision. The `state: 'awaiting'` predicate is the whole guard:
+   * a decided gate is somebody's answer and is never touched.
+   */
+  async supersedeAllAwaitingByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: { workItemId, state: 'awaiting' },
+      data: { state: 'superseded' },
+    });
+    return result.count;
+  },
+
+  /**
    * Every `awaiting` gate of `kind` asking about ONE subject, on any card — the merge
    * gate's withdrawal read (Story MOTIR-4882 · MOTIR-5515): a pull request's head
    * moving is a fact about the pull request, not about a card.
@@ -435,6 +497,59 @@ export const approvalGateRepository = {
       data: { state: 'superseded' },
     });
     return result.count;
+  },
+
+  /**
+   * Whether a subject already has a LIVE question — a gate on
+   * `(workItemId, kind, subjectId)` that is `awaiting` or `approved` (MOTIR-5532).
+   *
+   * The re-ask's precondition (ADR §6d AMENDMENT, rule 7): an awaiting gate is
+   * already asking, and an approved one has been answered for THESE bytes, so
+   * neither is asked again. `changes_requested` and `superseded` do not count —
+   * the first sent the work back, the second was withdrawn.
+   */
+  async hasLiveGateForSubject(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    subjectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const count = await tx.approvalGate.count({
+      where: { workItemId, kind, subjectId, state: { in: ['awaiting', 'approved'] } },
+    });
+    return count > 0;
+  },
+
+  /**
+   * RAISE an `awaiting` gate, or do nothing when one is already awaiting on the
+   * same subject (Story MOTIR-4887 · Subtask MOTIR-5532; ADR §6d AMENDMENT,
+   * rule 7). Returns whether a row was inserted.
+   *
+   * ⚠️ NOT {@link create}, and the difference is transactional, not cosmetic.
+   * `create` translates the partial unique index's `P2002` into a typed error —
+   * right at publish, where a collision is impossible by construction. The re-ask
+   * runs INSIDE a status transition, where a concurrent double raise is a normal
+   * outcome and must count as "already raised". A caught `P2002` cannot express
+   * that: Postgres has already ABORTED the transaction, so the status write that
+   * follows would fail. `ON CONFLICT DO NOTHING` (`skipDuplicates`) resolves the
+   * race inside the statement, and the transition carries on.
+   */
+  async createAwaitingIfAbsent(
+    data: {
+      workspaceId: string;
+      projectId: string;
+      workItemId: string;
+      kind: ApprovalGateKind;
+      subjectId: string;
+      routedToId: string | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.approvalGate.createMany({
+      data: [{ ...data, state: 'awaiting' }],
+      skipDuplicates: true,
+    });
+    return result.count > 0;
   },
 
   /**

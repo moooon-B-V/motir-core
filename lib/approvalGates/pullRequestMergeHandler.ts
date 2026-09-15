@@ -89,6 +89,21 @@ export const pullRequestMergeGateHandler: GateHandler<GithubPullRequestWithInsta
     return pr ? pullRequestSubjectVersion(pr) : null;
   },
 
+  /**
+   * NO re-ask on review entry (ADR `approval-gates.md` §6d AMENDMENT, rule 7 ·
+   * MOTIR-5532): always `null`.
+   *
+   * ⚠️ NOT an omission. This kind already asks again on its OWN trigger — the
+   * all-green verdict raises a fresh gate per pull request (MOTIR-5515) — and that
+   * verdict is the very event the CI-green promotion into `in_review` rides on. A
+   * review-entry raise would be a second writer of the same question, and it would
+   * have to pick ONE pull request where a card delivered by several holds one gate
+   * each. Rule 7 is an ADDITIONAL trigger for kinds with none; this one has one.
+   */
+  async currentSubject(): Promise<string | null> {
+    return null;
+  },
+
   /** ADR §2: `assigneeId ?? reporterId` — the routing rule every kind shares. */
   routeTo({ item }: GateRoutingArgs): string | null {
     return routingTargetId(item);

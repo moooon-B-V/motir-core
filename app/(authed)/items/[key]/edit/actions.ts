@@ -9,7 +9,10 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
 import {
+  ApprovalGatePendingError,
   IllegalParentTypeError,
   IllegalTransitionError,
   StaleWorkItemError,
@@ -78,7 +81,16 @@ export interface UpdateIssueInput {
 
 export type IssueActionResult =
   | { ok: true; updatedAt: string }
-  | { ok: false; error: string; field?: 'parent' | 'status'; stale?: boolean };
+  | {
+      ok: false;
+      error: string;
+      field?: 'parent' | 'status';
+      stale?: boolean;
+      /** Set ONLY for an approval-gate refusal (MOTIR-5526): the status control
+       *  renders it in place, with a door into the approval, from `gate`. */
+      code?: 'APPROVAL_GATE_PENDING';
+      gate?: ApprovalGatePendingPayloadDTO;
+    };
 
 async function requireContext() {
   const session = await getSession();
@@ -210,6 +222,22 @@ export async function changeStatusAction(input: {
     return { ok: true, updatedAt: updated.updatedAt };
   } catch (err) {
     const t = await getErrorsTranslator();
+    // A pending approval owns the target status (MOTIR-5526) — carried with its
+    // code and the render payload, so every surface committing through this
+    // action can say so on the status control. Every other failure keeps
+    // `{ ok: false, error }`.
+    if (err instanceof ApprovalGatePendingError) {
+      return {
+        ok: false,
+        error: workItemErrorMessage(err, t),
+        field: 'status',
+        code: 'APPROVAL_GATE_PENDING',
+        gate: await approvalGatesService.describePendingRefusal(err, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      };
+    }
     if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError)
       return { ok: false, error: workItemErrorMessage(err, t), field: 'status' };
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };

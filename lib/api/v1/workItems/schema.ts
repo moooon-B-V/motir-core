@@ -1047,6 +1047,25 @@ export const illegalTransitionSchema = z.object({
 });
 
 /**
+ * The refusal body for a move an approval gate holds (MOTIR-5526): the pinned
+ * `{ code, error }` PLUS an additive `gate` object — the SAME payload the board
+ * move, the status server action and MCP carry, so a client renders whose
+ * decision it is without parsing the sentence.
+ */
+export const approvalGatePendingSchema = z.object({
+  code: z.literal('APPROVAL_GATE_PENDING'),
+  error: z.string(),
+  gate: z.object({
+    itemKey: z.string(),
+    kind: z.string(),
+    waitingOn: z.enum(['decision', 'merge']),
+    gateRaised: z.boolean(),
+    canDecide: z.boolean(),
+    routedToLabel: z.string().nullable(),
+  }),
+});
+
+/**
  * The MINIMAL ACTOR a v1 collection row embeds (Amendment 10 Q1).
  *
  * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes

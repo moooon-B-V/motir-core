@@ -2058,6 +2058,16 @@ export default defineConfig({
         'lib/approvalGates/designResultHandler.ts',
         'lib/approvalGates/errors.ts',
         'lib/approvalGates/refusals.ts',
+        // Story MOTIR-4887 · MOTIR-5530 — the manual-flip guard's new surface: the
+        // ONE held-move rule the guard and the status control share, the pure
+        // intent resolver, and the held notice / refusal pieces the item page,
+        // quick view, edit page, board and list render. Measured before pinning.
+        'lib/approvalGates/heldMoves.ts',
+        'lib/workflows/statusIntent.ts',
+        'components/issues/StatusHeldNotice.tsx',
+        'components/issues/heldRefusal.ts',
+        'components/issues/useStatusHeld.ts',
+        'app/**/boards/_components/BoardHeldRefusal.tsx',
         // Bug MOTIR-5191 — ADR §2's routing rule and the *waiting on* display
         // name, shared by the item page's read and the Approvals queue. Two pure
         // functions with one job each, so they are measured and pinned here per
@@ -2213,6 +2223,41 @@ export default defineConfig({
         },
         'lib/approvalGates/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/approvalGates/refusals.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // Story MOTIR-4887 · MOTIR-5530 — measured against the story's own specs:
+        // heldMoves, statusIntent and BoardHeldRefusal at 100 on all four axes;
+        // StatusHeldNotice 100/95.45/100/100, heldRefusal 100/92.85/100/100 and
+        // useStatusHeld 100/90/100/100 (stmts/branches/funcs/lines).
+        'lib/approvalGates/heldMoves.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workflows/statusIntent.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'components/issues/StatusHeldNotice.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/issues/heldRefusal.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/issues/useStatusHeld.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/boards/_components/BoardHeldRefusal.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // Story MOTIR-4882 · MOTIR-5519 — measured at 100 on all four axes (see the
         // `include` note); pinned at the project's 90 floor so a refactor has room.
         'lib/approvalGates/pullRequestMergeHandler.ts': {

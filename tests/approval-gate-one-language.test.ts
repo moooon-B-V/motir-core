@@ -238,6 +238,32 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'superseded',
       callers: ['lib/services/mergeGates.ts', 'lib/services/pullRequestMergeService.ts'],
     },
+    // AMENDED ON THE RECORD — MOTIR-5527, 2026-09-14 (ADR `approval-gates.md` §6d
+    // AMENDMENT, rule 6). A hand move that pulls the work back out of review, or
+    // cancels it, WITHDRAWS every question on the item. That is a product-written
+    // `superseded`, exactly like the publish path's: no actor, no note, no
+    // decision — so it is a declared NON-decision writer, not a second door. It is
+    // a sibling method rather than a second caller of the one above, because it
+    // retires EVERY kind at once, and its one caller is the status funnel
+    // (`applyStatusTransition`), which every status door already passes through.
+    // AMENDED ON THE RECORD — MOTIR-5532, 2026-09-14 (ADR §6d AMENDMENT, rule 7).
+    // Entering review ASKS AGAIN: a card returning to `in_review` whose current
+    // subject has no awaiting or approved gate gets a fresh `awaiting` one. That
+    // is a product-written question, like the publish path's `create` — never a
+    // decision — raised by the review-entry seam in `approvalGatesService`. A
+    // sibling method rather than a second `create` caller, because it must absorb
+    // a concurrent double raise INSIDE a status transition, which a caught unique
+    // violation cannot do without aborting that transaction.
+    {
+      method: 'createAwaitingIfAbsent',
+      writes: 'awaiting',
+      callers: ['lib/services/approvalGatesService.ts'],
+    },
+    {
+      method: 'supersedeAllAwaitingByWorkItem',
+      writes: 'superseded',
+      callers: ['lib/services/workItemsService.ts'],
+    },
   ] as const;
 
   it('routes every DECISION through `approvalGatesService.decide` — one call site', () => {

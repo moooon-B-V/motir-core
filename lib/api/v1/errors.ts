@@ -254,6 +254,12 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // artifact — it is to land (or re-parent, or deliberately complete) the
   // children the error names. No new STATUS, so no ADR §4 row.
   CONTAINER_HAS_OPEN_CHILDREN: 422,
+  // MOTIR-5526 — the approval-gate guard: an item whose `awaiting` approval gate
+  // OWNS the target status (ADR `approval-gates.md` §6d AMENDMENT). A FIFTH
+  // distinct code on this sub-resource, for the reason the four above are
+  // distinct: the edge is legal, the status is spelled right, nothing is missing
+  // — the fix is for a person to decide the gate. No new STATUS, so no ADR §4 row.
+  APPROVAL_GATE_PENDING: 422,
 
   // 11.2.9 (MOTIR-2051) — the link edges.
   SELF_LINK: 422,
