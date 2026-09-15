@@ -1,0 +1,1671 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Plan history — every plan that shaped this item (MOTIR-5542 · MOTIR-5545)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — Story MOTIR-5542, design subtask MOTIR-5545.
+      Gates MOTIR-5547 (the section); walked by MOTIR-5549; renders the read
+      MOTIR-5546 builds.
+
+      WHAT IT DRAWS. A Plans section on the item page: every plan related to this
+      item (created · changed · archived · added work items under it), all five
+      PlanStatus values, one row per plan, oldest first. Each row says what the plan
+      did in a tense its status allows and opens /plans/<id>.
+
+      RENDERED FIRST. PlanRow (all five statuses, en + zh), PendingPlanNotice,
+      ContentSectionCard, ErrorState and ActivitySkeleton were rendered through the
+      repo's vitest + RTL setup on origin/main 34c8aa442. The status square, the
+      pill tones, the meta grammar and every glyph below are transcribed from that
+      render. PlanRow's own BOX is dropped: inside ContentSectionCard it would be a
+      container inside a container.
+
+      CITES, NEVER REDRAWS: pending-plan-indicator.mock.html (the notice, unchanged),
+      detail-arrival.mock.html (the tier allocation), activity-history.mock.html
+      (the pager grammar), approval-cta.mock.html (one container, one label).
+
+      See design-notes.md section "Plan history".
+    -->
+    <style>
+      /* ── Tier 0 — copied from packages/design-system/theme.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+
+        --radius-card: 12px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+      }
+      /* ── Tier 3 — the element layer. Emitted on the dark stage too, so a nested
+         data-theme="dark" recomputes it (tests/design-dark-parity.test.ts). ── */
+      :root,
+      [data-theme='dark'] {
+        --el-page-bg: var(--color-background);
+        --el-card: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-faint: var(--color-stone);
+        --el-text-identifier: var(--color-slate);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+      }
+      [data-theme='dark'] {
+        --color-primary: #7b6ce5;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+      }
+
+      /* ── Board chrome (NOT part of the design — the review page) ─────────── */
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .sprite {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .board {
+        max-width: 1328px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+        display: flex;
+        flex-direction: column;
+        gap: 36px;
+      }
+      .boardTitle {
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      .boardLead {
+        margin: 0;
+        color: var(--el-text-secondary);
+        max-width: 86ch;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panelLabel {
+        font-size: 12px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .panelNote {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        max-width: 90ch;
+      }
+      .panelNote code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .stateCap {
+        font-size: 13px;
+        font-weight: 650;
+        margin: 0 0 8px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+        align-items: start;
+      }
+      .spec {
+        min-width: 0;
+      }
+      .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 10.5px;
+        font-weight: 700;
+        flex: none;
+      }
+      .anatList {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .anat {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .darkStage {
+        padding: 24px;
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+
+      /* ── The item page at 1280 (panel 0) — ghosts, the section live ───────── */
+      .pg {
+        width: 1280px;
+        box-sizing: border-box;
+        padding: 20px 24px 28px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .pgHead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .pgKey {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        color: var(--el-text-identifier);
+      }
+      .pgTitle {
+        font-size: 20px;
+        font-weight: 650;
+      }
+      .pgGrid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 18rem;
+        gap: 24px;
+        align-items: start;
+      }
+      .pgCol {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        min-width: 0;
+      }
+      .ghost {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 14px 18px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .ghostTitle {
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .here {
+        outline: 2px solid var(--el-accent);
+        outline-offset: 4px;
+        border-radius: var(--radius-card);
+      }
+
+      /* ── PendingPlanNotice (shipped, unchanged) ─────────────────────────── */
+      .pn {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-lavender);
+        padding: 12px 14px;
+      }
+      .pnGlyph {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        flex: none;
+        color: var(--el-accent-on-surface);
+      }
+      .pnBody {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .pnHead {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .pnMeta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── ContentSectionCard (shipped: Card + header grammar) — THE container ── */
+      .sc {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+      }
+      .scHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: var(--spacing-md);
+      }
+      .scTitle {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .scGloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The history list — PlanRow's anatomy, flush, hairline-divided ───── */
+      .phList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .phItem + .phItem {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .phRow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        margin: 4px calc(var(--spacing-control-x) * -1);
+        border-radius: var(--radius-control);
+        color: inherit;
+        text-decoration: none;
+      }
+      .phRow:hover {
+        background: var(--el-surface);
+      }
+      .phSq {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        flex: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-strong);
+      }
+      .phSq-sky {
+        background: var(--el-tint-sky);
+      }
+      .phSq-lavender {
+        background: var(--el-tint-lavender);
+      }
+      .phSq-rose {
+        background: var(--el-tint-rose);
+      }
+      .phSq-mint {
+        background: var(--el-tint-mint);
+      }
+      .phSq-muted {
+        background: var(--el-muted);
+      }
+      .phIc {
+        width: 16px;
+        height: 16px;
+      }
+      .phBody {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        flex-direction: column;
+      }
+      .phTitle {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .phRel {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .phMeta {
+        display: flex;
+        flex-wrap: wrap;
+        column-gap: 12px;
+        row-gap: 2px;
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .phAuthor {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .phGlyph {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        flex: none;
+        border: 1px solid transparent;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill-sky {
+        background: var(--el-tint-sky);
+      }
+      .pill-lavender {
+        background: var(--el-tint-lavender);
+      }
+      .pill-rose {
+        background: var(--el-tint-rose);
+      }
+      .pill-mint {
+        background: var(--el-tint-mint);
+      }
+      .pill-archived {
+        background: var(--el-archived-pill-bg);
+        color: var(--el-archived-pill-text);
+      }
+
+      /* ── Show more (HistorySection's shipped pager grammar) ───────────────── */
+      .phMore {
+        box-sizing: border-box;
+        width: 100%;
+        height: var(--height-control);
+        margin-top: 12px;
+        padding: 0 var(--spacing-control-x);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font: inherit;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .phMore:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      .sk {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        margin-top: 12px;
+      }
+      .skRow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .skSq {
+        width: 32px;
+        height: 32px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .skBars {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .skBar {
+        height: 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .phErr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .phErrFirst {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+      }
+      .phErrText {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .btn {
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-button-border);
+        background: transparent;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      /* ── narrow (< md) ──────────────────────────────────────────────────── */
+      .narrow {
+        width: 390px;
+        box-sizing: border-box;
+        padding: 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .narrow .sc {
+        padding: 16px;
+      }
+      .narrow .phRow {
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sprite" aria-hidden="true" focusable="false">
+      <defs>
+        <g
+          id="i-loader"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </g>
+        <g
+          id="i-octagon-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 16h.01" />
+          <path d="M12 8v4" />
+          <path
+            d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"
+          />
+        </g>
+        <g
+          id="i-circle-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-circle-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m15 9-6 6" />
+          <path d="m9 9 6 6" />
+        </g>
+        <g
+          id="i-bot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </g>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </g>
+        <g
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+      </defs>
+    </svg>
+
+    <main class="board">
+      <header class="panel">
+        <h1 class="boardTitle">Plan history — every plan that shaped this item, oldest first</h1>
+        <p class="boardLead">
+          MOTIR-5545 (story MOTIR-5542). A <strong>Plans</strong> section on the item page lists
+          every plan that created this item, changed it, archived it or added work items under it,
+          in all five statuses, one row per plan. Each row says what the plan did in a tense its
+          status allows, and opens the plan.
+        </p>
+        <p class="panelNote">
+          The row is <code>PlanRow</code>'s anatomy (status square · title · meta · pill) with its
+          box removed, because the section card is the only container. The pending-plan notice stays
+          exactly as shipped and remains the only call to action for an undecided plan.
+        </p>
+      </header>
+
+      <!-- ═══ 0 · the page ═══════════════════════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          0 · The item page at 1280 — the section after Children, the pending notice above
+        </div>
+        <p class="panelNote">
+          Tier 2: the read joins the page's existing concurrent group, so the section renders with
+          the first content and moves nothing on arrival. The undecided plan appears twice: in the
+          notice, which has the button, and as an ordinary history row, which does not.
+        </p>
+        <div class="pg">
+          <div class="pgHead">
+            <span class="pgKey">MOTIR-5542</span
+            ><span class="pgTitle">A work item shows every plan that shaped it</span>
+          </div>
+          <div class="pgGrid">
+            <div class="pgCol">
+              <div class="pn" role="status">
+                <svg class="pnGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-sparkles" />
+                </svg>
+                <div class="pnBody">
+                  <span class="pnHead">A plan proposes changes to this item</span>
+                  <span class="pnMeta"
+                    >Nothing here has changed yet — the proposal applies only if the plan is
+                    approved.</span
+                  >
+                </div>
+                <a class="btn" href="/plans/p3" aria-label="Review the plan that names MOTIR-5542"
+                  >Review plan<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-arrow-right" /></svg
+                ></a>
+              </div>
+              <div class="ghost">
+                <span class="ghostTitle">Description</span> · Explanation · To-do list ·
+                Relationships
+              </div>
+              <div class="ghost">
+                <span class="ghostTitle">Development</span> · Acceptance · Design result — the late
+                stack, upper half
+              </div>
+              <div class="ghost"><span class="ghostTitle">Children</span> — 5 work items</div>
+              <div class="sc here">
+                <div class="scHead">
+                  <h2 class="scTitle">Plans</h2>
+                  <span class="scGloss">— how this item came to be</span>
+                </div>
+                <ul class="phList" aria-label="Plans that shaped MOTIR-5542">
+                  <li class="phItem">
+                    <a class="phRow" href="/plans/p1">
+                      <span class="phSq phSq-mint" aria-hidden="true"
+                        ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-check" /></svg
+                      ></span>
+                      <span class="phBody">
+                        <span class="phTitle">Plan the self-improvement epic</span>
+                        <span class="phRel">Created this item</span>
+                        <span class="phMeta"
+                          ><span>created 3 days ago</span><span>approved 3 days ago by Zhu Yue</span
+                          ><span class="phAuthor"
+                            ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-bot" /></svg
+                            ><span>via Claude Code · claude-opus-5</span></span
+                          ></span
+                        >
+                      </span>
+                      <span class="pill pill-mint">Approved</span>
+                    </a>
+                  </li>
+                  <li class="phItem">
+                    <a class="phRow" href="/plans/p2">
+                      <span class="phSq phSq-mint" aria-hidden="true"
+                        ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-check" /></svg
+                      ></span>
+                      <span class="phBody">
+                        <span class="phTitle">Expand MOTIR-5542 into subtasks</span>
+                        <span class="phRel">Added 5 work items under this item</span>
+                        <span class="phMeta"
+                          ><span>created 2 days ago</span><span>approved 2 days ago by Zhu Yue</span
+                          ><span class="phAuthor"
+                            ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-bot" /></svg
+                            ><span>via Claude Code · claude-opus-5</span></span
+                          ></span
+                        >
+                      </span>
+                      <span class="pill pill-mint">Approved</span>
+                    </a>
+                  </li>
+                  <li class="phItem">
+                    <a class="phRow" href="/plans/p3">
+                      <span class="phSq phSq-lavender" aria-hidden="true"
+                        ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                      ></span>
+                      <span class="phBody">
+                        <span class="phTitle">Re-scope the plan-history story</span>
+                        <span class="phRel">Proposes changes to this item</span>
+                        <span class="phMeta"
+                          ><span>created 1 hour ago</span
+                          ><span class="phAuthor"
+                            ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-bot" /></svg
+                            ><span>via Claude Code · claude-opus-5</span></span
+                          ></span
+                        >
+                      </span>
+                      <span class="pill pill-lavender">Planned</span>
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <div class="ghost">
+                <span class="ghostTitle">Attachments</span> · Activity — the late stack, lower half
+              </div>
+            </div>
+            <div class="ghost"><span class="ghostTitle">Core fields</span> · Provenance</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 1 · anatomy ════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">1 · Anatomy — one row</div>
+        <div class="grid2">
+          <div class="sc">
+            <div class="scHead">
+              <h2 class="scTitle">Plans</h2>
+              <span class="scGloss">— how this item came to be</span>
+            </div>
+            <ul class="phList" aria-label="Plans that shaped MOTIR-5542">
+              <li class="phItem">
+                <a class="phRow" href="/plans/p2">
+                  <span class="phSq phSq-mint" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-check" /></svg
+                  ></span>
+                  <span class="phBody">
+                    <span class="phTitle">Expand MOTIR-5542 into subtasks</span>
+                    <span class="phRel">Changed this item, and added 5 work items under it</span>
+                    <span class="phMeta"
+                      ><span>created 2 days ago</span><span>approved 2 days ago by Zhu Yue</span
+                      ><span class="phAuthor"
+                        ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-bot" /></svg
+                        ><span>via Claude Code · claude-opus-5</span></span
+                      ></span
+                    >
+                  </span>
+                  <span class="pill pill-mint">Approved</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="anatList">
+            <div class="anat">
+              <span class="num">1</span
+              ><span
+                ><strong>ContentSectionCard</strong> — title <em>Plans</em>, gloss
+                <em>how this item came to be</em>. The only container.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">2</span
+              ><span
+                ><strong>Status square</strong> — PlanRow's 32px square, the shipped tint per
+                status, glyph <code>--el-text-strong</code>, aria-hidden.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">3</span
+              ><span
+                ><strong>Title</strong> — <code>--el-text</code>, truncates;
+                <em>Untitled plan</em> when the plan has no title.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">4</span
+              ><span
+                ><strong>Relation sentence</strong> (new) — 13px <code>--el-text-secondary</code>;
+                the tense follows the status.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">5</span
+              ><span
+                ><strong>Meta line</strong> — <em>created {when}</em> ·
+                <em>approved/declined {when} by {name}</em> · <em>via {harness} · {model}</em>, 12px
+                <code>--el-text-secondary</code>.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="num">6</span
+              ><span><strong>Status pill</strong> — PlanRow's StatusPill, unchanged tones.</span>
+            </div>
+            <div class="anat">
+              <span class="num">7</span
+              ><span
+                ><strong>The row is one link</strong> to <code>/plans/&lt;id&gt;</code>; hover fills
+                <code>--el-surface</code>; hairline dividers, no box, no accent border.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 2 · per status ═════════════════════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">2 · One row per PlanStatus — all five, oldest first</div>
+        <p class="panelNote">
+          Generating, planned and stale <strong>propose</strong>; approved <strong>did</strong>;
+          declined <strong>proposed, not applied</strong>. The generating square's spinner is frozen
+          because a board is a still.
+        </p>
+        <div class="sc">
+          <div class="scHead">
+            <h2 class="scTitle">Plans</h2>
+            <span class="scGloss">— how this item came to be</span>
+          </div>
+          <ul class="phList" aria-label="Plans that shaped MOTIR-5542">
+            <li class="phItem">
+              <a class="phRow" href="/plans/d1">
+                <span class="phSq phSq-muted" aria-hidden="true"
+                  ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg
+                ></span>
+                <span class="phBody">
+                  <span class="phTitle">Archive the duplicate story</span>
+                  <span class="phRel">Proposed to archive this item — not applied</span>
+                  <span class="phMeta"
+                    ><span>created 5 days ago</span><span>declined 5 days ago by Zhu Yue</span
+                    ><span class="phAuthor"
+                      ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bot" /></svg
+                      ><span>via Claude Code · claude-opus-5</span></span
+                    ></span
+                  >
+                </span>
+                <span class="pill pill-archived">Declined</span>
+              </a>
+            </li>
+            <li class="phItem">
+              <a class="phRow" href="/plans/s1">
+                <span class="phSq phSq-rose" aria-hidden="true"
+                  ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-octagon-alert" /></svg
+                ></span>
+                <span class="phBody">
+                  <span class="phTitle">Rename the story</span>
+                  <span class="phRel">Proposes changes to this item</span>
+                  <span class="phMeta"
+                    ><span>created 3 days ago</span
+                    ><span class="phAuthor"
+                      ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bot" /></svg
+                      ><span>via Claude Code · claude-opus-5</span></span
+                    ></span
+                  >
+                </span>
+                <span class="pill pill-rose">Stale</span>
+              </a>
+            </li>
+            <li class="phItem">
+              <a class="phRow" href="/plans/a1">
+                <span class="phSq phSq-mint" aria-hidden="true"
+                  ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-check" /></svg
+                ></span>
+                <span class="phBody">
+                  <span class="phTitle">Expand MOTIR-5542 into subtasks</span>
+                  <span class="phRel">Added 5 work items under this item</span>
+                  <span class="phMeta"
+                    ><span>created 2 days ago</span><span>approved 2 days ago by Zhu Yue</span
+                    ><span class="phAuthor"
+                      ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bot" /></svg
+                      ><span>via Claude Code · claude-opus-5</span></span
+                    ></span
+                  >
+                </span>
+                <span class="pill pill-mint">Approved</span>
+              </a>
+            </li>
+            <li class="phItem">
+              <a class="phRow" href="/plans/p1">
+                <span class="phSq phSq-lavender" aria-hidden="true"
+                  ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                ></span>
+                <span class="phBody">
+                  <span class="phTitle">Re-scope the plan-history story</span>
+                  <span class="phRel"
+                    >Proposes changes to this item, and 2 work items under it</span
+                  >
+                  <span class="phMeta"
+                    ><span>created yesterday</span
+                    ><span class="phAuthor"
+                      ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-bot" /></svg
+                      ><span>via Claude Code · claude-opus-5</span></span
+                    ></span
+                  >
+                </span>
+                <span class="pill pill-lavender">Planned</span>
+              </a>
+            </li>
+            <li class="phItem">
+              <a class="phRow" href="/plans/g1">
+                <span class="phSq phSq-sky" aria-hidden="true"
+                  ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-loader" /></svg
+                ></span>
+                <span class="phBody">
+                  <span class="phTitle">Untitled plan</span>
+                  <span class="phRel">Proposes 3 work items under this item</span>
+                  <span class="phMeta"
+                    ><span>created 4 minutes ago</span
+                    ><span class="phAuthor"
+                      ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-sparkles" /></svg
+                      ><span>via Motir AI</span></span
+                    ></span
+                  >
+                </span>
+                <span class="pill pill-sky">Generating</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ═══ 3 · every relation, by tense ═══════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">3 · Every reachable relation, by tense</div>
+        <p class="panelNote">
+          A plan holds at most one of created, changed or archived for an item, and any of them can
+          combine with added N. <em>Created</em> exists only on an approved plan, because the new
+          item's id is written back at approval. <em>Created, and added N</em> is unreachable and is
+          drawn so the component's switch stays total.
+        </p>
+        <div class="grid2">
+          <div class="spec">
+            <p class="stateCap">Approved — what the plan did</p>
+            <div class="sc">
+              <ul class="phList" aria-label="Approved relations">
+                <li class="phItem">
+                  <a class="phRow" href="/plans/r1"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Plan the epic</span
+                      ><span class="phRel">Created this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/r2"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Plan the epic (unreachable)</span
+                      ><span class="phRel">Created this item, and 2 work items under it</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/r3"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Rename the story</span
+                      ><span class="phRel">Changed this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/r4"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Tidy the backlog</span
+                      ><span class="phRel">Archived this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/r5"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Expand into subtasks</span
+                      ><span class="phRel">Added 1 work item under this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/r6"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Re-scope and expand</span
+                      ><span class="phRel"
+                        >Changed this item, and added 4 work items under it</span
+                      ></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/r7"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Fold into a new story</span
+                      ><span class="phRel"
+                        >Archived this item, and added 2 work items under it</span
+                      ></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="stateCap">Generating · planned · stale — what the plan proposes</p>
+            <div class="sc">
+              <ul class="phList" aria-label="Proposed relations">
+                <li class="phItem">
+                  <a class="phRow" href="/plans/q1"
+                    ><span class="phSq phSq-lavender" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Rename the story</span
+                      ><span class="phRel">Proposes changes to this item</span></span
+                    ><span class="pill pill-lavender">Planned</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/q2"
+                    ><span class="phSq phSq-lavender" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Tidy the backlog</span
+                      ><span class="phRel">Proposes to archive this item</span></span
+                    ><span class="pill pill-lavender">Planned</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/q3"
+                    ><span class="phSq phSq-lavender" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Expand into subtasks</span
+                      ><span class="phRel">Proposes 1 work item under this item</span></span
+                    ><span class="pill pill-lavender">Planned</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/q4"
+                    ><span class="phSq phSq-lavender" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Re-scope and expand</span
+                      ><span class="phRel"
+                        >Proposes changes to this item, and 4 work items under it</span
+                      ></span
+                    ><span class="pill pill-lavender">Planned</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/q5"
+                    ><span class="phSq phSq-lavender" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Fold into a new story</span
+                      ><span class="phRel"
+                        >Proposes to archive this item, and 2 work items under it</span
+                      ></span
+                    ><span class="pill pill-lavender">Planned</span></a
+                  >
+                </li>
+              </ul>
+            </div>
+            <p class="stateCap" style="margin-top: 20px">
+              Declined — what the plan proposed, not applied
+            </p>
+            <div class="sc">
+              <ul class="phList" aria-label="Declined relations">
+                <li class="phItem">
+                  <a class="phRow" href="/plans/x1"
+                    ><span class="phSq phSq-muted" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Rename the story</span
+                      ><span class="phRel">Proposed changes to this item — not applied</span></span
+                    ><span class="pill pill-archived">Declined</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/x2"
+                    ><span class="phSq phSq-muted" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Tidy the backlog</span
+                      ><span class="phRel">Proposed to archive this item — not applied</span></span
+                    ><span class="pill pill-archived">Declined</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/x3"
+                    ><span class="phSq phSq-muted" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Expand into subtasks</span
+                      ><span class="phRel"
+                        >Proposed 1 work item under this item — not added</span
+                      ></span
+                    ><span class="pill pill-archived">Declined</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/x4"
+                    ><span class="phSq phSq-muted" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Re-scope and expand</span
+                      ><span class="phRel"
+                        >Proposed changes to this item, and 4 work items under it — not
+                        applied</span
+                      ></span
+                    ><span class="pill pill-archived">Declined</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/x5"
+                    ><span class="phSq phSq-muted" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Fold into a new story</span
+                      ><span class="phRel"
+                        >Proposed to archive this item, and 2 work items under it — not
+                        applied</span
+                      ></span
+                    ><span class="pill pill-archived">Declined</span></a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 4 · the bound and show more ════════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          4 · The bound — the oldest 5, then Show more plans (pages of 20)
+        </div>
+        <p class="panelNote">
+          The pager sits at the newer edge because the list reads oldest first. It carries no count,
+          because the read returns no total. Rows abbreviated to title and sentence on this panel;
+          each is the full row of panel 2.
+        </p>
+        <div class="grid2">
+          <div class="spec">
+            <p class="stateCap">At rest</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Plans</h2>
+                <span class="scGloss">— how this item came to be</span>
+              </div>
+              <ul class="phList" aria-label="Plans that shaped MOTIR-900">
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b1"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Plan the billing epic</span
+                      ><span class="phRel">Created this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b2"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Expand into stories</span
+                      ><span class="phRel">Added 6 work items under this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b3"
+                    ><span class="phSq phSq-muted" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Split the epic</span
+                      ><span class="phRel"
+                        >Proposed to archive this item, and 2 work items under it — not
+                        applied</span
+                      ></span
+                    ><span class="pill pill-archived">Declined</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b4"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Re-scope after the pricing change</span
+                      ><span class="phRel">Changed this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b5"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Add the invoice stories</span
+                      ><span class="phRel">Added 2 work items under this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+              </ul>
+              <button type="button" class="phMore">Show more plans</button>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="stateCap">Loading the next page</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Plans</h2>
+                <span class="scGloss">— how this item came to be</span>
+              </div>
+              <ul class="phList" aria-label="Plans that shaped MOTIR-900">
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b1"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Plan the billing epic</span
+                      ><span class="phRel">Created this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b5"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Add the invoice stories</span
+                      ><span class="phRel">Added 2 work items under this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+              </ul>
+              <div class="sk" aria-busy="true">
+                <div class="skRow">
+                  <span class="skSq"></span
+                  ><span class="skBars"
+                    ><span class="skBar" style="width: 58%"></span
+                    ><span class="skBar" style="width: 34%"></span
+                  ></span>
+                </div>
+                <div class="skRow">
+                  <span class="skSq"></span
+                  ><span class="skBars"
+                    ><span class="skBar" style="width: 46%"></span
+                    ><span class="skBar" style="width: 28%"></span
+                  ></span>
+                </div>
+              </div>
+              <button type="button" class="phMore" disabled>Show more plans</button>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="stateCap">The last page landed — the control is gone</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Plans</h2>
+                <span class="scGloss">— how this item came to be</span>
+              </div>
+              <ul class="phList" aria-label="Plans that shaped MOTIR-900">
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b5"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Add the invoice stories</span
+                      ><span class="phRel">Added 2 work items under this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b6"
+                    ><span class="phSq phSq-rose" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-octagon-alert" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Rename the epic</span
+                      ><span class="phRel">Proposes changes to this item</span></span
+                    ><span class="pill pill-rose">Stale</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b7"
+                    ><span class="phSq phSq-lavender" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Add the refunds story</span
+                      ><span class="phRel">Proposes 1 work item under this item</span></span
+                    ><span class="pill pill-lavender">Planned</span></a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="stateCap">A page failed to load — the rows stay</p>
+            <div class="sc">
+              <div class="scHead">
+                <h2 class="scTitle">Plans</h2>
+                <span class="scGloss">— how this item came to be</span>
+              </div>
+              <ul class="phList" aria-label="Plans that shaped MOTIR-900">
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b4"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Re-scope after the pricing change</span
+                      ><span class="phRel">Changed this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+                <li class="phItem">
+                  <a class="phRow" href="/plans/b5"
+                    ><span class="phSq phSq-mint" aria-hidden="true"
+                      ><svg class="phIc" viewBox="0 0 24 24">
+                        <use href="#i-circle-check" /></svg></span
+                    ><span class="phBody"
+                      ><span class="phTitle">Add the invoice stories</span
+                      ><span class="phRel">Added 2 work items under this item</span></span
+                    ><span class="pill pill-mint">Approved</span></a
+                  >
+                </li>
+              </ul>
+              <div class="phErr" role="status">
+                <span class="phErrText">Couldn't load more plans.</span
+                ><button type="button" class="btn">Try again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 5 · absences ═══════════════════════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          5 · The absences — no plan, no ai:view_plan, the first read failed
+        </div>
+        <div class="grid2">
+          <div class="spec">
+            <p class="stateCap">
+              No related plan — or no ai:view_plan: nothing renders, no box is reserved
+            </p>
+            <p class="panelNote">
+              For a viewer without <code>ai:view_plan</code> the read is skipped too, the same
+              conditional the pending notice uses.
+            </p>
+            <div class="pgCol" style="margin-top: 8px">
+              <div class="ghost"><span class="ghostTitle">Children</span> — 3 work items</div>
+              <div class="ghost"><span class="ghostTitle">Attachments</span> · Activity</div>
+            </div>
+          </div>
+          <div class="spec">
+            <p class="stateCap">
+              The first read failed — the section says so, flush, no inner card
+            </p>
+            <p class="panelNote">
+              The section still renders: leaving it out would claim no plan ever touched this item,
+              which the page does not know.
+            </p>
+            <div class="sc" style="margin-top: 8px">
+              <div class="scHead">
+                <h2 class="scTitle">Plans</h2>
+                <span class="scGloss">— how this item came to be</span>
+              </div>
+              <div class="phErrFirst" role="status">
+                <span class="phErrText">Couldn't load plans.</span
+                ><button type="button" class="btn">Try again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 6 · dark ═══════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">6 · Dark — panel 2's rows</div>
+        <div class="darkStage" data-theme="dark">
+          <div class="sc">
+            <div class="scHead">
+              <h2 class="scTitle">Plans</h2>
+              <span class="scGloss">— how this item came to be</span>
+            </div>
+            <ul class="phList" aria-label="Plans that shaped MOTIR-5542">
+              <li class="phItem">
+                <a class="phRow" href="/plans/d1"
+                  ><span class="phSq phSq-muted" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">Archive the duplicate story</span
+                    ><span class="phRel">Proposed to archive this item — not applied</span
+                    ><span class="phMeta"
+                      ><span>created 5 days ago</span><span>declined 5 days ago by Zhu Yue</span
+                      ><span class="phAuthor"
+                        ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-bot" /></svg
+                        ><span>via Claude Code · claude-opus-5</span></span
+                      ></span
+                    ></span
+                  ><span class="pill pill-archived">Declined</span></a
+                >
+              </li>
+              <li class="phItem">
+                <a class="phRow" href="/plans/s1"
+                  ><span class="phSq phSq-rose" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24">
+                      <use href="#i-octagon-alert" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">Rename the story</span
+                    ><span class="phRel">Proposes changes to this item</span
+                    ><span class="phMeta"
+                      ><span>created 3 days ago</span
+                      ><span class="phAuthor"
+                        ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-bot" /></svg
+                        ><span>via Claude Code · claude-opus-5</span></span
+                      ></span
+                    ></span
+                  ><span class="pill pill-rose">Stale</span></a
+                >
+              </li>
+              <li class="phItem">
+                <a class="phRow" href="/plans/a1"
+                  ><span class="phSq phSq-mint" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24">
+                      <use href="#i-circle-check" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">Expand MOTIR-5542 into subtasks</span
+                    ><span class="phRel">Added 5 work items under this item</span
+                    ><span class="phMeta"
+                      ><span>created 2 days ago</span><span>approved 2 days ago by Zhu Yue</span
+                      ><span class="phAuthor"
+                        ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-bot" /></svg
+                        ><span>via Claude Code · claude-opus-5</span></span
+                      ></span
+                    ></span
+                  ><span class="pill pill-mint">Approved</span></a
+                >
+              </li>
+              <li class="phItem">
+                <a class="phRow" href="/plans/p1"
+                  ><span class="phSq phSq-lavender" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-clock" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">Re-scope the plan-history story</span
+                    ><span class="phRel"
+                      >Proposes changes to this item, and 2 work items under it</span
+                    ><span class="phMeta"
+                      ><span>created yesterday</span
+                      ><span class="phAuthor"
+                        ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-bot" /></svg
+                        ><span>via Claude Code · claude-opus-5</span></span
+                      ></span
+                    ></span
+                  ><span class="pill pill-lavender">Planned</span></a
+                >
+              </li>
+              <li class="phItem">
+                <a class="phRow" href="/plans/g1"
+                  ><span class="phSq phSq-sky" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-loader" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">Untitled plan</span
+                    ><span class="phRel">Proposes 3 work items under this item</span
+                    ><span class="phMeta"
+                      ><span>created 4 minutes ago</span
+                      ><span class="phAuthor"
+                        ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-sparkles" /></svg
+                        ><span>via Motir AI</span></span
+                      ></span
+                    ></span
+                  ><span class="pill pill-sky">Generating</span></a
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ 7 · narrow, zh ═════════════════════════════════════════════════ -->
+      <section class="panel">
+        <div class="panelLabel">
+          7 · Narrow (&lt; md), zh — the meta line wraps, the pill stays top right
+        </div>
+        <div class="narrow" lang="zh">
+          <div class="sc">
+            <div class="scHead">
+              <h2 class="scTitle">计划</h2>
+              <span class="scGloss">— 此工作项的由来</span>
+            </div>
+            <ul class="phList" aria-label="塑造 MOTIR-5542 的计划">
+              <li class="phItem">
+                <a class="phRow" href="/plans/p1"
+                  ><span class="phSq phSq-mint" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24">
+                      <use href="#i-circle-check" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">规划自我改进史诗</span
+                    ><span class="phRel">创建了此工作项</span
+                    ><span class="phMeta"
+                      ><span>创建于 3 天前</span><span>由 Zhu Yue 批准于 3 天前</span
+                      ><span class="phAuthor"
+                        ><svg class="phGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-bot" /></svg
+                        ><span>由 Claude Code · claude-opus-5 撰写</span></span
+                      ></span
+                    ></span
+                  ><span class="pill pill-mint">已批准</span></a
+                >
+              </li>
+              <li class="phItem">
+                <a class="phRow" href="/plans/p2"
+                  ><span class="phSq phSq-mint" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24">
+                      <use href="#i-circle-check" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">将 MOTIR-5542 展开为子任务</span
+                    ><span class="phRel">在此工作项下新增了 5 个工作项</span
+                    ><span class="phMeta"
+                      ><span>创建于 2 天前</span><span>由 Zhu Yue 批准于 2 天前</span></span
+                    ></span
+                  ><span class="pill pill-mint">已批准</span></a
+                >
+              </li>
+              <li class="phItem">
+                <a class="phRow" href="/plans/p3"
+                  ><span class="phSq phSq-muted" aria-hidden="true"
+                    ><svg class="phIc" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg></span
+                  ><span class="phBody"
+                    ><span class="phTitle">归档重复的故事</span
+                    ><span class="phRel">曾提议归档此工作项——未应用</span
+                    ><span class="phMeta"
+                      ><span>创建于 1 天前</span><span>由 Zhu Yue 拒绝于 1 天前</span></span
+                    ></span
+                  ><span class="pill pill-archived">已拒绝</span></a
+                >
+              </li>
+            </ul>
+            <button type="button" class="phMore">显示更多计划</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
