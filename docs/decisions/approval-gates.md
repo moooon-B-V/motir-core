@@ -833,6 +833,25 @@ has several open pull requests and therefore several simultaneous awaiting gates
 > legitimate outcomes: the publish wins and the decide door refuses with
 > `ApprovalGateSupersededError` (nothing was approved, nothing needed pinning), or
 > the decide wins and the supersede finds the pin and keeps the bytes.
+>
+> ### §6b — AMENDMENT (MOTIR-5574, 2026-09-15): WITHDRAWAL is the second writer
+>
+> **A republish is not the only product write that retires the question. A
+> withdrawal does too.** A reviewer who withdraws the current design result
+> (`DELETE /api/work-items/<KEY>/design-evidence`, MOTIR-3215) takes the gate's
+> subject away with nothing in its place. Until this amendment that path wrote no
+> gate, so the gate stayed `awaiting`. The To-approve tab kept the row, and the
+> held transitions that read an awaiting gate kept holding the card.
+>
+> **So `designEvidenceService.withdrawCurrentForWorkItem` makes the same call as
+> the publish path**: `supersedeAwaitingByWorkItem(workItemId, 'design_result')`,
+> in the withdrawal's own transaction, **before the `design_evidence` lock** for
+> the lock-order reason above. The rest of this section holds unchanged:
+>
+> - it writes `state` alone;
+> - a DECIDED gate is untouched;
+> - a withdrawal refused for having no current result rolls back and retires
+>   nothing.
 
 > ### §6b — AMENDMENT (MOTIR-4911, 2026-09-08): the `approved` WORK-ITEM status, and `decisionSource: github`
 >
