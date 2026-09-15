@@ -13,11 +13,7 @@ import {
 } from '@/lib/approvalGates/pullRequestMergeHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
-import {
-  raiseMergeGates,
-  settleGreenVerdict,
-  withdrawMergeGatesOnHeadMove,
-} from '@/lib/services/mergeGates';
+import { settleGreenVerdict } from '@/lib/services/mergeGates';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import {
   autoMergeRefusedCommentBody,
@@ -171,7 +167,7 @@ describe('the version rule and the handler, when there is no head', () => {
   });
 });
 
-describe('settleGreenVerdict and raiseMergeGates — the answers that owe nothing', () => {
+describe('settleGreenVerdict — the answers that owe nothing', () => {
   it('no members, or a project that no longer resolves, settle to nothing', async () => {
     const { item, pr } = await mergeGateFor({ gate: false });
     const row = await itemRow(item.id);
@@ -184,7 +180,6 @@ describe('settleGreenVerdict and raiseMergeGates — the answers that owe nothin
           tx,
         ),
       ).toEqual([]);
-      expect(await raiseMergeGates({ item: row, pullRequestIds: [] }, fx.ctx, tx)).toBe(0);
     });
   });
 
@@ -209,10 +204,6 @@ describe('settleGreenVerdict and raiseMergeGates — the answers that owe nothin
       expect(
         await settleGreenVerdict({ item: childRow, pullRequestIds: [child.pr.id] }, fx.ctx, tx),
       ).toEqual([]);
-      // An auto project raises no gate, whoever asks.
-      expect(
-        await raiseMergeGates({ item: storyRow, pullRequestIds: [story.pr.id] }, fx.ctx, tx),
-      ).toBe(0);
     });
 
     await adminDb.githubPullRequest.update({
@@ -224,31 +215,6 @@ describe('settleGreenVerdict and raiseMergeGates — the answers that owe nothin
         await settleGreenVerdict({ item: storyRow, pullRequestIds: [story.pr.id] }, fx.ctx, tx),
       ).toEqual([]);
     });
-  });
-});
-
-describe('withdrawMergeGatesOnHeadMove — nothing to compare against', () => {
-  it('a gate whose pull request is gone, or has no head, is left alone', async () => {
-    const bare = await bareItem();
-    const ghost = await adminDb.approvalGate.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-        workItemId: bare.id,
-        kind: 'pull_request_merge',
-        subjectId: 'no-such-pull-request',
-        subjectVersion: `acme/web#1@${HEAD}`,
-      },
-    });
-    const { pr, gate } = await mergeGateFor();
-    await adminDb.githubCheckRun.deleteMany({ where: { pullRequestId: pr.id } });
-
-    await inTx(async (tx) => {
-      expect(await withdrawMergeGatesOnHeadMove('no-such-pull-request', tx)).toBe(0);
-      expect(await withdrawMergeGatesOnHeadMove(pr.id, tx)).toBe(0);
-    });
-    expect((await gateRow(ghost.id)).state).toBe('awaiting');
-    expect((await gateRow(gate!.id)).state).toBe('awaiting');
   });
 });
 

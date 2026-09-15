@@ -58,9 +58,10 @@ export const howToTestService = {
         createdAt: row.createdAt.toISOString(),
       }));
 
-      // THE RUN TARGET — the one resolution the merge gate's raise also calls
-      // (MOTIR-5515), so the block a person reads and the gate a person is asked
-      // cannot name two different cards.
+      // THE RUN TARGET — the one resolution the approve-to-merge gate's raise also
+      // calls (MOTIR-5515), so the block a person reads and the gate a person is
+      // asked cannot name two different cards. Since MOTIR-5611 that is the card's
+      // single `pull_request_approval` gate.
       const target = await resolveRunTarget({ hasCurrentRecord: current !== null, ancestors }, tx);
 
       if (!current) {

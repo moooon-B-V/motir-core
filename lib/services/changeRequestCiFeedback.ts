@@ -13,7 +13,6 @@ import { commentsService } from './commentsService';
 import { workItemsService } from './workItemsService';
 import { promoteDeliveredCardsOnGreen } from './ciPromotion';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
-import { withdrawMergeGatesOnHeadMove } from './mergeGates';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
 // The provider-agnostic CI / pipeline → work-item feedback consumer (Story 7.10 ·
@@ -273,10 +272,9 @@ export async function applyCiStatusFeedback(
         tx,
       );
       // A pending row is usually the FIRST sign of a new head — a push starts
-      // CI before anything finishes — so it withdraws the old head's merge gate
-      // too (MOTIR-5515). `approval_gate` has no system arm: bind the tenant.
+      // CI before anything finishes — so it withdraws the old head's approve-to-merge
+      // gate too (MOTIR-5482). `approval_gate` has no system arm: bind the tenant.
       await bindWorkspaceContext(tx, resolved.workspaceId);
-      await withdrawMergeGatesOnHeadMove(resolved.prId, tx);
       await withdrawPullRequestApprovalGatesOnHeadMove(resolved.prId, tx);
     });
     return {
@@ -363,11 +361,10 @@ export async function applyCiStatusFeedback(
       tx,
     );
     // A check row for a NEW head is how Motir learns the head moved, so it
-    // withdraws the merge gate asked about the old one, in the transaction that
-    // records it (MOTIR-5515). The current head is the latest check's commit —
+    // withdraws the approve-to-merge gate asked about the old one, in the transaction
+    // that records it (MOTIR-5482). The current head is the latest check's commit —
     // the rule the gate's version was written with — so a late row for an OLD
     // commit withdraws nothing.
-    await withdrawMergeGatesOnHeadMove(resolved.prId, tx);
     await withdrawPullRequestApprovalGatesOnHeadMove(resolved.prId, tx);
     return githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx);
   });
