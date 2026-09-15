@@ -206,12 +206,23 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     {
       method: 'create',
       writes: 'awaiting',
-      callers: ['lib/services/designEvidenceService.ts', 'lib/services/mergeGates.ts'],
+      // MOTIR-5482: the approve-and-merge gate is the third kind to ASK — one per card over
+      // its delivery set, raised by `pullRequestApprovalGates.ts` in the promotion.
+      callers: [
+        'lib/services/designEvidenceService.ts',
+        'lib/services/mergeGates.ts',
+        'lib/services/pullRequestApprovalGates.ts',
+      ],
     },
     {
       method: 'supersedeAwaitingByWorkItem',
       writes: 'superseded',
-      callers: ['lib/services/designEvidenceService.ts'],
+      // MOTIR-5482: the approve-and-merge gate is withdrawn BY CARD, because its subject is
+      // the card's whole delivery set — a moved head, a closed member or a set change.
+      callers: [
+        'lib/services/designEvidenceService.ts',
+        'lib/services/pullRequestApprovalGates.ts',
+      ],
     },
     {
       // The merge ENTRY POINT (MOTIR-5517) is the second caller, on the record: a
