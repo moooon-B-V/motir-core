@@ -1519,6 +1519,32 @@ _running_ under an awaiting gate. Under decision 3 that cannot happen, so both n
 `moooon/motir-ai · #88`'s repository has a merge queue. The port abbreviates How to test to its head
 line; Panel 12b draws it in full, and nothing in it changes with these states.
 
+#### No card inside a card — the frame sits FLUSH in the Development card (Yue, 2026-09-15)
+
+The first cut drew the approval frame as a bordered, rounded, shadowed card inside the Development
+section card, itself inside the card body's padding. **A container does not go inside a container.**
+The Development card is the container, so every frame on both sheets (12c, 12o, 12p–12w) now sits
+flush in it:
+
+| element                                                | before                                                    | now                                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| the frame's box                                        | `overflow-hidden rounded-(--radius-card) border` + shadow | **no border, no radius, no shadow, no fill** — `flex flex-col overflow-hidden`   |
+| the card body around the frame                         | `--spacing-card-padding` on every side                    | **no padding** — band 1 starts directly under the card head's divider            |
+| the bands (header, port, foot, confirm, record, alert) | inside the inner card                                     | **edge to edge in the section card**, separated by their own dividers, unchanged |
+| the port                                               | floor, `34rem` ceiling, its own scroll, Expand            | **unchanged** — a page card is not the viewport, so the ceiling and Expand stay  |
+
+**The component contract.** `ApprovalGateControl` has `layout: 'inline' | 'fill'`. `inline` draws
+the boxed card; `fill` (the overlay, § 22 in `design/workbench/design-notes.md`) drops the box but
+also drops the port's floor, ceiling and Expand, because there the viewport is the box. Neither fits a
+frame inside a section card. So the frame gains a third value, **`layout: 'flush'`**: `fill`'s box
+(no chrome) with `inline`'s port. It is a presentational input like `fill` — no state, verb, band or
+decide path — and `DevelopmentGateFrame` passes it, with the section card rendering the frame with no
+body padding. This is a TAKES on [MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy), amended on that
+card.
+
+**Not changed here:** the pull-request rows keep the shipped `PullRequestRow` treatment (§19), and
+the Design result section's own frame (`DesignResultSection`) is outside this card.
+
 #### The panels, and the card that implements each
 
 | panel | state                                                                                   | implemented by                                                               |
@@ -1605,13 +1631,13 @@ keys: six are this card's (MOTIR-4882, 5479, 5480, 5482, 5483, 5484), and the ot
 `github.mock.html` gains MOTIR-5480 only (41 → 42), and `approvals-row.mock.html` gains MOTIR-5437
 and MOTIR-5480 (19 → 21).
 
-| key                                           | GIVES / TAKES                                                                                                                                                                             |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy) | **GIVES** every panel above and the copy. **TAKES** its first criterion's _"the consequence line … names each `owner/name · #n`"_ for three or more — **amended on the card, 2026-09-15** |
-| [MOTIR-5483](motir:cmu1aj19x00gihyoi0b6lixcm) | **GIVES** the four outcomes it returns a drawing each (`merged` 12s/12t · `enqueued` 12s · `refused` 12u · `no_merge_gate` a row left unchanged). **TAKES** nothing                       |
-| [MOTIR-5482](motir:cmu1aj18f00gghyoik41ycibt) | **GIVES** the withdrawn state (12v). **TAKES** nothing                                                                                                                                    |
-| [MOTIR-5479](motir:cmu1aj13z00gahyoip0mfmjqw) | **TAKES** decisions 3–5, which these panels draw. Nothing either way beyond that                                                                                                          |
-| [MOTIR-4882](motir:cmtrwx3580055hxph0vfamj1l) | **TAKES** its refusal union, cited in 12u's slot and not re-worded, and which member queues. Nothing given                                                                                |
-| [MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4) | **GIVES** these states for its overlay to compose, and the To-approve row it later gives a _Review_ door (workbench § 23). **TAKES** nothing                                              |
-| [MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2) | done; its Panels 12c and 12o are **corrected on the sheet** (the running row turned green). No criterion of its changes                                                                   |
-| MOTIR-5461 (the ejection story)               | **nothing either way** — what a row shows after a queue EJECTS its pull request is its own design                                                                                         |
+| key                                           | GIVES / TAKES                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy) | **GIVES** every panel above, the copy and the flush frame. **TAKES** its first criterion's _"the consequence line … names each `owner/name · #n`"_ for three or more, and its _"`ApprovalGateControl.tsx` is unchanged"_ (the frame gains `layout: 'flush'`) — **both amended on the card, 2026-09-15** |
+| [MOTIR-5483](motir:cmu1aj19x00gihyoi0b6lixcm) | **GIVES** the four outcomes it returns a drawing each (`merged` 12s/12t · `enqueued` 12s · `refused` 12u · `no_merge_gate` a row left unchanged). **TAKES** nothing                                                                                                                                     |
+| [MOTIR-5482](motir:cmu1aj18f00gghyoik41ycibt) | **GIVES** the withdrawn state (12v). **TAKES** nothing                                                                                                                                                                                                                                                  |
+| [MOTIR-5479](motir:cmu1aj13z00gahyoip0mfmjqw) | **TAKES** decisions 3–5, which these panels draw. Nothing either way beyond that                                                                                                                                                                                                                        |
+| [MOTIR-4882](motir:cmtrwx3580055hxph0vfamj1l) | **TAKES** its refusal union, cited in 12u's slot and not re-worded, and which member queues. Nothing given                                                                                                                                                                                              |
+| [MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4) | **GIVES** these states for its overlay to compose, and the To-approve row it later gives a _Review_ door (workbench § 23). **TAKES** nothing                                                                                                                                                            |
+| [MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2) | done; its Panels 12c and 12o are **corrected on the sheet** (the running row turned green). No criterion of its changes                                                                                                                                                                                 |
+| MOTIR-5461 (the ejection story)               | **nothing either way** — what a row shows after a queue EJECTS its pull request is its own design                                                                                                                                                                                                       |

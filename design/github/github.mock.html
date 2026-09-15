@@ -2773,14 +2773,21 @@
          design/work-items/approval-control.mock.html draws them (.frame/.frameHead/.port/
          .frameFoot), re-declared under `af-` names so they cannot collide with this board's
          own `.pill`. Nothing here is a new band. ─────────────────────────────────────────────── */
+      /* ⚠️ NO CARD INSIDE A CARD (Yue, 2026-09-15 · MOTIR-5480). The Development card IS the
+         container, so the frame sits FLUSH in it: no border, no radius, no shadow, no fill of
+         its own, and no card-body padding around it — its bands run edge to edge under the
+         card head. The frame's `layout="flush"`: the fill form's box (no chrome) with the
+         inline form's port (floor, 34rem ceiling, Expand).
+         class="flex flex-col overflow-hidden" */
       .af-frame {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        background: var(--el-page-bg);
-        box-shadow: var(--shadow-card);
         overflow: hidden;
         display: flex;
         flex-direction: column;
+      }
+      .card-body.af-host {
+        padding: 0;
+        border-radius: 0 0 var(--radius-card) var(--radius-card);
+        overflow: hidden;
       }
       .af-head {
         display: flex;
@@ -5904,7 +5911,7 @@ git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;a
                 <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
               </button>
             </div>
-            <div class="card-body">
+            <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
                   <div class="af-what">
@@ -8044,7 +8051,7 @@ git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;a
                 <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
               </button>
             </div>
-            <div class="card-body">
+            <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
                   <div class="af-what">
@@ -8347,6 +8354,9 @@ git fetch origin &#x27;acme-12-throttle-v1&#x27; &amp;&amp; git checkout &#x27;a
         is already taller than a full-page export can capture. Panels 12c and 12o above now draw
         their second row <b>green</b>: under <span class="mono">approval-gates.md</span> §8's
         amendment, decision 3, a gate is raised only on an all-green set.
+        <b>No card inside a card:</b> the approval frame in 12c, 12o and on the new sheet sits flush
+        in the Development card, with no border, radius or shadow of its own, and its bands run edge
+        to edge under the card head.
       </p>
     </div>
   </body>
