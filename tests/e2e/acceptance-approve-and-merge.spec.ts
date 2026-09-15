@@ -448,7 +448,13 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       const zpra = zh.approvalGate.pullRequestApproval;
       const web = PRS.zh.web.number;
       const api = PRS.zh.api.number;
-      await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: page.url() }]);
+      // Against the SITE ROOT, not `page.url()`: Playwright derives a cookie's path from the
+      // url's directory, and this chapter starts on `/items/<key>`, so a cookie set from it
+      // is scoped to `/items/` and never reaches `/workbench` — CI run 34976200379 walked
+      // the To-approve tab in English for exactly that reason.
+      await page
+        .context()
+        .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
       await page.goto('/workbench?tab=approvals');
       const row = page
         .getByRole('main')
