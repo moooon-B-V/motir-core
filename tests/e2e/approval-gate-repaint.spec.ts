@@ -40,6 +40,20 @@ import {
 // half is covered by the same assertion, and by the acceptance receipt, which
 // drops the `page.reload()` this defect put there.
 //
+// ⚠️ THE DECISION IS MADE IN THE OVERLAY NOW (Story MOTIR-5215 · Subtask
+// MOTIR-5229). The item page no longer carries the verbs: an awaiting gate the
+// reader may decide renders a call-to-action band whose one control, *Review &
+// approve*, opens the approval overlay over the card. So every decision below is
+// pressed INSIDE the overlay, the overlay is closed, and the assertions are taken
+// on the page underneath — which is the harder version of this guard, because
+// the act and the surfaces it must repaint now live in different components. The
+// assertions themselves are unchanged. The client halves moved with the act: the
+// overlay's own `router.refresh()`, and the decided-gate announcement the page's
+// `DecidedGateStatusBridge` applies to the rail (MOTIR-5570), each pinned by a
+// component suite (`approval-gate-status-rail-optimistic.test.tsx`,
+// `approval-gate-files-kept-optimistic.test.tsx`). The break-it-and-watch-it-fail
+// proof recorded in the next-but-one paragraph was taken against the old path.
+//
 // ⚠️ WHY IT IS A BROWSER TEST. Nothing here is visible to a database read: the
 // decide transaction writes `work_item.status = 'done'` and `completed_at`
 // correctly, and every card the design was blocking becomes ready in the same
@@ -73,7 +87,7 @@ function statusCard(page: Page) {
 }
 
 /** Publish the design, sign the reviewer in, and leave them on the design card
- *  with an AWAITING gate and its verbs on screen. */
+ *  with an AWAITING gate and the band's one control on screen. */
 async function arriveAtTheGate(
   page: Page,
   baseURL: string,
@@ -97,11 +111,40 @@ async function arriveAtTheGate(
   await expect(page.getByText('Awaiting you', { exact: true })).toBeVisible();
 }
 
+/** The approval overlay, named for the card it decides. */
+function overlay(page: Page, seed: DesignApprovalSeed) {
+  return page.getByRole('dialog', { name: `Design result for ${seed.designKey}` });
+}
+
+/** Press the band's ONE control and wait for the design to be on screen in the
+ *  overlay — the frame's port group, not merely a dialog. */
+async function openTheOverlay(page: Page, seed: DesignApprovalSeed) {
+  const door = page.getByRole('link', { name: 'Review & approve' });
+  await expect(door).toHaveCount(1);
+  await door.click();
+  const dialog = overlay(page, seed);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
+  return dialog;
+}
+
 test.describe('deciding an approval gate repaints the item page in place', () => {
   let seed: DesignApprovalSeed;
 
   test.beforeEach(async () => {
     await resetDatabase();
+  });
+
+  // ⚠️ THE MOCK'S ROUTE CAN STILL BE IN FLIGHT WHEN A TEST ENDS, and that is a
+  // HARNESS race, not a product one. Since the decision moved into the overlay
+  // (MOTIR-5229) the page's decided record mounts its port — and so a fresh
+  // sandboxed mock frame — at the very end of the approve walk, after every
+  // assertion has passed. `servePublishedMock`'s `route.fetch` for that frame
+  // then throws *"Target page, context or browser has been closed"* during
+  // teardown and fails a green test. Unrouting with `ignoreErrors` is Playwright's
+  // own remedy for exactly that message; it waits on nothing and asserts nothing.
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
 
   test('approving moves the status rail and fills the record band, with no reload', async ({
@@ -111,15 +154,18 @@ test.describe('deciding an approval gate repaints the item page in place', () =>
     seed = await seedDesignApproval('repaint-approve');
     await arriveAtTheGate(page, baseURL!, seed);
 
-    await page.getByRole('button', { name: 'Approve' }).click();
+    const dialog = await openTheOverlay(page, seed);
+    await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
     // Approving is TERMINAL for this kind, which is why this verb confirms.
-    await expect(page.getByText('Approving this will:')).toBeVisible();
-    await page.getByRole('button', { name: 'Yes, Approve' }).click();
+    await expect(dialog.getByText('Approving this will:')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Yes, Approve' }).click();
 
-    // ⚠️ THE AUTHORITATIVE SIGNAL — the frame's own state, reconciled from the
-    // decide action's response. Everything after this line is a claim about a
-    // SERVER-rendered surface that the same decision moved.
-    await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+    // ⚠️ THE AUTHORITATIVE SIGNAL — the frame's own state in the overlay,
+    // reconciled from the decide action's response. Everything after it is a
+    // claim about the PAGE underneath, which the same decision moved.
+    await expect(dialog.getByText('Approved', { exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
 
     // The page-state contract's case 2 (`motir-core/CLAUDE.md`). The rail is a
     // Server-Component surface elsewhere on the page; the decision changed it,
@@ -145,7 +191,12 @@ test.describe('deciding an approval gate repaints the item page in place', () =>
 
     // A reversible act asked twice is friction rather than care, so this verb
     // does not confirm — one press is the whole decision.
-    await page.getByRole('button', { name: 'Request changes' }).click();
+    const dialog = await openTheOverlay(page, seed);
+    await dialog.getByRole('button', { name: 'Request changes' }).click();
+    await expect(dialog.getByText('Changes requested', { exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    // The page's own record of it, drawn in place.
     await expect(page.getByText('Changes requested', { exact: true })).toBeVisible();
 
     // Sending a design back feeds the revise loop; it settles

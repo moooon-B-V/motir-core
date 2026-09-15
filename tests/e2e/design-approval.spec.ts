@@ -75,6 +75,14 @@ import {
 // piece of work, and the clip's argument is the two item pages either side of
 // one button.
 //
+// ⚠️ THE ROUTED REVIEWER DECIDES IN THE OVERLAY NOW (Story MOTIR-5215 · Subtask
+// MOTIR-5229). The item page hands the decision over: an awaiting gate the reader
+// may decide renders a call-to-action band with ONE control, *Review & approve*,
+// which opens the approval overlay over the card. The walk's claim is unchanged —
+// a reader sees no verbs, the routed reviewer approves, the blocked card becomes
+// ready — and so is every assertion about it; the verbs are simply found, and
+// pressed, inside the overlay, and the page is read after it closes.
+//
 // DETERMINISM (`motir-core/CLAUDE.md` § E2E): every wait is a rendered landmark
 // or an element's own visible state — the state pill is set from the decide
 // action's AUTHORITATIVE response (`setCurrent(result.gate)`), never
@@ -138,10 +146,9 @@ test.describe('a published design waits, the control clears it, and the work it 
 
       // They see the QUESTION and the design — the frame is not hidden from them.
       //
-      // ⚠️ NOT `getByText('Design result')`: that string is on the page TWICE —
-      // `ContentSectionCard`'s own title and the frame's band-1 kind label —
-      // so it is a strict-mode violation rather than an assertion. The port
-      // group is the frame's own landmark and belongs to nothing else.
+      // The port group is the frame's own landmark and belongs to nothing else.
+      // (`Design result` is the section card's title — since MOTIR-5569 the
+      // frame renders flush in it and repeats no label of its own.)
       await expect(page.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
       await expect(page.getByText('Awaiting', { exact: true })).toBeVisible();
       // The design inside the port: its mock frame. (AMENDMENT 4 — no inline note.)
@@ -159,11 +166,24 @@ test.describe('a published design waits, the control clears it, and the work it 
       await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
     });
 
-    await test.step('The person it was routed to meets the same frame, with its verbs', async () => {
+    const dialog = page.getByRole('dialog', { name: `Design result for ${seed.designKey}` });
+
+    await test.step('The person it was routed to is invited to decide — and decides full screen', async () => {
       await startSignedOut(page);
       await signIn(page, seed.reviewerEmail, seed.password);
       await page.goto(`/items/${seed.designKey}`);
       await expect(page.getByRole('heading', { name: seed.designTitle })).toBeVisible();
+
+      // ⚠️ THE PAGE INVITES AND SUBMITS NOTHING (MOTIR-5229). One control, and no
+      // verb anywhere on the card: the decision is made in ONE place.
+      await expect(page.getByText('Awaiting you', { exact: true })).toBeVisible();
+      const door = page.getByRole('link', { name: 'Review & approve' });
+      await expect(door).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
+
+      await door.click();
+      await expect(dialog).toBeVisible();
 
       // ⚠️ THE SHARED FRAME, ASSERTED AS THE FRAME. The card's surviving step 7
       // asks that this surface render the SAME control rather than a bespoke
@@ -173,40 +193,46 @@ test.describe('a published design waits, the control clears it, and the work it 
       // is anything `DesignResultPanel` could produce by itself. (The band-1
       // kind label would read the same, but "Design result" is also the
       // enclosing `ContentSectionCard`'s title, so it identifies nothing.)
-      await expect(page.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
-      await expect(page.getByText('Awaiting you', { exact: true })).toBeVisible();
-      await expect(page.getByText(`Approving moves ${seed.designKey} to Done.`)).toBeVisible();
+      await expect(dialog.getByRole('group', { name: 'The subject being decided' })).toBeVisible();
+      await expect(dialog.getByText('Awaiting you', { exact: true })).toBeVisible();
+      await expect(dialog.getByText(`Approving moves ${seed.designKey} to Done.`)).toBeVisible();
 
       // The design itself, inside the port — the thing they are deciding ABOUT.
       // Since AMENDMENT 4 that is the mock; the note is one link away.
       await expect(
-        page.getByRole('group', { name: 'The subject being decided' }).locator('iframe').first(),
+        dialog.getByRole('group', { name: 'The subject being decided' }).locator('iframe').first(),
       ).toBeVisible();
 
-      await expect(page.getByRole('button', { name: 'Request changes' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Request changes' })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
     });
 
     await test.step('Approve — and the frame says what that will do before it does it', async () => {
-      await page.getByRole('button', { name: 'Approve' }).click();
+      await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
       // The confirm band. Approving is TERMINAL for this kind, which is the
       // whole reason this verb confirms and Request changes does not.
-      await expect(page.getByText('Approving this will:')).toBeVisible();
+      await expect(dialog.getByText('Approving this will:')).toBeVisible();
       await expect(
-        page.getByText(`move ${seed.designKey} to Done, starting the work items waiting on it.`),
+        dialog.getByText(`move ${seed.designKey} to Done, starting the work items waiting on it.`),
       ).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
 
-      await page.getByRole('button', { name: 'Yes, Approve' }).click();
+      await dialog.getByRole('button', { name: 'Yes, Approve' }).click();
 
       // ⚠️ THE AUTHORITATIVE SIGNAL. This pill is rendered from the gate row the
       // decide action RETURNED (`setCurrent(result.gate)`), not from an
       // optimistic guess — so it is true only once the server has recorded the
       // decision, and it is what the rest of this walk waits on.
-      await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('Approved', { exact: true })).toBeVisible();
       // The verbs are gone because the question is answered, not because this
       // reader may not act.
+      await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+
+      // Back to the card — the overlay closes onto the page it opened over.
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
       await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Review & approve' })).toHaveCount(0);
     });
 
     await test.step('The design card is Done, and the record says which version', async () => {

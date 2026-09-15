@@ -113,6 +113,7 @@ async function renderStoryPage() {
     reads: Promise.resolve(reads),
     itemId: s.story.id,
     itemIdentifier: s.story.identifier,
+    currentUserId: 'u-viewer',
     canEdit: true,
     repoDelivery: [],
     deliveries: [],

@@ -19,19 +19,16 @@ import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 // INSIDE the bands still renders. The frame's other suites are not edited — they
 // render `inline`, and passing unchanged is their half of the proof.
 
-const { decideSpy, refreshSpy } = vi.hoisted(() => ({ decideSpy: vi.fn(), refreshSpy: vi.fn() }));
-
-vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
-  decideApprovalGateAction: decideSpy,
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/items/MOTIR-4321',
+  useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshSpy }) }));
 
 import { DesignResultSection } from '@/app/(authed)/items/[key]/_components/DesignResultSection';
 import { OptimisticStatusProvider } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
 });
 
 const KIND_LABEL = en.approvalGate.designResult.kindLabel;
@@ -222,6 +219,7 @@ describe('DesignResultSection renders the frame flush (MOTIR-5569)', () => {
           subject={null}
           itemIdentifier="MOTIR-4321"
           routedToLabel="Ada Lovelace"
+          routedToViewer={false}
         />
       </OptimisticStatusProvider>,
     );

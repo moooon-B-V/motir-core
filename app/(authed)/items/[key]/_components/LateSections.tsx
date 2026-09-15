@@ -145,10 +145,15 @@ export async function LateUpperSections({
   reads,
   itemId,
   itemIdentifier,
+  currentUserId,
   canEdit,
   repoDelivery,
   deliveries,
-}: LateProps) {
+}: LateProps & {
+  /** The session's user — only to say whether the design gate is ROUTED to the
+   *  reader (the band's sentence, MOTIR-5229). Authority stays `canDecide`. */
+  currentUserId: string;
+}) {
   const r = await reads;
   const [tGithub, tAcceptance, tDesignResult, tRuns] = await Promise.all([
     getTranslations('github'),
@@ -270,6 +275,7 @@ export async function LateUpperSections({
             gate={r.designGate.gate}
             canDecide={r.designGate.canDecide}
             routedToLabel={r.designGate.routedToLabel}
+            routedToViewer={r.designGate.gate?.routedToId === currentUserId}
             subject={r.designGate.subject}
             itemIdentifier={itemIdentifier}
           />
