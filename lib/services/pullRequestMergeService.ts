@@ -38,15 +38,11 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
-import type { GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
+import type { GithubPullRequestQueueExit } from '@/generated/prisma/client';
 import type { PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
-import {
-  IllegalTransitionError,
-  UnknownStatusError,
-  WorkItemNotFoundError,
-} from '@/lib/workItems/errors';
-import { workItemsService } from './workItemsService';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { projectAccessService } from './projectAccessService';
+import { queueExitCardMoves } from './mergeQueueExitService';
 import {
   approvalGatesService,
   resolveGateAuthority,
@@ -549,7 +545,7 @@ export const pullRequestMergeService = {
       if (mode?.prMergeMode !== 'auto') {
         throw new QueueAgainRefusedError('wrong_mode', input.pullRequestId);
       }
-      await lockCard(found.id, tx);
+      await queueExitCardMoves.lockCard(found.id, tx);
       const item = (await workItemRepository.findById(found.id, tx))!;
 
       const row = (await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx)).find(
@@ -571,7 +567,7 @@ export const pullRequestMergeService = {
         throw new ApprovalGateAlreadyRequeuedError(pr.id);
       }
 
-      const moved = await returnCard(item, 'in_review', ctx, tx, {});
+      const moved = await queueExitCardMoves.returnCard(item, 'in_review', ctx, tx, {});
       return { item, exit, moved };
     });
 
@@ -583,7 +579,7 @@ export const pullRequestMergeService = {
       actorUserId: ctx.userId,
       idempotencyKey: `${input.pullRequestId}:${claimed.exit.headSha}:requeue:${claimed.exit.id}`,
     });
-    await emitMoved(claimed.item.id, claimed.moved, ctx);
+    await queueExitCardMoves.emitMoved(claimed.item.id, claimed.moved, ctx);
     return {
       pullRequestId: input.pullRequestId,
       headSha: claimed.exit.headSha,
@@ -662,8 +658,6 @@ async function mergeMember(
   }
 }
 
-type AppliedMove = { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
-
 function toQueueExitDto(exit: GithubPullRequestQueueExit): PullRequestQueueExitDTO {
   return {
     rawReason: exit.rawReason,
@@ -672,56 +666,6 @@ function toQueueExitDto(exit: GithubPullRequestQueueExit): PullRequestQueueExitD
     exitedAt: exit.exitedAt.toISOString(),
     requeuedAt: exit.requeuedAt?.toISOString() ?? null,
   };
-}
-
-/** The card's lock, in the funnel's order: its awaiting gates, then the card (ADR §6d
- *  amendment, rule 8) — `applyStatusTransition` takes the same two, so a press and a
- *  status move never take them in opposite orders. */
-async function lockCard(workItemId: string, tx: Prisma.TransactionClient): Promise<void> {
-  await approvalGateRepository.lockAwaitingByWorkItem(workItemId, tx);
-  await workItemRepository.lockById(workItemId, tx);
-}
-
-/**
- * Return a card a merge-queue failure moved to `implemented` to the status it was moved
- * from, when it is still there. A card somebody has since moved elsewhere is left where
- * they put it, and a workflow that refuses the move leaves it too — the re-enqueue has
- * happened either way, and the move is secondary to it.
- */
-async function returnCard(
-  item: { id: string; status: string },
-  to: 'approved' | 'in_review',
-  ctx: ServiceContext,
-  tx: Prisma.TransactionClient,
-  opts: { decidingGateId?: string },
-): Promise<AppliedMove> {
-  if (item.status !== 'implemented') return null;
-  try {
-    const { transition } = await workItemsService.applyStatusTransition(item.id, to, ctx, tx, opts);
-    return transition;
-  } catch (err) {
-    if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError) {
-      console.warn('[pullRequestMergeService] Queue again could not return the card', {
-        workItemId: item.id,
-        to,
-        error: err.message,
-      });
-      return null;
-    }
-    throw err;
-  }
-}
-
-async function emitMoved(workItemId: string, moved: AppliedMove, ctx: ServiceContext) {
-  if (!moved) return;
-  await sendEvent('work-item/transitioned', {
-    workspaceId: ctx.workspaceId,
-    workItemId,
-    actorId: ctx.userId,
-    fromStatusKey: moved.fromStatusKey,
-    toStatusKey: moved.toStatusKey,
-    revisionId: moved.revisionId,
-  });
 }
 
 /**
@@ -763,7 +707,7 @@ async function queueAgainUnderApproval(
   const claimedAt = new Date();
   try {
     await withWorkspaceContext(ctx, async (tx) => {
-      await lockCard(args.workItemId, tx);
+      await queueExitCardMoves.lockCard(args.workItemId, tx);
       const count = await githubPullRequestQueueExitRepository.claimRequeue(
         args.exit.id,
         claimedAt,
@@ -801,11 +745,13 @@ async function queueAgainUnderApproval(
   }
 
   const moved = await withWorkspaceContext(ctx, async (tx) => {
-    await lockCard(args.workItemId, tx);
+    await queueExitCardMoves.lockCard(args.workItemId, tx);
     const item = await workItemRepository.findById(args.workItemId, tx);
-    return item ? returnCard(item, 'approved', ctx, tx, { decidingGateId: approvalGateId }) : null;
+    return item
+      ? queueExitCardMoves.returnCard(item, 'approved', ctx, tx, { decidingGateId: approvalGateId })
+      : null;
   });
-  await emitMoved(args.workItemId, moved, ctx);
+  await queueExitCardMoves.emitMoved(args.workItemId, moved, ctx);
   return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
 }
 

@@ -17,6 +17,8 @@ import {
 } from '@/lib/workspaces/context';
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { workItemsService } from './workItemsService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
 
 // A MERGE QUEUE REMOVED A PULL REQUEST (Story MOTIR-5461 · MOTIR-5632).
 //
@@ -189,8 +191,7 @@ export const mergeQueueExitService = {
         // LOCK ORDER — the card's awaiting gates, then the card (ADR §6d amendment,
         // rule 8), exactly as `applyStatusTransition` takes them; then re-read the
         // status under that lock, because the resolve above read it unlocked.
-        await approvalGateRepository.lockAwaitingByWorkItem(ref.id, tx);
-        await workItemRepository.lockById(ref.id, tx);
+        await lockCard(ref.id, tx);
         const item = await workItemRepository.findById(ref.id, tx);
         if (!item) continue;
         const mode = (await projectRepository.findPrMergeMode(item.projectId, tx))?.prMergeMode;
@@ -254,3 +255,66 @@ export const mergeQueueExitService = {
     return result;
   },
 };
+
+// ── The card moves Queue again makes (MOTIR-5634) ───────────────────────────────
+//
+// They live HERE, beside the ejection that made them necessary, and not in
+// `pullRequestMergeService`: the merge path writes no work-item status
+// (`tests/merge-story-guards.test.ts` guard (b)); the merge webhook is the single
+// writer of `done`. Returning a card an ejection moved is this story's write
+// (`approval-gates.md` §4 THIRD AMENDMENT, decision 5), and the merge service only
+// calls it.
+
+type AppliedMove = { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
+
+/** The card's lock, in the funnel's order: its awaiting gates, then the card (ADR §6d
+ *  amendment, rule 8) — `applyStatusTransition` takes the same two, so a press and a
+ *  status move never take them in opposite orders. */
+async function lockCard(workItemId: string, tx: Prisma.TransactionClient): Promise<void> {
+  await approvalGateRepository.lockAwaitingByWorkItem(workItemId, tx);
+  await workItemRepository.lockById(workItemId, tx);
+}
+
+/**
+ * Return a card a merge-queue failure moved to `implemented` to the status it was moved
+ * from, when it is still there. A card somebody has since moved elsewhere is left where
+ * they put it, and a workflow that refuses the move leaves it too — the re-enqueue has
+ * happened either way, and the move is secondary to it.
+ */
+async function returnCard(
+  item: { id: string; status: string },
+  to: 'approved' | 'in_review',
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+  opts: { decidingGateId?: string },
+): Promise<AppliedMove> {
+  if (item.status !== 'implemented') return null;
+  try {
+    const { transition } = await workItemsService.applyStatusTransition(item.id, to, ctx, tx, opts);
+    return transition;
+  } catch (err) {
+    if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError) {
+      console.warn('[mergeQueueExitService] Queue again could not return the card', {
+        workItemId: item.id,
+        to,
+        error: err.message,
+      });
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function emitMoved(workItemId: string, moved: AppliedMove, ctx: ServiceContext) {
+  if (!moved) return;
+  await sendEvent('work-item/transitioned', {
+    workspaceId: ctx.workspaceId,
+    workItemId,
+    actorId: ctx.userId,
+    fromStatusKey: moved.fromStatusKey,
+    toStatusKey: moved.toStatusKey,
+    revisionId: moved.revisionId,
+  });
+}
+
+export const queueExitCardMoves = { lockCard, returnCard, emitMoved };

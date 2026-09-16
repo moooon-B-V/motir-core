@@ -130,6 +130,16 @@ const WALLED_SITES: Record<string, string> = {
     'github_installation and github_repo, both armed, and nothing else. The write that follows is ' +
     'repo_deployment, whose repo_deployment_workspace_or_system policy carries the arm. ' +
     'No member, no work item, no tenant-only table. CLEAN.',
+  'lib/services/mergeQueueExitService.ts#recordExit':
+    'write ∈ { the local `write` closure in the same method } — one implementation, ' +
+    'read in full (MOTIR-5632). The system arm is taken ONLY when the workspace has no ' +
+    'owner, and its first statement is bindWorkspaceContext(tx, found.workspaceId) — the ' +
+    'tenant Phase 1 resolved from the armed github_installation + github_repo rows — so ' +
+    'everything write reads runs tenant-bound: github_pull_request (find + lock + clear ' +
+    'queue ref), github_pull_request_queue_exit (find by delivery + create; its policy ' +
+    'carries the arm), and resolveDeliveredWorkItems (work_item_delivery → work_item). ' +
+    'With no owner there is no actor, so every card is skipped as no_actor and no gate, ' +
+    'work item or status write is reached. CLEAN.',
 };
 
 let rlsTables: Set<string>;
