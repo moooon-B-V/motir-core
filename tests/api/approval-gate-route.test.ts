@@ -143,6 +143,79 @@ async function rawGate(card: WorkItem, kind: string, subjectId: string) {
   );
 }
 
+let repoSeq = 0;
+
+/**
+ * A repository with one pull request whose latest check ran green, DELIVERED by
+ * `item` — the seed `tests/approval-gate-pull-request-approval-kind.test.ts` uses.
+ */
+async function deliver(item: { id: string }, opts: { name: string; number: number }) {
+  repoSeq += 1;
+  const installation = await adminDb.githubInstallation.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      installationId: `inst-5439-${repoSeq}`,
+      accountLogin: 'acme',
+      accountType: 'Organization',
+      provider: 'github',
+    },
+  });
+  const repo = await adminDb.githubRepo.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
+      installationId: installation.id,
+      repoId: `repo-5439-${repoSeq}`,
+      owner: 'acme',
+      name: opts.name,
+      defaultBranch: 'main',
+      provider: 'github',
+    },
+  });
+  const pr = await adminDb.githubPullRequest.create({
+    data: {
+      repoId: repo.id,
+      number: opts.number,
+      title: `Change in ${opts.name}`,
+      state: 'open',
+      merged: false,
+      headRef: 'parent/ACME-12-throttle',
+      baseRef: 'main',
+      provider: 'github',
+    },
+  });
+  await adminDb.githubCheckRun.create({
+    data: {
+      pullRequestId: pr.id,
+      commitSha: `${opts.name}-head-${repoSeq}`.padEnd(40, '0'),
+      checkName: 'Vitest',
+      conclusion: 'success',
+    },
+  });
+  await adminDb.workItemDelivery.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      workItemId: item.id,
+      githubPullRequestId: pr.id,
+      repoId: repo.id,
+    },
+  });
+  return pr;
+}
+
+/** A story in review whose run delivered to TWO repositories. */
+async function twoRepoStory(): Promise<WorkItem> {
+  const story = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'story', title: 'Throttle the public API' },
+    fx.ctx,
+  );
+  await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+  await workItemsService.updateStatus(story.id, 'in_review', fx.ctx);
+  await deliver(story, { name: 'web', number: 7 });
+  await deliver(story, { name: 'api', number: 12 });
+  return adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } });
+}
+
 /** A workspace member with no administrative role and no relationship to the card. */
 async function plainMember(): Promise<Actor> {
   const user = await createTestUser();
@@ -245,6 +318,86 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     const body = await res.json();
     expect(body.gate).toMatchObject({ id: gate.id, kind: 'pull_request_merge' });
     expect(body.subject).toEqual({ state: 'kind_not_built' });
+  });
+
+  it('the APPROVE-TO-MERGE gate resolves to the Development block: both pull requests, the delivery set and How to test (MOTIR-5439)', async () => {
+    const story = await twoRepoStory();
+    // The approve-and-merge gate's subject is the card's delivery set, so its
+    // `subjectId` is the work item's own id (`pullRequestApprovalHandler`).
+    const gate = await rawGate(story, 'pull_request_approval', story.id);
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: story.identifier, kind: 'pull_request_approval' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.gate).toMatchObject({
+      id: gate.id,
+      kind: 'pull_request_approval',
+      state: 'awaiting',
+    });
+    expect(body.canDecide).toBe(true);
+    expect(body.subject.state).toBe('resolved');
+    expect(body.subject.kind).toBe('pull_request_approval');
+    // Both repositories' pull requests, in the shape the item page's Development
+    // section reads — the SAME service call, so the two surfaces cannot disagree.
+    expect(
+      body.subject.pullRequests
+        .map((pr: { number: number }) => pr.number)
+        .sort((a: number, b: number) => a - b),
+    ).toEqual([7, 12]);
+    expect(body.subject.pullRequests).toEqual(
+      JSON.parse(JSON.stringify(await workItemsService.listLinkedPullRequests(story.id, fx.ctx))),
+    );
+    expect(body.subject.deliveries).toHaveLength(2);
+    const view = await workItemsService.getDeliveryView(story.id, story.targetRepos, fx.ctx);
+    expect(body.subject.repoDelivery).toEqual(JSON.parse(JSON.stringify(view.repos)));
+    // No run wrote How to test here: the DTO's own answer, not an error.
+    expect(body.subject.howToTest.state).toBe('record_missing');
+    expect(body.subject.designEvidence).toBeNull();
+    expect(body.subject.isDesignCard).toBe(false);
+    // Awaiting: nothing has merged, so there is nothing a reload knows per member.
+    expect(body.subject.members).toEqual([]);
+  });
+
+  it('on a DESIGN card, the approve-to-merge subject carries the current design result beside its pull request (MOTIR-5439, AMENDMENT 4 Q8)', async () => {
+    const card = await designCard();
+    const evidence = await publish(card);
+    await deliver(card, { name: 'core', number: 31 });
+    await rawGate(card, 'pull_request_approval', card.id);
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: card.identifier, kind: 'pull_request_approval' })
+    ).json();
+    expect(body.subject.state).toBe('resolved');
+    expect(body.subject.pullRequests).toHaveLength(1);
+    expect(body.subject.designEvidence.id).toBe(evidence.id);
+  });
+
+  it('an approve-to-merge gate whose delivery set has EMPTIED is gone — the handler answers null for it', async () => {
+    const card = await designCard();
+    await rawGate(card, 'pull_request_approval', card.id);
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: card.identifier, kind: 'pull_request_approval' })
+    ).json();
+    expect(body.gate.kind).toBe('pull_request_approval');
+    expect(body.subject).toEqual({ state: 'gone' });
+  });
+
+  it('a reader who may see but not decide gets the approve-to-merge port with canDecide false', async () => {
+    const story = await twoRepoStory();
+    await rawGate(story, 'pull_request_approval', story.id);
+    signIn(await plainMember());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'pull_request_approval' })
+    ).json();
+    expect(body.subject.state).toBe('resolved');
+    expect(body.subject.pullRequests).toHaveLength(2);
+    expect(body.canDecide).toBe(false);
   });
 
   it('never serves a cached gate — its state changes under the reader by design', async () => {
@@ -378,6 +531,24 @@ describe('GET /api/work-items/approval-gate · the refusals', () => {
     expect((await gateViaRoute({ key: card.identifier, kind: 'design_result' })).status).toBe(200);
   });
 
+  it('an approve-to-merge gate that RESOLVES for its reader is the same 404 for an outsider (MOTIR-5439)', async () => {
+    // The reader's view and the true population differ: the gate and both pull
+    // requests exist and resolve in their own workspace, and must not elsewhere.
+    const story = await twoRepoStory();
+    await rawGate(story, 'pull_request_approval', story.id);
+    signIn(owner());
+    const own = await gateViaRoute({ key: story.identifier, kind: 'pull_request_approval' });
+    expect(own.status).toBe(200);
+    expect((await own.json()).subject.pullRequests).toHaveLength(2);
+
+    const outsiderFx = await makeWorkItemFixture({ name: 'Elsewhere', identifier: 'ELSE' });
+    signIn({ id: outsiderFx.owner.id, email: outsiderFx.owner.email }, outsiderFx);
+    const forbidden = await gateViaRoute({ key: story.identifier, kind: 'pull_request_approval' });
+    const unknown = await gateViaRoute({ key: 'ELSE-99999', kind: 'pull_request_approval' });
+    expect(forbidden.status).toBe(404);
+    expect(await forbidden.text()).toBe(await unknown.text());
+  });
+
   it('a key in a project this reader may NOT BROWSE is the same 404', async () => {
     const card = await designCard();
     await publish(card);
@@ -405,13 +576,35 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
     expect(code).not.toMatch(/prisma/i);
   });
 
-  it('composes exactly the three shipped service reads and adds none', () => {
+  it('composes exactly the shipped service reads — the approve-to-merge port reuses the item page’s — and adds none', () => {
+    // MOTIR-5439 added the Development block's reads, which are `lateReads.ts`'s own
+    // calls verbatim; a NEW service method here would be a second read of the block.
     const calls = [...new Set(code.match(/\w+Service\.\w+/g) ?? [])].sort();
     expect(calls).toEqual([
       'approvalGatesService.getForWorkItem',
+      'designEvidenceService.getCurrentForWorkItem',
       'designEvidenceService.getForGateSubject',
+      'howToTestService.getForWorkItem',
+      'pullRequestMergeService.listApprovalMembers',
+      'workItemsService.getDeliveryView',
       'workItemsService.getWorkItemByIdentifier',
+      'workItemsService.listLinkedPullRequests',
     ]);
+    const lateReads = readFileSync(
+      join(process.cwd(), 'app/(authed)/items/[key]/_components/lateReads.ts'),
+      'utf8',
+    );
+    const page = readFileSync(join(process.cwd(), 'app/(authed)/items/[key]/page.tsx'), 'utf8');
+    // The approve-to-merge port's reads, each one the item page already makes.
+    for (const call of [
+      'designEvidenceService.getCurrentForWorkItem',
+      'howToTestService.getForWorkItem',
+      'pullRequestMergeService.listApprovalMembers',
+      'workItemsService.getDeliveryView',
+      'workItemsService.listLinkedPullRequests',
+    ]) {
+      expect(`${lateReads}\n${page}`, `${call} is not one the item page makes`).toContain(call);
+    }
   });
 
   it('holds the 2FA gate AFTER the no-project arm and BEFORE the parameter arms', () => {

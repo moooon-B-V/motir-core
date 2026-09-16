@@ -448,30 +448,45 @@ describe('the Approvals list — the PULL-REQUEST row (MOTIR-5485, design-notes 
     expect(screen.queryByText('Motir cannot show this kind yet')).toBeNull();
   });
 
-  it("the row and Open work item both lead to the work item's page — nothing opens in the list", () => {
+  // ⚠️ AMENDED BY MOTIR-5440 (design-notes § 24's *The ACCESS PATH*): the row used to
+  // send the reader to the card, because the overlay could not render this kind. It can
+  // now, so the row opens it — *Open work item* becomes *Review*, exactly as § 23 said it
+  // would, and the row behaves like every other renderable row.
+  it('the row OPENS THE OVERLAY on a plain primary click, and Review is its labelled door', () => {
     renderRows([pullRequestRow(2)]);
 
-    const door = screen.getByRole('link', { name: /^Open ACME-12 / });
+    const door = screen.getByRole('link', { name: /^Review ACME-12 / });
     expect(door.getAttribute('href')).toBe('/items/ACME-12');
-    expect(door.getAttribute('aria-haspopup')).toBeNull();
-    expect(fireEvent.click(door, { button: 0 })).toBe(true);
-    expect(shallowPush).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: en.workbench.approvals.pullRequest.openWorkItem }),
+    expect(door.getAttribute('aria-haspopup')).toBe('dialog');
+    fireEvent.click(door, { button: 0 });
+    expect(shallowPush).toHaveBeenCalledWith(
+      expect.stringContaining('approval=ACME-12&approvalKind=pull_request_approval'),
     );
-    expect(push).toHaveBeenCalledWith('/items/ACME-12');
-  });
-
-  it('a reader who may not decide sees Awaiting and no Open work item — and the row still leads to the card', () => {
-    renderRows([pullRequestRow(1, { canDecide: false })]);
-
-    expect(screen.getByText('Awaiting')).toBeTruthy();
     expect(
       screen.queryByRole('button', { name: en.workbench.approvals.pullRequest.openWorkItem }),
     ).toBeNull();
-    expect(screen.getByRole('link', { name: /^Open ACME-12 / }).getAttribute('href')).toBe(
+
+    shallowPush.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(shallowPush).toHaveBeenCalledWith(
+      expect.stringContaining('approval=ACME-12&approvalKind=pull_request_approval'),
+    );
+  });
+
+  it('a MODIFIED click keeps the href — the card in a new tab, nothing intercepted', () => {
+    renderRows([pullRequestRow(2)]);
+
+    const door = screen.getByRole('link', { name: /^Review ACME-12 / });
+    expect(fireEvent.click(door, { button: 0, metaKey: true })).toBe(true);
+    expect(shallowPush).not.toHaveBeenCalled();
+  });
+
+  it('a reader who may not decide sees Awaiting and no door control — and the row still leads to the card', () => {
+    renderRows([pullRequestRow(1, { canDecide: false })]);
+
+    expect(screen.getByText('Awaiting')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
+    expect(screen.getByRole('link', { name: /^Review ACME-12 / }).getAttribute('href')).toBe(
       '/items/ACME-12',
     );
   });

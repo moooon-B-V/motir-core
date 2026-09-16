@@ -5,6 +5,14 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { APPROVAL_GATE_KINDS, withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
+import {
+  CORE_PR,
+  GATEWAY_FETCH,
+  GATEWAY_PR,
+  coreRepo,
+  gatewayRepo,
+  recordDto,
+} from '../helpers/howToTestFixtures';
 import type {
   ApprovalGateDTO,
   ApprovalGateKindDTO,
@@ -40,8 +48,17 @@ vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.
 const { fetchApprovalGateOverlay } = vi.hoisted(() => ({ fetchApprovalGateOverlay: vi.fn() }));
 vi.mock('@/lib/approvals/approvalOverlayClient', () => ({ fetchApprovalGateOverlay }));
 
-const { decideApprovalGateAction } = vi.hoisted(() => ({ decideApprovalGateAction: vi.fn() }));
-vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({ decideApprovalGateAction }));
+const { decideApprovalGateAction, approveAndMergeAction, retryApproveAndMergeMemberAction } =
+  vi.hoisted(() => ({
+    decideApprovalGateAction: vi.fn(),
+    approveAndMergeAction: vi.fn(),
+    retryApproveAndMergeMemberAction: vi.fn(),
+  }));
+vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
+  decideApprovalGateAction,
+  approveAndMergeAction,
+  retryApproveAndMergeMemberAction,
+}));
 
 const { announceGateDecided } = vi.hoisted(() => ({ announceGateDecided: vi.fn() }));
 vi.mock('@/lib/approvals/decidedGates', () => ({ announceGateDecided }));
@@ -255,7 +272,13 @@ describe('the overlay is TOTAL over what the read can answer', () => {
       expect(screen.queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
       expect(
         screen.getByRole('dialog', {
-          name: `${en.workbench.approvals.kind[kind as keyof typeof en.workbench.approvals.kind]} for GATE-1`,
+          name: `${
+            // The approve-to-merge kind is named by its FRAME wherever it is named
+            // (MOTIR-5440, § 24); every other kind by the row vocabulary.
+            kind === 'pull_request_approval'
+              ? en.approvalGate.pullRequestApproval.kindLabel
+              : en.workbench.approvals.kind[kind as keyof typeof en.workbench.approvals.kind]
+          } for GATE-1`,
         }),
       ).toBeTruthy();
     });
@@ -423,5 +446,156 @@ describe('the overlay across a CHANGING address (MOTIR-5226)', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Design result for GATE-1' });
     expect(within(dialog).getByText(en.approvalGate.designResult.meta.plain)).toBeTruthy();
+  });
+});
+
+// THE APPROVE-TO-MERGE PORT (Story MOTIR-5437 · Subtask MOTIR-5440), built to
+// `design/workbench/design-notes.md` § 24 and its delta mock.
+//
+// Band 2 is the item page's Development block, COMPOSED: the same component, fed the
+// same fields, in the `fill` box instead of the `flush` one. So what this file holds is
+// the OVERLAY's half — that the block is what mounts, that the frame's verbs come with
+// it, and that a reader who may not decide gets the port and nothing to press. The
+// block's own contents have their own suites (`development-block`, `how-to-test-block`).
+describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24)', () => {
+  const PR_GATE: ApprovalGateDTO = {
+    ...GATE,
+    kind: 'pull_request_approval',
+    // The set version names every member; `membersOf` parses band 1's count from it.
+    subjectVersion: `${CORE_PR.repo}#${CORE_PR.number}@abc1234,${GATEWAY_PR.repo}#${GATEWAY_PR.number}@def5678`,
+    subjectId: 'wi-1',
+  };
+
+  function pullRequestRead(
+    over: {
+      canDecide?: boolean;
+      howToTest?: ReturnType<typeof recordDto>;
+      designEvidence?: { id: string } | null;
+      isDesignCard?: boolean;
+    } = {},
+  ): ApprovalGateOverlayReadDTO {
+    return readOf({
+      gate: PR_GATE,
+      workItem: { id: 'wi-1', identifier: 'ACME-12', title: 'Throttle the public API' },
+      canDecide: over.canDecide ?? true,
+      subject: {
+        state: 'resolved',
+        kind: 'pull_request_approval',
+        pullRequests: [CORE_PR, GATEWAY_PR],
+        repoDelivery: [],
+        deliveries: [],
+        howToTest: over.howToTest ?? recordDto({ repos: [coreRepo(), gatewayRepo()] }),
+        designEvidence: (over.designEvidence ?? null) as never,
+        isDesignCard: over.isDesignCard ?? false,
+        members: [],
+      },
+    });
+  }
+
+  const openPullRequestGate = async (over?: Parameters<typeof pullRequestRead>[0]) => {
+    openAt('ACME-12', 'pull_request_approval');
+    fetchApprovalGateOverlay.mockResolvedValue(pullRequestRead(over));
+    await renderOverlay();
+    return screen.getByRole('dialog', { name: /Pull requests for ACME-12/ });
+  };
+
+  it('mounts ONE frame whose band 2 holds BOTH pull requests and How to test, with the gate’s verbs', async () => {
+    const dialog = await openPullRequestGate();
+
+    const ports = within(dialog).getAllByRole('group', { name: en.approvalGate.port.label });
+    expect(ports).toHaveLength(1);
+    const port = ports[0]!;
+    expect(within(port).getByText(CORE_PR.title)).toBeTruthy();
+    expect(within(port).getByText(GATEWAY_PR.title)).toBeTruthy();
+    expect(
+      within(port).getByRole('group', { name: en.github.development.howToTest.title }),
+    ).toBeTruthy();
+    // The kind's own verbs, from the shared frame — and no second approve control.
+    expect(
+      within(dialog).getByRole('button', {
+        name: en.approvalGate.pullRequestApproval.verb.approveAndMerge,
+      }),
+    ).toBeTruthy();
+    expect(
+      within(dialog).getAllByRole('button', { name: en.approvalGate.verb.requestChanges }),
+    ).toHaveLength(1);
+    // The design port belongs to the other kind; nothing of it is mounted here.
+    expect(screen.queryByTestId('design-port')).toBeNull();
+  });
+
+  it('is the FILL form — the port takes the viewport, not the item page’s 34rem ceiling', async () => {
+    const dialog = await openPullRequestGate();
+    const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });
+
+    expect(port.className).not.toContain('max-h-[34rem]');
+    expect(port.className).toContain('flex-1');
+  });
+
+  it('a code block’s copy control copies THAT block’s text, exactly', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const dialog = await openPullRequestGate();
+
+    // The FIRST fenced command in the run's body, and then the core repository's own
+    // fetch block — each copies its own text, inside the overlay exactly as on the
+    // item page (`how-to-test-block.test.tsx` asserts the same two).
+    const controls = within(dialog).getAllByRole('button', {
+      name: en.github.development.howToTest.code.copyAria,
+    });
+    await act(async () => {
+      fireEvent.click(controls[0]!);
+    });
+    expect(writeText).toHaveBeenLastCalledWith('pnpm install --frozen-lockfile && pnpm db:seed');
+
+    await act(async () => {
+      fireEvent.click(controls.at(-1)!);
+    });
+    expect(writeText).toHaveBeenLastCalledWith(GATEWAY_FETCH);
+  });
+
+  it('a reader who may SEE but not DECIDE gets the port and no verbs', async () => {
+    const dialog = await openPullRequestGate({ canDecide: false });
+
+    expect(within(dialog).getByRole('group', { name: en.approvalGate.port.label })).toBeTruthy();
+    expect(within(dialog).getByText(CORE_PR.title)).toBeTruthy();
+    for (const verb of [
+      en.approvalGate.pullRequestApproval.verb.approveAndMerge,
+      en.approvalGate.verb.requestChanges,
+    ]) {
+      expect(within(dialog).queryByRole('button', { name: verb })).toBeNull();
+    }
+  });
+
+  it('a record-missing item shows the block’s own missing state INSIDE the port, verbs intact', async () => {
+    const dialog = await openPullRequestGate({
+      howToTest: recordDto({ state: 'record_missing', record: null, repos: [] }),
+    });
+
+    const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });
+    expect(within(port).getByText(en.github.development.howToTest.missing.title)).toBeTruthy();
+    // The gate is real, and a reviewer may approve without instructions (§ 24).
+    expect(
+      within(dialog).getByRole('button', {
+        name: en.approvalGate.pullRequestApproval.verb.approveAndMerge,
+      }),
+    ).toBeTruthy();
+  });
+
+  it('a DESIGN card carries its design result inside the same port (state 7)', async () => {
+    const dialog = await openPullRequestGate({
+      designEvidence: { id: 'ev-9' },
+      isDesignCard: true,
+    });
+
+    const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });
+    const design = within(port).getByTestId('design-port');
+    expect(design.getAttribute('data-evidence')).toBe('ev-9');
+    // …and it leads the block: the design, then How to test, then the rows (§ 24).
+    const howToTest = within(port).getByRole('group', {
+      name: en.github.development.howToTest.title,
+    });
+    expect(
+      design.compareDocumentPosition(howToTest) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

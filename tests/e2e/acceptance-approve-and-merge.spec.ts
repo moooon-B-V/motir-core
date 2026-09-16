@@ -273,15 +273,17 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
     await beat();
 
     await chapter('The card: one frame over both pull requests and How to test', async () => {
-      // The row's own decide-cell control, NOT the whole-row overlay link: that link is
-      // `absolute inset-0 z-0`, so the row's work-item link (`z-10`) covers its centre and a
-      // pointer click there never lands on it — CI run 34952412734 retried it to the timeout.
+      // ⚠️ THE ROW'S WORK-ITEM LINK, NOT ITS DECIDE CELL (amended by MOTIR-5440). This row's
+      // decide cell used to read *Open work item* and lead here; since the overlay can render
+      // this kind it reads *Review* and opens the overlay instead. What this chapter is about
+      // is the CARD, so it takes the one link that visibly leaves — the work-item cell, which
+      // sits on `z-10` above the whole-row door for exactly this reason.
       await page
         .getByRole('table', { name: 'To approve' })
         .getByTestId(/^approval-row-/)
         .filter({ hasText: en.workbench.approvals.pullRequest.kindLabel })
         .filter({ hasText: seed.merged.identifier })
-        .getByRole('button', { name: en.workbench.approvals.pullRequest.openWorkItem, exact: true })
+        .getByRole('link', { name: new RegExp(`^${seed.merged.identifier}\\b`) })
         .click();
       await expect(page).toHaveURL(new RegExp(`/items/${seed.merged.identifier}$`));
       const dev = developmentCard(page);
@@ -456,26 +458,23 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
         .context()
         .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
       await page.goto('/workbench?tab=approvals');
-      // Picked by its Open work item button, NOT by the kind label: in zh each merge gate's
+      // Picked by its DECIDE CONTROL, NOT by the kind label: in zh each merge gate's
       // subject line reads `… · 拉取请求`, so the label is a substring of all three of the
-      // card's rows (CI run 34979375067) — only the approve-and-merge row has the button.
+      // card's rows (CI run 34979375067) — and only the approve-and-merge row is renderable,
+      // so only it carries one. The control is *查看* since MOTIR-5440 swapped the cell.
       const row = page
         .getByRole('main')
         .getByTestId(/^approval-row-/)
         .filter({ hasText: seed.zh.identifier })
         .filter({
-          has: page.getByRole('button', {
-            name: zh.workbench.approvals.pullRequest.openWorkItem,
-            exact: true,
-          }),
+          has: page.getByRole('button', { name: zh.workbench.approvals.review, exact: true }),
         });
       await expect(
         row.getByText(zh.workbench.approvals.pullRequest.kindLabel, { exact: true }),
       ).toBeVisible({ timeout: 60_000 });
-      // The row's decide-cell control, for the reason the English chapter gives.
-      await row
-        .getByRole('button', { name: zh.workbench.approvals.pullRequest.openWorkItem, exact: true })
-        .click();
+      // The row's work-item link, for the reason the English chapter gives: the decide cell
+      // opens the overlay now, and this chapter is about the card.
+      await row.getByRole('link', { name: new RegExp(`^${seed.zh.identifier}\\b`) }).click();
       await expect(page).toHaveURL(new RegExp(`/items/${seed.zh.identifier}$`));
       const dev = developmentCard(page, zh.github.development.title);
       await expect(dev).toHaveCount(1, { timeout: 60_000 });
