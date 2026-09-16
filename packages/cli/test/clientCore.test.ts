@@ -350,6 +350,79 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(claim.transitionedBy).toEqual({ id: 'user_them', name: 'Ada' });
   });
 
+  // ── The REPAIR claim (MOTIR-5464 / MOTIR-5465) ────────────────────────────
+  it('claims a REPAIR on the work item’s own path and restates every pull request', async () => {
+    const pullRequest = {
+      repo: 'acme/web',
+      number: 12,
+      url: 'https://github.com/acme/web/pull/12',
+      headRef: 'subtask/PROD-7-widget',
+      baseRef: null,
+      ci: 'failing',
+      failingChecks: ['Vitest'],
+    };
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/repair': {
+        body: {
+          key: 'PROD-7',
+          title: 'Widget',
+          outcome: 'claimed',
+          reason: null,
+          runTargetKey: null,
+          runId: 'run_fix_1',
+          holder: { id: 'user_me', name: 'Mo' },
+          startedAt: '2026-09-16T10:00:00.000Z',
+          pullRequests: [pullRequest],
+        },
+      },
+    });
+    const client = connected();
+
+    const claim = await client.claimWorkItemRepair('PROD-7');
+
+    expect(server.v1Calls[0]?.method).toBe('POST');
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/work-items/PROD-7/repair');
+    expect(claim).toMatchObject({
+      outcome: 'claimed',
+      runId: 'run_fix_1',
+      holder: { id: 'user_me', name: 'Mo' },
+      pullRequests: [pullRequest],
+    });
+  });
+
+  it('carries a repair REFUSAL through with no holder and no pull requests', async () => {
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/repair': {
+        body: {
+          key: 'PROD-7',
+          title: 'Widget',
+          outcome: 'not_repairable',
+          reason: 'repair_on_run_target',
+          runTargetKey: 'PROD-2',
+          runId: null,
+          holder: null,
+          startedAt: null,
+          pullRequests: [],
+        },
+      },
+    });
+    const client = connected();
+
+    const claim = await client.claimWorkItemRepair('PROD-7');
+
+    expect(claim).toEqual({
+      key: 'PROD-7',
+      title: 'Widget',
+      outcome: 'not_repairable',
+      reason: 'repair_on_run_target',
+      runTargetKey: 'PROD-2',
+      runId: null,
+      holder: null,
+      startedAt: null,
+      pullRequests: [],
+    });
+  });
+
   // ── LINKING a pull request (MOTIR-5048) ────────────────────────────────────
   // The link is the ONLY thing that associates a pull request with a work item —
   // there is no title parse and no branch fallback — so what is asserted here is

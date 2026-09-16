@@ -139,6 +139,13 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     '`WorkItemClaim` whole — so the shape family IS checked here, on the tool that has an ' +
     'agent-facing reason to exist. ⚠️ If an agent surface is ever added for a scoped run, ' +
     'this entry closes and `claim_scope` probes this resource; it is not a permanent divergence.',
+  WorkItemRepairClaim:
+    'MOTIR-5464’s REPAIR claim ships on `/api/v1` ONLY, for the reason `ScopeClaim` above gives: ' +
+    'its caller is `motir fix <key>` in `packages/cli`, which speaks /api/v1 only since 11.5.6, ' +
+    'and the card that specifies it adds no MCP tool (`tests/api/v1/work-loop-story-gate.test.ts` ' +
+    'carries the same argument as that operation’s unmirrored entry). A dispatched agent has no ' +
+    'use for it either: it is handed its branches by the command. ⚠️ If an agent surface ever ' +
+    'claims a repair, this entry closes and that tool probes this resource.',
   ProjectRepository:
     'MOTIR-3586 publishes the project\u2019s repository SET on `/api/v1` ONLY, and the absence is ' +
     'argued rather than incidental: its caller is `motir link` in `packages/cli`, which retired ' +
