@@ -161,7 +161,7 @@ describe('the tool is REGISTERED and its surface matches what the description pr
       tool!.inputSchema as { properties: Record<string, unknown>; required?: string[] }
     ).properties;
     // A caller reading the surface must find what the description promises.
-    for (const field of ['projectKey', 'query', 'kinds', 'types', 'phases', 'limit']) {
+    for (const field of ['projectKey', 'query', 'kinds', 'types', 'phases', 'subject', 'limit']) {
       expect(props, `tools/list omits \`${field}\``).toHaveProperty(field);
     }
     const required = (tool!.inputSchema as { required?: string[] }).required ?? [];
@@ -250,6 +250,51 @@ describe('MATCHED — the text arrives, marked with the scope it came from', () 
     // The axes the caller did not name never became `[]` on the way through.
     expect(body).not.toHaveProperty('types');
     expect(body).not.toHaveProperty('phases');
+    expect(body).not.toHaveProperty('subject');
+  });
+
+  // MOTIR-5621 — the fourth axis, asserted THROUGH the shipped transport rather
+  // than at either end of it. The axis was write-only precisely because every
+  // layer below this one already accepted it: `subjectFilter` has emitted
+  // `AND ("subject" IS NULL OR "subject" = $s)` since MOTIR-5080, and the
+  // parameter was dropped somewhere between the tool and the wire. Checking the
+  // tool takes it, or that the SQL filters, would each have passed while the
+  // feature did nothing — so what this asserts is the hop between them.
+  it('forwards a SUBJECT to the serialized upstream body, scalar and unwrapped', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connect(await tokenWith(fx, GRANTABLE_PERMISSIONS, 'full'));
+    const upstream = stubUpstream(() => jsonResponse({ lessons: [] }));
+
+    await search(client, fx, { subject: 'mcp' });
+
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    // A bare string, not `['mcp']` — the clause beneath compares, it does not overlap.
+    expect(body['subject']).toBe('mcp');
+  });
+
+  it('renders a returned row SUBJECT in the axis tag, so a narrowed result can be re-narrowed', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connect(await tokenWith(fx, GRANTABLE_PERMISSIONS, 'full'));
+    stubUpstream(() =>
+      jsonResponse({
+        lessons: [
+          {
+            id: 'l1',
+            title: 'the shared corpus row',
+            body: 'b',
+            howToApply: 'Re-measure on a ref',
+            scope: 'global',
+            subject: 'mcp',
+            distance: 0.2,
+          },
+        ],
+      }),
+    );
+
+    const text = renderedText(await search(client, fx, { subject: 'mcp' }));
+    // A subject-narrowed search returns rows carrying the subject AND rows
+    // carrying none. Without the tag the caller cannot tell which it is holding.
+    expect(text).toContain('subject: mcp');
   });
 });
 
