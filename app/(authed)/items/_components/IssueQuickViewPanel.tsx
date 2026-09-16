@@ -874,6 +874,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               // what made it say "No pull request yet" about a repository whose
               // pull request was on the row above (MOTIR-3036).
               repoDelivery={data.repoDelivery ?? []}
+              // The persisted merge outcomes (Bug MOTIR-5650): a queued pull request reads
+              // *Queued to merge* here as it does on the item page, not *Checks passing*.
+              mergeMembers={data.mergeMembers ?? []}
               // The design result's SLOT (Q8): a card whose open pull requests
               // carry its design shows it here, first in the block, exactly as
               // the detail page does. The service reads it only in that case.

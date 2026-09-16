@@ -58,6 +58,7 @@ import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { pullRequestApprovalMembersService } from '@/lib/services/pullRequestApprovalMembersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -5796,6 +5797,18 @@ export const workItemsService = {
     const designEvidence = hasOpenPr
       ? await designEvidenceService.getCurrentForWorkItem(detail.item.id, ctx)
       : null;
+    // What a reload of the item page shows on each pull-request row after Approve and merge
+    // (Bug MOTIR-5650) — *Queued to merge* / *Not merged yet*, from the same member facts the
+    // Development frame reads. An approve-and-merge gate only ever covers a card's linked
+    // pull requests, so a card with none skips the read: this payload is fetched on every row
+    // click.
+    const mergeMembers =
+      pullRequests.length > 0 || deliveryView.deliveries.length > 0
+        ? await pullRequestApprovalMembersService.listForLatestGate(
+            { workItemId: detail.item.id },
+            ctx,
+          )
+        : [];
     // The moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528) — the peek's
     // status field says so the way the detail page's does, from the same read.
     const heldTransitions = await approvalGatesService.listHeldTransitions(detail.item.id, ctx);
@@ -5816,7 +5829,7 @@ export const workItemsService = {
       folderPath,
       designEvidence,
     );
-    return { ...view, heldTransitions };
+    return { ...view, heldTransitions, mergeMembers };
   },
 
   /**

@@ -30,6 +30,7 @@ import type {
 } from '@/lib/dto/approvalGate';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from './projectAccessService';
+import { pullRequestApprovalMembersService } from './pullRequestApprovalMembersService';
 import {
   approvalGatesService,
   resolveGateAuthority,
@@ -323,36 +324,7 @@ export const pullRequestMergeService = {
     input: { workItemId: string; approvalGateId: string },
     ctx: ServiceContext,
   ): Promise<PullRequestApprovalMemberDTO[]> {
-    return withWorkspaceContext(ctx, async (tx) => {
-      const approval = await approvalGateRepository.findById(input.approvalGateId, tx);
-      if (
-        !approval ||
-        approval.kind !== APPROVAL_KIND ||
-        approval.state !== 'approved' ||
-        approval.workItemId !== input.workItemId
-      ) {
-        return [];
-      }
-      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
-        input.workItemId,
-        tx,
-      );
-      return membersOf(approval.subjectVersion).map((member) => {
-        const pr = deliveries.find(
-          (row) =>
-            `${row.repo.owner}/${row.repo.name}` === member.repo &&
-            row.pullRequest.number === member.number,
-        )?.pullRequest;
-        const outcome = pr?.mergeOutcomeRef ?? null;
-        return {
-          subjectVersion: member.subjectVersion,
-          pullRequestId: pr?.id ?? null,
-          queued: pr !== undefined && !pr.merged && (outcome?.startsWith('queue:') ?? false),
-          // A member Motir has not merged or queued yet is the one a person can try again.
-          retryable: pr !== undefined && !pr.merged && outcome === null,
-        };
-      });
-    });
+    return pullRequestApprovalMembersService.listForGate(input, ctx);
   },
 
   /**

@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { awaitingRepoRows, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
+import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import { RepairFixPart } from './RepairFixPart';
@@ -26,7 +27,7 @@ import {
   type DevelopmentGateActions,
   type DevelopmentGateRead,
 } from './DevelopmentGateFrame';
-import { MergeOutcomeSlot } from './MergeOutcomeSlot';
+import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
 // design/github Panels 3 + 4a: linked-PR rows — PR glyph + title +
@@ -602,6 +603,7 @@ export function DevelopmentSection({
   repoDelivery = [],
   deliveries = [],
   designResult = null,
+  mergeMembers = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   itemIdentifier: string;
@@ -617,18 +619,25 @@ export function DevelopmentSection({
    *  — the same element the detail page passes, so the peek shows the design in
    *  the same place. Read-only: the panel has no verbs of its own. */
   designResult?: ReactNode;
+  /** What a reload knows about each member of the card's APPROVED approve-and-merge gate
+   *  (Bug MOTIR-5650) — so a row reads *Queued to merge* / *Not merged yet* here exactly as
+   *  it does on the item page. The peek draws no frame, so no Retry. Empty for every other
+   *  gate state, and for a card with no gate. */
+  mergeMembers?: readonly PullRequestApprovalMemberDTO[];
 }) {
   const t = useTranslations('github');
   return (
     <section className={className} data-testid="development-section">
       <SectionLabel label={t('development.title')} />
-      <DevelopmentSectionBody
-        pullRequests={pullRequests}
-        itemIdentifier={itemIdentifier}
-        repoDelivery={repoDelivery}
-        deliveries={deliveries}
-        designResult={designResult}
-      />
+      <PersistedMergeOutcomes members={mergeMembers}>
+        <DevelopmentSectionBody
+          pullRequests={pullRequests}
+          itemIdentifier={itemIdentifier}
+          repoDelivery={repoDelivery}
+          deliveries={deliveries}
+          designResult={designResult}
+        />
+      </PersistedMergeOutcomes>
     </section>
   );
 }
