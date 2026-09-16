@@ -2164,6 +2164,24 @@ export default defineConfig({
         'lib/services/workItemRepairService.ts',
         'app/api/v1/work-items/[key]/repair/route.ts',
         'components/github/RepairFixPart.tsx',
+        // ── Story MOTIR-5461 · A PULL REQUEST THE MERGE QUEUE EJECTS ───────────
+        // Subtask MOTIR-5636, the story's vitest gate. The files the story CREATED —
+        // the ejection and failing-check services, the reason table and its error, the
+        // exit line and the auto part. MEASURED on the parent branch before being
+        // pinned, over `tests/github`, `tests/integration/mergeQueueEjectionStoryGate`,
+        // `tests/components/development-ejection` and `tests/integration/approvals`:
+        // exit service 97.7 / 91.1 br, check service 97.9 / 95.5 br, the two
+        // components 98.2 / 96.2 and 100 / 92.9 br, the rest 100. The shared files it
+        // changed keep their existing pins (`pullRequestMergeService.ts`,
+        // `DevelopmentGateFrame.tsx`, `MergeOutcomeSlot.tsx`). Not pinned:
+        // `githubMergeQueueAttemptRepository.ts`, whose one uncovered arm is the
+        // empty-input guard its only caller never reaches (50% of two branches).
+        'lib/services/mergeQueueExitService.ts',
+        'lib/services/mergeQueueCheckService.ts',
+        'lib/mergeQueue/queueExit.ts',
+        'lib/mergeQueue/errors.ts',
+        'components/github/QueueExitLine.tsx',
+        'components/github/QueueExitAutoPart.tsx',
         // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN — the approval overlay ───
         // Subtask MOTIR-5226, the story's own vitest gate. The overlay, its
         // address and client read, the row's settle signal and the route were in
@@ -2392,6 +2410,43 @@ export default defineConfig({
           statements: 90,
         },
         'components/github/RepairFixPart.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-5636 — the merge-queue ejection story's new files, measured above.
+        'lib/services/mergeQueueExitService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/mergeQueueCheckService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mergeQueue/queueExit.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mergeQueue/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/QueueExitLine.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/QueueExitAutoPart.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -394,6 +394,27 @@ describe('auto mode — no gate, a flush Merge queue part (E5)', () => {
     expect(queueAgain()).toBeTruthy();
   });
 
+  it('a NEUTRAL removal reads Removed from the queue, and its press predicts no status', async () => {
+    const press = vi.fn().mockResolvedValue({ ok: false, refusal: { tag: 'UNEXPECTED' } });
+    renderAuto({
+      queueAgain: press,
+      exits: [
+        {
+          pullRequestId: GATEWAY_PR.id,
+          repo: 'moooon/motir-gateway',
+          number: 57,
+          exit: exit({ rawReason: 'QUEUE_CLEARED', disposition: 'neutral' }),
+          requeueable: true,
+        },
+      ],
+    });
+    expect(within(gatewayRow()).getByText(pra.outcome.removedFromQueue)).toBeTruthy();
+    fireEvent.click(queueAgain()!);
+    await screen.findByRole('alert');
+    expect(rail()).toBe('implemented');
+    expect(press).toHaveBeenCalledTimes(1);
+  });
+
   it('a moved head shows New commits since approval and no button', () => {
     renderAuto({
       exits: [
