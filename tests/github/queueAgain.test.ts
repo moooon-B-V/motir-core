@@ -527,6 +527,54 @@ describe('auto mode — a person’s Queue again', () => {
     expect(sent.map((e) => e.name)).toEqual(['pull-request/auto-merge.requested']);
   });
 
+  it('the standing-exits read offers Queue again until the head moves or it is put back', async () => {
+    const { s, item, prId } = await ejectedAuto('auto-read@example.com');
+    const read = () =>
+      pullRequestMergeService.listStandingQueueExits({ workItemId: item.id }, s.ctx);
+
+    expect(await read()).toEqual([
+      expect.objectContaining({
+        pullRequestId: prId,
+        repo: 'moooon/acme',
+        number: 21,
+        requeueable: true,
+        exit: expect.objectContaining({
+          rawReason: 'CI_FAILURE',
+          disposition: 'failure',
+          failingCheckName: null,
+        }),
+      }),
+    ]);
+
+    await ci(21, 'sha-auto-2');
+    expect(await read()).toEqual([expect.objectContaining({ requeueable: false })]);
+
+    await adminDb.githubPullRequestQueueExit.updateMany({
+      where: { pullRequestId: prId },
+      data: { requeuedAt: new Date() },
+    });
+    expect(await read()).toEqual([]);
+    expect(
+      await pullRequestMergeService.listStandingQueueExits({ workItemId: 'no-such-card' }, s.ctx),
+    ).toEqual([]);
+  });
+
+  it('the standing-exits read answers nothing for a closed pull request or a manual project', async () => {
+    const { s, item, prId } = await ejectedAuto('auto-read-closed@example.com');
+    await adminDb.githubPullRequest.update({ where: { id: prId }, data: { state: 'closed' } });
+    expect(
+      await pullRequestMergeService.listStandingQueueExits({ workItemId: item.id }, s.ctx),
+    ).toEqual([]);
+
+    const manual = await ejectedManual('manual-read@example.com');
+    expect(
+      await pullRequestMergeService.listStandingQueueExits(
+        { workItemId: manual.item.id },
+        manual.s.ctx,
+      ),
+    ).toEqual([]);
+  });
+
   it('a pull request with no standing exit is refused', async () => {
     const s = await makeScenario('auto-no-exit@example.com', 'auto');
     const item = await card(s, [22]);

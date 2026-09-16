@@ -8473,7 +8473,11 @@
         "queued": "Queued to merge",
         "refused": "Not merged",
         "notMergedYet": "Not merged yet",
-        "retry": "Retry merge"
+        "retry": "Retry merge",
+        "leftQueue": "Left the queue",
+        "removedFromQueue": "Removed from the queue",
+        "newCommits": "New commits since approval",
+        "queueAgain": "Queue again"
       },
       "refused": {
         "title": "{pr} was not merged.",
@@ -8489,7 +8493,33 @@
         "pair": "{a} and {b}",
         "separator": ", "
       },
-      "host": "GitHub"
+      "host": "GitHub",
+      "exit": {
+        "left": "<b>{pr}</b> left the merge queue: {reason}",
+        "removed": "<b>{pr}</b> was removed from the merge queue: {reason}",
+        "reason": {
+          "CI_FAILURE": "its checks failed in the merge queue.",
+          "CI_TIMEOUT": "its checks timed out in the merge queue.",
+          "MERGE_CONFLICT": "it no longer merges cleanly with the changes ahead of it.",
+          "INVALID_MERGE_COMMIT": "the queue could not build a merge commit for it.",
+          "GIT_TREE_INVALID": "the queue could not build its tree.",
+          "BRANCH_PROTECTIONS": "a branch protection rule stopped it.",
+          "MANUAL": "someone took it out.",
+          "QUEUE_CLEARED": "the merge queue was cleared.",
+          "ROLL_BACK": "it was taken out for a roll-back.",
+          "unknown": "GitHub did not say why."
+        },
+        "failingCheck": "Failing check: <link>{check}</link>",
+        "unchanged": "Your approval still covers these commits, so <b>Queue again</b> puts it back with no new approval.",
+        "newCommits": "It has new commits since your approval. Motir asks again when every check is green.",
+        "auto": "Motir merges this project’s pull requests when they are green. <b>Queue again</b> sends it back at the same commits.",
+        "partTitle": "Merge queue",
+        "openCheck": "Open the failing check {check} on GitHub"
+      },
+      "requeue": {
+        "progress": "Adding {pr} back to its merge queue…",
+        "refusedTitle": "{pr} was not queued again."
+      }
     },
     "statusHeld": {
       "decision": "Status can't be moved to <strong>{status}</strong> directly — a <strong>{decision}</strong> is waiting.",

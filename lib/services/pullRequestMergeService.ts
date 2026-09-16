@@ -39,7 +39,7 @@ import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { GithubPullRequestQueueExit } from '@/generated/prisma/client';
-import type { PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
+import type { PullRequestQueueExitDTO, PullRequestStandingExitDTO } from '@/lib/dto/approvalGate';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { projectAccessService } from './projectAccessService';
 import { queueExitCardMoves } from './mergeQueueExitService';
@@ -381,6 +381,47 @@ export const pullRequestMergeService = {
             row !== undefined &&
             deliveryMemberVersion(row) === member.subjectVersion,
         };
+      });
+    });
+  },
+
+  /**
+   * The standing merge-queue exits of a card in an `auto` project (MOTIR-5635; design § 22,
+   * E5) — the read the Development block draws *Left the queue* and *Queue again* from when
+   * there is no approval frame. READ-ONLY. A `manual` project reads its exits through
+   * {@link listApprovalMembers}, on its decided gate, so this answers nothing there.
+   * `requeueable` is exactly what {@link requeueAutoMember} accepts: open, the exit not put
+   * back, and the head the latest checks ran at still the one it left at.
+   */
+  async listStandingQueueExits(
+    input: { workItemId: string },
+    ctx: ServiceContext,
+  ): Promise<PullRequestStandingExitDTO[]> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(input.workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) return [];
+      const mode = await projectRepository.findPrMergeMode(item.projectId, tx);
+      if (mode?.prMergeMode !== 'auto') return [];
+      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
+      const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+        deliveries.map((row) => row.pullRequest.id),
+        tx,
+      );
+      return deliveries.flatMap((row) => {
+        const pr = row.pullRequest;
+        const exit = exits.get(pr.id);
+        const open = pr.state === 'open' && !pr.merged;
+        if (!exit || exit.requeuedAt !== null || !open) return [];
+        const head = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+        return [
+          {
+            pullRequestId: pr.id,
+            repo: `${row.repo.owner}/${row.repo.name}`,
+            number: pr.number,
+            exit: toQueueExitDto(exit),
+            requeueable: head === exit.headSha,
+          },
+        ];
       });
     });
   },

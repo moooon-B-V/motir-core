@@ -2,7 +2,15 @@
 
 import { createContext, useContext, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { CircleEllipsis, CircleX, Clock, GitMerge, GitPullRequestArrow } from 'lucide-react';
+import {
+  CircleEllipsis,
+  CircleMinus,
+  CircleX,
+  Clock,
+  GitBranch,
+  GitMerge,
+  GitPullRequestArrow,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 
@@ -31,7 +39,20 @@ export type RowMergeOutcome =
       /** Retry this member's merge; `null` for a reader who may not decide. */
       onRetry: (() => void) | null;
       retrying: boolean;
-    };
+    }
+  // THE MERGE QUEUE REMOVED IT (MOTIR-5635; design § 22, E1–E7). A FAILURE is rose, a
+  // NEUTRAL removal is not — nothing was said about the work.
+  | {
+      kind: 'leftQueue' | 'removedFromQueue';
+      /** *Queue again*; `null` when the approval no longer covers the head, or for a
+       *  reader who may not press it. */
+      onQueueAgain: (() => void) | null;
+      /** The press is in flight: the pill stays, the button waits (E2). */
+      queueing: boolean;
+    }
+  /** Removed, and a push moved the head since: the approval no longer describes the code,
+   *  so nothing is offered (E3). */
+  | { kind: 'newCommits' };
 
 const MergeOutcomeContext = createContext<ReadonlyMap<string, RowMergeOutcome> | null>(null);
 
@@ -120,6 +141,41 @@ export function MergeOutcomeSlot({
             </Button>
           ) : null}
         </>
+      );
+    case 'leftQueue':
+    case 'removedFromQueue':
+      return (
+        <>
+          {outcome.kind === 'leftQueue' ? (
+            <Pill severity="danger">
+              <CircleX className="h-3 w-3" aria-hidden />
+              {t('leftQueue')}
+            </Pill>
+          ) : (
+            <Pill tone="neutral">
+              <CircleMinus className="h-3 w-3" aria-hidden />
+              {t('removedFromQueue')}
+            </Pill>
+          )}
+          {outcome.onQueueAgain ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              disabled={outcome.queueing}
+              onClick={outcome.onQueueAgain}
+            >
+              {t('queueAgain')}
+            </Button>
+          ) : null}
+        </>
+      );
+    case 'newCommits':
+      return (
+        <Pill tone="neutral">
+          <GitBranch className="h-3 w-3" aria-hidden />
+          {t('newCommits')}
+        </Pill>
       );
   }
 }

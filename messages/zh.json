@@ -8469,7 +8469,11 @@
         "queued": "已加入合并队列",
         "refused": "未合并",
         "notMergedYet": "尚未合并",
-        "retry": "重试合并"
+        "retry": "重试合并",
+        "leftQueue": "已离开合并队列",
+        "removedFromQueue": "已从合并队列中移除",
+        "newCommits": "批准后有新提交",
+        "queueAgain": "重新排队"
       },
       "refused": {
         "title": "{pr} 未合并。",
@@ -8485,7 +8489,33 @@
         "pair": "{a} 和 {b}",
         "separator": "、"
       },
-      "host": "GitHub"
+      "host": "GitHub",
+      "exit": {
+        "left": "<b>{pr}</b> 已离开合并队列：{reason}",
+        "removed": "<b>{pr}</b> 已被移出合并队列：{reason}",
+        "reason": {
+          "CI_FAILURE": "它的检查在合并队列中未通过。",
+          "CI_TIMEOUT": "它的检查在合并队列中超时。",
+          "MERGE_CONFLICT": "它与排在前面的更改无法再干净地合并。",
+          "INVALID_MERGE_COMMIT": "合并队列无法为它生成合并提交。",
+          "GIT_TREE_INVALID": "合并队列无法为它生成文件树。",
+          "BRANCH_PROTECTIONS": "分支保护规则阻止了它。",
+          "MANUAL": "有人把它移出了队列。",
+          "QUEUE_CLEARED": "合并队列已被清空。",
+          "ROLL_BACK": "因回滚而被移出。",
+          "unknown": "GitHub 未说明原因。"
+        },
+        "failingCheck": "未通过的检查：<link>{check}</link>",
+        "unchanged": "你的批准仍覆盖这些提交，<b>重新排队</b>即可放回队列，无需再次批准。",
+        "newCommits": "你批准后它有了新提交。所有检查通过后，Motir 会再次征求批准。",
+        "auto": "Motir 会在检查通过后合并本项目的拉取请求。<b>重新排队</b>会以相同的提交将它放回队列。",
+        "partTitle": "合并队列",
+        "openCheck": "在 GitHub 上打开未通过的检查 {check}"
+      },
+      "requeue": {
+        "progress": "正在将 {pr} 放回合并队列…",
+        "refusedTitle": "{pr} 未能重新排队。"
+      }
     },
     "statusHeld": {
       "decision": "无法直接将状态改为<strong>{status}</strong>——<strong>{decision}</strong>正在等待。",

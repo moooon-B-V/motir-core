@@ -554,6 +554,18 @@ export interface PullRequestQueueExitDTO {
   failingCheckUrl: string | null;
 }
 
+/** A pull request the merge queue removed and nobody has put back, on a card with NO
+ *  approval gate — an `auto` project (MOTIR-5635; design § 22, E5). */
+export interface PullRequestStandingExitDTO {
+  pullRequestId: string;
+  /** `owner/name`, as the row names its repository. */
+  repo: string;
+  number: number;
+  exit: PullRequestQueueExitDTO;
+  /** *Queue again* is honest: the pull request is open and still at the head it left at. */
+  requeueable: boolean;
+}
+
 /** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */
 export type ApproveAndMergeMemberOutcomeDTO =
   | {
