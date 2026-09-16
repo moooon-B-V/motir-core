@@ -19,6 +19,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { PermissionDeniedError } from '@/lib/projects/errors';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -288,6 +289,15 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
     expect(members.find((m) => m.pullRequestId === prId)).toMatchObject({ requeueable: true });
   });
 
+  it('a host FAULT releases the claim and is rethrown, not dressed as a refusal', async () => {
+    const { s, item, approved, prId } = await ejectedManual('manual-fault@example.com');
+    vi.spyOn(github, 'mergeChangeRequest').mockRejectedValue(new Error('the host is on fire'));
+
+    await expect(press(s, approved.id, prId)).rejects.toThrow('the host is on fire');
+    expect((await latestExit(11)).requeuedAt).toBeNull();
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+
   it('a second press on the same exit is refused and enqueues nothing', async () => {
     const { s, approved, prId } = await ejectedManual('manual-twice@example.com');
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_5' });
@@ -467,6 +477,54 @@ describe('auto mode — a person’s Queue again', () => {
   it('the gate path refuses an auto project — it has no approval to reuse', async () => {
     const { s, prId } = await ejectedAuto('auto-gate-door@example.com');
     await expect(press(s, 'no-such-gate', prId)).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+  });
+
+  it('an unknown card is not found', async () => {
+    const { s, prId } = await ejectedAuto('auto-unknown@example.com');
+    await expect(
+      pullRequestMergeService.requeueAutoMember(
+        { workItemId: 'no-such-card', pullRequestId: prId },
+        s.ctx,
+      ),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+
+  it('a pull request the card does not deliver is refused', async () => {
+    const { s, item } = await ejectedAuto('auto-not-delivered@example.com');
+    await expect(
+      pullRequestMergeService.requeueAutoMember(
+        { workItemId: item.id, pullRequestId: 'no-such-pull-request' },
+        s.ctx,
+      ),
+    ).rejects.toMatchObject({ reason: 'not_delivered' });
+  });
+
+  it('a closed pull request is refused, and nothing is claimed', async () => {
+    const { s, item, prId } = await ejectedAuto('auto-closed@example.com');
+    await adminDb.githubPullRequest.update({ where: { id: prId }, data: { state: 'closed' } });
+
+    await expect(
+      pullRequestMergeService.requeueAutoMember(
+        { workItemId: item.id, pullRequestId: prId },
+        s.ctx,
+      ),
+    ).rejects.toMatchObject({ reason: 'not_open' });
+    expect((await latestExit(21)).requeuedAt).toBeNull();
+  });
+
+  it('re-dispatches but leaves a card a person has since moved elsewhere', async () => {
+    const { s, item, prId } = await ejectedAuto('auto-moved-card@example.com');
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    sent.length = 0;
+
+    const result = await pullRequestMergeService.requeueAutoMember(
+      { workItemId: item.id, pullRequestId: prId },
+      s.ctx,
+    );
+
+    expect(result).toMatchObject({ status: 'in_progress' });
+    expect(await statusOf(item.id)).toBe('in_progress');
+    expect(sent.map((e) => e.name)).toEqual(['pull-request/auto-merge.requested']);
   });
 
   it('a pull request with no standing exit is refused', async () => {
