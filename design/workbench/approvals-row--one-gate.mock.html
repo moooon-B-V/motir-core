@@ -52,7 +52,7 @@
       NO RAW HEX AND NO RAW SHAPE UTILITIES: colour is --el-* element tokens and shape
       is the element-semantic shape tokens throughout.
     -->
-<style>
+    <style>
       /* ─── Tier-0 base (@theme → :root) — from packages/design-system/theme.css ─── */
       :root {
         /* ── Color: brand & primary ─────────────────────────────────────── */
@@ -3420,7 +3420,7 @@
     </style>
   </head>
   <body>
-<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
         <!-- lucide `arrow-left` — EXTRACTED from the installed `lucide-react@1.16.0`
              (node_modules/lucide-react/dist/esm/icons/arrow-left.mjs). It was already byte-identical to the package;
@@ -4301,19 +4301,21 @@
         <div class="vp-wrap">
           <div class="bar">1 · after · the tab lists one decision</div>
           <div class="vp">
-          <div class="ar-row">
-            <div class="ar-cell">
-              <svg class="ar-glyph"><use href="#i-git-pr" /></svg>
-              <span class="ar-kind">Pull requests</span>
-              <span class="ar-subject">moooon/motir-core · #131, moooon/motir-gateway · #57</span>
+            <div class="ar-row">
+              <div class="ar-cell">
+                <svg class="ar-glyph"><use href="#i-git-pr" /></svg>
+                <span class="ar-kind">Pull requests</span>
+                <span class="ar-subject">moooon/motir-core · #131, moooon/motir-gateway · #57</span>
+              </div>
+              <div class="ar-cell">
+                <span class="ar-key">MOTIR-4931</span>
+                <span class="ar-title">Throttle the public API</span>
+              </div>
+              <div class="ar-cell"><span class="ar-time">16h ago</span></div>
+              <div class="ar-cell" data-end>
+                <button class="ar-btn" type="button">Review</button>
+              </div>
             </div>
-            <div class="ar-cell">
-              <span class="ar-key">MOTIR-4931</span>
-              <span class="ar-title">Throttle the public API</span>
-            </div>
-            <div class="ar-cell"><span class="ar-time">16h ago</span></div>
-            <div class="ar-cell" data-end><button class="ar-btn" type="button">Review</button></div>
-          </div>
           </div>
         </div>
         <div class="note">
@@ -4338,63 +4340,79 @@
           <div class="vp-wrap">
             <div class="bar">2a · before · three rows, one card, one of them twice</div>
             <div class="vp">
-          <div class="ar-row">
-            <div class="ar-cell">
-              <svg class="ar-glyph"><use href="#i-git-pr" /></svg>
-              <span class="ar-kind">Pull requests</span>
-              <span class="ar-subject">moooon/motir-core · #131, moooon/motir-gateway · #57</span>
-            </div>
-            <div class="ar-cell">
-              <span class="ar-key">MOTIR-4931</span>
-              <span class="ar-title">Throttle the public API</span>
-            </div>
-            <div class="ar-cell"><span class="ar-time">16h ago</span></div>
-            <div class="ar-cell" data-end><button class="ar-btn" type="button">Review</button></div>
-          </div>
-          <div class="ar-row" data-removed>
-            <div class="ar-cell">
-              <svg class="ar-glyph" data-faint><use href="#i-git-pr" /></svg>
-              <span class="ar-kind" data-muted>Pull-request merge</span>
-              <span class="ar-subject">moooon/motir-core#131 · pull request</span>
-            </div>
-            <div class="ar-cell">
-              <span class="ar-key">MOTIR-4931</span>
-              <span class="ar-title" style="color: var(--el-text-secondary)">Throttle the public API</span>
-            </div>
-            <div class="ar-cell"><span class="ar-time">16h ago</span></div>
-            <div class="ar-cell" data-end><span class="ar-pill-archived">Not built yet</span></div>
-          </div>
-          <div class="ar-row" data-removed>
-            <div class="ar-cell">
-              <svg class="ar-glyph" data-faint><use href="#i-git-pr" /></svg>
-              <span class="ar-kind" data-muted>Pull-request merge</span>
-              <span class="ar-subject">moooon/motir-gateway#57 · pull request</span>
-            </div>
-            <div class="ar-cell">
-              <span class="ar-key">MOTIR-4931</span>
-              <span class="ar-title" style="color: var(--el-text-secondary)">Throttle the public API</span>
-            </div>
-            <div class="ar-cell"><span class="ar-time">16h ago</span></div>
-            <div class="ar-cell" data-end><span class="ar-pill-archived">Not built yet</span></div>
-          </div>
+              <div class="ar-row">
+                <div class="ar-cell">
+                  <svg class="ar-glyph"><use href="#i-git-pr" /></svg>
+                  <span class="ar-kind">Pull requests</span>
+                  <span class="ar-subject"
+                    >moooon/motir-core · #131, moooon/motir-gateway · #57</span
+                  >
+                </div>
+                <div class="ar-cell">
+                  <span class="ar-key">MOTIR-4931</span>
+                  <span class="ar-title">Throttle the public API</span>
+                </div>
+                <div class="ar-cell"><span class="ar-time">16h ago</span></div>
+                <div class="ar-cell" data-end>
+                  <button class="ar-btn" type="button">Review</button>
+                </div>
+              </div>
+              <div class="ar-row" data-removed>
+                <div class="ar-cell">
+                  <svg class="ar-glyph" data-faint><use href="#i-git-pr" /></svg>
+                  <span class="ar-kind" data-muted>Pull-request merge</span>
+                  <span class="ar-subject">moooon/motir-core#131 · pull request</span>
+                </div>
+                <div class="ar-cell">
+                  <span class="ar-key">MOTIR-4931</span>
+                  <span class="ar-title" style="color: var(--el-text-secondary)"
+                    >Throttle the public API</span
+                  >
+                </div>
+                <div class="ar-cell"><span class="ar-time">16h ago</span></div>
+                <div class="ar-cell" data-end>
+                  <span class="ar-pill-archived">Not built yet</span>
+                </div>
+              </div>
+              <div class="ar-row" data-removed>
+                <div class="ar-cell">
+                  <svg class="ar-glyph" data-faint><use href="#i-git-pr" /></svg>
+                  <span class="ar-kind" data-muted>Pull-request merge</span>
+                  <span class="ar-subject">moooon/motir-gateway#57 · pull request</span>
+                </div>
+                <div class="ar-cell">
+                  <span class="ar-key">MOTIR-4931</span>
+                  <span class="ar-title" style="color: var(--el-text-secondary)"
+                    >Throttle the public API</span
+                  >
+                </div>
+                <div class="ar-cell"><span class="ar-time">16h ago</span></div>
+                <div class="ar-cell" data-end>
+                  <span class="ar-pill-archived">Not built yet</span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="vp-wrap">
             <div class="bar">2b · after · the same card</div>
             <div class="vp">
-          <div class="ar-row">
-            <div class="ar-cell">
-              <svg class="ar-glyph"><use href="#i-git-pr" /></svg>
-              <span class="ar-kind">Pull requests</span>
-              <span class="ar-subject">moooon/motir-core · #131, moooon/motir-gateway · #57</span>
-            </div>
-            <div class="ar-cell">
-              <span class="ar-key">MOTIR-4931</span>
-              <span class="ar-title">Throttle the public API</span>
-            </div>
-            <div class="ar-cell"><span class="ar-time">16h ago</span></div>
-            <div class="ar-cell" data-end><button class="ar-btn" type="button">Review</button></div>
-          </div>
+              <div class="ar-row">
+                <div class="ar-cell">
+                  <svg class="ar-glyph"><use href="#i-git-pr" /></svg>
+                  <span class="ar-kind">Pull requests</span>
+                  <span class="ar-subject"
+                    >moooon/motir-core · #131, moooon/motir-gateway · #57</span
+                  >
+                </div>
+                <div class="ar-cell">
+                  <span class="ar-key">MOTIR-4931</span>
+                  <span class="ar-title">Throttle the public API</span>
+                </div>
+                <div class="ar-cell"><span class="ar-time">16h ago</span></div>
+                <div class="ar-cell" data-end>
+                  <button class="ar-btn" type="button">Review</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4406,8 +4424,8 @@
             described, because it is the thing a reader is being asked to stop seeing.</span
           >
           <span
-            >The pill was never false about the build: the kind IS registered, and what it lacked was
-            a renderer. Under one gate the row has no reason to exist at all, so the cell is not
+            >The pill was never false about the build: the kind IS registered, and what it lacked
+            was a renderer. Under one gate the row has no reason to exist at all, so the cell is not
             re-worded — the row is removed and <code>notBuiltYet</code> stops being reachable from
             this kind.</span
           >
@@ -4416,50 +4434,54 @@
 
       <!-- ══ PANEL 3 ══════════════════════════════════════════════════════════════════════ -->
       <div class="group">
-        <p class="cap">Panel 3 · The Development frame at rest — the outcome is on the PULL REQUEST</p>
+        <p class="cap">
+          Panel 3 · The Development frame at rest — the outcome is on the PULL REQUEST
+        </p>
         <div class="vp-wrap">
           <div class="bar">3 · card approved · both members merged</div>
           <div class="vp" style="padding: 16px">
-        <div class="df-frame">
-          <div class="df-head">
-            <span class="df-head-title">Pull requests</span>
-            <span class="df-head-meta">Approved by Ada L. · 2 pull requests</span>
-            <span class="df-state">Approved</span>
-          </div>
-          <ul class="df-list">
-            <li class="df-pr">
-              <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
-              <div class="df-pr-main">
-                <div class="df-pr-title">Rate-limit the public API per key</div>
-                <div class="df-pr-meta">moooon/motir-core · #131</div>
+            <div class="df-frame">
+              <div class="df-head">
+                <span class="df-head-title">Pull requests</span>
+                <span class="df-head-meta">Approved by Ada L. · 2 pull requests</span>
+                <span class="df-state">Approved</span>
               </div>
-              <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
-            </li>
-            <li class="df-pr">
-              <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
-              <div class="df-pr-main">
-                <div class="df-pr-title">Throttle burst traffic on /v1</div>
-                <div class="df-pr-meta">moooon/motir-gateway · #57</div>
+              <ul class="df-list">
+                <li class="df-pr">
+                  <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
+                  <div class="df-pr-main">
+                    <div class="df-pr-title">Rate-limit the public API per key</div>
+                    <div class="df-pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
+                </li>
+                <li class="df-pr">
+                  <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
+                  <div class="df-pr-main">
+                    <div class="df-pr-title">Throttle burst traffic on /v1</div>
+                    <div class="df-pr-meta">moooon/motir-gateway · #57</div>
+                  </div>
+                  <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
+                </li>
+              </ul>
+              <div class="df-elided">
+                How to test — composed, unchanged (github.mock.html Panel 12b)
               </div>
-              <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
-            </li>
-          </ul>
-          <div class="df-elided">How to test — composed, unchanged (github.mock.html Panel 12b)</div>
-        </div>
+            </div>
           </div>
         </div>
         <div class="note">
           <span
-            ><b>One gate, two outcomes, and the outcomes are facts about pull requests.</b> The frame
-            holds the card's single gate and its decision (<i>Approved by Ada L.</i>); each row
-            carries what happened to THAT pull request, read from
-            <code>merge_authority</code> / <code>merge_outcome_ref</code> on the pull-request row
-            rather than from a gate of its own.</span
+            ><b>One gate, two outcomes, and the outcomes are facts about pull requests.</b> The
+            frame holds the card's single gate and its decision (<i>Approved by Ada L.</i>); each
+            row carries what happened to THAT pull request, read from <code>merge_authority</code> /
+            <code>merge_outcome_ref</code> on the pull-request row rather than from a gate of its
+            own.</span
           >
           <span
-            >Nothing in the frame's chrome moves. This panel exists to record that the row's trailing
-            cell is where a merge result is drawn, because that is what makes the second gate
-            unnecessary rather than merely hidden.</span
+            >Nothing in the frame's chrome moves. This panel exists to record that the row's
+            trailing cell is where a merge result is drawn, because that is what makes the second
+            gate unnecessary rather than merely hidden.</span
           >
         </div>
       </div>
@@ -4470,47 +4492,55 @@
         <div class="vp-wrap">
           <div class="bar">4 · card stays approved · #57 refused, #131 merged</div>
           <div class="vp" style="padding: 16px">
-        <div class="df-frame">
-          <div class="df-head">
-            <span class="df-head-title">Pull requests</span>
-            <span class="df-head-meta">Approved by Ada L. · 2 pull requests</span>
-            <span class="df-state">Approved</span>
-          </div>
-          <ul class="df-list">
-            <li class="df-pr">
-              <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
-              <div class="df-pr-main">
-                <div class="df-pr-title">Rate-limit the public API per key</div>
-                <div class="df-pr-meta">moooon/motir-core · #131</div>
+            <div class="df-frame">
+              <div class="df-head">
+                <span class="df-head-title">Pull requests</span>
+                <span class="df-head-meta">Approved by Ada L. · 2 pull requests</span>
+                <span class="df-state">Approved</span>
               </div>
-              <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
-            </li>
-            <li class="df-pr">
-              <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
-              <div class="df-pr-main">
-                <div class="df-pr-title">Throttle burst traffic on /v1</div>
-                <div class="df-pr-meta">moooon/motir-gateway · #57</div>
+              <ul class="df-list">
+                <li class="df-pr">
+                  <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
+                  <div class="df-pr-main">
+                    <div class="df-pr-title">Rate-limit the public API per key</div>
+                    <div class="df-pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
+                </li>
+                <li class="df-pr">
+                  <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
+                  <div class="df-pr-main">
+                    <div class="df-pr-title">Throttle burst traffic on /v1</div>
+                    <div class="df-pr-meta">moooon/motir-gateway · #57</div>
+                  </div>
+                  <div class="df-tail">
+                    <span class="df-chip" data-tone="pending">Not merged yet</span
+                    ><button class="df-btn" type="button">Retry merge</button>
+                  </div>
+                </li>
+              </ul>
+              <div class="df-alert">
+                moooon/motir-gateway · #57 has not merged yet. Retry it, or open it on GitHub to see
+                why.
               </div>
-              <div class="df-tail"><span class="df-chip" data-tone="pending">Not merged yet</span><button class="df-btn" type="button">Retry merge</button></div>
-            </li>
-          </ul>
-            <div class="df-alert">moooon/motir-gateway · #57 has not merged yet. Retry it, or open it on GitHub to see why.</div>
-          <div class="df-elided">How to test — composed, unchanged (github.mock.html Panel 12b)</div>
-        </div>
+              <div class="df-elided">
+                How to test — composed, unchanged (github.mock.html Panel 12b)
+              </div>
+            </div>
           </div>
         </div>
         <div class="note">
           <span
             ><b>THE PANEL THIS CARD EXISTS FOR.</b> A refused merge used to be retried against its
-            own gate's id. There is no such gate now, and the affordance does not move: <b>Retry
-            merge</b> stays in the refused row's trailing cell, and it is addressed to
+            own gate's id. There is no such gate now, and the affordance does not move:
+            <b>Retry merge</b> stays in the refused row's trailing cell, and it is addressed to
             <b>(the card's approved gate, THIS pull request)</b>.</span
           >
           <span
             ><b>The approval is not re-asked, and the card does not move.</b> The gate stays
             <i>Approved</i>, the card stays <code>approved</code>, and the sibling that merged keeps
-            its outcome. A retry carries out a decision that already stands — it never asks anyone to
-            approve the same commits twice, which is the whole reason the second gate looked
+            its outcome. A retry carries out a decision that already stands — it never asks anyone
+            to approve the same commits twice, which is the whole reason the second gate looked
             necessary.</span
           >
           <span
@@ -4527,40 +4557,44 @@
         <div class="vp-wrap">
           <div class="bar">5 · card approved · #131 queued, #57 merged</div>
           <div class="vp" style="padding: 16px">
-        <div class="df-frame">
-          <div class="df-head">
-            <span class="df-head-title">Pull requests</span>
-            <span class="df-head-meta">Approved by Ada L. · 2 pull requests</span>
-            <span class="df-state">Approved</span>
-          </div>
-          <ul class="df-list">
-            <li class="df-pr">
-              <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
-              <div class="df-pr-main">
-                <div class="df-pr-title">Rate-limit the public API per key</div>
-                <div class="df-pr-meta">moooon/motir-core · #131</div>
+            <div class="df-frame">
+              <div class="df-head">
+                <span class="df-head-title">Pull requests</span>
+                <span class="df-head-meta">Approved by Ada L. · 2 pull requests</span>
+                <span class="df-state">Approved</span>
               </div>
-              <div class="df-tail"><span class="df-chip" data-tone="queued">Queued to merge</span></div>
-            </li>
-            <li class="df-pr">
-              <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
-              <div class="df-pr-main">
-                <div class="df-pr-title">Throttle burst traffic on /v1</div>
-                <div class="df-pr-meta">moooon/motir-gateway · #57</div>
+              <ul class="df-list">
+                <li class="df-pr">
+                  <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
+                  <div class="df-pr-main">
+                    <div class="df-pr-title">Rate-limit the public API per key</div>
+                    <div class="df-pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <div class="df-tail">
+                    <span class="df-chip" data-tone="queued">Queued to merge</span>
+                  </div>
+                </li>
+                <li class="df-pr">
+                  <svg class="df-pr-glyph"><use href="#i-git-pr" /></svg>
+                  <div class="df-pr-main">
+                    <div class="df-pr-title">Throttle burst traffic on /v1</div>
+                    <div class="df-pr-meta">moooon/motir-gateway · #57</div>
+                  </div>
+                  <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
+                </li>
+              </ul>
+              <div class="df-elided">
+                How to test — composed, unchanged (github.mock.html Panel 12b)
               </div>
-              <div class="df-tail"><span class="df-chip" data-tone="ok">Merged</span></div>
-            </li>
-          </ul>
-          <div class="df-elided">How to test — composed, unchanged (github.mock.html Panel 12b)</div>
-        </div>
+            </div>
           </div>
         </div>
         <div class="note">
           <span
             ><b>Queued is an outcome, not a pending decision.</b> A repository with a merge queue
             answers the press with a queue entry, so the row reads <i>Queued to merge</i> while the
-            card sits <code>approved</code> — and it keeps reading that until the merge webhook lands
-            it and the card reaches <code>done</code>.</span
+            card sits <code>approved</code> — and it keeps reading that until the merge webhook
+            lands it and the card reaches <code>done</code>.</span
           >
           <span
             >It is drawn here because it is the state most easily mistaken for one needing a second
@@ -4575,15 +4609,14 @@
         <p class="cap">What this asset does NOT decide</p>
         <div class="note">
           <span
-            ><b>The copy.</b> Every string above is the SHIPPED one. Where this change makes a string
-            unreachable (<code>workbench.approvals.notBuiltYet</code> for this kind,
+            ><b>The copy.</b> Every string above is the SHIPPED one. Where this change makes a
+            string unreachable (<code>workbench.approvals.notBuiltYet</code> for this kind,
             <code>mergeSubjectMeta</code>), retiring it in <code>en</code> and <code>zh</code> is
             MOTIR-5615's, not this card's.</span
           >
           <span
-            ><b>The overlay.</b> § 22 and § 24 draw it, and its
-            <code>kind_not_built</code> arm for this kind retires with the row — the arm itself is
-            MOTIR-5615's and MOTIR-5616's.</span
+            ><b>The overlay.</b> § 22 and § 24 draw it, and its <code>kind_not_built</code> arm for
+            this kind retires with the row — the arm itself is MOTIR-5615's and MOTIR-5616's.</span
           >
           <span
             ><b>The registry.</b> The kind stays registered until MOTIR-5616, and the Postgres enum
