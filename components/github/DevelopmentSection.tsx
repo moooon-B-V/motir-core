@@ -19,6 +19,8 @@ import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github
 import { awaitingRepoRows, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
+import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import { RepairFixPart } from './RepairFixPart';
 import {
   DevelopmentGateFrame,
   type DevelopmentGateActions,
@@ -344,6 +346,7 @@ export function DevelopmentSectionBody({
   gateActions,
   gateLayout = 'flush',
   designResult = null,
+  repair = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -439,6 +442,13 @@ export function DevelopmentSectionBody({
    * panel lives in the item page's route folder and owns its own probes.
    */
   designResult?: ReactNode;
+  /**
+   * The FIX PART (Story MOTIR-5460 · MOTIR-5466, design § 21) — the copyable
+   * `motir fix`, a repair in progress, a repair that gave up, or a child's
+   * pointer to its run target. Drawn below the rows' caption and above How to
+   * test. Omitted (the peek) or `hidden`, it renders nothing.
+   */
+  repair?: WorkItemRepairViewDto | null;
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
@@ -497,6 +507,7 @@ export function DevelopmentSectionBody({
           },
         )}
       </p>
+      {repair ? <RepairFixPart repair={repair} itemIdentifier={itemIdentifier} /> : null}
     </>
   );
   const block = designResult ? (

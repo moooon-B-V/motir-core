@@ -80,3 +80,42 @@ export interface WorkItemRepairClaimDto {
    *  otherwise, so a refused caller is handed nothing to act on. */
   pullRequests: RepairPullRequestDto[];
 }
+
+/** A failing pull request as the Development block names it: `owner/name · #n`. */
+export interface RepairPullRequestRefDto {
+  repo: string;
+  number: number;
+}
+
+/**
+ * What the item page's Development block draws about a repair (Story MOTIR-5460
+ * · MOTIR-5466; design `design/github` § 21, Panels F1–F4).
+ *
+ * Derived from the SAME evaluation the repair claim makes, so the page never
+ * offers a command the claim would refuse (§ 21: *"the part and the claim read
+ * one predicate"*).
+ *
+ * - `hidden` — state 5: not implemented, nothing failing, or no pull request.
+ * - `offer` — F1, or F3 when the card's latest `fix` run gave up (`lastGaveUp`).
+ * - `in_progress` — F2: an open `fix` run holds the card.
+ * - `pointer` — F4: the card's own failing pull requests belong to a run launched
+ *   against `runTargetKey`, which is where the repair runs.
+ */
+export type WorkItemRepairViewDto =
+  | { state: 'hidden' }
+  | {
+      state: 'offer';
+      failing: RepairPullRequestRefDto[];
+      /** The latest `fix` run ended `failed`: when, and after how many attempts
+       *  (null when the run reported no count — a give-up older than the event). */
+      lastGaveUp: { attempts: number | null; endedAt: string } | null;
+    }
+  | {
+      state: 'in_progress';
+      failing: RepairPullRequestRefDto[];
+      holder: ClaimActorDto | null;
+      /** The viewer started it — the copy says *you*. */
+      byViewer: boolean;
+      startedAt: string;
+    }
+  | { state: 'pointer'; failing: RepairPullRequestRefDto[]; runTargetKey: string };

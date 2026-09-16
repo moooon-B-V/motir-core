@@ -69,6 +69,13 @@ export interface RunningDispatchRunHolder {
   createdBy: { id: string; name: string } | null;
 }
 
+/** A run's terminal facts and its starter — the repair view's read. */
+export interface LatestDispatchRun extends RunningDispatchRunHolder {
+  status: DispatchRunStatus;
+  stopReason: DispatchRun['stopReason'];
+  endedAt: Date | null;
+}
+
 export const dispatchRunRepository = {
   /** Open a run. `tx` required — a write. */
   async create(
@@ -142,6 +149,31 @@ export const dispatchRunRepository = {
       select: {
         id: true,
         startedAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+  },
+
+  /**
+   * The NEWEST run of one command that held a leg for this work item, in ANY
+   * status, with its starter, or null — what the Development block reads to say
+   * whether a repair is running, gave up, or never happened (MOTIR-5466).
+   */
+  async findLatestByCommandForWorkItem(
+    workItemId: string,
+    command: DispatchCommand,
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestDispatchRun | null> {
+    return tx.dispatchRun.findFirst({
+      where: { command, cards: { some: { workItemId } } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        status: true,
+        stopReason: true,
+        startedAt: true,
+        endedAt: true,
         createdById: true,
         createdBy: { select: { id: true, name: true } },
       },

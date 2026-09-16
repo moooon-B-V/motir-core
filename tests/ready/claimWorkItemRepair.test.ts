@@ -398,3 +398,150 @@ describe('claimRepair — access', () => {
     expect(await fixRuns(card.id)).toHaveLength(0);
   });
 });
+
+// ── The Development block's read (MOTIR-5466) ─────────────────────────────────
+// The SAME evaluation as the claim, without a lock and without opening anything.
+describe('getRepairView — what the Development block draws', () => {
+  const view = (fx: WorkItemFixture, id: string, ctx: ServiceContext = fx.ctx) =>
+    workItemRepairService.getRepairView(id, ctx);
+
+  it('offers the command on a red implemented card, and opens nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await redCard(fx);
+
+    expect(await view(fx, card.id)).toEqual({
+      state: 'offer',
+      failing: [{ repo: `acme/${repo.name}`, number: pr.number }],
+      lastGaveUp: null,
+    });
+    expect(await fixRuns(card.id)).toHaveLength(0);
+  });
+
+  it('is hidden wherever the claim would refuse: running, passing, no CI, no PR, not implemented', async () => {
+    const fx = await makeWorkItemFixture();
+    const repo = await connectRepairRepo(fx, 'web');
+    const make = async (
+      title: string,
+      status: string,
+      checks?: Record<string, 'success' | 'failure' | 'pending'>,
+    ) => {
+      const card = await createTestWorkItem(fx, { kind: 'task', title });
+      await setStatus(card.id, status);
+      if (checks !== undefined) await deliveredPr(fx, card.id, repo, { headRef: title, checks });
+      return card;
+    };
+    const running = await make('running', 'implemented', { Vitest: 'pending' });
+    const passing = await make('passing', 'implemented', { Vitest: 'success' });
+    const noCi = await make('no-ci', 'implemented', {});
+    const noPr = await make('no-pr', 'implemented');
+    const inReview = await make('in-review', 'in_review', { Vitest: 'failure' });
+
+    for (const card of [running, passing, noCi, noPr, inReview]) {
+      expect(await view(fx, card.id), card.title).toEqual({ state: 'hidden' });
+    }
+  });
+
+  it('names who is fixing it once a repair is claimed — "you" for the holder', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await redCard(fx);
+    const claimed = await claim(fx, card.identifier);
+    const rival = await member(fx, 'Rival Runner');
+
+    expect(await view(fx, card.id)).toMatchObject({
+      state: 'in_progress',
+      holder: { id: fx.ownerId },
+      byViewer: true,
+      startedAt: claimed.startedAt,
+    });
+    expect(await view(fx, card.id, rival.ctx)).toMatchObject({
+      state: 'in_progress',
+      byViewer: false,
+    });
+  });
+
+  it('a repair that GAVE UP is offered again with the attempt count its event reported', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await redCard(fx);
+    const claimed = await claim(fx, card.identifier);
+    await dispatchRunService.appendEvents(
+      claimed.runId!,
+      [
+        {
+          kind: 'ci_gave_up',
+          workItemKey: card.identifier,
+          data: { kind: 'gave_up', attempts: 5 },
+        },
+      ],
+      fx.ctx,
+    );
+    await dispatchRunService.close(claimed.runId!, { stopReason: 'halted' }, fx.ctx);
+
+    const result = await view(fx, card.id);
+    expect(result).toMatchObject({ state: 'offer', lastGaveUp: { attempts: 5 } });
+    expect(result.state === 'offer' && result.lastGaveUp?.endedAt).toEqual(expect.any(String));
+  });
+
+  it('a give-up with no count event, and a STOPPED repair, draw what they should', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await redCard(fx);
+    const first = await claim(fx, card.identifier);
+    await dispatchRunService.close(first.runId!, { stopReason: 'halted' }, fx.ctx);
+    expect(await view(fx, card.id)).toMatchObject({ lastGaveUp: { attempts: null } });
+
+    // A stopped (interrupted) repair is neither running nor a give-up: plain F1.
+    const second = await claim(fx, card.identifier);
+    await dispatchRunService.close(second.runId!, { stopReason: 'interrupted' }, fx.ctx);
+    expect(await view(fx, card.id)).toMatchObject({ state: 'offer', lastGaveUp: null });
+  });
+
+  it('a CHILD with a red pull request of its own points at its run target; without one it is hidden', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the run target' });
+    const red = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'red child',
+      parentId: story.id,
+    });
+    const quiet = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'quiet child',
+      parentId: story.id,
+    });
+    await setStatus(red.id, 'implemented');
+    await setStatus(quiet.id, 'implemented');
+    const repo = await connectRepairRepo(fx, 'web');
+    const pr = await deliveredPr(fx, red.id, repo, {
+      headRef: 'parent/x',
+      checks: { Vitest: 'failure' },
+    });
+    await testInstructionsService.publish(
+      {
+        workItemId: story.id,
+        bodyMd: '## Precondition\n\nSign in.',
+        previewPath: null,
+        repos: [{ repoId: repo.id, commitSha: 'c'.repeat(40) }],
+      },
+      fx.ctx,
+    );
+
+    expect(await view(fx, red.id)).toEqual({
+      state: 'pointer',
+      failing: [{ repo: 'acme/web', number: pr.number }],
+      runTargetKey: story.identifier,
+    });
+    expect(await view(fx, quiet.id)).toEqual({ state: 'hidden' });
+  });
+
+  it('is refused for a card the caller cannot see, and for an id that does not exist', async () => {
+    const fx = await makeWorkItemFixture();
+    const outsider = await makeWorkItemFixture({ name: 'Rival Co', identifier: 'ZZZ' });
+    const { card } = await redCard(fx);
+
+    await expect(view(fx, card.id, outsider.ctx)).rejects.toMatchObject({
+      code: expect.stringMatching(/NOT_FOUND/),
+    });
+    await expect(view(fx, 'cm-no-such-item')).rejects.toMatchObject({
+      code: 'WORK_ITEM_NOT_FOUND',
+    });
+  });
+});

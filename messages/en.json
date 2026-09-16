@@ -6346,6 +6346,32 @@
         },
         "unknownState": "Unrecognised How to test state: {value}"
       },
+      "fix": {
+        "title": "Fix the checks",
+        "aria": {
+          "part": "Fix the checks"
+        },
+        "failingOn": "Checks are failing on <prs></prs>.",
+        "lead": "Hand the repair to an agent from your terminal:",
+        "how": "An agent works on the pull request's own branch, pushes, and the checks run again.",
+        "howMany": "An agent works on each pull request's own branch, pushes, and the checks run again.",
+        "fixing": {
+          "pill": "Fixing",
+          "by": "Being fixed by <b>{name}</b> · started <when></when>",
+          "byYou": "Being fixed by <b>you</b> · started <when></when>",
+          "bySomeone": "Being fixed by someone · started <when></when>",
+          "why": "Only one fix runs at a time. The checks run again when the agent pushes."
+        },
+        "gaveUp": {
+          "pill": "Gave up",
+          "title": "<b>The last fix gave up after {attempts, plural, one {# attempt} other {# attempts}}</b> · <when></when>.",
+          "titleNoCount": "<b>The last fix gave up</b> · <when></when>.",
+          "body": "The checks are still red. Run it again, or open the pull request to see which check fails."
+        },
+        "child": {
+          "pointer": "Run the fix from <link>{key}</link> — this work item was built as part of that run, so its repair runs there."
+        }
+      },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
       "autoLinkCaption": "Linked by <mono>link_pull_request</mono> over the MCP or a <mono>motir auto</mono> session branch.",

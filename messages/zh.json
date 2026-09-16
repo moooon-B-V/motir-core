@@ -6342,6 +6342,32 @@
         },
         "unknownState": "无法识别的测试说明状态：{value}"
       },
+      "fix": {
+        "title": "修复检查",
+        "aria": {
+          "part": "修复检查"
+        },
+        "failingOn": "<prs></prs> 的检查未通过。",
+        "lead": "在终端中将修复交给智能体：",
+        "how": "智能体在该拉取请求自己的分支上工作并推送，然后检查会重新运行。",
+        "howMany": "智能体在每个拉取请求自己的分支上工作并推送，然后检查会重新运行。",
+        "fixing": {
+          "pill": "修复中",
+          "by": "<b>{name}</b> 正在修复 · <when></when>开始",
+          "byYou": "<b>你</b>正在修复 · <when></when>开始",
+          "bySomeone": "有人正在修复 · <when></when>开始",
+          "why": "同一时间只运行一个修复。智能体推送后，检查会重新运行。"
+        },
+        "gaveUp": {
+          "pill": "已放弃",
+          "title": "<b>上一次修复在尝试 {attempts} 次后放弃</b> · <when></when>。",
+          "titleNoCount": "<b>上一次修复已放弃</b> · <when></when>。",
+          "body": "检查仍未通过。请再次运行，或打开拉取请求查看是哪项检查失败。"
+        },
+        "child": {
+          "pointer": "请从 <link>{key}</link> 运行修复——此工作项是作为该运行的一部分构建的，修复也在那里运行。"
+        }
+      },
       "emptyTitle": "暂无关联的拉取请求",
       "emptyDescription": "使用此处的“+关联拉取请求”，或通过 MCP 调用 <mono>link_pull_request</mono> 来添加 PR，并显示实时 PR 与 CI 状态。",
       "autoLinkCaption": "通过 MCP 调用 <mono>link_pull_request</mono> 或使用 <mono>motir auto</mono> 会话分支进行关联。",

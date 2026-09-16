@@ -1,8 +1,11 @@
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import type { Prisma } from '@/generated/prisma/client';
+import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   RepairPullRequestDto,
   WorkItemRepairClaimDto,
   WorkItemRepairRefusal,
+  WorkItemRepairViewDto,
 } from '@/lib/dto/workItemRepair';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -16,6 +19,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
+import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE REPAIR CLAIM (Story MOTIR-5460 · MOTIR-5464) — hand an `implemented` card's
@@ -56,6 +60,113 @@ function refused(
   };
 }
 
+type Evaluation =
+  | { ok: true; pullRequests: RepairPullRequestDto[] }
+  | {
+      ok: false;
+      reason: WorkItemRepairRefusal;
+      runTargetKey: string | null;
+      /** The card's own failing open pull requests — what a child's pointer names. */
+      failing: RepairPullRequestDto[];
+    };
+
+/** The Implemented rung's key set, resolved by KEY PRESENCE (see `claimRepair`). */
+function ladderKeysOf(statuses: readonly WorkflowStatusDto[]) {
+  const keyOf = (key: string) => statuses.find((s) => s.key === key)?.key ?? null;
+  return {
+    reviewKey: keyOf('in_review'),
+    implementedKey: keyOf('implemented'),
+    approvedKey: keyOf('approved'),
+  };
+}
+
+/**
+ * THE PREDICATE — whether a card can be repaired, and with what. ONE function,
+ * read by the claim (under its row lock) and by the Development block (without
+ * one), so the page never offers a command the claim would refuse
+ * (design § 21: *"the part and the claim read one predicate"*).
+ *
+ * The REFUSAL order is the claim's contract: not implemented → not the run target
+ * → no pull requests → nothing failing. The deliveries are read before the run
+ * target is resolved only because the child pointer names the child's own failing
+ * rows; the reason returned is unchanged by that.
+ */
+async function evaluate(
+  item: { id: string; status: string; archivedAt: Date | null },
+  statuses: readonly WorkflowStatusDto[],
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<Evaluation> {
+  if (
+    item.archivedAt !== null ||
+    rankOfStatus(item.status, statuses, ladderKeysOf(statuses)) !== RUNG_RANK.implemented
+  ) {
+    return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [] };
+  }
+
+  // The verdict is `derivePrCiState` — the one the Development pill and
+  // `ciPromotion` read — per member. Only an OPEN member can be repaired: a push
+  // cannot change a merged or closed pull request, so its colour says nothing
+  // about what an agent could do.
+  const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
+  const open = deliveries
+    .filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged)
+    .map((d) => ({ row: d, ci: derivePrCiState(d.pullRequest.checkRuns) }));
+  const failing: RepairPullRequestDto[] = open
+    .filter((m) => m.ci === 'failing')
+    .map(({ row, ci }) => ({
+      repo: `${row.repo.owner}/${row.repo.name}`,
+      number: row.pullRequest.number,
+      url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.pullRequest.number}`,
+      headRef: row.pullRequest.headRef,
+      baseRef: row.pullRequest.baseRef,
+      ci,
+      // The names behind the verdict, from the SAME window `derivePrCiState`
+      // judged — so a give-up can say which check is still red.
+      failingChecks: [
+        ...new Set(
+          liveRowsAtLatestSha(row.pullRequest.checkRuns)
+            .filter((c) => c.conclusion === 'failure')
+            .map((c) => c.checkName),
+        ),
+      ].sort(),
+    }));
+
+  // The repair runs where the run that delivered the pull requests was launched.
+  // The resolution is `runTarget.ts`'s, shared with How to test and the
+  // approve-to-merge gate — one answer to "which card is this run about".
+  const target = await resolveRunTargetFor({ id: item.id, workspaceId: ctx.workspaceId }, tx);
+  if (target.kind === 'ancestor') {
+    return {
+      ok: false,
+      reason: 'repair_on_run_target',
+      runTargetKey: target.holder.identifier,
+      failing,
+    };
+  }
+  if (deliveries.length === 0) {
+    return { ok: false, reason: 'no_pull_requests', runTargetKey: null, failing };
+  }
+  if (failing.length === 0) {
+    return {
+      ok: false,
+      reason: open.some((m) => m.ci === 'running') ? 'ci_running' : 'not_failing',
+      runTargetKey: null,
+      failing,
+    };
+  }
+  return { ok: true, pullRequests: failing };
+}
+
+/** The `attempts` a `ci_gave_up` event carries, or null when it carries none. */
+function attemptsOf(data: unknown): number | null {
+  if (data === null || typeof data !== 'object') return null;
+  const attempts = (data as { attempts?: unknown }).attempts;
+  return typeof attempts === 'number' && Number.isInteger(attempts) ? attempts : null;
+}
+
+const refOf = (pr: RepairPullRequestDto) => ({ repo: pr.repo, number: pr.number });
+
 export const workItemRepairService = {
   /**
    * CLAIM the repair of one `implemented` card's failing pull requests.
@@ -89,12 +200,6 @@ export const workItemRepairService = {
     // guard in `applyStatusTransition` resolves it: a workflow with no status
     // keyed `implemented` has nothing at that rung, so nothing there is repairable.
     const statuses = await workflowsService.listStatusesByProject(projectId, ctx.workspaceId);
-    const keyOf = (key: string) => statuses.find((s) => s.key === key)?.key ?? null;
-    const ladderKeys = {
-      reviewKey: keyOf('in_review'),
-      implementedKey: keyOf('implemented'),
-      approvedKey: keyOf('approved'),
-    };
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
@@ -104,53 +209,14 @@ export const workItemRepairService = {
         /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
         if (!state) throw new WorkItemNotFoundError(identifier);
 
-        if (
-          state.archivedAt !== null ||
-          rankOfStatus(state.status, statuses, ladderKeys) !== RUNG_RANK.implemented
-        ) {
-          return refused(item, 'not_implemented');
-        }
-
-        // The repair runs where the run that delivered the pull requests was
-        // launched. The resolution is `runTarget.ts`'s, shared with How to test
-        // and the approve-to-merge gate — one answer to "which card is this run
-        // about", never a copy.
-        const target = await resolveRunTargetFor({ id: item.id, workspaceId: ctx.workspaceId }, tx);
-        if (target.kind === 'ancestor') {
-          return refused(item, 'repair_on_run_target', target.holder.identifier);
-        }
-
-        const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
-        if (deliveries.length === 0) return refused(item, 'no_pull_requests');
-
-        // The verdict is `derivePrCiState` — the one the Development pill and
-        // `ciPromotion` read — per member. Only an OPEN member can be repaired: a
-        // push cannot change a merged or closed pull request, so its colour says
-        // nothing about what an agent could do.
-        const open = deliveries
-          .filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged)
-          .map((d) => ({ row: d, ci: derivePrCiState(d.pullRequest.checkRuns) }));
-        const failing = open.filter((m) => m.ci === 'failing');
-        if (failing.length === 0) {
-          return refused(item, open.some((m) => m.ci === 'running') ? 'ci_running' : 'not_failing');
-        }
-        const pullRequests: RepairPullRequestDto[] = failing.map(({ row, ci }) => ({
-          repo: `${row.repo.owner}/${row.repo.name}`,
-          number: row.pullRequest.number,
-          url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.pullRequest.number}`,
-          headRef: row.pullRequest.headRef,
-          baseRef: row.pullRequest.baseRef,
-          ci,
-          // The names behind the verdict, from the SAME window `derivePrCiState`
-          // judged — so a give-up can say which check is still red.
-          failingChecks: [
-            ...new Set(
-              liveRowsAtLatestSha(row.pullRequest.checkRuns)
-                .filter((c) => c.conclusion === 'failure')
-                .map((c) => c.checkName),
-            ),
-          ].sort(),
-        }));
+        const verdict = await evaluate(
+          { id: item.id, status: state.status, archivedAt: state.archivedAt },
+          statuses,
+          ctx,
+          tx,
+        );
+        if (!verdict.ok) return refused(item, verdict.reason, verdict.runTargetKey);
+        const pullRequests = verdict.pullRequests;
 
         const held = await dispatchRunRepository.findRunningByCommandForWorkItem(
           item.id,
@@ -199,6 +265,76 @@ export const workItemRepairService = {
           startedAt: opened.startedAt.toISOString(),
           pullRequests,
         };
+      },
+    );
+  },
+
+  /**
+   * What the item page's Development block draws about a repair (MOTIR-5466) —
+   * the claim's own evaluation, WITHOUT a lock and without opening anything, plus
+   * the card's latest `fix` run.
+   *
+   * A read a browse-only viewer may make: it names who is fixing the card and
+   * offers a command, and the command itself is what asks for edit.
+   */
+  async getRepairView(workItemId: string, ctx: ServiceContext): Promise<WorkItemRepairViewDto> {
+    const item = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => workItemRepository.findById(workItemId, tx),
+    );
+    if (!item) throw new WorkItemNotFoundError(workItemId);
+    await projectAccessService.assertCanBrowse(item.projectId, ctx);
+    const statuses = await workflowsService.listStatusesByProject(item.projectId, ctx.workspaceId);
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: item.projectId },
+      async (tx): Promise<WorkItemRepairViewDto> => {
+        const verdict = await evaluate(item, statuses, ctx, tx);
+        if (!verdict.ok) {
+          // A child is pointed at its run target only when it has something red
+          // of its own to point about; every other refusal is state 5.
+          return verdict.reason === 'repair_on_run_target' && verdict.failing.length > 0
+            ? {
+                state: 'pointer',
+                failing: verdict.failing.map(refOf),
+                runTargetKey: verdict.runTargetKey as string,
+              }
+            : { state: 'hidden' };
+        }
+        const failing = verdict.pullRequests.map(refOf);
+
+        const latest = await dispatchRunRepository.findLatestByCommandForWorkItem(
+          item.id,
+          'fix',
+          tx,
+        );
+        if (latest?.status === 'running') {
+          return {
+            state: 'in_progress',
+            failing,
+            holder: latest.createdBy,
+            byViewer: latest.createdById === ctx.userId,
+            startedAt: latest.startedAt.toISOString(),
+          };
+        }
+        // Only a run that FAILED gave up. A stopped (cancelled) or reaped repair
+        // draws F1 with no history line — nothing is running and nothing gave up.
+        if (latest?.status === 'failed') {
+          const event = await dispatchRunEventRepository.findLatestOfKind(
+            latest.id,
+            'ci_gave_up',
+            tx,
+          );
+          return {
+            state: 'offer',
+            failing,
+            lastGaveUp: {
+              attempts: attemptsOf(event?.data ?? null),
+              endedAt: (latest.endedAt ?? latest.startedAt).toISOString(),
+            },
+          };
+        }
+        return { state: 'offer', failing, lastGaveUp: null };
       },
     );
   },

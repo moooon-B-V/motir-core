@@ -12,6 +12,8 @@ import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService'
 import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { howToTestService } from '@/lib/services/howToTestService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
+import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
@@ -128,6 +130,13 @@ export interface LateReads {
   mergeGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     members: PullRequestApprovalMemberDTO[];
   };
+  /**
+   * What the Development block says about a REPAIR (Story MOTIR-5460 ·
+   * MOTIR-5466, design `design/github` § 21) — the copyable `motir fix`, who is
+   * fixing the card, or that the last fix gave up. `null` on a failed read: the
+   * block then renders WITHOUT the fix part, never an error, like `howToTest`.
+   */
+  repair: WorkItemRepairViewDto | null;
 }
 
 export interface LateReadsInput {
@@ -178,6 +187,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       scopeRun,
       howToTest,
       mergeGate,
+      repair,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -322,6 +332,13 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           };
         }
       })(),
+      (async () => {
+        try {
+          return await workItemRepairService.getRepairView(itemId, ctx);
+        } catch {
+          return null;
+        }
+      })(),
     ]);
 
     return {
@@ -343,6 +360,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       scopeRun,
       howToTest,
       mergeGate,
+      repair,
     };
   })();
 }
