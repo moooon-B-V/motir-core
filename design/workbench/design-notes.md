@@ -1680,8 +1680,13 @@ this section and the mock's prose, on the ELEMENT, STRUCTURE and PREMISE axes.
 
 **What changes, and for which kind.** Once `pull_request_approval` registers
 (MOTIR-5481) and gates are raised (MOTIR-5482), a real, decidable gate would reach
-Panel 7's _Not built yet_ row. Panel 9 draws its row instead. **`decision_approval`
-and `pull_request_merge` keep Panel 7's row**, unchanged, and Panel 7's note says so.
+Panel 7's _Not built yet_ row. Panel 9 draws its row instead. ~~**`decision_approval`
+and `pull_request_merge` keep Panel 7's row**, unchanged, and Panel 7's note says
+so.~~ **AMENDED by § 25 (MOTIR-5612):** `decision_approval` keeps Panel 7's row.
+**`pull_request_merge` has no row at all** — a card holds ONE approve-to-merge gate,
+so the per-pull-request row and its _Not built yet_ cell are removed rather than
+re-worded. The struck sentence is kept visible because it is what the asset promised
+until 2026-09-16, and a reader arriving from MOTIR-5485 will be looking for it.
 
 | element           | treatment                                                                                                                              | field                                                  |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -1904,3 +1909,79 @@ design slot's frame and note row take `--el-card` inside the port, so `--el-link
 | **[MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar)** · `done`                                                                                                         | Nothing                                                                                                                          | Nothing — the item page's door writes the same address.                                                                                                                                                                                                          |
 
 Fixture items use `ACME-n` keys and link to nothing.
+
+## 25 · The To-approve ROW SET and the Development frame WITHOUT a merge gate — MOTIR-5612
+
+**AMENDS § 20** (`approvals-row.mock.html`, Panel 9 as § 23 revised it) **and § 23 itself**, in the
+delta **`approvals-row--one-gate.mock.html`** (Bug [MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37),
+card [MOTIR-5612](motir:cmu3bguy400drhwtx2p8zl203)). It also amends the Development frame drawn in
+`design/github/design-notes.md` § 20 (MOTIR-5327 · MOTIR-5484). It is the layout source of truth for
+[MOTIR-5615](motir:cmu3bgv5u00dxhwtxlgojcou8), which builds it and carries this card in `blocked_by`.
+**No existing mock is edited** and no image export ships (`docs/decisions/design-result.md`
+AMENDMENT 4).
+
+**Why it is owed.** A card in a `manual` project was raised TWO approve-to-merge gates — one per pull
+request beside the one per card — so the To-approve tab listed the same pull request twice, and one of
+those rows read _Not built yet_ about a kind that is in fact registered. The model is now ONE gate per
+card, and approving it merges every pull request the card delivers
+(`docs/decisions/approval-gates.md` § 8's SECOND AMENDMENT, **decisions 3 and 5**). § 23 of this file
+SPECIFIED the row being removed, so the new state had to be drawn before it is built.
+
+### Rendered against shipped reality, not redrawn
+
+Every string, structure and class string in the delta was taken from the REAL components mounted with
+the shipped fixtures at `origin/main` `45b107a5f`, not read off the source:
+
+- `components/approvals/ApprovalRow.tsx` — both rows of Panel 2, including the `Pill tone="archived"`
+  _Not built yet_ cell and the `Pull-request merge` subject line `mergeSubjectMeta` writes;
+- `components/github/DevelopmentGateFrame.tsx` (via `DevelopmentSection.tsx`) — the frame header, the
+  pull-request rows, the outcome chips, _Retry merge_ and the refusal alert of Panels 3–5.
+
+The mock's second stylesheet re-declares those components' markup under prefixed names, each rule
+quoting the class string it maps to; the first stylesheet is § 24's delta byte for byte.
+
+### The panels
+
+| panel | what it settles                                                                                                                                                                                                                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **To approve draws ONE row for one card, whatever it delivers.** The subject cell already names the whole set in the gate's canonical order, so the row states what approving it merges. The decide cell is § 23's _Review_ and the door is § 24's overlay — both unchanged.                                    |
+| **2** | **The row that is GONE**, as a before/after pair over the same card: 2a draws today's three rows — the card's own plus one `pull_request_merge` row per pull request, each carrying the _Not built yet_ pill in its decide cell — and 2b draws the one row that remains.                                        |
+| **3** | **The frame at rest.** The card's single gate holds the decision; each pull request's merge OUTCOME is drawn in its own row's trailing cell, read from `merge_authority` / `merge_outcome_ref` on the pull-request row rather than from a gate of its own.                                                      |
+| **4** | **ONE member refused.** _Retry merge_ stays in the refused row's trailing cell and is addressed to **(the card's approved gate, THIS pull request)**. The gate stays `approved`, the card stays `approved`, and the sibling that merged keeps its outcome — a retry carries out a decision that already stands. |
+| **5** | **A QUEUED pull request.** _Queued to merge_ is an outcome, not a pending decision: the card sits `approved` until the merge webhook lands it. No retry is offered while an outcome exists.                                                                                                                     |
+
+**No second gate is drawn in any panel**, which is the one thing a reader should be able to check by
+looking rather than by reading.
+
+### What this asset does NOT decide
+
+- **The copy.** Every string in the delta is the shipped one. Retiring the strings this change makes
+  unreachable for the kind — `workbench.approvals.notBuiltYet`, `mergeSubjectMeta` — in `en` and `zh`
+  is [MOTIR-5615](motir:cmu3bgv5u00dxhwtxlgojcou8)'s.
+- **The overlay.** § 22 and § 24 draw it. Its `kind_not_built` arm for this kind retires with the row,
+  and that arm is MOTIR-5615's and [MOTIR-5616](motir:cmu3bgv8100dzhwtx5nb0ovib)'s.
+- **The registry and the enum.** The kind stays registered until MOTIR-5616, and the
+  `approval_gate_kind` Postgres value is kept permanently, because superseded rows reference it.
+
+### ⚠️ A line in a sibling asset that is TRUE ONLY LATER
+
+`approval-overlay.mock.html:4815` labels a panel
+`4a · kind = pull_request_merge (in UNREGISTERED_GATE_KINDS)`. **That is not true today** — the kind is
+registered (`lib/approvalGates/registry.ts`), which is exactly why the To-approve row was decidable-looking
+enough to reach a _Not built yet_ cell rather than an unregistered one. It becomes true when
+[MOTIR-5616](motir:cmu3bgv8100dzhwtx5nb0ovib) moves the kind to `UNREGISTERED_GATE_KINDS`. It is named
+here, and not edited, because § 22's mock is a record of what was drawn: a reader meeting that label
+should know it describes the destination rather than the present.
+
+### GIVES / TAKES — every card this amendment names
+
+| card                                                                    | GIVES                                                                                                                   | TAKES                                                                                                                                     |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **[MOTIR-5615](motir:cmu3bgv5u00dxhwtxlgojcou8)** (the UI) · `blocked`  | Panels 1–5: the row set, the outcome cell, RETRY's address, and the copy it must retire in `en` + `zh`                  | Nothing to amend — it was authored against this delta and carries it in `blocked_by`                                                      |
+| **[MOTIR-5616](motir:cmu3bgv8100dzhwtx5nb0ovib)** (the retirement)      | The `UNREGISTERED_GATE_KINDS` line above becomes true at this card, and the overlay's `kind_not_built` arm goes with it | Nothing — its scope is the registry tier, unchanged by this asset                                                                         |
+| **[MOTIR-5485](motir:cmu1aj1d000gmhyoic2qrsb4v)** (§ 23's row) · `done` | Nothing                                                                                                                 | Nothing — a `done` card is history. § 23's struck sentence records that its sibling row is gone, so a reader arriving there is not misled |
+| **[MOTIR-5480](motir:cmu1aj15k00gchyoidbhlbomo)** (§ 23) · `done`       | Nothing                                                                                                                 | **ELEMENT:** the Panel 7 promise for `pull_request_merge` is struck in place, above                                                       |
+| **[MOTIR-5438](motir:cmu118c4s0009hytxgtmyfeg8)** (§ 24) · `done`       | Nothing                                                                                                                 | Nothing — the overlay and its port are unchanged; this delta composes them                                                                |
+| **[MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37)** (the bug)             | The drawn state of its own fix                                                                                          | Nothing                                                                                                                                   |
+
+Fixture items use `MOTIR-4931` and link to nothing.
