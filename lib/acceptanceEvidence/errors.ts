@@ -88,6 +88,28 @@ export class AcceptanceEvidenceBlobMissingError extends AcceptanceEvidenceError 
 }
 
 /**
+ * A publish reported a `commitSha` that is not a commit id (MOTIR-5619) — the
+ * receipt's CITATION, and the one thing tying the recording to the code it
+ * shows. Refused on the SERVICE, so both entry points (the MCP tool and the
+ * HTTP route) answer identically; `lib/git/commitSha.ts` supplies the pattern
+ * and the reason, shared with `publish_test_instructions`. → 400.
+ *
+ * ⚠️ THE FORMAT IS ALL THIS RULES ON. A 40-character string of valid hex naming
+ * no commit anywhere passes — which is exactly how this defect surfaced, a real
+ * short sha completed with invented characters. The panel renders the first
+ * seven characters as plain unlinked text, so a reader could not have told.
+ * Verifying EXISTENCE is a separate, larger question and its own card.
+ */
+export class AcceptanceEvidenceCommitShaError extends AcceptanceEvidenceError {
+  readonly code = 'ACCEPTANCE_EVIDENCE_INVALID_COMMIT_SHA' as const;
+  readonly status = 400;
+  constructor(reason: string) {
+    super(`commitSha: ${reason}`);
+    this.name = 'AcceptanceEvidenceCommitShaError';
+  }
+}
+
+/**
  * The story's CURRENT receipt is `approved` — a human watched that recording and
  * signed it — so it is FROZEN and a publish may not supersede it (MOTIR-2764).
  *

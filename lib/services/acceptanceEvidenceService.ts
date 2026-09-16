@@ -12,12 +12,14 @@ import { MAX_UPLOAD_BYTES, isAllowedAcceptanceVideoType } from '@/lib/blob/allow
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
   AcceptanceEvidenceBlobMissingError,
+  AcceptanceEvidenceCommitShaError,
   AcceptanceEvidenceNotAStoryError,
   AcceptanceEvidenceNotFoundError,
   AcceptanceEvidenceAlreadyApprovedError,
   AcceptanceEvidenceNotInReviewError,
   AcceptanceEvidencePathnameError,
 } from '@/lib/acceptanceEvidence/errors';
+import { normalizeCommitSha } from '@/lib/git/commitSha';
 import { toAcceptanceEvidenceDto } from '@/lib/mappers/acceptanceEvidenceMappers';
 import type {
   AcceptanceEvidenceChapterDTO,
@@ -138,9 +140,42 @@ async function resolveCostContext(
 }
 
 /**
+ * The receipt's commit CITATION, canonical — or a typed refusal (MOTIR-5619).
+ *
+ * ⚠️ CALLED ONCE PER PUBLISH, AND ITS RESULT FEEDS BOTH JOBS. `commitSha` is
+ * compared by `findIdempotentExisting` and stored by `persistEvidence`, so
+ * normalising it in one place and passing that one value to both is what makes
+ * the idempotency key canonical. Normalising at each use would compare one
+ * spelling and store another.
+ *
+ * ⚠️ AND IT LIVES HERE RATHER THAN AT EITHER DOOR. The publish path has two
+ * entry points — `publish_acceptance_result` and
+ * `POST /api/work-items/[id]/acceptance-evidence` — and they must not be able to
+ * disagree about what a citation is. Both `toToolError` and the route's error
+ * mapping key on the ABSTRACT `AcceptanceEvidenceError`, so a throw here is
+ * already a typed refusal naming the field on both of them, with no door-side
+ * wiring at all. Same reasoning the eligibility gate and the owning-story hop
+ * are shared rather than restated (MOTIR-4144).
+ *
+ * An ABSENT citation stays absent: the field is optional, and a receipt with no
+ * commit is watchable (it simply cites nothing, and idempotency is skipped).
+ */
+function normalizeReceiptCommitSha(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const result = normalizeCommitSha(raw);
+  if (!result.ok) throw new AcceptanceEvidenceCommitShaError(result.reason);
+  return result.commitSha;
+}
+
+/**
  * Idempotency: a CI redelivery of the SAME commit+producer is a no-op — the
  * current evidence already records it, so return it (no re-upload, no duplicate
  * history row). Null when there is no matching current evidence.
+ *
+ * ⚠️ THE COMPARISON IS `===` ON THE STORED STRING, so it is only sound because
+ * the value reaching it has been through `normalizeReceiptCommitSha` and the
+ * value it compares against was stored the same way. Two spellings of one
+ * commit were two keys until they were (MOTIR-5619).
  */
 async function findIdempotentExisting(
   storyId: string,
@@ -369,12 +404,11 @@ export const acceptanceEvidenceService = {
   ): Promise<AcceptanceEvidenceDTO> {
     const story = await resolveStory(input.workItemId, ctx);
 
-    const idempotent = await findIdempotentExisting(
-      story.id,
-      input.commitSha,
-      input.producedByKey,
-      ctx,
-    );
+    // AFTER the access gate, so a caller who cannot see the story still gets the
+    // 404-not-403 answer rather than learning its citation was malformed.
+    const commitSha = normalizeReceiptCommitSha(input.commitSha);
+
+    const idempotent = await findIdempotentExisting(story.id, commitSha, input.producedByKey, ctx);
     if (idempotent) return idempotent;
 
     // SECURITY: every reported pathname MUST live under this story's acceptance
@@ -424,7 +458,7 @@ export const acceptanceEvidenceService = {
         },
         trace,
         chapters: input.chapters ?? [],
-        commitSha: input.commitSha ?? null,
+        commitSha,
         ciRunUrl: input.ciRunUrl ?? null,
         producedByKey: input.producedByKey ?? null,
       },
@@ -445,12 +479,10 @@ export const acceptanceEvidenceService = {
   ): Promise<AcceptanceEvidenceDTO> {
     const story = await resolveStory(input.workItemId, ctx);
 
-    const idempotent = await findIdempotentExisting(
-      story.id,
-      input.commitSha,
-      input.producedByKey,
-      ctx,
-    );
+    // AFTER the access gate — see `recordFromPathnames` for the ordering.
+    const commitSha = normalizeReceiptCommitSha(input.commitSha);
+
+    const idempotent = await findIdempotentExisting(story.id, commitSha, input.producedByKey, ctx);
     if (idempotent) return idempotent;
 
     // MIME gate — the acceptance-scoped allowlist (video is 415 elsewhere).
@@ -498,7 +530,7 @@ export const acceptanceEvidenceService = {
         },
         trace,
         chapters: input.chapters ?? [],
-        commitSha: input.commitSha ?? null,
+        commitSha,
         ciRunUrl: input.ciRunUrl ?? null,
         producedByKey: input.producedByKey ?? null,
       },

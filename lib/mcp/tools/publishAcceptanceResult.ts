@@ -116,8 +116,13 @@ const publishInputSchema = {
     .string()
     .optional()
     .describe(
-      'The commit the run recorded at. ALSO THE IDEMPOTENCY KEY: re-publishing the same ' +
-        'commit + producedByKey returns the existing receipt instead of superseding it.',
+      'The commit the run recorded at, as 7 to 64 HEX characters — a full object id or an ' +
+        'abbreviation of it, never a branch name or "HEAD". Surrounding whitespace and ' +
+        'upper-case hex are accepted and stored normalised; anything else is refused naming ' +
+        'this field. ALSO THE IDEMPOTENCY KEY: re-publishing the same commit + producedByKey ' +
+        'returns the existing receipt instead of superseding it — which is why it is stored ' +
+        'canonical, so two spellings of one commit are one key. The format is checked; whether ' +
+        'the commit EXISTS is not.',
     ),
   producedByKey: z
     .string()

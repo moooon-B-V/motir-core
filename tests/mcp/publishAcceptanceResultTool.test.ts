@@ -358,3 +358,80 @@ describe('the two allowlists do not grow toward each other', () => {
     expect(await adminDb.acceptanceEvidence.count()).toBe(0);
   });
 });
+
+// ── The commit CITATION, on the MCP door (MOTIR-5619) ────────────────────────
+// The refusal lives on the SERVICE and `toToolError` maps the abstract
+// `AcceptanceEvidenceError`, so this asserts the tool surfaces it. The HTTP
+// door's half is `tests/acceptance-evidence-publish-route.test.ts`.
+
+describe('publish_acceptance_result — commitSha', () => {
+  const SHA = '832026b77b2b276ae9ba028b47e603274a4072cd';
+
+  async function grantFor(story: { key: string }) {
+    const created = await runCreateAcceptanceUpload({ key: story.key }, fx.ctx);
+    const video = payload(created).video as Record<string, unknown>;
+    putUploaded(video.pathname as string, 4096);
+    return video.pathname as string;
+  }
+
+  it('refuses a commitSha that is not a commit id, and writes no receipt', async () => {
+    const story = await makeItem('A story with a bogus citation');
+    const pathname = await grantFor(story);
+
+    const result = await runPublishAcceptanceResult(
+      { key: story.key, videoPathname: pathname, commitSha: 'not-a-commit' },
+      fx.ctx,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('commitSha');
+    expect(await adminDb.acceptanceEvidence.count()).toBe(0);
+  });
+
+  it('stores a whitespace-padded, upper-case commitSha NORMALISED', async () => {
+    const story = await makeItem('A story whose citation needs normalising');
+    const pathname = await grantFor(story);
+
+    const result = await runPublishAcceptanceResult(
+      { key: story.key, videoPathname: pathname, commitSha: `  ${SHA.toUpperCase()}\n` },
+      fx.ctx,
+    );
+
+    expect(result.isError, JSON.stringify(result)).toBeFalsy();
+    const row = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { id: payload(result).id as string },
+    });
+    expect(row.commitSha).toBe(SHA);
+  });
+
+  // The two spellings are ONE key, so a redelivery is a no-op rather than a
+  // supersede. This is the same assertion the service test makes on real
+  // Postgres, made through the door an agent actually calls.
+  it('a redelivery spelling the same commit differently returns the SAME receipt', async () => {
+    const story = await makeItem('A story redelivered with a newline');
+    const first = await runPublishAcceptanceResult(
+      {
+        key: story.key,
+        videoPathname: await grantFor(story),
+        commitSha: SHA,
+        producedByKey: story.key,
+      },
+      fx.ctx,
+    );
+    expect(first.isError, JSON.stringify(first)).toBeFalsy();
+
+    const again = await runPublishAcceptanceResult(
+      {
+        key: story.key,
+        videoPathname: await grantFor(story),
+        commitSha: `${SHA}\n`,
+        producedByKey: story.key,
+      },
+      fx.ctx,
+    );
+
+    expect(again.isError, JSON.stringify(again)).toBeFalsy();
+    expect(payload(again).id).toBe(payload(first).id);
+    expect(await adminDb.acceptanceEvidence.count()).toBe(1);
+  });
+});

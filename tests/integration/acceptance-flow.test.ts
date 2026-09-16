@@ -141,8 +141,8 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
 
   it('a second publish SUPERSEDES — one current, the old video unlinked (retention)', async () => {
     const story = await inReviewStory(fx);
-    await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaa' });
-    await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbb' });
+    await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaaaaaa' });
+    await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbbbbbb' });
 
     const currents = await adminDb.acceptanceEvidence.count({
       where: { workItemId: story.id, isCurrent: true },
@@ -156,7 +156,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     // The current points at the newest commit; the superseded video is unlinked
     // (workItemId → null) so the orphan-GC reclaims it.
     const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
-    expect(current!.commitSha).toBe('bbb');
+    expect(current!.commitSha).toBe('bbbbbbb');
     const unlinked = await adminDb.attachment.count({
       where: { source: 'acceptance_video', workItemId: null },
     });
@@ -174,13 +174,13 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
 
   it('an APPROVED receipt is FROZEN — a republish is refused and writes NOTHING', async () => {
     const story = await inReviewStory(fx);
-    await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaa' });
+    await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaaaaaa' });
     await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
     const approved = await adminDb.acceptanceEvidence.findFirstOrThrow({
       where: { workItemId: story.id, isCurrent: true },
     });
 
-    const res = await publishVia(token, story, { videoName: 'later.webm', commitSha: 'bbb' });
+    const res = await publishVia(token, story, { videoName: 'later.webm', commitSha: 'bbbbbbb' });
 
     // Refused at the service boundary, by CODE — the uploader branches on this
     // rather than on the status number (MOTIR-2768).
@@ -210,18 +210,18 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
 
   it('a `changes_requested` receipt stays REPLACEABLE — the rule narrows, it does not stop supersede', async () => {
     const story = await inReviewStory(fx);
-    await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaa' });
+    await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaaaaaa' });
     await acceptanceEvidenceService.decide(
       { workItemId: story.id, decision: 'request_changes' },
       fx.ctx,
     );
 
     // The whole point of requesting changes is that the next run should differ.
-    const res = await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbb' });
+    const res = await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbbbbbb' });
     expect(res.status).toBe(201);
 
     const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
-    expect(current!.commitSha).toBe('bbb');
+    expect(current!.commitSha).toBe('bbbbbbb');
     expect(current!.status).toBe('pending');
     expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(2);
   });
@@ -231,13 +231,16 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     // doing so: a CI redelivery of the same commit+producer is a no-op, not a
     // conflict. Getting this order wrong would fail a retry that changed nothing.
     const story = await inReviewStory(fx);
-    await publishVia(token, story, { commitSha: 'aaa', producedByKey: 'MOTIR-1638' });
+    await publishVia(token, story, { commitSha: 'aaaaaaa', producedByKey: 'MOTIR-1638' });
     await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
 
     // 201, like every other success on this route — the idempotent path returns
     // the EXISTING receipt rather than a conflict. What proves it short-circuited
     // is the row set below, not the status code.
-    const res = await publishVia(token, story, { commitSha: 'aaa', producedByKey: 'MOTIR-1638' });
+    const res = await publishVia(token, story, {
+      commitSha: 'aaaaaaa',
+      producedByKey: 'MOTIR-1638',
+    });
     expect(res.status).toBe(201);
 
     const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
@@ -250,7 +253,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     // so that a future manual republish or a backfill inherits it. Drive the
     // service directly — no route, no token — and it still refuses.
     const story = await inReviewStory(fx);
-    await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaa' });
+    await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaaaaaa' });
     await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
 
     await expect(
@@ -259,7 +262,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
           workItemId: story.id,
           videoPathname: `acceptance/${fx.workspaceId}/${story.id}/backfill.webm`,
           chapters: [],
-          commitSha: 'ccc',
+          commitSha: 'ccccccc',
         },
         fx.ctx,
       ),
