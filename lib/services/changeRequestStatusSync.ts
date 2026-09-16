@@ -104,6 +104,11 @@ import { NO_ARTIFACT_MARKER } from '@/lib/workItems/artifactEvidence';
  *  LEGAL move from `in_review` (the default workflow has an `in_review →
  *  in_progress` edge but no `in_review → todo`). The seam emits the
  *  provider-agnostic signal; this consumer picks the concrete status. */
+/** The default key the OPENED lifecycle writes, and the default statuses past it
+ *  that MOTIR-5630's backfill gave an edge back into it. */
+const IMPLEMENTED_KEY = 'implemented';
+const PAST_IMPLEMENTED: ReadonlySet<string> = new Set(['in_review', 'approved']);
+
 const LIFECYCLE_TARGET: Record<
   ChangeRequestLifecycle,
   { key: string; category: StatusCategoryDto }
@@ -808,6 +813,15 @@ async function applyToDeliveredItem(
   // short-circuit so the outcome reads `noop` rather than `transitioned`.
   if (decision.currentStatus === targetKey)
     return { workItemId, outcome: 'noop', toStatus: targetKey };
+
+  // NEVER BACK OUT OF A VERDICT. `in_review → implemented` and
+  // `approved → implemented` are declared edges since MOTIR-5630, for the
+  // merge-queue ejection's system write and a person's hand move
+  // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7) — not for a pull request
+  // being opened, reopened, marked ready or linked. Before those edges existed
+  // the workflow refused this move, and the outcome stays the one it produced.
+  if (targetKey === IMPLEMENTED_KEY && PAST_IMPLEMENTED.has(decision.currentStatus))
+    return { workItemId, outcome: 'illegal_transition', toStatus: targetKey };
 
   const refusalContext = {
     workItemId,

@@ -171,12 +171,19 @@ describe('the seed and the backfill migration AGREE', () => {
       `DELETE FROM workflow_status WHERE project_id = $1 AND key = 'implemented'`,
       backfilled.id,
     );
-    await adminDb.$executeRawUnsafe(
-      readFileSync(
-        join(ROOT, 'prisma/migrations/20260819090000_add_implemented_default_status/migration.sql'),
-        'utf8',
-      ),
-    );
+    // Every migration that writes an edge touching `implemented`, in the order
+    // `migrate deploy` applies them: deleting the status also cascades
+    // MOTIR-5630's ejection edges (`approved → implemented`,
+    // `in_review → implemented`, `implemented → approved`), which only its own
+    // backfill restores. The CHAIN is what must agree with the seed.
+    for (const migration of [
+      '20260819090000_add_implemented_default_status',
+      '20260916180000_add_queue_ejection_default_edges',
+    ]) {
+      await adminDb.$executeRawUnsafe(
+        readFileSync(join(ROOT, `prisma/migrations/${migration}/migration.sql`), 'utf8'),
+      );
+    }
 
     const [a, b] = await Promise.all([shapeOf(fresh.id), shapeOf(backfilled.id)]);
     expect(b.statuses).toEqual(a.statuses);

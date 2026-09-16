@@ -34,10 +34,37 @@ const APPROVED: ApprovalGateDTO = {
   outcomeRef: 'approved',
 };
 
+const NO_EXIT = { exit: null, requeueable: false } as const;
 const MEMBERS: PullRequestApprovalMemberDTO[] = [
-  { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: true, retryable: false },
-  { subjectVersion: GATEWAY_V, pullRequestId: GATEWAY_PR.id, queued: false, retryable: true },
+  { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: true, retryable: false, ...NO_EXIT },
+  {
+    subjectVersion: GATEWAY_V,
+    pullRequestId: GATEWAY_PR.id,
+    queued: false,
+    retryable: true,
+    ...NO_EXIT,
+  },
 ];
+
+/** The gateway member the merge queue removed, at the approved head (MOTIR-5635). */
+const exited = (disposition: 'failure' | 'neutral', requeueable: boolean) =>
+  [
+    MEMBERS[0]!,
+    {
+      ...MEMBERS[1]!,
+      retryable: false,
+      requeueable,
+      exit: {
+        rawReason: disposition === 'failure' ? 'CI_FAILURE' : 'MANUAL',
+        disposition,
+        headSha: 'aa11bb2000000000000000000000000000000000',
+        exitedAt: '2026-09-15T15:00:00.000Z',
+        requeuedAt: null,
+        failingCheckName: null,
+        failingCheckUrl: null,
+      },
+    },
+  ] satisfies PullRequestApprovalMemberDTO[];
 
 const rowOf = (title: string) => screen.getByText(title).closest('li')!;
 
@@ -99,4 +126,29 @@ describe('the quick view reads the persisted merge outcome (MOTIR-5650)', () => 
     expect(peek[0]).toContain(pra.outcome.queued);
     expect(peek[1]).toContain(pra.outcome.notMergedYet);
   });
+
+  it.each([
+    ['failure', true, pra.outcome.leftQueue],
+    ['neutral', true, pra.outcome.removedFromQueue],
+    ['failure', false, pra.outcome.newCommits],
+  ] as const)(
+    'reads an ejected member (%s, requeueable %s) as the item page does, with NO Queue again (MOTIR-5635)',
+    (disposition, requeueable, label) => {
+      const members = exited(disposition, requeueable);
+      render(
+        <DevelopmentSectionBody
+          pullRequests={[CORE_PR, GATEWAY_PR]}
+          itemIdentifier="ACME-12"
+          mergeGate={{ gate: APPROVED, canDecide: false, routedToLabel: null, members }}
+        />,
+      );
+      const detail = pillsOf(GATEWAY_PR.title);
+      cleanup();
+
+      renderPeek(members);
+      expect(pillsOf(GATEWAY_PR.title)).toEqual(detail);
+      expect(within(rowOf(GATEWAY_PR.title)).getByText(label)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: pra.outcome.queueAgain })).toBeNull();
+    },
+  );
 });

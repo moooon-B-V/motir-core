@@ -217,6 +217,47 @@ export interface NormalizedDeploymentStatus {
   occurredAt: Date;
 }
 
+/** A pull request a MERGE QUEUE removed, normalized (Story MOTIR-5461 · MOTIR-5632;
+ *  `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 1). GitHub's
+ *  `pull_request` action `dequeued`.
+ *
+ *  `rawReason` is the host's own string, VERBATIM — classifying it is
+ *  `classifyQueueExit`'s job (`lib/mergeQueue/queueExit.ts`), not the seam's, so a
+ *  reason nobody has mapped yet still arrives and is recorded. `headSha` is the
+ *  pull request's head as the delivery states it. The payload names no merge group
+ *  and no failing check. */
+export interface NormalizedMergeQueueExit {
+  providerRepoId: string;
+  number: number;
+  headSha: string;
+  rawReason: string | null;
+}
+
+/** One MERGE GROUP the queue started testing, normalized (Story MOTIR-5461 ·
+ *  MOTIR-5633; `approval-gates.md` §4 THIRD AMENDMENT, decision 8). GitHub's
+ *  `merge_group` action `checks_requested`: every check the queue runs for the group
+ *  is reported against `headSha`, and nothing else ties those checks to a pull
+ *  request. `prNumbers` are parsed from `headRef`
+ *  (`refs/heads/gh-readonly-queue/<base>/pr-<n>-<base sha>`) — every `pr-<n>` the
+ *  ref names, in order. */
+export interface NormalizedMergeGroupAttempt {
+  providerRepoId: string;
+  headSha: string;
+  headRef: string;
+  prNumbers: number[];
+}
+
+/** A COMPLETED check that FAILED on a commit no pull request names — the only shape
+ *  a merge-queue check can have (MOTIR-5633). `url` is the check's own page, the
+ *  link the exit row carries. */
+export interface NormalizedUnlinkedCheckFailure {
+  providerRepoId: string;
+  headSha: string;
+  name: string;
+  url: string;
+  completedAt: Date;
+}
+
 /** A completed CI workflow run, normalized across providers — consumed by the
  *  CI-minutes meter (Story MOTIR-1775 · MOTIR-1896). DISTINCT from
  *  `NormalizedStatusEvent`, which is the *verification* signal (did CI pass?)

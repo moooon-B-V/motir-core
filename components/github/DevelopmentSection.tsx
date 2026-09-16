@@ -28,6 +28,7 @@ import {
   type DevelopmentGateRead,
 } from './DevelopmentGateFrame';
 import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
+import { QueueExitAutoPart, type AutoQueueExits } from './QueueExitAutoPart';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
 // design/github Panels 3 + 4a: linked-PR rows — PR glyph + title +
@@ -348,6 +349,7 @@ export function DevelopmentSectionBody({
   gateLayout = 'flush',
   designResult = null,
   repair = null,
+  autoQueueExits = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -450,6 +452,13 @@ export function DevelopmentSectionBody({
    * test. Omitted (the peek) or `hidden`, it renders nothing.
    */
   repair?: WorkItemRepairViewDto | null;
+  /**
+   * The standing merge-queue exits of a card with NO approval gate — an `auto` project
+   * (Story MOTIR-5461 · MOTIR-5635, design § 22 E5). Drawn as a flush *Merge queue* part
+   * below the rows, and read by the rows' outcome slot. Ignored when a gate frame is
+   * drawn: under a gate the frame reads the exits itself.
+   */
+  autoQueueExits?: AutoQueueExits | null;
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
@@ -511,6 +520,21 @@ export function DevelopmentSectionBody({
       {repair ? <RepairFixPart repair={repair} itemIdentifier={itemIdentifier} /> : null}
     </>
   );
+  // An `auto` card's standing exits (§ 22 E5): the rows and How to test sit inside the
+  // part's outcome context, the part between them. Never under a gate frame.
+  const exitsRead =
+    !mergeGate && autoQueueExits && autoQueueExits.exits.length > 0 ? autoQueueExits : null;
+  const rowsThen = (after: ReactNode) =>
+    exitsRead ? (
+      <QueueExitAutoPart read={exitsRead} itemIdentifier={itemIdentifier} rows={rowsPart}>
+        {after}
+      </QueueExitAutoPart>
+    ) : (
+      <>
+        {rowsPart}
+        {after}
+      </>
+    );
   const block = designResult ? (
     // THE DESIGN CARD'S ORDER (Q8, revised on review 2026-09-14): design result,
     // How to test, then the pull requests behind the rule How to test used to carry.
@@ -530,7 +554,7 @@ export function DevelopmentSectionBody({
             description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
           />
         ) : (
-          rowsPart
+          rowsThen(null)
         )}
       </div>
     </>
@@ -545,10 +569,7 @@ export function DevelopmentSectionBody({
       {howToTestPart}
     </>
   ) : (
-    <>
-      {rowsPart}
-      {howToTestPart}
-    </>
+    rowsThen(howToTestPart)
   );
   // NO GATE ⇒ NO FRAME (the `DesignResultSection` rule): a card's approve-and-merge
   // gate wraps the block in every state, and it wraps ALL of it — one frame for every

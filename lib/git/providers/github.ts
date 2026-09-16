@@ -39,6 +39,9 @@ import type {
   MergeChangeRequestResult,
   MergeRefusal,
   NormalizedDeploymentStatus,
+  NormalizedMergeGroupAttempt,
+  NormalizedMergeQueueExit,
+  NormalizedUnlinkedCheckFailure,
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
 
@@ -96,6 +99,21 @@ function normalizeRepo(value: unknown): NormalizedRepo | null {
  */
 export function mapGithubCiConclusion(raw: string): CiConclusion {
   return mapConclusion(raw);
+}
+
+/** Every `pr-<n>` in a merge-queue ref's LAST segment
+ *  (`gh-readonly-queue/<base>/pr-<n>-<base sha>`), in order and without repeats. A
+ *  ref that is not a queue ref names none. */
+function readQueuePrNumbers(headRef: string): number[] {
+  const ref = headRef.replace(/^refs\/heads\//, '');
+  if (!ref.startsWith('gh-readonly-queue/')) return [];
+  const last = ref.slice(ref.lastIndexOf('/') + 1);
+  const numbers: number[] = [];
+  for (const match of last.matchAll(/(?:^|-)pr-(\d+)(?=-|$)/g)) {
+    const n = Number(match[1]);
+    if (Number.isSafeInteger(n) && n > 0 && !numbers.includes(n)) numbers.push(n);
+  }
+  return numbers;
 }
 
 function mapConclusion(raw: string): CiConclusion {
@@ -828,6 +846,102 @@ export const githubProvider: GitProvider = {
     }
 
     return null;
+  },
+
+  /**
+   * `pull_request` action `dequeued` → a merge-queue exit (MOTIR-5632). Read from a
+   * real delivery (MOTIR-5627): `number`, `pull_request.head.sha`, and a top-level
+   * `reason` in the webhook enum's UPPER_SNAKE spelling. A missing `reason` is
+   * carried as `null` rather than refusing the delivery — the exit still happened,
+   * and the classifier reads an absent reason as unrecognised.
+   */
+  parseMergeQueueExitEvent(rawPayload: unknown): NormalizedMergeQueueExit | null {
+    const payload = asRecord(rawPayload);
+    if (!payload || payload['action'] !== 'dequeued') return null;
+    const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
+    const pr = asRecord(payload['pull_request']);
+    const number = pr?.['number'];
+    const headSha = asRecord(pr?.['head'])?.['sha'];
+    if (
+      !providerRepoId ||
+      typeof number !== 'number' ||
+      !Number.isInteger(number) ||
+      typeof headSha !== 'string' ||
+      headSha.length === 0
+    ) {
+      return null;
+    }
+    const reason = payload['reason'];
+    return {
+      providerRepoId,
+      number,
+      headSha,
+      rawReason: typeof reason === 'string' && reason.length > 0 ? reason : null,
+    };
+  },
+
+  /**
+   * A `merge_group` `checks_requested` delivery → the attempt it starts (MOTIR-5633).
+   * The pull requests are read off `head_ref`, whose last segment is
+   * `pr-<n>-<base sha>` (MOTIR-5627's capture); every `pr-<n>` in that segment is
+   * taken, so a group that names several pull requests yields each of them.
+   */
+  parseMergeGroupAttemptEvent(rawPayload: unknown): NormalizedMergeGroupAttempt | null {
+    const payload = asRecord(rawPayload);
+    if (!payload || payload['action'] !== 'checks_requested') return null;
+    const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
+    const group = asRecord(payload['merge_group']);
+    const headSha = group?.['head_sha'];
+    const headRef = group?.['head_ref'];
+    if (
+      !providerRepoId ||
+      typeof headSha !== 'string' ||
+      headSha.length === 0 ||
+      typeof headRef !== 'string'
+    ) {
+      return null;
+    }
+    const prNumbers = readQueuePrNumbers(headRef);
+    if (prNumbers.length === 0) return null;
+    return { providerRepoId, headSha, headRef, prNumbers };
+  },
+
+  /**
+   * A `check_run` delivery that COMPLETED as a failure on a commit no pull request
+   * names → the check a merge queue failed on (MOTIR-5633). "Failure" is
+   * `mapConclusion`'s, the same verdict the CI feedback reads. A `check_suite`
+   * delivery is not one: it names no check and links to none.
+   */
+  parseUnlinkedCheckFailure(rawPayload: unknown): NormalizedUnlinkedCheckFailure | null {
+    const payload = asRecord(rawPayload);
+    const checkRun = asRecord(payload?.['check_run']);
+    if (!payload || !checkRun) return null;
+    const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
+    const headSha = checkRun['head_sha'];
+    const name = checkRun['name'];
+    const url = checkRun['html_url'];
+    const conclusion = checkRun['conclusion'];
+    if (
+      !providerRepoId ||
+      typeof headSha !== 'string' ||
+      headSha.length === 0 ||
+      typeof name !== 'string' ||
+      typeof url !== 'string' ||
+      checkRun['status'] !== 'completed' ||
+      typeof conclusion !== 'string' ||
+      mapConclusion(conclusion) !== 'failure' ||
+      readPrNumbers(checkRun['pull_requests']).length > 0
+    ) {
+      return null;
+    }
+    const completedAt = new Date(String(checkRun['completed_at'] ?? ''));
+    return {
+      providerRepoId,
+      headSha,
+      name,
+      url,
+      completedAt: Number.isNaN(completedAt.getTime()) ? new Date() : completedAt,
+    };
   },
 
   /**

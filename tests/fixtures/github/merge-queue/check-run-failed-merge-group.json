@@ -1,0 +1,39 @@
+{
+  "_source": "MOTIR-5633 \u2014 the REAL failed check run on the pr-2830 merge group commit (7a67057), read with gh api repos/moooon-B-V/motir-core/check-runs/103732354674, wrapped in the check_run `completed` delivery envelope (no webhook sample of a merge-group check was captured; decision 8). Its `pull_requests` is [] and `check_suite.head_branch` is null, as delivered.",
+  "event": "check_run",
+  "action": "completed",
+  "payload": {
+    "action": "completed",
+    "check_run": {
+      "id": 103732354674,
+      "name": "Vitest (7/12)",
+      "node_id": "CR_kwDOSkYHBM8AAAAYJu4ecg",
+      "head_sha": "7a67057cafc9c60da0eaa8e4c4a283b460857c9b",
+      "external_id": "06ac07a5-cf9c-56f3-9fd3-f87551530866",
+      "url": "https://api.github.com/repos/moooon-B-V/motir-core/check-runs/103732354674",
+      "html_url": "https://github.com/moooon-B-V/motir-core/actions/runs/34760457676/job/103732354674",
+      "details_url": "https://github.com/moooon-B-V/motir-core/actions/runs/34760457676/job/103732354674",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-13T13:40:21Z",
+      "completed_at": "2026-09-13T14:27:21Z",
+      "output": {
+        "title": null,
+        "_elided": "summary and annotations"
+      },
+      "check_suite": {
+        "id": 94142560115
+      },
+      "app": {
+        "slug": "github-actions",
+        "_elided": "the rest of the app object"
+      },
+      "pull_requests": []
+    },
+    "repository": {
+      "id": 1246103300,
+      "full_name": "moooon-B-V/motir-core",
+      "_elided": "the rest of the repository object"
+    }
+  }
+}

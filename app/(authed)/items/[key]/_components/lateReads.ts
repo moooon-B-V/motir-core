@@ -9,7 +9,10 @@ import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVide
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
-import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
+import type {
+  PullRequestApprovalMemberDTO,
+  PullRequestStandingExitDTO,
+} from '@/lib/dto/approvalGate';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -129,6 +132,9 @@ export interface LateReads {
    */
   mergeGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     members: PullRequestApprovalMemberDTO[];
+    /** An `auto` card's standing merge-queue exits, read only when there is no gate
+     *  (MOTIR-5635). */
+    autoQueueExits: PullRequestStandingExitDTO[];
   };
   /**
    * What the Development block says about a REPAIR (Story MOTIR-5460 ·
@@ -321,7 +327,11 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
                   ctx,
                 )
               : [];
-          return { ...read, members };
+          // An `auto` card has no gate to read its exits through (MOTIR-5635, § 22 E5).
+          const autoQueueExits = read.gate
+            ? []
+            : await pullRequestMergeService.listStandingQueueExits({ workItemId: itemId }, ctx);
+          return { ...read, members, autoQueueExits };
         } catch {
           return {
             gate: null,
@@ -329,6 +339,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             routedToLabel: null,
             settingsDoor: null,
             members: [],
+            autoQueueExits: [],
           };
         }
       })(),

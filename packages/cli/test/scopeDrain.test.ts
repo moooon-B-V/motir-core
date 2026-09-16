@@ -100,6 +100,8 @@ interface Fake {
 
 /** Keys whose card reads back as `planning` — the agent refused it (MOTIR-3018). */
 let replanned: Set<string>;
+/** A status a test pins for one key; every other key reads as `in_review`. */
+let statusOf: Map<string, string>;
 /** Keys whose per-card claim re-assert is REFUSED (defensive; see the test). */
 let claimRefuses: Set<string>;
 /** Per-key repository SET, for the multi-repository card (MOTIR-3135). */
@@ -166,7 +168,10 @@ function client(): MotirClient {
       return {};
     },
     getWorkItem: async (key: string) => ({
-      item: { identifier: key, status: replanned.has(key) ? 'planning' : 'in_review' },
+      item: {
+        identifier: key,
+        status: replanned.has(key) ? 'planning' : (statusOf.get(key) ?? 'in_review'),
+      },
     }),
   };
   return c as unknown as MotirClient;
@@ -229,6 +234,7 @@ beforeEach(() => {
     root,
   };
   replanned = new Set();
+  statusOf = new Map();
   claimRefuses = new Set();
   repoSets = {};
   repoOf = {};
@@ -734,6 +740,9 @@ describe('the scoped drain declares what its session pull request delivers', () 
     expect(fake.transitions).toEqual([]);
 
     closeOutRepos(summary, run);
+    // The container is still In Progress when its close-out runs; one CI already
+    // moved on is left where it is (sessionPrContainer.test.ts).
+    statusOf.set('PROD-1', 'in_progress');
     await closeOutContainer(session().client, summary);
 
     expect(fake.transitions).toEqual(['PROD-1:implemented']);

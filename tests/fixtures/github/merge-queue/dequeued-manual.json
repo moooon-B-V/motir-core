@@ -1,0 +1,114 @@
+{
+  "_source": "MOTIR-5627: a real delivery to a repository hook on moooon-B-V/motir-core, read back with GET /repos/moooon-B-V/motir-core/hooks/641004545/deliveries/3842572155099283456 on 2026-09-16. Fields Motir reads are verbatim; repository/sender/org objects and long texts are elided and marked.",
+  "delivery": {
+    "guid": "26a5cb10-afbf-11f1-9933-dfc7e2c61497",
+    "deliveredAt": "2026-09-13T22:04:56.314Z",
+    "event": "pull_request"
+  },
+  "payload": {
+    "action": "dequeued",
+    "number": 2864,
+    "pull_request": {
+      "url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/2864",
+      "id": 4520900404,
+      "node_id": "PR_kwDOSkYHBM8AAAABDXd3NA",
+      "html_url": "https://github.com/moooon-B-V/motir-core/pull/2864",
+      "diff_url": "https://github.com/moooon-B-V/motir-core/pull/2864.diff",
+      "patch_url": "https://github.com/moooon-B-V/motir-core/pull/2864.patch",
+      "issue_url": "https://api.github.com/repos/moooon-B-V/motir-core/issues/2864",
+      "number": 2864,
+      "state": "open",
+      "locked": false,
+      "title": "MOTIR-5222 design(approvals): the approval OVERLAY \u2014 full-bleed anatomy, its address, every state, and the \u00a7 20 amendment",
+      "user": {
+        "login": "zhuyue11",
+        "id": 3026260,
+        "_elided": true
+      },
+      "body": "**MOTIR-5222** \u2014 the design child of **MOTIR-5214** (_DECIDE IT FULL SCREEN_). This is the parent run's design **stopper**: it lands on its own approval PR, and \u2026[truncated]",
+      "created_at": "2026-09-13T21:07:28Z",
+      "updated_at": "2026-09-13T21:36:13Z",
+      "closed_at": null,
+      "merged_at": null,
+      "merge_commit_sha": "019145156707234f20c1979108c177ed1e5e7f56",
+      "assignees": [],
+      "requested_reviewers": [],
+      "requested_teams": [],
+      "labels": [],
+      "milestone": null,
+      "draft": false,
+      "commits_url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/2864/commits",
+      "review_comments_url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/2864/comments",
+      "review_comment_url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/comments{/number}",
+      "comments_url": "https://api.github.com/repos/moooon-B-V/motir-core/issues/2864/comments",
+      "statuses_url": "https://api.github.com/repos/moooon-B-V/motir-core/statuses/ceff8b254e27b44e98d7e88811a5d746b2a81690",
+      "head": {
+        "label": "moooon-B-V:design/MOTIR-5222-approval-overlay",
+        "ref": "design/MOTIR-5222-approval-overlay",
+        "sha": "ceff8b254e27b44e98d7e88811a5d746b2a81690",
+        "user": {
+          "login": "moooon-B-V",
+          "id": 287054146,
+          "_elided": true
+        },
+        "repo": {
+          "id": 1246103300,
+          "full_name": "moooon-B-V/motir-core",
+          "_elided": true
+        }
+      },
+      "base": {
+        "label": "moooon-B-V:main",
+        "ref": "main",
+        "sha": "fc30c572349ab93c10fcaacff6c7cd7fea3b45a8",
+        "user": {
+          "login": "moooon-B-V",
+          "id": 287054146,
+          "_elided": true
+        },
+        "repo": {
+          "id": 1246103300,
+          "full_name": "moooon-B-V/motir-core",
+          "_elided": true
+        }
+      },
+      "author_association": "COLLABORATOR",
+      "auto_merge": null,
+      "assignee": null,
+      "active_lock_reason": null,
+      "merged": false,
+      "mergeable": true,
+      "rebaseable": true,
+      "mergeable_state": "clean",
+      "merged_by": null,
+      "comments": 0,
+      "review_comments": 0,
+      "maintainer_can_modify": false,
+      "commits": 2,
+      "additions": 6944,
+      "deletions": 3,
+      "changed_files": 3
+    },
+    "reason": "MANUAL",
+    "repository": {
+      "id": 1246103300,
+      "full_name": "moooon-B-V/motir-core",
+      "_elided": true
+    },
+    "organization": {
+      "id": 287054146,
+      "login": "moooon-B-V",
+      "_elided": true
+    },
+    "enterprise": {
+      "id": 819931,
+      "login": "moooon-bv",
+      "_elided": true
+    },
+    "sender": {
+      "id": 3026260,
+      "login": "zhuyue11",
+      "_elided": true
+    }
+  }
+}

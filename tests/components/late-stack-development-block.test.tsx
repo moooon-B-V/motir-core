@@ -87,6 +87,7 @@ function reads(): LateReads {
       routedToLabel: null,
       settingsDoor: null,
       members: [],
+      autoQueueExits: [],
     },
     // No repair to show — also what a FAILED repair read answers (MOTIR-5466).
     repair: null,

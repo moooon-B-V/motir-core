@@ -467,3 +467,59 @@ describe('SEAM 3 · the port is SCOPED — the actor’s view and the population
     expect(within(dialog).getByText('Change in web')).toBeTruthy();
   });
 });
+
+describe('SEAM 5 · an EJECTED member reads the same in the overlay (MOTIR-5635)', () => {
+  it('the decided frame shows Left the queue, the reason and the failing check', async () => {
+    const story = await twoRepoStory();
+    const gate = await rawGate(story, 'pull_request_approval', story.id, setVersion);
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: {
+        state: 'approved',
+        decidedById: fx.owner.id,
+        decidedByLabel: 'Owner',
+        decidedAt: new Date(),
+      },
+    });
+    const api = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 12 } });
+    await adminDb.githubPullRequestQueueExit.create({
+      data: {
+        pullRequestId: api.id,
+        deliveryId: 'guid-5635',
+        rawReason: 'CI_FAILURE',
+        disposition: 'failure',
+        headSha: HEAD_API,
+        exitedAt: new Date(),
+        failingCheckName: 'CI complete',
+        failingCheckUrl: 'https://github.com/acme/api/actions/runs/1/job/2',
+      },
+    });
+    signIn(owner());
+
+    nav.go(
+      `/workbench?tab=approvals&approval=${story.identifier}&approvalKind=pull_request_approval`,
+    );
+    renderWithIntl(<ApprovalOverlay />);
+
+    const pra = en.approvalGate.pullRequestApproval;
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: `Pull requests for ${story.identifier}` },
+      SLOW,
+    );
+    const row = within(dialog).getByText('Change in api').closest('li')!;
+    expect(within(row).getByText(pra.outcome.leftQueue)).toBeTruthy();
+    // The overlay draws a DECIDED gate with nothing to press, as it does Retry merge — the
+    // press lives on the item page (an ejected card is not in To approve, § 22).
+    expect(within(row).queryByRole('button', { name: pra.outcome.queueAgain })).toBeNull();
+    expect(within(dialog).getByText(new RegExp(pra.exit.reason.CI_FAILURE))).toBeTruthy();
+    expect(
+      within(dialog)
+        .getByRole('link', { name: pra.exit.openCheck.replace('{check}', 'CI complete') })
+        .getAttribute('href'),
+    ).toBe('https://github.com/acme/api/actions/runs/1/job/2');
+    // The sibling was never removed.
+    const web = within(dialog).getByText('Change in web').closest('li')!;
+    expect(within(web).queryByText(pra.outcome.leftQueue)).toBeNull();
+  });
+});

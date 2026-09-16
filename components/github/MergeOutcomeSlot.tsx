@@ -2,7 +2,15 @@
 
 import { createContext, useContext, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { CircleEllipsis, CircleX, Clock, GitMerge, GitPullRequestArrow } from 'lucide-react';
+import {
+  CircleEllipsis,
+  CircleMinus,
+  CircleX,
+  Clock,
+  GitBranch,
+  GitMerge,
+  GitPullRequestArrow,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
@@ -34,7 +42,20 @@ export type RowMergeOutcome =
       /** Retry this member's merge; `null` for a reader who may not decide. */
       onRetry: (() => void) | null;
       retrying: boolean;
-    };
+    }
+  // THE MERGE QUEUE REMOVED IT (MOTIR-5635; design § 22, E1–E7). A FAILURE is rose, a
+  // NEUTRAL removal is not — nothing was said about the work.
+  | {
+      kind: 'leftQueue' | 'removedFromQueue';
+      /** *Queue again*; `null` when the approval no longer covers the head, or for a
+       *  reader who may not press it. */
+      onQueueAgain: (() => void) | null;
+      /** The press is in flight: the pill stays, the button waits (E2). */
+      queueing: boolean;
+    }
+  /** Removed, and a push moved the head since: the approval no longer describes the code,
+   *  so nothing is offered (E3). */
+  | { kind: 'newCommits' };
 
 const MergeOutcomeContext = createContext<ReadonlyMap<string, RowMergeOutcome> | null>(null);
 
@@ -59,19 +80,45 @@ export function MergeOutcomeProvider({
  * reading of `PullRequestApprovalMemberDTO` every surface shares, so the item page's frame
  * and the quick view cannot say different things about the same row (Bug MOTIR-5650).
  * `null` when there is nothing to report and the row keeps its CI pill.
+ *
+ * An exit nobody has put back (MOTIR-5635) outranks everything but a queued merge: it is the
+ * newest thing that happened to the pull request. While the approval still covers its head
+ * it reads *Left the queue* (a failure) or *Removed from the queue*; once a push moved it,
+ * *New commits since approval*.
  */
+export type PersistedRowOutcome =
+  | 'queued'
+  | 'leftQueue'
+  | 'removedFromQueue'
+  | 'newCommits'
+  | 'notMergedYet';
+
 export function persistedRowOutcome(
-  fact: Pick<PullRequestApprovalMemberDTO, 'queued' | 'retryable'>,
-): 'queued' | 'notMergedYet' | null {
+  fact: Pick<PullRequestApprovalMemberDTO, 'queued' | 'retryable' | 'exit' | 'requeueable'>,
+): PersistedRowOutcome | null {
   if (fact.queued) return 'queued';
+  if (fact.exit && fact.exit.requeuedAt === null) {
+    if (!fact.requeueable) return 'newCommits';
+    return fact.exit.disposition === 'failure' ? 'leftQueue' : 'removedFromQueue';
+  }
   if (fact.retryable) return 'notMergedYet';
   return null;
 }
 
+/** A persisted outcome with nothing to press — the READ-ONLY reading of every kind. */
+const READ_ONLY: Record<PersistedRowOutcome, RowMergeOutcome> = {
+  queued: { kind: 'queued' },
+  leftQueue: { kind: 'leftQueue', onQueueAgain: null, queueing: false },
+  removedFromQueue: { kind: 'removedFromQueue', onQueueAgain: null, queueing: false },
+  newCommits: { kind: 'newCommits' },
+  notMergedYet: { kind: 'notMergedYet', onRetry: null, retrying: false },
+};
+
 /**
  * The READ-ONLY provider (Bug MOTIR-5650) — the quick view has no approval frame, and must
  * still show what a reload of the item page shows. It takes the members of an APPROVED gate
- * (the server reads none for any other state) and offers no Retry: the peek has no verbs.
+ * (the server reads none for any other state) and offers no Retry and no Queue again: the
+ * peek has no verbs.
  */
 export function PersistedMergeOutcomes({
   members,
@@ -85,10 +132,7 @@ export function PersistedMergeOutcomes({
     const member = parseMemberVersion(fact.subjectVersion);
     const kind = member ? persistedRowOutcome(fact) : null;
     if (!member || !kind) continue;
-    value.set(
-      rowKey(member.repo, member.number),
-      kind === 'queued' ? { kind } : { kind, onRetry: null, retrying: false },
-    );
+    value.set(rowKey(member.repo, member.number), READ_ONLY[kind]);
   }
   if (value.size === 0) return <>{children}</>;
   return <MergeOutcomeProvider value={value}>{children}</MergeOutcomeProvider>;
@@ -163,6 +207,41 @@ export function MergeOutcomeSlot({
             </Button>
           ) : null}
         </>
+      );
+    case 'leftQueue':
+    case 'removedFromQueue':
+      return (
+        <>
+          {outcome.kind === 'leftQueue' ? (
+            <Pill severity="danger">
+              <CircleX className="h-3 w-3" aria-hidden />
+              {t('leftQueue')}
+            </Pill>
+          ) : (
+            <Pill tone="neutral">
+              <CircleMinus className="h-3 w-3" aria-hidden />
+              {t('removedFromQueue')}
+            </Pill>
+          )}
+          {outcome.onQueueAgain ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              disabled={outcome.queueing}
+              onClick={outcome.onQueueAgain}
+            >
+              {t('queueAgain')}
+            </Button>
+          ) : null}
+        </>
+      );
+    case 'newCommits':
+      return (
+        <Pill tone="neutral">
+          <GitBranch className="h-3 w-3" aria-hidden />
+          {t('newCommits')}
+        </Pill>
       );
   }
 }

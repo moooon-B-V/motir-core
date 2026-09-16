@@ -10,6 +10,7 @@ import type { GitProviderId, MergeChangeRequestResult, MergeRefusalCode } from '
 import { pullRequestSubjectVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
   ApprovalGateAlreadyDecidedError,
+  ApprovalGateAlreadyRequeuedError,
   ApprovalGateError,
   ApprovalGateMergeRefusedError,
   ApprovalGateNotAuthorisedError,
@@ -18,6 +19,8 @@ import {
   type MergeRefusalTag,
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -29,8 +32,18 @@ import type {
   PullRequestApprovalMemberDTO,
 } from '@/lib/dto/approvalGate';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import type { GithubPullRequestQueueExit } from '@/generated/prisma/client';
+import type { PullRequestStandingExitDTO } from '@/lib/dto/approvalGate';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { projectAccessService } from './projectAccessService';
-import { pullRequestApprovalMembersService } from './pullRequestApprovalMembersService';
+import { queueExitCardMoves } from './mergeQueueExitService';
+import {
+  pullRequestApprovalMembersService,
+  toQueueExitDto,
+} from './pullRequestApprovalMembersService';
 import {
   approvalGatesService,
   resolveGateAuthority,
@@ -328,6 +341,47 @@ export const pullRequestMergeService = {
   },
 
   /**
+   * The standing merge-queue exits of a card in an `auto` project (MOTIR-5635; design § 22,
+   * E5) — the read the Development block draws *Left the queue* and *Queue again* from when
+   * there is no approval frame. READ-ONLY. A `manual` project reads its exits through
+   * {@link listApprovalMembers}, on its decided gate, so this answers nothing there.
+   * `requeueable` is exactly what {@link requeueAutoMember} accepts: open, the exit not put
+   * back, and the head the latest checks ran at still the one it left at.
+   */
+  async listStandingQueueExits(
+    input: { workItemId: string },
+    ctx: ServiceContext,
+  ): Promise<PullRequestStandingExitDTO[]> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(input.workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) return [];
+      const mode = await projectRepository.findPrMergeMode(item.projectId, tx);
+      if (mode?.prMergeMode !== 'auto') return [];
+      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
+      const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+        deliveries.map((row) => row.pullRequest.id),
+        tx,
+      );
+      return deliveries.flatMap((row) => {
+        const pr = row.pullRequest;
+        const exit = exits.get(pr.id);
+        const open = pr.state === 'open' && !pr.merged;
+        if (!exit || exit.requeuedAt !== null || !open) return [];
+        const head = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+        return [
+          {
+            pullRequestId: pr.id,
+            repo: `${row.repo.owner}/${row.repo.name}`,
+            number: pr.number,
+            exit: toQueueExitDto(exit),
+            requeueable: head === exit.headSha,
+          },
+        ];
+      });
+    });
+  },
+
+  /**
    * APPROVE AND MERGE — the one press behind the approve-and-merge gate (Story MOTIR-4909 ·
    * MOTIR-5483 · MOTIR-5613; `approval-gates.md` §8's SECOND AMENDMENT, decisions 1 and 4).
    *
@@ -404,18 +458,129 @@ export const pullRequestMergeService = {
       if (!delivered) return null;
       // The member is matched by `owner/name#number`, so a pull request whose head has moved
       // since the approval is found here and goes stale in the check — not silently skipped.
-      return (
+      const member =
         membersOf(approval.subjectVersion).find(
-          (member) =>
-            member.repo === `${delivered.repo.owner}/${delivered.repo.name}` &&
-            member.number === delivered.pullRequest.number,
-        ) ?? null
-      );
+          (candidate) =>
+            candidate.repo === `${delivered.repo.owner}/${delivered.repo.name}` &&
+            candidate.number === delivered.pullRequest.number,
+        ) ?? null;
+      if (!member) return null;
+      const exit = (
+        await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+          [delivered.pullRequest.id],
+          tx,
+        )
+      ).get(delivered.pullRequest.id);
+      return {
+        member,
+        workItemId: approval.workItemId,
+        standingExit: exit && exit.requeuedAt === null ? exit : null,
+        // Already put back and still waiting in the queue: a second press would enqueue
+        // it twice (MOTIR-5634).
+        alreadyRequeued:
+          exit !== undefined &&
+          exit.requeuedAt !== null &&
+          !delivered.pullRequest.merged &&
+          (delivered.pullRequest.mergeOutcomeRef?.startsWith('queue:') ?? false),
+        pullRequestId: delivered.pullRequest.id,
+      };
     });
     // Not delivered by this card, or never a member of what was approved: there is no
     // question to carry out, and the card's gate is not re-asked.
     if (!found) throw new ApprovalGateSupersededError(input.approvalGateId);
-    return mergeMember(input.approvalGateId, found, ctx);
+    if (found.alreadyRequeued) {
+      return {
+        subjectVersion: found.member.subjectVersion,
+        pullRequestId: found.pullRequestId,
+        outcome: 'refused',
+        refusal: toGateRefusal('MERGE_ALREADY_REQUEUED'),
+      };
+    }
+    if (found.standingExit) {
+      return queueAgainUnderApproval(
+        input.approvalGateId,
+        found.member,
+        { workItemId: found.workItemId, exit: found.standingExit },
+        ctx,
+      );
+    }
+    return mergeMember(input.approvalGateId, found.member, ctx);
+  },
+
+  /**
+   * QUEUE AGAIN in an `auto` project (Story MOTIR-5461 · MOTIR-5634; `approval-gates.md`
+   * §4 THIRD AMENDMENT, decision 5). There is no approval to reuse — the project's
+   * setting authorised the merge — so this is a PERSON's press that re-sends the
+   * automatic merge for the SAME head the queue removed.
+   *
+   * ⚠️ THE SHIPPED DISPATCH IS KEYED `pullRequestId:headSha` (MOTIR-5518), which would
+   * refuse the same head for ever. So the key carries the exit's id: once per exit, and
+   * a second exit of the same head is a new key.
+   *
+   * In ONE transaction, under the card's row lock: the checks, the claim on the exit
+   * (`requeuedAt`), and the card's return `implemented → in_review` — the status the
+   * failure moved it from. The dispatch is sent after the commit.
+   */
+  async requeueAutoMember(
+    input: { workItemId: string; pullRequestId: string },
+    ctx: ServiceContext,
+  ): Promise<{ pullRequestId: string; headSha: string; status: string }> {
+    const now = new Date();
+    const claimed = await withWorkspaceContext(ctx, async (tx) => {
+      const found = await workItemRepository.findById(input.workItemId, tx);
+      if (!found || found.workspaceId !== ctx.workspaceId) {
+        throw new WorkItemNotFoundError(input.workItemId);
+      }
+      await projectAccessService.assertPermission(
+        found.projectId,
+        ctx,
+        APPROVAL_MERGE_PERMISSION,
+        tx,
+      );
+      const mode = await projectRepository.findPrMergeMode(found.projectId, tx);
+      if (mode?.prMergeMode !== 'auto') {
+        throw new QueueAgainRefusedError('wrong_mode', input.pullRequestId);
+      }
+      await queueExitCardMoves.lockCard(found.id, tx);
+      const item = (await workItemRepository.findById(found.id, tx))!;
+
+      const row = (await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx)).find(
+        (candidate) => candidate.pullRequest.id === input.pullRequestId,
+      );
+      if (!row) throw new QueueAgainRefusedError('not_delivered', input.pullRequestId);
+      const pr = row.pullRequest;
+      if (pr.state !== 'open' || pr.merged) {
+        throw new QueueAgainRefusedError('not_open', input.pullRequestId);
+      }
+      const exit = (
+        await githubPullRequestQueueExitRepository.findLatestByPullRequests([pr.id], tx)
+      ).get(pr.id);
+      if (!exit) throw new QueueAgainRefusedError('no_exit', input.pullRequestId);
+      if (exit.requeuedAt !== null) throw new ApprovalGateAlreadyRequeuedError(pr.id);
+      const head = liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+      if (head !== exit.headSha) throw new QueueAgainRefusedError('head_moved', pr.id);
+      if ((await githubPullRequestQueueExitRepository.claimRequeue(exit.id, now, tx)) === 0) {
+        throw new ApprovalGateAlreadyRequeuedError(pr.id);
+      }
+
+      const moved = await queueExitCardMoves.returnCard(item, 'in_review', ctx, tx, {});
+      return { item, exit, moved };
+    });
+
+    await sendEvent('pull-request/auto-merge.requested', {
+      workspaceId: ctx.workspaceId,
+      workItemId: claimed.item.id,
+      pullRequestId: input.pullRequestId,
+      headSha: claimed.exit.headSha,
+      actorUserId: ctx.userId,
+      idempotencyKey: `${input.pullRequestId}:${claimed.exit.headSha}:requeue:${claimed.exit.id}`,
+    });
+    await queueExitCardMoves.emitMoved(claimed.item.id, claimed.moved, ctx);
+    return {
+      pullRequestId: input.pullRequestId,
+      headSha: claimed.exit.headSha,
+      status: claimed.moved?.toStatusKey ?? claimed.item.status,
+    };
   },
 };
 
@@ -487,6 +652,93 @@ async function mergeMember(
       refusal,
     };
   }
+}
+
+/**
+ * QUEUE AGAIN under the card's DECIDED approval (Story MOTIR-5461 · MOTIR-5634;
+ * `approval-gates.md` §4 THIRD AMENDMENT, decision 5). The member left the merge queue
+ * and nobody has put it back; while it is still at the head the approval named, the
+ * approval still describes it, so it is re-enqueued with no second question.
+ *
+ * ⚠️ THE CLAIM COMES BEFORE THE HOST CALL. Two presses on one exit must enqueue ONCE,
+ * so the first stamps the exit's `requeuedAt` under the card's row lock and the second
+ * finds it stamped. A host that refuses releases the stamp, so the exit is offered
+ * again; a success returns the card `implemented → approved`, carrying the decided
+ * gate's id — the one write rule 2b lets into `approved` while a pull request is open.
+ */
+async function queueAgainUnderApproval(
+  approvalGateId: string,
+  member: MemberVersion,
+  args: { workItemId: string; exit: GithubPullRequestQueueExit },
+  ctx: ServiceContext,
+): Promise<ApproveAndMergeMemberOutcome> {
+  let target: MergeTarget;
+  try {
+    const checked = await checkMember({ approvalGateId, member }, ctx);
+    // A moved head: the approval no longer describes the code, so nothing is claimed.
+    // The next green verdict raises the fresh question (decision 6).
+    if (checked.kind === 'stale') throw new ApprovalGateSupersededError(approvalGateId);
+    target = checked.target;
+  } catch (err) {
+    const refusal = memberRefusal(err);
+    if (!refusal) throw err;
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: null,
+      outcome: 'refused',
+      refusal,
+    };
+  }
+
+  const claimedAt = new Date();
+  try {
+    await withWorkspaceContext(ctx, async (tx) => {
+      await queueExitCardMoves.lockCard(args.workItemId, tx);
+      const count = await githubPullRequestQueueExitRepository.claimRequeue(
+        args.exit.id,
+        claimedAt,
+        tx,
+      );
+      if (count === 0) throw new ApprovalGateAlreadyRequeuedError(target.pullRequestId);
+    });
+  } catch (err) {
+    const refusal = memberRefusal(err);
+    if (!refusal) throw err;
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: target.pullRequestId,
+      outcome: 'refused',
+      refusal,
+    };
+  }
+
+  let outcome: 'merged' | 'enqueued';
+  try {
+    outcome = await mergeOrEnqueue(approvalGateId, target, ctx);
+  } catch (err) {
+    // The host said no, or said nothing: the exit is offered again.
+    await withWorkspaceContext(ctx, (tx) =>
+      githubPullRequestQueueExitRepository.releaseRequeue(args.exit.id, claimedAt, tx),
+    );
+    const refusal = memberRefusal(err);
+    if (!refusal) throw err;
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: target.pullRequestId,
+      outcome: 'refused',
+      refusal,
+    };
+  }
+
+  const moved = await withWorkspaceContext(ctx, async (tx) => {
+    await queueExitCardMoves.lockCard(args.workItemId, tx);
+    const item = await workItemRepository.findById(args.workItemId, tx);
+    return item
+      ? queueExitCardMoves.returnCard(item, 'approved', ctx, tx, { decidingGateId: approvalGateId })
+      : null;
+  });
+  await queueExitCardMoves.emitMoved(args.workItemId, moved, ctx);
+  return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
 }
 
 /** A member's refusal in the frame's own vocabulary — the mapping the decide action uses. */

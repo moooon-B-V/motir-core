@@ -95,6 +95,18 @@ changes**.
   and why, **your approval stands**, and that pull request offers **Retry merge**.
   After a reload it reads _Not merged yet_: the reason is not kept, so open the
   pull request to see it.
+- **If the merge queue takes a pull request out**, its row reads **Left the
+  queue** when its checks failed there (with the failing check linked when it
+  is known), or **Removed from the queue** when someone took it out or the
+  queue was cleared. A failure moves the work item back to **Implemented**.
+  Your approval still stands: while the pull request is at the commits you
+  approved, **Queue again** puts it back with no new question, and the work item
+  returns to **Approved**. After a new push the row reads **New commits since
+  approval** instead, and Motir asks again once every check is green. An
+  ejected work item is not in _To approve_ — its question was already answered.
+  In a project that merges automatically, the same row and a **Merge queue**
+  note appear without a gate, and anyone who may edit the work item can press
+  **Queue again**.
 - **Request changes** records your note and moves nothing, as on every gate.
 
 ## Who is asked, and who may answer

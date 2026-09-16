@@ -1,9 +1,11 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
-import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
+import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
+import type { PullRequestApprovalMemberDTO, PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // WHAT A RELOAD STILL KNOWS ABOUT AN APPROVE-AND-MERGE SET (Story MOTIR-4909 · MOTIR-5484 ·
@@ -16,7 +18,9 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //   · whether the press QUEUED it — the pull request carries a `queue:` outcome and has not
 //     merged — so the row reads *Queued to merge* for as long as that is true;
 //   · whether a RETRY is offered, which is a fact about the pull request rather than about a
-//     second gate: the approval stands, and this member has no merge outcome yet.
+//     second gate: the approval stands, and this member has no merge outcome yet;
+//   · the merge queue's latest EXIT, and whether *Queue again* is honest — the exit nobody has
+//     put back, while the pull request is still at the head the approval named (MOTIR-5634).
 //
 // ⚠️ NO REFUSAL REASON: the press does not persist one.
 //
@@ -42,21 +46,51 @@ async function approvedMembers(
     return [];
   }
   const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+  const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+    deliveries.map((row) => row.pullRequest.id),
+    tx,
+  );
   return membersOf(approval.subjectVersion).map((member) => {
-    const pr = deliveries.find(
-      (row) =>
-        `${row.repo.owner}/${row.repo.name}` === member.repo &&
-        row.pullRequest.number === member.number,
-    )?.pullRequest;
+    const row = deliveries.find(
+      (candidate) =>
+        `${candidate.repo.owner}/${candidate.repo.name}` === member.repo &&
+        candidate.pullRequest.number === member.number,
+    );
+    const pr = row?.pullRequest;
     const outcome = pr?.mergeOutcomeRef ?? null;
+    const exit = pr ? (exits.get(pr.id) ?? null) : null;
+    // An exit nobody has put back is Queue again's to offer, not Retry's (MOTIR-5634) — and
+    // only while the pull request is still at the head the approval named, which is what
+    // makes reusing the approval honest.
+    const standingExit = exit !== null && exit.requeuedAt === null;
+    const open = pr !== undefined && pr.state === 'open' && !pr.merged;
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: pr?.id ?? null,
       queued: pr !== undefined && !pr.merged && (outcome?.startsWith('queue:') ?? false),
       // A member Motir has not merged or queued yet is the one a person can try again.
-      retryable: pr !== undefined && !pr.merged && outcome === null,
+      retryable: pr !== undefined && !pr.merged && outcome === null && !standingExit,
+      exit: exit ? toQueueExitDto(exit) : null,
+      requeueable:
+        open &&
+        standingExit &&
+        row !== undefined &&
+        deliveryMemberVersion(row) === member.subjectVersion,
     };
   });
+}
+
+/** One merge-queue exit as a surface reads it (MOTIR-5632 · MOTIR-5633 · MOTIR-5634). */
+export function toQueueExitDto(exit: GithubPullRequestQueueExit): PullRequestQueueExitDTO {
+  return {
+    rawReason: exit.rawReason,
+    disposition: exit.disposition,
+    headSha: exit.headSha,
+    exitedAt: exit.exitedAt.toISOString(),
+    requeuedAt: exit.requeuedAt?.toISOString() ?? null,
+    failingCheckName: exit.failingCheckName,
+    failingCheckUrl: exit.failingCheckUrl,
+  };
 }
 
 export const pullRequestApprovalMembersService = {

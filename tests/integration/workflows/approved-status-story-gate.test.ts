@@ -116,20 +116,62 @@ async function backdate(id: string, days: number): Promise<void> {
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('the integration seams', () => {
-  it('REFUSES `implemented → approved` and the refusal classifies as 422', async () => {
-    // ⚠️ THIS EDGE IS ABSENT ON PURPOSE, and its absence is the story's one
-    // real design decision. `approved` is a PERSON's yes; `implemented` is the
-    // agent reporting it finished. An edge straight from one to the other would
-    // let a card be approved before anybody — or any build — looked at it, which
-    // is precisely the state the status was introduced to make unrepresentable.
-    // The only way in is `in_review → approved`.
+  it('REFUSES a hand `implemented → approved` while an open pull request delivers the card, and the refusal classifies as 422', async () => {
+    // ⚠️ `approved` is a PERSON's yes; `implemented` is the agent reporting it
+    // finished. Approving straight from one to the other would let a card be
+    // approved before any build looked at it. Until MOTIR-5630 that was held by
+    // the ABSENCE of this edge. The edge is now declared for Queue again
+    // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7), so the protection is
+    // asserted where it now lives: §6d rule 2b refuses the hand move while an
+    // open pull request — a build to skip — delivers the card.
     const c = await card('a card the agent has built');
     await move(c.id, 'in_progress', 'implemented');
+    const installation = await adminDb.githubInstallation.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        installationId: 'inst-apg-story-gate',
+        accountLogin: 'acme',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+    });
+    const repo = await adminDb.githubRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
+        installationId: installation.id,
+        repoId: 'repo-apg-story-gate',
+        owner: 'acme',
+        name: 'web',
+        defaultBranch: 'main',
+        provider: 'github',
+      },
+    });
+    const pr = await adminDb.githubPullRequest.create({
+      data: {
+        repoId: repo.id,
+        number: 11,
+        title: 'a card the agent has built',
+        state: 'open',
+        merged: false,
+        headRef: 'subtask/built',
+        baseRef: 'main',
+        provider: 'github',
+      },
+    });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: c.id,
+        githubPullRequestId: pr.id,
+        repoId: repo.id,
+      },
+    });
 
     const err = await workItemsService.updateStatus(c.id, 'approved', fx.ctx).catch((e) => e);
 
     expect(err).toBeInstanceOf(Error);
-    expect((err as { code?: string }).code).toBe('ILLEGAL_TRANSITION');
+    expect((err as { code?: string }).code).toBe('APPROVAL_GATE_PENDING');
     // …and it is a REFUSAL the API renders, not a fault that 500s. The status
     // comes from the shipped classifier rather than from a literal in this
     // file: asserting `422` against a number I typed would pass even if the
@@ -139,19 +181,18 @@ describe('the integration seams', () => {
     // The card did not move.
     expect(await statusOf(c.id)).toBe('implemented');
 
-    // …and the refusal comes with a REAL set of allowed targets, computed from
-    // the project's own workflow rather than from a constant. `in_review` is in
-    // it; `approved` is not, which is the absence this whole test is about.
+    // The edge itself is declared (decision 7) beside the ordinary way in, so
+    // the refusal above is the guard's, not the workflow table's.
     const canReach = async (to: string) =>
       workflowsService.canTransition(fx.projectId, 'implemented', to, fx.workspaceId);
     expect(await canReach('in_review')).toBe(true);
-    expect(await canReach('approved')).toBe(false);
+    expect(await canReach('approved')).toBe(true);
   });
 
   it('accepts EVERY declared hop out of approved', async () => {
-    // ⚠️ THE ABSENT EDGE IS ONLY HALF THE CONTRACT. A workflow that refused
-    // `implemented → approved` by refusing everything would pass the test above
-    // and be catastrophically wrong. The migration declares one way in and THREE
+    // ⚠️ THE REFUSAL IS ONLY HALF THE CONTRACT. A workflow that refused a hand
+    // move into approved by refusing everything would pass the test above and be
+    // catastrophically wrong. The migration declared one way in and THREE
     // ways out — `done` when the merge lands, `in_progress` to pull work back
     // after approval, and `cancelled` by the constant's own convention that
     // cancellation is reachable from anywhere. Each is driven on its own card,

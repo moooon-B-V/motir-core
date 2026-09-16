@@ -17,6 +17,9 @@ import type {
   MergeChangeRequestInput,
   MergeChangeRequestResult,
   NormalizedDeploymentStatus,
+  NormalizedMergeGroupAttempt,
+  NormalizedMergeQueueExit,
+  NormalizedUnlinkedCheckFailure,
 } from './types';
 
 // The GitProvider seam (Story 7.10 · MOTIR-891). ONE interface every Git host
@@ -385,6 +388,34 @@ export interface GitProvider {
    * GitHub implements it here; GitLab's `deployment` hook is MOTIR-5332's.
    */
   parseDeploymentStatusEvent?(rawPayload: unknown): NormalizedDeploymentStatus | null;
+
+  // --- Merge queues (Story MOTIR-5461 · MOTIR-5632) --------------------------
+
+  /**
+   * Normalize a raw webhook payload announcing that a MERGE QUEUE removed a change
+   * request, or `null` when it is not one (a different action, or a malformed
+   * body). PURE.
+   *
+   * OPTIONAL in the style of the reads above: GitHub implements it; GitLab's merge
+   * trains are MOTIR-4608's, and a host that does not declare it is simply never
+   * asked.
+   */
+  parseMergeQueueExitEvent?(rawPayload: unknown): NormalizedMergeQueueExit | null;
+
+  /**
+   * Normalize a raw payload announcing that a merge queue started testing a group,
+   * or `null` when it is not one (MOTIR-5633). PURE. A ref that names no pull request
+   * is `null` too: there is nothing to attach a check to.
+   */
+  parseMergeGroupAttemptEvent?(rawPayload: unknown): NormalizedMergeGroupAttempt | null;
+
+  /**
+   * Normalize a raw CI payload into a FAILED, COMPLETED check that names no pull
+   * request — the shape of a merge-queue check — or `null` for anything else: a
+   * pending or passing check, one a pull request claims, or a suite-level event
+   * (which carries no check name or link). PURE (MOTIR-5633).
+   */
+  parseUnlinkedCheckFailure?(rawPayload: unknown): NormalizedUnlinkedCheckFailure | null;
 
   /**
    * Fetch the JOBS of one completed workflow run, normalized. The meter bills

@@ -730,9 +730,249 @@ An approval that does not merge is a note, not a gate.
 > today. MOTIR-4610 replaces capability-by-optional-method with a declared set, and
 > this helper is one of the sites it converts.
 >
-> **Not decided here:** §8 row 4a (MOTIR-5479's), what a queue EJECTION does to
-> the card (MOTIR-5461), how a GitHub review maps onto gates (MOTIR-4910), and
-> whether a provisioned repository gets a queue at all (MOTIR-4161).
+> **Not decided here:** §8 row 4a (MOTIR-5479's), how a GitHub review maps onto
+> gates (MOTIR-4910), and whether a provisioned repository gets a queue at all
+> (MOTIR-4161). What a queue EJECTION does to the card is decided by §4's THIRD
+> AMENDMENT, directly below.
+
+> ### §4 — THIRD AMENDMENT (MOTIR-5629, 2026-09-16): a merge-queue EJECTION — the reason map, the exit recorded on the pull request, the card's ONE decided gate stands, _Queue again_ while the heads are unchanged, and a push re-arms
+>
+> **What was OPEN.** Decision 6 above enqueues a pull request, and §8's second
+> amendment makes approving the card's ONE `pull_request_approval` gate merge or
+> enqueue every member. Nothing said what happens when the queue then REMOVES a
+> member: to the card, to the approval a person already gave, to the pull
+> request's _Queued to merge_ record, and to the card's other members. Story
+> MOTIR-5461's children build against these answers. **Everything above in §4,
+> and §8's second and third amendments, stands. No path this amendment
+> describes raises a gate per pull request, and no path raises a second
+> `pull_request_approval` over commits a person already approved.**
+>
+> **Read at base `58bb046d0`.** The evidence is MOTIR-5627's capture, attached to
+> that card as `mq-deliveries-cla-hook-2026-09-13.json.txt` with its findings in
+> the card's comments: 963 real deliveries to a repository hook on
+> `moooon-B-V/motir-core` (2026-09-13 12:32 → 2026-09-16 12:31), read back with
+> `gh api repos/moooon-B-V/motir-core/hooks/<id>/deliveries/<delivery-id>`.
+>
+> **1. THE EVENT** (rung 2: the capture). The signal is the `pull_request`
+> event, action **`dequeued`**. Motir's App (`motir-integration`) already
+> subscribes to `pull_request`, so no grant is needed to HEAR an ejection. The
+> payload carries `number`, `pull_request` (head SHA included) and `reason`, and
+> **nothing about the merge group or the check that failed.** It is normalised
+> through the `GitProvider` seam as an OPTIONAL capability, the way
+> `parseWorkflowRunEvent?` (`lib/git/provider.ts:362`) is. GitLab merge trains are
+> MOTIR-4608's.
+>
+> **2. THE REASON MAP — closed and total** (rung 2: the capture; rung 1: the
+> published webhook schema). **A delivery spells the reason in the webhook
+> schema's UPPER_SNAKE enum, not in the GraphQL timeline's lowercase one.**
+> Counted over 110 real `dequeued` deliveries: `MERGE` 88, `CI_FAILURE` 15,
+> `MANUAL` 4, `MERGE_CONFLICT` 3. The timeline's `failed_checks` / `merged` /
+> `checks_timed_out` never appear in a delivery. A successful merge is `MERGE`,
+> not `merged`. The match is EXACT; nothing is case-folded.
+>
+> | `reason` (exact)         | seen in a delivery | disposition | why                                                                                             |
+> | ------------------------ | ------------------ | ----------- | ----------------------------------------------------------------------------------------------- |
+> | `CI_FAILURE`             | yes (15)           | failure     | the queue's checks failed on the merge group                                                    |
+> | `CI_TIMEOUT`             | no — schema        | failure     | the checks did not finish; GitHub lists a timeout as a removal cause beside failures            |
+> | `MERGE_CONFLICT`         | yes (3)            | failure     | the pull request does not combine with what is ahead of it; the work needs a change             |
+> | `INVALID_MERGE_COMMIT`   | no — schema        | failure     | the queue could not build a merge commit for it                                                 |
+> | `GIT_TREE_INVALID`       | no — schema        | failure     | the queue could not build a tree for it                                                         |
+> | `BRANCH_PROTECTIONS`     | no — schema        | failure     | GitHub: _"branch protection failure that could not automatically be resolved"_ — it cannot land |
+> | `MANUAL`                 | yes (4)            | neutral     | somebody took it out on purpose; nothing is said about the work                                 |
+> | `QUEUE_CLEARED`          | no — schema        | neutral     | the queue was reset                                                                             |
+> | `ROLL_BACK`              | no — schema        | neutral     | removed for a roll-back, not for its own content                                                |
+> | `UNKNOWN_REMOVAL_REASON` | no — schema        | neutral     | GitHub itself does not know; a card never moves on an unknown                                   |
+> | `MERGE`                  | yes (88)           | landed      | it merged                                                                                       |
+> | `ALREADY_MERGED`         | no — schema        | landed      | it was merged already                                                                           |
+> | **any other string**     | —                  | neutral     | recorded raw and logged once, so a new spelling is visible and moves no card                    |
+>
+> The three schema-only failure rows are decided as failures because in each
+> the queue could not produce a mergeable result for that pull request as it
+> stands, which is what `implemented` says (MOTIR-3685: committed code whose
+> build has not passed).
+>
+> **3. WHAT A REMOVAL RECORDS, AND WHAT A FAILURE DOES** (rung 2: §4 decision 4
+> and §8's second amendment, decision 4 — the outcome lives on the PULL
+> REQUEST).
+>
+> - **Every non-landed removal writes ONE queue-EXIT ROW** on the pull request:
+>   the raw reason, its disposition, the head SHA it left at, the time, the
+>   delivery GUID (decision 9), and a nullable `requeuedAt` (decision 5). Rows
+>   accumulate; the latest is the pull request's current exit. The failing
+>   check's name and link are added by decision 8.
+> - **A `queue:` `merge_outcome_ref` is CLEARED**, and only a `queue:` one, so the
+>   pull request stops reading _Queued to merge_. `merge_authority` stays: it
+>   still says who asked for the enqueue.
+> - **On a failure, every card the pull request DELIVERS moves to
+>   `implemented`** — from `approved` in a `manual` project, from `in_review` in
+>   an `auto` one — through `applyStatusTransition` as a SYSTEM write. A
+>   delivered card at any other status (somebody moved it) is left alone and
+>   named in the handler's result. §6d rule 6 does not fire, because it is scoped
+>   to a person's move, and there is no awaiting gate to withdraw anyway.
+> - **The card's OTHER members still in the queue are left there.** They were
+>   approved at their own heads, and those heads have not moved.
+> - **All of it is ONE transaction**, and nothing external is called. A failure
+>   inside it answers non-2xx; GitHub does not retry by itself, so recovery is a
+>   hand redelivery, which decision 9 makes safe.
+>
+> **4. NEUTRAL AND LANDED.** A neutral removal writes the row, clears the ref,
+> and moves no card; the pull request is put back by _Queue again_. A landed
+> removal writes nothing and moves nothing: the merge webhook already owns
+> `done` (§4 amendment).
+>
+> **5. THE CARD'S ONE DECIDED GATE STANDS, AND _QUEUE AGAIN_ REUSES IT WHILE THE
+> HEADS ARE UNCHANGED** (rung 1: GitHub; rung 3: MOTIR-5603's record).
+>
+> - **An ejection neither supersedes nor re-opens the decided
+>   `pull_request_approval` gate.** A decided gate is a record (§6a), and the
+>   trigger `trg_approval_gate_decided_immutable` refuses to edit it anyway.
+> - **While a member's head still equals its entry in the gate's
+>   `subjectVersion`, the approval still describes that code.** GitHub agrees:
+>   its documented removal causes do not touch a review, and an approval is
+>   dismissed only when new commits change the diff, and only where the branch
+>   rule _Dismiss stale pull request approvals when new commits are pushed_ is on
+>   (_About protected branches_, and _Managing a merge queue_, read 2026-09-16).
+>   Asking again for the same commits is _"the same person answering the same
+>   question twice"_, which MOTIR-5603 retired.
+> - **_Queue again_ in a `manual` project is the shipped per-member RETRY**
+>   (`pullRequestMergeService.retryApproveAndMergeMember`, MOTIR-5613), addressed
+>   by (the card's approved gate, the pull request), extended to accept an
+>   exited member whose latest exit is not yet re-queued. Under the card's row
+>   lock it re-runs merge-or-enqueue, records the outcome
+>   (`recordMotirMerge`), stamps the exit row's `requeuedAt`, and, if a failure
+>   had moved the card, writes `implemented → approved` carrying
+>   `decidingGateId` = that gate. **It decides nothing and raises nothing.** A
+>   moved head is refused by the retry's shipped head check.
+> - **_Queue again_ in an `auto` project** has no gate to reuse, so it is a
+>   person's press on (the card, the pull request): the same permission floor as
+>   the press (`work_item:edit`), an unchanged head, and an un-re-queued exit. It
+>   re-dispatches `pull-request/auto-merge.requested` with an idempotency key
+>   that includes the exit row's id, because the shipped key is `prId:headSha`
+>   (`lib/services/ciPromotion.ts`, `dispatchAutoMerges`) and would otherwise
+>   refuse the same head for ever. It stamps `requeuedAt` and returns the card
+>   `implemented → in_review`, the status the failure moved it from.
+>   `merge_authority` stays `auto_mode`.
+> - **Two presses on one exit enqueue once.** The card's row lock plus a
+>   `requeuedAt IS NULL` predicate decide it; the loser gets a named refusal.
+>
+> **6. NO SECOND GATE OVER THE SAME COMMITS, AND A PUSH RE-ARMS** (rung 2: the
+> shipped promotion). **This is the rule the story turns on, because the shipped
+> latch would otherwise break decision 5 by itself.** After a failure exit the
+> card is `implemented` while its members' OWN checks are still green: only the
+> queue's merge commit failed. Two shipped paths would promote it straight back:
+>
+> - `workItemsService.latchCiGreen` runs `promoteIfCiAlreadyGreen` whenever a card
+>   ARRIVES at `implemented`, which includes the ejection's own write; and
+> - `promoteDeliveredCardsOnGreen` promotes on the next green check event at that
+>   head.
+>
+> Either promotion calls `raisePullRequestApprovalGate`, which checks only for an
+> `awaiting` gate, so it would raise a second gate over the commits the decided
+> gate already covers. **So the promotion HOLDS a card while any delivered
+> member has an un-re-queued FAILURE exit at its CURRENT head**, in both edges,
+> read in the transaction the promotion already opens. The hold lifts in exactly
+> two ways:
+>
+> - **a push** moves that member's head, the exit is no longer at the current
+>   head, and the next green verdict promotes the card to `in_review` through the
+>   shipped path, which raises **ONE fresh awaiting gate** over the new heads
+>   (§8's amendment, decisions 3 and 4; the partial unique index is on `awaiting`
+>   only). Nothing new raises a gate;
+> - **_Queue again_** stamps the exit, and moves the card itself (decision 5).
+>
+> **And the raise itself never asks about commits a person already approved.**
+> `REVIEW_STATUSES` includes `approved`, so a late green check on an `approved`
+> card whose member is still queued reached `raisePullRequestApprovalGate`, which
+> found no `awaiting` gate and raised a second one over the approved commits —
+> MOTIR-5632 reproduced it before fixing it. The raise now refuses when the card's
+> latest gate of this kind is `approved` with the SAME `subjectVersion`. A push
+> changes the version, so the re-arm above is untouched. (Refusing queued members
+> as merge candidates was the alternative, and it was rejected: a card with one
+> member re-pushed and another still queued would then never be asked again.)
+>
+> **7. THE WORKFLOW EDGES** (rung 2: `DEFAULT_TRANSITIONS`, which carries 33
+> edges at this base).
+>
+> - `approved → implemented` and `in_review → implemented` are declared
+>   defaults: a person in an `auto` project may make the same move by hand, and
+>   the workflow editor must show the real lifecycle even though the ejection's
+>   own write is a system write.
+> - `implemented → approved` is declared for _Queue again_. **It was
+>   deliberately ABSENT** (`lib/workflows/defaultWorkflow.ts`, the `approved`
+>   block): an undeclared hop kept a card from skipping CI. The protection
+>   survives where there is a build to skip: the product's only writer is
+>   _Queue again_, which carries a decided gate whose `subjectVersion` names
+>   heads CI already judged green, and a HAND move into `approved` while an open
+>   pull request delivers the card is still refused by §6d rule 2b. A card with
+>   no open pull request may now be moved there by hand; it has no build to
+>   skip. The tests asserting the absence are rewritten to assert rule 2b,
+>   citing this decision.
+> - Existing default-workflow projects are backfilled by a KEY join with a
+>   `NOT EXISTS` guard, the pattern of
+>   `prisma/migrations/20260911140000_add_approved_default_status/migration.sql`.
+>   A project missing any of the three keys gets nothing, which leaves a custom
+>   workflow alone.
+>
+> **8. THE FAILING CHECK — the `merge_group` event, which needs a grant**
+> (rung 2: the capture). Two candidates were open; the capture settles it:
+>
+> - **REJECTED — a `check_run` delivery's `check_suite.head_branch`.** Over REST a
+>   failed merge-group check run reads `pull_requests: []` and
+>   `check_suite.head_branch: null`, and no webhook sample of it was captured.
+>   Nothing verified says a delivery names the queue branch.
+> - **CHOSEN — the `merge_group` event.** 126 `checks_requested` and 129
+>   `destroyed` deliveries were captured. Each carries
+>   `merge_group.head_sha` and `merge_group.head_ref` =
+>   `refs/heads/gh-readonly-queue/<base>/pr-<N>-<base_sha>`; `destroyed` also
+>   carries a lowercase `reason` (`merged` 88, `invalidated` 24, `dequeued` 17).
+>   Every `CI_FAILURE` `dequeued` pairs with a `destroyed`/`dequeued` for the same
+>   `pr-<N>`, delivered about 0.3 s EARLIER; a `MERGE_CONFLICT` removal, and some
+>   `MANUAL` ones, have no merge group at all, and so no failing check.
+>
+> So Motir records a QUEUE ATTEMPT at `checks_requested` (the merge group's
+> `head_sha` and the pull request number(s) parsed from `head_ref`), before any of
+> its checks can complete. A failed `check_run` whose `head_sha` is a known
+> attempt writes its `name` and `html_url` onto that attempt (the first failure
+> to complete wins), and the failure exit row takes its failing check from the
+> pull request's latest attempt. Because the attempt exists first, a check that
+> completes before the `dequeued` delivery is not lost. **A queue check NEVER
+> writes `github_check_run`**: that table is the pull request's own CI state at
+> its head (`derivePrCiState`), and a red row there would stop decision 6's
+> re-arm. **A named step with its own owner:** the App needs the `merge_group`
+> event and the _Merge queues_ (read) permission — MOTIR-5638, a person's card
+> in the App settings. Until an installation has accepted it, an exit row's
+> failing check is null and the surface says the check is unknown; nothing
+> else degrades.
+>
+> **9. IDEMPOTENCY — the delivery GUID** (rung 2: the capture). There is no
+> delivery-id table today, and `app/api/github/webhook/route.ts` reads
+> `x-hub-signature-256` and `x-github-event` but not `X-GitHub-Delivery`. **The
+> key is that header, UNIQUE on the exit row.** MOTIR-5627 redelivered a
+> delivery and read both rows back: a new delivery id
+> (`3843060808573517824`, `redelivery: true`) with the SAME GUID as the
+> original (`3843059981840547840`, `redelivery: false`) —
+> `0e648c86-b1d0-11f1-8f8e-188ebfa2d67b`, in the list and in the request header
+> alike. So a hand-redelivered old exit is a no-op, even after _Queue again_,
+> while a genuine second exit at the same head, which is a new event, acts.
+> **A `(head, reason)` key is REJECTED on the record**: the capture shows one
+> head ejected four times (pull request #2877 at `1a74b77`: `CI_FAILURE`,
+> `CI_FAILURE`, `MANUAL`, `CI_FAILURE`), each by a different merge group, and
+> such a key would collapse them. No fallback is needed, because the GUID is
+> repeated.
+>
+> **10. DELIBERATELY NOT DECIDED HERE.** The card BADGE and the `motir fix`
+> claim for an ejected card (MOTIR-5628); any notification; GitLab merge trains
+> (MOTIR-4608).
+>
+> **Which card builds which decision:**
+>
+> | decisions    | card                                                        |
+> | ------------ | ----------------------------------------------------------- |
+> | 1–4, 6 and 9 | MOTIR-5632 — the ejection arm and the two promotion guards  |
+> | 5            | MOTIR-5634 — _Queue again_, in both modes                   |
+> | 7            | MOTIR-5630 — the edges and their backfill                   |
+> | 8            | MOTIR-5633 — the failing check · MOTIR-5638 — the App grant |
+> | the surface  | MOTIR-5631 — the design delta · MOTIR-5635 — the frame      |
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 
@@ -1878,8 +2118,8 @@ record holds then, and why a null FK would be the wrong answer.
 > | the surfaces | MOTIR-5484 — the Development frame's verbs, plus `docs/approval-gates.md` and `CLAUDE.md`'s merge-gate paragraph once the behaviour ships · MOTIR-5485 — the To-approve row |
 >
 > **Not decided here:** §4's merge and enqueue seam and §7's modes (MOTIR-4882's);
-> what a merge queue EJECTING a pull request does to the card (MOTIR-5461); how
-> one pull request's GitHub review maps onto a gate over a set (MOTIR-4910); and
+> what a merge queue EJECTING a pull request does to the card (MOTIR-5461 —
+> decided since by §4's THIRD AMENDMENT, MOTIR-5629); how one pull request's GitHub review maps onto a gate over a set (MOTIR-4910); and
 > refusing a press whose stamp moved (MOTIR-5232). _What SHIPPED_'s _"What has NOT
 > shipped"_ line still lists the `pull_request_approval` handler, correctly: this
 > block ships no code.
@@ -1959,7 +2199,7 @@ record holds then, and why a null FK would be the wrong answer.
 >
 > **9. What this does NOT decide**, each with its key: what a GitHub review
 > decides under one gate (MOTIR-4910 / MOTIR-5590); a merge-queue EJECTION
-> (MOTIR-5461); the decision STAMP (MOTIR-5234); GitLab merge-request approvals
+> (MOTIR-5461 — decided since by §4's THIRD AMENDMENT, MOTIR-5629); the decision STAMP (MOTIR-5234); GitLab merge-request approvals
 > (MOTIR-5593).
 >
 > ### §8 — THIRD AMENDMENT (MOTIR-5624, 2026-09-16): EVERY door that approves the card's gate MERGES — the REST decide route included

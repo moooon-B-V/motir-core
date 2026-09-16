@@ -223,6 +223,12 @@ class FakeServer {
           sessionBranch: branch,
         };
       },
+      // The pre-write read `transitionToImplemented` makes (MOTIR-5630), so it
+      // never writes a card CI already moved past Implemented backwards.
+      getWorkItem: async (key: string) => {
+        const item = this.byKey(key);
+        return { item: { identifier: item.key, status: item.status } };
+      },
       transitionStatus: async (args: { key: string; status: string }) => {
         const refusal = this.refuseTransitionFor?.(args);
         if (refusal) {

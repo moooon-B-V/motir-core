@@ -268,12 +268,21 @@ describe('after a reload (Panels 12s, 12u′)', () => {
       {
         gate: APPROVED,
         members: [
-          { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: true, retryable: false },
+          {
+            subjectVersion: CORE_V,
+            pullRequestId: CORE_PR.id,
+            queued: true,
+            retryable: false,
+            exit: null,
+            requeueable: false,
+          },
           {
             subjectVersion: GATEWAY_V,
             pullRequestId: GATEWAY_PR.id,
             queued: false,
             retryable: true,
+            exit: null,
+            requeueable: false,
           },
         ],
       },
@@ -295,7 +304,14 @@ describe('after a reload (Panels 12s, 12u′)', () => {
       {
         gate: AWAITING,
         members: [
-          { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: false, retryable: true },
+          {
+            subjectVersion: CORE_V,
+            pullRequestId: CORE_PR.id,
+            queued: false,
+            retryable: true,
+            exit: null,
+            requeueable: false,
+          },
         ],
       },
       fakeActions(),
@@ -319,6 +335,8 @@ describe('who else sees it (Panels 12w, 12v)', () => {
             pullRequestId: GATEWAY_PR.id,
             queued: false,
             retryable: true,
+            exit: null,
+            requeueable: false,
           },
         ],
       },
@@ -472,7 +490,14 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
       {
         gate: APPROVED,
         members: [
-          { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: false, retryable: false },
+          {
+            subjectVersion: CORE_V,
+            pullRequestId: CORE_PR.id,
+            queued: false,
+            retryable: false,
+            exit: null,
+            requeueable: false,
+          },
         ],
       },
       fakeActions(),

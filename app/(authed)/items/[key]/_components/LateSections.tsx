@@ -7,6 +7,7 @@ import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
 import {
   approveAndMergeAction,
   decideApprovalGateAction,
+  queueAgainAutoAction,
   retryApproveAndMergeMemberAction,
 } from '../approvalGateActions';
 import { AttachmentsPanel } from './AttachmentsPanel';
@@ -263,6 +264,13 @@ export async function LateUpperSections({
               decide: decideApprovalGateAction,
               approveAndMerge: approveAndMergeAction,
               retryMember: retryApproveAndMergeMemberAction,
+            }}
+            // An `auto` card's exits (MOTIR-5635): Queue again for a reader who may edit.
+            autoQueueExits={{
+              workItemId: itemId,
+              exits: r.mergeGate.autoQueueExits,
+              canEdit,
+              queueAgain: queueAgainAutoAction,
             }}
           />
         </ContentSectionCard>

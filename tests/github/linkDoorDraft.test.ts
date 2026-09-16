@@ -424,3 +424,31 @@ describe('the resync passes no lifecycle it cannot justify', () => {
     expect(body).toMatch(/if \(subject\.draft === null\) return null;/);
   });
 });
+
+describe('an opened / reopened / ready pull request never moves a card BACK from In Review (MOTIR-5630)', () => {
+  // `in_review → implemented` is a DECLARED edge since MOTIR-5630, for the
+  // merge-queue ejection's system write and a person's hand move
+  // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7). Before it existed the
+  // workflow refused the OPENED lifecycle's write on a card CI had already
+  // promoted; the sync now declines it itself, with the same outcome.
+  it.each(['reopened', 'ready_for_review', 'opened'])(
+    'a `%s` delivery leaves an In Review card where it is',
+    async (action) => {
+      const s = await makeLeaf(`link-in-review-${action}@example.com`);
+      await linkFor(s);
+      await workItemsService.updateStatus(s.item.id, 'implemented', s.ctx);
+      await workItemsService.updateStatus(s.item.id, 'in_review', s.ctx);
+
+      const res = await deliver(prPayload({ action, identifier: s.item.identifier }));
+
+      expect(JSON.stringify(res)).toContain('illegal_transition');
+      expect(await statusOf(s.item.id)).toBe('in_review');
+      expect(await statusHops(s.item.id)).toEqual([
+        'todo',
+        'in_progress',
+        'implemented',
+        'in_review',
+      ]);
+    },
+  );
+});

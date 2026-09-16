@@ -198,7 +198,13 @@ describe('the transitions in and out are legal without an admin editing anything
     ).rejects.toBeInstanceOf(IllegalTransitionError);
   });
 
-  it('and NOT in_review → implemented — the promotion runs one way', async () => {
+  it('and in_review → implemented IS legal now — a merge queue can eject an in-review card (MOTIR-5630)', async () => {
+    // This asserted the OPPOSITE until MOTIR-5630 ("the promotion runs one way").
+    // The promotion still does; what changed is that a merge queue can reject an
+    // `auto` project's card after CI promoted it, and `implemented` is the status
+    // that describes committed code whose build has not passed
+    // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7). The edge is declared so
+    // a person can make the same move by hand.
     const item = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'already in review' },
       fx.ctx,
@@ -207,7 +213,7 @@ describe('the transitions in and out are legal without an admin editing anything
     await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
     await expect(
       workItemsService.updateStatus(item.id, 'implemented', fx.ctx),
-    ).rejects.toBeInstanceOf(IllegalTransitionError);
+    ).resolves.toMatchObject({ status: 'implemented' });
   });
 });
 

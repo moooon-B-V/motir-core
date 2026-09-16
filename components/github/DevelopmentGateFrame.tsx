@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import {
   ApprovalGateControl,
   useRefusalCopy,
@@ -28,8 +28,10 @@ import {
   MergeOutcomeProvider,
   persistedRowOutcome,
   rowKey,
+  type PersistedRowOutcome,
   type RowMergeOutcome,
 } from './MergeOutcomeSlot';
+import { QueueExitLine } from './QueueExitLine';
 
 // THE DEVELOPMENT BLOCK'S FRAME ARM (Story MOTIR-4906 · Subtask MOTIR-5336),
 // `design/github/design-notes.md` §20 · Panel 12c — AND ITS VERBS (Story MOTIR-4909 ·
@@ -97,13 +99,22 @@ function pressOutcomeOf(member: ApproveAndMergeMemberOutcomeDTO): PressOutcome {
 }
 
 /** One refused member's line in the alert band: the pull request, then the refusal's own
- *  words from MOTIR-4882's union — never a string this surface writes. */
-function RefusedMemberLine({ name, refusal }: { name: string; refusal: GateRefusal }) {
+ *  words from MOTIR-4882's union — never a string this surface writes. A refused *Queue
+ *  again* says so in its title (E7). */
+function RefusedMemberLine({
+  name,
+  refusal,
+  requeue,
+}: {
+  name: string;
+  refusal: GateRefusal;
+  requeue: boolean;
+}) {
   const t = useTranslations('approvalGate.pullRequestApproval');
   const { headline, nextAction } = useRefusalCopy(refusal);
   return (
     <span className="block">
-      <b>{t('refused.title', { pr: name })}</b> {headline}{' '}
+      <b>{t(requeue ? 'requeue.refusedTitle' : 'refused.title', { pr: name })}</b> {headline}{' '}
       <span className="text-(--el-text-secondary)">{nextAction}</span>
     </span>
   );
@@ -146,7 +157,7 @@ export function DevelopmentGateFrame({
   const tGate = useTranslations('approvalGate');
   const router = useRouter();
   // The in-browser path to the status rail (Bug MOTIR-5212) — a no-op outside the item page.
-  const { applyOptimisticStatus } = useOptimisticStatusWriter();
+  const { applyOptimisticStatus, clearOptimisticStatus } = useOptimisticStatusWriter();
 
   // The gate as this frame knows it: the server's, until this reader decides — then the row
   // the response returned. A DIFFERENT gate from the server (a withdrawal and a fresh raise
@@ -156,6 +167,9 @@ export function DevelopmentGateFrame({
   const [pressing, setPressing] = useState(false);
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, PressOutcome>>(new Map());
   const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set());
+  // Members whose latest press was *Queue again* rather than *Retry merge* (MOTIR-5635) —
+  // what words their progress line and a refusal's title.
+  const [requeued, setRequeued] = useState<ReadonlySet<string>>(new Set());
 
   const members = membersOf(gate.subjectVersion);
   const count = members.length;
@@ -169,15 +183,30 @@ export function DevelopmentGateFrame({
           b: names[names.length - 1]!,
         });
 
-  async function retryMember(subjectVersion: string, pullRequestId: string) {
+  async function retryMember(
+    subjectVersion: string,
+    pullRequestId: string,
+    queueAgain: { failure: boolean } | null = null,
+  ) {
     if (!actions) return;
     setRetrying((prev) => new Set(prev).add(subjectVersion));
+    setRequeued((prev) => {
+      const next = new Set(prev);
+      if (queueAgain) next.add(subjectVersion);
+      else next.delete(subjectVersion);
+      return next;
+    });
+    // *Queue again* after a FAILURE returns the card to Approved through the decided gate's
+    // own write (decision 5): the rail says so now, and a refusal takes it back. A neutral
+    // removal never moved the card, so there is nothing to predict.
+    if (queueAgain?.failure) applyOptimisticStatus('approved');
     try {
       const result = await actions.retryMember({
         approvalGateId: gate.id,
         pullRequestId,
         identifier: itemIdentifier,
       });
+      if (queueAgain?.failure && !result.ok) clearOptimisticStatus();
       // ONLY THAT ROW: a retry reports one member, and the others keep what they showed.
       setOutcomes((prev) =>
         new Map(prev).set(
@@ -197,6 +226,9 @@ export function DevelopmentGateFrame({
     }
   }
 
+  const factOf = (member: MemberVersion) =>
+    read.members?.find((m) => m.subjectVersion === member.subjectVersion) ?? null;
+
   function retryFor(member: MemberVersion, pullRequestId: string | null) {
     return {
       onRetry:
@@ -207,10 +239,45 @@ export function DevelopmentGateFrame({
     };
   }
 
+  function queueAgainFor(member: MemberVersion, fact: PullRequestApprovalMemberDTO) {
+    const failure = fact.exit?.disposition === 'failure';
+    return {
+      onQueueAgain:
+        read.canDecide && actions && fact.pullRequestId
+          ? () => void retryMember(member.subjectVersion, fact.pullRequestId!, { failure })
+          : null,
+      queueing: retrying.has(member.subjectVersion),
+    };
+  }
+
+  // TOTAL over what a reload knows (MOTIR-5635): a new `PersistedRowOutcome` does not compile
+  // until the frame draws it — with its verb, which the quick view's reading has not.
+  const rowForState: Record<
+    PersistedRowOutcome,
+    (member: MemberVersion, fact: PullRequestApprovalMemberDTO) => RowMergeOutcome | null
+  > = {
+    queued: () => ({ kind: 'queued' }),
+    leftQueue: (member, fact) => ({ kind: 'leftQueue', ...queueAgainFor(member, fact) }),
+    removedFromQueue: (member, fact) => ({
+      kind: 'removedFromQueue',
+      ...queueAgainFor(member, fact),
+    }),
+    newCommits: () => ({ kind: 'newCommits' }),
+    // MOTIR-5613: a retry is offered by the pull request under the card's own gate — there
+    // is no second gate to press. The row's copy is MOTIR-5615's.
+    notMergedYet: (member, fact) => ({
+      kind: 'notMergedYet',
+      ...retryFor(member, fact.pullRequestId),
+    }),
+  };
+
   function outcomeFor(member: MemberVersion): RowMergeOutcome | null {
     if (pressing) return { kind: 'merging' };
     const pressed = outcomes.get(member.subjectVersion);
-    if (pressed) {
+    // A refused *Queue again* leaves the row as the reload reads it — still out of the
+    // queue, still offering the press (E7); the refusal is named in the alert band.
+    const requeueRefused = pressed?.outcome === 'refused' && requeued.has(member.subjectVersion);
+    if (pressed && !requeueRefused) {
       switch (pressed.outcome) {
         case 'merged':
           return { kind: 'merged' };
@@ -224,19 +291,11 @@ export function DevelopmentGateFrame({
       }
     }
     if (gate.state !== 'approved') return null;
-    const fact = read.members?.find((m) => m.subjectVersion === member.subjectVersion);
+    const fact = factOf(member);
     if (!fact) return null;
     // The same reading the quick view applies (`persistedRowOutcome`, Bug MOTIR-5650).
-    switch (persistedRowOutcome(fact)) {
-      case 'queued':
-        return { kind: 'queued' };
-      case 'notMergedYet':
-        // MOTIR-5613: a retry is offered by the pull request under the card's own gate —
-        // there is no second gate to press. The row's copy is MOTIR-5615's.
-        return { kind: 'notMergedYet', ...retryFor(member, fact.pullRequestId) };
-      case null:
-        return null;
-    }
+    const kind = persistedRowOutcome(fact);
+    return kind ? rowForState[kind](member, fact) : null;
   }
 
   const rowOutcomes = new Map<string, RowMergeOutcome>();
@@ -346,7 +405,7 @@ export function DevelopmentGateFrame({
   const refused = members.flatMap((member) => {
     const pressed = outcomes.get(member.subjectVersion);
     return !pressing && pressed?.outcome === 'refused'
-      ? [{ member, refusal: pressed.refusal }]
+      ? [{ member, refusal: pressed.refusal, requeue: requeued.has(member.subjectVersion) }]
       : [];
   });
   const mergedNames = membersIn('merged').map(nameOf);
@@ -361,11 +420,12 @@ export function DevelopmentGateFrame({
           aria-hidden
         />
         <p className="text-[13px] leading-snug text-(--el-text-strong)">
-          {refused.map(({ member, refusal }) => (
+          {refused.map(({ member, refusal, requeue }) => (
             <RefusedMemberLine
               key={member.subjectVersion}
               name={nameOf(member)}
               refusal={refusal}
+              requeue={requeue}
             />
           ))}
           <span className="block text-(--el-text-secondary)">
@@ -389,11 +449,38 @@ export function DevelopmentGateFrame({
         : count > 0 && membersIn('merged').length === count
           ? t('merged.why', { key: itemIdentifier, host: t('host') })
           : null;
+  // THE EXITS (MOTIR-5635; § 22): every member the queue removed and nobody has put back,
+  // in words, with its failing check — or, while its *Queue again* is in flight, what is
+  // happening instead (E2).
+  const bold = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
+  const exitParts = members.flatMap((member) => {
+    const kind = rowOutcomes.get(rowKey(member.repo, member.number))?.kind;
+    if (kind !== 'leftQueue' && kind !== 'removedFromQueue' && kind !== 'newCommits') return [];
+    const fact = factOf(member);
+    if (!fact?.exit) return [];
+    if (kind !== 'newCommits' && retrying.has(member.subjectVersion)) {
+      return [
+        <span key={member.subjectVersion} className="inline-flex items-center gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          {t('requeue.progress', { pr: nameOf(member) })}
+        </span>,
+      ];
+    }
+    return [
+      <QueueExitLine
+        key={member.subjectVersion}
+        name={nameOf(member)}
+        exit={fact.exit}
+        sub={kind === 'newCommits' ? t('exit.newCommits') : t.rich('exit.unchanged', { b: bold })}
+      />,
+    ];
+  });
   const recordDetail =
     gate.state === 'approved' && count > 0 ? (
       <>
         <span>{t('record.commits', { count })}</span>
         {why ? <span>{why}</span> : null}
+        {exitParts}
       </>
     ) : null;
 
