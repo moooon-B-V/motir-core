@@ -38,6 +38,7 @@ import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { repoDeploymentService } from './repoDeploymentService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
+import { mergeQueueExitService, type MergeQueueExitResult } from './mergeQueueExitService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -173,7 +174,9 @@ export type GithubWebhookResult =
       outcome: 'recorded' | 'stale' | 'unknown_installation' | 'unknown_repo' | 'malformed';
     }
   | ChangeRequestSyncResult
-  | CiFeedbackResult;
+  | CiFeedbackResult
+  // A merge queue removed a pull request (MOTIR-5632).
+  | MergeQueueExitResult;
 
 export const githubWebhookService = {
   /**
@@ -183,8 +186,16 @@ export const githubWebhookService = {
    * the tests assert on. Idempotent under redelivery: a re-applied transition is
    * a no-op, and the PR/installation upserts converge (a concurrent-redelivery
    * unique-constraint race is caught and re-read).
+   *
+   * `deliveryId` is the `X-GitHub-Delivery` header. Only the merge-queue exit arm
+   * reads it (its idempotency key, MOTIR-5632); every other arm is idempotent by its
+   * own keys and ignores it.
    */
-  async handleEvent(eventType: string, payload: unknown): Promise<GithubWebhookResult> {
+  async handleEvent(
+    eventType: string,
+    payload: unknown,
+    deliveryId: string | null = null,
+  ): Promise<GithubWebhookResult> {
     const body = asRecord(payload);
     if (!body) return { event: 'ignored', reason: 'malformed_body' };
 
@@ -194,7 +205,7 @@ export const githubWebhookService = {
       case 'installation_repositories':
         return this.handleInstallationRepositories(body);
       case 'pull_request':
-        return this.handlePullRequest(body);
+        return this.handlePullRequest(body, deliveryId);
       case 'push':
         return this.handlePush(body);
       case 'check_suite':
@@ -391,7 +402,10 @@ export const githubWebhookService = {
     return { event: 'push', outcome: 'refresh_enqueued' };
   },
 
-  async handlePullRequest(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+  async handlePullRequest(
+    body: Record<string, unknown>,
+    deliveryId: string | null = null,
+  ): Promise<GithubWebhookResult> {
     // ⚠️ THE LINK CHECK RUNS ABOVE THE `HANDLED_PR_ACTIONS` GATE, ON ITS OWN
     // ACTION SET (MOTIR-3675). It must see `synchronize` — a check run belongs
     // to a COMMIT, so one written at `opened` disappears from view on the first
@@ -415,6 +429,21 @@ export const githubWebhookService = {
     // previous head (MOTIR-5482). Above the action gate for the link check's reason:
     // `synchronize` is exactly the action `HANDLED_PR_ACTIONS` leaves out.
     await withdrawGatesOnSynchronize(body);
+
+    // A MERGE QUEUE REMOVED IT (MOTIR-5632; `approval-gates.md` §4 THIRD AMENDMENT).
+    // Dispatched BEFORE the lifecycle mapping, because `dequeued` is not a lifecycle:
+    // the pull request is still open, and what changes is the queue's verdict on it.
+    // It stays out of `HANDLED_PR_ACTIONS` for that set's own reason — it bounds the
+    // file-listing capture below, and an exit changes no file.
+    if (body['action'] === 'dequeued') {
+      const exit = getGitProvider(PROVIDER).parseMergeQueueExitEvent?.(body) ?? null;
+      if (!exit) return { event: 'pull_request', outcome: 'malformed' };
+      return mergeQueueExitService.recordExit({
+        installationId: readInstallationId(body),
+        exit,
+        deliveryId,
+      });
+    }
 
     if (!HANDLED_PR_ACTIONS.has(String(body['action']))) {
       return { event: 'pull_request', outcome: 'ignored_action' };

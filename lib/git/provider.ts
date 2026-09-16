@@ -17,6 +17,7 @@ import type {
   MergeChangeRequestInput,
   MergeChangeRequestResult,
   NormalizedDeploymentStatus,
+  NormalizedMergeQueueExit,
 } from './types';
 
 // The GitProvider seam (Story 7.10 · MOTIR-891). ONE interface every Git host
@@ -385,6 +386,19 @@ export interface GitProvider {
    * GitHub implements it here; GitLab's `deployment` hook is MOTIR-5332's.
    */
   parseDeploymentStatusEvent?(rawPayload: unknown): NormalizedDeploymentStatus | null;
+
+  // --- Merge queues (Story MOTIR-5461 · MOTIR-5632) --------------------------
+
+  /**
+   * Normalize a raw webhook payload announcing that a MERGE QUEUE removed a change
+   * request, or `null` when it is not one (a different action, or a malformed
+   * body). PURE.
+   *
+   * OPTIONAL in the style of the reads above: GitHub implements it; GitLab's merge
+   * trains are MOTIR-4608's, and a host that does not declare it is simply never
+   * asked.
+   */
+  parseMergeQueueExitEvent?(rawPayload: unknown): NormalizedMergeQueueExit | null;
 
   /**
    * Fetch the JOBS of one completed workflow run, normalized. The meter bills

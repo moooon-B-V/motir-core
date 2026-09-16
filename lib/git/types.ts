@@ -217,6 +217,22 @@ export interface NormalizedDeploymentStatus {
   occurredAt: Date;
 }
 
+/** A pull request a MERGE QUEUE removed, normalized (Story MOTIR-5461 · MOTIR-5632;
+ *  `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 1). GitHub's
+ *  `pull_request` action `dequeued`.
+ *
+ *  `rawReason` is the host's own string, VERBATIM — classifying it is
+ *  `classifyQueueExit`'s job (`lib/mergeQueue/queueExit.ts`), not the seam's, so a
+ *  reason nobody has mapped yet still arrives and is recorded. `headSha` is the
+ *  pull request's head as the delivery states it. The payload names no merge group
+ *  and no failing check. */
+export interface NormalizedMergeQueueExit {
+  providerRepoId: string;
+  number: number;
+  headSha: string;
+  rawReason: string | null;
+}
+
 /** A completed CI workflow run, normalized across providers — consumed by the
  *  CI-minutes meter (Story MOTIR-1775 · MOTIR-1896). DISTINCT from
  *  `NormalizedStatusEvent`, which is the *verification* signal (did CI pass?)

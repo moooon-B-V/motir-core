@@ -40,7 +40,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   const eventType = req.headers.get('x-github-event') ?? '';
-  const result = await githubWebhookService.handleEvent(eventType, payload);
+  // The delivery's GUID — a hand REDELIVERY repeats it, which is what makes it the
+  // merge-queue exit's idempotency key (MOTIR-5632).
+  const deliveryId = req.headers.get('x-github-delivery');
+  const result = await githubWebhookService.handleEvent(eventType, payload, deliveryId);
   // 2xx ack — the result payload is for logging/observability, not a contract.
   return NextResponse.json({ ok: true, result }, { status: 200 });
 }

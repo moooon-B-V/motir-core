@@ -1,0 +1,118 @@
+{
+  "_source": "MOTIR-5627: a real delivery to a repository hook on moooon-B-V/motir-core, read back with GET /repos/moooon-B-V/motir-core/hooks/641004545/deliveries/3842498395035926528 on 2026-09-16. Fields Motir reads are verbatim; repository/sender/org objects and long texts are elided and marked.",
+  "delivery": {
+    "guid": "2e5ccb60-af6f-11f1-95a7-dd406a8bfe71",
+    "deliveredAt": "2026-09-13T12:32:29.116Z",
+    "event": "pull_request"
+  },
+  "payload": {
+    "action": "dequeued",
+    "number": 2843,
+    "pull_request": {
+      "url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/2843",
+      "id": 4518045346,
+      "node_id": "PR_kwDOSkYHBM8AAAABDUvmog",
+      "html_url": "https://github.com/moooon-B-V/motir-core/pull/2843",
+      "diff_url": "https://github.com/moooon-B-V/motir-core/pull/2843.diff",
+      "patch_url": "https://github.com/moooon-B-V/motir-core/pull/2843.patch",
+      "issue_url": "https://api.github.com/repos/moooon-B-V/motir-core/issues/2843",
+      "number": 2843,
+      "state": "closed",
+      "locked": false,
+      "title": "feat(settings): MOTIR-5278 the Approvals room opens to every project browser \u2014 read on project:browse, write on workflow:manage",
+      "user": {
+        "login": "zhuyue11",
+        "id": 3026260,
+        "_elided": true
+      },
+      "body": "**MOTIR-5278** \u2014 the Approvals room becomes the first settings room visible to someone who cannot change it. Decision of record: MOTIR-5190, `design/projects/de \u2026[truncated]",
+      "created_at": "2026-09-13T09:18:50Z",
+      "updated_at": "2026-09-13T12:32:27Z",
+      "closed_at": "2026-09-13T12:32:27Z",
+      "merged_at": "2026-09-13T12:32:27Z",
+      "merge_commit_sha": "6b06308171f9bba5a4bc4313ddc273a1c4f220c3",
+      "assignees": [],
+      "requested_reviewers": [],
+      "requested_teams": [],
+      "labels": [],
+      "milestone": null,
+      "draft": false,
+      "commits_url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/2843/commits",
+      "review_comments_url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/2843/comments",
+      "review_comment_url": "https://api.github.com/repos/moooon-B-V/motir-core/pulls/comments{/number}",
+      "comments_url": "https://api.github.com/repos/moooon-B-V/motir-core/issues/2843/comments",
+      "statuses_url": "https://api.github.com/repos/moooon-B-V/motir-core/statuses/34efea188bc827b456d3fb0ee2daabc5db4d429e",
+      "head": {
+        "label": "moooon-B-V:subtask/MOTIR-5278-approvals-view-key",
+        "ref": "subtask/MOTIR-5278-approvals-view-key",
+        "sha": "34efea188bc827b456d3fb0ee2daabc5db4d429e",
+        "user": {
+          "login": "moooon-B-V",
+          "id": 287054146,
+          "_elided": true
+        },
+        "repo": {
+          "id": 1246103300,
+          "full_name": "moooon-B-V/motir-core",
+          "_elided": true
+        }
+      },
+      "base": {
+        "label": "moooon-B-V:main",
+        "ref": "main",
+        "sha": "7e9b7f9e91b67926b8e215c8529fc1b776765f33",
+        "user": {
+          "login": "moooon-B-V",
+          "id": 287054146,
+          "_elided": true
+        },
+        "repo": {
+          "id": 1246103300,
+          "full_name": "moooon-B-V/motir-core",
+          "_elided": true
+        }
+      },
+      "author_association": "COLLABORATOR",
+      "auto_merge": null,
+      "assignee": null,
+      "active_lock_reason": null,
+      "merged": true,
+      "mergeable": null,
+      "rebaseable": null,
+      "mergeable_state": "unknown",
+      "merged_by": {
+        "login": "zhuyue11",
+        "id": 3026260,
+        "_elided": true
+      },
+      "comments": 0,
+      "review_comments": 0,
+      "maintainer_can_modify": false,
+      "commits": 8,
+      "additions": 713,
+      "deletions": 131,
+      "changed_files": 19
+    },
+    "reason": "MERGE",
+    "repository": {
+      "id": 1246103300,
+      "full_name": "moooon-B-V/motir-core",
+      "_elided": true
+    },
+    "organization": {
+      "id": 287054146,
+      "login": "moooon-B-V",
+      "_elided": true
+    },
+    "enterprise": {
+      "id": 819931,
+      "login": "moooon-bv",
+      "_elided": true
+    },
+    "sender": {
+      "id": 3026260,
+      "login": "zhuyue11",
+      "_elided": true
+    }
+  }
+}

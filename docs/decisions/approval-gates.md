@@ -880,11 +880,15 @@ An approval that does not merge is a note, not a gate.
 >   only). Nothing new raises a gate;
 > - **_Queue again_** stamps the exit, and moves the card itself (decision 5).
 >
-> A member still holding a live `queue:` outcome is NOT a merge candidate, so a
-> late green check on an `approved` card whose member is queued raises nothing
-> either. (`REVIEW_STATUSES` includes `approved`, and `mergeCandidateHead` does
-> not read the outcome; MOTIR-5632 tests that path first and fixes it if it
-> raises.)
+> **And the raise itself never asks about commits a person already approved.**
+> `REVIEW_STATUSES` includes `approved`, so a late green check on an `approved`
+> card whose member is still queued reached `raisePullRequestApprovalGate`, which
+> found no `awaiting` gate and raised a second one over the approved commits —
+> MOTIR-5632 reproduced it before fixing it. The raise now refuses when the card's
+> latest gate of this kind is `approved` with the SAME `subjectVersion`. A push
+> changes the version, so the re-arm above is untouched. (Refusing queued members
+> as merge candidates was the alternative, and it was rejected: a card with one
+> member re-pushed and another still queued would then never be asked again.)
 >
 > **7. THE WORKFLOW EDGES** (rung 2: `DEFAULT_TRANSITIONS`, which carries 33
 > edges at this base).

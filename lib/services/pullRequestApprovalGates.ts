@@ -72,6 +72,17 @@ export async function raisePullRequestApprovalGate(
     }
     members.push(deliveryMemberVersion(delivery, head)!);
   }
+  const subjectVersion = deliverySetVersion(members);
+
+  // ⚠️ THE SAME COMMITS ARE NEVER ASKED ABOUT TWICE (MOTIR-5632; ADR §4 THIRD
+  // AMENDMENT, decisions 5 and 6). The awaiting check above does not cover a card
+  // whose question was already ANSWERED: an `approved` card whose member is still
+  // in the merge queue, or one a queue ejected, hears a later green check at the same
+  // heads and would raise a second gate over exactly what a person approved. The
+  // latest gate is the one to compare — a push since the approval moves a head, the
+  // version differs, and the fresh gate is owed.
+  const latest = await approvalGateRepository.findLatestByWorkItem(item.id, KIND, tx);
+  if (latest?.state === 'approved' && latest.subjectVersion === subjectVersion) return false;
 
   await approvalGateRepository.create(
     {
@@ -80,7 +91,7 @@ export async function raisePullRequestApprovalGate(
       workItemId: item.id,
       kind: KIND,
       subjectId: item.id,
-      subjectVersion: deliverySetVersion(members),
+      subjectVersion,
       routedToId: routingTargetId(item),
     },
     tx,

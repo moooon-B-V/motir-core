@@ -530,6 +530,19 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
+  /** CLEAR a queued merge record when the queue removed the pull request (MOTIR-5632;
+   *  `approval-gates.md` §4 THIRD AMENDMENT, decision 3) — only a `queue:` value,
+   *  never a merge commit SHA, so a late removal delivery cannot erase a merge.
+   *  `merge_authority` stays: it still says who asked for the enqueue. Returns the
+   *  count (0 when the row carried no queued record). Write path → `tx`. */
+  async clearQueuedOutcome(pullRequestId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: { id: pullRequestId, mergeOutcomeRef: { startsWith: 'queue:' } },
+      data: { mergeOutcomeRef: null },
+    });
+    return result.count;
+  },
+
   /** The pull requests a page of merge gates asks about, keyed by id, with the
    *  repository and check rows a queue row renders (MOTIR-4793) — ONE query for the
    *  whole page, never one per gate. An id that no longer resolves is simply absent. */

@@ -2059,6 +2059,21 @@ enum MergeAuthority {
   @@map("merge_authority")
 }
 
+/// What a merge-queue removal MEANS for the cards the pull request delivers
+/// (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md` §4 THIRD
+/// AMENDMENT, decision 2). A `landed` removal is never recorded — the merge webhook
+/// owns it — so it is not a member here.
+enum QueueExitDisposition {
+  /// The queue could not land it as it stands: every delivered card moves to
+  /// `implemented`.
+  failure
+  /// Taken out without a verdict on the work (a manual removal, a cleared queue,
+  /// an unrecognised reason): no card moves.
+  neutral
+
+  @@map("queue_exit_disposition")
+}
+
 /// Which value is THE planning estimate a project's surfaces display + the
 /// roll-ups sum (`project.estimationStatistic`, Story 4.3) — the three Jira
 /// estimation statistics: `story_points` (the agile `work_item.storyPoints`
@@ -6688,16 +6703,54 @@ model GithubPullRequest {
   createdAt             DateTime        @default(now()) @map("created_at")
   updatedAt             DateTime        @updatedAt @map("updated_at")
 
-  repo               GithubRepo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repo               GithubRepo                   @relation(fields: [repoId], references: [id], onDelete: Cascade)
   checkRuns          GithubCheckRun[]
   deliveries         WorkItemDelivery[]
   // One per (head commit, delivered card) — THE feedback comment for that pair
   // (MOTIR-3770).
   ciFeedbackComments GithubCiFeedbackComment[]
+  // Every time the merge queue removed it without merging it (MOTIR-5632).
+  queueExits         GithubPullRequestQueueExit[]
 
   @@unique([repoId, number])
   @@index([repoId])
   @@map("github_pull_request")
+}
+
+/// One REMOVAL of a pull request from a merge queue that did not merge it (Story
+/// MOTIR-5461 · MOTIR-5632), specified by `docs/decisions/approval-gates.md` §4
+/// THIRD AMENDMENT, decisions 3 and 9. Rows ACCUMULATE: one head can be ejected
+/// several times, each by a different merge group, and the latest row is the pull
+/// request's current exit.
+///
+/// It is where the queue's verdict lives, and deliberately NOT in `github_check_run`:
+/// that table is the pull request's OWN CI state at its head, and a queue failure
+/// written there would turn a green pull request red.
+model GithubPullRequestQueueExit {
+  id            String               @id @default(cuid())
+  /// FK → GithubPullRequest.id (internal cuid).
+  pullRequestId String               @map("pull_request_id")
+  /// The delivery's `X-GitHub-Delivery` GUID — the idempotency key (decision 9). A
+  /// hand REDELIVERY repeats it (measured, MOTIR-5627), so a replayed exit writes
+  /// nothing; a genuine second exit is a new event with a new GUID.
+  deliveryId    String               @unique @map("delivery_id")
+  /// The host's reason, VERBATIM (`CI_FAILURE`, `MANUAL`, …, or a string nobody has
+  /// mapped yet).
+  rawReason     String               @map("raw_reason")
+  disposition   QueueExitDisposition
+  /// The pull request's head when it left the queue — what *Queue again* and the
+  /// promotion hold compare the current head against.
+  headSha       String               @map("head_sha")
+  exitedAt      DateTime             @map("exited_at")
+  /// Stamped by *Queue again* (MOTIR-5634) when the pull request was put back.
+  /// Null while the exit still stands.
+  requeuedAt    DateTime?            @map("requeued_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
+  @@index([pullRequestId, exitedAt])
+  @@map("github_pull_request_queue_exit")
 }
 
 /// One DELIVERY of a work item by a pull request — the ONE association between the

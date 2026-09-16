@@ -39,6 +39,7 @@ import type {
   MergeChangeRequestResult,
   MergeRefusal,
   NormalizedDeploymentStatus,
+  NormalizedMergeQueueExit,
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
 
@@ -828,6 +829,38 @@ export const githubProvider: GitProvider = {
     }
 
     return null;
+  },
+
+  /**
+   * `pull_request` action `dequeued` → a merge-queue exit (MOTIR-5632). Read from a
+   * real delivery (MOTIR-5627): `number`, `pull_request.head.sha`, and a top-level
+   * `reason` in the webhook enum's UPPER_SNAKE spelling. A missing `reason` is
+   * carried as `null` rather than refusing the delivery — the exit still happened,
+   * and the classifier reads an absent reason as unrecognised.
+   */
+  parseMergeQueueExitEvent(rawPayload: unknown): NormalizedMergeQueueExit | null {
+    const payload = asRecord(rawPayload);
+    if (!payload || payload['action'] !== 'dequeued') return null;
+    const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
+    const pr = asRecord(payload['pull_request']);
+    const number = pr?.['number'];
+    const headSha = asRecord(pr?.['head'])?.['sha'];
+    if (
+      !providerRepoId ||
+      typeof number !== 'number' ||
+      !Number.isInteger(number) ||
+      typeof headSha !== 'string' ||
+      headSha.length === 0
+    ) {
+      return null;
+    }
+    const reason = payload['reason'];
+    return {
+      providerRepoId,
+      number,
+      headSha,
+      rawReason: typeof reason === 'string' && reason.length > 0 ? reason : null,
+    };
   },
 
   /**

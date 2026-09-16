@@ -4,13 +4,14 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
-import { derivePrCiState } from '@/lib/github/prCiState';
+import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import {
   claimedCompleteSha,
   readReportedCheckSet,
   reconcileRecordedCheckSet,
 } from './checkSetReconcile';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import {
   deliverySetIsGreen,
@@ -209,6 +210,59 @@ async function everyDeliveryIsGreen(
 }
 
 /**
+ * IS THIS CARD HELD BY A MERGE-QUEUE FAILURE? (Story MOTIR-5461 · MOTIR-5632;
+ * `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 6.)
+ *
+ * True when ANY pull request delivering it has a latest queue exit that is a
+ * `failure`, has not been re-queued, and was recorded at that pull request's
+ * CURRENT head.
+ *
+ * ⚠️ WHY A GREEN SET IS NOT ENOUGH HERE. A queue ejects on the MERGE GROUP's checks;
+ * the pull request's own checks at its head are still green. Without this hold the
+ * card the ejection just moved to `implemented` would be promoted straight back —
+ * by edge 2 the moment it arrived, or by edge 1 on the next check event at that
+ * head — and the promotion's gate raise would ask a person to approve commits they
+ * already approved.
+ *
+ * It lifts in exactly two ways: a PUSH moves the head, so the exit no longer names
+ * the current head and the next green verdict promotes (with ONE fresh gate over
+ * the new heads); or *Queue again* stamps the exit and moves the card itself.
+ *
+ * "Current head" is the latest check run's commit — the rule the gate's own
+ * `subjectVersion` is written with (`deliveryMemberVersion`), so the two cannot
+ * disagree about which commit a member is at.
+ */
+async function heldByQueueFailure(
+  byId: Map<string, { checkRuns: GithubCheckRun[] }>,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+    [...byId.keys()],
+    tx,
+  );
+  for (const [pullRequestId, exit] of exits) {
+    if (exit.disposition !== 'failure' || exit.requeuedAt !== null) continue;
+    const head = liveRowsAtLatestSha(byId.get(pullRequestId)!.checkRuns)[0]?.commitSha;
+    if (head === exit.headSha) return true;
+  }
+  return false;
+}
+
+/**
+ * THE PROMOTION VERDICT — every delivering pull request green, and no merge-queue
+ * failure holding the card (MOTIR-5632). The ONE question all three callers ask
+ * (edge 1, edge 2 and the re-raise), for the reason `everyDeliveryIsGreen`'s own
+ * doc gives: two answers depending on which edge fired is a latch nobody can trust.
+ */
+async function isPromotable(
+  item: { id: string; sessionBranch: string | null },
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  if (!(await everyDeliveryIsGreen(item, tx))) return false;
+  return !(await heldByQueueFailure(await collectDeliveries(item, tx), tx));
+}
+
+/**
  * EDGE 1 — CI has just reported a terminal verdict for one change request.
  *
  * Promotes every card that change request delivers and that currently sits at
@@ -258,7 +312,7 @@ export async function promoteDeliveredCardsOnGreen(args: {
       // `set.items` carries no `sessionBranch`, and the legacy branch join needs
       // it — so the row is re-read rather than guessed at.
       const row = await workItemRepository.findById(item.id, tx);
-      if (row && (await everyDeliveryIsGreen(row, tx))) green.push(item.id);
+      if (row && (await isPromotable(row, tx))) green.push(item.id);
     }
 
     // ⚠️ AND THE CARDS ALREADY IN REVIEW (MOTIR-5515). A card that went green, was
@@ -324,7 +378,7 @@ export async function promoteIfCiAlreadyGreen(
     // function edge 1 asks, so the latch cannot answer two ways depending on
     // which edge happened to fire. This is what makes the LAST pull request's
     // green promote a card whose earlier ones went green hours ago.
-    return everyDeliveryIsGreen(item, tx);
+    return isPromotable(item, tx);
   });
 
   if (!shouldPromote) return false;
@@ -486,7 +540,7 @@ async function reRaiseMergeGates(
       await workItemRepository.lockById(id, tx);
       const item = await workItemRepository.findById(id, tx);
       if (!item || !REVIEW_STATUSES.includes(item.status)) return [];
-      if (!(await everyDeliveryIsGreen(item, tx))) return [];
+      if (!(await isPromotable(item, tx))) return [];
       return settleMergesForCard(item, ctx, tx);
     });
     await dispatchAutoMerges(id, requests, ctx);
