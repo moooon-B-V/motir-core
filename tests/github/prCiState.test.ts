@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { derivePrCiState, type PrCheckRunSlice } from '@/lib/github/prCiState';
+import { derivePrCiState, liveRowsAtLatestSha, type PrCheckRunSlice } from '@/lib/github/prCiState';
 
 // Story 7.10 · MOTIR-1579 — the per-PR CI derivation behind the Development
 // surface's CI pill. Pure unit: precedence (failing > running > passing) at
@@ -79,6 +79,19 @@ describe('derivePrCiState (MOTIR-1579)', () => {
         run('shaOld', 'failure', '2026-07-01T10:00:00Z'),
       ]),
     ).toBe('passing');
+  });
+
+  it('a NEW row for an OLD sha does not move the head — the sha first seen LAST is the head (MOTIR-5604)', () => {
+    // A check name the old commit had not reported before arrives after the push:
+    // the ingestion INSERTS it, so it is the newest row in the table. The head is
+    // still the commit that was first sighted most recently.
+    const rows = [
+      run('shaOld', 'success', '2026-07-01T10:00:00Z', '', 'ci'),
+      run('shaNew', 'success', '2026-07-01T11:00:00Z', '', 'ci'),
+      run('shaOld', 'failure', '2026-07-01T11:30:00Z', '', 'late-check'),
+    ];
+    expect(derivePrCiState(rows)).toBe('passing');
+    expect(liveRowsAtLatestSha(rows).map((r) => r.commitSha)).toEqual(['shaNew']);
   });
 
   it('rows with no known conclusion at the head sha → null', () => {
