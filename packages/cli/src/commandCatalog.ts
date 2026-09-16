@@ -545,6 +545,29 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     ],
   },
   {
+    path: 'fix',
+    // Story MOTIR-5460 · MOTIR-5465 — the command the item page's Development
+    // block offers on an Implemented card whose pull requests went red after its
+    // run ended. It sits beside `run` because it is the same work loop's repair.
+    signature: '<key>',
+    description:
+      'Hand an Implemented work item’s failing pull requests to your agent, on their own branches.',
+    helpGroup: HELP_GROUP.workLoop,
+    options: [
+      {
+        flags: '--agent <cmd>',
+        description: 'Run THIS agent command on the fix (overrides MOTIR_AGENT).',
+      },
+      // ── The RUN RECORD's one control (Story MOTIR-1789 · MOTIR-1794) ─────
+      // Same words as on the other work-loop commands.
+      {
+        flags: '--report-log',
+        description:
+          'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+      },
+    ],
+  },
+  {
     path: 'auto',
     signature: '',
     description: 'Drain the ready set unattended: one item at a time onto a session branch.',

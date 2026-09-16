@@ -450,7 +450,7 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 57 declarations names a GRANTABLE permission', () => {
+  it('every one of the 58 declarations names a GRANTABLE permission', () => {
     // 52: 41, plus MOTIR-2961's `POST …/work-items/{key}/claim`, MOTIR-3017's
     // `POST …/work-items/{key}/plan-approval`, MOTIR-3049's
     // `POST …/scope-claims`, MOTIR-3586's
@@ -459,11 +459,12 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // `…/{id}/close`), MOTIR-4085's `GET …/work-items/{key}/plan-approval`, and
     // MOTIR-5048's `POST …/work-items/{key}/pull-requests` — and 57 with
     // MOTIR-5408's FIVE folder operations (`listFolders`, `createFolder`,
-    // `getFolder`, `updateFolder`, `deleteFolder`).
+    // `getFolder`, `updateFolder`, `deleteFolder`) — and 58 with MOTIR-5464's
+    // `POST …/work-items/{key}/repair` (`claimWorkItemRepair`).
     // NINE branches independently wrote the count for their own addition alone,
     // which is exactly what this number exists to catch — read it on
     // `origin/main` before merging, exactly as `V1_CONTRACT_VERSION` is.
-    expect(V1_OPERATIONS.length).toBe(57);
+    expect(V1_OPERATIONS.length).toBe(58);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

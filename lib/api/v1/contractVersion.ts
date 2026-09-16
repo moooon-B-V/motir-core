@@ -431,5 +431,26 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: this claims
  *   `1.31.0` because sibling MOTIR-5412 claims `1.30.0` on the same parent
  *   branch. If the numbering has moved, RENUMBER this entry.
+ *
+ * - `1.32.0` — MOTIR-5464 adds `claimWorkItemRepair`
+ *   (`POST /api/v1/work-items/{key}/repair`) and its `WorkItemRepairClaim`
+ *   resource: the claim `motir fix <key>` makes to hand an `implemented` card's
+ *   failing pull requests to ONE fixing agent, answered as a 200 with an
+ *   `outcome` (`claimed` / `mine` / `taken` / `not_repairable` + `reason`). It
+ *   also adds `fix` to the `DispatchRun.command` vocabulary, because the claim IS
+ *   an open dispatch run with that command.
+ *
+ *   Additive: one new operation and one new resource (§8's first allowed
+ *   change). The new `command` member is written only by the new operation, so a
+ *   run any existing client opens or reads keeps the five members it already
+ *   knew; a client reading the runs of a project where somebody ran `motir fix`
+ *   will meet it, and `command` is a label there, never a branch. Gated on
+ *   `work_item:edit`, already in `CLI_TOKEN_GRANT` — the grant is NOT widened.
+ *   No work-item status is written, so nothing an existing operation reports
+ *   moves.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.31.0` at `3205ae235`, so this claims `1.32.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.31.0';
+export const V1_CONTRACT_VERSION = '1.32.0';

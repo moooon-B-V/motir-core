@@ -599,6 +599,7 @@ function recordingReporter(over: Partial<DispatchRunReporter> = {}): DispatchRun
     async open(input) {
       opens.push(input);
     },
+    adopt() {},
     async addCard() {},
     event(e) {
       events.push(e);

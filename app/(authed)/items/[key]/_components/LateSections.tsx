@@ -235,6 +235,9 @@ export async function LateUpperSections({
             // stack — and an awaiting approve-to-merge gate makes the rows plus
             // How to test the port of ONE frame, as Design result's gate does.
             howToTest={r.howToTest}
+            // THE FIX PART (MOTIR-5466, design § 21): below the rows, above How to
+            // test — the copyable `motir fix`, a repair in progress, or a give-up.
+            repair={r.repair}
             designResult={
               designInDevelopment ? (
                 <DesignResultPanel

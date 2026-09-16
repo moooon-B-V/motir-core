@@ -2152,6 +2152,18 @@ export default defineConfig({
         'lib/services/pullRequestApprovalGates.ts',
         'components/github/DevelopmentGateFrame.tsx',
         'components/github/MergeOutcomeSlot.tsx',
+        // ── Story MOTIR-5460 · HAND A RED PULL REQUEST TO AN AGENT ────────────
+        // Subtask MOTIR-5467, the story's vitest gate. The repair claim's service
+        // and route, and the Development block's fix part — MEASURED first, at
+        // 100 / 100 / 100 / 100 each, by `tests/ready/claimWorkItemRepair`,
+        // `tests/ciMetering/ciDispatchGate`, `tests/api/v1/work-item-repair-route`
+        // and `tests/components/repair-fix-part`. The shared files the story also
+        // touched keep their existing pins (`dispatchRunService.ts`) or were
+        // never in the report (the repositories, the v1 schema), and are not
+        // widened here.
+        'lib/services/workItemRepairService.ts',
+        'app/api/v1/work-items/[key]/repair/route.ts',
+        'components/github/RepairFixPart.tsx',
         // ── Story MOTIR-5214 · DECIDE IT FULL SCREEN — the approval overlay ───
         // Subtask MOTIR-5226, the story's own vitest gate. The overlay, its
         // address and client read, the row's settle signal and the route were in
@@ -2361,6 +2373,25 @@ export default defineConfig({
           statements: 90,
         },
         'components/github/MergeOutcomeSlot.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-5467 — measured at 100 on each; pinned at the story floor.
+        'lib/services/workItemRepairService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/work-items/[key]/repair/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/RepairFixPart.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

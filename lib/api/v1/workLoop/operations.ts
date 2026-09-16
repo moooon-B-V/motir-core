@@ -15,6 +15,7 @@ import {
   planSessionScopeBodySchema,
   planTurnBodySchema,
   workItemClaimSchema,
+  workItemRepairClaimSchema,
   scopeClaimBodySchema,
   scopeClaimSchema,
   ACTIVITY_VIEWS,
@@ -147,6 +148,47 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
     // malformed key. A LOST claim is not an error status \u2014 see `outcome`.
+    errorStatuses: [404, 422],
+  }),
+
+  // ── The REPAIR claim (Story MOTIR-5460 · MOTIR-5464) ────────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/repair',
+    operationId: 'claimWorkItemRepair',
+    summary: 'Claim the repair of an Implemented work item\u2019s failing pull requests',
+    description:
+      'Hand an `implemented` work item\u2019s RED pull requests to ONE fixing agent, after the ' +
+      'run that opened them has ended (`motir fix <key>`). In ONE transaction the item\u2019s row ' +
+      'is locked and, in order: an archived item or one not at the Implemented status is ' +
+      '`not_repairable` (`not_implemented`); an item whose pull requests belong to a run ' +
+      'launched against another item is `not_repairable` (`repair_on_run_target`, naming ' +
+      '`runTargetKey`); an item with no pull requests is `no_pull_requests`; an item with no ' +
+      'failing OPEN pull request is `ci_running` when one is running, else `not_failing`. ' +
+      'Otherwise an open dispatch run with command `fix` already holding the item answers ' +
+      '`mine` (yours \u2014 a resumed repair, same `runId`) or `taken` (somebody else\u2019s, ' +
+      'named with its start), and if there is none a `fix` run is opened: `claimed`. ' +
+      '\u26a0\ufe0f A refusal is a 200 with an `outcome`, not an error. \u26a0\ufe0f The item\u2019s ' +
+      'status and assignee are NEVER written: the open run is the lock, and the build moves ' +
+      'the item when it goes green. CLOSE the run (`closeDispatchRun`) when the repair ends.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item\u2019s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: workItemRepairClaimSchema },
+      description:
+        'What the repair claim resolved to, the `fix` run, and the failing pull requests.',
+    },
+    // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
+    // malformed key. A refused repair is not an error status — see `outcome`.
     errorStatuses: [404, 422],
   }),
 
@@ -872,6 +914,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
 export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchPrompt: dispatchPromptSchema,
   WorkItemClaim: workItemClaimSchema,
+  WorkItemRepairClaim: workItemRepairClaimSchema,
   ScopeClaim: scopeClaimSchema,
   IntegrationResult: integrationResultSchema,
   SessionCloseOut: sessionCloseOutSchema,

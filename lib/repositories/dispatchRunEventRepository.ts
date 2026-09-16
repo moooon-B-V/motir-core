@@ -115,6 +115,23 @@ export const dispatchRunEventRepository = {
     });
   },
 
+  /**
+   * The LATEST event of one kind on a run, or null — how the Development block
+   * reads a give-up's attempt count off the `ci_gave_up` event the CLI wrote
+   * (MOTIR-5466). The count is DATA the run reported, never a literal.
+   */
+  async findLatestOfKind(
+    dispatchRunId: string,
+    kind: DispatchRunEvent['kind'],
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<DispatchRunEvent, 'data'> | null> {
+    return tx.dispatchRunEvent.findFirst({
+      where: { dispatchRunId, kind },
+      orderBy: { seq: 'desc' },
+      select: { data: true },
+    });
+  },
+
   async countByRun(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.dispatchRunEvent.count({ where: { dispatchRunId } });
   },

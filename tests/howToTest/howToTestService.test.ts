@@ -530,6 +530,46 @@ describe('howToTestService.getForWorkItem', () => {
     expect(dto.owedBy).toEqual({ runId: scoped.id, label: 'motir run · 2026-09-13 12:04 UTC' });
   });
 
+  it('record_missing never names a `fix` repair as owing the record — the delivering run behind it does (MOTIR-5460)', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Repaired' });
+    const delivering = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'run',
+        startedAt: new Date('2026-09-01T08:00:00Z'),
+        cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
+      },
+    });
+    await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'fix',
+        startedAt: new Date('2026-09-13T12:04:00Z'),
+        cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
+      },
+    });
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    expect(dto.owedBy).toEqual({
+      runId: delivering.id,
+      label: 'motir run · 2026-09-01 08:00 UTC',
+    });
+
+    // A card only ever repaired owes nothing to name.
+    const onlyFixed = await createTestWorkItem(fx, { kind: 'task', title: 'Only repaired' });
+    await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'fix',
+        cards: { create: { workspaceId: fx.workspaceId, workItemId: onlyFixed.id, position: 0 } },
+      },
+    });
+    expect((await howToTestService.getForWorkItem(onlyFixed.id, fx.ctx)).owedBy).toBeNull();
+  });
+
   it('names the run that wrote the current record, and lists earlier runs newest first', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'Runs' });

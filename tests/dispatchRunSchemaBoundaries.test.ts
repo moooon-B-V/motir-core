@@ -165,7 +165,16 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
   // `origin/main` 435bce9bd — growing it is a decision to record, not a field to
   // add.
   it('DispatchCommand', () => {
-    expect(Object.keys(DispatchCommand)).toEqual(['next', 'run', 'run_scope', 'batch', 'auto']);
+    // `fix` — MOTIR-5464: a repair is a dispatch run, opened by the server's
+    // repair claim for `motir fix <key>`.
+    expect(Object.keys(DispatchCommand)).toEqual([
+      'next',
+      'run',
+      'run_scope',
+      'batch',
+      'auto',
+      'fix',
+    ]);
   });
 
   it('DispatchRunOrigin — the discriminator that lets one table serve two writers', () => {

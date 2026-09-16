@@ -60,7 +60,7 @@ export const REPORTER_OFFLINE_WARNING =
 /** What a command hands the reporter when it opens a run. */
 export interface OpenDispatchRunInput {
   projectKey: string;
-  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto';
+  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix';
   /** `runIdFromDate`'s id — carried, never re-minted. */
   runId: string;
   /**
@@ -78,6 +78,14 @@ export interface OpenDispatchRunInput {
 export interface DispatchRunReporter {
   /** Open the run. Safe to call once; a second call is ignored. */
   open(input: OpenDispatchRunInput): Promise<void>;
+  /**
+   * Report into a run the SERVER already opened, instead of opening one —
+   * `motir fix`'s repair claim (MOTIR-5464) opens its `fix` run inside the same
+   * transaction that locks the card, so the CLI must not open a second. Ignored
+   * once the reporter holds a run. `addCard` stays a no-op on an adopted run: the
+   * set is the claim's, and it was complete when the run was opened.
+   */
+  adopt(runId: string): void;
   /** Append a leg mid-run — `motir auto`'s per-iteration discovery. */
   addCard(card: DispatchRunCardInput): Promise<void>;
   /** Queue one event. Never awaits the network; never throws. */
@@ -131,6 +139,7 @@ export interface DispatchRunReporterDeps {
  */
 export const nullDispatchRunReporter: DispatchRunReporter = {
   async open() {},
+  adopt() {},
   async addCard() {},
   event() {},
   async flush() {},
@@ -208,6 +217,11 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
         runId = result.runId;
         opened = input;
       });
+    },
+
+    adopt(id) {
+      if (runId !== null) return;
+      runId = id;
     },
 
     async addCard(card) {

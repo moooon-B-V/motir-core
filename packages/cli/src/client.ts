@@ -16,6 +16,7 @@ import {
   toExpandSubmitResult,
   toScopeClaim,
   toWorkItemClaim,
+  toWorkItemRepairClaim,
   toActivityHistoryPage,
   toCommentsPage,
   toProjectList,
@@ -592,6 +593,52 @@ export interface WorkItemClaim {
   /** WHEN that transition happened, ISO-8601; null for a row whose status was
    *  never moved. */
   transitionedAt: string | null;
+}
+
+/**
+ * What a REPAIR claim resolved to (Story MOTIR-5460 · MOTIR-5464) — `motir fix`.
+ *
+ * `claimed` / `mine` hand over the failing pull requests and an open `fix` run;
+ * `taken` names who holds that run; `not_repairable` says why in `reason`.
+ */
+export type WorkItemRepairOutcome = 'claimed' | 'mine' | 'taken' | 'not_repairable';
+
+/** Why a card cannot be repaired — set exactly on `not_repairable`. */
+export type WorkItemRepairRefusal =
+  | 'not_implemented'
+  | 'repair_on_run_target'
+  | 'no_pull_requests'
+  | 'ci_running'
+  | 'not_failing';
+
+/** One failing pull request a repair is handed. */
+export interface RepairPullRequest {
+  /** `owner/name`. */
+  repo: string;
+  number: number;
+  url: string;
+  /** The pull request's own branch — checked out, and pushed to. */
+  headRef: string;
+  baseRef: string | null;
+  ci: 'passing' | 'failing' | 'running' | null;
+  /** The checks failing at the verdict's commit, by name. */
+  failingChecks: string[];
+}
+
+/** The result of a repair claim. A refusal is a 200, as on the keyed claim. */
+export interface WorkItemRepairClaim {
+  key: string;
+  title: string;
+  outcome: WorkItemRepairOutcome;
+  reason: WorkItemRepairRefusal | null;
+  /** The card to repair instead, on `repair_on_run_target`. */
+  runTargetKey: string | null;
+  /** The open `fix` run — set on `claimed`, `mine` and `taken`. */
+  runId: string | null;
+  holder: ClaimActor | null;
+  startedAt: string | null;
+  /** Non-empty on `claimed` and `mine` only. */
+  pullRequests: RepairPullRequest[];
 }
 
 /** Which of the two claimable scopes a result is about. */
@@ -1739,6 +1786,15 @@ export class MotirClient {
   }
 
   /**
+   * CLAIM THE REPAIR of an `implemented` card's red pull requests (MOTIR-5464) —
+   * the first thing `motir fix` does. The server opens the `fix` run the command
+   * then reports into and closes; the card's status is never written.
+   */
+  async claimWorkItemRepair(key: string): Promise<WorkItemRepairClaim> {
+    return toWorkItemRepairClaim(await this.v1.request('claimWorkItemRepair', { path: { key } }));
+  }
+
+  /**
    * CLAIM a whole SCOPE — a container and its children, or the project's active
    * sprint — in ONE all-or-nothing transaction (MOTIR-3049).
    *
@@ -1787,7 +1843,7 @@ export class MotirClient {
    */
   async openDispatchRun(args: {
     projectKey: string;
-    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto';
+    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix';
     idempotencyKey: string;
     cards: DispatchRunCardInput[];
     scopeKey?: string;

@@ -88,6 +88,8 @@ function reads(): LateReads {
       settingsDoor: null,
       members: [],
     },
+    // No repair to show — also what a FAILED repair read answers (MOTIR-5466).
+    repair: null,
   };
 }
 
@@ -131,6 +133,46 @@ describe('the late stack — How to test is part of the Development card (MOTIR-
     expect(messages.github.development.gloss).toBe(
       'Pull requests and how to test them · live PR and CI status',
     );
+  });
+});
+
+// ── The FIX PART (Story MOTIR-5460 · MOTIR-5466, design/github § 21) ─────────
+describe('the late stack — the fix part sits inside the Development card', () => {
+  const fix = messages.github.development.fix;
+  const render_ = async (repair: LateReads['repair']) =>
+    render(
+      await LateUpperSections({
+        reads: Promise.resolve({ ...reads(), repair }),
+        itemId: 'wi-acme-12',
+        itemIdentifier: 'ACME-12',
+        currentUserId: 'u-viewer',
+        canEdit: true,
+        repoDelivery: [],
+        deliveries: [],
+      }),
+    );
+
+  it('draws the part below the rows and above How to test, in the same card', async () => {
+    await render_({
+      state: 'offer',
+      failing: [{ repo: CORE_PR.repo, number: CORE_PR.number }],
+      lastGaveUp: null,
+    });
+
+    const part = screen.getByRole('group', { name: fix.aria.part });
+    const howToTest = screen.getByRole('group', { name: htt.title });
+    expect(part.compareDocumentPosition(howToTest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const row = screen.getByText(CORE_PR.title);
+    expect(row.compareDocumentPosition(part) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(part).getByText('motir fix ACME-12')).toBeTruthy();
+  });
+
+  it('a failed repair read (null) renders the block WITHOUT the part — never an error', async () => {
+    const { container } = await render_(null);
+
+    expect(screen.queryByRole('group', { name: fix.aria.part })).toBeNull();
+    expect(container.textContent).toContain(CORE_PR.title);
+    expect(screen.getByRole('group', { name: htt.title })).toBeTruthy();
   });
 });
 

@@ -244,99 +244,114 @@ export const dispatchRunService = {
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
-      async (tx) => {
-        if (input.idempotencyKey) {
-          const existing = await dispatchRunRepository.findByIdempotencyKey(
-            ctx.workspaceId,
-            input.idempotencyKey,
-            tx,
-          );
-          if (existing) {
-            const withCards = await dispatchRunRepository.findByIdWithCards(existing.id, tx);
-            /* v8 ignore next -- the row was just read inside this transaction */
-            if (!withCards) throw new DispatchRunNotFoundError(existing.id);
-            const seq = (await dispatchRunEventRepository.maxSeq(existing.id, tx)) ?? 0;
-            return { run: toDispatchRunDto(withCards, seq), created: false };
-          }
-        }
-
-        // Resolve the SET before writing anything: a run whose plan names a card
-        // that is not in this project is a client bug, and half a set is worse
-        // than none.
-        const keys = input.cards.map((c) => c.key.trim().toUpperCase());
-        const items = await workItemRepository.findByIdentifiers(project.id, keys, tx);
-        const byKey = new Map(items.map((i) => [i.identifier, i]));
-        const scopeItem = input.scopeKey
-          ? await workItemRepository.findByIdentifier(
-              project.id,
-              input.scopeKey.trim().toUpperCase(),
-              tx,
-            )
-          : null;
-        if (input.scopeKey && !scopeItem) {
-          throw new UnknownDispatchRunCardError(input.scopeKey.trim().toUpperCase());
-        }
-        for (const key of keys) {
-          if (!byKey.has(key)) throw new UnknownDispatchRunCardError(key);
-        }
-
-        let run;
-        try {
-          run = await dispatchRunRepository.create(
-            {
-              workspace: { connect: { id: ctx.workspaceId } },
-              project: { connect: { id: project.id } },
-              command: input.command,
-              origin: input.origin ?? 'local',
-              ...(scopeItem ? { scope: { connect: { id: scopeItem.id } } } : {}),
-              ...(input.scopeLabel !== undefined ? { scopeLabel: input.scopeLabel } : {}),
-              ...(input.agent !== undefined ? { agent: input.agent } : {}),
-              ...(input.model !== undefined ? { model: input.model } : {}),
-              ...(input.idempotencyKey !== undefined
-                ? { idempotencyKey: input.idempotencyKey }
-                : {}),
-              createdBy: { connect: { id: ctx.userId } },
-            },
-            tx,
-          );
-        } catch (err) {
-          // The narrow window between the read above and this insert. Translate
-          // it: a raw `P2002` escaping the service would reach a client as a
-          // bare 500 for a condition that has a correct, specific answer.
-          if (
-            input.idempotencyKey &&
-            err instanceof Prisma.PrismaClientKnownRequestError &&
-            err.code === 'P2002'
-          ) {
-            throw new DuplicateDispatchRunError(input.idempotencyKey);
-          }
-          throw err;
-        }
-
-        if (keys.length > 0) {
-          await dispatchRunCardRepository.createMany(
-            input.cards.map((card, position) => {
-              const key = keys[position]!;
-              return {
-                workspaceId: ctx.workspaceId,
-                dispatchRunId: run.id,
-                workItemId: byKey.get(key)!.id,
-                workItemKey: key,
-                position,
-                disposition: card.disposition,
-                ...(card.skipReason !== undefined ? { skipReason: card.skipReason } : {}),
-              };
-            }),
-            tx,
-          );
-        }
-
-        const withCards = await dispatchRunRepository.findByIdWithCards(run.id, tx);
-        /* v8 ignore next -- the row was just written inside this transaction */
-        if (!withCards) throw new DispatchRunNotFoundError(run.id);
-        return { run: toDispatchRunDto(withCards, 0), created: true };
-      },
+      (tx) => dispatchRunService.openWithin(project.id, input, ctx, tx),
     );
+  },
+
+  /**
+   * The OPEN's write half, inside a transaction the CALLER holds — extracted
+   * (MOTIR-5464) so the repair claim can open its `fix` run under the card's row
+   * lock, in the same transaction that decided nobody else holds the repair.
+   * A second copy of the insert beside the claim would be a second definition of
+   * what opening a run writes.
+   *
+   * The caller has already resolved the project and asserted it may edit it; this
+   * method asserts nothing, and `tx` must be bound to the caller's workspace.
+   */
+  async openWithin(
+    projectId: string,
+    input: Omit<OpenDispatchRunInput, 'projectKey'>,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRunOpenedDto> {
+    if (input.idempotencyKey) {
+      const existing = await dispatchRunRepository.findByIdempotencyKey(
+        ctx.workspaceId,
+        input.idempotencyKey,
+        tx,
+      );
+      if (existing) {
+        const withCards = await dispatchRunRepository.findByIdWithCards(existing.id, tx);
+        /* v8 ignore next -- the row was just read inside this transaction */
+        if (!withCards) throw new DispatchRunNotFoundError(existing.id);
+        const seq = (await dispatchRunEventRepository.maxSeq(existing.id, tx)) ?? 0;
+        return { run: toDispatchRunDto(withCards, seq), created: false };
+      }
+    }
+
+    // Resolve the SET before writing anything: a run whose plan names a card
+    // that is not in this project is a client bug, and half a set is worse
+    // than none.
+    const keys = input.cards.map((c) => c.key.trim().toUpperCase());
+    const items = await workItemRepository.findByIdentifiers(projectId, keys, tx);
+    const byKey = new Map(items.map((i) => [i.identifier, i]));
+    const scopeItem = input.scopeKey
+      ? await workItemRepository.findByIdentifier(
+          projectId,
+          input.scopeKey.trim().toUpperCase(),
+          tx,
+        )
+      : null;
+    if (input.scopeKey && !scopeItem) {
+      throw new UnknownDispatchRunCardError(input.scopeKey.trim().toUpperCase());
+    }
+    for (const key of keys) {
+      if (!byKey.has(key)) throw new UnknownDispatchRunCardError(key);
+    }
+
+    let run;
+    try {
+      run = await dispatchRunRepository.create(
+        {
+          workspace: { connect: { id: ctx.workspaceId } },
+          project: { connect: { id: projectId } },
+          command: input.command,
+          origin: input.origin ?? 'local',
+          ...(scopeItem ? { scope: { connect: { id: scopeItem.id } } } : {}),
+          ...(input.scopeLabel !== undefined ? { scopeLabel: input.scopeLabel } : {}),
+          ...(input.agent !== undefined ? { agent: input.agent } : {}),
+          ...(input.model !== undefined ? { model: input.model } : {}),
+          ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
+          createdBy: { connect: { id: ctx.userId } },
+        },
+        tx,
+      );
+    } catch (err) {
+      // The narrow window between the read above and this insert. Translate
+      // it: a raw `P2002` escaping the service would reach a client as a
+      // bare 500 for a condition that has a correct, specific answer.
+      if (
+        input.idempotencyKey &&
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new DuplicateDispatchRunError(input.idempotencyKey);
+      }
+      throw err;
+    }
+
+    if (keys.length > 0) {
+      await dispatchRunCardRepository.createMany(
+        input.cards.map((card, position) => {
+          const key = keys[position]!;
+          return {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: run.id,
+            workItemId: byKey.get(key)!.id,
+            workItemKey: key,
+            position,
+            disposition: card.disposition,
+            ...(card.skipReason !== undefined ? { skipReason: card.skipReason } : {}),
+          };
+        }),
+        tx,
+      );
+    }
+
+    const withCards = await dispatchRunRepository.findByIdWithCards(run.id, tx);
+    /* v8 ignore next -- the row was just written inside this transaction */
+    if (!withCards) throw new DispatchRunNotFoundError(run.id);
+    return { run: toDispatchRunDto(withCards, 0), created: true };
   },
 
   /**
