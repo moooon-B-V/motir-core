@@ -1680,8 +1680,13 @@ this section and the mock's prose, on the ELEMENT, STRUCTURE and PREMISE axes.
 
 **What changes, and for which kind.** Once `pull_request_approval` registers
 (MOTIR-5481) and gates are raised (MOTIR-5482), a real, decidable gate would reach
-Panel 7's _Not built yet_ row. Panel 9 draws its row instead. **`decision_approval`
-and `pull_request_merge` keep Panel 7's row**, unchanged, and Panel 7's note says so.
+Panel 7's _Not built yet_ row. Panel 9 draws its row instead. ~~**`decision_approval`
+and `pull_request_merge` keep Panel 7's row**, unchanged, and Panel 7's note says
+so.~~ **AMENDED by § 25 (MOTIR-5612):** `decision_approval` keeps Panel 7's row.
+**`pull_request_merge` has no row at all** — a card holds ONE approve-to-merge gate,
+so the per-pull-request row and its _Not built yet_ cell are removed rather than
+re-worded. The struck sentence is kept visible because it is what the asset promised
+until 2026-09-16, and a reader arriving from MOTIR-5485 will be looking for it.
 
 | element           | treatment                                                                                                                              | field                                                  |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -1722,3 +1727,261 @@ to 21: MOTIR-5480 and MOTIR-5437 are new. The row's SAMPLE keys are `ACME-n`.
 | [MOTIR-5485](motir:cmu1aj1d000gmhyoic2qrsb4v) | The row: glyph, label, subject line and its truncation rule, the link, and the copy | Nothing. Its criteria (glyph, every pull request named, no pill, reaches the page) all hold |
 | [MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4) | The row its _Review_ door replaces _Open card_ on                                   | Nothing                                                                                     |
 | MOTIR-5481 / MOTIR-5482                       | Nothing — named as what puts a gate in this row                                     | Nothing                                                                                     |
+
+## 24 · The approval overlay renders the APPROVE-TO-MERGE gate — MOTIR-5438
+
+**AMENDS § 22** (`approval-overlay.mock.html`) for ONE gate kind, `pull_request_approval`, in the delta
+**`approval-overlay--pull-request-gate.mock.html`** (Story [MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4),
+card [MOTIR-5438](motir:cmu118c4s0009hytxgtmyfeg8)). It is the layout source of truth for
+[MOTIR-5440](motir:cmu118ca1000dhytx0jofi4gl) (the host), which carries it in `blocked_by`, and for
+[MOTIR-5439](motir:cmu118c7e000bhytxn9l5u1v0) (the read), which feeds what band 2 renders. Neither § 22's
+mock nor any other asset is edited, and no image export ships (`docs/decisions/design-result.md`
+AMENDMENT 4).
+
+**Why it is owed.** § 22 built the overlay for every gate kind but a port only for `design_result`. On
+`origin/main` the read answers `kind_not_built` for `pull_request_approval`
+(`app/api/work-items/approval-gate/route.ts`, whose comment names this story), so the decision most cards
+end in opened to _Not built yet_.
+
+| Surface                                      | Asset                                                       | Panels |
+| -------------------------------------------- | ----------------------------------------------------------- | ------ |
+| **The overlay on the approve-to-merge gate** | **`approval-overlay--pull-request-gate.mock.html`** (delta) | 1–10   |
+
+**Panels:** 1 awaiting, a two-repository run under ONE frame · 2 a short screen · 3 see but not decide ·
+4 How to test missing · 5 a design card (state 7's block) · 6a approved · 6b changes requested ·
+6c superseded · 7 one refused, in place · 8 narrow, in `zh` · 9 dark · 10 the To-approve row's door.
+
+### Rendered first
+
+Composed from what ships, not from memory. Rendered headless before drawing: § 22's Panel 1
+(`approval-overlay.mock.html`, the shipped `ApprovalOverlay` inside `Modal size="full"`) and
+`design/github/approve-and-merge.mock.html` Panel 12p (the Development block with its frame flush in the
+section card). Read against the components: `ApprovalGateControl` takes `layout: 'inline' | 'fill' |
+'flush' | 'section'` and `ApprovalOverlay` already passes `fill`; `DevelopmentGateFrame` passes `flush` on
+the item page; `DevelopmentSectionBody` already renders state 7's order when it is handed a design result.
+**Nothing in this section needs a new component input.**
+
+### The answer in one line
+
+**Band 2 is the item page's Development block**, composed unchanged: every linked pull-request row, then
+the run's How to test (body, one sub-block per repository, earlier runs) — and on a design card, state 7's
+design slot first. Band 1 and band 3 are MOTIR-4909's kind words and verbs, byte-identical to the item
+page. One frame and one _Approve and merge_ over every pull request, in any repository.
+
+### What is composed, and who owns it
+
+| piece                                                                | owner — composed, not redrawn                                                                                                     |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| the dialog, the exit row, the address, the fill form, narrow         | § 22 (MOTIR-5222)                                                                                                                 |
+| band 1, band 3, the confirm step, every gate state, the refusal      | `design/github/design-notes.md` § 20 _The verbs and their states_ (MOTIR-5480) · `ApprovalGateControl`                            |
+| band 2 — the rows and How to test                                    | `design/github/design-notes.md` § 20 (MOTIR-5327) · `github.mock.html` Panel 12b, 12i                                             |
+| band 2 on a design card — the design slot                            | `design/work-items/design-notes.md` § _States 7–8_ (MOTIR-5494) · `design-result--what-to-review.mock.html` state 7 and section 8 |
+| the row's glyph, label and subject line                              | § 23 (MOTIR-5480)                                                                                                                 |
+| **which content band 2 holds for this kind, and the row's _Review_** | **this section**                                                                                                                  |
+
+**Nothing in the Development block is redrawn.** The mock carries `approve-and-merge.mock.html`'s own
+stylesheet and sprite sheet byte for byte, so its rows, pills, How to test, code blocks and `af-` frame
+bands are that sheet's rules; the overlay container is re-declared under `ov-` names quoting § 22's class
+strings, and state 7's slot under `ds-` names quoting its sheet.
+
+### FILL, not FLUSH — the one thing that differs from the item page
+
+The same block renders in two frame layouts, and the difference is the BOX only:
+
+| element                                    | item page — `layout="flush"` (12p)            | overlay — `layout="fill"` (this section)                          |
+| ------------------------------------------ | --------------------------------------------- | ----------------------------------------------------------------- |
+| the container                              | the Development section card                  | the overlay itself — no card around the frame                     |
+| the section card's title, gloss and door   | _Development_, its gloss, _Link pull request_ | **absent** — they are the page's, not the gate's                  |
+| the port's floor · 34rem ceiling · Expand  | kept                                          | **dropped** — the viewport is the box                             |
+| scroll                                     | the port, inside its ceiling                  | the port, at viewport height; band 3 on the bottom edge (Panel 2) |
+| bands 1 and 3, every state, verb and alert | the frame's                                   | **the frame's, byte-identical**                                   |
+
+**_Pull requests_ appears ONCE**, as band 1's kind label. The overlay has no section card, so there is no
+_Development_ heading above it and nothing to de-duplicate; the dialog's accessible name keeps the kind
+(`approvalOverlay.dialogTitle`, _Pull requests for ACME-12_).
+
+### How to test is evidence, never a gate
+
+It renders inside band 2, below the rows (or below the design slot on a design card). It has **no band,
+no gate row, no verb and no approval of its own**, in every panel. Its copy controls work in every state,
+including see-but-not-decide (Panel 3), because reading is not deciding. When no run wrote it, the
+block's **record-missing** callout renders inside the port (Panel 4, 12i unchanged) and the verbs stay:
+the gate is real, and a reviewer may approve without instructions.
+
+### A design card — state 7, and it outranks the card
+
+Panel 5. On a design card with an open linked pull request (AMENDMENT 4 Q8) band 2 is state 7's block:
+**the design result once, then How to test, then every pull-request row** behind a soft rule. No design
+band, no design gate, no design verbs.
+
+**⚠️ This corrects MOTIR-5438's own criterion**, which placed the result _"below every pull-request row
+and above How to test"_. State 7 merged at 2026-09-14T23:10Z (#2894), after the card was last edited
+(19:11Z), on review: _"design result and how to test should be before the PRs"_. The shipped
+`DevelopmentSectionBody` renders that order. The criterion is amended on the card, 2026-09-15.
+
+### States — composed, one panel each
+
+| state                          | panel | composed from                                                                   |
+| ------------------------------ | ----- | ------------------------------------------------------------------------------- |
+| awaiting (you)                 | 1, 2  | 12p                                                                             |
+| awaiting, see but not decide   | 3     | 12w — no verbs, _Waiting on {name}._, pill _Awaiting_                           |
+| How to test record missing     | 4     | 12i inside 12p                                                                  |
+| approved — all merged          | 6a    | 12t                                                                             |
+| changes_requested              | 6b    | the frame's record band (state E) with this kind's commit count; nothing merged |
+| superseded — withdrawn by push | 6c    | 12v                                                                             |
+| merging · queued to merge      | —     | 12r · 12s, unchanged — the same bands in the same fill form, not repeated       |
+| one refused, in place          | 7     | 12u                                                                             |
+
+**Deciding does not close the overlay** (§ 22): the frame re-renders with the decided record, and the row
+underneath settles in place in the same reconcile.
+
+**Band 3's copy is the SHIPPED copy.** `approvalGate.pullRequestApproval.consequence.named` reads
+_Approving merges {prs} — each now, or through its repository's merge queue where one is required — then
+moves {key} to Approved._ `approve-and-merge.mock.html` 12p still draws the earlier per-member wording
+(_… and adds {queued} to its merge queue …_); the panels here draw what `messages/en.json` ships.
+
+### Narrow (`< md`) and dark
+
+Panel 8, in `zh`: § 22's narrow exit row unchanged (no `Esc` chip, no title, _Open work item_ as its icon
+with the label as its accessible name); rows wrap their pills under the title; band 3 wraps its sentence
+above the verbs. Panel 9: Panel 1 under `data-theme="dark"` — no token of its own.
+
+### The ACCESS PATH — the row's door (Panel 10)
+
+§ 23 said it: once this story lands the `pull_request_approval` row's decide cell swaps **_Open card_ for
+_Review_**, exactly as design rows have it. **The whole row is the door** (§ 22 Panel 9, MOTIR-5225's
+`aria-haspopup="dialog"` link): a plain primary click writes
+`?approval=<key>&approvalKind=pull_request_approval` with `shallowPush` and this overlay opens over the
+tab; a modified or middle click opens `/items/<key>` in a new tab. The glyph, _Pull requests_ label and
+subject line with its _+n more_ rule are § 23's, unchanged.
+
+### Fields the port reads
+
+The port is `DevelopmentSectionBody`, so it reads exactly what the item page hands it — which is what the
+read (MOTIR-5439) must return beside `gate` and `canDecide`.
+
+| rendered element                      | field(s)                                                                                                  | source on the item page                                  |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| every pull-request row                | `deliveries` — `WorkItemDeliveryDto[]`, each with its `LinkedPullRequestDto`                              | `workItemsService.getDeliveryView(item.id, targetRepos)` |
+| a repository with no pull request yet | `repos` — the repository set amended by the delivery set (`AwaitingRepoRow`, 12l)                         | the same `getDeliveryView` call                          |
+| How to test — every part              | `HowToTestDto` (`record` · `record_missing` · `tested_via_ancestor`)                                      | `howToTestService.getForWorkItem`                        |
+| the design slot (Panel 5)             | the current `DesignEvidenceDTO`, or `null` on a card with none                                            | `designEvidenceService.getCurrentForWorkItem`            |
+| band 1, band 3, every state           | `ApprovalGateDTO`, `canDecide`, `routedToLabel`; the member outcomes as `DevelopmentGateFrame` reads them | the overlay read (MOTIR-5223)                            |
+
+### Copy — `en` + `zh`
+
+**No new string.** Every visible string is shipped: `common.close`; `approvalOverlay.*`;
+`approvalGate.state.*`, `approvalGate.waitingOn`, `approvalGate.verb.requestChanges`;
+`approvalGate.pullRequestApproval.*`; `github.development.howToTest.*`; `designResult.*`;
+`workbench.approvals.review` (_Review_ / _查看_) and `workbench.approvals.pullRequest.*`.
+
+### Tokens
+
+`--el-*` colour and element-semantic shape tokens only, no raw hex. The overlay's own elements keep
+§ 22's token map. Board chrome inks are `--el-text` and `--el-text-secondary` only. Code blocks and the
+design slot's frame and note row take `--el-card` inside the port, so `--el-link` keeps AA.
+
+### What this asset does NOT decide
+
+- **The overlay container, the address, the exit row** — § 22's.
+- **The frame's states, verbs, confirm step, refusal copy or merge behaviour** — MOTIR-4909 / MOTIR-4882.
+- **The Development block, How to test, the design slot** — MOTIR-5327 / MOTIR-5336 / MOTIR-5494.
+- **The item page's door** — MOTIR-5215.
+
+### GIVES / TAKES — every card this asset names
+
+| card                                                                                                                                                               | GIVES                                                                                                                            | TAKES                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[MOTIR-5438](motir:cmu118c4s0009hytxgtmyfeg8)** (this card)                                                                                                      | Panels 1–10 and this section                                                                                                     | **PREMISE:** its design-card criterion's order (_"below every pull-request row and above How to test"_) — state 7 outranks it. **Amended on the card, 2026-09-15.**                                                                                              |
+| **[MOTIR-5439](motir:cmu118c7e000bhytxn9l5u1v0)** (the read)                                                                                                       | The Fields-read table: `deliveries`, `repos`, `HowToTestDto`, `DesignEvidenceDTO` or `null`                                      | **ELEMENT:** _"the item's linked pull requests, in the same shape the item page's Development section reads"_ names one of the two delivery fields; the block also reads `repos` to draw a repository with no pull request. **Amended on the card, 2026-09-15.** |
+| **[MOTIR-5440](motir:cmu118ca1000dhytx0jofi4gl)** (the host)                                                                                                       | Every panel, the fill form around this port, no new frame input, and the row's door                                              | **ELEMENT:** the row's decide cell _Open card_ → _Review_ (§ 23's promise), which its criteria did not name. **Amended on the card, 2026-09-15.**                                                                                                                |
+| **[MOTIR-5441](motir:cmu118cco000fhytx4onw4dk2)** (the vitest gate)                                                                                                | The seams to assert: one frame over both repositories, How to test with no verb, record-missing inside the port, state 7's order | Nothing.                                                                                                                                                                                                                                                         |
+| **[MOTIR-5442](motir:cmu118cf8000hhytxpqsqhdqm)** (the acceptance E2E)                                                                                             | The walk's surfaces: the row's _Review_, both rows and How to test at full size, a copy control, band 3 on the bottom edge       | Nothing.                                                                                                                                                                                                                                                         |
+| **[MOTIR-5222](motir:cmtxm4vqc00euhztx2esa99wa)** (§ 22) · `done`                                                                                                  | A second port for its container                                                                                                  | Nothing — the container is composed.                                                                                                                                                                                                                             |
+| **[MOTIR-5223](motir:cmtxm4vsr00ewhztxdvzgyay8)** (the read's route) · `done`                                                                                      | A drawn consumer for a resolved `pull_request_approval` subject                                                                  | Nothing — its `kind_not_built` arm for this kind is what MOTIR-5439 replaces.                                                                                                                                                                                    |
+| **[MOTIR-5224](motir:cmtxm4vvp00eyhztxhm8nwmrs)** (the host) · `done`                                                                                              | Nothing                                                                                                                          | Nothing — `layout="fill"` shipped; this port needs no other input.                                                                                                                                                                                               |
+| **[MOTIR-5225](motir:cmtxm4vyn00f0hztxmer6bqau)** (the row door) · `done`                                                                                          | Its door, reached from a second kind                                                                                             | Nothing.                                                                                                                                                                                                                                                         |
+| **[MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2)** (the Development block) · `done`                                                                                 | A third mount context for the block                                                                                              | Nothing — composed.                                                                                                                                                                                                                                              |
+| **[MOTIR-5494](motir:cmu1hrmoo001shutx9zav5r0h)** (state 7) · `done`                                                                                               | Nothing                                                                                                                          | Nothing — its section 8 already drew this overlay's band 2 on a design card; Panel 5 composes it.                                                                                                                                                                |
+| **[MOTIR-4909](motir:cmtt4ogps000ghutxdx7laze2)** · **[MOTIR-5480](motir:cmu1aj15k00gchyoidbhlbomo)** · **[MOTIR-5484](motir:cmu1aj1bj00gkhyoi0iuds6xy)** · `done` | A fourth mount context for the kind's bands                                                                                      | Nothing — bands 1 and 3 composed; the shipped consequence copy is drawn where 12p's sheet predates it.                                                                                                                                                           |
+| **[MOTIR-5485](motir:cmu1aj1d000gmhyoic2qrsb4v)** (the row) · `done`                                                                                               | Nothing                                                                                                                          | **ELEMENT:** _Open card_ → _Review_ and the row's link → the overlay door. Not amended: a `done` card is history; § 23 recorded the swap as MOTIR-5437's.                                                                                                        |
+| **[MOTIR-4882](motir:cmtrwx3580055hxph0vfamj1l)** · `done`                                                                                                         | Nothing                                                                                                                          | Nothing — its refusal union is cited in Panel 7's slot, not re-worded.                                                                                                                                                                                           |
+| **[MOTIR-5215](motir:cmtxm4v6g00efhztx79g9zyar)** · `done`                                                                                                         | Nothing                                                                                                                          | Nothing — the item page's door writes the same address.                                                                                                                                                                                                          |
+
+Fixture items use `ACME-n` keys and link to nothing.
+
+## 25 · The To-approve ROW SET and the Development frame WITHOUT a merge gate — MOTIR-5612
+
+**AMENDS § 20** (`approvals-row.mock.html`, Panel 9 as § 23 revised it) **and § 23 itself**, in the
+delta **`approvals-row--one-gate.mock.html`** (Bug [MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37),
+card [MOTIR-5612](motir:cmu3bguy400drhwtx2p8zl203)). It also amends the Development frame drawn in
+`design/github/design-notes.md` § 20 (MOTIR-5327 · MOTIR-5484). It is the layout source of truth for
+[MOTIR-5615](motir:cmu3bgv5u00dxhwtxlgojcou8), which builds it and carries this card in `blocked_by`.
+**No existing mock is edited** and no image export ships (`docs/decisions/design-result.md`
+AMENDMENT 4).
+
+**Why it is owed.** A card in a `manual` project was raised TWO approve-to-merge gates — one per pull
+request beside the one per card — so the To-approve tab listed the same pull request twice, and one of
+those rows read _Not built yet_ about a kind that is in fact registered. The model is now ONE gate per
+card, and approving it merges every pull request the card delivers
+(`docs/decisions/approval-gates.md` § 8's SECOND AMENDMENT, **decisions 3 and 5**). § 23 of this file
+SPECIFIED the row being removed, so the new state had to be drawn before it is built.
+
+### Rendered against shipped reality, not redrawn
+
+Every string, structure and class string in the delta was taken from the REAL components mounted with
+the shipped fixtures at `origin/main` `45b107a5f`, not read off the source:
+
+- `components/approvals/ApprovalRow.tsx` — both rows of Panel 2, including the `Pill tone="archived"`
+  _Not built yet_ cell and the `Pull-request merge` subject line `mergeSubjectMeta` writes;
+- `components/github/DevelopmentGateFrame.tsx` (via `DevelopmentSection.tsx`) — the frame header, the
+  pull-request rows, the outcome chips, _Retry merge_ and the refusal alert of Panels 3–5.
+
+The mock's second stylesheet re-declares those components' markup under prefixed names, each rule
+quoting the class string it maps to; the first stylesheet is § 24's delta byte for byte.
+
+### The panels
+
+| panel | what it settles                                                                                                                                                                                                                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **To approve draws ONE row for one card, whatever it delivers.** The subject cell already names the whole set in the gate's canonical order, so the row states what approving it merges. The decide cell is § 23's _Review_ and the door is § 24's overlay — both unchanged.                                    |
+| **2** | **The row that is GONE**, as a before/after pair over the same card: 2a draws today's three rows — the card's own plus one `pull_request_merge` row per pull request, each carrying the _Not built yet_ pill in its decide cell — and 2b draws the one row that remains.                                        |
+| **3** | **The frame at rest.** The card's single gate holds the decision; each pull request's merge OUTCOME is drawn in its own row's trailing cell, read from `merge_authority` / `merge_outcome_ref` on the pull-request row rather than from a gate of its own.                                                      |
+| **4** | **ONE member refused.** _Retry merge_ stays in the refused row's trailing cell and is addressed to **(the card's approved gate, THIS pull request)**. The gate stays `approved`, the card stays `approved`, and the sibling that merged keeps its outcome — a retry carries out a decision that already stands. |
+| **5** | **A QUEUED pull request.** _Queued to merge_ is an outcome, not a pending decision: the card sits `approved` until the merge webhook lands it. No retry is offered while an outcome exists.                                                                                                                     |
+
+**No second gate is drawn in any panel**, which is the one thing a reader should be able to check by
+looking rather than by reading.
+
+### What this asset does NOT decide
+
+- **The copy.** Every string in the delta is the shipped one. Retiring the strings this change makes
+  unreachable for the kind — `workbench.approvals.notBuiltYet`, `mergeSubjectMeta` — in `en` and `zh`
+  is [MOTIR-5615](motir:cmu3bgv5u00dxhwtxlgojcou8)'s.
+- **The overlay.** § 22 and § 24 draw it. Its `kind_not_built` arm for this kind retires with the row,
+  and that arm is MOTIR-5615's and [MOTIR-5616](motir:cmu3bgv8100dzhwtx5nb0ovib)'s.
+- **The registry and the enum.** The kind stays registered until MOTIR-5616, and the
+  `approval_gate_kind` Postgres value is kept permanently, because superseded rows reference it.
+
+### ⚠️ A line in a sibling asset that is TRUE ONLY LATER
+
+`approval-overlay.mock.html:4815` labels a panel
+`4a · kind = pull_request_merge (in UNREGISTERED_GATE_KINDS)`. **That is not true today** — the kind is
+registered (`lib/approvalGates/registry.ts`), which is exactly why the To-approve row was decidable-looking
+enough to reach a _Not built yet_ cell rather than an unregistered one. It becomes true when
+[MOTIR-5616](motir:cmu3bgv8100dzhwtx5nb0ovib) moves the kind to `UNREGISTERED_GATE_KINDS`. It is named
+here, and not edited, because § 22's mock is a record of what was drawn: a reader meeting that label
+should know it describes the destination rather than the present.
+
+### GIVES / TAKES — every card this amendment names
+
+| card                                                                    | GIVES                                                                                                                   | TAKES                                                                                                                                     |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **[MOTIR-5615](motir:cmu3bgv5u00dxhwtxlgojcou8)** (the UI) · `blocked`  | Panels 1–5: the row set, the outcome cell, RETRY's address, and the copy it must retire in `en` + `zh`                  | Nothing to amend — it was authored against this delta and carries it in `blocked_by`                                                      |
+| **[MOTIR-5616](motir:cmu3bgv8100dzhwtx5nb0ovib)** (the retirement)      | The `UNREGISTERED_GATE_KINDS` line above becomes true at this card, and the overlay's `kind_not_built` arm goes with it | Nothing — its scope is the registry tier, unchanged by this asset                                                                         |
+| **[MOTIR-5485](motir:cmu1aj1d000gmhyoic2qrsb4v)** (§ 23's row) · `done` | Nothing                                                                                                                 | Nothing — a `done` card is history. § 23's struck sentence records that its sibling row is gone, so a reader arriving there is not misled |
+| **[MOTIR-5480](motir:cmu1aj15k00gchyoidbhlbomo)** (§ 23) · `done`       | Nothing                                                                                                                 | **ELEMENT:** the Panel 7 promise for `pull_request_merge` is struck in place, above                                                       |
+| **[MOTIR-5438](motir:cmu118c4s0009hytxgtmyfeg8)** (§ 24) · `done`       | Nothing                                                                                                                 | Nothing — the overlay and its port are unchanged; this delta composes them                                                                |
+| **[MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37)** (the bug)             | The drawn state of its own fix                                                                                          | Nothing                                                                                                                                   |
+
+Fixture items use `MOTIR-4931` and link to nothing.
