@@ -1789,3 +1789,160 @@ nothing here. This notes file gains MOTIR-5463, 5464, 5465, 5466 and 5468.
 
 Fixture items use `ACME-n` keys (the card's `MOTIR-123` placeholder is drawn as `ACME-12`, as the
 rest of this area does), so they link to nothing.
+
+## 22 · The Development frame after a merge-queue EJECTION — _Left the queue_, the reason in words and its failing check, _Queue again_ on the card's own approval (MOTIR-5631, 2026-09-16)
+
+**AMENDS § 20** — _The verbs and their states_ (MOTIR-5480), Panels **12s** (_Queued to merge_),
+**12u / 12u′** (one refused, RETRY in place) and **12v** (withdrawn by a push) in
+`design/github/approve-and-merge.mock.html` — and the ONE-gate delta
+`design/workbench/approvals-row--one-gate.mock.html` (`design/workbench/design-notes.md` § 25,
+MOTIR-5612), which drew RETRY on the card's own gate. The delta is
+**[`approve-and-merge--ejected.mock.html`](./approve-and-merge--ejected.mock.html)**, Panels
+**E1–E7** (plus E2′, the press answered), each at desktop, dark and ~400px. Card MOTIR-5631, Story
+MOTIR-5461. **No existing mock is edited** and no image export ships (`docs/decisions/design-result.md`
+AMENDMENT 4). The behaviour drawn is `docs/decisions/approval-gates.md` § 4 **THIRD AMENDMENT**
+(MOTIR-5629); each panel cites its decision. The component that builds every panel is **MOTIR-5635**.
+
+**Why it is owed.** `MergeOutcomeSlot` knows `merging` · `merged` · `queued` · `refused` ·
+`notMergedYet`. It has no picture for _the queue threw this out_, so an ejected pull request would
+read _Queued to merge_ for ever. The one distinction the frame must make at a glance: **the approved
+code is unchanged** → one press puts it back and nobody is asked again; **new commits arrived** → the
+old approval no longer covers them, and the card asks again on green.
+
+### Access path
+
+- The item page → the **Development block** (§ 20, Panels 12a / 12c), reached from any board card,
+  list row or Workbench row that opens the card. The ejected row is one of the frame's own rows; no
+  new entry point.
+- The same frame inside the **full-screen approval overlay** (MOTIR-5437), opened from the item
+  page's _Review & approve_ control — it renders the Development block as its port, so every panel
+  here reads the same there.
+- **An ejected card is NOT in _To approve_.** Its `pull_request_approval` gate is **decided**
+  (approved), and _To approve_ lists awaiting gates only; the ejection raises no gate (decision 5),
+  so nothing new appears in the queue. The card is found through its own surfaces — and, once built,
+  the card badge (a sibling story's, not drawn here). A card whose head moved (E3) comes back to
+  _To approve_ only when the fresh gate is raised on green (decision 6, Panel 12p).
+
+### Rendered against shipped reality, not redrawn
+
+The frame (`components/github/DevelopmentGateFrame.tsx` — `outcomeFor`, `recordDetail`), the row
+(`PullRequestRow` with the outcome slot beside the host pill), the record band, the refusal band
+(12u) and How to test are composed from `approve-and-merge.mock.html`'s stylesheet and sprite,
+carried verbatim at `origin/main` `58bb046d0`. New rules are the `ej-` block only, each quoting the
+class string MOTIR-5635 builds it from. **No panel shows a second gate or a per-pull-request approval
+control**: every frame has ONE record band, _Approved by Ada L._, and no verb row.
+
+### The panels, the decision each depicts, and the card that builds it
+
+| panel | state                                                                                                                                                                                                                                                                                                                                              | status rail | decision | built by   |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- | ---------- |
+| E1    | **Ejected, heads unchanged, `manual`** — the row's slot reads **Left the queue** (rose) and offers **Queue again** exactly where _Retry merge_ sits in 12u′; the record band keeps _Approved by_ and adds the exit: reason in words, _Failing check: {name}_ as a link, and _your approval still covers these commits_. The sibling keeps _Merged_ | Implemented | 3, 5, 8  | MOTIR-5635 |
+| E2    | **Queue again pressed** — `MergeOutcomeSlot`'s shipped `retrying` treatment: the row keeps _Left the queue_, the button is disabled (`disabled:opacity-50`), the record band shows the progress line                                                                                                                                               | Implemented | 5        | MOTIR-5635 |
+| E2′   | **The press answered** — the row is 12s again (_Queued to merge_, peach) and the rail reads **Approved**, written through the decided gate's own path; the exit line is gone, its row stays on the pull request for the audit                                                                                                                      | Approved    | 5        | MOTIR-5635 |
+| E3    | **Ejected, then a push moved the head** — no _Queue again_; the slot reads **New commits since approval** (neutral); the frame keeps the decided record and draws no verbs (12v's grammar, composed). On green the card is promoted to In Review with ONE fresh question (12p)                                                                     | Implemented | 6        | MOTIR-5635 |
+| E4    | **Neutral removal** (`MANUAL`, `QUEUE_CLEARED`, `ROLL_BACK`, unknown) — **Removed from the queue** (neutral, `circle-minus`), the reason in words, **Queue again** offered, no check line                                                                                                                                                          | Approved    | 4, 5     | MOTIR-5635 |
+| E5    | **`auto` mode** — no gate, so no frame: § 20's Panel 12a with the exit as a **flush part** (§ 21's grammar: a soft rule and an `h4` _Merge queue_) between the rows' caption and How to test; **Queue again** is offered to anyone who may edit the card                                                                                           | Implemented | 3, 5     | MOTIR-5635 |
+| E6    | **No failing check known** — `MERGE_CONFLICT` has no merge group; a check the product could not tie back is the same case. The reason line stands alone, nothing invented                                                                                                                                                                          | Implemented | 8        | MOTIR-5635 |
+| E7    | **Queue again refused** — 12u's rose band in place, _{pr} was not queued again._, the refusal copy from the one vocabulary (drawn: `mergeAlreadyRequeued`; also `APPROVAL_GATE_SUPERSEDED` and the host's `MERGE_*` members), _Your approval stands._                                                                                              | Implemented | 5, 6     | MOTIR-5635 |
+
+### New `MergeOutcomeSlot` kinds
+
+| kind               | pill                                                           | offers        | shown when (fields below)                                                                  |
+| ------------------ | -------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
+| `leftQueue`        | _Left the queue_ · `severity="danger"` (rose) · `circle-x`     | _Queue again_ | latest exit is `failure`, not requeued, and the pull request's head equals the exit's head |
+| `removedFromQueue` | _Removed from the queue_ · `tone="neutral"` · `circle-minus`   | _Queue again_ | latest exit is `neutral`, not requeued, head unchanged                                     |
+| `newCommits`       | _New commits since approval_ · `tone="neutral"` · `git-branch` | nothing       | latest exit not requeued, and the head has moved since the exit                            |
+
+`requeueable` from `listApprovalMembers` (MOTIR-5634) is the one predicate for _offers Queue again_;
+the slot never offers a press the server would refuse as `head_moved` or `no_exit`. The pressed
+state reuses the shipped `retrying` sub-state; a requeued exit (`requeuedAt` set) falls back to the
+row's ordinary outcome (`queued`, E2′).
+
+### The reason map, in words
+
+One string per **raw reason** (decision 2's table, exact match). A failure reads under _left the
+merge queue_, a neutral under _was removed from the merge queue_. An unrecognised string renders the
+`unknown` sentence — never the raw value.
+
+### Fields read
+
+| rendered element          | field(s) read                                                                                                                                              | panel          |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| which kind the slot shows | the member's `exit` (`PullRequestQueueExitDTO`: `rawReason`, `disposition`, `headSha`, `exitedAt`, `requeuedAt`), the PR's current head, and `requeueable` | E1–E7          |
+| the reason sentence       | `exit.rawReason` → `exit.reason.*`                                                                                                                         | E1, E3–E7      |
+| the failing check         | the exit's failing-check name and URL (decision 8; MOTIR-5633) — absent → no line                                                                          | E1, E3, E5, E7 |
+| the record band           | the decided gate's `decidedBy` / `decidedAt` / commit count — unchanged from § 20                                                                          | E1–E4, E6, E7  |
+| the rail                  | the card's status (`implemented` after a failure; unchanged after a neutral)                                                                               | all            |
+| the refusal               | the press's refusal tag through `lib/approvalGates/refusals.ts`                                                                                            | E7             |
+
+### Tone and tokens
+
+`--el-*` colour and element-semantic shape tokens only. The exit line: `--el-text`, repository ·
+number bold and unbroken; its glyph `--el-danger-on-surface` for a failure, `--el-icon-muted` for a
+neutral. The follow-on lines (_Failing check_, _your approval still covers…_, the auto sentence):
+`--el-text-secondary`, indented to the text column. The check link: `--el-link`, underlined, with the
+shipped external glyph. The auto part: `border-(--el-border-soft)` rule, `h4` in `--el-text`. Pills
+ride the shipped `Pill` axes, no new variant. The refusal band is 12u's
+(`--el-danger-surface` + `--el-danger-on-surface`). No new sprite symbol: `audit-mock-sprites
+--strict` on the delta — 44 symbols, 0 drifted, 0 undeclared.
+
+### Copy — `en` + `zh`
+
+Under **`approvalGate.pullRequestApproval`**, beside `outcome.queued`. The refusal body is the
+shipped `approvalGate.refusal.mergeAlreadyRequeued` (MOTIR-5634), not re-keyed. `{pr}` is the row's
+`owner/name · #n`.
+
+| key                                | en                                                                                                                | zh                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `outcome.leftQueue`                | Left the queue                                                                                                    | 已离开合并队列                                                                     |
+| `outcome.removedFromQueue`         | Removed from the queue                                                                                            | 已从合并队列中移除                                                                 |
+| `outcome.newCommits`               | New commits since approval                                                                                        | 批准后有新提交                                                                     |
+| `outcome.queueAgain`               | Queue again                                                                                                       | 重新排队                                                                           |
+| `exit.left`                        | {pr} left the merge queue: {reason}                                                                               | {pr} 已离开合并队列：{reason}                                                      |
+| `exit.removed`                     | {pr} was removed from the merge queue: {reason}                                                                   | {pr} 已被移出合并队列：{reason}                                                    |
+| `exit.reason.CI_FAILURE`           | its checks failed in the merge queue.                                                                             | 它的检查在合并队列中未通过。                                                       |
+| `exit.reason.CI_TIMEOUT`           | its checks timed out in the merge queue.                                                                          | 它的检查在合并队列中超时。                                                         |
+| `exit.reason.MERGE_CONFLICT`       | it no longer merges cleanly with the changes ahead of it.                                                         | 它与排在前面的更改无法再干净地合并。                                               |
+| `exit.reason.INVALID_MERGE_COMMIT` | the queue could not build a merge commit for it.                                                                  | 合并队列无法为它生成合并提交。                                                     |
+| `exit.reason.GIT_TREE_INVALID`     | the queue could not build its tree.                                                                               | 合并队列无法为它生成文件树。                                                       |
+| `exit.reason.BRANCH_PROTECTIONS`   | a branch protection rule stopped it.                                                                              | 分支保护规则阻止了它。                                                             |
+| `exit.reason.MANUAL`               | someone took it out.                                                                                              | 有人把它移出了队列。                                                               |
+| `exit.reason.QUEUE_CLEARED`        | the merge queue was cleared.                                                                                      | 合并队列已被清空。                                                                 |
+| `exit.reason.ROLL_BACK`            | it was taken out for a roll-back.                                                                                 | 因回滚而被移出。                                                                   |
+| `exit.reason.unknown`              | GitHub did not say why.                                                                                           | GitHub 未说明原因。                                                                |
+| `exit.failingCheck`                | Failing check: {check}                                                                                            | 未通过的检查：{check}                                                              |
+| `exit.unchanged`                   | Your approval still covers these commits, so **Queue again** puts it back with no new approval.                   | 你的批准仍覆盖这些提交，**重新排队**即可放回队列，无需再次批准。                   |
+| `exit.newCommits`                  | It has new commits since your approval. Motir asks again when every check is green.                               | 你批准后它有了新提交。所有检查通过后，Motir 会再次征求批准。                       |
+| `exit.auto`                        | Motir merges this project’s pull requests when they are green. **Queue again** sends it back at the same commits. | Motir 会在检查通过后合并本项目的拉取请求。**重新排队**会以相同的提交将它放回队列。 |
+| `exit.partTitle`                   | Merge queue                                                                                                       | 合并队列                                                                           |
+| `requeue.progress`                 | Adding {pr} back to its merge queue…                                                                              | 正在将 {pr} 放回合并队列…                                                          |
+| `requeue.refusedTitle`             | {pr} was not queued again.                                                                                        | {pr} 未能重新排队。                                                                |
+
+After E2′ the record band reads the shipped `queued.why`; after E7 the band closes with the shipped
+`refused.standsAlone`.
+
+### Scope
+
+**Drawn:** the ejected row in its three kinds, the press and its answer, the refusal, the exit in the
+record band (`manual`) and as a flush part (`auto`), each at desktop, dark and ~400px. **Not drawn,
+and whose it is:** the reason map and data shape — MOTIR-5629 / MOTIR-5632; the requeue route and its
+refusals — MOTIR-5634; the failing-check capture — MOTIR-5633 (behind the grant MOTIR-5638); the card
+BADGE on boards and lists — the sibling story's; the component — MOTIR-5635. How to test is unchanged and
+abbreviated on the sheet.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' <asset> | sort -u`. `approve-and-merge--ejected.mock.html` carries
+**25** keys: four are this section's (MOTIR-5461, 5629, 5631, 5635); the other 21 are the base
+mock's stylesheet and sprite provenance, carried verbatim, and GIVE or TAKE nothing here.
+
+| key        | GIVES / TAKES                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5635 | **GIVES** every panel, the three slot kinds, the copy and the tokens above — it builds them. **TAKES** nothing it does not already own                              |
+| MOTIR-5632 | **TAKES** that the member read carries the latest exit (`PullRequestQueueExitDTO`) and the PR's current head, so the slot can tell E1 from E3 without a second read |
+| MOTIR-5634 | **TAKES** that `requeueable` is the single predicate for drawing _Queue again_, and that a refused press answers with a tag in the one refusal vocabulary (E7)      |
+| MOTIR-5633 | **TAKES** the failing check's **name and URL** on the exit; absent, the frame draws E6's lone reason                                                                |
+| MOTIR-5629 | **GIVES** decisions 2–8, cited per panel. **TAKES** nothing                                                                                                         |
+| MOTIR-5631 | this card                                                                                                                                                           |
+
+Fixture items use `ACME-n` keys, so they link to nothing.
