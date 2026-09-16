@@ -68,9 +68,12 @@ const pra = en.approvalGate.pullRequestApproval;
 
 const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
+/** The tags the ejection's rich messages use — removed by name, not by pattern: a message is
+ *  our own catalogue text, and a closed list says exactly what the page drops. */
+const RICH_TAGS = ['<b>', '</b>', '<link>', '</link>'] as const;
 /** A rich message as the page reads it — its tags gone. */
 const plain = (text: string, vars: Record<string, string | number> = {}) =>
-  fill(text, vars).replace(/<\/?\w+>/g, '');
+  RICH_TAGS.reduce((out, tag) => out.split(tag).join(''), fill(text, vars));
 
 const prName = (number: number) => `${WEB} · #${number}`;
 const headRefFor = (card: SeededCard, number: number) =>
