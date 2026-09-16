@@ -51,6 +51,7 @@ function lesson(over: Record<string, unknown> = {}) {
     kinds: [],
     types: ['code'],
     phases: ['author'],
+    subject: null,
     distance: 0.12,
     ...over,
   };
@@ -237,9 +238,80 @@ describe('the axes reach the seam, and an omitted one stays absent', () => {
   it('omits an axis the caller did not name — never `[]`', async () => {
     await runSearchLessons(ARGS, ctx);
     const passed = searchLessons.mock.calls[0]![2];
-    for (const axis of ['kinds', 'types', 'phases']) {
+    for (const axis of ['kinds', 'types', 'phases', 'subject']) {
       expect(passed).not.toHaveProperty(axis);
     }
+  });
+});
+
+// ── The FOURTH axis (MOTIR-5621) ────────────────────────────────────────────
+//
+// It was WRITE-ONLY: `add_lesson` recorded a subject and no query could narrow
+// on it. The filter itself was never the gap — `selectForInjection`,
+// `listForInjection` and `POST /v1/lessons/search` have all carried it since
+// MOTIR-5080 — so what these assert is the part that was actually missing: that
+// the TOOL takes it and that it survives the hop to the seam.
+describe('the SCALAR subject axis reaches the seam', () => {
+  it('passes a supplied subject through', async () => {
+    await runSearchLessons({ ...ARGS, subject: 'mcp' } as never, ctx);
+    expect(searchLessons.mock.calls[0]![2]).toMatchObject({ subject: 'mcp' });
+  });
+
+  it('is SCALAR at the schema — a list is refused, not coerced', () => {
+    const schema = registeredTool().config.inputSchema as Record<
+      string,
+      { parse(v: unknown): unknown }
+    >;
+    expect(schema['subject']!.parse('mcp')).toBe('mcp');
+    // The whole reason the axis is scalar: a lesson has ONE subject, and the
+    // SQL clause beneath COMPARES rather than overlaps.
+    expect(() => schema['subject']!.parse(['mcp', 'data'])).toThrow();
+  });
+
+  it('refuses a blank subject rather than letting one narrow to nothing', () => {
+    const schema = registeredTool().config.inputSchema as Record<
+      string,
+      { parse(v: unknown): unknown }
+    >;
+    // `''` is treated as UNCONSTRAINED by `subjectFilter` upstream while every
+    // hop between here and there spreads on truthiness — two defensible reads of
+    // the same value. The schema is where that ambiguity stops, so no hop below
+    // has to special-case it.
+    expect(() => schema['subject']!.parse('')).toThrow();
+    expect(() => schema['subject']!.parse('   ')).toThrow();
+  });
+
+  it('the description teaches the axis in the same register as the other three', () => {
+    const d = registeredTool().config['description'] as string;
+    expect(d).toMatch(/subject/i);
+    const schema = registeredTool().config.inputSchema as Record<string, { description?: string }>;
+    const p = schema['subject']!.description ?? '';
+    // The two halves a caller cannot guess: that it is scalar, and that an
+    // untagged lesson still reaches a narrowed query.
+    expect(p).toMatch(/scalar|one subject or none/i);
+    expect(p).toMatch(/carrying none|still reaches every query/i);
+  });
+});
+
+describe('the subject is VISIBLE on the way back', () => {
+  // Without this the axis is half-built: a narrowed search legitimately mixes
+  // rows carrying the subject with rows carrying none, and the tag is the only
+  // thing that says which is which — so a caller cannot re-narrow.
+  it('renders the subject in the axis tag', () => {
+    const out = summarizeLessonSearch({
+      outcome: 'matched',
+      lessons: [lesson({ kinds: [], types: [], phases: [], subject: 'mcp' })] as never,
+    });
+    expect(out).toContain('subject: mcp');
+    expect(out).not.toContain('[unconstrained]');
+  });
+
+  it('an untagged row still reads as unconstrained', () => {
+    const out = summarizeLessonSearch({
+      outcome: 'matched',
+      lessons: [lesson({ kinds: [], types: [], phases: [], subject: null })] as never,
+    });
+    expect(out).toContain('[unconstrained]');
   });
 
   it('upper-cases and trims the project key before resolving it', async () => {

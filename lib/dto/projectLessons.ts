@@ -162,6 +162,18 @@ export interface RankedLessonDTO {
   kinds: string[];
   types: string[];
   phases: LessonPlanPhase[];
+  /**
+   * Which SUBJECT MATTER it is about — the fourth axis, SCALAR because a lesson
+   * has one subject or none (MOTIR-5081). `null` = any, and it is the same
+   * answer whether the row carries no subject or an older motir-ai omitted the
+   * field.
+   *
+   * ⚠️ IT IS ON THE DTO BECAUSE THE AXIS CAN BE NARROWED ON. A subject-narrowed
+   * search returns rows carrying that subject AND rows carrying none — both are
+   * correct answers — and without this field a caller cannot tell which it is
+   * holding, so it cannot re-narrow. Same job the other three axes do here.
+   */
+  subject: string | null;
   /** Cosine distance to the query; lower is nearer. */
   distance: number;
 }

@@ -186,6 +186,11 @@ function toRankedLessonDTO(raw: RawRankedLesson): RankedLessonDTO {
     // to make visible, so it is carried through and the badge renderer falls back
     // to printing it raw.
     phases: (raw.phases ?? []) as RankedLessonDTO['phases'],
+    // ⚠️ ABSENT AND NULL COLLAPSE TO NULL, and that is the right reading of both.
+    // An older motir-ai omits the field; a row with no subject sends null. To the
+    // caller those are one answer — "this row carries no subject" — which is the
+    // half of AC 1's contract that says an untagged lesson reaches every query.
+    subject: raw.subject ?? null,
     distance: raw.distance,
   };
 }
@@ -279,6 +284,8 @@ export const projectLessonsService = {
       kinds?: string[];
       types?: string[];
       phases?: string[];
+      /** SCALAR — one subject or none, never a list (MOTIR-5621). */
+      subject?: string;
       limit?: number;
     },
   ): Promise<LessonSearchResult> {
@@ -294,6 +301,9 @@ export const projectLessonsService = {
         ...(input.kinds ? { kinds: input.kinds } : {}),
         ...(input.types ? { types: input.types } : {}),
         ...(input.phases ? { phases: input.phases } : {}),
+        // The scalar axis, under the same rule: absent must stay absent across
+        // this hop too, or the upstream renders a clause nothing matches.
+        ...(input.subject ? { subject: input.subject } : {}),
         ...(input.limit !== undefined ? { limit: input.limit } : {}),
       });
       // ⚠️ NO `isTenantRow` FILTER HERE, deliberately. It guards the inspection

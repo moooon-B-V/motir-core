@@ -31,8 +31,14 @@ import { projectKeyField } from './sprintRef';
 // FAILS SOFTLY WHEN MISUSED. The retrieval arithmetic is:
 //
 //     WHERE  … kinds/types/phases overlap …      ← chooses the candidate POOL
+//       AND  (subject IS NULL OR subject = $s)    ← the SCALAR fourth axis
 //     ORDER BY "embedding" <=> query ASC         ← chooses which few arrive
 //     LIMIT  n
+//
+// ⚠️ THE FOURTH AXIS IS NOT AN OVERLAP — it is scalar, and its clause admits the
+// UNTAGGED row as well as the matching one. A lesson with no subject is more
+// general than any subject, so narrowing must not exclude it; the three set
+// axes get the same treatment for the same reason, via their own empty-set arm.
 //
 // The axes only cut the pool. **The query TEXT does the remaining selection**,
 // so a weak query returns n near-arbitrary rows out of a correctly-filtered
@@ -117,6 +123,21 @@ const inputSchema = {
         '"author"; they are removed in a later release. The ' +
         'coordinate only you can supply.',
     ),
+  subject: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'WHICH SUBJECT MATTER this search is about — the FOURTH routing axis, the same one ' +
+        '`add_lesson` records a lesson against (`data`, `jobs`, `llm`, `mcp`, …). SCALAR: one ' +
+        'subject or none, never a list, because a lesson has one. Narrowing on it returns the ' +
+        'lessons carrying that subject AND the lessons carrying none — an untagged lesson is ' +
+        'MORE general than either subject, so it still reaches every query. Omitting it leaves ' +
+        'the axis unconstrained. MEMBERSHIP IS NOT VALIDATED, exactly as on the write side: an ' +
+        'unrecognised value is accepted and simply matches no subject-tagged row, so a typo ' +
+        'narrows to the untagged lessons rather than erroring.',
+    ),
   limit: z
     .number()
     .int()
@@ -154,6 +175,11 @@ export function summarizeLessonSearch(result: LessonSearchResult): string {
       l.kinds.length > 0 ? `kinds: ${l.kinds.join('/')}` : null,
       l.types.length > 0 ? `types: ${l.types.join('/')}` : null,
       l.phases.length > 0 ? `phases: ${l.phases.join('/')}` : null,
+      // The fourth axis earns its place in the tag for the same reason as the
+      // three above: on a subject-narrowed search the result set legitimately
+      // MIXES rows carrying the subject with rows carrying none, and the tag is
+      // the only thing that says which is which.
+      l.subject ? `subject: ${l.subject}` : null,
     ].filter((x): x is string => x !== null);
     // The axis tag is what lets a caller see WHY a row came back and re-narrow.
     const tag = axes.length > 0 ? ` [${axes.join(' · ')}]` : ' [unconstrained]';
@@ -173,6 +199,7 @@ export async function runSearchLessons(
     kinds?: (typeof LESSON_KINDS)[number][];
     types?: (typeof LESSON_TYPES)[number][];
     phases?: string[];
+    subject?: string;
     limit?: number;
   },
   ctx: ServiceContext,
@@ -209,6 +236,10 @@ export async function runSearchLessons(
       // `skeleton` / `deepen` searches as `lay` / `author`, so the upstream
       // only ever sees the current vocabulary.
       ...(args.phases ? { phases: canonicalizeLessonPhases(args.phases) } : {}),
+      // The scalar fourth axis (MOTIR-5621). Same spread, same reason — and the
+      // zod schema's `.trim().min(1)` is what keeps a whitespace-only value from
+      // reaching here as a truthy string that narrows to nothing.
+      ...(args.subject ? { subject: args.subject } : {}),
       ...(args.limit !== undefined ? { limit: args.limit } : {}),
     });
 
@@ -238,8 +269,9 @@ export function registerSearchLessons(server: McpServer, resolveContext: McpCont
         'each with what to do about it — by MEANING, before you plan or build. You get the ' +
         "shared corpus AND this project's own lessons in one answer. " +
         'TWO STEPS, and the second is the one that decides what you get: (1) NARROW by the card ' +
-        'you are working on — its `kinds`, its `types`, and the `phases` you are in (`lay` ' +
-        "while laying a level's children, `author` while writing a body); (2) ASK A REAL " +
+        'you are working on — its `kinds`, its `types`, the `phases` you are in (`lay` ' +
+        "while laying a level's children, `author` while writing a body), and the `subject` " +
+        'matter it is about; (2) ASK A REAL ' +
         'QUESTION in `query`. ⚠️ The axes only choose the candidate POOL; the query TEXT then ' +
         'chooses which few arrive. So a vague query returns a handful of near-arbitrary rows out ' +
         'of a correctly-filtered slice — which reads as the mechanism working while it hands you ' +
