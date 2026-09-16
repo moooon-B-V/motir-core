@@ -1,0 +1,34 @@
+{
+  "_source": "MOTIR-5627 capture \u2014 a real delivery to a repository hook on moooon-B-V/motir-core, read back with gh api \u2026/hooks/<id>/deliveries/<id>. Fields Motir reads are verbatim; repository/sender/org objects and the head commit are elided and marked. Repository hooks carry no `installation`; tests add one.",
+  "guid": "551c4820-af74-11f1-89e0-2db032c36246",
+  "delivered_at": "2026-09-13T13:09:21.414Z",
+  "event": "merge_group",
+  "action": "checks_requested",
+  "payload": {
+    "action": "checks_requested",
+    "merge_group": {
+      "head_sha": "0a3359bd653343e89f4f88ddd6a10800178446ab",
+      "head_ref": "refs/heads/gh-readonly-queue/main/pr-2846-c50cbd7d636120565f616f55c31c6e16002c1f71",
+      "base_sha": "c50cbd7d636120565f616f55c31c6e16002c1f71",
+      "base_ref": "refs/heads/main",
+      "head_commit": {
+        "id": "0a3359bd653343e89f4f88ddd6a10800178446ab",
+        "_elided": "tree, message, author and committer"
+      }
+    },
+    "repository": {
+      "id": 1246103300,
+      "full_name": "moooon-B-V/motir-core",
+      "_elided": "the rest of the repository object"
+    },
+    "organization": {
+      "_elided": "organization"
+    },
+    "enterprise": {
+      "_elided": "enterprise"
+    },
+    "sender": {
+      "_elided": "sender"
+    }
+  }
+}

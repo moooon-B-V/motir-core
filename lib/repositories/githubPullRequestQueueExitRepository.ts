@@ -19,6 +19,10 @@ export interface QueueExitCreateInput {
   disposition: QueueExitDisposition;
   headSha: string;
   exitedAt: Date;
+  /** The merge-queue check that failed, when the pull request's latest attempt names
+   *  one (MOTIR-5633). */
+  failingCheckName?: string | null;
+  failingCheckUrl?: string | null;
 }
 
 export const githubPullRequestQueueExitRepository = {
@@ -59,6 +63,21 @@ export const githubPullRequestQueueExitRepository = {
     const result = await tx.githubPullRequestQueueExit.updateMany({
       where: { id: exitId, requeuedAt: at },
       data: { requeuedAt: null },
+    });
+    return result.count;
+  },
+
+  /** Name a FAILURE exit's failing check — only if none is named yet (MOTIR-5633).
+   *  For a check that completed after the exit was written. Returns the count. Write
+   *  path → `tx`. */
+  async setFailingCheckIfUnset(
+    exitId: string,
+    check: { name: string; url: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequestQueueExit.updateMany({
+      where: { id: exitId, disposition: 'failure', failingCheckName: null },
+      data: { failingCheckName: check.name, failingCheckUrl: check.url },
     });
     return result.count;
   },

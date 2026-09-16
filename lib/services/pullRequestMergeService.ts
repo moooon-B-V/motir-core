@@ -665,6 +665,8 @@ function toQueueExitDto(exit: GithubPullRequestQueueExit): PullRequestQueueExitD
     headSha: exit.headSha,
     exitedAt: exit.exitedAt.toISOString(),
     requeuedAt: exit.requeuedAt?.toISOString() ?? null,
+    failingCheckName: exit.failingCheckName,
+    failingCheckUrl: exit.failingCheckUrl,
   };
 }
 

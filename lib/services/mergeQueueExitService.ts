@@ -3,6 +3,7 @@ import type { GitProviderId, NormalizedMergeQueueExit } from '@/lib/git/types';
 import { classifyQueueExit } from '@/lib/mergeQueue/queueExit';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMergeQueueAttemptRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
@@ -162,6 +163,14 @@ export const mergeQueueExitService = {
         return { ...base, outcome: 'duplicate' };
       }
 
+      // A FAILURE names the check that failed, from the pull request's latest queue
+      // attempt (MOTIR-5633; decision 8). A neutral removal says nothing about the
+      // work, so it names none; a check that completes later is attached by
+      // `mergeQueueCheckService.attachFailingCheck`.
+      const attempt =
+        disposition === 'failure'
+          ? await githubMergeQueueAttemptRepository.findLatestByPullRequest(pr.id, tx)
+          : null;
       await githubPullRequestQueueExitRepository.create(
         {
           pullRequestId: pr.id,
@@ -170,6 +179,8 @@ export const mergeQueueExitService = {
           disposition,
           headSha: exit.headSha,
           exitedAt: input.now ?? new Date(),
+          failingCheckName: attempt?.failingCheckName ?? null,
+          failingCheckUrl: attempt?.failingCheckUrl ?? null,
         },
         tx,
       );

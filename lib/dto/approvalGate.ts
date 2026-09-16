@@ -547,6 +547,11 @@ export interface PullRequestQueueExitDTO {
   exitedAt: string;
   /** When *Queue again* put it back; null while the exit stands. */
   requeuedAt: string | null;
+  /** The merge-queue check that failed, and its page (MOTIR-5633). Both null when no
+   *  check is known — a conflict, a neutral removal, or a check nobody could tie back;
+   *  the frame then states the reason alone. */
+  failingCheckName: string | null;
+  failingCheckUrl: string | null;
 }
 
 /** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */

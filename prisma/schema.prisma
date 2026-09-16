@@ -6524,6 +6524,7 @@ model GithubRepo {
   /// a deleted organisation takes its mirrored repos with it.
   organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pullRequests                GithubPullRequest[]
+  mergeQueueAttempts          GithubMergeQueueAttempt[]
   /// Metered CI runs on this repo (Story MOTIR-1775 · MOTIR-1896). SetNull, like
   /// `ProjectRepo.githubRepoId`: disconnecting the repo must not delete the
   /// record that Motir paid for its compute. The row keeps `repoOwner`/`repoName`
@@ -6711,6 +6712,7 @@ model GithubPullRequest {
   ciFeedbackComments GithubCiFeedbackComment[]
   // Every time the merge queue removed it without merging it (MOTIR-5632).
   queueExits         GithubPullRequestQueueExit[]
+  queueAttempts      GithubMergeQueueAttempt[]
 
   @@unique([repoId, number])
   @@index([repoId])
@@ -6727,30 +6729,66 @@ model GithubPullRequest {
 /// that table is the pull request's OWN CI state at its head, and a queue failure
 /// written there would turn a green pull request red.
 model GithubPullRequestQueueExit {
-  id            String               @id @default(cuid())
+  id               String               @id @default(cuid())
   /// FK → GithubPullRequest.id (internal cuid).
-  pullRequestId String               @map("pull_request_id")
+  pullRequestId    String               @map("pull_request_id")
   /// The delivery's `X-GitHub-Delivery` GUID — the idempotency key (decision 9). A
   /// hand REDELIVERY repeats it (measured, MOTIR-5627), so a replayed exit writes
   /// nothing; a genuine second exit is a new event with a new GUID.
-  deliveryId    String               @unique @map("delivery_id")
+  deliveryId       String               @unique @map("delivery_id")
   /// The host's reason, VERBATIM (`CI_FAILURE`, `MANUAL`, …, or a string nobody has
   /// mapped yet).
-  rawReason     String               @map("raw_reason")
-  disposition   QueueExitDisposition
+  rawReason        String               @map("raw_reason")
+  disposition      QueueExitDisposition
   /// The pull request's head when it left the queue — what *Queue again* and the
   /// promotion hold compare the current head against.
-  headSha       String               @map("head_sha")
-  exitedAt      DateTime             @map("exited_at")
+  headSha          String               @map("head_sha")
+  exitedAt         DateTime             @map("exited_at")
   /// Stamped by *Queue again* (MOTIR-5634) when the pull request was put back.
   /// Null while the exit still stands.
-  requeuedAt    DateTime?            @map("requeued_at")
-  createdAt     DateTime             @default(now()) @map("created_at")
+  requeuedAt       DateTime?            @map("requeued_at")
+  /// The merge-queue check that failed, copied from the pull request's latest
+  /// queue attempt (MOTIR-5633; decision 8) — or filled later, when that check
+  /// completes after the exit. Null when no check is known: a conflict has no merge
+  /// group, and an installation without the `merge_group` event records no attempt.
+  failingCheckName String?              @map("failing_check_name")
+  failingCheckUrl  String?              @map("failing_check_url")
+  createdAt        DateTime             @default(now()) @map("created_at")
 
   pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
 
   @@index([pullRequestId, exitedAt])
   @@map("github_pull_request_queue_exit")
+}
+
+/// One merge-queue ATTEMPT of a pull request (Story MOTIR-5461 · MOTIR-5633;
+/// `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 8). Written at the
+/// `merge_group` `checks_requested` delivery, before any of the group's checks can
+/// complete, for each pull request its `head_ref` names. A failed check run at the
+/// group's `head_sha` writes its name and link here (the first failure to complete
+/// wins). Like the exit row, deliberately NOT `github_check_run`: the group's checks
+/// say nothing about the pull request's own head.
+model GithubMergeQueueAttempt {
+  id               String    @id @default(cuid())
+  /// FK → GithubPullRequest.id (internal cuid).
+  pullRequestId    String    @map("pull_request_id")
+  /// FK → GithubRepo.id — the lookup a check run makes, by repository and sha.
+  repoId           String    @map("repo_id")
+  /// The merge group's commit — every check the queue runs is reported against it.
+  headSha          String    @map("head_sha")
+  /// `refs/heads/gh-readonly-queue/<base>/pr-<n>-<base sha>`, verbatim.
+  headRef          String    @map("head_ref")
+  failingCheckName String?   @map("failing_check_name")
+  failingCheckUrl  String?   @map("failing_check_url")
+  failedAt         DateTime? @map("failed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  repo        GithubRepo        @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([pullRequestId, headSha])
+  @@index([repoId, headSha])
+  @@map("github_merge_queue_attempt")
 }
 
 /// One DELIVERY of a work item by a pull request — the ONE association between the

@@ -39,6 +39,7 @@ import { readReportedCheckSet } from './checkSetReconcile';
 import { repoDeploymentService } from './repoDeploymentService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 import { mergeQueueExitService, type MergeQueueExitResult } from './mergeQueueExitService';
+import { mergeQueueCheckService, type MergeGroupResult } from './mergeQueueCheckService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -176,7 +177,9 @@ export type GithubWebhookResult =
   | ChangeRequestSyncResult
   | CiFeedbackResult
   // A merge queue removed a pull request (MOTIR-5632).
-  | MergeQueueExitResult;
+  | MergeQueueExitResult
+  // A merge queue started testing a group (MOTIR-5633).
+  | MergeGroupResult;
 
 export const githubWebhookService = {
   /**
@@ -211,6 +214,8 @@ export const githubWebhookService = {
       case 'check_suite':
       case 'check_run':
         return this.handleCiStatus(body);
+      case 'merge_group':
+        return this.handleMergeGroup(body);
       case 'workflow_run':
         return this.handleWorkflowRun(body);
       case 'workflow_job':
@@ -525,7 +530,41 @@ export const githubWebhookService = {
     const event = provider.parseCiStatusEvent(body);
     if (!event) return { event: 'ci', outcome: 'malformed' };
 
-    return applyCiStatusFeedback(event, (tx) => resolveGithubCiContext(body, event, tx));
+    const result = await applyCiStatusFeedback(event, (tx) =>
+      resolveGithubCiContext(body, event, tx),
+    );
+
+    // A MERGE-QUEUE CHECK THAT FAILED (MOTIR-5633; `approval-gates.md` §4 THIRD
+    // AMENDMENT, decision 8). It names no pull request, so the feedback above attached
+    // it to nothing and wrote no `github_check_run` row — which is right, and stays so:
+    // the check is written only onto the queue attempt at its commit, and onto that
+    // pull request's failure exit. A check a pull request claims never gets here.
+    const failed = provider.parseUnlinkedCheckFailure?.(body) ?? null;
+    if (failed) {
+      await mergeQueueCheckService.attachFailingCheck({
+        installationId: readInstallationId(body),
+        check: failed,
+      });
+    }
+    return result;
+  },
+
+  /**
+   * Handle a `merge_group` delivery (Story MOTIR-5461 · MOTIR-5633). Only
+   * `checks_requested` is read: it is where a group's commit is tied to the pull
+   * requests it tests, before any of its checks can complete. `destroyed` is left
+   * alone — the `pull_request` `dequeued` delivery that follows it is the exit.
+   */
+  async handleMergeGroup(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    if (body['action'] !== 'checks_requested') {
+      return { event: 'merge_group', outcome: 'ignored_action' };
+    }
+    const attempt = getGitProvider(PROVIDER).parseMergeGroupAttemptEvent?.(body) ?? null;
+    if (!attempt) return { event: 'merge_group', outcome: 'malformed' };
+    return mergeQueueCheckService.recordAttempt({
+      installationId: readInstallationId(body),
+      attempt,
+    });
   },
 
   /**

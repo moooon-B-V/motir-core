@@ -233,6 +233,31 @@ export interface NormalizedMergeQueueExit {
   rawReason: string | null;
 }
 
+/** One MERGE GROUP the queue started testing, normalized (Story MOTIR-5461 ·
+ *  MOTIR-5633; `approval-gates.md` §4 THIRD AMENDMENT, decision 8). GitHub's
+ *  `merge_group` action `checks_requested`: every check the queue runs for the group
+ *  is reported against `headSha`, and nothing else ties those checks to a pull
+ *  request. `prNumbers` are parsed from `headRef`
+ *  (`refs/heads/gh-readonly-queue/<base>/pr-<n>-<base sha>`) — every `pr-<n>` the
+ *  ref names, in order. */
+export interface NormalizedMergeGroupAttempt {
+  providerRepoId: string;
+  headSha: string;
+  headRef: string;
+  prNumbers: number[];
+}
+
+/** A COMPLETED check that FAILED on a commit no pull request names — the only shape
+ *  a merge-queue check can have (MOTIR-5633). `url` is the check's own page, the
+ *  link the exit row carries. */
+export interface NormalizedUnlinkedCheckFailure {
+  providerRepoId: string;
+  headSha: string;
+  name: string;
+  url: string;
+  completedAt: Date;
+}
+
 /** A completed CI workflow run, normalized across providers — consumed by the
  *  CI-minutes meter (Story MOTIR-1775 · MOTIR-1896). DISTINCT from
  *  `NormalizedStatusEvent`, which is the *verification* signal (did CI pass?)
