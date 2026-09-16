@@ -47,7 +47,7 @@ const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
 /** A rich message as the DOM reads it: its tags gone. */
 const plain = (text: string, vars: Record<string, string | number> = {}) =>
-  fill(text, vars).replace(/<\/?\w+>/g, '');
+  fill(text, vars).replace(/[<>]/g, '');
 
 const CORE_SHA = '3f2a91c0000000000000000000000000000000aa';
 const GATEWAY_SHA = 'aa11bb2000000000000000000000000000000000';
