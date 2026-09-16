@@ -1,4 +1,9 @@
-import type { DispatchRun, DispatchRunStatus, Prisma } from '@/generated/prisma/client';
+import type {
+  DispatchCommand,
+  DispatchRun,
+  DispatchRunStatus,
+  Prisma,
+} from '@/generated/prisma/client';
 
 // Single Prisma operations on `dispatch_run` — the HEADER of one CLI invocation
 // (Story MOTIR-1789 · MOTIR-1791, ADR `docs/decisions/dispatch-run-record.md`).
@@ -55,6 +60,15 @@ export interface LockedDispatchRunTerminalState {
   endedAt: Date | null;
 }
 
+/** An open run and who started it — the holder a refused repair claim names. */
+export interface RunningDispatchRunHolder {
+  id: string;
+  startedAt: Date;
+  createdById: string | null;
+  /** Null when the operator's account has since been deleted (`SET NULL`). */
+  createdBy: { id: string; name: string } | null;
+}
+
 export const dispatchRunRepository = {
   /** Open a run. `tx` required — a write. */
   async create(
@@ -105,6 +119,33 @@ export const dispatchRunRepository = {
       select: { scope: { select: { id: true, identifier: true } } },
     });
     return row?.scope ?? null;
+  },
+
+  /**
+   * The newest RUNNING run of one COMMAND that holds a leg for this work item, with
+   * the person who started it, or null — the REPAIR claim's lock read (MOTIR-5464).
+   *
+   * An open `fix` run IS the one-repair-at-a-time lock, so the question is asked
+   * of the run table rather than of a column on the card. It is only a lock
+   * because the caller holds the CARD's row lock while it asks and while it opens
+   * the run that answers the next caller: two claimants serialize on the card, so
+   * the second one reads the first one's committed run here.
+   */
+  async findRunningByCommandForWorkItem(
+    workItemId: string,
+    command: DispatchCommand,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunHolder | null> {
+    return tx.dispatchRun.findFirst({
+      where: { status: 'running', command, cards: { some: { workItemId } } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        startedAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
   },
 
   /** One run WITH its legs, in stored `position` order. */

@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -10,6 +11,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
 
 // The REFUSAL where it actually bites (Story MOTIR-1775 · MOTIR-1901 ·
 // `ci-minutes-allowance.md` §6.2–6.3) — the DISPATCH paths, not just the service
@@ -117,6 +119,27 @@ describe('an EXHAUSTED org is refused on every dispatch path (§6.2)', () => {
     // in_progress and stranded — the item is still there for after the top-up.
     const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
     expect(row.status).toBe('todo');
+  });
+
+  it('claimRepair — `motir fix` — takes no lock and opens no run (MOTIR-5464)', async () => {
+    // The fifth dispatch entry point. A repair starts an agent that pushes, and a
+    // push is what bills CI, so the gate that holds a claim holds a repair too.
+    const fx = await makeWorkItemFixture();
+    const card = await makeReady(fx, 'red and implemented');
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(fx, 'web');
+    await deliveredPr(fx, card.id, repo, { headRef: 'subtask/red', checks: { Vitest: 'failure' } });
+    await exhaustPool(fx);
+    stubBalance(0);
+
+    await expect(
+      workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx),
+    ).rejects.toThrow(CiCreditsExhaustedError);
+
+    const runs = await adminDb.dispatchRun.count({ where: { command: 'fix' } });
+    expect(runs).toBe(0);
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(row.status).toBe('implemented');
   });
 
   it('the route maps it to 402 with the detail the surface renders (§6.3)', async () => {

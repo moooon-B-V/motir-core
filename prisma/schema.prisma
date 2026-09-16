@@ -9435,14 +9435,18 @@ model DispatchRunEvent {
   @@map("dispatch_run_event")
 }
 
-/// Which CLI command opened the run. Five, not four: `motir run <key>` and
-/// `motir run <scope>` share a word and are different runs.
+/// Which CLI command opened the run. `motir run <key>` and `motir run <scope>`
+/// share a word and are different runs.
 enum DispatchCommand {
   next
   run
   run_scope
   batch
   auto
+  /// `motir fix <key>` (MOTIR-5464) — a REPAIR of an `implemented` card's red pull
+  /// requests. Opened by the server's repair claim, not by the CLI's own open: the
+  /// open `fix` run IS the one-repair-at-a-time lock, and it writes no status.
+  fix
 
   @@map("dispatch_command")
 }

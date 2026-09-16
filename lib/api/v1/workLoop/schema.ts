@@ -6,6 +6,7 @@ import {
 } from '@/lib/api/v1/workItems/schema';
 import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
+import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
@@ -489,6 +490,95 @@ export function presentWorkItemClaim(dto: WorkItemClaimDto): V1WorkItemClaim {
         ? null
         : { id: dto.transitionedBy.id, name: dto.transitionedBy.name },
     transitionedAt: dto.transitionedAt,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The REPAIR CLAIM (Story MOTIR-5460 · MOTIR-5464)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What a repair claim resolved to. CLOSED, for the reason
+ * `workItemClaimOutcomeSchema` gives: it decides whether the caller may start an
+ * agent, and a client meeting an unknown member would have to guess.
+ */
+export const workItemRepairOutcomeSchema = z.enum(['claimed', 'mine', 'taken', 'not_repairable']);
+
+/** Why a card cannot be repaired — set exactly on `not_repairable`. CLOSED. */
+export const workItemRepairRefusalSchema = z.enum([
+  'not_implemented',
+  'repair_on_run_target',
+  'no_pull_requests',
+  'ci_running',
+  'not_failing',
+]);
+
+/** One failing pull request a fixing agent is handed. */
+const repairPullRequestSchema = z.object({
+  /** `owner/name`. */
+  repo: z.string(),
+  number: z.number().int(),
+  url: z.string(),
+  /** The pull request's own branch — the agent checks it out and pushes to it,
+   *  so the SAME pull request runs its checks again. The delivery read does not
+   *  expose it, which is why it rides here. */
+  headRef: z.string(),
+  /** The branch the pull request targets; the agent merges it first. Null on a
+   *  row mirrored before base branches were recorded. */
+  baseRef: z.string().nullable(),
+  /** From `derivePrCiState`, the verdict the Development pill shows. */
+  ci: z.enum(['passing', 'failing', 'running']).nullable(),
+});
+
+/**
+ * The result of claiming the REPAIR of one `implemented` card's red pull requests.
+ *
+ * ⚠️ **A REFUSAL IS A 200**, as on the keyed claim: `taken` and `not_repairable`
+ * are ordinary answers a person running `motir fix` meets, and each is stated in
+ * words by the CLI. ⚠️ **THE CARD'S STATUS AND ASSIGNEE ARE NEVER WRITTEN** — the
+ * claim is an open dispatch run with command `fix`, and that run is the lock.
+ */
+export const workItemRepairClaimSchema = z.object({
+  key: workItemKeySchema,
+  title: z.string(),
+  outcome: workItemRepairOutcomeSchema,
+  /** Why the card cannot be repaired; null unless `outcome` is `not_repairable`. */
+  reason: workItemRepairRefusalSchema.nullable(),
+  /** The card to repair instead; set only with `reason: repair_on_run_target`. */
+  runTargetKey: workItemKeySchema.nullable(),
+  /** The open `fix` run — set on `claimed`, `mine` and `taken`. Report into it and
+   *  CLOSE it (`POST /api/v1/dispatch-runs/{id}/close`): an unclosed run is what
+   *  the item page shows as a repair in progress. */
+  runId: z.string().nullable(),
+  /** Who opened that run. */
+  holder: actorRefSchema.nullable(),
+  /** When that run started. */
+  startedAt: z.string().datetime().nullable(),
+  /** The failing OPEN pull requests — non-empty on `claimed` and `mine`, empty on
+   *  every other outcome. */
+  pullRequests: z.array(repairPullRequestSchema),
+});
+export type V1WorkItemRepairClaim = z.infer<typeof workItemRepairClaimSchema>;
+
+/** Map the repair claim to the wire — field by field, never a spread. */
+export function presentWorkItemRepairClaim(dto: WorkItemRepairClaimDto): V1WorkItemRepairClaim {
+  return {
+    key: dto.key,
+    title: dto.title,
+    outcome: dto.outcome,
+    reason: dto.reason,
+    runTargetKey: dto.runTargetKey,
+    runId: dto.runId,
+    holder: dto.holder === null ? null : { id: dto.holder.id, name: dto.holder.name },
+    startedAt: dto.startedAt,
+    pullRequests: dto.pullRequests.map((pr) => ({
+      repo: pr.repo,
+      number: pr.number,
+      url: pr.url,
+      headRef: pr.headRef,
+      baseRef: pr.baseRef,
+      ci: pr.ci,
+    })),
   };
 }
 
@@ -1666,8 +1756,9 @@ function presentActivityValue(value: unknown): z.infer<typeof activityValueSchem
 // member without a contract-version bump.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Which CLI command opened the run. */
-export const dispatchCommandSchema = z.enum(['next', 'run', 'run_scope', 'batch', 'auto']);
+/** Which CLI command opened the run. `fix` (MOTIR-5464) is opened by the server's
+ *  repair claim, never by `openDispatchRun` from a client that knows the others. */
+export const dispatchCommandSchema = z.enum(['next', 'run', 'run_scope', 'batch', 'auto', 'fix']);
 
 /** WHERE the run executed — the discriminator that lets one record serve two writers. */
 export const dispatchRunOriginSchema = z.enum(['local', 'hosted']);

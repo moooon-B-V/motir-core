@@ -60,7 +60,7 @@ export const REPORTER_OFFLINE_WARNING =
 /** What a command hands the reporter when it opens a run. */
 export interface OpenDispatchRunInput {
   projectKey: string;
-  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto';
+  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix';
   /** `runIdFromDate`'s id — carried, never re-minted. */
   runId: string;
   /**

@@ -1787,7 +1787,7 @@ export class MotirClient {
    */
   async openDispatchRun(args: {
     projectKey: string;
-    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto';
+    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix';
     idempotencyKey: string;
     cards: DispatchRunCardInput[];
     scopeKey?: string;
