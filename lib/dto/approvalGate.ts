@@ -1,6 +1,9 @@
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
+import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 
 // Wire DTOs for the approval-gate record (Story MOTIR-4778 · Subtask
 // MOTIR-4788; ADR docs/decisions/approval-gates.md). The service layer (the
@@ -455,6 +458,41 @@ export type ApprovalGateOverlaySubjectDTO =
       evidence: DesignEvidenceDTO;
       /** `DesignGateSubjectDTO.filesKept`, off the row rather than the state. */
       filesKept: boolean;
+    }
+  | {
+      state: 'resolved';
+      kind: 'pull_request_approval';
+      /**
+       * THE DEVELOPMENT BLOCK'S DATA (Story MOTIR-5437 · Subtask MOTIR-5439) — the
+       * approve-and-merge gate's port is the item page's Development block
+       * (`design/github/design-notes.md` § 20), so the overlay reads exactly what
+       * `LateUpperSections` hands `DevelopmentSectionBody`, from the same services.
+       * Two surfaces reading one block from two different reads could disagree about
+       * which pull requests exist; these cannot.
+       */
+      pullRequests: LinkedPullRequestDto[];
+      /** `workItemsService.getDeliveryView(…).repos` — the item's repository set,
+       *  amended by its delivery set, verbatim. */
+      repoDelivery: RepoDelivery[];
+      /** `workItemsService.getDeliveryView(…).deliveries` — the delivery set itself. */
+      deliveries: WorkItemDeliveryDto[];
+      /** The block's second part. `record_missing` is an ANSWER here, not an error. */
+      howToTest: HowToTestDto;
+      /**
+       * The card's CURRENT design result, or null. On a card with an open linked pull
+       * request the result renders inside this block rather than as its own section
+       * (`design-result.md` AMENDMENT 4 Q8), so the port needs it.
+       */
+      designEvidence: DesignEvidenceDTO | null;
+      /** Whether the card is a `design` leaf — `DesignResultPanel`'s own input. */
+      isDesignCard: boolean;
+      /**
+       * What a reload still knows about each member once the gate is APPROVED — the
+       * item page's `mergeGate.members`, read under the same condition. Empty for any
+       * other state: before the press nothing merged, and a withdrawn question merged
+       * nothing.
+       */
+      members: PullRequestApprovalMemberDTO[];
     };
 
 /** The overlay's one read. */

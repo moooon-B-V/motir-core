@@ -65,6 +65,49 @@ async function planWithTwoAdds(fx: WorkItemFixture) {
 const row = (id: string) => adminDb.planItem.findUniqueOrThrow({ where: { id } });
 
 describe('a correction reaches the columns the deepen turn excludes', () => {
+  // ── MOTIR-5607: the SUBJECT half of the correction door ──────────────────
+  //
+  // `correctProposal` re-asked the append's two questions, so retiring the KIND
+  // refusal in `validateProposals` alone would have left a subject settable on an
+  // epic at `add` and refused on the way back in here. Two write boundaries, two
+  // tests — and the SHAPE half is asserted alongside, because that is the check
+  // that had to survive the retirement rather than go with it.
+  it('ACCEPTS a subject on a CONTAINER kind — the append door’s twin (MOTIR-5607)', async () => {
+    for (const kind of ['epic', 'story'] as const) {
+      const fx = await makeWorkItemFixture();
+      const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+      const added = await plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: `A ${kind}`, kind } }],
+        fx.ctx,
+      );
+      const itemId = added.items[0]!.id;
+      const corrected = await plansService.correctProposal(
+        plan.id,
+        itemId,
+        { subject: 'onboarding' },
+        fx.ctx,
+      );
+      expect(
+        corrected.items.find((i) => i.id === itemId)!.proposedFields?.subject,
+        `a subject was refused on a \`${kind}\``,
+      ).toBe('onboarding');
+    }
+  });
+
+  it('still REFUSES a MALFORMED subject here — the SHAPE check survived the retirement', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const added = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A card', kind: 'task' } }],
+      fx.ctx,
+    );
+    await expect(
+      plansService.correctProposal(plan.id, added.items[0]!.id, { subject: 'Not A Slug' }, fx.ctx),
+    ).rejects.toThrow(InvalidProposalError);
+  });
+
   it('changes parentRef, blockedByRefs, targetRepo and targetRepoRole on a `planned` plan', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, firstId, secondId } = await planWithTwoAdds(fx);

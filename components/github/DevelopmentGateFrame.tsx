@@ -15,6 +15,7 @@ import type {
   decideApprovalGateAction,
   retryApproveAndMergeMemberAction,
 } from '@/app/(authed)/items/[key]/approvalGateActions';
+import { announceGateDecided } from '@/lib/approvals/decidedGates';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type {
@@ -109,6 +110,7 @@ export function DevelopmentGateFrame({
   runLabel,
   currentHeads = [],
   actions,
+  layout = 'flush',
   children,
 }: {
   read: DevelopmentGateRead;
@@ -119,6 +121,20 @@ export function DevelopmentGateFrame({
   runLabel: string | null;
   currentHeads?: CurrentHead[];
   actions?: DevelopmentGateActions;
+  /**
+   * WHICH BOX the frame sits in (Story MOTIR-5437 · Subtask MOTIR-5440;
+   * `design/workbench/design-notes.md` § 24, *FILL, not FLUSH*).
+   *
+   * `flush` (the default) is the ITEM PAGE: the Development section card is the
+   * container, so the frame drops its own chrome and steps out of the card body's
+   * padding, and the port keeps its floor, its 34rem ceiling and Expand.
+   * `fill` is the APPROVAL OVERLAY: the dialog is the container and the VIEWPORT is
+   * the box, so the port drops that floor, that ceiling and Expand, and band 3 sits
+   * on the bottom edge. Both are `ApprovalGateControl`'s own shipped layouts — the
+   * only thing that differs is the box, and this input picks it. Every band, verb,
+   * state, outcome and refusal below is identical in the two.
+   */
+  layout?: 'flush' | 'fill';
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -238,6 +254,12 @@ export function DevelopmentGateFrame({
       setOutcomes(new Map(result.members.map((m) => [m.subjectVersion, pressOutcomeOf(m)])));
       // The rail, in the browser, from the status the decision RECORDED writing (MOTIR-5212).
       applyOptimisticStatus(result.gate.outcomeRef);
+      // ⚠️ AND EVERY OTHER SURFACE WATCHING THIS GATE (MOTIR-5570, MOTIR-5440). Pressed
+      // from the approval OVERLAY, the To-approve row underneath is a client island this
+      // component cannot reach and `router.refresh()` does not re-seed — so the row settles
+      // in the SAME reconcile only because the decision is announced. `filesKept` is the
+      // design kind's field and is null here: this gate keeps no files.
+      announceGateDecided({ gate: result.gate, filesKept: null });
       router.refresh();
       return null;
     }
@@ -245,6 +267,7 @@ export function DevelopmentGateFrame({
     if (!result.ok) return result.refusal;
     setDecided(result.gate);
     applyOptimisticStatus(result.gate.outcomeRef);
+    announceGateDecided({ gate: result.gate, filesKept: null });
     router.refresh();
     return null;
   }
@@ -365,12 +388,23 @@ export function DevelopmentGateFrame({
       </>
     ) : null;
 
+  // The item page's frame steps out of its card's padding so the bands meet the
+  // card's edges; the overlay HAS no card — the dialog is the container — so it
+  // takes no wrapper at all (§ 24, *FILL, not FLUSH*).
+  const inBox = (frame: ReactNode) =>
+    layout === 'fill' ? (
+      frame
+    ) : (
+      <div className="-mx-(--spacing-card-padding) -mb-(--spacing-card-padding) overflow-hidden rounded-b-(--radius-card) border-t border-(--el-border-soft)">
+        {frame}
+      </div>
+    );
+
   return (
     <MergeOutcomeProvider value={rowOutcomes}>
-      {/* Out of the card body's padding, so the frame's bands meet the card's edges. */}
-      <div className="-mx-(--spacing-card-padding) -mb-(--spacing-card-padding) overflow-hidden rounded-b-(--radius-card) border-t border-(--el-border-soft)">
+      {inBox(
         <ApprovalGateControl
-          layout="flush"
+          layout={layout}
           // ⚠️ THE VERSION IS NOT HANDED TO THE RECORD STRIP. The frame prints the first eight
           // characters of `subjectVersion`, which names a design's commit — and would print
           // `moooon/m` for a set. The set is named in band 1 and counted in `recordDetail`;
@@ -400,8 +434,8 @@ export function DevelopmentGateFrame({
             cite: t('withdrawn.portCite'),
           }}
           onDecide={onDecide}
-        />
-      </div>
+        />,
+      )}
     </MergeOutcomeProvider>
   );
 }

@@ -31,9 +31,8 @@ import {
   isIssueType,
   type IssueType,
 } from '@/lib/issues/parentRules';
-import { isWorkItemType, WORK_ITEM_TYPES, TYPEABLE_KINDS } from '@/lib/issues/executorDefaults';
+import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
-import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import {
   FOLDER_REF_PREFIX,
@@ -253,21 +252,27 @@ function assertProposedTypeKnown(item: ProposalNode): void {
 
 /**
  * The proposed `subject` — the fourth planning-rule selector coordinate — checked
- * for SHAPE and for the one KIND rule this repository owns (Story MOTIR-5062 ·
- * MOTIR-5065).
+ * for SHAPE only (Story MOTIR-5062 · MOTIR-5065; the KIND half retired by
+ * MOTIR-5607).
  *
  * The twin of {@link assertProposedTypeKnown} directly above, and owed by the same
  * argument this module's header makes: the approved set can be edited between
  * generation and approve (`updateProposal`), so nothing the planner self-checked
  * is trusted here.
  *
- * ⚠️ TWO CHECKS, AND WHAT IS DELIBERATELY ABSENT IS THE THIRD.
+ * ⚠️ ONE CHECK NOW, AND TWO THINGS DELIBERATELY ABSENT.
  *
  *   · SHAPE — a bounded lowercase slug (`lib/plans/subjectShape.ts`). A value that
  *     could not name a `subject-<name>.md` rule pack could not be a member however
  *     the corpus grows, so refusing it costs nothing and keeps the column clean.
- *   · KIND — refused on a container, mirroring `type`. Which packs a card composes
- *     is decided for the LEAF that gets authored.
+ *   · KIND — **NO LONGER CHECKED (MOTIR-5607).** A subject was once refused on a
+ *     container, mirroring `type`; that refusal is retired by decision. A subject
+ *     says what a work item is ABOUT, and a container is about something exactly as
+ *     much as a leaf is, so `epic` and `story` carry one too.
+ *     ⚠️ `TYPEABLE_KINDS` still gates `type` / `executor` and is deliberately NOT
+ *     consulted here any more — the two axes stopped sharing a predicate, which is
+ *     the substance of that decision rather than a side effect of it. Re-coupling
+ *     them would grant an epic a `type`, which nothing decided.
  *   · MEMBERSHIP — **NOT CHECKED, ON PURPOSE.** The vocabulary IS the pack file
  *     set in `motir-meta`, mirrored by motir-ai's `PACKS_BY_SUBJECT`, so this
  *     repository holding the list would put a schema change, a migration and a
@@ -286,15 +291,6 @@ function assertProposedSubjectValid(item: ProposalNode): void {
       'malformed_subject',
       item.id,
       `Proposal ${item.id} proposes subject "${String(subject)}", which is not a well-formed subject. ${describeSubjectShape()}`,
-    );
-  }
-
-  const kind = item.proposedFields?.kind;
-  if (kind != null && kind !== '' && !TYPEABLE_KINDS.has(kind as WorkItemKindDto)) {
-    throw new PlanGrammarError(
-      'subject_on_container',
-      item.id,
-      `Proposal ${item.id} proposes subject "${subject}" on a \`${kind}\`, which is a container. A subject selects the rule packs an AUTHORING pass composes for a LEAF; a container's rules come from its own kind. Move the subject onto the leaf that carries the work.`,
     );
   }
 }
@@ -1097,9 +1093,10 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     //     2: a malformed plan should fail with the most specific reason, and a
     //     bad `type` is a property of the proposal alone — it needs no graph.
     assertProposedTypeKnown(item);
-    // 3a-bis. The proposed `subject` is well-formed and is not on a container
-    //     (MOTIR-5065). Same tier and same argument as the `type` check above —
-    //     a property of the proposal alone, needing no graph.
+    // 3a-bis. The proposed `subject` is well-formed (MOTIR-5065; the container
+    //     half retired by MOTIR-5607 — a subject is legal on every kind). Same
+    //     tier and same argument as the `type` check above — a property of the
+    //     proposal alone, needing no graph.
     assertProposedSubjectValid(item);
     const childKind = issueKindOf(item);
     const parentKind = effectiveParentKind(item, addsById, liveById);

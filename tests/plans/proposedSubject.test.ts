@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { validatePlanProposals, type ProposalNode } from '@/lib/plans/validateProposals';
 import { PlanGrammarError } from '@/lib/plans/errors';
+import { TYPEABLE_KINDS } from '@/lib/issues/executorDefaults';
 import {
   describeSubjectShape,
   isWellFormedSubject,
@@ -11,11 +12,15 @@ import {
 //
 // ── What this file pins, and the one thing it pins by NOT asserting ─────────
 // `subject` is the fourth coordinate of `pack(phase, kind, type, subject)`. This
-// repository is the BOUNDARY it crosses, and it checks exactly two of the three
-// questions somebody will expect it to check:
+// repository is the BOUNDARY it crosses, and it now checks exactly ONE of the
+// three questions somebody will expect it to check:
 //
 //   · SHAPE — a bounded lowercase slug. Refused.
-//   · KIND  — a container may not carry one, mirroring `type`. Refused.
+//   · KIND  — **NO LONGER REFUSED (MOTIR-5607).** A container may carry a subject.
+//     The refusal mirrored `type`, and the two axes are deliberately uncoupled
+//     now: `TYPEABLE_KINDS` still gates `type` / `executor` and no longer has any
+//     say over a subject. The test below pins BOTH halves, because re-coupling
+//     them is the obvious edit and it would hand an epic a `type`.
 //   · MEMBERSHIP — **deliberately NOT checked**, and the test that says so is
 //     the most important one here.
 //
@@ -45,8 +50,13 @@ function add(id: string, proposedFields: Record<string, unknown>): ProposalNode 
 
 /** Run the gate over one proposal against an empty live tree. */
 function validateOne(node: ProposalNode): void {
+  validateAll([node]);
+}
+
+/** The same, over a SET — a subtask needs its parent in the batch. */
+function validateAll(nodes: ProposalNode[]): void {
   validatePlanProposals({
-    items: [node],
+    items: nodes,
     liveById: new Map(),
     terminalStatusKeys: new Set(['done', 'cancelled']),
     planProjectId: 'proj_plan',
@@ -132,21 +142,42 @@ describe('the subject GATE, over a proposal', () => {
     expect(grammar.message).toContain('lowercase slug');
   });
 
-  it('REFUSES a subject on a CONTAINER kind, mirroring the refusal of `type` on one', () => {
-    for (const kind of ['epic', 'story']) {
-      let err: unknown;
-      try {
-        validateOne(add('p5', { title: 'A container', kind, subject: 'data' }));
-      } catch (e) {
-        err = e;
-      }
-      expect(err).toBeInstanceOf(PlanGrammarError);
-      expect((err as PlanGrammarError).reason).toBe('subject_on_container');
-      // The message routes the caller rather than only refusing it — the caller
-      // correcting this is usually an agent, which can act on being told where
-      // the value belongs and cannot act on a bare no.
-      expect((err as PlanGrammarError).message).toContain('leaf');
+  it('ACCEPTS a subject on EVERY kind, containers included (MOTIR-5607)', () => {
+    // Decided 2026-09-15: a subject says what a work item is ABOUT, and a
+    // container is about something exactly as much as a leaf is. `task`,
+    // `subtask` and `bug` already passed — `epic` and `story` are what changed,
+    // so all five are asserted rather than only the two that moved.
+    for (const kind of ['epic', 'story', 'task', 'bug']) {
+      expect(
+        () => validateOne(add('p5', { title: `A ${kind}`, kind, subject: 'onboarding' })),
+        `a subject was refused on a \`${kind}\``,
+      ).not.toThrow();
     }
+    // A `subtask` is validated BENEATH a parent because the PLACEMENT grammar —
+    // untouched by this change — refuses a parentless one before the subject
+    // check is ever reached. Asserting it as a root would pass for the wrong
+    // reason today and hide a real regression tomorrow.
+    const parent = add('p5parent', { title: 'A task', kind: 'task' });
+    const child: ProposalNode = {
+      ...add('p5child', { title: 'A subtask', kind: 'subtask', subject: 'onboarding' }),
+      parentRef: 'planItem:p5parent',
+    };
+    expect(
+      () => validateAll([parent, child]),
+      'a subject was refused on a `subtask`',
+    ).not.toThrow();
+  });
+
+  it('does NOT re-couple the subject axis to `TYPEABLE_KINDS` — that set still gates `type`', () => {
+    // ⚠️ THE EDIT THIS EXISTS TO CATCH: widening `TYPEABLE_KINDS` to admit
+    // `epic` / `story` is the shortest way to make the test above pass, and it is
+    // wrong. That set answers a DIFFERENT question — may this kind carry a `type`
+    // and an `executor` — and `workItemsService` refuses `TYPE_NOT_ALLOWED_ON_KIND`
+    // from it. Admitting containers there would silently grant an epic a type,
+    // which no decision covers.
+    expect([...TYPEABLE_KINDS].sort()).toEqual(['bug', 'subtask', 'task']);
+    expect(TYPEABLE_KINDS.has('epic')).toBe(false);
+    expect(TYPEABLE_KINDS.has('story')).toBe(false);
   });
 
   it('ACCEPTS an unrecognised but well-formed member ON PURPOSE — the vocabulary is the rule-pack file set, and this repository does not hold it', () => {

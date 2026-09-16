@@ -342,6 +342,7 @@ export function DevelopmentSectionBody({
   howToTest = null,
   mergeGate = null,
   gateActions,
+  gateLayout = 'flush',
   designResult = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
@@ -416,6 +417,14 @@ export function DevelopmentSectionBody({
    * frame draws no verbs — which is every host but the detail page.
    */
   gateActions?: DevelopmentGateActions;
+  /**
+   * WHICH BOX that frame sits in (Story MOTIR-5437 · Subtask MOTIR-5440) — passed
+   * straight to `DevelopmentGateFrame`. `flush` (the default) is the item page's
+   * section card; `fill` is the approval overlay, where the viewport is the box.
+   * The BLOCK is identical either way, which is the point: the overlay composes
+   * this component rather than drawing a second one.
+   */
+  gateLayout?: 'flush' | 'fill';
   /**
    * The card's DESIGN RESULT, rendered by the host as the Development block's
    * slot (Story MOTIR-5488 · MOTIR-5498; `design-result.md` AMENDMENT 4 Q8,
@@ -550,6 +559,7 @@ export function DevelopmentSectionBody({
         runLabel={howToTest?.record?.run?.label ?? null}
         currentHeads={currentHeads}
         actions={gateActions}
+        layout={gateLayout}
       >
         {block}
       </DevelopmentGateFrame>
