@@ -1093,9 +1093,10 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     //     2: a malformed plan should fail with the most specific reason, and a
     //     bad `type` is a property of the proposal alone — it needs no graph.
     assertProposedTypeKnown(item);
-    // 3a-bis. The proposed `subject` is well-formed and is not on a container
-    //     (MOTIR-5065). Same tier and same argument as the `type` check above —
-    //     a property of the proposal alone, needing no graph.
+    // 3a-bis. The proposed `subject` is well-formed (MOTIR-5065; the container
+    //     half retired by MOTIR-5607 — a subject is legal on every kind). Same
+    //     tier and same argument as the `type` check above — a property of the
+    //     proposal alone, needing no graph.
     assertProposedSubjectValid(item);
     const childKind = issueKindOf(item);
     const parentKind = effectiveParentKind(item, addsById, liveById);
