@@ -298,6 +298,29 @@ describe('partial success', () => {
     expect(seam).toHaveBeenCalledTimes(1);
   });
 
+  it('a member the card NO LONGER DELIVERS reports `no_merge_gate`, and is never sent to the host', async () => {
+    const { approval, web, api } = await pressable();
+    // #7 is unlinked AFTER the approval committed — while the host is merging #12, which the
+    // canonical order presses first. The approval no longer covers a pull request the card
+    // does not deliver.
+    const seam = stubHost({ 12: { outcome: 'merged', commitSha: 'merge-api' } }, async () => {
+      await adminDb.workItemDelivery.deleteMany({ where: { githubPullRequestId: web.prId } });
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect(result.approval.gate.state).toBe('approved');
+    expect(result.members.map((m) => [m.subjectVersion, m.outcome, m.pullRequestId])).toEqual([
+      [api.version, 'merged', api.prId],
+      [web.version, 'no_merge_gate', null],
+    ]);
+    expect(seam).toHaveBeenCalledTimes(1);
+    expect(await prRecord(web.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
+  });
+
   it('RETRY merges only that member, under the approval that already stands', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
