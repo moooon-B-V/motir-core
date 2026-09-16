@@ -545,3 +545,28 @@ describe('getRepairView — what the Development block draws', () => {
     });
   });
 });
+
+describe('getRepairView — what a malformed give-up record still says', () => {
+  it('an attempts field that is not a whole number reads as no count, and a missing end reads as the start', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await redCard(fx);
+    const claimed = await claim(fx, card.identifier);
+    await dispatchRunService.appendEvents(
+      claimed.runId!,
+      [{ kind: 'ci_gave_up', workItemKey: card.identifier, data: { attempts: '5' } }],
+      fx.ctx,
+    );
+    await dispatchRunService.close(claimed.runId!, { stopReason: 'halted' }, fx.ctx);
+    // A failed row with no end time is not something `close` writes; a record
+    // imported or repaired by hand can carry one, and the page must still render.
+    const run = await adminDb.dispatchRun.update({
+      where: { id: claimed.runId! },
+      data: { endedAt: null },
+    });
+
+    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
+      state: 'offer',
+      lastGaveUp: { attempts: null, endedAt: run.startedAt.toISOString() },
+    });
+  });
+});
