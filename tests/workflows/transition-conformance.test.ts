@@ -139,7 +139,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
     ]);
   });
 
-  it('declares exactly the thirty-three default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139)', () => {
+  it('declares exactly the thirty-six default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -185,30 +185,34 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'implemented>blocked',
         'implemented>cancelled',
         'implemented>done',
-        // MOTIR-5139: a person's YES. ONE in and THREE out. Deliberately NOT
-        // from `implemented` — that hop would let a person approve past a build
-        // that never ran, so the only way in is through `in_review`, the status
-        // CI itself writes on green. The absence is asserted twice: by name in
-        // `approved-status.test.ts`, and here by `implemented>approved` falling
-        // into NON_EDGES, which the restricted sweep below refuses one by one.
+        // MOTIR-5139: a person's YES. ONE in and THREE out.
         'in_review>approved',
         'approved>done',
         'approved>in_progress',
         'approved>cancelled',
+        // MOTIR-5630: the merge-queue EJECTION (`approval-gates.md` §4 THIRD
+        // AMENDMENT, decision 7). A failure sends an approved (manual) or
+        // in-review (auto) card back to `implemented`, and Queue again returns
+        // it to `approved` on unchanged heads. `implemented>approved` WAS absent
+        // (MOTIR-5139); a HAND move into `approved` past an open pull request is
+        // still refused, by §6d rule 2b — `approved-status.test.ts` asserts it.
+        'approved>implemented',
+        'in_review>implemented',
+        'implemented>approved',
       ]),
     );
-    expect(EDGES).toHaveLength(33);
+    expect(EDGES).toHaveLength(36);
   });
 
-  it('partitions the 9×9 grid into 33 edges + 9 self-loops + 39 non-edges', () => {
+  it('partitions the 9×9 grid into 36 edges + 9 self-loops + 36 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(39);
+    expect(NON_EDGES).toHaveLength(36);
   });
 });
 
-describe('restricted mode — every default edge is accepted (the full 33-edge sweep)', () => {
+describe('restricted mode — every default edge is accepted (the full 36-edge sweep)', () => {
   it.each(EDGES)(
     '%s → %s transitions and records exactly one "updated" revision',
     async (from, to) => {

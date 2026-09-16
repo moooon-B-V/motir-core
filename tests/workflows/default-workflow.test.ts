@@ -73,8 +73,8 @@ describe('defaultWorkflow constant', () => {
     expect(new Set(positions).size).toBe(positions.length); // all distinct
   });
 
-  it('defines thirty-three transitions, each referencing a known status key (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139)', () => {
-    expect(DEFAULT_TRANSITIONS).toHaveLength(33);
+  it('defines thirty-six transitions, each referencing a known status key (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630)', () => {
+    expect(DEFAULT_TRANSITIONS).toHaveLength(36);
     const keys = new Set(DEFAULT_STATUSES.map((s) => s.key));
     for (const [from, to] of DEFAULT_TRANSITIONS) {
       expect(keys.has(from)).toBe(true);
@@ -82,11 +82,20 @@ describe('defaultWorkflow constant', () => {
     }
     const pairs = DEFAULT_TRANSITIONS.map(([f, t]) => `${f}->${t}`);
     expect(new Set(pairs).size).toBe(pairs.length); // no duplicate edges
+    // MOTIR-5630 — the merge-queue ejection's three edges, by key
+    // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7).
+    expect(pairs).toEqual(
+      expect.arrayContaining([
+        'approved->implemented',
+        'in_review->implemented',
+        'implemented->approved',
+      ]),
+    );
   });
 });
 
 describe('createProject seeds the default workflow (same transaction)', () => {
-  it('a fresh project ends with 8 statuses + 29 transitions; todo is the initial status', async () => {
+  it('a fresh project ends with 9 statuses + 36 transitions; todo is the initial status', async () => {
     const { userId, workspaceId } = await makeWorkspaceAndUser();
     const project = await projectsService.createProject({
       workspaceId,
@@ -99,7 +108,7 @@ describe('createProject seeds the default workflow (same transaction)', () => {
       adminDb.workflowTransition.count({ where: { projectId: project.id } }),
     ]);
     expect(statusCount).toBe(9);
-    expect(transitionCount).toBe(33);
+    expect(transitionCount).toBe(36);
 
     const initials = await adminDb.workflowStatus.findMany({
       where: { projectId: project.id, isInitial: true },
@@ -121,7 +130,7 @@ describe('createProject seeds the default workflow (same transaction)', () => {
 
     const wf = await workflowsService.getWorkflow(project.id, workspaceId);
     expect(wf.statuses.map((s) => s.key)).toEqual(DISPLAY_ORDER);
-    expect(wf.transitions).toHaveLength(33);
+    expect(wf.transitions).toHaveLength(36);
     expect(wf.policyMode).toBe('restricted');
   });
 
@@ -184,7 +193,7 @@ describe('seed atomicity + the one-initial-per-project constraint', () => {
     const workflowTransitionCount = await adminDb.workflowTransition.count({
       where: { projectId: project.id },
     });
-    expect(workflowTransitionCount).toBe(33);
+    expect(workflowTransitionCount).toBe(36);
   });
 
   it('a second initial status in the same project violates the partial-unique index (2.2.1)', async () => {
@@ -234,7 +243,7 @@ describe('backfillDefaultWorkflow (one-off, idempotent)', () => {
     const workflowTransitionCount = await adminDb.workflowTransition.count({
       where: { projectId: bare.id },
     });
-    expect(workflowTransitionCount).toBe(33);
+    expect(workflowTransitionCount).toBe(36);
 
     // Idempotent — already has a workflow, so the second call is a no-op.
     const again = await workflowsService.backfillDefaultWorkflow(bare.id, userId);

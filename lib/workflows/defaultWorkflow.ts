@@ -181,6 +181,13 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // exception. `approved` is non-terminal by construction, so `approved →
 // cancelled` ships. If that omission was deliberate rather than incidental, the
 // edge is one line to strike and the tally becomes 32.
+//
+// MOTIR-5630 adds THREE more with no new status — `approved → implemented`,
+// `in_review → implemented` and `implemented → approved` — bringing the total to
+// THIRTY-SIX, with a backfill of the edges alone
+// (`20260916180000_add_queue_ejection_default_edges`). They are the merge-queue
+// EJECTION's (`docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 7),
+// and each is justified beside the `approved` block below.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
@@ -276,15 +283,20 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   ['implemented', 'done'],
 
   // `approved` (MOTIR-5139) — a person's YES, between CI's verdict and the
-  // merge. ONE edge in and THREE out.
+  // merge. ONE edge in and THREE out — plus the ejection's TWO more in and ONE
+  // more out (MOTIR-5630), at the end of this list.
   //
-  // ⚠️ `implemented → approved` is deliberately ABSENT, and
-  // `tests/workflows/defaultWorkflow.test.ts` asserts that absence rather than
-  // trusting this list to stay short. Under this project's `restricted` policy
-  // an undeclared hop is a 422, and this is the one that would let CI be
-  // skipped: `implemented` means the branch is pushed and NOTHING has been
-  // compiled. CI speaks before a person does, so the only way into `approved`
-  // is through `in_review`, which is the status CI itself writes on green.
+  // ⚠️ `implemented → approved` WAS deliberately absent (MOTIR-5139): an
+  // undeclared hop is a 422 under the `restricted` policy, and this is the one
+  // that would let a person approve past a build that never ran. It is declared
+  // now for ONE writer — _Queue again_ putting an ejected pull request back into
+  // the merge queue (MOTIR-5634) — which carries the card's DECIDED approval
+  // gate, whose `subjectVersion` names heads CI already judged green. What still
+  // stops a person from dragging a card past CI is §6d rule 2b in
+  // `applyStatusTransition`: while an open pull request delivers the card, a hand
+  // move into `approved` is refused unless it is a deciding gate's own write. A
+  // card with no open pull request has no build to skip.
+  // `tests/workflows/approved-status.test.ts` asserts both halves.
   ['in_review', 'approved'],
   // The merge lands. This is the edge, not the writer: `changeRequestStatusSync`
   // resolves a status by CATEGORY on merge, and `approved` is `in_progress`, so
@@ -298,4 +310,20 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // convention note in this constant's header. Cancellation is legal from every
   // non-terminal state; `approved` is non-terminal.
   ['approved', 'cancelled'],
+  // ── The merge-queue EJECTION (MOTIR-5630) ──────────────────────────────────
+  // `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 7. A queue
+  // that removes a pull request for a FAILURE sends every card it delivers back
+  // to `implemented` — committed code whose build (the queue's merge commit) has
+  // not passed. The ejection's own write is a system write, which skips the edge
+  // check; the edges are declared anyway so the workflow editor shows the real
+  // lifecycle and a person can make the same move by hand.
+  //   • `approved → implemented`  — a `manual` project's card the queue ejected
+  //     after a person approved it.
+  //   • `in_review → implemented` — an `auto` project's card, which never
+  //     reaches `approved` because no person decides it.
+  //   • `implemented → approved`  — _Queue again_ on unchanged heads, reusing the
+  //     card's one decided approval (see the note at the top of this block).
+  ['approved', 'implemented'],
+  ['in_review', 'implemented'],
+  ['implemented', 'approved'],
 ];

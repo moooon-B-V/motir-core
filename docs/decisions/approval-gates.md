@@ -895,12 +895,14 @@ An approval that does not merge is a note, not a gate.
 >   own write is a system write.
 > - `implemented → approved` is declared for _Queue again_. **It was
 >   deliberately ABSENT** (`lib/workflows/defaultWorkflow.ts`, the `approved`
->   block): an undeclared hop kept a card from skipping CI. The reason survives
->   because the only writer is _Queue again_, which carries a decided gate whose
->   `subjectVersion` names heads CI already judged green, and a HAND move into
->   `approved` while an open pull request delivers the card is still refused by
->   §6d rule 2b. The tests asserting the absence are rewritten, citing this
->   decision.
+>   block): an undeclared hop kept a card from skipping CI. The protection
+>   survives where there is a build to skip: the product's only writer is
+>   _Queue again_, which carries a decided gate whose `subjectVersion` names
+>   heads CI already judged green, and a HAND move into `approved` while an open
+>   pull request delivers the card is still refused by §6d rule 2b. A card with
+>   no open pull request may now be moved there by hand; it has no build to
+>   skip. The tests asserting the absence are rewritten to assert rule 2b,
+>   citing this decision.
 > - Existing default-workflow projects are backfilled by a KEY join with a
 >   `NOT EXISTS` guard, the pattern of
 >   `prisma/migrations/20260911140000_add_approved_default_status/migration.sql`.

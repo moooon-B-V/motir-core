@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { DEFAULT_STATUSES, DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
-import { IllegalTransitionError } from '@/lib/workItems/errors';
+import { ApprovalGatePendingError, IllegalTransitionError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -17,13 +17,12 @@ import { truncateAuthTables } from '../helpers/db';
 // to `done`, which claims it merged. Both are false, and GitHub models the same
 // split: a pull request is approved, and separately merged.
 //
-// ⚠️ THE TEST THAT MATTERS is `implemented → approved` being REFUSED. Under this
-// project's `restricted` policy an undeclared hop is a 422, and this is the one
-// that would let CI be skipped: `implemented` means the branch is pushed and
-// NOTHING has been compiled. CI speaks before a person does, so the only way in
-// is through `in_review`, which is the status CI itself writes on green. An edge
-// list is a thing you add to; the absence is the thing that has to be asserted,
-// because nothing else fails when it stops being true.
+// ⚠️ THE TEST THAT MATTERS is a person being unable to approve past a build that
+// never ran. Until MOTIR-5630 that was asserted as the ABSENCE of
+// `implemented → approved`. That edge is now declared for Queue again
+// (`approval-gates.md` §4 THIRD AMENDMENT, decision 7), so the same protection is
+// asserted where it now lives: §6d rule 2b refuses a hand move into `approved`
+// while an open pull request delivers the card.
 //
 // ⚠️ SCOPE — this card creates the STATE and moves nothing into it. The parent
 // ROLLUP that must not complete on `approved` children, and the DEPENDENT that
@@ -164,19 +163,81 @@ describe('the transitions in and out are legal without an admin editing anything
     });
   });
 
-  it('⚠️ but NOT implemented → approved — CI speaks before a person does', async () => {
-    // THE assertion this card exists to make. `implemented` means the branch is
-    // pushed and nothing has been compiled; allowing this hop would let a person
-    // approve past a build that never ran.
+  // ⚠️ `implemented → approved` WAS asserted ABSENT here (MOTIR-5139) — CI speaks
+  // before a person does. MOTIR-5630 declares the edge for ONE writer, Queue again
+  // putting an ejected pull request back into the merge queue on the card's
+  // decided approval (`approval-gates.md` §4 THIRD AMENDMENT, decision 7). What
+  // keeps a person from approving past a build is now §6d rule 2b, and both
+  // halves are asserted below: with no pull request there is no build to skip,
+  // and with an OPEN one the hand move is refused.
+  async function builtCard(title: string): Promise<{ id: string }> {
     const item = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'built, unchecked' },
+      { projectId: fx.projectId, kind: 'task', title },
       fx.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
     await workItemsService.updateStatus(item.id, 'implemented', fx.ctx);
-    await expect(workItemsService.updateStatus(item.id, 'approved', fx.ctx)).rejects.toBeInstanceOf(
-      IllegalTransitionError,
+    return item;
+  }
+
+  it('implemented → approved is a declared edge — a card with no pull request has no build to skip', async () => {
+    const item = await builtCard('built, nothing to merge');
+    await expect(workItemsService.updateStatus(item.id, 'approved', fx.ctx)).resolves.toMatchObject(
+      { status: 'approved' },
     );
+  });
+
+  it('⚠️ but a HAND implemented → approved is REFUSED while an open pull request delivers the card (rule 2b)', async () => {
+    // The assertion MOTIR-5139 made by absence, made now by the guard: a person
+    // cannot approve past a build that has not run.
+    const item = await builtCard('built, unchecked');
+    const installation = await adminDb.githubInstallation.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        installationId: 'inst-approved-status',
+        accountLogin: 'acme',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+    });
+    const repo = await adminDb.githubRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
+        installationId: installation.id,
+        repoId: 'repo-approved-status',
+        owner: 'acme',
+        name: 'web',
+        defaultBranch: 'main',
+        provider: 'github',
+      },
+    });
+    const pr = await adminDb.githubPullRequest.create({
+      data: {
+        repoId: repo.id,
+        number: 7,
+        title: 'built, unchecked',
+        state: 'open',
+        merged: false,
+        headRef: 'subtask/built',
+        baseRef: 'main',
+        provider: 'github',
+      },
+    });
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: item.id,
+        githubPullRequestId: pr.id,
+        repoId: repo.id,
+      },
+    });
+
+    const err = await workItemsService.updateStatus(item.id, 'approved', fx.ctx).catch((e) => e);
+    expect(err).toBeInstanceOf(ApprovalGatePendingError);
+    expect((err as ApprovalGatePendingError).waitingOn).toBe('decision');
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(row.status).toBe('implemented');
   });
 
   it('and NOT todo → approved — nobody approves work nobody started', async () => {
@@ -261,10 +322,12 @@ describe('the backfill onto a project that predates the status', () => {
         ...EDGES_OUT.map((to) => `approved→${to}`),
       ].sort(),
     );
-    // And the hop the record refuses is absent from the BACKFILLED project too —
-    // the SQL states the same graph the constant does, so a divergence between
-    // them is a defect this asserts rather than a comment that claims it.
+    // MOTIR-5139's backfill wires exactly its own four and nothing else: the
+    // ejection's `implemented→approved` and `approved→implemented` are not its to
+    // add. They arrive from MOTIR-5630's migration, asserted in
+    // `queue-ejection-edges.test.ts`.
     expect(touching).not.toContain('implemented→approved');
+    expect(touching).not.toContain('approved→implemented');
   });
 
   it('is IDEMPOTENT — running it twice changes nothing', async () => {
