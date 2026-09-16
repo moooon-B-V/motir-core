@@ -342,7 +342,7 @@ const proposedFieldsSchema = z
           'exactly as wanting two repositories is. MEMBERSHIP IS NOT VALIDATED HERE — the ' +
           'vocabulary is the rule-pack file set, so a well-formed unrecognised member is ' +
           'accepted and refused one hop later by the rule-pack resolver. Shape only: a ' +
-          'lowercase slug of at most 32 characters. Refused on a container kind.',
+          'lowercase slug of at most 32 characters. Legal on EVERY kind — a container carries one too.',
       ),
   })
   .describe('The proposed item’s fields. Required on an `add`, ignored otherwise.');

@@ -39,8 +39,6 @@ import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepositor
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
-import { TYPEABLE_KINDS } from '@/lib/issues/executorDefaults';
-import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
@@ -1593,21 +1591,18 @@ function assertKnownRepoRole(role: unknown, planItemId: string | null, label: st
  * proposal corrected past a gate the append enforced would reach approve
  * malformed.
  *
- * ⚠️ SHAPE AND KIND ONLY. Membership is not checked in this repository at all —
+ * ⚠️ SHAPE ONLY (MOTIR-5607 retired the KIND half — a subject is legal on every
+ * kind, and `TYPEABLE_KINDS` is deliberately no longer consulted here; it still
+ * gates `type` / `executor`). Membership is not checked in this repository at all —
  * the subject vocabulary IS the rule-pack file set, so a well-formed but
  * unrecognised member is accepted here and refused by the planner's own resolver.
  * That is the story's decision, not a gap: a closed list here would put a
  * migration and a platform deploy in front of every new rule pack.
  */
-function assertCorrectedSubjectValid(subject: string, kind: string, planItemId: string): void {
+function assertCorrectedSubjectValid(subject: string, planItemId: string): void {
   if (!isWellFormedSubject(subject)) {
     throw new InvalidProposalError(
       `Proposal ${planItemId} sets subject \`${subject}\`, which is not a well-formed subject. ${describeSubjectShape()}`,
-    );
-  }
-  if (!TYPEABLE_KINDS.has(kind as WorkItemKindDto)) {
-    throw new InvalidProposalError(
-      `Proposal ${planItemId} sets subject \`${subject}\` on a \`${kind}\`, which is a container. A subject selects the rule packs an authoring pass composes for a LEAF; a container's rules come from its own kind.`,
     );
   }
 }
@@ -1846,7 +1841,7 @@ async function materialize(
       // (Story MOTIR-5062 · MOTIR-5065) — the fourth selector coordinate,
       // written beside the three planning columns above because it is the same
       // kind of fact. SHAPE-validated at the append and again in
-      // `validateProposals` (`malformed_subject` / `subject_on_container`);
+      // `validateProposals` (`malformed_subject`);
       // MEMBERSHIP is deliberately not checked in this repository, so an
       // unrecognised but well-formed member persists here and is refused by
       // motir-ai's rule-pack resolver, the system that owns the vocabulary.
@@ -4415,9 +4410,9 @@ export const plansService = {
           // correction may, which is AMENDMENT 3 D3's rule applied rather than an
           // exception to it.
           //
-          // Re-validated by the SAME shape and container checks the append runs,
-          // so a correction cannot introduce a subject the append would have
-          // refused. `undefined` leaves it alone and an explicit `null` unpins.
+          // Re-validated by the SAME shape check the append runs, so a correction
+          // cannot introduce a subject the append would have refused. The KIND half
+          // of both doors retired with MOTIR-5607. `undefined` leaves it alone and an explicit `null` unpins.
           // MEMBERSHIP is not checked here, in either door — the vocabulary is
           // the rule-pack file set, and this repository deliberately does not
           // hold it.
@@ -4425,11 +4420,7 @@ export const plansService = {
             if (input.subject === null) {
               delete next.subject;
             } else {
-              assertCorrectedSubjectValid(
-                input.subject,
-                next.kind ?? DEFAULT_PROPOSED_KIND,
-                item.id,
-              );
+              assertCorrectedSubjectValid(input.subject, item.id);
               next.subject = input.subject;
             }
           }

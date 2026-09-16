@@ -2,7 +2,6 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planReviewService } from '@/lib/services/planReviewService';
-import { PlanGrammarError } from '@/lib/plans/errors';
 import type { PlanItemProposedFields } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -108,18 +107,23 @@ describe('subject — what the boundary REFUSES, and what it deliberately does n
     });
   });
 
-  it('REFUSES a subject on a CONTAINER kind — a KIND question IS this repository’s domain', async () => {
+  it('ACCEPTS a subject on a CONTAINER kind — the refusal retired (MOTIR-5607)', async () => {
+    // Was: REFUSES, "a KIND question IS this repository's domain". Decided
+    // 2026-09-15 — a subject says what a work item is ABOUT, and a container is
+    // about something exactly as much as a leaf is, so `epic` and `story` carry
+    // one too. The SHAPE twin directly above is untouched and still refuses at
+    // the close, which is the half that had to survive the retirement.
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'p' }, fx.ctx);
     await plansService.addProposals(
       plan.id,
-      [{ op: 'add', proposedFields: { title: 'A story', kind: 'story', subject: 'data' } }],
+      [
+        { op: 'add', proposedFields: { title: 'A story', kind: 'story', subject: 'data' } },
+        { op: 'add', proposedFields: { title: 'An epic', kind: 'epic', subject: 'onboarding' } },
+      ],
       fx.ctx,
     );
-    // Refused at the CLOSE, like its shape twin above.
-    await expect(plansService.markPlanned(plan.id, fx.ctx)).rejects.toBeInstanceOf(
-      PlanGrammarError,
-    );
+    await expect(plansService.markPlanned(plan.id, fx.ctx)).resolves.toBeDefined();
   });
 
   it('ACCEPTS an unrecognised but well-formed member ON PURPOSE — the vocabulary is the rule-pack file set, not this repository’s', async () => {
