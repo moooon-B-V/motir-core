@@ -7499,7 +7499,6 @@
       "subjectMeta": "{files, plural, =1 {# file} other {# files}} · {version}",
       "noVersion": "no version",
       "decidedOn": "on <mono>{version}</mono>",
-      "mergeSubjectMeta": "{pr} · pull request",
       "subjectGone": "The design this asked about is gone",
       "notRenderable": "Motir cannot show this kind yet",
       "notBuiltYet": "Not built yet",

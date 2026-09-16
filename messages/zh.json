@@ -7495,7 +7495,6 @@
       "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
       "noVersion": "无版本号",
       "decidedOn": "基于 <mono>{version}</mono>",
-      "mergeSubjectMeta": "{pr} · 拉取请求",
       "subjectGone": "此项针对的设计已不存在",
       "notRenderable": "Motir 暂不支持展示此类型",
       "notBuiltYet": "尚未实现",

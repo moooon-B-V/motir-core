@@ -19,7 +19,6 @@ import type {
   ApprovalRecordDecidedRowDto,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
-  PullRequestMergeSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
 
 // THE APPROVALS ROW — the ONE row both approval lists render: the Workbench's
@@ -191,18 +190,13 @@ function SubjectMeta({
       </span>
     );
   }
-  if (subject.kind === 'pull_request_merge') {
-    // A REGISTERED kind with a real subject (MOTIR-4793): the row names the pull
-    // request. Its decide surface is MOTIR-4909's frame, so the Decide cell still
-    // takes the no-renderer treatment — but the SUBJECT is known, and "Motir cannot
-    // show this kind" would be false about it.
-    const merge: PullRequestMergeSubjectSummaryDTO = subject;
-    return (
-      <span className="truncate text-xs text-(--el-text-secondary)">
-        {t('mergeSubjectMeta', { pr: `${merge.repo}#${merge.number}` })}
-      </span>
-    );
-  }
+  // ⚠️ `pull_request_merge` HAS NO ARM HERE ANY MORE (MOTIR-5615; the delta mock
+  // `design/workbench/approvals-row--one-gate.mock.html`, panel 2). A card holds ONE
+  // approve-to-merge gate over its whole delivery set, so there is no per-pull-request
+  // row to name: nothing raises the kind (MOTIR-5611), every row it left is superseded
+  // (MOTIR-5614), and the one row the card contributes is the `pull_request_approval`
+  // row above, whose subject names every member. A superseded row reached by URL falls
+  // to `notRenderable` below with the rest of the kinds this build does not draw.
   if (subject.kind !== 'design_result') {
     return (
       <span className="truncate text-xs text-(--el-text-secondary)">{t('notRenderable')}</span>
