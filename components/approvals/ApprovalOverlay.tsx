@@ -11,7 +11,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
-import { decideApprovalGateAction } from '@/app/(authed)/items/[key]/approvalGateActions';
+import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
+import {
+  approveAndMergeAction,
+  decideApprovalGateAction,
+  retryApproveAndMergeMemberAction,
+} from '@/app/(authed)/items/[key]/approvalGateActions';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { parseApprovalOverlay, withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { fetchApprovalGateOverlay } from '@/lib/approvals/approvalOverlayClient';
@@ -182,6 +187,7 @@ export function ApprovalOverlay() {
   const tRow = useTranslations('workbench.approvals');
   const tGate = useTranslations('approvalGate');
   const tDesign = useTranslations('approvalGate.designResult');
+  const tPullRequest = useTranslations('approvalGate.pullRequestApproval');
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -261,7 +267,16 @@ export function ApprovalOverlay() {
     settled?.outcome === 'unavailable' ||
     (read !== null && (read.gate === null || read.subject.state === 'no_gate'));
   const loading = !unavailable && read === null;
-  const kindLabel = kind ? tRow(`kind.${kind}`) : '';
+  // ⚠️ THE APPROVE-TO-MERGE KIND IS NAMED BY ITS FRAME, NOT BY THE ROW VOCABULARY
+  // (§ 24: the dialog's accessible name is *Pull requests for ACME-12*). Band 1 renders
+  // `approvalGate.pullRequestApproval.kindLabel`, and a dialog announcing a different
+  // name for the same thing is two names for one gate. Every other kind keeps the row's
+  // label, which is what its own arms render.
+  const kindLabel = !kind
+    ? ''
+    : kind === 'pull_request_approval'
+      ? tPullRequest('kindLabel')
+      : tRow(`kind.${kind}`);
 
   let workItem: { identifier: string; title: string } | null = null;
   let srTitle = t('loading');
@@ -300,14 +315,7 @@ export function ApprovalOverlay() {
     );
     const subject = read.subject;
 
-    if (
-      subject.state === 'kind_not_built' ||
-      // The read resolves the approve-and-merge port now (MOTIR-5439), and this host
-      // does not render it yet — MOTIR-5440 mounts the Development block here. Until
-      // then the overlay keeps drawing what it drew for this kind before the read
-      // learned it, rather than a design frame over a subject that is not a design.
-      (subject.state === 'resolved' && subject.kind !== 'design_result')
-    ) {
+    if (subject.state === 'kind_not_built') {
       // Panel 4a — a feature that has not shipped. Opposite in meaning to 4b,
       // which is a gate worth withdrawing, however alike they look.
       body = (
@@ -374,34 +382,76 @@ export function ApprovalOverlay() {
         return null;
       };
 
-      body = (
-        <ApprovalGateControl
-          layout="fill"
-          gate={gate}
-          // THE READ'S ANSWER, never this component's — a decided gate is
-          // immutable, so nothing is left to press on one either way.
-          canDecide={read.canDecide && !decidedState}
-          kindLabel={tDesign('kindLabel')}
-          subjectMeta={
-            gate.subjectVersion
-              ? tDesign('meta.withVersion', { version: gate.subjectVersion.slice(0, 8) })
-              : tDesign('meta.plain')
-          }
-          // The route reads the GATE's own subject, so a decided gate shows the
-          // version that was decided on (ADR §6c), not whatever is current now.
-          port={<DesignResultPanel evidence={subject.evidence} isDesignCard />}
-          verbs={verbs}
-          consequence={tDesign('consequence', { key: identifier })}
-          confirmConsequences={[
-            tDesign('confirm.records'),
-            tDesign('confirm.keepsFiles'),
-            tDesign('confirm.movesToDone', { key: identifier }),
-          ]}
-          routedToLabel={read.routedToLabel}
-          filesKept={local ? local.filesKept : subject.filesKept}
-          onDecide={onDecide}
-        />
-      );
+      body =
+        subject.kind === 'pull_request_approval' ? (
+          // THE APPROVE-TO-MERGE PORT (Story MOTIR-5437 · Subtask MOTIR-5440;
+          // `design/workbench/design-notes.md` § 24). Band 2 is the item page's
+          // Development block — every pull-request row, then the run's How to test,
+          // and on a design card its result first — COMPOSED, never redrawn: the same
+          // component the page renders, handed the same fields from this overlay's own
+          // read (MOTIR-5439). The only difference is the BOX: `fill`, because the
+          // viewport is the container here and a section card is there.
+          //
+          // The frame, its verbs, its confirm step, the per-row merge outcomes and the
+          // refusal are `DevelopmentGateFrame`'s (MOTIR-5484) — so there is still exactly
+          // ONE approve control in the product, and How to test carries no verb.
+          <DevelopmentSectionBody
+            pullRequests={subject.pullRequests}
+            itemIdentifier={identifier}
+            repoDelivery={subject.repoDelivery}
+            deliveries={subject.deliveries}
+            howToTest={subject.howToTest}
+            designResult={
+              subject.designEvidence ? (
+                <DesignResultPanel
+                  evidence={subject.designEvidence}
+                  isDesignCard={subject.isDesignCard}
+                  placement="development"
+                />
+              ) : undefined
+            }
+            mergeGate={{
+              gate,
+              // A decided gate has nothing left to press, exactly as on the design arm.
+              canDecide: read.canDecide && !decidedState,
+              routedToLabel: read.routedToLabel,
+              members: subject.members,
+            }}
+            gateActions={{
+              decide: decideApprovalGateAction,
+              approveAndMerge: approveAndMergeAction,
+              retryMember: retryApproveAndMergeMemberAction,
+            }}
+            gateLayout="fill"
+          />
+        ) : (
+          <ApprovalGateControl
+            layout="fill"
+            gate={gate}
+            // THE READ'S ANSWER, never this component's — a decided gate is
+            // immutable, so nothing is left to press on one either way.
+            canDecide={read.canDecide && !decidedState}
+            kindLabel={tDesign('kindLabel')}
+            subjectMeta={
+              gate.subjectVersion
+                ? tDesign('meta.withVersion', { version: gate.subjectVersion.slice(0, 8) })
+                : tDesign('meta.plain')
+            }
+            // The route reads the GATE's own subject, so a decided gate shows the
+            // version that was decided on (ADR §6c), not whatever is current now.
+            port={<DesignResultPanel evidence={subject.evidence} isDesignCard />}
+            verbs={verbs}
+            consequence={tDesign('consequence', { key: identifier })}
+            confirmConsequences={[
+              tDesign('confirm.records'),
+              tDesign('confirm.keepsFiles'),
+              tDesign('confirm.movesToDone', { key: identifier }),
+            ]}
+            routedToLabel={read.routedToLabel}
+            filesKept={local ? local.filesKept : subject.filesKept}
+            onDecide={onDecide}
+          />
+        );
     }
   }
 
