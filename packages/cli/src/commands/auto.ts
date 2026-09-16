@@ -1432,6 +1432,9 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   );
 }
 
+/** The default statuses a card reaches AFTER Implemented and can be moved back from. */
+const PAST_IMPLEMENTED: ReadonlySet<string> = new Set(['in_review', 'approved']);
+
 /**
  * Move one card to Implemented, answering the ONE refusal a run reports rather
  * than dies on: `null` on success, the server's own sentence when the container
@@ -1447,6 +1450,20 @@ export async function transitionToImplemented(
   client: MotirClient,
   key: string,
 ): Promise<string | null> {
+  // ⚠️ NEVER BACKWARDS. `in_review → implemented` and `approved → implemented`
+  // are DECLARED edges since MOTIR-5630 (a merge-queue ejection writes them), so
+  // the server no longer refuses this move when CI got there first. Written
+  // blind, it would demote a card the webhook already promoted, and nothing
+  // would promote it again: its checks are already green. A card past
+  // Implemented is already what this call wants, so it is a success.
+  //
+  // A read that fails falls through to the write it guards, which is what ran
+  // before: an auth or network fault surfaces there, and is rethrown below.
+  const status = await client.getWorkItem(key).then(
+    (d) => d.item.status,
+    () => null,
+  );
+  if (status !== null && PAST_IMPLEMENTED.has(status)) return null;
   try {
     await client.transitionStatus({ key, status: 'implemented' });
     return null;
@@ -1675,10 +1692,11 @@ export async function closeOutContainer(client: MotirClient, summary: AutoSummar
   } catch (err) {
     // Reported and swallowed, exactly as `openSessionPr` / `updateSessionPr` /
     // `markSessionPrReady` are. The commonest arrival here is not a fault at all:
-    // CI beat the close-out, the webhook already moved the container on to In
-    // Review, and `in_review → implemented` is not a legal edge. The work is
-    // reviewable either way, and a run that aborted its summary over this would
-    // hide it.
+    // a refusal the server wrote (the container gate, or an edge a custom
+    // workflow does not declare). A container CI already moved on to In Review is
+    // not one: `transitionToImplemented` reads it first and leaves it there. The
+    // work is reviewable either way, and a run that aborted its summary over this
+    // would hide it.
     info(
       `Could not move ${scope.key} to Implemented: ` +
         `${err instanceof Error ? err.message : String(err)}`,

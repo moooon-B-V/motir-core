@@ -80,12 +80,15 @@ function fakeClient(
   over: {
     onLink?: (key: string) => Error | null;
     onTransition?: (key: string) => Error | null;
+    /** The status the container reads as before the close-out writes. */
+    status?: string;
   } = {},
 ): FakeClient {
   const links: FakeClient['links'] = [];
   const transitions: FakeClient['transitions'] = [];
   const calls: string[] = [];
   const client = {
+    getWorkItem: async () => ({ item: { status: over.status ?? 'in_progress' } }),
     linkPullRequest: async (args: FakeClient['links'][number]) => {
       calls.push(`link:${args.key}`);
       links.push(args);
@@ -447,19 +450,32 @@ describe('closeOutContainer moves the container to Implemented', () => {
     expect(fake.transitions).toHaveLength(1);
   });
 
-  it('REPORTS an illegal transition — CI beat the close-out to In Review', async () => {
-    // The commonest arrival here is not a fault: the checks went green while the
-    // close-out was running, the webhook moved the container on, and
-    // `in_review → implemented` is not a legal edge. The work is reviewable
-    // either way and a summary that aborted over it would hide it.
+  it('REPORTS an illegal transition rather than dying on it', async () => {
+    // A workflow that does not declare the edge refuses the move. The work is
+    // reviewable either way and a summary that aborted over it would hide it.
     const fake = fakeClient({
       onTransition: () =>
-        new CliError('In Review → Implemented is not allowed. Allowed: In Progress, Done.'),
+        new CliError('In Progress → Implemented is not allowed. Allowed: In Review, Done.'),
     });
     const summary = summaryOf([record({ key: 'PROD-2' }), record({ key: 'PROD-3' })], [pr()]);
 
     await expect(closeOutContainer(fake.client, summary)).resolves.toBeUndefined();
   });
+
+  it.each(['in_review', 'approved'])(
+    'LEAVES a container CI already moved on to %s — never writes it backwards',
+    async (status) => {
+      // `in_review → implemented` and `approved → implemented` are declared edges
+      // since MOTIR-5630 (a merge-queue ejection writes them), so the server would
+      // ACCEPT the move. Written blind it would demote a card whose checks are
+      // already green, and nothing would promote it again.
+      const fake = fakeClient({ status });
+      const summary = summaryOf([record({ key: 'PROD-2' }), record({ key: 'PROD-3' })], [pr()]);
+
+      await expect(closeOutContainer(fake.client, summary)).resolves.toBeUndefined();
+      expect(fake.transitions).toEqual([]);
+    },
+  );
 
   it('counts only cards that LANDED — a failed card does not make a container', async () => {
     // `landedWork` is the predicate everywhere else in the close-out, and it
