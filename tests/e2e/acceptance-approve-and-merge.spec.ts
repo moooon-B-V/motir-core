@@ -251,13 +251,13 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       'Both pull requests are green: the question is waiting on To approve',
       async () => {
         await page.goto('/workbench?tab=approvals');
-        // ONE Pull requests row per card. Each pull request's own merge gate keeps its
-        // Not built yet row beside it — the approved design (design/workbench/design-notes.md
-        // § 23: `pull_request_merge` keeps Panel 7's row) — so the count is of this kind only.
-        const rows = page
-          .getByRole('table', { name: 'To approve' })
-          .getByTestId(/^approval-row-/)
-          .filter({ hasText: en.workbench.approvals.pullRequest.kindLabel });
+        // ONE row per card, FULL STOP (Bug MOTIR-5603 · MOTIR-5615; the delta mock
+        // `design/workbench/approvals-row--one-gate.mock.html`, panels 1-2). § 23 used to
+        // promise a *Not built yet* row per pull request beside this one; § 25 struck that,
+        // and the merge kind now raises nothing. So the count is taken over EVERY row on
+        // the tab, not filtered to one kind — filtering is what would hide a regression.
+        const table = page.getByRole('table', { name: 'To approve' });
+        const rows = table.getByTestId(/^approval-row-/);
         await expect(rows).toHaveCount(4, { timeout: 60_000 });
         const row = rows.filter({ hasText: seed.merged.identifier });
         await expect(row).toHaveCount(1);
@@ -458,10 +458,15 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
         .context()
         .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
       await page.goto('/workbench?tab=approvals');
-      // Picked by its DECIDE CONTROL, NOT by the kind label: in zh each merge gate's
-      // subject line reads `… · 拉取请求`, so the label is a substring of all three of the
-      // card's rows (CI run 34979375067) — and only the approve-and-merge row is renderable,
-      // so only it carries one. The control is *查看* since MOTIR-5440 swapped the cell.
+      // Picked by its DECIDE CONTROL, NOT by the kind label. The control is *查看* since
+      // MOTIR-5440 swapped the cell.
+      //
+      // That selector was once a NECESSITY: in zh each merge gate's subject line read
+      // `… · 拉取请求`, so the label was a substring of all three of the card's rows
+      // (CI run 34979375067). MOTIR-5615 removed those rows and MOTIR-5616 retired
+      // `mergeSubjectMeta`, so the card now has ONE row and the ambiguity is gone. The
+      // control is kept as the selector anyway, because it asserts the row is the
+      // DECIDABLE one — which the kind label alone never did.
       const row = page
         .getByRole('main')
         .getByTestId(/^approval-row-/)

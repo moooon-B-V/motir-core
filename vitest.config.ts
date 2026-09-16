@@ -2100,14 +2100,14 @@ export default defineConfig({
         'lib/approvalGates/routing.ts',
         'lib/mappers/approvalGateMappers.ts',
         // Story MOTIR-4882 · MOTIR-5519 — the MERGE story's files that carry logic:
-        // the `pull_request_merge` handler and its settings door, the provenance
+        // its settings door, the provenance
         // resolver, the run-target resolver, gate raise/withdraw, the merge entry
         // point, and auto mode with its job. MEASURED on this branch before being
         // pinned, per the note above — 100 / 100 / 100 / 100 on every one of the eight —
         // over `tests/git`, `tests/github/{mergeGates,pullRequestMergeEntry,
         // pullRequestAutoMerge,pullRequestMergeRecord,appRoleForRepo,ciGreenPromotion,
         // mergeStoryEdges}`, `tests/integration/mergeStoryJourney`,
-        // `tests/approval-gate-{merge-kind,settings-door-read,coverage-floor}`,
+        // `tests/approval-gate-{settings-door-read,coverage-floor}`,
         // `tests/components/approval-gate-control` and `tests/howToTest/howToTestService`.
         //
         // `lib/git/providers/github.ts` is NOT pinned here: it is the whole GitHub
@@ -2115,7 +2115,11 @@ export default defineConfig({
         // are fully covered (`tests/git/mergeChangeRequest{,Edges}.test.ts`); the file's
         // remaining arms belong to the provider's pre-existing readers and parsers,
         // whose own stories own their numbers.
-        'lib/approvalGates/pullRequestMergeHandler.ts',
+        // ⚠️ `pullRequestMergeHandler.ts` WAS PINNED HERE and was deleted with its kind
+        // (Bug MOTIR-5603 · MOTIR-5616). Its logic did not move: the handler contract went
+        // with the retirement, and the one function that outlived it,
+        // `pullRequestSubjectVersion`, now sits in `deliverySetVersion.ts` beside the set
+        // version — already covered by the suites listed above.
         'lib/approvalGates/settingsDoor.ts',
         'lib/github/appRoleForRepo.ts',
         'lib/services/runTarget.ts',
@@ -2298,12 +2302,7 @@ export default defineConfig({
         },
         // Story MOTIR-4882 · MOTIR-5519 — measured at 100 on all four axes (see the
         // `include` note); pinned at the project's 90 floor so a refactor has room.
-        'lib/approvalGates/pullRequestMergeHandler.ts': {
-          lines: 90,
-          functions: 90,
-          branches: 90,
-          statements: 90,
-        },
+        // (`pullRequestMergeHandler.ts`'s threshold retired with the file — MOTIR-5616.)
         'lib/approvalGates/settingsDoor.ts': {
           lines: 90,
           functions: 90,

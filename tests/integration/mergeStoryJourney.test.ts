@@ -31,6 +31,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { JobTestEngine } from '../helpers/jobs';
@@ -46,6 +47,19 @@ const { POST: decideRoute } = await import('@/app/api/approval-gates/[id]/decide
 //
 //   green checks raise a question → a person answers it → GitHub merges →
 //   the merge webhook, and nothing else, finishes the card.
+//
+// ⚠️ RE-KEYED ONTO ONE GATE PER CARD (Bug MOTIR-5603 · MOTIR-5617). A card no longer
+// holds a `pull_request_merge` gate per pull request; it holds ONE
+// `pull_request_approval` gate over its whole delivery set, and approving it merges
+// every member. The journeys below therefore ask about the CARD's gate, and the door
+// they press is `pullRequestMergeService.approveAndMerge` — the function the item
+// page's *Approve and merge* action calls.
+//
+// ⚠️ THE REST DECIDE ROUTE IS NO LONGER THE MERGING DOOR, AND THAT IS A KNOWN DEFECT:
+// `decideGate` became a pass-through in MOTIR-5613, so approving through the route
+// records the approval and merges nothing. It is filed as MOTIR-5624, which owns
+// restoring this journey's route assertions. The route is still exercised below for
+// the verbs it still owns.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-merge-journey';
@@ -232,12 +246,24 @@ async function decide(gateId: string, decision = 'approve') {
 const statusOf = async (id: string) =>
   (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 const prRow = (number: number) => adminDb.githubPullRequest.findFirstOrThrow({ where: { number } });
-const gateFor = async (workItemId: string, number: number, state = 'awaiting') => {
-  const pr = await prRow(number);
-  return adminDb.approvalGate.findFirstOrThrow({
-    where: { workItemId, subjectId: pr.id, kind: 'pull_request_merge', state: state as never },
+/** The card's ONE approve-to-merge gate — its subject is the CARD, not a pull request. */
+const gateFor = async (workItemId: string, state = 'awaiting') =>
+  adminDb.approvalGate.findFirstOrThrow({
+    where: {
+      workItemId,
+      subjectId: workItemId,
+      kind: 'pull_request_approval',
+      state: state as never,
+    },
   });
-};
+
+/** Every gate on the card, whatever its kind — the one-gate claim, checkable. */
+const gatesOn = (workItemId: string) =>
+  adminDb.approvalGate.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
+
+/** *Approve and merge* — the press, through the same function the item page calls. */
+const press = (s: Scenario, gateId: string) =>
+  pullRequestMergeService.approveAndMerge({ gateId, source: 'ui' }, s.ctx);
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -259,75 +285,99 @@ afterAll(async () => {
 });
 
 describe('journey 1 — manual, imported repository, two pull requests: approve → merge → webhook → Done', () => {
-  it('green raises two gates; approving merges through the ROUTE; only the merge webhook finishes the card', async () => {
+  it('green raises ONE gate; the press merges BOTH; only the merge webhook finishes the card', async () => {
     const s = await makeScenario('journey-1@example.com', 'manual');
     const item = await cardWithPrs(s, [11, 12]);
 
     await ci('success', 'sha-a', 11);
     await ci('success', 'sha-b', 12);
     expect(await statusOf(item.id)).toBe('in_review');
-    expect(
-      await adminDb.approvalGate.count({
-        where: { workItemId: item.id, kind: 'pull_request_merge', state: 'awaiting' },
-      }),
-    ).toBe(2);
 
+    // ONE question for the whole set, named by both members.
+    const gates = await gatesOn(item.id);
+    expect(gates.map((g) => g.kind)).toEqual(['pull_request_approval']);
+    expect(gates[0]!.subjectVersion).toBe('moooon/acme#11@sha-a,moooon/acme#12@sha-b');
+
+    const { approval, members } = await press(s, gates[0]!.id);
+
+    expect(approval.gate.state).toBe('approved');
+    expect(members.map((m) => m.outcome)).toEqual(['merged', 'merged']);
     for (const number of [11, 12]) {
-      const gate = await gateFor(item.id, number);
-      const res = await decide(gate.id);
-      expect(res.status).toBe(200);
-      expect((await gateRow(gate.id)).state).toBe('approved');
       expect(await prRow(number)).toMatchObject({
         mergeAuthority: 'gate',
         mergeOutcomeRef: `merge-${number}`,
       });
     }
 
-    // GUARD (b) — ONE STATUS WRITER. Both merges happened and were recorded; the
-    // webhook has not been delivered, so the card has not moved.
-    expect(await statusOf(item.id)).toBe('in_review');
+    // GUARD (b) — ONE STATUS WRITER. Both merges happened and were recorded; the card
+    // moved to `approved` because the APPROVAL says so, and `done` still waits for the
+    // webhook.
+    expect(await statusOf(item.id)).toBe('approved');
     expect(mergeCalls().filter((c) => c.method === 'PUT')).toHaveLength(2);
 
     await prDelivery('closed', 11, `subtask/${item.identifier}-11`, true);
-    expect(await statusOf(item.id)).toBe('in_review'); // its other pull request is still open
+    expect(await statusOf(item.id)).toBe('approved'); // its other pull request is still open
     await prDelivery('closed', 12, `subtask/${item.identifier}-12`, true);
     expect(await statusOf(item.id)).toBe('done');
 
-    await expectEveryMergeGateOutcomeNull();
+    await expectNoMergeResultOnAnyGate();
+  });
+
+  it('⚠️ approving through the REST ROUTE merges NOTHING — MOTIR-5624', async () => {
+    // This is a DEFECT, pinned so it cannot change silently in either direction: the
+    // route used to merge (it dispatched to `approveMergeGate`), MOTIR-5613's
+    // pass-through stopped it, and MOTIR-5624 owns deciding whether it should again.
+    // When that card lands it replaces this test with the route walking journey 1.
+    const s = await makeScenario('journey-1-route@example.com', 'manual');
+    const item = await cardWithPrs(s, [11]);
+    await ci('success', 'sha-a', 11);
+
+    const res = await decide((await gateFor(item.id)).id);
+
+    expect(res.status).toBe(200);
+    expect((await gateRow((await gateFor(item.id, 'approved')).id)).state).toBe('approved');
+    expect(await statusOf(item.id)).toBe('approved');
+    // …and the pull request was never merged, with no gate left to press.
+    expect(await prRow(11)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
+    expect(host.calls).toEqual([]);
   });
 });
 
 describe('journey 2 — the App is chosen by the repository PROVENANCE', () => {
-  it('an imported repository mints through user-facing; the same approval on a hosted one through provisioning', async () => {
-    const s = await makeScenario('journey-2@example.com', 'manual');
-    const item = await cardWithPrs(s, [11, 12]);
+  it('an imported repository mints through user-facing; a hosted one through provisioning', async () => {
+    // One press per scenario now, because ONE press merges the whole set: the App
+    // choice is a property of the repository, so it is read once per press.
+    const imported = await makeScenario('journey-2a@example.com', 'manual');
+    const a = await cardWithPrs(imported, [11]);
     await ci('success', 'sha-a', 11);
-    await ci('success', 'sha-b', 12);
-
-    await decide((await gateFor(item.id, 11)).id);
+    await press(imported, (await gateFor(a.id)).id);
     expect(mintInstallationToken).toHaveBeenLastCalledWith(INSTALLATION_ID, 'user-facing');
 
     // `moooon` becomes the organisation Motir provisions into — a HOSTED repository.
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'moooon');
-    await decide((await gateFor(item.id, 12)).id);
+    const hosted = await makeScenario('journey-2b@example.com', 'manual');
+    const b = await cardWithPrs(hosted, [12]);
+    await ci('success', 'sha-b', 12);
+    await press(hosted, (await gateFor(b.id)).id);
     expect(mintInstallationToken).toHaveBeenLastCalledWith(INSTALLATION_ID, 'provisioning');
   });
 });
 
 describe('journey 3 — a base branch with a merge QUEUE is enqueued, and the card waits for the queue', () => {
-  it('enqueuePullRequest, no merge call, queue:<id> on the pull request, the card still in review', async () => {
+  it('enqueuePullRequest, no merge call, queue:<id> on the pull request, the card waits for the queue', async () => {
     const s = await makeScenario('journey-3@example.com', 'manual');
     const item = await cardWithPrs(s, [11]);
     host.rules = [{ type: 'merge_queue' }];
     await ci('success', 'sha-a', 11);
 
-    const gate = await gateFor(item.id, 11);
-    expect((await decide(gate.id)).status).toBe(200);
+    const { members } = await press(s, (await gateFor(item.id)).id);
 
+    expect(members.map((m) => m.outcome)).toEqual(['enqueued']);
     expect(mergeCalls().map((c) => c.method)).toEqual(['POST']);
     expect((await prRow(11)).mergeOutcomeRef).toBe('queue:MQE_1');
-    expect(await statusOf(item.id)).toBe('in_review');
-    await expectEveryMergeGateOutcomeNull();
+    // The APPROVAL moved the card; `done` still waits for the queue's merge webhook.
+    expect(await statusOf(item.id)).toBe('approved');
+    await expectNoMergeResultOnAnyGate();
   });
 });
 
@@ -348,7 +398,7 @@ describe('journey 4 — NOT green raises nothing and merges nothing, in either m
   );
 });
 
-describe('journey 5 — every merge refusal through the ROUTE leaves the gate awaiting', () => {
+describe('journey 5 — every merge refusal rides its MEMBER and leaves the approval standing', () => {
   const MATRIX = [
     {
       code: 'MERGE_CHECKS_NOT_GREEN',
@@ -382,26 +432,47 @@ describe('journey 5 — every merge refusal through the ROUTE leaves the gate aw
     },
   ];
 
-  it('the five refusals, then a moved head that supersedes with no host call', async () => {
+  it('the five refusals ride the MEMBER, the approval stands, and a moved head calls no host', async () => {
     const s = await makeScenario('journey-5@example.com', 'manual');
     const item = await cardWithPrs(s, [11]);
     await ci('success', 'sha-a', 11);
-    const gate = await gateFor(item.id, 11);
+    const gate = await gateFor(item.id);
 
-    for (const row of MATRIX) {
+    const armHost = (row: (typeof MATRIX)[number]) => {
       resetHost();
       host.heads[11] = 'sha-a';
       host.merge = () => row.merge;
       host.reread = () => row.reread;
+    };
 
-      const res = await decide(gate.id);
-      expect(res, row.code).toMatchObject({ status: row.status, body: { code: row.code } });
-      expect((await gateRow(gate.id)).state, row.code).toBe('awaiting');
-      expect((await prRow(11)).mergeAuthority, row.code).toBeNull();
+    // ⚠️ A REFUSAL IS A MEMBER'S OUTCOME NOW, NOT A THROWN STATUS. The press commits the
+    // approval FIRST, so a host that refuses cannot unwind it: the member reports the
+    // refusal, the gate stays `approved`, and the reader's next act is *Retry merge* on
+    // that row. The first row rides the PRESS, which is what commits the approval; the
+    // other four ride the RETRY, which is the affordance a refused member actually
+    // offers.
+    armHost(MATRIX[0]!);
+    const pressed = await press(s, gate.id);
+    expect(pressed.members[0], MATRIX[0]!.code).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: MATRIX[0]!.code },
+    });
+
+    for (const row of MATRIX.slice(1)) {
+      armHost(row);
+      const member = await pullRequestMergeService.retryApproveAndMergeMember(
+        { approvalGateId: gate.id, pullRequestId: (await prRow(11)).id, source: 'ui' },
+        s.ctx,
+      );
+      expect(member, row.code).toMatchObject({ outcome: 'refused', refusal: { tag: row.code } });
     }
 
-    // A head that moved after the gate was raised — recorded straight onto the pull
-    // request, so it is the entry point's own check that finds it.
+    // Five refusals later: the decision still stands and nothing was recorded as merged.
+    expect((await gateRow(gate.id)).state).toBe('approved');
+    expect(await prRow(11)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
+
+    // A head that moved after the gate was approved — recorded straight onto the pull
+    // request, so it is the entry point's own check that finds it, with no host call.
     resetHost();
     await adminDb.githubCheckRun.create({
       data: {
@@ -411,10 +482,13 @@ describe('journey 5 — every merge refusal through the ROUTE leaves the gate aw
         conclusion: 'pending',
       },
     });
-    const res = await decide(gate.id);
-    expect(res).toMatchObject({ status: 409, body: { code: 'APPROVAL_GATE_SUPERSEDED' } });
+    const member = await pullRequestMergeService.retryApproveAndMergeMember(
+      { approvalGateId: gate.id, pullRequestId: (await prRow(11)).id, source: 'ui' },
+      s.ctx,
+    );
+    expect(member.outcome).toBe('no_merge_gate');
     expect(host.calls).toEqual([]);
-    await expectEveryMergeGateOutcomeNull();
+    await expectNoMergeResultOnAnyGate();
   });
 });
 
@@ -446,20 +520,27 @@ describe('journey 6 — AUTO merges both pull requests after promotion, and writ
   });
 });
 
-describe('journey 7 — a push withdraws only its own gate, and the next green raises a fresh one', () => {
-  it('superseded on the new head, re-raised when it is green, the other gate untouched', async () => {
+describe("journey 7 — a push supersedes the CARD's gate, and the next green raises a fresh one", () => {
+  it('superseded over the old set, re-raised over the new one — still exactly one gate', async () => {
     const s = await makeScenario('journey-7@example.com', 'manual');
     const item = await cardWithPrs(s, [11, 12]);
     await ci('success', 'sha-a', 11);
     await ci('success', 'sha-b', 12);
-    const twelve = await gateFor(item.id, 12);
+    const raised = await gateFor(item.id);
+    expect(raised.subjectVersion).toBe('moooon/acme#11@sha-a,moooon/acme#12@sha-b');
 
+    // ⚠️ THE SET IS THE SUBJECT, so a push to ONE member withdraws the question about
+    // ALL of them — there is no longer a sibling gate to leave untouched. That is the
+    // point of one gate per card: nobody is asked about half a set.
     await ci(null, 'sha-a2', 11);
-    expect((await gateFor(item.id, 11, 'superseded')).subjectVersion).toBe('moooon/acme#11@sha-a');
+    expect((await gateRow(raised.id)).state).toBe('superseded');
 
     await ci('success', 'sha-a2', 11);
-    expect((await gateFor(item.id, 11)).subjectVersion).toBe('moooon/acme#11@sha-a2');
-    expect((await gateFor(item.id, 12)).id).toBe(twelve.id);
+    const reraised = await gateFor(item.id);
+    expect(reraised.subjectVersion).toBe('moooon/acme#11@sha-a2,moooon/acme#12@sha-b');
+    expect(reraised.id).not.toBe(raised.id);
+    // One awaiting question, and one superseded record of the old one.
+    expect((await gatesOn(item.id)).map((g) => g.state).sort()).toEqual(['awaiting', 'superseded']);
   });
 });
 
@@ -467,12 +548,21 @@ const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: 
 
 /**
  * GUARD (c) — `outcomeRef` KEEPS ITS MEANING. The item page applies a gate's outcome as a
- * STATUS KEY, so a merge gate is never decided with one; the merge's outcome lives on the
- * pull request. Asserted after journeys 1, 3 and 5.
+ * STATUS KEY, so no gate is ever decided with a MERGE result in it; a merge's outcome
+ * lives on the pull request (`merge_authority` / `merge_outcome_ref`). Asserted after
+ * journeys 1, 3 and 5.
+ *
+ * Since MOTIR-5603 the decided gate is the card's own, and it DOES carry an outcome —
+ * `approved`, the status it moved the card to. So the guard asserts the distinction
+ * rather than emptiness: a commit sha or a `queue:` reference in there would mean the
+ * merge result had leaked into a field the page reads as a status.
  */
-async function expectEveryMergeGateOutcomeNull(): Promise<void> {
+async function expectNoMergeResultOnAnyGate(): Promise<void> {
   const decided = await adminDb.approvalGate.findMany({
-    where: { kind: 'pull_request_merge', state: { in: ['approved', 'changes_requested'] } },
+    where: { state: { in: ['approved', 'changes_requested'] } },
   });
-  for (const gate of decided) expect(gate.outcomeRef, gate.id).toBeNull();
+  for (const gate of decided) {
+    expect(gate.outcomeRef, gate.id).not.toMatch(/^queue:/);
+    expect(gate.outcomeRef ?? 'approved', gate.id).toMatch(/^[a-z_]+$/);
+  }
 }

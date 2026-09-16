@@ -191,7 +191,7 @@ export type RetryApproveAndMergeMemberActionResult =
 /** *Retry merge* on ONE refused member of an approved press (MOTIR-5484). */
 export async function retryApproveAndMergeMemberAction(input: {
   approvalGateId: string;
-  mergeGateId: string;
+  pullRequestId: string;
   identifier: string;
 }): Promise<RetryApproveAndMergeMemberActionResult> {
   const ctx = await requireContext();
@@ -199,7 +199,7 @@ export async function retryApproveAndMergeMemberAction(input: {
     const member = await pullRequestMergeService.retryApproveAndMergeMember(
       {
         approvalGateId: input.approvalGateId,
-        mergeGateId: input.mergeGateId,
+        pullRequestId: input.pullRequestId,
         noteMd: null,
         source: 'ui',
       },

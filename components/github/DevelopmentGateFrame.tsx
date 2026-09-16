@@ -83,11 +83,11 @@ export interface CurrentHead {
  *  the ids a row does not need. */
 type PressOutcome =
   | { outcome: 'merged' | 'enqueued' | 'no_merge_gate' }
-  | { outcome: 'refused'; refusal: GateRefusal; mergeGateId: string | null };
+  | { outcome: 'refused'; refusal: GateRefusal; pullRequestId: string | null };
 
 function pressOutcomeOf(member: ApproveAndMergeMemberOutcomeDTO): PressOutcome {
   return member.outcome === 'refused'
-    ? { outcome: 'refused', refusal: member.refusal, mergeGateId: member.mergeGateId }
+    ? { outcome: 'refused', refusal: member.refusal, pullRequestId: member.pullRequestId }
     : { outcome: member.outcome };
 }
 
@@ -164,13 +164,13 @@ export function DevelopmentGateFrame({
           b: names[names.length - 1]!,
         });
 
-  async function retryMember(subjectVersion: string, mergeGateId: string) {
+  async function retryMember(subjectVersion: string, pullRequestId: string) {
     if (!actions) return;
     setRetrying((prev) => new Set(prev).add(subjectVersion));
     try {
       const result = await actions.retryMember({
         approvalGateId: gate.id,
-        mergeGateId,
+        pullRequestId,
         identifier: itemIdentifier,
       });
       // ONLY THAT ROW: a retry reports one member, and the others keep what they showed.
@@ -179,7 +179,7 @@ export function DevelopmentGateFrame({
           subjectVersion,
           result.ok
             ? pressOutcomeOf(result.member)
-            : { outcome: 'refused', refusal: result.refusal, mergeGateId },
+            : { outcome: 'refused', refusal: result.refusal, pullRequestId },
         ),
       );
       if (result.ok) router.refresh();
@@ -192,11 +192,11 @@ export function DevelopmentGateFrame({
     }
   }
 
-  function retryFor(member: MemberVersion, mergeGateId: string | null) {
+  function retryFor(member: MemberVersion, pullRequestId: string | null) {
     return {
       onRetry:
-        read.canDecide && actions && mergeGateId
-          ? () => void retryMember(member.subjectVersion, mergeGateId)
+        read.canDecide && actions && pullRequestId
+          ? () => void retryMember(member.subjectVersion, pullRequestId)
           : null,
       retrying: retrying.has(member.subjectVersion),
     };
@@ -212,7 +212,7 @@ export function DevelopmentGateFrame({
         case 'enqueued':
           return { kind: 'queued' };
         case 'refused':
-          return { kind: 'refused', ...retryFor(member, pressed.mergeGateId) };
+          return { kind: 'refused', ...retryFor(member, pressed.pullRequestId) };
         case 'no_merge_gate':
           // Nothing was pressed for it, so there is nothing to report and the row is unchanged.
           return null;
@@ -222,8 +222,10 @@ export function DevelopmentGateFrame({
     const fact = read.members?.find((m) => m.subjectVersion === member.subjectVersion);
     if (!fact) return null;
     if (fact.queued) return { kind: 'queued' };
-    if (fact.awaitingMergeGateId) {
-      return { kind: 'notMergedYet', ...retryFor(member, fact.awaitingMergeGateId) };
+    // MOTIR-5613: a retry is offered by the pull request under the card's own gate — there
+    // is no second gate to press. The row's copy is MOTIR-5615's.
+    if (fact.retryable) {
+      return { kind: 'notMergedYet', ...retryFor(member, fact.pullRequestId) };
     }
     return null;
   }

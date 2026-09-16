@@ -246,24 +246,48 @@ describe('the Approvals list — rows with no subject to show', () => {
     );
   });
 
-  it('names the pull request for a MERGE gate — a registered kind with a real subject (MOTIR-4793)', () => {
+  it('draws ONE row for a card delivered by two pull requests, and names BOTH in it', () => {
+    // Bug MOTIR-5603 · MOTIR-5615, the delta mock's panel 1: a card holds ONE
+    // approve-to-merge gate over its whole delivery set, so the tab lists ONE
+    // decision and its subject cell names every member.
     const row = designRow({
-      gateId: 'gate-merge',
-      kind: 'pull_request_merge',
+      gateId: 'gate-approval',
+      kind: 'pull_request_approval',
       subject: {
-        kind: 'pull_request_merge',
-        pullRequestId: 'pr-1',
-        repo: 'acme/web',
-        number: 7,
-        title: 'The merge seam',
-        headSha: 'abc123',
+        kind: 'pull_request_approval',
+        members: [
+          { repo: 'moooon/motir-core', number: 131, headSha: 'aa11bb22', state: 'open' },
+          { repo: 'moooon/motir-gateway', number: 57, headSha: 'cc33dd44', state: 'open' },
+        ],
       },
     });
     renderRows([row]);
 
-    expect(screen.getByText('Pull-request merge')).toBeTruthy();
-    expect(screen.getByText('acme/web#7 · pull request')).toBeTruthy();
-    expect(screen.queryByText('Motir cannot show this kind yet')).toBeNull();
+    // The data rows, not the header: one card, one decision, one row.
+    expect(screen.getAllByTestId(/^approval-row-/)).toHaveLength(1);
+    expect(screen.getByText('Pull requests')).toBeTruthy();
+    expect(screen.getByText('moooon/motir-core · #131, moooon/motir-gateway · #57')).toBeTruthy();
+  });
+
+  it('gives a MERGE gate no row treatment of its own — the per-pull-request row is gone', () => {
+    // MOTIR-5615: the kind's arm was deleted from `ApprovalRow`. Nothing raises it
+    // (MOTIR-5611) and every row it left is superseded (MOTIR-5614), so the only way
+    // to reach one is by hand — and it falls in with the kinds this build does not
+    // draw rather than being named as a pull request.
+    // Since MOTIR-5616 the kind is UNREGISTERED, so its summary is the kind alone —
+    // the same answer every kind this build does not render gets.
+    const row = designRow({
+      gateId: 'gate-merge',
+      kind: 'pull_request_merge',
+      subject: { kind: 'pull_request_merge' },
+    });
+    renderRows([row]);
+
+    // ⚠️ THE PILL IS NOT THE POINT — the ROW is. `notBuiltYet` still ships for
+    // `decision_approval`, which genuinely has no decide surface yet; what went is any
+    // row naming one pull request as a decision of its own.
+    expect(screen.queryByText(/pull request$/)).toBeNull();
+    expect(screen.getByText('Motir cannot show this kind yet')).toBeTruthy();
   });
 
   it('says the SUBJECT IS GONE — a different row from not-built-yet — and still opens', () => {

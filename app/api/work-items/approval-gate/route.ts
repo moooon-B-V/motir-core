@@ -108,13 +108,16 @@ async function readSubject(
         ? { state: 'resolved', kind: 'design_result', evidence, filesKept }
         : { state: 'gone' };
     }
-    case 'pull_request_merge':
-      // REGISTERED (MOTIR-4793) but with no overlay PORT: the ONE approve-to-merge
-      // gate a person decides is `pull_request_approval` (MOTIR-4909), whose port is
-      // below. A per-PR merge gate is pressed through that gate, so the overlay draws
-      // the not-built arm for it — the same answer the Approvals list's Decide cell
-      // gives a merge row — rather than a resolved subject nothing can render.
-      return { state: 'kind_not_built' };
+    // ⚠️ `pull_request_merge` HAS NO ARM, and needs none: MOTIR-5616 moved the kind to
+    // `UNREGISTERED_GATE_KINDS`, so `isRegisteredGateKind` above answers it with
+    // `kind_not_built` before this switch is reached. MOTIR-5615 recorded why the arm
+    // could not go earlier — this switch is total over the REGISTERED kinds, so the case
+    // could only be deleted in the same diff that unregisters the kind.
+    //
+    // ⚠️ MERGE RESOLUTION, 2026-09-16: MOTIR-5437 (#2920) landed on `main` in between and
+    // gave `pull_request_approval` the real port below, while keeping a merge arm that
+    // returned `kind_not_built`. Both halves are kept — 5437's port, and no merge arm —
+    // because the kind that arm answered for is no longer registered to reach it.
     case 'pull_request_approval': {
       // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
       // is the card's DELIVERY SET (`pullRequestApprovalHandler.resolveSubject`), so a

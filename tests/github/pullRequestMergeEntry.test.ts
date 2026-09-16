@@ -4,14 +4,13 @@ import { getGitProvider } from '@/lib/git';
 import type { GitProvider } from '@/lib/git/provider';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import type { MergeChangeRequestResult } from '@/lib/git/types';
-import {
-  ApprovalGateError,
-  ApprovalGateMergeRefusedError,
-  ApprovalGateNotAuthorisedError,
-  ApprovalGateSupersededError,
-} from '@/lib/approvalGates/errors';
+import { ApprovalGateError, ApprovalGateNotAuthorisedError } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import {
+  APPROVAL_MERGE_PERMISSION,
+  pullRequestMergeService,
+} from '@/lib/services/pullRequestMergeService';
+import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -20,10 +19,14 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
-// THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517), against a REAL Postgres. The
-// host is the seam's `mergeChangeRequest`, stubbed per case — the one thing that leaves
-// the process. The property under test is the ORDER: check, merge, then decide; and a
-// refusal decides nothing.
+// THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517 · MOTIR-5613), against a REAL
+// Postgres. The host is the seam's `mergeChangeRequest`, stubbed per case — the one thing
+// that leaves the process.
+//
+// ⚠️ RE-KEYED ONTO THE CARD'S OWN GATE. There is ONE approve-to-merge gate per card, so a
+// merge is addressed by (that gate, the pull request) and no `pull_request_merge` row
+// exists for any of this. The property under test is the ORDER — check, merge, then RECORD
+// on the pull request — and the new half of it: a refusal leaves the APPROVAL standing.
 
 const HEAD = '9840d00ea1b2c3d4e5f60718293a4b5c6d7e8f90';
 const github = getGitProvider('github') as Required<GitProvider>;
@@ -60,9 +63,10 @@ async function seatedOn(role: 'member' | 'viewer') {
   return { user, ctx: { userId: user.id, workspaceId: fx.workspaceId } };
 }
 
-/** A card in review, delivered by pull request #7 green at HEAD, holding an awaiting
- *  merge gate raised on that head — the state `raiseMergeGates` leaves. */
-async function mergeGateFor(assigneeId: string) {
+/** A card in review, delivered by pull request #7 green at HEAD, holding the card's ONE
+ *  awaiting approve-to-merge gate over that set — the state
+ *  `raisePullRequestApprovalGate` leaves. */
+async function cardWithGate(assigneeId: string) {
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'task', title: 'Merge me' },
     fx.ctx,
@@ -120,8 +124,9 @@ async function mergeGateFor(assigneeId: string) {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         workItemId: item.id,
-        kind: 'pull_request_merge',
-        subjectId: pr.id,
+        kind: 'pull_request_approval',
+        // ⚠️ THE CARD is the subject; the version names its members.
+        subjectId: item.id,
         subjectVersion: `acme/web#7@${HEAD}`,
         routedToId: assigneeId,
       },
@@ -143,10 +148,10 @@ function stubSeam(...answers: Array<MergeChangeRequestResult | Error>) {
   return spy;
 }
 
-describe('APPROVE merges first, then decides — and records the outcome on the pull request', () => {
-  it('merged: ONE seam call with the gate’s head, no transaction open; approved, gate outcome null, PR record written, card unmoved', async () => {
+describe('APPROVE MERGES THE SET — one gate decided, then each pull request', () => {
+  it('merged: ONE seam call at the approved head with no transaction open; the card is approved and the PULL REQUEST carries the outcome', async () => {
     const assignee = await seatedOn('member');
-    const { item, pr, gate, installation } = await mergeGateFor(assignee.user.id);
+    const { item, pr, gate, installation } = await cardWithGate(assignee.user.id);
 
     // Count the transactions open at the moment the host is called.
     let open = 0;
@@ -165,8 +170,8 @@ describe('APPROVE merges first, then decides — and records the outcome on the 
       return { outcome: 'merged', commitSha: 'f00dfeedcafe' };
     });
 
-    const result = await pullRequestMergeService.decideGate(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
       assignee.ctx,
     );
 
@@ -178,36 +183,43 @@ describe('APPROVE merges first, then decides — and records the outcome on the 
       number: 7,
       expectedHeadSha: HEAD,
     });
-    // The spy really sits on the transaction entry — the check, the decision and the
+    // The spy really sits on the transaction entry — the decision, the check and the
     // record each opened one — so the zero below is a measurement, not a default.
     expect(opened).toBeGreaterThanOrEqual(3);
     expect(openAtSeam).toBe(0);
 
-    expect(result.gate.state).toBe('approved');
-    expect(result.gate.outcomeRef).toBeNull();
+    expect(result.approval.gate.state).toBe('approved');
+    // The gate's outcome is the STATUS it moved the card to; a merge writes nothing here.
+    expect(result.approval.gate.outcomeRef).toBe('approved');
+    expect(result.members).toEqual([
+      { subjectVersion: `acme/web#7@${HEAD}`, pullRequestId: pr.id, outcome: 'merged' },
+    ]);
     expect((await prRow(pr.id)).mergeAuthority).toBe('gate');
     expect((await prRow(pr.id)).mergeOutcomeRef).toBe('f00dfeedcafe');
+    // ONE gate, and it is the card's. Nothing raised a second one to decide.
+    expect(await adminDb.approvalGate.findMany({ where: { workItemId: item.id } })).toHaveLength(1);
     const card = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
-    expect(card.status).toBe('in_review');
+    expect(card.status).toBe('approved');
   });
 
-  it('enqueued: the pull request records queue:<entryId>, and the gate outcome stays null', async () => {
+  it('enqueued: the pull request records queue:<entryId>, and the merge leaves no mark on the gate', async () => {
     const assignee = await seatedOn('member');
-    const { pr, gate } = await mergeGateFor(assignee.user.id);
+    const { pr, gate } = await cardWithGate(assignee.user.id);
     stubSeam({ outcome: 'enqueued', entryId: 'MQE_1' });
 
-    const result = await pullRequestMergeService.approveMergeGate(
+    const result = await pullRequestMergeService.approveAndMerge(
       { gateId: gate.id, source: 'api' },
       assignee.ctx,
     );
 
-    expect(result.gate.state).toBe('approved');
-    expect(result.gate.outcomeRef).toBeNull();
+    expect(result.approval.gate.state).toBe('approved');
+    expect(result.approval.gate.outcomeRef).toBe('approved');
+    expect(result.members[0]).toMatchObject({ outcome: 'enqueued', pullRequestId: pr.id });
     expect((await prRow(pr.id)).mergeOutcomeRef).toBe('queue:MQE_1');
   });
 });
 
-describe('a host REFUSAL decides nothing and writes nothing', () => {
+describe('a host REFUSAL writes nothing — and the APPROVAL still stands', () => {
   const MATRIX = [
     { code: 'checks_not_green', tag: 'MERGE_CHECKS_NOT_GREEN' },
     { code: 'conflict', tag: 'MERGE_CONFLICT' },
@@ -220,9 +232,9 @@ describe('a host REFUSAL decides nothing and writes nothing', () => {
     },
   ] as const;
 
-  it.each(MATRIX)('$code → $tag; the gate stays awaiting', async (row) => {
+  it.each(MATRIX)('$code → $tag, reported on the member; the gate stays approved', async (row) => {
     const assignee = await seatedOn('member');
-    const { pr, gate } = await mergeGateFor(assignee.user.id);
+    const { pr, gate } = await cardWithGate(assignee.user.id);
     stubSeam({
       outcome: 'refused',
       refusal: {
@@ -232,111 +244,139 @@ describe('a host REFUSAL decides nothing and writes nothing', () => {
       },
     });
 
-    const refused = await pullRequestMergeService
-      .decideGate({ gateId: gate.id, decision: 'approve', source: 'ui' }, assignee.ctx)
-      .catch((err: unknown) => err);
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      assignee.ctx,
+    );
 
-    expect(refused).toBeInstanceOf(ApprovalGateMergeRefusedError);
-    const err = refused as ApprovalGateMergeRefusedError;
-    expect(err.tag).toBe(row.tag);
-    expect(err.permission).toBe('permission' in row ? row.permission : null);
-    expect(err.reason).toBe('reason' in row ? row.reason : null);
-
+    // The five MERGE_* members round-trip from the seam to the caller unchanged.
+    expect(result.members[0]).toMatchObject({
+      outcome: 'refused',
+      pullRequestId: pr.id,
+      refusal: {
+        tag: row.tag,
+        ...('permission' in row ? { permission: row.permission } : {}),
+        ...('reason' in row ? { reason: row.reason } : {}),
+      },
+    });
+    // ⚠️ THE DECISION IS NOT UNDONE BY A REFUSED MERGE — that is what one gate per card
+    // means: the person answered *are these commits right?* and a conflict is not an
+    // answer to it. The retry presses the same standing approval.
     const after = await gateRow(gate.id);
-    expect(after).toMatchObject({ state: 'awaiting', decidedById: null, decidedAt: null });
+    expect(after.state).toBe('approved');
     expect(await prRow(pr.id)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
   });
 
-  it('a host that does not ANSWER decides nothing, and is logged with the gate id', async () => {
+  it('a host that does not ANSWER records nothing, and is logged with the gate and the pull request', async () => {
     const assignee = await seatedOn('member');
-    const { gate } = await mergeGateFor(assignee.user.id);
+    const { pr, gate } = await cardWithGate(assignee.user.id);
     stubSeam(new MergeChangeRequestError('github', 'timeout'));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: gate.id, source: 'ui' }, assignee.ctx),
-    ).rejects.toBeInstanceOf(MergeChangeRequestError);
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      assignee.ctx,
+    );
 
-    expect((await gateRow(gate.id)).state).toBe('awaiting');
+    // Nothing was decided about the MERGE, so the member is unclassified rather than
+    // refused by the host.
+    expect(result.members[0]).toMatchObject({ outcome: 'refused', refusal: { tag: 'UNEXPECTED' } });
+    expect((await gateRow(gate.id)).state).toBe('approved');
+    expect(await prRow(pr.id)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
     expect(logged).toHaveBeenCalledWith(
       expect.stringContaining('did not answer'),
-      expect.objectContaining({ gateId: gate.id }),
+      expect.objectContaining({ approvalGateId: gate.id, pullRequestId: pr.id }),
     );
   });
 });
 
-describe('a CHANGED subject supersedes the gate and calls no host', () => {
-  const CHANGES: Array<{ name: string; change: (pr: { id: string }) => Promise<unknown> }> = [
-    {
-      name: 'the head moved',
-      change: (pr) =>
-        adminDb.githubCheckRun.create({
-          data: {
-            pullRequestId: pr.id,
-            commitSha: 'a-newer-head',
-            checkName: 'Vitest',
-            conclusion: 'pending',
-          },
-        }),
-    },
-    {
-      name: 'the pull request closed',
-      change: (pr) =>
-        adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { state: 'closed' } }),
-    },
-    {
-      name: 'its delivery row is gone',
-      change: (pr) =>
-        adminDb.workItemDelivery.deleteMany({ where: { githubPullRequestId: pr.id } }),
-    },
-  ];
-
-  it.each(CHANGES)('$name → APPROVAL_GATE_SUPERSEDED, zero seam calls', async ({ change }) => {
+describe('a member the card no longer delivers at the approved head is NOT merged', () => {
+  it('the pull request CLOSED → nothing to merge, zero seam calls, approval intact', async () => {
     const assignee = await seatedOn('member');
-    const { pr, gate } = await mergeGateFor(assignee.user.id);
-    await change(pr);
+    const { pr, gate } = await cardWithGate(assignee.user.id);
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { state: 'closed' } });
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: gate.id, source: 'ui' }, assignee.ctx),
-    ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      assignee.ctx,
+    );
 
     expect(seam).not.toHaveBeenCalled();
-    expect((await gateRow(gate.id)).state).toBe('superseded');
+    // The `no_merge_gate` literal no longer names a gate — MOTIR-5615 renames it with the
+    // frame's copy. It means: this card has no pull request to merge at the approved head.
+    expect(result.members[0]).toMatchObject({ outcome: 'no_merge_gate', pullRequestId: null });
+    expect((await gateRow(gate.id)).state).toBe('approved');
+    expect(await prRow(pr.id)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
   });
 
-  it('a seam subject_changed (the 409 that raced the check) supersedes the same way', async () => {
+  it('its DELIVERY ROW is gone → the set names no members, and no host is called', async () => {
     const assignee = await seatedOn('member');
-    const { gate } = await mergeGateFor(assignee.user.id);
+    const { pr, gate } = await cardWithGate(assignee.user.id);
+    await adminDb.workItemDelivery.deleteMany({ where: { githubPullRequestId: pr.id } });
+    const seam = vi.spyOn(github, 'mergeChangeRequest');
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      assignee.ctx,
+    );
+
+    // ⚠️ THE DOOR RE-RESOLVES THE SET AT DECIDE TIME. A delivery set that can no longer
+    // name its commits has no members, so the press approves and merges nothing at all —
+    // it does not report a stale member, because there is no member left to report.
+    //
+    // (A head that MOVED is not this path's case: it supersedes the gate before anyone can
+    // press it — MOTIR-5482, covered in `tests/github/mergeGates.test.ts`.)
+    expect(result.approval.gate.state).toBe('approved');
+    expect(result.members).toEqual([]);
+    expect(seam).not.toHaveBeenCalled();
+    expect(await prRow(pr.id)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
+  });
+
+  it('a seam subject_changed (the 409 that raced the check) is a superseded member, not a refusal a host owns', async () => {
+    const assignee = await seatedOn('member');
+    const { gate } = await cardWithGate(assignee.user.id);
     stubSeam({ outcome: 'refused', refusal: { code: 'subject_changed' } });
 
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: gate.id, source: 'ui' }, assignee.ctx),
-    ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
-    expect((await gateRow(gate.id)).state).toBe('superseded');
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: gate.id, source: 'ui' },
+      assignee.ctx,
+    );
+
+    expect(result.members[0]).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'APPROVAL_GATE_SUPERSEDED' },
+    });
+    // ⚠️ AND THE CARD'S GATE IS NOT WITHDRAWN. One member racing a push is not a reason to
+    // re-ask the whole set; the head-move withdrawal is the raise path's (MOTIR-5482).
+    expect((await gateRow(gate.id)).state).toBe('approved');
   });
 });
 
 describe('the actor and the other verb', () => {
-  it('an actor without authority is refused with zero seam calls', async () => {
+  it('the permission the merge asserts IS the gate’s own floor — the copy cannot drift', () => {
+    // The service copies this rather than importing the handler, because importing it
+    // closes a module cycle through `workItemsService`. This is the pin that keeps the
+    // copy honest.
+    expect(APPROVAL_MERGE_PERMISSION).toBe(pullRequestApprovalGateHandler.permission);
+  });
+
+  it('an actor without authority is refused with zero seam calls, and decides nothing', async () => {
     const assignee = await seatedOn('member');
     const bystander = await seatedOn('member');
-    const { gate } = await mergeGateFor(assignee.user.id);
+    const { gate } = await cardWithGate(assignee.user.id);
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     await expect(
-      pullRequestMergeService.decideGate(
-        { gateId: gate.id, decision: 'approve', source: 'ui' },
-        bystander.ctx,
-      ),
+      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, bystander.ctx),
     ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
     expect(seam).not.toHaveBeenCalled();
     expect((await gateRow(gate.id)).state).toBe('awaiting');
   });
 
-  it('request_changes on a merge gate calls no host and records the decision', async () => {
+  it('request_changes calls no host and records the decision', async () => {
     const assignee = await seatedOn('member');
-    const { gate } = await mergeGateFor(assignee.user.id);
+    const { gate } = await cardWithGate(assignee.user.id);
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     const result = await pullRequestMergeService.decideGate(
@@ -350,19 +390,16 @@ describe('the actor and the other verb', () => {
 });
 
 describe('two presses at once', () => {
-  it('one merges and decides; the other is refused — one decided gate, one merge record, no 500', async () => {
+  it('one approves and merges; the other is refused — one decided gate, one merge record, no 500', async () => {
     const assignee = await seatedOn('member');
-    const { pr, gate } = await mergeGateFor(assignee.user.id);
+    const { pr, gate } = await cardWithGate(assignee.user.id);
     stubSeam(
       { outcome: 'merged', commitSha: 'c0ffee' },
       { outcome: 'refused', refusal: { code: 'already_merged' } },
     );
 
     const press = () =>
-      pullRequestMergeService.decideGate(
-        { gateId: gate.id, decision: 'approve', source: 'ui' },
-        assignee.ctx,
-      );
+      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, assignee.ctx);
     const outcomes = await Promise.allSettled([press(), press()]);
 
     const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');

@@ -2,8 +2,9 @@
 // MOTIR-5484; `approval-gates.md` §8's amendment, decision 2).
 //
 // A `pull_request_approval` gate's `subjectVersion` is its members' versions, sorted and
-// comma-joined, each spelled `owner/name#number@headSha` — the same spelling a
-// `pull_request_merge` gate records for its one pull request. The Development frame names
+// comma-joined, each spelled `owner/name#number@headSha` — the spelling the retired
+// per-pull-request kind used for its one pull request, kept because it is the one the
+// merge entry point still compares against. The Development frame names
 // each member from it (the consequence line, the confirm step, the refusal) and matches it
 // to a row and to the head that row is at now.
 //

@@ -56,7 +56,7 @@ async function seatedOn(role: 'admin' | 'member') {
 }
 
 /** A work item carrying an `awaiting` gate of `kind`. */
-async function itemWithGate(kind: 'pull_request_merge' | 'design_result') {
+async function itemWithGate(kind: 'pull_request_approval' | 'design_result') {
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'task', title: 'Merge the seam' },
     fx.ctx,
@@ -87,8 +87,8 @@ describe('getForWorkItem hands the settings door ONLY to a workflow:manage holde
     expect(managerHeld.has('workflow:manage')).toBe(true);
     expect(memberHeld.has('workflow:manage')).toBe(false);
 
-    const item = await itemWithGate('pull_request_merge');
-    const input = { workItemId: item.id, kind: 'pull_request_merge' as const };
+    const item = await itemWithGate('pull_request_approval');
+    const input = { workItemId: item.id, kind: 'pull_request_approval' as const };
 
     const asManager = await approvalGatesService.getForWorkItem(input, manager.ctx);
     const asMember = await approvalGatesService.getForWorkItem(input, member.ctx);
@@ -128,7 +128,7 @@ describe('getForWorkItem hands the settings door ONLY to a workflow:manage holde
     );
 
     const read = await approvalGatesService.getForWorkItem(
-      { workItemId: item.id, kind: 'pull_request_merge' },
+      { workItemId: item.id, kind: 'pull_request_approval' },
       manager.ctx,
     );
     expect(read).toEqual({
@@ -152,16 +152,16 @@ describe('the door lands where the room says it does', () => {
     const anchor = card.match(/export const MERGE_MODE_ANCHOR = '([^']+)'/)?.[1];
     expect(anchor).toBe('merge-mode');
     expect(card).toMatch(/id=\{MERGE_MODE_ANCHOR\}/);
-    expect(handlerFor('pull_request_merge').settingsDoor?.href).toBe(
+    expect(handlerFor('pull_request_approval').settingsDoor?.href).toBe(
       `/settings/project/approvals#${anchor}`,
     );
   });
 
   it('settingsDoorFor is the key check and nothing else', () => {
-    const mergeDoor = handlerFor('pull_request_merge').settingsDoor;
-    expect(mergeDoor).toBeDefined();
-    expect(settingsDoorFor(mergeDoor, new Set())).toBeNull();
-    expect(settingsDoorFor(mergeDoor, new Set(['workflow:manage']))).toEqual(mergeDoor);
+    const mergeModeDoor = handlerFor('pull_request_approval').settingsDoor;
+    expect(mergeModeDoor).toBeDefined();
+    expect(settingsDoorFor(mergeModeDoor, new Set())).toBeNull();
+    expect(settingsDoorFor(mergeModeDoor, new Set(['workflow:manage']))).toEqual(mergeModeDoor);
     // A kind that supplies no door hands out none, whatever the viewer holds.
     expect(
       settingsDoorFor(handlerFor('design_result').settingsDoor, new Set(['workflow:manage'])),

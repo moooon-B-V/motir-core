@@ -5,8 +5,10 @@
 // writes. Today it carries ONE switch; the type is an object rather than a bare
 // boolean precisely because a second is already decided —
 // `docs/decisions/approval-gates.md` §7 moves the pull-request merge mode to the
-// project, where `manual` raises a `pull_request_merge` gate and `auto` raises
-// none — so the next switch joins this DTO instead of changing a signature.
+// project, where `manual` raises the card's ONE approve-to-merge gate and `auto`
+// raises none and merges on green — so the next switch joins this DTO instead of
+// changing a signature. (It said `pull_request_merge` until MOTIR-5616 retired that
+// kind; the SWITCH is unchanged, only the kind it decides.)
 //
 // ⚠️ THE ENTITLEMENT IS NOT HERE, AND THAT IS THE POINT. Whether the
 // organisation holds a paid Motir AI plan is a BILLING fact, resolved

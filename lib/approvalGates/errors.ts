@@ -59,9 +59,10 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_SUPERSEDED'
   | 'APPROVAL_GATE_NOT_AUTHORISED'
   | 'APPROVAL_GATE_KIND_UNREGISTERED'
-  // MERGE tier — the HOST refused the merge a `pull_request_merge` approval
+  // MERGE tier — the HOST refused a merge the card's approve-to-merge gate
   // performs (Story MOTIR-4882 · MOTIR-5512; `approval-gates.md` §4, second
-  // amendment decision 8). The seam maps the host's answer onto these; the merge
+  // amendment decision 8, and §8's SECOND AMENDMENT, which keeps this union whole
+  // while retiring the per-pull-request kind that first raised it). The seam maps the host's answer onto these; the merge
   // entry point returns them and writes nothing, so the gate stays decidable.
   // A changed subject is NOT one of these — it supersedes the gate and answers
   // `APPROVAL_GATE_SUPERSEDED`.
@@ -272,8 +273,8 @@ export class ApprovalGateNotAuthorisedError extends ApprovalGateError {
 export type MergeRefusalTag = Extract<ApprovalGateErrorTag, `MERGE_${string}`>;
 
 /**
- * The HOST refused the merge a `pull_request_merge` approval performs (Story MOTIR-4882 ·
- * MOTIR-5517). Thrown by the merge entry point BEFORE anything is decided, so the gate
+ * The HOST refused a merge the card's approve-to-merge gate performs (Story MOTIR-4882 ·
+ * MOTIR-5517 · MOTIR-5613). Thrown by the merge entry point BEFORE anything is decided, so the gate
  * stays awaiting and the refusal is drawn in place with its next action.
  *
  * `permission` is the one a missing App permission names, as the host named it;

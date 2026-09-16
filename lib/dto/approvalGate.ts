@@ -209,23 +209,11 @@ export interface DesignResultSubjectSummaryDTO {
   noteExcerpt: string | null;
 }
 
-/**
- * WHICH PULL REQUEST a merge gate is asking about, at row scale (MOTIR-4793) —
- * `owner/name#number` and the head the question was raised on, enough to recognise
- * the change without opening it.
- */
-export interface PullRequestMergeSubjectSummaryDTO {
-  kind: 'pull_request_merge';
-  /** Motir's own id for the `github_pull_request` row the gate asks about. */
-  pullRequestId: string;
-  /** `owner/name` — the repository half of the reference. */
-  repo: string;
-  number: number;
-  /** The title as last delivered, or null on a row ingested before titles were kept. */
-  title: string | null;
-  /** The head commit the latest recorded checks ran on, or null when none reported. */
-  headSha: string | null;
-}
+// ⚠️ `PullRequestMergeSubjectSummaryDTO` WAS HERE (MOTIR-4793) and retired with its
+// kind (Bug MOTIR-5603 · MOTIR-5616). It named ONE pull request, because a merge gate
+// asked about one; the gate that survives asks about the whole delivery set and names
+// every member below. A superseded row of the old kind now reads through
+// `UnregisteredSubjectSummaryDTO`, like every other kind this build does not render.
 
 /**
  * WHICH PULL REQUESTS an approve-and-merge gate is asking about, at row scale (MOTIR-5481)
@@ -248,18 +236,16 @@ export interface PullRequestApprovalSubjectSummaryDTO {
  * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
  * day this ships, not a defensive branch.
  *
- * `lib/approvalGates/registry.ts` registers three kinds and names the fourth as a
- * declared compile-time hole owned by MOTIR-4907.
- * A gate carrying one of them can exist — a fixture, a half-landed sibling, the
- * day the next story lands its creation path before its renderer — and the
- * honest answer is a row that SAYS the kind is not built yet, which is exactly
+ * `lib/approvalGates/registry.ts` registers two kinds and names the other two as
+ * declared holes: `decision_approval`, which MOTIR-4907 will build, and
+ * `pull_request_merge`, which MOTIR-5616 RETIRED — built once, withdrawn, and never
+ * to be registered again. A gate carrying either can exist — a fixture, a
+ * half-landed sibling, or one of the superseded merge rows the backfill left — and
+ * the honest answer is a row that SAYS the kind is not built here, which is exactly
  * what `UNREGISTERED_GATE_KINDS` exists at runtime to let a surface do.
  */
 export interface UnregisteredSubjectSummaryDTO {
-  kind: Exclude<
-    ApprovalGateKindDTO,
-    'design_result' | 'pull_request_merge' | 'pull_request_approval'
-  >;
+  kind: Exclude<ApprovalGateKindDTO, 'design_result' | 'pull_request_approval'>;
 }
 
 /**
@@ -274,7 +260,6 @@ export interface UnregisteredSubjectSummaryDTO {
  */
 export type ApprovalGateSubjectSummaryDTO =
   | DesignResultSubjectSummaryDTO
-  | PullRequestMergeSubjectSummaryDTO
   | PullRequestApprovalSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
@@ -533,10 +518,14 @@ export interface ApprovalGateOverlayReadDTO {
 export interface PullRequestApprovalMemberDTO {
   /** `owner/name#number@headSha`, as the approval named the member. */
   subjectVersion: string;
-  /** The member's merge gate while it still AWAITS — what *Retry merge* presses. */
-  awaitingMergeGateId: string | null;
+  /** The pull request the member names, while this card still delivers it (MOTIR-5613) —
+   *  what *Retry merge* presses, together with the card's own gate. */
+  pullRequestId: string | null;
   /** The press handed it to its repository's merge queue, and it has not merged yet. */
   queued: boolean;
+  /** Motir has neither merged nor queued it yet, so it can be tried again under the
+   *  approval that already stands. No second gate is involved. */
+  retryable: boolean;
 }
 
 /** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */
@@ -544,22 +533,22 @@ export type ApproveAndMergeMemberOutcomeDTO =
   | {
       /** The member as the approval named it: `owner/name#number@headSha`. */
       subjectVersion: string;
-      mergeGateId: string;
       pullRequestId: string;
       outcome: 'merged' | 'enqueued';
     }
   | {
       subjectVersion: string;
-      mergeGateId: string;
-      pullRequestId: string;
+      /** Null when the member was refused before a pull request could be resolved. */
+      pullRequestId: string | null;
       outcome: 'refused';
       /** The refusal in the frame's vocabulary — MOTIR-4882's union for a host refusal. */
       refusal: GateRefusal;
     }
   | {
       subjectVersion: string;
-      mergeGateId: null;
       pullRequestId: null;
-      /** No merge gate is awaiting for this member's exact head. */
+      /** ⚠️ SINCE MOTIR-5613 THIS NAMES NO GATE: this card no longer delivers that pull
+       *  request at the head it was approved at, so there is nothing to merge. The literal
+       *  is kept until MOTIR-5615 renames it with the frame's copy. */
       outcome: 'no_merge_gate';
     };
