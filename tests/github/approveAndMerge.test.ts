@@ -451,6 +451,47 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
   });
 });
 
+describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
+  const peek = (identifier: string) =>
+    workItemsService.getQuickView(fx.projectId, identifier, 'open', fx.ctx, 'en');
+
+  it('carries the approved gate’s members — the facts the item page’s frame reads', async () => {
+    const { item, approval, web, api } = await pressable();
+    stubHost({
+      7: { outcome: 'enqueued', entryId: 'MQE_11' },
+      12: { outcome: 'refused', refusal: { code: 'conflict' } },
+    });
+    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+
+    const view = await peek(item.identifier);
+    expect(view.mergeMembers).toEqual([
+      { subjectVersion: api.version, pullRequestId: api.prId, queued: false, retryable: true },
+      { subjectVersion: web.version, pullRequestId: web.prId, queued: true, retryable: false },
+    ]);
+    expect(view.mergeMembers).toEqual(
+      await pullRequestMergeService.listApprovalMembers(
+        { workItemId: item.id, approvalGateId: approval.id },
+        fx.ctx,
+      ),
+    );
+  });
+
+  it('carries none while the gate still awaits', async () => {
+    const { item } = await pressable();
+    expect((await peek(item.identifier)).mergeMembers).toEqual([]);
+  });
+
+  it('carries none — and reads no gate — for a card with no linked pull request', async () => {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Nothing delivered yet' },
+      fx.ctx,
+    );
+    const spy = vi.spyOn(approvalGateRepository, 'findLatestByWorkItem');
+    expect((await peek(item.identifier)).mergeMembers).toEqual([]);
+    expect(spy.mock.calls.filter(([, kind]) => kind === 'pull_request_approval')).toEqual([]);
+  });
+});
+
 describe('the press and its retry refuse what they were not handed (MOTIR-5486 coverage floor)', () => {
   const pressed = async () => {
     const fixture = await pressable();

@@ -24,7 +24,12 @@ import type {
   GateDecision,
   PullRequestApprovalMemberDTO,
 } from '@/lib/dto/approvalGate';
-import { MergeOutcomeProvider, rowKey, type RowMergeOutcome } from './MergeOutcomeSlot';
+import {
+  MergeOutcomeProvider,
+  persistedRowOutcome,
+  rowKey,
+  type RowMergeOutcome,
+} from './MergeOutcomeSlot';
 
 // THE DEVELOPMENT BLOCK'S FRAME ARM (Story MOTIR-4906 · Subtask MOTIR-5336),
 // `design/github/design-notes.md` §20 · Panel 12c — AND ITS VERBS (Story MOTIR-4909 ·
@@ -221,13 +226,17 @@ export function DevelopmentGateFrame({
     if (gate.state !== 'approved') return null;
     const fact = read.members?.find((m) => m.subjectVersion === member.subjectVersion);
     if (!fact) return null;
-    if (fact.queued) return { kind: 'queued' };
-    // MOTIR-5613: a retry is offered by the pull request under the card's own gate — there
-    // is no second gate to press. The row's copy is MOTIR-5615's.
-    if (fact.retryable) {
-      return { kind: 'notMergedYet', ...retryFor(member, fact.pullRequestId) };
+    // The same reading the quick view applies (`persistedRowOutcome`, Bug MOTIR-5650).
+    switch (persistedRowOutcome(fact)) {
+      case 'queued':
+        return { kind: 'queued' };
+      case 'notMergedYet':
+        // MOTIR-5613: a retry is offered by the pull request under the card's own gate —
+        // there is no second gate to press. The row's copy is MOTIR-5615's.
+        return { kind: 'notMergedYet', ...retryFor(member, fact.pullRequestId) };
+      case null:
+        return null;
     }
-    return null;
   }
 
   const rowOutcomes = new Map<string, RowMergeOutcome>();
