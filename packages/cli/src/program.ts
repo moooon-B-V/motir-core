@@ -14,6 +14,7 @@ import {
 } from './commands/read.js';
 import { doctorCommand } from './commands/doctor.js';
 import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
+import { fixCommand } from './commands/fix.js';
 import { autoCommand } from './commands/auto.js';
 import { batchCommand } from './commands/batch.js';
 import { planCommand } from './commands/plan.js';
@@ -352,6 +353,14 @@ export function buildProgram(): Command {
       'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
     )
     .action(runCommand);
+  // `motir fix <key>` (MOTIR-5465) — the repair of a red, Implemented card.
+  register(program, 'fix')
+    .option('--agent <cmd>', 'Run THIS agent command on the fix (overrides MOTIR_AGENT).')
+    .option(
+      '--report-log',
+      'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+    )
+    .action(fixCommand);
   register(program, 'auto')
     .option('--agent <cmd>', 'Run THIS agent command on every prompt (overrides MOTIR_AGENT).')
     .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')

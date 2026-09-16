@@ -220,6 +220,48 @@ that has no direct edge, or when you want the review hop on the record. An
 illegal flip surfaces the server's own allowed-targets error verbatim. A merged
 **session** PR closes out in bulk with `motir done --session <branch>`.
 
+## The repair — `motir fix` (MOTIR-5465)
+
+```sh
+motir fix <key> [--agent <cmd>] [--report-log]
+```
+
+**When to use it.** A card is **Implemented**, its run has ended, and one of its
+pull requests has gone red since — a check failed later, or a merge queue threw
+it out. The item page's Development block offers this command, ready to copy.
+
+**What it does:**
+
+1. **Claims the repair** (`POST /api/v1/work-items/{key}/repair`). Only one
+   repair runs on a card at a time. The claim is an open `fix` run, and it never
+   changes the card's status or assignee. A refusal is printed in words and
+   exits non-zero:
+   - somebody is already fixing it, and they are named;
+   - the card is not at Implemented;
+   - the pull requests belong to the parent's run, and the key to fix instead is
+     named;
+   - the card has no pull requests;
+   - its checks are still running;
+   - nothing is failing.
+2. **Checks out each red pull request's own branch**, as a worktree beside that
+   repository's checkout (`<repo>-fix-<key>-<number>`). The worktree is on the
+   branch, not a detached HEAD, so a push updates the same pull request. A
+   repository with no local checkout is refused. A resumed repair reuses its
+   worktree.
+3. **Runs the same fix loop `motir run` ends with**, using the same prompt and
+   the same limit of five attempts. When the failing set spans several
+   repositories, the prompt lists every checkout.
+4. **Closes the run** on every exit path:
+   - green → completed, exit 0;
+   - the sixth red → halted, exit 1, naming each failing check, its repository
+     and the attempt count;
+   - Ctrl-C → interrupted, exit 130.
+
+   The page shows a repair as in progress for as long as its run is open.
+
+It opens no pull request and links nothing. The build moves the card to
+**In Review** when the checks pass, exactly as it does after `motir run`.
+
 ## The loop — `motir auto` (7.9.4)
 
 ```sh

@@ -38,6 +38,7 @@ import type {
   WorkItemSummary,
   ScopeClaim,
   WorkItemClaim,
+  WorkItemRepairClaim,
 } from '../client.js';
 
 // The READ ADAPTERS — wire shapes in, the CLI's own view models out
@@ -617,6 +618,34 @@ export function toWorkItemClaim(body: SuccessBody<'claimWorkItem'>): WorkItemCla
       ? { id: body.transitionedBy.id, name: body.transitionedBy.name }
       : null,
     transitionedAt: body.transitionedAt,
+  };
+}
+
+/**
+ * The REPAIR claim result (MOTIR-5464) — restated field by field, and each pull
+ * request element by element, for the reason {@link toWorkItemClaim} gives.
+ */
+export function toWorkItemRepairClaim(
+  body: SuccessBody<'claimWorkItemRepair'>,
+): WorkItemRepairClaim {
+  return {
+    key: body.key,
+    title: body.title,
+    outcome: body.outcome,
+    reason: body.reason,
+    runTargetKey: body.runTargetKey,
+    runId: body.runId,
+    holder: body.holder ? { id: body.holder.id, name: body.holder.name } : null,
+    startedAt: body.startedAt,
+    pullRequests: body.pullRequests.map((pr) => ({
+      repo: pr.repo,
+      number: pr.number,
+      url: pr.url,
+      headRef: pr.headRef,
+      baseRef: pr.baseRef,
+      ci: pr.ci,
+      failingChecks: [...pr.failingChecks],
+    })),
   };
 }
 

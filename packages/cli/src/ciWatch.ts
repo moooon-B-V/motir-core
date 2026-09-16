@@ -281,6 +281,14 @@ export function renderFixPrompt(input: {
   title: string | null;
   failing: readonly WorkItemDelivery[];
   attempt: number;
+  /**
+   * WHERE each failing pull request's branch is checked out, when the caller
+   * made those checkouts itself — `motir fix` (MOTIR-5465), whose run began after
+   * the run that pushed the branches had ended. Absent, the prompt is exactly
+   * what `run` / `batch` / `auto` have always sent: their agent stands in the
+   * checkout its own dispatch prompt arranged.
+   */
+  checkouts?: readonly FixCheckout[];
 }): string {
   // WHAT to merge is the branch each pull request TARGETS, not the default
   // branch: a stacked pull request is based on its parent's branch and CI
@@ -303,6 +311,17 @@ export function renderFixPrompt(input: {
     lines.push(`- **${d.repo}#${d.number}** (base \`${d.baseRef ?? d.defaultBranch}\`) — ${d.url}`);
   }
   lines.push('');
+  if (input.checkouts && input.checkouts.length > 0) {
+    lines.push('## Where each branch is checked out');
+    lines.push('');
+    for (const c of input.checkouts) {
+      lines.push(`- **${c.repo}** — branch \`${c.branch}\` at \`${c.path}\``);
+    }
+    lines.push('');
+    lines.push('Work in those checkouts, on those branches. Each push updates its');
+    lines.push('existing pull request.');
+    lines.push('');
+  }
   lines.push('## What to do');
   lines.push('');
   lines.push('1. **MERGE THE LATEST BASE BRANCH FIRST — before you read anything as a');
@@ -353,6 +372,15 @@ export function renderFixPrompt(input: {
   return lines.join('\n');
 }
 
+/** One failing pull request's branch, checked out where the fixing agent can
+ *  reach it. */
+export interface FixCheckout {
+  /** `owner/name`. */
+  repo: string;
+  branch: string;
+  path: string;
+}
+
 /**
  * THE LANE-FACING PHASE — watch, and dispatch a fixing agent on each red.
  *
@@ -367,6 +395,8 @@ export interface CiWatchPhaseInput {
   agent: ParsedAgentCommand;
   /** Where the fixing agent runs — the checkout holding the branch CI is red on. */
   cwd: string;
+  /** Every branch's checkout, named in the prompt — `motir fix` only. */
+  checkouts?: readonly FixCheckout[];
   report: (line: string) => void;
   runAgentFn?: (input: {
     command: ParsedAgentCommand;
@@ -397,7 +427,13 @@ export async function runCiWatchPhase(input: CiWatchPhaseInput): Promise<CiWatch
     fix: async (failing, attempt) => {
       const result = await runAgentFn({
         command: input.agent,
-        prompt: renderFixPrompt({ key: input.key, title: input.title, failing, attempt }),
+        prompt: renderFixPrompt({
+          key: input.key,
+          title: input.title,
+          failing,
+          attempt,
+          ...(input.checkouts ? { checkouts: input.checkouts } : {}),
+        }),
         cwd: input.cwd,
       });
       return result.exitCode === 0

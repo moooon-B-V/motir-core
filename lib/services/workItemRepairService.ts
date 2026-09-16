@@ -1,4 +1,4 @@
-import { derivePrCiState } from '@/lib/github/prCiState';
+import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import type {
   RepairPullRequestDto,
   WorkItemRepairClaimDto,
@@ -141,6 +141,15 @@ export const workItemRepairService = {
           headRef: row.pullRequest.headRef,
           baseRef: row.pullRequest.baseRef,
           ci,
+          // The names behind the verdict, from the SAME window `derivePrCiState`
+          // judged — so a give-up can say which check is still red.
+          failingChecks: [
+            ...new Set(
+              liveRowsAtLatestSha(row.pullRequest.checkRuns)
+                .filter((c) => c.conclusion === 'failure')
+                .map((c) => c.checkName),
+            ),
+          ].sort(),
         }));
 
         const held = await dispatchRunRepository.findRunningByCommandForWorkItem(

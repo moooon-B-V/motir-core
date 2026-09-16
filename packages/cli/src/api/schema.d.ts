@@ -1646,6 +1646,7 @@ export interface components {
                 headRef: string;
                 baseRef: string | null;
                 ci: ("passing" | "failing" | "running") | null;
+                failingChecks: string[];
             }[];
         };
         ScopeClaim: {

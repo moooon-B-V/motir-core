@@ -57,6 +57,7 @@ function recorder(): DispatchRunReporter & { events: DispatchRunEventInput[] } {
   return {
     events,
     async open() {},
+    adopt() {},
     async addCard() {},
     event(e) {
       events.push(e);

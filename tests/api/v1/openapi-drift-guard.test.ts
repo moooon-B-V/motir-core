@@ -563,6 +563,18 @@ describe('every operation’s REAL response validates against its declared schem
       { key: claimable },
     );
 
+    // ── The REPAIR claim (MOTIR-5464) ───────────────────────────────────────
+    // On its OWN item. A to-do card is refused as `not_repairable` — a 200 in the
+    // SAME declared shape as a claim, which is what this guard checks; the
+    // claimed arm is parsed against the schema in `work-item-repair-route.test.ts`.
+    const repairable = await createItem('An item nobody may repair yet');
+    await drive(
+      'claimWorkItemRepair',
+      () => import('@/app/api/v1/work-items/[key]/repair/route'),
+      send(`/api/v1/work-items/${repairable}/repair`, 'POST'),
+      { key: repairable },
+    );
+
     // ── The SCOPE claim (MOTIR-3049) ────────────────────────────────────────
     // On its OWN container, for the same reason the keyed claim above takes its
     // own item: a scope claim moves EVERY member to `in_progress` and assigns

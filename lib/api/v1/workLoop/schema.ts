@@ -528,6 +528,9 @@ const repairPullRequestSchema = z.object({
   baseRef: z.string().nullable(),
   /** From `derivePrCiState`, the verdict the Development pill shows. */
   ci: z.enum(['passing', 'failing', 'running']).nullable(),
+  /** The checks failing at that verdict's commit, by name, sorted. A repair that
+   *  gives up re-claims (`mine`) and names these. */
+  failingChecks: z.array(z.string()),
 });
 
 /**
@@ -578,6 +581,7 @@ export function presentWorkItemRepairClaim(dto: WorkItemRepairClaimDto): V1WorkI
       headRef: pr.headRef,
       baseRef: pr.baseRef,
       ci: pr.ci,
+      failingChecks: [...pr.failingChecks],
     })),
   };
 }

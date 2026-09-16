@@ -97,6 +97,7 @@ describe('claimRepair — the claim', () => {
         headRef: 'subtask/red-card',
         baseRef: 'main',
         ci: 'failing',
+        failingChecks: ['Vitest'],
       },
     ]);
 

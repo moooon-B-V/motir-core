@@ -540,7 +540,7 @@ async function deliver(input: DeliverInput): Promise<void> {
  * green (`ciWatch.ts` says so in its own words — a card whose pull requests are
  * unknown to this build has not been shown to pass).
  */
-const CI_WATCH_EVENT = {
+export const CI_WATCH_EVENT = {
   green: 'ci_verdict',
   nothing: 'ci_verdict',
   gave_up: 'ci_gave_up',
@@ -553,7 +553,7 @@ const CI_WATCH_EVENT = {
  * `halted` ONLY on a give-up. A green watch, and a run with nothing to watch,
  * both ended the way they meant to.
  */
-const CI_WATCH_STOP_REASON = {
+export const CI_WATCH_STOP_REASON = {
   green: 'completed',
   nothing: 'completed',
   gave_up: 'halted',

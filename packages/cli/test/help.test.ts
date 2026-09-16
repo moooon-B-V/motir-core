@@ -134,6 +134,8 @@ describe('the curated overview', () => {
                                   deliver its prompt.
         run [options] <scope>     Run a scope: one work item, a whole story, or
                                   \`sprint\` for the active one.
+        fix [options] <key>       Hand an Implemented work item’s failing pull
+                                  requests to your agent, on their own branches.
         auto [options]            Drain the ready set unattended: one item at a time
                                   onto a session branch.
         batch [options]           Implement a FROZEN snapshot of the ready set: one
@@ -236,6 +238,7 @@ describe('group membership', () => {
     expect(groups.get(HELP_GROUP.workLoop)).toEqual([
       'next',
       'run',
+      'fix',
       'auto',
       'batch',
       'plan',

@@ -55,6 +55,9 @@ export interface RepairPullRequestDto {
   baseRef: string | null;
   /** Always `failing` today; carried so a reader never has to assume it. */
   ci: PrCiState;
+  /** The checks failing at the verdict's commit, by name, sorted — what a
+   *  give-up names (MOTIR-5465). */
+  failingChecks: string[];
 }
 
 /** The result of one repair claim attempt. */

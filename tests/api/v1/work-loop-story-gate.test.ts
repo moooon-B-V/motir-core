@@ -130,6 +130,11 @@ const WORK_LOOP_MIRRORS = {
  * `TOOL_PERMISSIONS` all the same.
  */
 const WORK_LOOP_UNMIRRORED: Record<string, string> = {
+  claimWorkItemRepair:
+    'MOTIR-5464 — the REPAIR claim serves `motir fix <key>`, a CLI command, and `packages/cli` ' +
+    'speaks /api/v1 only since 11.5.6, so a mirrored tool would be a second implementation with ' +
+    'no caller. The card that specifies it says it adds no MCP tool. It takes `claim_work_item`’s ' +
+    'permission (`work_item:edit`) — it opens a dispatch run, a write — and writes no status.',
   claimScope:
     'MOTIR-3049 — the SCOPE claim serves `motir run <story-id>` / `motir run sprint`, and ' +
     '`packages/cli` retired its MCP transport in 11.5.6, so a mirrored tool would be a second ' +
@@ -251,7 +256,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // agent has no USE for it rather than that it must be kept away from one.
     // 20 since MOTIR-4906: the run's close-out prompt (MOTIR-5357) and the How
     // to test read (MOTIR-5358), both READS the CLI makes for the operator's loop.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(20);
+    // 21 since MOTIR-5464: the REPAIR claim `motir fix` makes.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(21);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {
