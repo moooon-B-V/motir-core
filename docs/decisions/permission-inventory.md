@@ -131,26 +131,26 @@ carries a decided policy, and no row says `new`.
 > That is eight rows leaving the pending count and one gaining a gate — nine, and the guard's pin
 > falls **36 → 27** for exactly that reason. No key was added, removed or re-labelled.
 
-| Domain               | Permissions                                                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `ai` (4)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ · `ai:decide_plan`                                                                       |
-| `approval` (2)       | `approval:decide_any` (MOTIR-5292) · `approval:view_any` (MOTIR-5305 · MOTIR-5301)                                                       |
-| `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                                                                            |
-| `board` (1)          | `board:configure`                                                                                                                        |
-| `comment` (2)        | `comment:add` · `comment:moderate`                                                                                                       |
-| `estimation` (1)     | `estimation:manage`                                                                                                                      |
-| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                                                                                     |
-| `import` (1)         | `import:run` ᵖ                                                                                                                           |
-| `integration` (1)    | `integration:manage`                                                                                                                     |
-| `member` (2)         | `member:manage` · `project:manage_access`                                                                                                |
-| `project` (2)        | `project:administer` · `project:browse`                                                                                                  |
-| `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`                                                             |
-| `report` (3)         | `report:view` ᵖ · `saved_filter:manage` ᵖ · `saved_filter:manage_any`                                                                    |
-| `repository` (2)     | `repository:manage` · `repository:manage_access`                                                                                         |
-| `sprint` (1)         | `sprint:manage` ᵖ                                                                                                                        |
-| `watcher` (1)        | `watcher:manage`                                                                                                                         |
-| `work_item` (6)      | `project:browse` · `work_item:archive` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:merge_pull_request` · `work_item:triage` ᵖ |
-| `workflow` (2)       | `automation:manage` · `workflow:manage`                                                                                                  |
+| Domain               | Permissions                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `ai` (4)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ · `ai:decide_plan`                                      |
+| `approval` (2)       | `approval:decide_any` (MOTIR-5292) · `approval:view_any` (MOTIR-5305 · MOTIR-5301)                      |
+| `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                                           |
+| `board` (1)          | `board:configure`                                                                                       |
+| `comment` (2)        | `comment:add` · `comment:moderate`                                                                      |
+| `estimation` (1)     | `estimation:manage`                                                                                     |
+| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                                                    |
+| `import` (1)         | `import:run` ᵖ                                                                                          |
+| `integration` (1)    | `integration:manage`                                                                                    |
+| `member` (2)         | `member:manage` · `project:manage_access`                                                               |
+| `project` (2)        | `project:administer` · `project:browse`                                                                 |
+| `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`                            |
+| `report` (3)         | `report:view` ᵖ · `saved_filter:manage` ᵖ · `saved_filter:manage_any`                                   |
+| `repository` (2)     | `repository:manage` · `repository:manage_access`                                                        |
+| `sprint` (1)         | `sprint:manage` ᵖ                                                                                       |
+| `watcher` (1)        | `watcher:manage`                                                                                        |
+| `work_item` (5)      | `project:browse` · `work_item:archive` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
+| `workflow` (2)       | `automation:manage` · `workflow:manage`                                                                 |
 
 ᵖ = `planned` — justified here, not yet enforced.
 
@@ -440,7 +440,7 @@ The floor is the KIND's own key, supplied by its `GateHandler` (`lib/approvalGat
 
 ⚠️ **`decided_under_authority` still carries `reporter`, and historical rows are NOT migrated.** The member stays legal and simply becomes reachable only on an unassigned item; a row recording `reporter` on an assigned item records what was true when the press happened, which is what ADR §6a freezes the arm to preserve.
 
-⚠️ **`work_item:merge_pull_request` is NOT this row's key and governs no route.** It survives only to sit in `IRREVERSIBLE_PERMISSIONS` (`lib/tokens/grant.ts`), which `apiTokensService` filters out of what an API token may confer — so no minted token can ever confer merge, whatever grant it carries. It is how a TOKEN is refused, not how a PERSON is authorised, and it enters the catalog as `enforcement: 'planned'`.
+⚠️ **`work_item:merge_pull_request` RETIRED** (Bug [MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37) · MOTIR-5616, 2026-09-16). It was the floor the `pull_request_merge` handler named, and it existed for that handler alone; a card now holds ONE approve-to-merge gate whose floor is `work_item:edit`, which every holder of the retired key already had. **The claim struck here was also stale when it was struck:** `IRREVERSIBLE_PERMISSIONS` is `['work_item:delete']` and has been for some time, so the key was not doing the token-refusal job this paragraph credited it with. It is now in no catalog, no built-in role and neither locale.
 
 The route is SESSION-authed and never CI-authed, on the same argument the design-result WITHDRAW route makes: publishing is something a build DOES and deciding is a judgement somebody MAKES, so the record has to be able to name a person (ADR §6a — the row is the human-in-the-loop evidence an agent-driven pipeline owes an auditor).
 
@@ -452,7 +452,7 @@ The key is **`workflow:manage`**, on BOTH verbs, asserted in `approvalGateSettin
 
 ⚠️ **The READ is gated on the same key as the WRITE, and that is the rule in force: the room is MANAGE-ONLY** (`design/projects/design-notes.md` § ⭐ Approvals §6, amended 2026-09-13). The sibling settings rooms split their verbs (`/api/projects/[key]/estimation-config` and `/api/projects/[key]/status-automation` both read on `project:browse`). This one does not, because the room is offered to and reachable by exactly the actor who may write it: a member who cannot manage the project gets no rail row, no settings door and no read, so a member's GET is a `403`. A NON-browser is still answered `404` on either verb, before any key is consulted.
 
-**The MERGE MODE is this row's second switch** (Story MOTIR-4880 · MOTIR-5181). `PATCH /api/projects/[key]/pr-merge-mode` changes `Project.prMergeMode`, where `manual` raises a `pull_request_merge` gate and `auto` raises none (`docs/decisions/approval-gates.md` §7). It is the same question as the acceptance-video switch — does this gate exist for this project — so it takes the same key, `workflow:manage`, asserted in `projectPrMergeModeService.setPrMergeMode`. There is no GET route: the room's page reads the value server-side through `getPrMergeMode`, which is also `workflow:manage`.
+**The MERGE MODE is this row's second switch** (Story MOTIR-4880 · MOTIR-5181). `PATCH /api/projects/[key]/pr-merge-mode` changes `Project.prMergeMode`, where `manual` raises the card's ONE approve-to-merge gate and `auto` raises none (`docs/decisions/approval-gates.md` §7). It is the same question as the acceptance-video switch — does this gate exist for this project — so it takes the same key, `workflow:manage`, asserted in `projectPrMergeModeService.setPrMergeMode`. There is no GET route: the room's page reads the value server-side through `getPrMergeMode`, which is also `workflow:manage`.
 
 _Reverted 2026-09-13, manage-only._ [MOTIR-5190](motir:cmtx85ynp00y6i0tx2lmi7cez) decided on 2026-09-11 that the room is shown READ-ONLY to a member who cannot manage it. [MOTIR-5193](motir:cmtx9wctp013uhvoil4s80ykf) built the settings-registry VIEW key that made that expressible, and [MOTIR-5278](motir:cmtys0kdg00elhvoi3nesxn3w) (PR #2843) moved this row's GET onto `project:browse`. The 2026-09-13 amendment withdrew the read-only view, and [MOTIR-5394](motir:cmu09oxzx00a6hwtxme79ckyj) returned the GET to `workflow:manage`. The view-key MECHANISM stays shipped, with no room declaring it.
 

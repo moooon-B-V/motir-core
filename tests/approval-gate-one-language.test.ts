@@ -199,9 +199,17 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
 
   /** The writes that are NOT decisions, each with the production callers it is
    *  allowed. Adding a row — or a caller — here is a deliberate act a reviewer
-   *  sees. The merge gate (MOTIR-5515) is the second kind to ASK and WITHDRAW:
-   *  `mergeGates.ts` raises one per green pull request and supersedes it BY
-   *  SUBJECT, because a card's two pull requests are two independent questions. */
+   *  sees.
+   *
+   *  ⚠️ AMENDED ON THE RECORD — MOTIR-5611 · MOTIR-5613, 2026-09-16. This list used
+   *  to say: *"The merge gate (MOTIR-5515) is the second kind to ASK and WITHDRAW:
+   *  `mergeGates.ts` raises one per green pull request and supersedes it BY SUBJECT,
+   *  because a card's two pull requests are two independent questions."* A card now
+   *  holds ONE approve-to-merge gate over its whole delivery set, so `mergeGates.ts`
+   *  raises nothing, `supersedeAwaitingBySubject` has no callers left and is deleted,
+   *  and the row for it is gone from this list rather than left with an empty
+   *  `callers` array — a declared writer nobody calls is not a hole worth keeping
+   *  open. */
   const DECLARED_NON_DECISION_WRITERS = [
     {
       method: 'create',
@@ -210,7 +218,6 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // its delivery set, raised by `pullRequestApprovalGates.ts` in the promotion.
       callers: [
         'lib/services/designEvidenceService.ts',
-        'lib/services/mergeGates.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },
@@ -228,15 +235,6 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         'lib/services/githubPullRequestService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
-    },
-    {
-      // The merge ENTRY POINT (MOTIR-5517) is the second caller, on the record: a
-      // press that finds its pull request moved, closed or unlinked WITHDRAWS the
-      // question instead of merging — the same `superseded` a webhook would write,
-      // reached a moment earlier by the person about to answer it.
-      method: 'supersedeAwaitingBySubject',
-      writes: 'superseded',
-      callers: ['lib/services/mergeGates.ts', 'lib/services/pullRequestMergeService.ts'],
     },
     // AMENDED ON THE RECORD — MOTIR-5527, 2026-09-14 (ADR `approval-gates.md` §6d
     // AMENDMENT, rule 6). A hand move that pulls the work back out of review, or

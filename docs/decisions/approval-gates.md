@@ -557,10 +557,14 @@ An approval that does not merge is a note, not a gate.
 > strictly stronger than the original claim, because it also says who writes the
 > intermediate state instead of leaving it unwritten.
 >
-> **Approving in GITHUB decides only the FIRST gate.** A GitHub review approval
+> ~~**Approving in GITHUB decides only the FIRST gate.** A GitHub review approval
 > syncs `pull_request_approval` and leaves `pull_request_merge` `awaiting`; the
 > card reaches `approved` either way, and somebody still presses merge. §8's
-> Workflow B row 4b is why there are two gates rather than one.
+> Workflow B row 4b is why there are two gates rather than one.~~
+>
+> **⚠️ STRUCK by §8's SECOND AMENDMENT (MOTIR-5609, 2026-09-16).** There is no
+> second gate for a GitHub approval to leave behind. What a synced approval does
+> under one gate is MOTIR-4910's, recorded by MOTIR-5590.
 
 > ### §4 — SECOND AMENDMENT (MOTIR-5510, 2026-09-14): the MERGE gate's contract — one per pull request, raised on green, merged or enqueued OUTSIDE the decision, and its outcome recorded on the PULL REQUEST
 >
@@ -862,9 +866,12 @@ has several open pull requests and therefore several simultaneous awaiting gates
 > **⚠️ TWO DIFFERENT THINGS ARE SPELLED `approved`, AND CONFLATING THEM IS THE
 > ONE READING ERROR THIS SECTION INVITES.** The table above is the **GATE's**
 > state — one row's answer to one question. What follows is the **WORK ITEM's**
-> workflow status. A card can hold an `approved` `pull_request_approval` gate and
+> workflow status. ~~A card can hold an `approved` `pull_request_approval` gate and
 > an `awaiting` `pull_request_merge` gate at the same time (§4's amendment), and
-> be at work-item status `approved` because of the first. The two never have to
+> be at work-item status `approved` because of the first.~~ **STRUCK by §8's
+> SECOND AMENDMENT (MOTIR-5609, 2026-09-16): that state no longer exists, because
+> a card has exactly one approve-to-merge gate.** The warning itself stands: a
+> GATE's state is not a WORK ITEM's status. The two never have to
 > agree, and nothing derives one from the other by name.
 >
 > #### The `approved` work-item status
@@ -1661,15 +1668,15 @@ it**, and that is why §3's rule is conditional rather than simply reversed.
 
 #### WORKFLOW B — a pull request exists (design and code, IDENTICALLY)
 
-| #   | event                                                                                                                                                                                                                                                       | actor                              | status         |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------- |
-| 1   | the agent opens the pull request                                                                                                                                                                                                                            | agent                              | `implemented`  |
-| 2   | CI goes green                                                                                                                                                                                                                                               | CI, server-side                    | `in_review`    |
-| 3   | **both** gates created `awaiting` — `pull_request_approval` and `pull_request_merge`                                                                                                                                                                        | product                            | —              |
-| 4a  | **"Approve and merge" in Motir** — ~~decides BOTH gates in ONE transaction~~ **commits the approval FIRST, then merges or ENQUEUES each pull request after that commit, deciding each merge gate only on success** (§8's amendment, MOTIR-5479, decision 5) | **person**                         | **`approved`** |
-| 4b  | _or_ the pull request is approved **IN GITHUB** → syncs the approval gate only; the **merge gate stays `awaiting`**                                                                                                                                         | **GitHub reviewer**                | **`approved`** |
-| 5   | merge — or ENQUEUE, where the repository has a merge queue                                                                                                                                                                                                  | product (4a) / a second press (4b) | —              |
-| 6   | the merge lands                                                                                                                                                                                                                                             | webhook                            | **`done`**     |
+| #   | event                                                                                                                                                                                                                                                                     | actor                                                    | status         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | -------------- |
+| 1   | the agent opens the pull request                                                                                                                                                                                                                                          | agent                                                    | `implemented`  |
+| 2   | CI goes green                                                                                                                                                                                                                                                             | CI, server-side                                          | `in_review`    |
+| 3   | ~~**both** gates created `awaiting` — `pull_request_approval` and `pull_request_merge`~~ **ONE gate created `awaiting` — `pull_request_approval`** (§8's second amendment, MOTIR-5609)                                                                                    | product                                                  | —              |
+| 4a  | **"Approve and merge" in Motir** — ~~decides BOTH gates in ONE transaction~~ **commits the approval FIRST, then merges or ENQUEUES each pull request after that commit, deciding each merge gate only on success** (§8's amendment, MOTIR-5479, decision 5)               | **person**                                               | **`approved`** |
+| 4b  | _or_ the pull request is approved **IN GITHUB** → ~~syncs the approval gate only; the **merge gate stays `awaiting`**~~ **decides the card's ONE gate — and the merge follows it** (§8's second amendment; what a review decides is MOTIR-4910's, recorded by MOTIR-5590) | **GitHub reviewer**                                      | **`approved`** |
+| 5   | merge — or ENQUEUE, where the repository has a merge queue                                                                                                                                                                                                                | product, after either 4a or 4b — ~~a second press (4b)~~ | —              |
+| 6   | the merge lands                                                                                                                                                                                                                                                           | webhook                                                  | **`done`**     |
 
 **Design and code take the SAME rows.** A design card that opened a pull request
 — one or many — is Workflow B; only its PORT differs: the Development block shows
@@ -1677,11 +1684,19 @@ the design result once (the mock(s) with the note as a link), then How to test,
 then every pull-request row, and no `design_result` gate is raised for the card
 (`design-result.md` AMENDMENT 4 Q8).
 
-**Row 4b is WHY there are two gates rather than one.** A GitHub approval tells
+~~**Row 4b is WHY there are two gates rather than one.** A GitHub approval tells
 Motir the code was approved and **nothing else** — it is not a merge, and
 treating it as one would merge on somebody's review. And the audit needs two rows
 regardless: **if one person approves in GitHub and another merges in Motir, that
-is two decisions by two people, and one row could not record it.**
+is two decisions by two people, and one row could not record it.**~~
+
+**⚠️ STRUCK by §8's SECOND AMENDMENT (MOTIR-5609, 2026-09-16), and kept visible
+because it was a considered position rather than an oversight.** The product
+owner has decided that approving a card's pull requests IS the instruction to
+merge them, so the two gates asked one question twice. The case this paragraph
+defends — a GitHub approval that is not a merge — was never built:
+`githubWebhookService` has no `pull_request_review` arm. What a synced approval
+does under one gate is decided by MOTIR-4910, and recorded by MOTIR-5590.
 
 **`decisionSource` gains `github` for row 4b**, and the approving actor may be a
 GitHub identity Motir cannot map to a member — §6b's amendment says what the
@@ -1868,6 +1883,84 @@ record holds then, and why a null FK would be the wrong answer.
 > refusing a press whose stamp moved (MOTIR-5232). _What SHIPPED_'s _"What has NOT
 > shipped"_ line still lists the `pull_request_approval` handler, correctly: this
 > block ships no code.
+
+> ### §8 — SECOND AMENDMENT (MOTIR-5609, 2026-09-16): ONE approve-to-merge gate per card — approving it MERGES every pull request the card delivers, and the merge gate retires
+>
+> **What was DECIDED, and by whom.** A card in a `manual` project carried TWO
+> awaiting gates once its pull requests went green: `pull_request_approval` over
+> the card's delivery set, and one `pull_request_merge` per pull request. The
+> Workbench's **To approve** tab listed the same pull request twice, one row
+> reading _Not built yet_. The product owner decided (2026-09-16, rung 3):
+> **approving a card's pull requests IS the instruction to merge them, so it is
+> ONE decision and ONE gate.** MOTIR-5603 is the defect; this block is the
+> contract its seven other children build against.
+>
+> **Read at base `09e30b21f`.** This block STRIKES text in §4, §6b and §8 in
+> place, each strike kept visible. **It supersedes MOTIR-5510's §4 second
+> amendment, decision 1**, and it leaves §4's merge-and-enqueue SEAM, §2's
+> authority rule and §6c retention untouched.
+>
+> **1. ONE GATE PER CARD** (rung 3: the decision above). The
+> `pull_request_approval` gate over the run target's delivery set is the ONLY
+> approve-to-merge gate. Its subject, its `subjectVersion` and its raise moment
+> are unchanged from MOTIR-5479's amendment, decisions 2 and 3. **No
+> `pull_request_merge` gate is raised, in either merge mode.** A second gate asks
+> the same person the same question twice: if the commits are right, approving
+> merges them.
+>
+> **2. §8 row 3 is STRUCK in place.** It read _"**both** gates created
+> `awaiting`"_. One gate is created.
+>
+> **3. §8 row 4b's RATIONALE is STRUCK in place**, including the paragraph that
+> began _"Row 4b is WHY there are two gates rather than one."_ **Row 4b's own
+> promise SURVIVES** — a pull request approved on GitHub reaches Motir — but
+> **what a GitHub review DECIDES under one gate is not decided here**: it is
+> MOTIR-4910's, recorded by its own amendment, MOTIR-5590. The case the struck
+> paragraph defended is unbuilt in any event: `githubWebhookService` has no
+> `pull_request_review` arm (`lib/services/githubWebhookService.ts:192-214`).
+>
+> **4. A PULL REQUEST'S MERGE IS AN OUTCOME, NOT A GATE — this SUPERSEDES §4's
+> second amendment, decision 1**, which reads _"**1. SUBJECT — one gate per pull
+> request** (rung 2: the shipped uniqueness key)"_. That decision is struck by
+> this one. Where the merge result lives is unchanged and already shipped:
+> `githubPullRequestRepository.recordMotirMerge`
+> (`lib/repositories/githubPullRequestRepository.ts:513-528`) writes
+> `merge_authority` (`gate` | `auto_mode`) and `merge_outcome_ref` — the merge
+> commit SHA, or `queue:<entryId>` for an enqueue — on the pull request itself.
+> **Nothing new is stored, and both of that function's existing callers stay**:
+> `pullRequestMergeService` writes `'gate'` (`:283-288`) and
+> `pullRequestAutoMergeService` writes `'auto_mode'` (`:139-148`).
+>
+> **5. §6b's simultaneous-gates sentence is STRUCK in place.** A card can no
+> longer hold an `approved` `pull_request_approval` beside an `awaiting`
+> `pull_request_merge`, because the second gate does not exist. §6b's warning
+> that a GATE's state is not a WORK ITEM's status is unaffected.
+>
+> **6. THE REFUSAL UNION SURVIVES, UNCHANGED.** The five `MERGE_*` members are
+> facts about a merge ATTEMPT, not about a gate kind: they render on the card's
+> own gate, and a refused pull request is retried from the Development frame
+> against **(the card's approved gate, that pull request)**. Stated explicitly
+> because the obvious misreading of decision 1 is that the refusals retire with
+> the kind. They do not.
+>
+> **7. `auto` MODE IS UNCHANGED** (§7a). It raises no gate and merges or enqueues
+> through the same seam, recording `merge_authority = 'auto_mode'`.
+> `settleGreenVerdict` (`lib/services/mergeGates.ts:87`) is the hook BOTH modes
+> pass through; only its `manual` arm's raise goes.
+>
+> **8. THE POSTGRES ENUM VALUE STAYS.** `pull_request_merge` is a member of
+> `approval_gate_kind`
+> (`prisma/migrations/20260908210000_add_approval_gate/migration.sql:36`) and
+> gates already raised keep referencing it after they are superseded. **The kind
+> is retired at the REGISTRY tier** — moved into `UNREGISTERED_GATE_KINDS`
+> (`lib/approvalGates/registry.ts`) — **and the enum member is NOT dropped.**
+> Recorded as a decision because the obvious next edit is to drop it, which would
+> break every superseded row.
+>
+> **9. What this does NOT decide**, each with its key: what a GitHub review
+> decides under one gate (MOTIR-4910 / MOTIR-5590); a merge-queue EJECTION
+> (MOTIR-5461); the decision STAMP (MOTIR-5234); GitLab merge-request approvals
+> (MOTIR-5593).
 
 #### What the two workflows settle, in one line each
 

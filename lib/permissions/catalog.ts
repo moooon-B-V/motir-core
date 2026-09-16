@@ -208,12 +208,12 @@ export const PERMISSIONS = [
   'work_item:archive',
   'work_item:delete',
   'work_item:triage',
-  // MOTIR-4793 — APPROVING A MERGE, the floor `pull_request_merge`'s handler names
-  // (`approval-gates.md` §1's handler table, §4 second amendment decision 10). A key
-  // of its own rather than `work_item:edit`, because pressing it lands code on a
-  // repository's default branch through Motir's GitHub App — an act on the HOST, not
-  // on the card.
-  'work_item:merge_pull_request',
+  // ⚠️ `work_item:merge_pull_request` WAS HERE (MOTIR-4793) and is RETIRED (Bug
+  // MOTIR-5603 · MOTIR-5616). It was the floor the `pull_request_merge` handler named,
+  // and it existed for that handler alone; the gate that replaced it carries
+  // `work_item:edit` as its floor, which every holder of the retired key already had.
+  // A permission that grants nothing is worse than clutter on a roles surface meant to
+  // describe what a person can do — somebody would grant it and expect an effect.
   'comment:add',
   'comment:moderate',
   'attachment:create',
@@ -338,9 +338,6 @@ const PERMISSION_META: Record<
   'work_item:archive': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-3629
   'work_item:delete': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
   'work_item:triage': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
-  // `enforced` on arrival: the decide door asserts it (`assertPermission(…,
-  // handler.permission)`) in the same change that registers the kind.
-  'work_item:merge_pull_request': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-4793
   'comment:add': { domain: 'comment', enforcement: 'enforced' },
   'comment:moderate': { domain: 'comment', enforcement: 'enforced' },
   'attachment:create': { domain: 'attachment', enforcement: 'enforced' },

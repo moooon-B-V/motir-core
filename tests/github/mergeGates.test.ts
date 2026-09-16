@@ -8,7 +8,7 @@ vi.mock('@/lib/jobs/sendEvent', async () => {
       // Read on ANOTHER connection at the moment of sending: a gate visible here was
       // committed before the event left, which is what "post-commit" means.
       const gatesAtSend = await admin.approvalGate.count({
-        where: { workItemId: String(data['workItemId']), kind: 'pull_request_merge' },
+        where: { workItemId: String(data['workItemId']) },
       });
       sent.push({ name, data, gatesAtSend });
     },
@@ -25,7 +25,7 @@ import { githubPullRequestService } from '@/lib/services/githubPullRequestServic
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { promoteDeliveredCardsOnGreen } from '@/lib/services/ciPromotion';
-import { raiseMergeGates } from '@/lib/services/mergeGates';
+import { raisePullRequestApprovalGate } from '@/lib/services/pullRequestApprovalGates';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -34,13 +34,14 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 
-// RAISE and WITHDRAW merge gates (Story MOTIR-4882 · MOTIR-5515; `approval-gates.md`
-// §4's second amendment, decisions 1–3), against a REAL Postgres through the real
-// webhook service — the same doors a GitHub delivery walks.
+// ONE GATE per card (MOTIR-5603 · MOTIR-5611; `approval-gates.md` §8's SECOND
+// AMENDMENT, decisions 1 and 2), against a REAL Postgres through the real webhook
+// service — the same doors a GitHub delivery walks.
 //
-// One `awaiting` `pull_request_merge` gate per green pull request, on the run target,
-// in a `manual` project — written in the transaction that promotes the card, and
-// `superseded` the moment what it asks about changes.
+// A green delivery set leaves EXACTLY ONE `awaiting` gate on the run target in a
+// `manual` project — the `pull_request_approval` gate over the whole set — and NEVER a
+// per-pull-request `pull_request_merge` gate. This file is the regression guard for
+// that: every assertion below fails if the manual arm ever raises one again.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-merge-gates';
@@ -155,6 +156,15 @@ async function prId(number: number): Promise<string> {
   return (await adminDb.githubPullRequest.findFirstOrThrow({ where: { number } })).id;
 }
 
+/** Every gate on the card, whatever its kind — what a person would see waiting. */
+async function gatesOf(workItemId: string) {
+  return adminDb.approvalGate.findMany({
+    where: { workItemId },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
+/** The gate kind MOTIR-5611 retired. Every call below asserts this is EMPTY. */
 async function mergeGates(workItemId: string) {
   return adminDb.approvalGate.findMany({
     where: { workItemId, kind: 'pull_request_merge' },
@@ -163,7 +173,7 @@ async function mergeGates(workItemId: string) {
 }
 
 async function awaitingVersions(workItemId: string): Promise<string[]> {
-  return (await mergeGates(workItemId))
+  return (await gatesOf(workItemId))
     .filter((g) => g.state === 'awaiting')
     .map((g) => g.subjectVersion ?? '')
     .sort();
@@ -181,14 +191,17 @@ async function greenRow(number: number, sha: string) {
   });
 }
 
-/** A card promoted to in_review on two green pull requests, holding their two gates. */
-async function reviewedWithTwoGates(email: string) {
+/** A card promoted to in_review on two green pull requests, holding its ONE gate. */
+async function reviewedWithOneGate(email: string) {
   const s = await makeScenario(email);
   const item = await cardWithPrs(s, 'Two pull requests', [11, 12]);
   await ci({ conclusion: 'success', headSha: 'sha-a', number: 11 });
   await ci({ conclusion: 'success', headSha: 'sha-b', number: 12 });
   expect(await statusOf(item.id)).toBe('in_review');
-  expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a', 'moooon/acme#12@sha-b']);
+  const gates = await gatesOf(item.id);
+  expect(gates).toHaveLength(1);
+  expect(gates[0]!.kind).toBe('pull_request_approval');
+  expect(await mergeGates(item.id)).toEqual([]);
   return { s, item };
 }
 
@@ -204,30 +217,45 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('RAISE — one awaiting gate per green pull request, on the run target, in a manual project', () => {
-  it('a card whose two pull requests turn green reaches in_review holding TWO gates, each naming its head', async () => {
+describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on the run target', () => {
+  it('a card whose two pull requests turn green reaches in_review holding ONE gate over BOTH heads', async () => {
     const s = await makeScenario('mg-raise@example.com');
     const item = await cardWithPrs(s, 'Two pull requests', [11, 12]);
 
     // One green of two is not the verdict: no promotion, no gate.
     await ci({ conclusion: 'success', headSha: 'sha-a', number: 11 });
     expect(await statusOf(item.id)).toBe('implemented');
-    expect(await mergeGates(item.id)).toEqual([]);
+    expect(await gatesOf(item.id)).toEqual([]);
 
     await ci({ conclusion: 'success', headSha: 'sha-b', number: 12 });
     expect(await statusOf(item.id)).toBe('in_review');
 
-    const gates = await mergeGates(item.id);
-    expect(gates).toHaveLength(2);
-    expect(gates.map((g) => [g.subjectId, g.subjectVersion, g.state, g.routedToId])).toEqual(
-      expect.arrayContaining([
-        [await prId(11), 'moooon/acme#11@sha-a', 'awaiting', s.user.id],
-        [await prId(12), 'moooon/acme#12@sha-b', 'awaiting', s.user.id],
-      ]),
+    const gates = await gatesOf(item.id);
+    expect(gates).toHaveLength(1);
+    expect([
+      gates[0]!.kind,
+      gates[0]!.subjectId,
+      gates[0]!.subjectVersion,
+      gates[0]!.state,
+    ]).toEqual([
+      'pull_request_approval',
+      item.id,
+      'moooon/acme#11@sha-a,moooon/acme#12@sha-b',
+      'awaiting',
+    ]);
+    expect(gates[0]!.routedToId).toBe(s.user.id);
+    // MOTIR-5611: the per-pull-request kind is never raised again.
+    expect(await mergeGates(item.id)).toEqual([]);
+
+    // And through the PRODUCTION read — a row in the table that the scoped read
+    // cannot see is not a question anybody is being asked.
+    const awaiting = await withWorkspaceContext(s.ctx, (tx) =>
+      approvalGateRepository.findAwaitingByWorkItem(item.id, tx),
     );
+    expect(awaiting.map((g) => g.kind)).toEqual(['pull_request_approval']);
   });
 
-  it('the same card in an AUTO project reaches in_review and holds no merge gate', async () => {
+  it('the same card in an AUTO project reaches in_review and holds NO gate at all', async () => {
     const s = await makeScenario('mg-auto@example.com');
     await adminDb.project.update({ where: { id: s.project.id }, data: { prMergeMode: 'auto' } });
     const item = await cardWithPrs(s, 'Auto', [11, 12]);
@@ -236,7 +264,7 @@ describe('RAISE — one awaiting gate per green pull request, on the run target,
     await ci({ conclusion: 'success', headSha: 'sha-b', number: 12 });
 
     expect(await statusOf(item.id)).toBe('in_review');
-    expect(await mergeGates(item.id)).toEqual([]);
+    expect(await gatesOf(item.id)).toEqual([]);
   });
 
   it('one pull request green and one red: the card stays implemented and holds no gate', async () => {
@@ -247,12 +275,12 @@ describe('RAISE — one awaiting gate per green pull request, on the run target,
     await ci({ conclusion: 'failure', headSha: 'sha-b', number: 12 });
 
     expect(await statusOf(item.id)).toBe('implemented');
-    expect(await mergeGates(item.id)).toEqual([]);
+    expect(await gatesOf(item.id)).toEqual([]);
   });
 
-  it('a green pull request whose provider cannot merge (GitLab) gets no gate; the same one on GitHub does', async () => {
+  it('a card whose provider cannot merge (GitLab) gets no gate; the same one on GitHub gets ONE', async () => {
     const s = await makeScenario('mg-gitlab@example.com');
-    // Promote with no gates first, so the provider is the only thing that differs
+    // Promote with no gate first, so the provider is the only thing that differs
     // between the two re-raises below.
     await adminDb.project.update({ where: { id: s.project.id }, data: { prMergeMode: 'auto' } });
     const item = await cardWithPrs(s, 'GitLab', [11]);
@@ -270,14 +298,15 @@ describe('RAISE — one awaiting gate per green pull request, on the run target,
 
     await adminDb.githubRepo.update({ where: { id: repo.id }, data: { provider: 'gitlab' } });
     await promote();
-    expect(await mergeGates(item.id)).toEqual([]);
+    expect(await gatesOf(item.id)).toEqual([]);
 
     await adminDb.githubRepo.update({ where: { id: repo.id }, data: { provider: 'github' } });
     await promote();
     expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a']);
+    expect(await mergeGates(item.id)).toEqual([]);
   });
 
-  it('a CHILD a container run delivers holds no gate; its run target does — and How to test names the same card', async () => {
+  it('a CHILD a container run delivers holds no gate; its run target holds the one — and How to test names the same card', async () => {
     const s = await makeScenario('mg-child@example.com');
     const story = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'story', title: 'The story' },
@@ -306,22 +335,21 @@ describe('RAISE — one awaiting gate per green pull request, on the run target,
       });
     }
     await greenRow(13, 'sha-p');
-    const pullRequestIds = [await prId(13)];
 
     const raised = await withWorkspaceContext(s.ctx, async (tx) => {
       const rows = await Promise.all(
         [child.id, story.id].map((id) => tx.workItem.findUniqueOrThrow({ where: { id } })),
       );
       return {
-        child: await raiseMergeGates({ item: rows[0]!, pullRequestIds }, s.ctx, tx),
-        story: await raiseMergeGates({ item: rows[1]!, pullRequestIds }, s.ctx, tx),
+        child: await raisePullRequestApprovalGate(rows[0]!, tx),
+        story: await raisePullRequestApprovalGate(rows[1]!, tx),
         target: await resolveRunTargetFor(rows[0]!, tx),
       };
     });
 
-    expect(raised.child).toBe(0);
-    expect(raised.story).toBe(1);
-    expect(await mergeGates(child.id)).toEqual([]);
+    expect(raised.child).toBe(false);
+    expect(raised.story).toBe(true);
+    expect(await gatesOf(child.id)).toEqual([]);
     expect(await awaitingVersions(story.id)).toEqual(['moooon/acme#13@sha-p']);
 
     // The raise and the How to test block resolve the SAME run target.
@@ -332,32 +360,24 @@ describe('RAISE — one awaiting gate per green pull request, on the run target,
   });
 });
 
-describe('WITHDRAW — superseded when what the gate asks about changes', () => {
-  it('a NEW COMMIT supersedes only that pull request’s gate; its green raises a fresh gate on the new head', async () => {
-    const { item } = await reviewedWithTwoGates('mg-push@example.com');
+describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes', () => {
+  it('a NEW COMMIT supersedes the card’s gate; the next green raises a fresh one over the new set', async () => {
+    const { item } = await reviewedWithOneGate('mg-push@example.com');
 
     await ci({ conclusion: null, status: 'in_progress', headSha: 'sha-a2', number: 11 });
-    const afterPush = await mergeGates(item.id);
-    expect(
-      afterPush.map((g) => [g.subjectVersion, g.state]).sort((a, b) => a[0]!.localeCompare(b[0]!)),
-    ).toEqual([
-      ['moooon/acme#11@sha-a', 'superseded'],
-      ['moooon/acme#12@sha-b', 'awaiting'],
+    const afterPush = await gatesOf(item.id);
+    expect(afterPush.map((g) => [g.subjectVersion, g.state])).toEqual([
+      ['moooon/acme#11@sha-a,moooon/acme#12@sha-b', 'superseded'],
     ]);
 
     await ci({ conclusion: 'success', headSha: 'sha-a2', number: 11 });
     expect(await statusOf(item.id)).toBe('in_review');
-    expect(await awaitingVersions(item.id)).toEqual([
-      'moooon/acme#11@sha-a2',
-      'moooon/acme#12@sha-b',
-    ]);
-    // The other pull request's gate is the SAME row it was — untouched, not re-raised.
-    const twelve = (await mergeGates(item.id)).filter((g) => g.subjectVersion?.includes('#12@'));
-    expect(twelve).toHaveLength(1);
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a2,moooon/acme#12@sha-b']);
+    expect(await mergeGates(item.id)).toEqual([]);
   });
 
-  it('a `synchronize` delivery supersedes the gate on the head it moved away from', async () => {
-    const { item } = await reviewedWithTwoGates('mg-sync@example.com');
+  it('a `synchronize` delivery supersedes the gate asked about the head it moved away from', async () => {
+    const { item } = await reviewedWithOneGate('mg-sync@example.com');
 
     await githubWebhookService.handleEvent(
       'pull_request',
@@ -366,24 +386,23 @@ describe('WITHDRAW — superseded when what the gate asks about changes', () => 
       }),
     );
 
-    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#12@sha-b']);
+    expect(await awaitingVersions(item.id)).toEqual([]);
   });
 
-  it('a CLOSED pull request supersedes its gate', async () => {
-    const { item } = await reviewedWithTwoGates('mg-closed@example.com');
+  it('a CLOSED member supersedes the gate — the set nobody can merge is no longer the question', async () => {
+    const { item } = await reviewedWithOneGate('mg-closed@example.com');
 
     await githubWebhookService.handleEvent(
       'pull_request',
       pullRequestPayload('closed', 12, `subtask/${item.identifier}-12`),
     );
 
-    const twelve = (await mergeGates(item.id)).find((g) => g.subjectVersion?.includes('#12@'));
-    expect(twelve?.state).toBe('superseded');
-    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a']);
+    expect(await awaitingVersions(item.id)).toEqual([]);
+    expect((await gatesOf(item.id)).map((g) => g.state)).toEqual(['superseded']);
   });
 
-  it('UNLINKING a pull request supersedes that card’s gate for it, and only that one', async () => {
-    const { s, item } = await reviewedWithTwoGates('mg-unlink@example.com');
+  it('UNLINKING a member supersedes that card’s gate', async () => {
+    const { s, item } = await reviewedWithOneGate('mg-unlink@example.com');
 
     const result = await githubPullRequestService.unlinkPullRequestByCoordinates(
       { workItemId: item.id, projectId: s.project.id, owner: 'moooon', name: 'acme', number: 12 },
@@ -391,11 +410,11 @@ describe('WITHDRAW — superseded when what the gate asks about changes', () => 
     );
 
     expect(result.removed).toBe(true);
-    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a']);
+    expect(await awaitingVersions(item.id)).toEqual([]);
   });
 });
 
-describe('one transaction, one gate per pull request, however the events arrive', () => {
+describe('one transaction, ONE gate per card, however the events arrive', () => {
   it('a gate insert that FAILS rolls the status write back with it', async () => {
     const s = await makeScenario('mg-rollback@example.com');
     const item = await cardWithPrs(s, 'Rollback', [11]);
@@ -412,11 +431,11 @@ describe('one transaction, one gate per pull request, however the events arrive'
     ).rejects.toThrow('insert failed');
 
     expect(await statusOf(item.id)).toBe('implemented');
-    expect(await mergeGates(item.id)).toEqual([]);
+    expect(await gatesOf(item.id)).toEqual([]);
     expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });
 
-  it('two green events for one card, concurrently, leave one gate per pull request; a redelivery adds none', async () => {
+  it('two green events for one card, concurrently, leave ONE gate; a redelivery adds none', async () => {
     const s = await makeScenario('mg-race@example.com');
     const item = await cardWithPrs(s, 'Race', [11, 12]);
     await greenRow(11, 'sha-a');
@@ -432,13 +451,11 @@ describe('one transaction, one gate per pull request, however the events arrive'
 
     expect([...first, ...second]).toContain(item.id);
     expect(await statusOf(item.id)).toBe('in_review');
-    expect(await awaitingVersions(item.id)).toEqual([
-      'moooon/acme#11@sha-a',
-      'moooon/acme#12@sha-b',
-    ]);
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a,moooon/acme#12@sha-b']);
 
     await Promise.all([green(11), green(11)]);
-    expect(await mergeGates(item.id)).toHaveLength(2);
+    expect(await gatesOf(item.id)).toHaveLength(1);
+    expect(await mergeGates(item.id)).toEqual([]);
   });
 
   it('work-item/transitioned is still sent after commit, with the payload it always carried', async () => {

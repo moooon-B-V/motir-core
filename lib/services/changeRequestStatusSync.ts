@@ -20,7 +20,6 @@ import {
   type DeliverySetShortfall,
 } from '@/lib/workItems/deliverySet';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { withdrawMergeGatesOnClose } from './mergeGates';
 import { withdrawPullRequestApprovalGatesOnClose } from './pullRequestApprovalGates';
 import {
   classifyRepoDelivery,
@@ -343,8 +342,9 @@ export async function syncChangeRequestStatus(
     // records the close (MOTIR-5515). This is also what retires a gate a crash left
     // awaiting between a merge and its decision: the merge delivery lands here.
     if (cr.state === 'closed') {
-      await withdrawMergeGatesOnClose(prId, tx);
-      // A closed member changes the set every card it delivers asked about (MOTIR-5482).
+      // A closed member changes the set the card's one approve-to-merge gate asked
+      // about (MOTIR-5482). The per-pull-request merge gate it used to withdraw
+      // beside this retired with MOTIR-5611.
       await withdrawPullRequestApprovalGatesOnClose(prId, tx);
     }
 
@@ -1241,8 +1241,9 @@ async function applyTransition(
   ctx: { userId: string; workspaceId: string },
 ): Promise<void> {
   // `keepPendingQuestions`: a lifecycle move is not a person pulling the work back.
-  // This sync withdraws merge gates BY SUBJECT (`withdrawMergeGatesOnClose`), so the
-  // funnel's blanket rule-6 withdraw must not take a sibling pull request's question.
+  // This sync withdraws the approve-to-merge gate BY SUBJECT
+  // (`withdrawPullRequestApprovalGatesOnClose`), so the funnel's blanket rule-6
+  // withdraw must not take a sibling pull request's question.
   await workItemsService.updateStatus(workItemId, toStatusKey, ctx, { keepPendingQuestions: true });
 }
 

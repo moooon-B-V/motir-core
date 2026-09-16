@@ -37,7 +37,6 @@ import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { repoDeploymentService } from './repoDeploymentService';
-import { withdrawMergeGatesOnHeadMove } from './mergeGates';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
@@ -412,10 +411,10 @@ export const githubWebhookService = {
     // fires at most ONCE per pull request either way, so the per-push cost the
     // argument turns on is untouched.
     await writeLinkCheckForDelivery(body);
-    // A push to the pull request withdraws the merge gate asked about the previous
-    // head (MOTIR-5515). Above the action gate for the link check's reason:
+    // A push to the pull request withdraws the approve-to-merge gate asked about the
+    // previous head (MOTIR-5482). Above the action gate for the link check's reason:
     // `synchronize` is exactly the action `HANDLED_PR_ACTIONS` leaves out.
-    await withdrawMergeGatesOnSynchronize(body);
+    await withdrawGatesOnSynchronize(body);
 
     if (!HANDLED_PR_ACTIONS.has(String(body['action']))) {
       return { event: 'pull_request', outcome: 'ignored_action' };
@@ -831,7 +830,7 @@ async function reconcileInstallation(
  * the only one for the minutes before any check has reported. SWALLOWS EVERYTHING, for
  * the link check's reason: the delivery's load-bearing effect is the status sync.
  */
-async function withdrawMergeGatesOnSynchronize(body: Record<string, unknown>): Promise<void> {
+async function withdrawGatesOnSynchronize(body: Record<string, unknown>): Promise<void> {
   try {
     if (body['action'] !== 'synchronize') return;
     const installationId = readInstallationId(body);
@@ -859,8 +858,8 @@ async function withdrawMergeGatesOnSynchronize(body: Record<string, unknown>): P
       await bindWorkspaceContext(tx, repo.workspaceId);
       const row = await githubPullRequestRepository.findByRepoAndNumber(repo.id, number, tx);
       if (row) {
-        await withdrawMergeGatesOnHeadMove(row.id, tx, headSha);
-        // The approve-and-merge gate over the set this pull request belongs to (MOTIR-5482).
+        // The approve-and-merge gate over the set this pull request belongs to
+        // (MOTIR-5482) — the card's only gate since MOTIR-5611.
         await withdrawPullRequestApprovalGatesOnHeadMove(row.id, tx, headSha);
       }
     });

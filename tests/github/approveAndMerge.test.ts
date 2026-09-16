@@ -14,6 +14,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -21,8 +22,13 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
-// APPROVE AND MERGE (Story MOTIR-4909 · MOTIR-5483; `approval-gates.md` §8's amendment,
-// decision 5), against a REAL Postgres. The host is the seam's `mergeChangeRequest`, stubbed
+// APPROVE AND MERGE (Story MOTIR-4909 · MOTIR-5483 · MOTIR-5613; `approval-gates.md` §8's
+// SECOND AMENDMENT, decisions 1 and 4), against a REAL Postgres.
+//
+// ⚠️ ONE GATE PER CARD. A press decides the card's `pull_request_approval` gate and then
+// merges every member; each member's outcome is recorded on ITS OWN PULL REQUEST, and no
+// `pull_request_merge` row exists anywhere in this file. A retry addresses
+// (the card's gate, one pull request). The host is the seam's `mergeChangeRequest`, stubbed
 // per pull request — the one thing that leaves the process. The properties under test are the
 // ORDER (the approval commits before any merge), the RECORD (one actor, one source, one
 // instant across every row a press writes) and PARTIAL SUCCESS (a refused member leaves the
@@ -52,7 +58,7 @@ afterAll(async () => {
 let seq = 0;
 
 /** A story in review whose run delivered `acme/web#7` and `acme/api#12`, both green, holding
- *  the approve-and-merge gate over the set and one merge gate per pull request. */
+ *  the card's ONE approve-and-merge gate over the set. */
 async function pressable() {
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'story', title: 'Throttle the public API' },
@@ -61,7 +67,7 @@ async function pressable() {
   await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
   await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
 
-  const members: Record<number, { prId: string; mergeGateId: string; version: string }> = {};
+  const members: Record<number, { prId: string; version: string }> = {};
   for (const [name, number, head] of [
     ['web', 7, HEAD_WEB],
     ['api', 12, HEAD_API],
@@ -110,21 +116,7 @@ async function pressable() {
     await adminDb.githubCheckRun.create({
       data: { pullRequestId: pr.id, commitSha: head, checkName: 'Vitest', conclusion: 'success' },
     });
-    const version = `acme/${name}#${number}@${head}`;
-    const mergeGate = await withWorkspaceContext(fx.ctx, (tx) =>
-      approvalGateRepository.create(
-        {
-          workspaceId: fx.workspaceId,
-          projectId: fx.projectId,
-          workItemId: item.id,
-          kind: 'pull_request_merge',
-          subjectId: pr.id,
-          subjectVersion: version,
-        },
-        tx,
-      ),
-    );
-    members[number] = { prId: pr.id, mergeGateId: mergeGate.id, version };
+    members[number] = { prId: pr.id, version: `acme/${name}#${number}@${head}` };
   }
 
   const approval = await withWorkspaceContext(fx.ctx, (tx) =>
@@ -152,11 +144,18 @@ function stubHost(answers: Record<number, MergeChangeRequestResult>, onCall?: ()
 }
 
 const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: { id } });
+/** What a merge leaves on the PULL REQUEST — where the outcome lives since MOTIR-5613. */
+const prRecord = async (id: string) => {
+  const { mergeAuthority, mergeOutcomeRef } = await adminDb.githubPullRequest.findUniqueOrThrow({
+    where: { id },
+  });
+  return { mergeAuthority, mergeOutcomeRef };
+};
 const statusOf = async (id: string) =>
   (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 
 describe('one press: the approval, then every member', () => {
-  it('decides the approval and both merge gates as ONE decision — same actor, source and instant', async () => {
+  it('decides the card’s ONE gate and merges both members — the decision on the gate, each outcome on its pull request', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
@@ -176,13 +175,25 @@ describe('one press: the approval, then every member', () => {
       [web.version, 'merged'],
     ]);
 
-    const rows = await Promise.all([approval.id, web.mergeGateId, api.mergeGateId].map(gateRow));
-    expect(rows.map((r) => r.state)).toEqual(['approved', 'approved', 'approved']);
-    expect(new Set(rows.map((r) => r.decidedById))).toEqual(new Set([fx.ownerId]));
-    expect(new Set(rows.map((r) => r.decisionSource))).toEqual(new Set(['ui']));
-    expect(new Set(rows.map((r) => r.decidedAt?.toISOString()))).toEqual(
-      new Set([rows[0]!.decidedAt!.toISOString()]),
-    );
+    // ONE gate, decided once, by one actor from one source.
+    const gates = await adminDb.approvalGate.findMany({ where: { workItemId: item.id } });
+    expect(gates).toHaveLength(1);
+    expect(gates[0]).toMatchObject({
+      id: approval.id,
+      kind: 'pull_request_approval',
+      state: 'approved',
+      decidedById: fx.ownerId,
+      decisionSource: 'ui',
+    });
+    // …and each member's result on the row that owns it.
+    expect(await prRecord(web.prId)).toEqual({
+      mergeAuthority: 'gate',
+      mergeOutcomeRef: 'merge-web',
+    });
+    expect(await prRecord(api.prId)).toEqual({
+      mergeAuthority: 'gate',
+      mergeOutcomeRef: 'merge-api',
+    });
   });
 
   it('calls the host only AFTER the approval has committed — read from another connection', async () => {
@@ -209,7 +220,7 @@ describe('one press: the approval, then every member', () => {
     ]);
   });
 
-  it('a member whose repository has a merge queue is ENQUEUED: gate outcome null, queue entry on the pull request, card still approved', async () => {
+  it('a member whose repository has a merge queue is ENQUEUED: the queue entry rides the pull request, card still approved', async () => {
     const { item, approval, api } = await pressable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
@@ -222,7 +233,9 @@ describe('one press: the approval, then every member', () => {
     );
 
     expect(result.members.find((m) => m.subjectVersion === api.version)?.outcome).toBe('enqueued');
-    expect((await gateRow(api.mergeGateId)).outcomeRef).toBeNull();
+    // The gate's outcome is the STATUS the approval moved the card to — a merge, or a
+    // queue entry, writes nothing onto the gate.
+    expect((await gateRow(approval.id)).outcomeRef).toBe('approved');
     const pr = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: api.prId } });
     expect(pr.mergeOutcomeRef).toBe('queue:MQE_7');
     expect(await statusOf(item.id)).toBe('approved');
@@ -245,29 +258,31 @@ describe('partial success', () => {
     expect(result.members).toEqual([
       {
         subjectVersion: api.version,
-        mergeGateId: api.mergeGateId,
         pullRequestId: api.prId,
         outcome: 'refused',
         refusal: { tag: 'MERGE_CONFLICT' },
       },
-      {
-        subjectVersion: web.version,
-        mergeGateId: web.mergeGateId,
-        pullRequestId: web.prId,
-        outcome: 'merged',
-      },
+      { subjectVersion: web.version, pullRequestId: web.prId, outcome: 'merged' },
     ]);
+    // ⚠️ THE APPROVAL IS NOT UNDONE BY A REFUSED MERGE, and the refusal is recorded
+    // NOWHERE: the refused pull request simply has no outcome yet, which is what makes it
+    // retryable.
     expect((await gateRow(approval.id)).state).toBe('approved');
     expect(await statusOf(item.id)).toBe('approved');
-    expect((await gateRow(api.mergeGateId)).state).toBe('awaiting');
-    expect((await gateRow(web.mergeGateId)).state).toBe('approved');
+    expect(await prRecord(api.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
+    expect(await prRecord(web.prId)).toEqual({
+      mergeAuthority: 'gate',
+      mergeOutcomeRef: 'merge-web',
+    });
   });
 
-  it('a member with NO awaiting merge gate reports `no_merge_gate`, and the other still merges', async () => {
+  it('a member the card can no longer merge reports `no_merge_gate`, and the other still merges', async () => {
     const { approval, web, api } = await pressable();
-    await adminDb.approvalGate.update({
-      where: { id: web.mergeGateId },
-      data: { state: 'superseded' },
+    // #7 was closed by hand before the press: it is still a member of what was approved,
+    // and there is nothing left to merge.
+    await adminDb.githubPullRequest.update({
+      where: { id: web.prId },
+      data: { state: 'closed' },
     });
     const seam = stubHost({ 12: { outcome: 'merged', commitSha: 'merge-api' } });
 
@@ -283,34 +298,42 @@ describe('partial success', () => {
     expect(seam).toHaveBeenCalledTimes(1);
   });
 
-  it('RETRY decides only that member’s merge gate, at the press’s instant', async () => {
-    const { approval, web, api } = await pressable();
+  it('RETRY merges only that member, under the approval that already stands', async () => {
+    const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
       12: { outcome: 'refused', refusal: { code: 'checks_not_green' } },
     });
     await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    const decidedAt = (await gateRow(approval.id)).decidedAt!.toISOString();
     vi.restoreAllMocks();
     const seam = stubHost({ 12: { outcome: 'merged', commitSha: 'merge-api' } });
 
     const retried = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: approval.id, mergeGateId: api.mergeGateId, source: 'ui' },
+      { approvalGateId: approval.id, pullRequestId: api.prId, source: 'ui' },
       fx.ctx,
     );
 
-    expect(retried).toMatchObject({ mergeGateId: api.mergeGateId, outcome: 'merged' });
+    expect(retried).toEqual({
+      subjectVersion: api.version,
+      pullRequestId: api.prId,
+      outcome: 'merged',
+    });
+    // ONLY that one: one host call, and the sibling's record is the first press's.
     expect(seam).toHaveBeenCalledTimes(1);
-    const [approvalRow, apiRow, webRow] = (await Promise.all(
-      [approval.id, api.mergeGateId, web.mergeGateId].map(gateRow),
-    )) as [
-      Awaited<ReturnType<typeof gateRow>>,
-      Awaited<ReturnType<typeof gateRow>>,
-      Awaited<ReturnType<typeof gateRow>>,
-    ];
-    expect(apiRow.state).toBe('approved');
-    expect(apiRow.decidedById).toBe(fx.ownerId);
-    expect(apiRow.decidedAt?.toISOString()).toBe(approvalRow.decidedAt?.toISOString());
-    expect(webRow.state).toBe('approved');
+    expect(await prRecord(api.prId)).toEqual({
+      mergeAuthority: 'gate',
+      mergeOutcomeRef: 'merge-api',
+    });
+    expect(await prRecord(web.prId)).toEqual({
+      mergeAuthority: 'gate',
+      mergeOutcomeRef: 'merge-web',
+    });
+    // ⚠️ AND NOTHING WAS DECIDED AGAIN: the card's one gate still carries the instant of
+    // the original press, and there is still exactly one of it.
+    const gates = await adminDb.approvalGate.findMany({ where: { workItemId: item.id } });
+    expect(gates).toHaveLength(1);
+    expect(gates[0]!.decidedAt?.toISOString()).toBe(decidedAt);
   });
 });
 
@@ -375,7 +398,7 @@ describe('boundaries', () => {
 });
 
 describe('the members read — what a reload still knows (MOTIR-5484)', () => {
-  it('reads a queued member as queued, and a refused one as awaiting its merge — with no reason', async () => {
+  it('reads a queued member as queued, and a refused one as retryable — with no reason', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'enqueued', entryId: 'MQE_9' },
@@ -389,8 +412,8 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
     );
     // In the set's own order, and nothing a refusal said survives into the read.
     expect(members).toEqual([
-      { subjectVersion: api.version, awaitingMergeGateId: api.mergeGateId, queued: false },
-      { subjectVersion: web.version, awaitingMergeGateId: null, queued: true },
+      { subjectVersion: api.version, pullRequestId: api.prId, queued: false, retryable: true },
+      { subjectVersion: web.version, pullRequestId: web.prId, queued: true, retryable: false },
     ]);
   });
 
@@ -410,7 +433,11 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
       { workItemId: item.id, approvalGateId: approval.id },
       fx.ctx,
     );
-    expect(members.map((m) => m.queued)).toEqual([false, false]);
+    // Merged is not retryable either: there is nothing left to try.
+    expect(members.map((m) => [m.queued, m.retryable])).toEqual([
+      [false, false],
+      [false, false],
+    ]);
   });
 
   it('is empty for an approval gate that has not been approved', async () => {
@@ -439,68 +466,65 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
     return fixture;
   };
 
-  it('approveAndMerge handed a MERGE gate is a programming error, and decides nothing', async () => {
-    const { web } = await pressable();
+  it('approveAndMerge handed a gate of another KIND is a programming error, and decides nothing', async () => {
+    const { item } = await pressable();
+    const design = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: item.id,
+        kind: 'design_result',
+        subjectId: 'ev-1',
+      },
+    });
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: web.mergeGateId, source: 'ui' }, fx.ctx),
-    ).rejects.toThrow(/handed a pull_request_merge gate/);
-    expect((await gateRow(web.mergeGateId)).state).toBe('awaiting');
+      pullRequestMergeService.approveAndMerge({ gateId: design.id, source: 'ui' }, fx.ctx),
+    ).rejects.toThrow(/handed a design_result gate/);
+    expect((await gateRow(design.id)).state).toBe('awaiting');
   });
 
-  it('a retry names a gate it cannot act on as not found — unknown, undecided, another kind, another card', async () => {
+  it('a retry it cannot act on is refused with the door’s own errors — unknown, undecided, not a member', async () => {
     const { approval, api } = await pressable();
-    const retry = (approvalGateId: string, mergeGateId: string) =>
+    const retry = (approvalGateId: string, pullRequestId: string) =>
       pullRequestMergeService.retryApproveAndMergeMember(
-        { approvalGateId, mergeGateId, source: 'ui' },
+        { approvalGateId, pullRequestId, source: 'ui' },
         fx.ctx,
       );
     // The approval still awaits: there is no press to retry a member of.
-    await expect(retry(approval.id, api.mergeGateId)).rejects.toBeInstanceOf(
-      ApprovalGateNotFoundError,
-    );
-    await expect(retry('no-such-gate', api.mergeGateId)).rejects.toBeInstanceOf(
-      ApprovalGateNotFoundError,
-    );
+    await expect(retry(approval.id, api.prId)).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+    await expect(retry('no-such-gate', api.prId)).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
 
     const other = await pressed();
-    await expect(retry(other.approval.id, 'no-such-gate')).rejects.toBeInstanceOf(
-      ApprovalGateNotFoundError,
+    // A pull request that is not this card's, and one that does not exist at all: the
+    // approval covers neither, and neither is a reason to re-ask it.
+    await expect(retry(other.approval.id, api.prId)).rejects.toBeInstanceOf(
+      ApprovalGateSupersededError,
     );
-    // The approval gate itself is not a merge gate.
-    await expect(retry(other.approval.id, other.approval.id)).rejects.toBeInstanceOf(
-      ApprovalGateNotFoundError,
+    await expect(retry(other.approval.id, 'no-such-pull-request')).rejects.toBeInstanceOf(
+      ApprovalGateSupersededError,
     );
-    // A merge gate from ANOTHER card is never merged on this approval.
-    await expect(retry(other.approval.id, api.mergeGateId)).rejects.toBeInstanceOf(
-      ApprovalGateNotFoundError,
-    );
+    expect((await gateRow(other.approval.id)).state).toBe('approved');
   });
 
-  it('a retried merge gate with no recorded head is a withdrawn question, reported as a refusal', async () => {
-    const { item, approval } = await pressed();
-    const webPrId = (await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } })).id;
-    const headless = await withWorkspaceContext(fx.ctx, (tx) =>
-      approvalGateRepository.create(
-        {
-          workspaceId: fx.workspaceId,
-          projectId: fx.projectId,
-          workItemId: item.id,
-          kind: 'pull_request_merge',
-          subjectId: webPrId,
-        },
-        tx,
-      ),
-    );
+  it('a retried member with no recorded head is a withdrawn question, reported as nothing to merge', async () => {
+    const { approval, web } = await pressed();
+    // Every check row for #7 disappears, so the pull request has no head to compare.
+    await adminDb.githubCheckRun.deleteMany({ where: { pullRequestId: web.prId } });
+
     const member = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: approval.id, mergeGateId: headless.id, source: 'ui' },
+      { approvalGateId: approval.id, pullRequestId: web.prId, source: 'ui' },
       fx.ctx,
     );
-    expect(member).toMatchObject({ outcome: 'refused', subjectVersion: '' });
+    expect(member).toEqual({
+      subjectVersion: web.version,
+      pullRequestId: null,
+      outcome: 'no_merge_gate',
+    });
   });
 
   it.each([
     [
-      'an already-decided merge gate names its decider',
+      'an already-decided gate names its decider',
       () => new ApprovalGateAlreadyDecidedError('g', 'approved', 'u', new Date(), 'Ada L.'),
       { tag: 'APPROVAL_GATE_ALREADY_DECIDED', decidedByLabel: 'Ada L.' },
     ],
@@ -520,56 +544,51 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
       { tag: 'UNEXPECTED' },
     ],
   ])('a member refusal maps into the frame’s vocabulary: %s', async (_label, error, refusal) => {
-    const { approval, api } = await pressable();
-    stubHost({
-      7: { outcome: 'merged', commitSha: 'merge-web' },
-      12: { outcome: 'refused', refusal: { code: 'conflict' } },
-    });
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
-    vi.spyOn(pullRequestMergeService, 'approveMergeGate').mockRejectedValue(error());
+    const { approval, api } = await pressed();
+    // The check's own first call — every refusal below is raised before a host is named.
+    vi.spyOn(projectAccessService, 'assertPermission').mockRejectedValue(error());
 
     const member = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: approval.id, mergeGateId: api.mergeGateId, source: 'ui' },
+      { approvalGateId: approval.id, pullRequestId: api.prId, source: 'ui' },
       fx.ctx,
     );
     expect(member).toMatchObject({ outcome: 'refused', refusal });
   });
 
   it('an error that is not a refusal of the member is rethrown, not swallowed', async () => {
-    const { approval, api } = await pressable();
-    stubHost({
-      7: { outcome: 'merged', commitSha: 'merge-web' },
-      12: { outcome: 'refused', refusal: { code: 'conflict' } },
-    });
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
-    vi.spyOn(pullRequestMergeService, 'approveMergeGate').mockRejectedValue(
+    const { approval, api } = await pressed();
+    vi.spyOn(projectAccessService, 'assertPermission').mockRejectedValue(
       new Error('the database fell over'),
     );
 
     await expect(
       pullRequestMergeService.retryApproveAndMergeMember(
-        { approvalGateId: approval.id, mergeGateId: api.mergeGateId, source: 'ui' },
+        { approvalGateId: approval.id, pullRequestId: api.prId, source: 'ui' },
         fx.ctx,
       ),
     ).rejects.toThrow('the database fell over');
   });
 
-  it('the members read: a decided merge gate with no merge record, or whose pull request is gone, is not queued', async () => {
+  it('the members read: a member whose PULL REQUEST is gone is neither queued nor retryable', async () => {
     const { item, approval, web, api } = await pressable();
-    // Decided straight through the door — no merge was recorded on the pull request.
-    await approvalGatesService.decide(
-      { gateId: web.mergeGateId, decision: 'approve', source: 'ui' },
-      fx.ctx,
-    );
-    stubHost({ 12: { outcome: 'enqueued', entryId: 'MQE_11' } });
+    stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'enqueued', entryId: 'MQE_11' },
+    });
     await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
     // #12's pull request row disappears after it was queued.
+    await adminDb.workItemDelivery.deleteMany({ where: { githubPullRequestId: api.prId } });
     await adminDb.githubPullRequest.delete({ where: { id: api.prId } });
 
     const members = await pullRequestMergeService.listApprovalMembers(
       { workItemId: item.id, approvalGateId: approval.id },
       fx.ctx,
     );
-    expect(members.map((m) => m.queued)).toEqual([false, false]);
+    // The member the approval named is still listed — the set is what was approved, not
+    // what survives — but there is nothing to say about it and nothing to press.
+    expect(members).toEqual([
+      { subjectVersion: api.version, pullRequestId: null, queued: false, retryable: false },
+      { subjectVersion: web.version, pullRequestId: web.prId, queued: false, retryable: false },
+    ]);
   });
 });

@@ -397,10 +397,6 @@
       "label": "删除工作项",
       "description": "永久删除工作项及其下级内容，无法撤销。"
     },
-    "work_item_merge_pull_request": {
-      "label": "合并拉取请求",
-      "description": "批准工作项的拉取请求，由 Motir 在 Git 托管平台上完成合并。"
-    },
     "work_item_triage": {
       "label": "处理收件箱",
       "description": "接受、拒绝、升级或延后收件箱中的条目。"
@@ -7495,7 +7491,6 @@
       "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
       "noVersion": "无版本号",
       "decidedOn": "基于 <mono>{version}</mono>",
-      "mergeSubjectMeta": "{pr} · 拉取请求",
       "subjectGone": "此项针对的设计已不存在",
       "notRenderable": "Motir 暂不支持展示此类型",
       "notBuiltYet": "尚未实现",

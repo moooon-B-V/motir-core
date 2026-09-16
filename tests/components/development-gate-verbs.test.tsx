@@ -152,13 +152,11 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
         members: [
           {
             subjectVersion: CORE_V,
-            mergeGateId: 'mg-1',
             pullRequestId: CORE_PR.id,
             outcome: 'merged',
           },
           {
             subjectVersion: GATEWAY_V,
-            mergeGateId: 'mg-2',
             pullRequestId: GATEWAY_PR.id,
             outcome: 'enqueued',
           },
@@ -196,13 +194,11 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
         members: [
           {
             subjectVersion: CORE_V,
-            mergeGateId: 'mg-1',
             pullRequestId: CORE_PR.id,
             outcome: 'merged',
           },
           {
             subjectVersion: GATEWAY_V,
-            mergeGateId: 'mg-2',
             pullRequestId: GATEWAY_PR.id,
             outcome: 'refused',
             refusal: { tag: 'MERGE_CONFLICT' },
@@ -213,7 +209,6 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
         ok: true,
         member: {
           subjectVersion: GATEWAY_V,
-          mergeGateId: 'mg-2',
           pullRequestId: GATEWAY_PR.id,
           outcome: 'merged',
         },
@@ -239,7 +234,7 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
     );
     expect(actions.retryMember).toHaveBeenCalledWith({
       approvalGateId: APPROVED.id,
-      mergeGateId: 'mg-2',
+      pullRequestId: GATEWAY_PR.id,
       identifier: 'ACME-12',
     });
     expect(screen.queryByRole('alert')).toBeNull();
@@ -273,8 +268,13 @@ describe('after a reload (Panels 12s, 12u′)', () => {
       {
         gate: APPROVED,
         members: [
-          { subjectVersion: CORE_V, awaitingMergeGateId: null, queued: true },
-          { subjectVersion: GATEWAY_V, awaitingMergeGateId: 'mg-2', queued: false },
+          { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: true, retryable: false },
+          {
+            subjectVersion: GATEWAY_V,
+            pullRequestId: GATEWAY_PR.id,
+            queued: false,
+            retryable: true,
+          },
         ],
       },
       fakeActions(),
@@ -294,7 +294,9 @@ describe('after a reload (Panels 12s, 12u′)', () => {
     renderFrame(
       {
         gate: AWAITING,
-        members: [{ subjectVersion: CORE_V, awaitingMergeGateId: 'mg-1', queued: false }],
+        members: [
+          { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: false, retryable: true },
+        ],
       },
       fakeActions(),
     );
@@ -311,7 +313,14 @@ describe('who else sees it (Panels 12w, 12v)', () => {
       {
         gate: APPROVED,
         canDecide: false,
-        members: [{ subjectVersion: GATEWAY_V, awaitingMergeGateId: 'mg-2', queued: false }],
+        members: [
+          {
+            subjectVersion: GATEWAY_V,
+            pullRequestId: GATEWAY_PR.id,
+            queued: false,
+            retryable: true,
+          },
+        ],
       },
       fakeActions(),
     );
@@ -395,13 +404,11 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
         members: [
           {
             subjectVersion: CORE_V,
-            mergeGateId: 'mg-1',
             pullRequestId: CORE_PR.id,
             outcome: 'merged',
           },
           {
             subjectVersion: GATEWAY_V,
-            mergeGateId: null,
             pullRequestId: null,
             outcome: 'no_merge_gate',
           },
@@ -428,13 +435,11 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
         members: [
           {
             subjectVersion: CORE_V,
-            mergeGateId: 'mg-1',
             pullRequestId: CORE_PR.id,
             outcome: 'merged',
           },
           {
             subjectVersion: GATEWAY_V,
-            mergeGateId: 'mg-2',
             pullRequestId: GATEWAY_PR.id,
             outcome: 'merged',
           },
@@ -466,7 +471,9 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
     renderFrame(
       {
         gate: APPROVED,
-        members: [{ subjectVersion: CORE_V, awaitingMergeGateId: null, queued: false }],
+        members: [
+          { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: false, retryable: false },
+        ],
       },
       fakeActions(),
     );
@@ -492,14 +499,12 @@ describe('the remaining frame arms (MOTIR-5486 coverage floor)', () => {
         members: [
           {
             subjectVersion: CORE_V,
-            mergeGateId: 'mg-1',
             pullRequestId: CORE_PR.id,
             outcome: 'refused',
             refusal: { tag: 'MERGE_CONFLICT' },
           },
           {
             subjectVersion: GATEWAY_V,
-            mergeGateId: 'mg-2',
             pullRequestId: GATEWAY_PR.id,
             outcome: 'refused',
             refusal: { tag: 'MERGE_CONFLICT' },

@@ -4,7 +4,6 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
-import { pullRequestMergeGateHandler } from '@/lib/approvalGates/pullRequestMergeHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 
@@ -53,11 +52,15 @@ import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
  * it, and each later kind is then a row in the enum, a handler, and a renderer
  * rather than a second approval feature.
  */
-// MOTIR-4793 registers the SECOND: `pull_request_merge`, the kind Story MOTIR-4882
-// merges through (`approval-gates.md` §4 and its second amendment).
-// MOTIR-5481 registers the THIRD: `pull_request_approval`, the approve-and-merge gate over a
+// MOTIR-5481 registers the SECOND: `pull_request_approval`, the approve-and-merge gate over a
 // card's delivery set that Story MOTIR-4909 decides (§8's amendment, decisions 2 and 6).
-export type RegisteredGateKind = 'design_result' | 'pull_request_merge' | 'pull_request_approval';
+//
+// ⚠️ `pull_request_merge` WAS REGISTERED HERE (MOTIR-4793) AND IS RETIRED (Bug MOTIR-5603 ·
+// MOTIR-5616; §8's SECOND AMENDMENT, decision 8). A card holds ONE approve-to-merge gate, so
+// the per-pull-request kind has no producer (MOTIR-5611), no decider (MOTIR-5613) and no
+// surface (MOTIR-5615). It moves to the holes below rather than out of the enum: the rows it
+// already wrote are superseded, not deleted, and they still reference the value.
+export type RegisteredGateKind = 'design_result' | 'pull_request_approval';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -66,12 +69,14 @@ export type RegisteredGateKind = 'design_result' | 'pull_request_merge' | 'pull_
  * | kind                    | owner                                              |
  * | ----------------------- | -------------------------------------------------- |
  * | `decision_approval`     | MOTIR-4907 — the DECISION gate                     |
+ * | `pull_request_merge`    | nobody — RETIRED (MOTIR-5616)                      |
  *
- * ⚠️ The card's own text names ONE hole (`pull_request_merge`), because it was
- * written before MOTIR-4911's ADR amendment added `decision_approval` and split
- * the pull-request kind in two. The merged enum has four members and three
- * holes; `prisma/schema.prisma`'s own comment on `ApprovalGateKind` already says
- * so, and the ADR §1 amendment is the authority.
+ * ⚠️ THE TWO HOLES ARE NOT THE SAME KIND OF HOLE, and the difference is worth
+ * keeping: `decision_approval` is NOT BUILT YET and has a card that will build
+ * it; `pull_request_merge` is BUILT AND WITHDRAWN. Nothing owns it, nothing will
+ * register it again, and a surface meeting one of its superseded rows should say
+ * this build does not render the kind — which is exactly what being unregistered
+ * makes it say.
  */
 export type UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>;
 
@@ -85,6 +90,7 @@ export type UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>
  */
 export const UNREGISTERED_GATE_KINDS = [
   'decision_approval',
+  'pull_request_merge',
 ] as const satisfies readonly UnregisteredGateKind[];
 
 // TOTALITY, asserted at the type level. `Exclude` gives us the complement of the
@@ -273,9 +279,10 @@ export interface GateHandler<TSubject = unknown> {
    * which prefers the key and falls back to the CATEGORY. Hard-coding a key here
    * is the *never hard-code a status key* rule this indirection exists for.
    *
-   * `null` for a kind that moves nothing — `pull_request_merge`, where the
-   * webhook moves the card (§4) — and that is a real answer rather than a
-   * not-yet: it is what keeps `done` to one writer.
+   * `null` for a kind that moves nothing, which is a real answer rather than a
+   * not-yet: it is what keeps `done` to one writer. The retired merge kind was
+   * the example — the webhook moved its card (§4) — and the approve-and-merge
+   * gate that replaced it DOES move one, to `approved`.
    */
   statusIntent: { key: string; category: StatusCategoryDto } | null;
 
@@ -301,7 +308,6 @@ export interface GateHandler<TSubject = unknown> {
  */
 export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   design_result: designResultGateHandler,
-  pull_request_merge: pullRequestMergeGateHandler,
   pull_request_approval: pullRequestApprovalGateHandler,
 };
 

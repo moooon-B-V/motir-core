@@ -865,13 +865,16 @@ back keeps its decision record and loses its bytes on the ordinary seven-day
 sweep — the intended loss. Nothing about that is yours to manage; it is here so
 you do not treat a superseded design's missing files as a defect.
 
-**The merge gate is RAISED ON GREEN, not on opening (Story MOTIR-4882).** Opening a
-pull request raises nothing. When a run target's whole delivery set goes green in a
-`manual` project, Motir raises one `awaiting` `pull_request_merge` gate per pull
-request (`lib/services/mergeGates.ts`), and a push, a close or an unlink withdraws
-it. Approving one MERGES — or enqueues — that pull request first and is decided only
-once the host said yes (`pullRequestMergeService`); a refusal decides nothing. So a
-green card of yours in a manual project is waiting on a person to press merge, and
+**The approve-to-merge gate is RAISED ON GREEN, not on opening (Story MOTIR-4882;
+Bug MOTIR-5603).** Opening a pull request raises nothing. When a run target's whole
+delivery set goes green in a `manual` project, Motir raises **ONE** `awaiting`
+`pull_request_approval` gate over the WHOLE SET — not one per pull request
+(`lib/services/pullRequestApprovalGates.ts`) — and a push, a close or an unlink to
+ANY member withdraws it, because the set is the subject. Approving it commits the
+decision FIRST and then merges, or enqueues, every member, recording each outcome on
+its own pull request (`pullRequestMergeService.approveAndMerge`); a member the host
+refuses is retried from that row and never re-asks the question. So a green card of
+yours in a manual project is waiting on a person to press _Approve and merge_, and
 the card reaches `done` on the merge webhook, never on your push.
 `docs/approval-gates.md` § _What does not exist yet_ is the list to trust over any
 inference from this section.

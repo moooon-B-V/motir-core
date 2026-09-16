@@ -6,7 +6,6 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { withdrawMergeGateOnUnlink } from './mergeGates';
 import { withdrawPullRequestApprovalGateOnSetChange } from './pullRequestApprovalGates';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
@@ -523,10 +522,9 @@ export const githubPullRequestService = {
 
       const count = await workItemDeliveryRepository.remove(workItemId, pullRequestId, tx);
       // The row left the card, so the card's merge question about it goes too, in
-      // the same transaction (MOTIR-5515).
+      // the same transaction: a member left the set the approve-and-merge gate asked
+      // about (MOTIR-5482). The per-pull-request gate retired with MOTIR-5611.
       if (count > 0) {
-        await withdrawMergeGateOnUnlink(workItemId, pullRequestId, tx);
-        // A member left the set the approve-and-merge gate asked about (MOTIR-5482).
         await withdrawPullRequestApprovalGateOnSetChange(workItemId, tx);
       }
       return { removed: count > 0 };
@@ -607,9 +605,8 @@ export const githubPullRequestService = {
       // the one named here and keeps the other three, which is the difference
       // between a correction and a retraction.
       const count = await workItemDeliveryRepository.remove(input.workItemId, pr.id, tx);
-      // The same withdrawal the sibling arm makes (MOTIR-5515).
+      // The same withdrawal the sibling arm makes (MOTIR-5482).
       if (count > 0) {
-        await withdrawMergeGateOnUnlink(input.workItemId, pr.id, tx);
         await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
       }
       return { removed: count > 0, pullRequestId: pr.id };
