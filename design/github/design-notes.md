@@ -23,6 +23,10 @@ built by **MOTIR-5005**.
   [`approve-and-merge.dark.png`](./approve-and-merge.dark.png) — the approve-and-merge verbs and
   their states (Panels 12p–12w), specified in §20 _The verbs and their states_. It carries
   `github.mock.html`'s own tokens, primitives and sprite sheet verbatim.
+- **Delta sheet (MOTIR-5463, 2026-09-16):**
+  [`github--fix-callout.mock.html`](./github--fix-callout.mock.html) — the Development block's red
+  state (Panels F1–F4), specified in §21. It amends §20 and edits no existing mock; no image export
+  ships (`docs/decisions/design-result.md` AMENDMENT 4).
 
 ---
 
@@ -1641,3 +1645,147 @@ and MOTIR-5480 (19 → 21).
 | [MOTIR-5437](motir:cmu118c1q0007hytx0tt38vq4) | **GIVES** these states for its overlay to compose, and the To-approve row it later gives a _Review_ door (workbench § 23). **TAKES** nothing                                                                                                                                                            |
 | [MOTIR-5327](motir:cmtzoqqmt00bzhvtxgxduxev2) | done; its Panels 12c and 12o are **corrected on the sheet** (the running row turned green). No criterion of its changes                                                                                                                                                                                 |
 | MOTIR-5461 (the ejection story)               | **nothing either way** — what a row shows after a queue EJECTS its pull request is its own design                                                                                                                                                                                                       |
+
+## 21 · The Development block's RED state — a copyable `motir fix`, a fix in progress, a fix that gave up (MOTIR-5463, 2026-09-16)
+
+**AMENDS § 20** — Panels 12a / 12b (the block), 12d (the copyable code block) and 12m (the child
+pointer) in `design/github/github.mock.html` — in the delta
+**[`github--fix-callout.mock.html`](./github--fix-callout.mock.html)**, Panels **F1–F4**, each at
+desktop, dark and ~400px. Card MOTIR-5463. **No existing mock is edited** and no image export ships
+(`docs/decisions/design-result.md` AMENDMENT 4; `CLAUDE.md` § "Design assets — TWO files per
+surface"). The component that builds every panel is **MOTIR-5466**.
+
+**Why it is owed.** On an Implemented card whose run has ended, a red pull request shows the
+_Checks failing_ pill (§ 20's tone table: `severity="danger"`, `--el-tint-rose`, lucide `circle-x`)
+and nothing to do about it. The product has no hosted dispatch, so what the card hands over is a
+**command**: `motir fix <key>`.
+
+**Access path.** The item page → the **Development card** (Panels 12a / 12b). No new entry point:
+the new **fix part** sits inside that card, below the rows' caption and above How to test. Every
+panel draws the card on its item page (key, title, status) so the reader sees where it lives.
+
+### Rendered against shipped reality, not redrawn
+
+`DevelopmentSectionBody` was rendered at `origin/main` `3205ae235` with the shipped fixtures
+(`tests/helpers/howToTestFixtures`) and a row's `ci` set to `failing`: the rows, the caption, How to
+test's `Part` (`mt-4 flex min-w-0 flex-col gap-3 border-t border-(--el-border-soft) pt-4` with an
+`h4`) and the child pointer are that output. The code block is
+`components/markdown/CopyableCodeBlock.tsx` (Panel 12d): the delta's `.dvb-code*` / `.dvb-copy` rules
+are `github.mock.html`'s byte for byte, and the fix part **composes** that component with
+`language="shell"` — exactly what How to test's _Locally_ fact already does
+(`<CopyableCodeBlock language="shell" code={repo.fetchCommand} />`). No second code block is drawn.
+
+### The panels, and the card that builds each
+
+| panel | state                                                                                                                                                                                    | shown when (the repair claim's answer, MOTIR-5464)                                                                                         | built by   |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| F1    | **Red, nobody fixing it** — the failing set named `owner/name · #n`, `motir fix ACME-12` in Panel 12d's code block with its _Copy_ control, one sentence on what the agent does          | `implemented`, ≥ 1 row failing, none running, **no open `fix` run** → `claimed`. A `fix` run that was **stopped** (interrupted) lands here | MOTIR-5466 |
+| F2    | **A fix in progress** — _Being fixed by Mara S. · started 4 min ago_, a sky _Fixing_ pill, **no code block and no Copy control**                                                         | an **open** `fix` dispatch run → `taken` (or `mine` for the viewer: _Being fixed by you_)                                                  | MOTIR-5466 |
+| F3    | **The last fix gave up** — a danger callout _The last fix gave up after 5 attempts · 20 min ago_, a rose _Gave up_ pill, and the command **offered again**                               | the latest `fix` run is **failed**, and nothing is open                                                                                    | MOTIR-5466 |
+| F4    | **A child of a container run** — names its own failing pull request, then _Run the fix from ACME-12 — …_; **no command**. Panel 12m's _Tested as part of ACME-12_ stays below, unchanged | `not_repairable` / `repair_on_run_target`, which names the run-target key                                                                  | MOTIR-5466 |
+
+**Not shown (state 5 — a note, not a panel).** The part renders **nothing**, and the card is exactly
+Panel 12a / 12b, when any check is **running**, when every check is **passing**, when **no check**
+reported, when the card has **no pull request**, or when the card is **not `implemented`** — the
+claim's `ci_running`, `not_failing`, `no_pull_requests` and `not_implemented`. The part and the claim
+read **one predicate**; the part never shows a command the claim would refuse.
+
+**With an approve-and-merge gate.** MOTIR-4909's frame is not redrawn. On a card with both a red pull
+request and a gate the fix part keeps the same place — **inside band 2 (the port), below the rows'
+caption, above How to test** — and the port's `[data-port]` rule lifts its code block to
+`--el-card`, as for every code block in the port. (Under § 20's decision 3 a gate is raised only on an
+all-green set, and a push withdraws it, so this pairing is rare: a check that turns red on an
+unchanged head.)
+
+### Decisions
+
+| decision                  | chosen                                                                                                                                                                                      | why                                                                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the "callout"'s container | **a flush part** of the Development card — a soft rule and an `h4` (_Fix the checks_), the grammar How to test uses; **not** a box                                                          | a container does not go inside the card that already names it (§ 20, _No card inside a card_); a boxed callout would also nest Panel 12d's bordered code block inside a second box |
+| where it sits             | **below the rows' caption, above How to test**                                                                                                                                              | it acts on the rows just read; How to test is evidence for a green set and reads after the repair                                                                                  |
+| naming the failing set    | the **same string the row's meta line carries** (`moooon/motir-core · #131`), bold, never broken; one or more joined by the locale's list format (`Intl.ListFormat`, `type: 'conjunction'`) | read together with the rows, as § 20's repository sub-headings are                                                                                                                 |
+| the command               | **`motir fix {key}`**, the card's own key, in `CopyableCodeBlock language="shell"`; the copy writes exactly that string                                                                     | one control the product already ships, with its rest / hover / copied / failed states                                                                                              |
+| in progress               | **no command at all**, not a disabled one                                                                                                                                                   | a second person must not start a second repair; the claim would refuse it anyway (`taken`)                                                                                         |
+| the time                  | **relative** (`Intl.RelativeTimeFormat`, minutes then hours then days) with `formatRunInstant` in `title`, on a `<time datetime>`                                                           | the card's wording (_started 4 min ago_); `ApprovalRow`'s relative label is the precedent. The absolute run time stays one hover away, in the run area's one format                |
+| gave up                   | the shipped callout shape (`.dvb-callout`) on **`--el-danger-surface`**, then the command again                                                                                             | a terminal state owes its own drawing, and its next move is to run it again                                                                                                        |
+| the attempt count         | **data** — the `attempts` field of the failed run's `ci_gave_up` event (`CiWatchOutcome` in `packages/cli/src/ciWatch.ts`)                                                                  | the cap is `CI_FIX_ATTEMPTS` (5 today) and is meant to become a setting; a literal 5 would lie the day it changes                                                                  |
+| stopped                   | a `fix` run that ended **stopped** (stop reason `interrupted`) draws **F1**, with no history line                                                                                           | nothing is running and nothing gave up; the person who stopped it knows why                                                                                                        |
+| the child                 | **names its own failing row**, then points at the run target by key; **no command**                                                                                                         | the repair runs on the run target (`repair_on_run_target`), where every pull request of the run is fixed together                                                                  |
+
+### Fields read
+
+| rendered element           | field(s) read                                                                                                                                          | panel |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| whether the part renders   | the card's status (`implemented`) and each row's `ci` — the same predicate as the repair claim's `not_repairable` reasons                              | all   |
+| the failing set            | the rows with `ci === 'failing'` → `repo` + `number` (the claim's failing PRs carry `{ repo, number, url, headRef, baseRef, ci }`)                     | F1–F4 |
+| the command                | the card's own key → `motir fix {key}`                                                                                                                 | F1 F3 |
+| the holder and start       | the **open** dispatch run with `command = fix` scoped to the card → its user's display name (`createdBy`) and `startedAt`; _you_ when it is the viewer | F2    |
+| the attempt count and time | the **latest** `fix` run with `status = failed` → the `attempts` of its `ci_gave_up` event's `data`, and the run's `endedAt`                           | F3    |
+| the run target             | `repair_on_run_target`'s run-target key (the same key § 20's `runTarget` gives the child pointer)                                                      | F4    |
+
+### Tone and tokens
+
+`--el-*` colour and element-semantic shape tokens only; each `fx-` rule in the delta quotes the class
+string MOTIR-5466 builds it from. The part: `border-(--el-border-soft)` rule, `h4` in `--el-text`. The
+failing line: `--el-text`, its `circle-x` glyph in `--el-danger-on-surface`. The holder and child lines:
+`--el-text-secondary`, the name in `--el-text`, the glyph `--el-icon-muted`. The sentence under the
+command: `--el-text-secondary`. The gave-up callout: `--el-danger-surface` + `--el-danger-surface-text`
+(tint + strong ink, finding #35), `rounded-(--radius-card)`. Pills ride the shipped `Pill` axes, no new
+variant: _Fixing_ `status="in-progress"` (sky) + `circle-ellipsis`; _Gave up_ `severity="danger"` (rose)
+
+- `triangle-alert`. No new sprite: `audit-mock-sprites --strict` on the delta — 44 symbols, 0 drifted,
+  0 undeclared.
+
+### Copy — `en` + `zh`
+
+One namespace, **`github.development.fix`**, beside `github.development.howToTest`. The code block's
+_Copy_ / _Copied_ / failure strings are `github.development.howToTest.code.*`, shipped and not
+re-keyed. The fence label `shell` is not translated. The CLI's own refusal text is not this card's.
+
+| key             | en                                                                                          | zh                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `title`         | Fix the checks                                                                              | 修复检查                                                                    |
+| `aria.part`     | Fix the checks                                                                              | 修复检查                                                                    |
+| `failingOn`     | Checks are failing on {prs}.                                                                | {prs} 的检查未通过。                                                        |
+| `lead`          | Hand the repair to an agent from your terminal:                                             | 在终端中将修复交给智能体：                                                  |
+| `how`           | An agent works on the pull request's own branch, pushes, and the checks run again.          | 智能体在该拉取请求自己的分支上工作并推送，然后检查会重新运行。              |
+| `howMany`       | An agent works on each pull request's own branch, pushes, and the checks run again.         | 智能体在每个拉取请求自己的分支上工作并推送，然后检查会重新运行。            |
+| `fixing.pill`   | Fixing                                                                                      | 修复中                                                                      |
+| `fixing.by`     | Being fixed by {name} · started {time}                                                      | {name} 正在修复 · {time}开始                                                |
+| `fixing.byYou`  | Being fixed by you · started {time}                                                         | 你正在修复 · {time}开始                                                     |
+| `fixing.why`    | Only one fix runs at a time. The checks run again when the agent pushes.                    | 同一时间只运行一个修复。智能体推送后，检查会重新运行。                      |
+| `gaveUp.pill`   | Gave up                                                                                     | 已放弃                                                                      |
+| `gaveUp.title`  | The last fix gave up after {attempts, plural, one {# attempt} other {# attempts}}           | 上一次修复在尝试 {attempts} 次后放弃                                        |
+| `gaveUp.body`   | The checks are still red. Run it again, or open the pull request to see which check fails.  | 检查仍未通过。请再次运行，或打开拉取请求查看是哪项检查失败。                |
+| `child.pointer` | Run the fix from {key} — this card was built as part of that run, so its repair runs there. | 请从 {key} 运行修复——此工作项是作为该运行的一部分构建的，修复也在那里运行。 |
+
+`{time}` is the relative label (_4 min ago_ / _4分钟前_) and `gaveUp.title` is followed by
+` · {time}.` in both locales; `{prs}` is the list-formatted failing set (_A and B_ / _A和B_).
+
+### Scope
+
+**Drawn:** the fix part in its four states, each at desktop, dark and ~400px; the not-shown rule; the
+place under a gate. **Not drawn, and whose it is:** the component — MOTIR-5466; the claim and its
+outcomes — MOTIR-5464; `motir fix` and its terminal output, including every refusal — MOTIR-5465; the
+approve-and-merge frame — MOTIR-4909 (§ 20, _The verbs and their states_); the acceptance video —
+MOTIR-5468. How to test (Panel 12b) is unchanged and abbreviated on the sheet.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' <asset> | sort -u` over the two edited assets.
+`github--fix-callout.mock.html` carries **26** keys: four are this section's (MOTIR-5463, 5464, 5465,
+5466); the other 22 (among them MOTIR-4909, cited again in the sheet's gate note) are
+`approve-and-merge.mock.html`'s stylesheet and sprite provenance, carried verbatim, and GIVE or TAKE
+nothing here. This notes file gains MOTIR-5463, 5464, 5465, 5466 and 5468.
+
+| key        | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5466 | **GIVES** every panel (F1–F4), the not-shown rule, the copy and the tokens above — it builds the fix part. **TAKES** nothing it does not already own                                                                                                                                                                                                                                                              |
+| MOTIR-5464 | **GIVES** each outcome a drawing (`claimed` F1 · `taken` / `mine` F2 · `repair_on_run_target` F4 · the other `not_repairable` reasons the not-shown rule). **TAKES** the read the panels need: the open `fix` run's **holder display name and `startedAt`**, and the **latest ended `fix` run** (status, `endedAt`, and its `ci_gave_up` `attempts`) — a read beside the claim, not only the claim's own response |
+| MOTIR-5465 | **TAKES** that a gave-up `motir fix` records its **attempt count as data** on the run — the `ci_gave_up` event's `attempts`, as `motir run`'s CI watch already writes it — and closes the run with `status = failed` and `endedAt`; a green fix ends with stop reason `completed`, an interrupt with `interrupted`. **GIVES** nothing drawn: its terminal output is not this card's                               |
+| MOTIR-4909 | **nothing either way** — its frame is not redrawn; the fix part keeps its place inside band 2                                                                                                                                                                                                                                                                                                                     |
+| MOTIR-5468 | **GIVES** the four states as the acceptance video's script (F1 → F2 → F3, and F4 on a child). **TAKES** nothing                                                                                                                                                                                                                                                                                                   |
+| MOTIR-5463 | this card                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+Fixture items use `ACME-n` keys (the card's `MOTIR-123` placeholder is drawn as `ACME-12`, as the
+rest of this area does), so they link to nothing.
