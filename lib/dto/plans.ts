@@ -359,8 +359,9 @@ export interface PlanItemProposedFields {
    * migration and a platform deploy in front of every new rule pack, and the
    * value's only producer is the system that owns the vocabulary.
    *
-   * REFUSED on a CONTAINER kind, mirroring `type`: which packs a card composes
-   * is a leaf question, and a KIND question is this repository's domain.
+   * LEGAL ON EVERY KIND (MOTIR-5607). It was refused on a container, mirroring
+   * `type`; that refusal is retired — a subject says what a work item is ABOUT,
+   * and a container is about something exactly as much as a leaf is.
    *
    * OPTIONAL in BOTH directions — a proposal carrying none materializes exactly
    * as it did before this field existed, which is what makes the axis purely
@@ -873,8 +874,9 @@ export interface CorrectProposalInput extends UpdateProposalInput {
    *
    * Without this key a mis-derived subject would be unfixable short of a whole new
    * plan, which is precisely the cost AMENDMENT 8's doors exist to remove.
-   * Re-validated by the same shape and container checks the append runs, so a
-   * correction cannot introduce a subject the append would have refused.
+   * Re-validated by the same SHAPE check the append runs, so a correction cannot
+   * introduce a subject the append would have refused. The container check that
+   * stood beside it retired with MOTIR-5607, at both doors together.
    */
   subject?: string | null;
 }

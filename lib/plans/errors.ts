@@ -470,15 +470,24 @@ export type PlanGrammarViolation =
    * refused one hop later, by the planner's own resolver. What this refuses is a
    * value that could not name a `subject-<name>.md` file at all.
    */
-  | 'malformed_subject'
-  /**
-   * An `add` proposing a `subject` on a CONTAINER kind (Story MOTIR-5062 ·
-   * MOTIR-5065) — the mirror of the existing refusal of a `type` on an
-   * `epic` / `story`, and a KIND question, which unlike the vocabulary IS this
-   * repository's domain. Which rule packs a card composes is decided for the LEAF
-   * that gets authored; a container's rules come from its own kind pack.
-   */
-  | 'subject_on_container';
+  | 'malformed_subject';
+
+/*
+ * ⚠️ `subject_on_container` WAS A MEMBER AND IS RETIRED (MOTIR-5607).
+ *
+ * It refused an `add` proposing a `subject` on a container kind (Story
+ * MOTIR-5062 · MOTIR-5065), mirroring the refusal of a `type` on an
+ * `epic` / `story`. A subject is now legal on EVERY kind, so the code had no
+ * throw site left — and a refusal reason that cannot fire is dead vocabulary the
+ * classification test below would go on classifying for ever. It is removed from
+ * the union rather than kept as a declared-but-unreachable member: the record
+ * beneath is compile-enforced in BOTH directions, so nothing can reference it
+ * silently.
+ *
+ * The two axes it conflated are now separate. `TYPEABLE_KINDS` still gates
+ * `type` / `executor` — an epic still cannot carry a `type` — and is no longer
+ * consulted about a subject at either write boundary.
+ */
 
 /**
  * Every {@link PlanGrammarViolation} member, ENUMERABLE AT RUNTIME (MOTIR-3936).
@@ -498,7 +507,6 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   parent_depth_limit: true,
   parent_terminal: true,
   malformed_subject: true,
-  subject_on_container: true,
 };
 
 /** {@link PlanGrammarViolation}'s members as an array — see the record above. */
