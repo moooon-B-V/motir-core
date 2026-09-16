@@ -60,6 +60,8 @@ export type GateRefusal =
       reason?: string;
     }
   | { tag: 'MERGE_ALREADY_MERGED' }
+  // Queue again lost the claim to another press (MOTIR-5634).
+  | { tag: 'MERGE_ALREADY_REQUEUED' }
   | {
       tag: 'MERGE_APP_PERMISSION_MISSING';
       /**
@@ -113,6 +115,7 @@ export function toGateRefusal(
     case 'MERGE_CHECKS_NOT_GREEN':
     case 'MERGE_CONFLICT':
     case 'MERGE_ALREADY_MERGED':
+    case 'MERGE_ALREADY_REQUEUED':
       return { tag: code };
     case 'MERGE_BRANCH_PROTECTED':
       return extra?.reason ? { tag: code, reason: extra.reason } : { tag: code };

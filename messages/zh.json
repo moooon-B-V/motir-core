@@ -8397,6 +8397,10 @@
         "title": "该拉取请求已经合并。",
         "next": "无需再做任何操作。合并送达后，工作项会自动推进。"
       },
+      "mergeAlreadyRequeued": {
+        "title": "已有人把这个拉取请求重新放回合并队列。",
+        "next": "无需再做任何操作。刷新页面查看它现在的状态。"
+      },
       "mergeAppPermissionMissing": {
         "title": "Motir 的 GitHub App 无权在此合并。",
         "next": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 {permission} 权限，然后再次批准。",

@@ -8401,6 +8401,10 @@
         "title": "This pull request is already merged.",
         "next": "Nothing is left to do. The work item moves when the merge arrives."
       },
+      "mergeAlreadyRequeued": {
+        "title": "Someone already put this pull request back in the merge queue.",
+        "next": "Nothing is left to do. Reload to see where it is now."
+      },
       "mergeAppPermissionMissing": {
         "title": "Motir's GitHub App is not allowed to merge here.",
         "next": "An organisation owner grants {permission} to Motir's GitHub App on GitHub, then you approve again.",

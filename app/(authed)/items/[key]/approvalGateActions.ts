@@ -10,6 +10,7 @@ import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService'
 import { ApprovalGateError, ApprovalGateMergeRefusedError } from '@/lib/approvalGates/errors';
 import { ApprovalGateAlreadyDecidedError } from '@/lib/approvalGates/errors';
 import { MergeChangeRequestError } from '@/lib/git/errors';
+import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
 import type { ApprovalGateDTO, ApproveAndMergeMemberOutcomeDTO } from '@/lib/dto/approvalGate';
@@ -212,6 +213,38 @@ export async function retryApproveAndMergeMemberAction(input: {
   } catch (err) {
     const refusal = refusalOf(err);
     if (refusal) return { ok: false, refusal };
+    throw err;
+  }
+}
+
+export type QueueAgainAutoActionResult =
+  | { ok: true; status: string }
+  | { ok: false; refusal: GateRefusal };
+
+/**
+ * *Queue again* in an `auto` project (MOTIR-5634) — a person's press that re-sends the
+ * automatic merge for the head the merge queue removed. The `manual` press is
+ * {@link retryApproveAndMergeMemberAction}: it reuses the card's decided approval.
+ */
+export async function queueAgainAutoAction(input: {
+  workItemId: string;
+  pullRequestId: string;
+  identifier: string;
+}): Promise<QueueAgainAutoActionResult> {
+  const ctx = await requireContext();
+  try {
+    const result = await pullRequestMergeService.requeueAutoMember(
+      { workItemId: input.workItemId, pullRequestId: input.pullRequestId },
+      ctx,
+    );
+    revalidatePath(`/items/${input.identifier}`);
+    return { ok: true, status: result.status };
+  } catch (err) {
+    const refusal = refusalOf(err);
+    if (refusal) return { ok: false, refusal };
+    // Queue again's own refusals (wrong mode, a moved head, no standing exit) are
+    // states the frame never offers the button in, so reaching one is a stale page.
+    if (err instanceof QueueAgainRefusedError) return { ok: false, refusal: { tag: 'UNEXPECTED' } };
     throw err;
   }
 }

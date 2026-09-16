@@ -91,6 +91,7 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
       'MERGE_CHECKS_NOT_GREEN',
       'MERGE_CONFLICT',
       'MERGE_ALREADY_MERGED',
+      'MERGE_ALREADY_REQUEUED',
     ] as const) {
       expect(toGateRefusal(tag)).toEqual({ tag });
     }

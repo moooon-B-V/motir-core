@@ -412,8 +412,22 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
     );
     // In the set's own order, and nothing a refusal said survives into the read.
     expect(members).toEqual([
-      { subjectVersion: api.version, pullRequestId: api.prId, queued: false, retryable: true },
-      { subjectVersion: web.version, pullRequestId: web.prId, queued: true, retryable: false },
+      {
+        subjectVersion: api.version,
+        pullRequestId: api.prId,
+        queued: false,
+        retryable: true,
+        exit: null,
+        requeueable: false,
+      },
+      {
+        subjectVersion: web.version,
+        pullRequestId: web.prId,
+        queued: true,
+        retryable: false,
+        exit: null,
+        requeueable: false,
+      },
     ]);
   });
 
@@ -587,8 +601,22 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
     // The member the approval named is still listed — the set is what was approved, not
     // what survives — but there is nothing to say about it and nothing to press.
     expect(members).toEqual([
-      { subjectVersion: api.version, pullRequestId: null, queued: false, retryable: false },
-      { subjectVersion: web.version, pullRequestId: web.prId, queued: false, retryable: false },
+      {
+        subjectVersion: api.version,
+        pullRequestId: null,
+        queued: false,
+        retryable: false,
+        exit: null,
+        requeueable: false,
+      },
+      {
+        subjectVersion: web.version,
+        pullRequestId: web.prId,
+        queued: false,
+        retryable: false,
+        exit: null,
+        requeueable: false,
+      },
     ]);
   });
 });

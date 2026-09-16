@@ -70,7 +70,11 @@ export type ApprovalGateErrorTag =
   | 'MERGE_CONFLICT'
   | 'MERGE_BRANCH_PROTECTED'
   | 'MERGE_ALREADY_MERGED'
-  | 'MERGE_APP_PERMISSION_MISSING';
+  | 'MERGE_APP_PERMISSION_MISSING'
+  // QUEUE AGAIN (Story MOTIR-5461 · MOTIR-5634; `approval-gates.md` §4 THIRD
+  // AMENDMENT, decision 5) — somebody else already put this pull request back into
+  // the merge queue after it left. Not a host answer: the second press lost the claim.
+  | 'MERGE_ALREADY_REQUEUED';
 
 /**
  * Base class for every approval-gate typed error. Concrete subclasses set a
@@ -299,6 +303,21 @@ export class ApprovalGateMergeRefusedError extends ApprovalGateError {
     this.permission = extra.permission ?? null;
     this.reason = extra.reason ?? null;
     this.name = 'ApprovalGateMergeRefusedError';
+  }
+}
+
+/**
+ * *Queue again* on a merge-queue exit somebody already put back (MOTIR-5634). Two
+ * presses on one exit enqueue ONCE: the first claims the exit (`requeuedAt`) under the
+ * card's row lock, and the second finds it claimed and gets this — nothing is called
+ * and nothing is written.
+ */
+export class ApprovalGateAlreadyRequeuedError extends ApprovalGateError {
+  readonly tag = 'MERGE_ALREADY_REQUEUED' as const;
+  readonly code = 'MERGE_ALREADY_REQUEUED' as const;
+  constructor(readonly pullRequestId: string) {
+    super(`Pull request ${pullRequestId} was already put back into the merge queue.`);
+    this.name = 'ApprovalGateAlreadyRequeuedError';
   }
 }
 

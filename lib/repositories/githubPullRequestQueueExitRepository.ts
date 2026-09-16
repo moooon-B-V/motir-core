@@ -41,6 +41,28 @@ export const githubPullRequestQueueExitRepository = {
     return tx.githubPullRequestQueueExit.create({ data: input });
   },
 
+  /** CLAIM an exit for *Queue again* (MOTIR-5634): stamp `requeuedAt` only if nobody
+   *  has. Returns the count — 0 means another press claimed it first. The
+   *  `requeued_at IS NULL` predicate is what makes two presses enqueue once. Write
+   *  path → `tx`. */
+  async claimRequeue(exitId: string, at: Date, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.githubPullRequestQueueExit.updateMany({
+      where: { id: exitId, requeuedAt: null },
+      data: { requeuedAt: at },
+    });
+    return result.count;
+  },
+
+  /** RELEASE a claim this press made, when the host refused the re-enqueue — only the
+   *  stamp it wrote, so a later press's claim is never undone. Write path → `tx`. */
+  async releaseRequeue(exitId: string, at: Date, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.githubPullRequestQueueExit.updateMany({
+      where: { id: exitId, requeuedAt: at },
+      data: { requeuedAt: null },
+    });
+    return result.count;
+  },
+
   /** Each pull request's LATEST exit, keyed by pull request id — ONE query for a
    *  whole delivery set. A pull request never ejected is simply absent. Ties on
    *  `exitedAt` fall to the newest row. */

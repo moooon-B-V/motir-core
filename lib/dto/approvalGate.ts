@@ -524,8 +524,29 @@ export interface PullRequestApprovalMemberDTO {
   /** The press handed it to its repository's merge queue, and it has not merged yet. */
   queued: boolean;
   /** Motir has neither merged nor queued it yet, so it can be tried again under the
-   *  approval that already stands. No second gate is involved. */
+   *  approval that already stands. No second gate is involved. False while the member
+   *  carries a merge-queue exit that has not been put back — that member offers
+   *  {@link requeueable} instead. */
   retryable: boolean;
+  /** The pull request's latest merge-queue EXIT (MOTIR-5632), or null when the queue
+   *  never removed it. The failing check's name and link are MOTIR-5633's. */
+  exit: PullRequestQueueExitDTO | null;
+  /** *Queue again* is offered (MOTIR-5634; `approval-gates.md` §4 THIRD AMENDMENT,
+   *  decision 5): the approval stands, the latest exit has not been put back, and the
+   *  pull request is still at the head the approval named. */
+  requeueable: boolean;
+}
+
+/** One merge-queue removal as a surface reads it (MOTIR-5632 · MOTIR-5634). */
+export interface PullRequestQueueExitDTO {
+  /** The host's own reason string, verbatim — the frame words it. */
+  rawReason: string;
+  disposition: 'failure' | 'neutral';
+  /** The head the pull request left the queue at. */
+  headSha: string;
+  exitedAt: string;
+  /** When *Queue again* put it back; null while the exit stands. */
+  requeuedAt: string | null;
 }
 
 /** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */
