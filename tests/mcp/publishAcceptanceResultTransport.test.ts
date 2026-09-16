@@ -192,7 +192,7 @@ describe('a CLI-minted token REACHES both tools', () => {
         key,
         videoPathname: pathname,
         chapters: [{ label: 'Open the item', tSeconds: 0 }],
-        commitSha: 'abc123',
+        commitSha: 'abc1234',
         producedByKey: key,
       },
     });
