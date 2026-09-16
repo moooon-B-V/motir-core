@@ -105,6 +105,9 @@ interface ProjectRoadmapCanvasBaseProps {
    * selected/search-matched ring and every other node takes the SHIPPED
    * `opacity-35` dim. It is the same pair the wrapper already applies to ONE
    * node, applied to a SET — no second highlight vocabulary, no second dim value.
+   * The EDGES follow the same rule: an edge touching none of `ids` takes the
+   * selection's shipped edge dim, so the arrows between two faded cards fade too
+   * (MOTIR-5639). A live selection still wins, for edges as for cards.
    *
    * ⚠️ OPT-IN, and absent by default, exactly as `searchable` / `fullScreenable`
    * / `locatable` are — an onboarding canvas that grew a Show-changes toggle
@@ -1528,6 +1531,9 @@ export function ProjectRoadmapCanvas({
           onNodeMove={onNodeMove ? handleMove : undefined}
           onNodeActivate={handleActivate}
           selectedId={selectedId}
+          litIds={
+            showChanges && connectedIds === null && emphasisedIds.size > 0 ? emphasisedIds : null
+          }
           arrival={arriveAtReadableScale ? { floor: ARRIVAL_MIN_SCALE, focalNodeId } : undefined}
           onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
