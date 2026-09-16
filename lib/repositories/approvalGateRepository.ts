@@ -460,44 +460,13 @@ export const approvalGateRepository = {
     });
   },
 
-  /**
-   * RETIRE the `awaiting` gates of `kind` asking about ONE subject (Story MOTIR-4882 ·
-   * MOTIR-5515) — narrowed to one card by `workItemId`, and sparing a gate whose
-   * `subjectVersion` is `exceptVersion` (the head that did not move).
-   *
-   * ⚠️ BY SUBJECT, NOT BY CARD. {@link supersedeAwaitingByWorkItem} retires EVERY
-   * awaiting gate of a kind on a card, which is right for a design result (one current
-   * version) and wrong for a merge gate: a card delivered by two pull requests holds
-   * two independent questions, and one head moving must not withdraw the other.
-   *
-   * It writes `state` and nothing else, and it cannot reach the immutability trigger
-   * for the reason the by-card variant states: its predicate is `state = 'awaiting'`.
-   */
-  async supersedeAwaitingBySubject(
-    where: {
-      kind: ApprovalGateKind;
-      subjectId: string;
-      workItemId?: string;
-      exceptVersion?: string;
-    },
-    tx: Prisma.TransactionClient,
-  ): Promise<number> {
-    const result = await tx.approvalGate.updateMany({
-      where: {
-        kind: where.kind,
-        subjectId: where.subjectId,
-        state: 'awaiting',
-        ...(where.workItemId !== undefined ? { workItemId: where.workItemId } : {}),
-        ...(where.exceptVersion !== undefined
-          ? {
-              OR: [{ subjectVersion: null }, { NOT: { subjectVersion: where.exceptVersion } }],
-            }
-          : {}),
-      },
-      data: { state: 'superseded' },
-    });
-    return result.count;
-  },
+  // ⚠️ `supersedeAwaitingBySubject` WAS HERE, and it retired with the kind it was
+  // written for (MOTIR-5611 · MOTIR-5613). It withdrew the awaiting gates of a kind
+  // asking about ONE SUBJECT rather than one card — right when a card delivered by two
+  // pull requests held two independent merge questions, and meaningless now that it
+  // holds ONE gate over the whole delivery set. Its two callers went with the per-pull-
+  // request gate: `mergeGates.ts`'s withdrawals and the merge entry point's own
+  // supersede. {@link supersedeAwaitingByWorkItem} is the verb that survives.
 
   /**
    * Whether a subject already has a LIVE question — a gate on
