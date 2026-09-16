@@ -1,6 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { routingTargetId } from '@/lib/approvalGates/routing';
+import { derivePrCiState } from '@/lib/github/prCiState';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -56,7 +57,19 @@ export async function raisePullRequestApprovalGate(
   const members: string[] = [];
   for (const delivery of deliveries) {
     const head = mergeCandidateHead({ ...delivery.pullRequest, repo: delivery.repo });
-    if (!head) return false;
+    if (!head) {
+      // Every caller has just judged this set green, so a member that is not a merge
+      // candidate is the refusal worth naming (MOTIR-5604): the card goes unapprovable
+      // until the next green, and nothing else on the page says why.
+      console.warn('[pullRequestApprovalGates] raise refused: a member is not a merge candidate', {
+        workItemId: item.id,
+        pullRequestId: delivery.githubPullRequestId,
+        state: delivery.pullRequest.state,
+        merged: delivery.pullRequest.merged,
+        ciState: derivePrCiState(delivery.pullRequest.checkRuns),
+      });
+      return false;
+    }
     members.push(deliveryMemberVersion(delivery, head)!);
   }
 
@@ -109,6 +122,14 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
       ),
     );
     if (!current || current === gate.subjectVersion) continue;
+    // Named, so a gate raised and withdrawn again in the same minute can be traced to
+    // the head each side read (MOTIR-5604).
+    console.warn('[pullRequestApprovalGates] withdrawn on a head move', {
+      workItemId,
+      pullRequestId,
+      asked: gate.subjectVersion,
+      current,
+    });
     withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, tx);
   }
   return withdrawn;

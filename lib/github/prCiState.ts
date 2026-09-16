@@ -5,10 +5,11 @@
 // computed at read time per PR and includes the non-terminal 'running' (from
 // the pending rows the webhook records since MOTIR-1579).
 //
-// The derivation window is the PR's LATEST recorded commit sha — the sha of
-// its newest-created check row. `createdAt` (not `updatedAt`) orders shas by
-// first sighting: a re-run on an OLD sha refreshes that row's `updatedAt` but
-// never outranks a newer push's rows.
+// The derivation window is the PR's LATEST recorded commit sha — the sha whose
+// EARLIEST check row is the newest. `createdAt` (not `updatedAt`) orders shas by
+// first sighting: a re-run on an OLD sha refreshes that row's `updatedAt`, and a
+// check the old sha reports for the first time after a push adds a NEW row to
+// it, and neither outranks a newer push's rows.
 //
 // ⚠️ AND WITHIN THAT SHA, ONLY THE RUNS THAT HAVE NOT BEEN REPLACED
 // (MOTIR-3209). Two workflow runs at one commit is ordinary — `cancel-in-progress`
@@ -55,6 +56,19 @@ export function derivePrCiState(checkRuns: PrCheckRunSlice[]): PrCiState {
  */
 export function liveRowsAtLatestSha<T extends PrCheckRunSlice>(checkRuns: T[]): T[] {
   if (checkRuns.length === 0) return [];
-  const newest = checkRuns.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
-  return liveCheckRows(checkRuns.filter((r) => r.commitSha === newest.commitSha));
+  // ⚠️ A SHA's FIRST SIGHTING is its EARLIEST row, not any row (MOTIR-5604). Picking the
+  // newest row outright let a check name an OLD commit had not reported yet — inserted
+  // after the push — make that commit the head again, and the approve-to-merge gate's
+  // raise and withdrawal both read their head from here: the fresh gate was superseded
+  // and a new one raised over the commit the push replaced.
+  const firstSeen = new Map<string, Date>();
+  for (const row of checkRuns) {
+    const seen = firstSeen.get(row.commitSha);
+    if (!seen || row.createdAt < seen) firstSeen.set(row.commitSha, row.createdAt);
+  }
+  let head: string | null = null;
+  for (const [sha, seen] of firstSeen) {
+    if (head === null || seen > firstSeen.get(head)!) head = sha;
+  }
+  return liveCheckRows(checkRuns.filter((r) => r.commitSha === head));
 }

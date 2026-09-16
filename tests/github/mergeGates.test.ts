@@ -122,6 +122,24 @@ const ci = (opts: {
     },
   });
 
+/** ONE named check at one commit — how a LATE row for an old commit arrives (a
+ *  workflow reporting after the push, a redelivery). The name is one that commit has
+ *  not reported yet, so the ingestion INSERTS a row rather than updating one. */
+const checkRun = (opts: { name: string; conclusion: string; headSha: string; number: number }) =>
+  githubWebhookService.handleEvent('check_run', {
+    action: 'completed',
+    installation: INSTALLATION,
+    repository: { id: Number(REPO_PROVIDER_ID) },
+    check_run: {
+      head_sha: opts.headSha,
+      status: 'completed',
+      conclusion: opts.conclusion,
+      name: opts.name,
+      check_suite: { head_branch: null, id: 777 },
+      pull_requests: [{ number: opts.number }],
+    },
+  });
+
 /** A card delivered by one pull request per number, each linked the way a run links
  *  it and opened, so the card sits at `implemented`. */
 async function cardWithPrs(s: Scenario, title: string, numbers: number[]) {
@@ -372,6 +390,54 @@ describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes'
 
     await ci({ conclusion: 'success', headSha: 'sha-a2', number: 11 });
     expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a2,moooon/acme#12@sha-b']);
+    expect(await mergeGates(item.id)).toEqual([]);
+  });
+
+  // MOTIR-5604 — green → push → green must leave exactly ONE awaiting gate even when a row
+  // for the OLD commit is written after the new one's. The head used to be the commit of
+  // the newest ROW, so that late row made the old commit current again: the withdrawal
+  // superseded the fresh gate, and the raise named the old head.
+  it('a LATE row for the OLD commit, written after the new head went green, leaves the fresh gate standing', async () => {
+    const { s, item } = await reviewedWithOneGate('mg-late-after@example.com');
+
+    await ci({ conclusion: null, status: 'in_progress', headSha: 'sha-a2', number: 11 });
+    await ci({ conclusion: 'success', headSha: 'sha-a2', number: 11 });
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a2,moooon/acme#12@sha-b']);
+
+    await checkRun({ name: 'CodeQL', conclusion: 'success', headSha: 'sha-a', number: 11 });
+
+    // Rows for BOTH commits exist, and the older commit's was written last.
+    const rows = await adminDb.githubCheckRun.findMany({
+      where: { pullRequestId: await prId(11) },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(new Set(rows.map((r) => r.commitSha))).toEqual(new Set(['sha-a', 'sha-a2']));
+    expect(rows[0]!.commitSha).toBe('sha-a');
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a2,moooon/acme#12@sha-b']);
+    const awaiting = await withWorkspaceContext(s.ctx, (tx) =>
+      approvalGateRepository.findAwaitingByWorkItem(item.id, tx),
+    );
+    expect(awaiting.map((g) => g.kind)).toEqual(['pull_request_approval']);
+    expect(await mergeGates(item.id)).toEqual([]);
+  });
+
+  it('a LATE row for the OLD commit, written between the push and the new green, does not stop the green raising over the NEW head', async () => {
+    const { item } = await reviewedWithOneGate('mg-late-between@example.com');
+
+    await ci({ conclusion: null, status: 'in_progress', headSha: 'sha-a2', number: 11 });
+    expect(await awaitingVersions(item.id)).toEqual([]);
+
+    // The old commit reports a check it had not reported before, AFTER the new commit's
+    // first row. The new commit's verdict then UPDATES its pending row, which keeps that
+    // row's creation time — so the old commit's row stays the newest one.
+    await checkRun({ name: 'CodeQL', conclusion: 'success', headSha: 'sha-a', number: 11 });
+    await ci({ conclusion: 'success', headSha: 'sha-a2', number: 11 });
+
+    const gates = await gatesOf(item.id);
+    expect(gates.filter((g) => g.state === 'awaiting')).toHaveLength(1);
     expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a2,moooon/acme#12@sha-b']);
     expect(await mergeGates(item.id)).toEqual([]);
   });
