@@ -24,7 +24,13 @@ import type {
   GateDecision,
   PullRequestApprovalMemberDTO,
 } from '@/lib/dto/approvalGate';
-import { MergeOutcomeProvider, rowKey, type RowMergeOutcome } from './MergeOutcomeSlot';
+import {
+  MergeOutcomeProvider,
+  persistedRowOutcome,
+  rowKey,
+  type PersistedRowOutcome,
+  type RowMergeOutcome,
+} from './MergeOutcomeSlot';
 import { QueueExitLine } from './QueueExitLine';
 
 // THE DEVELOPMENT BLOCK'S FRAME ARM (Story MOTIR-4906 · Subtask MOTIR-5336),
@@ -90,29 +96,6 @@ function pressOutcomeOf(member: ApproveAndMergeMemberOutcomeDTO): PressOutcome {
   return member.outcome === 'refused'
     ? { outcome: 'refused', refusal: member.refusal, pullRequestId: member.pullRequestId }
     : { outcome: member.outcome };
-}
-
-/**
- * What a RELOAD knows about one member of an approved set — the discriminant `outcomeFor`
- * is total over (MOTIR-5635). An exit nobody has put back outranks everything but a queued
- * merge: it is the newest thing that happened to the pull request.
- */
-type MemberState =
-  | 'queued'
-  | 'exitedFailure'
-  | 'exitedNeutral'
-  | 'movedHead'
-  | 'notMergedYet'
-  | 'nothing';
-
-function memberStateOf(fact: PullRequestApprovalMemberDTO): MemberState {
-  if (fact.queued) return 'queued';
-  if (fact.exit && fact.exit.requeuedAt === null) {
-    // Not requeueable while the exit stands: the head moved since the approval (E3).
-    if (!fact.requeueable) return 'movedHead';
-    return fact.exit.disposition === 'failure' ? 'exitedFailure' : 'exitedNeutral';
-  }
-  return fact.retryable ? 'notMergedYet' : 'nothing';
 }
 
 /** One refused member's line in the alert band: the pull request, then the refusal's own
@@ -267,26 +250,25 @@ export function DevelopmentGateFrame({
     };
   }
 
-  // TOTAL over what a reload knows (MOTIR-5635): a new `MemberState` does not compile until
-  // it is drawn here.
+  // TOTAL over what a reload knows (MOTIR-5635): a new `PersistedRowOutcome` does not compile
+  // until the frame draws it — with its verb, which the quick view's reading has not.
   const rowForState: Record<
-    MemberState,
+    PersistedRowOutcome,
     (member: MemberVersion, fact: PullRequestApprovalMemberDTO) => RowMergeOutcome | null
   > = {
     queued: () => ({ kind: 'queued' }),
-    exitedFailure: (member, fact) => ({ kind: 'leftQueue', ...queueAgainFor(member, fact) }),
-    exitedNeutral: (member, fact) => ({
+    leftQueue: (member, fact) => ({ kind: 'leftQueue', ...queueAgainFor(member, fact) }),
+    removedFromQueue: (member, fact) => ({
       kind: 'removedFromQueue',
       ...queueAgainFor(member, fact),
     }),
-    movedHead: () => ({ kind: 'newCommits' }),
+    newCommits: () => ({ kind: 'newCommits' }),
     // MOTIR-5613: a retry is offered by the pull request under the card's own gate — there
     // is no second gate to press. The row's copy is MOTIR-5615's.
     notMergedYet: (member, fact) => ({
       kind: 'notMergedYet',
       ...retryFor(member, fact.pullRequestId),
     }),
-    nothing: () => null,
   };
 
   function outcomeFor(member: MemberVersion): RowMergeOutcome | null {
@@ -310,7 +292,10 @@ export function DevelopmentGateFrame({
     }
     if (gate.state !== 'approved') return null;
     const fact = factOf(member);
-    return fact ? rowForState[memberStateOf(fact)](member, fact) : null;
+    if (!fact) return null;
+    // The same reading the quick view applies (`persistedRowOutcome`, Bug MOTIR-5650).
+    const kind = persistedRowOutcome(fact);
+    return kind ? rowForState[kind](member, fact) : null;
   }
 
   const rowOutcomes = new Map<string, RowMergeOutcome>();

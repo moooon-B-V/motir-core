@@ -298,6 +298,29 @@ describe('partial success', () => {
     expect(seam).toHaveBeenCalledTimes(1);
   });
 
+  it('a member the card NO LONGER DELIVERS reports `no_merge_gate`, and is never sent to the host', async () => {
+    const { approval, web, api } = await pressable();
+    // #7 is unlinked AFTER the approval committed — while the host is merging #12, which the
+    // canonical order presses first. The approval no longer covers a pull request the card
+    // does not deliver.
+    const seam = stubHost({ 12: { outcome: 'merged', commitSha: 'merge-api' } }, async () => {
+      await adminDb.workItemDelivery.deleteMany({ where: { githubPullRequestId: web.prId } });
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect(result.approval.gate.state).toBe('approved');
+    expect(result.members.map((m) => [m.subjectVersion, m.outcome, m.pullRequestId])).toEqual([
+      [api.version, 'merged', api.prId],
+      [web.version, 'no_merge_gate', null],
+    ]);
+    expect(seam).toHaveBeenCalledTimes(1);
+    expect(await prRecord(web.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
+  });
+
   it('RETRY merges only that member, under the approval that already stands', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
@@ -462,6 +485,62 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         fx.ctx,
       ),
     ).toEqual([]);
+  });
+});
+
+describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
+  const peek = (identifier: string) =>
+    workItemsService.getQuickView(fx.projectId, identifier, 'open', fx.ctx, 'en');
+
+  it('carries the approved gate’s members — the facts the item page’s frame reads', async () => {
+    const { item, approval, web, api } = await pressable();
+    stubHost({
+      7: { outcome: 'enqueued', entryId: 'MQE_11' },
+      12: { outcome: 'refused', refusal: { code: 'conflict' } },
+    });
+    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+
+    const view = await peek(item.identifier);
+    expect(view.mergeMembers).toEqual([
+      // No merge-queue exit on either (MOTIR-5634 / MOTIR-5635 carry it on the same read).
+      {
+        subjectVersion: api.version,
+        pullRequestId: api.prId,
+        queued: false,
+        retryable: true,
+        exit: null,
+        requeueable: false,
+      },
+      {
+        subjectVersion: web.version,
+        pullRequestId: web.prId,
+        queued: true,
+        retryable: false,
+        exit: null,
+        requeueable: false,
+      },
+    ]);
+    expect(view.mergeMembers).toEqual(
+      await pullRequestMergeService.listApprovalMembers(
+        { workItemId: item.id, approvalGateId: approval.id },
+        fx.ctx,
+      ),
+    );
+  });
+
+  it('carries none while the gate still awaits', async () => {
+    const { item } = await pressable();
+    expect((await peek(item.identifier)).mergeMembers).toEqual([]);
+  });
+
+  it('carries none — and reads no gate — for a card with no linked pull request', async () => {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Nothing delivered yet' },
+      fx.ctx,
+    );
+    const spy = vi.spyOn(approvalGateRepository, 'findLatestByWorkItem');
+    expect((await peek(item.identifier)).mergeMembers).toEqual([]);
+    expect(spy.mock.calls.filter(([, kind]) => kind === 'pull_request_approval')).toEqual([]);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
+import type { HeldTransitionDTO, PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
@@ -207,6 +207,14 @@ export interface QuickViewData {
    * shows it as its slot, as the detail page does. Absent or null otherwise.
    */
   designEvidence?: DesignEvidenceDTO | null;
+  /**
+   * What a reload knows about each member of the card's APPROVED approve-and-merge gate
+   * (Bug MOTIR-5650) — read by `pullRequestApprovalMembersService.listForLatestGate`, the
+   * same facts the detail page's Development frame reads, so a row says *Queued to merge* /
+   * *Not merged yet* in both places. Absent or empty for any other gate state, a card with
+   * no linked pull request, and a PROPOSAL.
+   */
+  mergeMembers?: PullRequestApprovalMemberDTO[];
   /**
    * Does the item already have children (MOTIR-910)? The peek header's
    * Plan / Re-plan entrance picks its face from this — an item with children is

@@ -7,10 +7,7 @@ import type { GitProviderId, MergeChangeRequestResult, MergeRefusalCode } from '
 // surviving approval gate names each of its members, so the pull request's version now
 // and the version the card was approved at are comparable (MOTIR-5613). It lives beside
 // the set version since MOTIR-5616 retired the handler it was written in.
-import {
-  deliveryMemberVersion,
-  pullRequestSubjectVersion,
-} from '@/lib/approvalGates/deliverySetVersion';
+import { pullRequestSubjectVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateAlreadyRequeuedError,
@@ -39,10 +36,14 @@ import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { GithubPullRequestQueueExit } from '@/generated/prisma/client';
-import type { PullRequestQueueExitDTO, PullRequestStandingExitDTO } from '@/lib/dto/approvalGate';
+import type { PullRequestStandingExitDTO } from '@/lib/dto/approvalGate';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { projectAccessService } from './projectAccessService';
 import { queueExitCardMoves } from './mergeQueueExitService';
+import {
+  pullRequestApprovalMembersService,
+  toQueueExitDto,
+} from './pullRequestApprovalMembersService';
 import {
   approvalGatesService,
   resolveGateAuthority,
@@ -336,53 +337,7 @@ export const pullRequestMergeService = {
     input: { workItemId: string; approvalGateId: string },
     ctx: ServiceContext,
   ): Promise<PullRequestApprovalMemberDTO[]> {
-    return withWorkspaceContext(ctx, async (tx) => {
-      const approval = await approvalGateRepository.findById(input.approvalGateId, tx);
-      if (
-        !approval ||
-        approval.kind !== APPROVAL_KIND ||
-        approval.state !== 'approved' ||
-        approval.workItemId !== input.workItemId
-      ) {
-        return [];
-      }
-      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
-        input.workItemId,
-        tx,
-      );
-      const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
-        deliveries.map((row) => row.pullRequest.id),
-        tx,
-      );
-      return membersOf(approval.subjectVersion).map((member) => {
-        const row = deliveries.find(
-          (candidate) =>
-            `${candidate.repo.owner}/${candidate.repo.name}` === member.repo &&
-            candidate.pullRequest.number === member.number,
-        );
-        const pr = row?.pullRequest;
-        const outcome = pr?.mergeOutcomeRef ?? null;
-        const exit = pr ? (exits.get(pr.id) ?? null) : null;
-        // An exit nobody has put back is Queue again's to offer, not Retry's
-        // (MOTIR-5634) — and only while the pull request is still at the head the
-        // approval named, which is what makes reusing the approval honest.
-        const standingExit = exit !== null && exit.requeuedAt === null;
-        const open = pr !== undefined && pr.state === 'open' && !pr.merged;
-        return {
-          subjectVersion: member.subjectVersion,
-          pullRequestId: pr?.id ?? null,
-          queued: pr !== undefined && !pr.merged && (outcome?.startsWith('queue:') ?? false),
-          // A member Motir has not merged or queued yet is the one a person can try again.
-          retryable: pr !== undefined && !pr.merged && outcome === null && !standingExit,
-          exit: exit ? toQueueExitDto(exit) : null,
-          requeueable:
-            open &&
-            standingExit &&
-            row !== undefined &&
-            deliveryMemberVersion(row) === member.subjectVersion,
-        };
-      });
-    });
+    return pullRequestApprovalMembersService.listForGate(input, ctx);
   },
 
   /**
@@ -697,18 +652,6 @@ async function mergeMember(
       refusal,
     };
   }
-}
-
-function toQueueExitDto(exit: GithubPullRequestQueueExit): PullRequestQueueExitDTO {
-  return {
-    rawReason: exit.rawReason,
-    disposition: exit.disposition,
-    headSha: exit.headSha,
-    exitedAt: exit.exitedAt.toISOString(),
-    requeuedAt: exit.requeuedAt?.toISOString() ?? null,
-    failingCheckName: exit.failingCheckName,
-    failingCheckUrl: exit.failingCheckUrl,
-  };
 }
 
 /**
