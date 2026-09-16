@@ -46,7 +46,6 @@ const INSTALLATION_ID = 'inst-approve-and-merge-journey';
 const REPO_PROVIDER_ID = '994';
 const INSTALLATION = { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } };
 const APPROVAL = 'pull_request_approval' as const;
-const MERGE = 'pull_request_merge' as const;
 
 // ── the stubbed host ───────────────────────────────────────────────────────────
 
@@ -220,11 +219,10 @@ const approvalGates = (workItemId: string) =>
   });
 const awaitingApproval = async (workItemId: string) =>
   (await approvalGates(workItemId)).filter((g) => g.state === 'awaiting');
-const mergeGateFor = async (workItemId: string, number: number) =>
-  adminDb.approvalGate.findFirstOrThrow({
-    where: { workItemId, kind: MERGE, subjectId: (await prRow(number)).id },
-    orderBy: { createdAt: 'desc' },
-  });
+/** Every gate on the card, whatever its kind — MOTIR-5613 asserts there is only ever the
+ *  one, so a per-pull-request gate would show up here. */
+const allGates = (workItemId: string) =>
+  adminDb.approvalGate.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
 
 /** A card whose two pull requests are green, holding its ONE approve-and-merge gate. */
 async function greenCard(email: string) {
@@ -282,9 +280,14 @@ describe('§2 seam 2 — press → merged → webhook → done', () => {
     await mergedWebhook(item.identifier, 12);
     expect(await statusOf(item.id)).toBe('done');
 
-    // The approval's outcome is the status it wrote; the merges' live on the pull requests.
+    // The approval's outcome is the status it wrote; the merges' live on the pull requests
+    // — and there is no second gate anywhere on the card (MOTIR-5613).
     expect((await approvalGates(item.id))[0]!.outcomeRef).toBe('approved');
-    for (const n of [11, 12]) expect((await mergeGateFor(item.id, n)).outcomeRef).toBeNull();
+    expect((await allGates(item.id)).map((g) => g.kind)).toEqual([APPROVAL]);
+    for (const n of [11, 12]) {
+      expect((await prRow(n)).mergeAuthority).toBe('gate');
+      expect((await prRow(n)).mergeOutcomeRef).not.toBeNull();
+    }
   });
 });
 
@@ -300,11 +303,10 @@ describe('§2 seam 3 — press → enqueued → approved → webhook → done', 
     );
 
     expect(members.map((m) => m.outcome)).toEqual(['merged', 'enqueued']);
-    const queued = await mergeGateFor(item.id, 12);
-    // Decided on the enqueue — the queue entry is recorded on the PULL REQUEST, and the merge
-    // gate's own outcome stays null (`approval-gates.md` §8's amendment, decision 5(d)).
-    expect(queued.state).toBe('approved');
-    expect(queued.outcomeRef).toBeNull();
+    // The queue entry is recorded on the PULL REQUEST, and no gate is decided by the
+    // enqueue (`approval-gates.md` §8's SECOND AMENDMENT, decisions 4 and 6).
+    expect((await allGates(item.id)).map((g) => g.kind)).toEqual([APPROVAL]);
+    expect((await prRow(12)).mergeAuthority).toBe('gate');
     expect((await prRow(12)).mergeOutcomeRef).toBe('queue:MQE_1');
     expect(await statusOf(item.id)).toBe('approved');
     expect(
@@ -341,11 +343,13 @@ describe('§2 seam 4 — one refused', () => {
     const approval = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
     expect(approval.state).toBe('approved');
     expect(await statusOf(item.id)).toBe('approved');
-    expect((await mergeGateFor(item.id, 12)).state).toBe('awaiting');
-    const merged = await mergeGateFor(item.id, 11);
-    expect(merged.state).toBe('approved');
-    expect(merged.decidedById).toBe(approval.decidedById);
-    expect(merged.decidedAt?.toISOString()).toBe(approval.decidedAt?.toISOString());
+    // The refused member simply has no outcome yet — which is what makes it retryable —
+    // and the merged one carries its own. ONE gate throughout, holding the one decision.
+    expect(await prRow(12)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
+    expect(await prRow(11)).toMatchObject({ mergeAuthority: 'gate' });
+    expect((await allGates(item.id)).map((g) => [g.kind, g.state])).toEqual([
+      [APPROVAL, 'approved'],
+    ]);
   });
 });
 

@@ -495,10 +495,14 @@ export interface ApprovalGateOverlayReadDTO {
 export interface PullRequestApprovalMemberDTO {
   /** `owner/name#number@headSha`, as the approval named the member. */
   subjectVersion: string;
-  /** The member's merge gate while it still AWAITS — what *Retry merge* presses. */
-  awaitingMergeGateId: string | null;
+  /** The pull request the member names, while this card still delivers it (MOTIR-5613) —
+   *  what *Retry merge* presses, together with the card's own gate. */
+  pullRequestId: string | null;
   /** The press handed it to its repository's merge queue, and it has not merged yet. */
   queued: boolean;
+  /** Motir has neither merged nor queued it yet, so it can be tried again under the
+   *  approval that already stands. No second gate is involved. */
+  retryable: boolean;
 }
 
 /** One member of an approve-and-merge press, and what happened to it (MOTIR-5483). */
@@ -506,22 +510,22 @@ export type ApproveAndMergeMemberOutcomeDTO =
   | {
       /** The member as the approval named it: `owner/name#number@headSha`. */
       subjectVersion: string;
-      mergeGateId: string;
       pullRequestId: string;
       outcome: 'merged' | 'enqueued';
     }
   | {
       subjectVersion: string;
-      mergeGateId: string;
-      pullRequestId: string;
+      /** Null when the member was refused before a pull request could be resolved. */
+      pullRequestId: string | null;
       outcome: 'refused';
       /** The refusal in the frame's vocabulary — MOTIR-4882's union for a host refusal. */
       refusal: GateRefusal;
     }
   | {
       subjectVersion: string;
-      mergeGateId: null;
       pullRequestId: null;
-      /** No merge gate is awaiting for this member's exact head. */
+      /** ⚠️ SINCE MOTIR-5613 THIS NAMES NO GATE: this card no longer delivers that pull
+       *  request at the head it was approved at, so there is nothing to merge. The literal
+       *  is kept until MOTIR-5615 renames it with the frame's copy. */
       outcome: 'no_merge_gate';
     };

@@ -53,9 +53,10 @@ afterAll(async () => {
 
 let seq = 0;
 
-/** A card in review delivered by one pull request green at HEAD, holding an awaiting
- *  merge gate on it, assigned to the fixture's owner. */
-async function mergeGateFor(opts: { parentId?: string; gate?: boolean } = {}) {
+/** A card in review delivered by one pull request green at HEAD, holding the card's ONE
+ *  approve-to-merge gate over that set, assigned to the fixture's owner. `approved` decides
+ *  it the way a press would, for the paths that run AFTER an approval (MOTIR-5613). */
+async function cardWithPr(opts: { parentId?: string; gate?: boolean; approved?: boolean } = {}) {
   seq += 1;
   const item = await workItemsService.createWorkItem(
     {
@@ -118,10 +119,14 @@ async function mergeGateFor(opts: { parentId?: string; gate?: boolean } = {}) {
             workspaceId: fx.workspaceId,
             projectId: fx.projectId,
             workItemId: item.id,
-            kind: 'pull_request_merge',
-            subjectId: pr.id,
+            kind: 'pull_request_approval',
+            // THE CARD is the subject of its one gate; the version names its members.
+            subjectId: item.id,
             subjectVersion: `acme/web#${seq}@${HEAD}`,
             routedToId: fx.ownerId,
+            ...(opts.approved
+              ? { state: 'approved' as const, decidedById: fx.ownerId, decidedAt: new Date() }
+              : {}),
           },
         });
   return { item, repo, pr, gate };
@@ -169,7 +174,7 @@ describe('the version rule and the handler, when there is no head', () => {
 
 describe('settleGreenVerdict — the answers that owe nothing', () => {
   it('no members, or a project that no longer resolves, settle to nothing', async () => {
-    const { item, pr } = await mergeGateFor({ gate: false });
+    const { item, pr } = await cardWithPr({ gate: false });
     const row = await itemRow(item.id);
     await inTx(async (tx) => {
       expect(await settleGreenVerdict({ item: row, pullRequestIds: [] }, fx.ctx, tx)).toEqual([]);
@@ -185,7 +190,7 @@ describe('settleGreenVerdict — the answers that owe nothing', () => {
 
   it('AUTO: the run target owes its green pull request; a child under it and a closed pull request owe nothing', async () => {
     await setMode('auto');
-    const story = await mergeGateFor({ gate: false });
+    const story = await cardWithPr({ gate: false });
     await adminDb.testInstructions.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -194,7 +199,7 @@ describe('settleGreenVerdict — the answers that owe nothing', () => {
         bodyMd: '## Open',
       },
     });
-    const child = await mergeGateFor({ parentId: story.item.id, gate: false });
+    const child = await cardWithPr({ parentId: story.item.id, gate: false });
     const [storyRow, childRow] = [await itemRow(story.item.id), await itemRow(child.item.id)];
 
     await inTx(async (tx) => {
@@ -219,13 +224,22 @@ describe('settleGreenVerdict — the answers that owe nothing', () => {
 });
 
 describe('the merge ENTRY POINT refuses before it reaches a host', () => {
+  // Since MOTIR-5613 the entry point is addressed by (the card's own gate, a pull request),
+  // so these are the answers a RETRY gives before any host is called — and the approval it
+  // could not act on is never re-asked.
+  const retry = (approvalGateId: string, pullRequestId: string) =>
+    pullRequestMergeService.retryApproveAndMergeMember(
+      { approvalGateId, pullRequestId, source: 'ui' },
+      fx.ctx,
+    );
+
   it('an unknown gate is a not-found', async () => {
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: 'no-such-gate', source: 'ui' }, fx.ctx),
-    ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+    await expect(retry('no-such-gate', 'no-such-pull-request')).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
   });
 
-  it('a gate of ANOTHER kind is a programming error for approveMergeGate, and decideGate hands it to the door', async () => {
+  it('a gate of ANOTHER kind is a programming error for the press, and decideGate hands it to the door', async () => {
     const bare = await bareItem();
     const design = await adminDb.approvalGate.create({
       data: {
@@ -237,8 +251,12 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
       },
     });
     await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: design.id, source: 'ui' }, fx.ctx),
+      pullRequestMergeService.approveAndMerge({ gateId: design.id, source: 'ui' }, fx.ctx),
     ).rejects.toThrow(/handed a design_result gate/);
+    // …and a retry addressed at it is simply not a gate this path knows.
+    await expect(retry(design.id, 'no-such-pull-request')).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
 
     const door = vi.spyOn(approvalGatesService, 'decide').mockResolvedValue({} as never);
     await pullRequestMergeService.decideGate(
@@ -258,77 +276,73 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         workItemId: (await bareItem(foreign)).id,
-        kind: 'pull_request_merge',
+        kind: 'pull_request_approval',
         subjectId: 'pr-foreign',
       },
     });
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: gate.id, source: 'ui' }, fx.ctx),
-    ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+    await expect(retry(gate.id, 'no-such-pull-request')).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
   });
 
-  it('a SUPERSEDED gate and an already DECIDED one are the door’s own refusals, with no host call', async () => {
+  it('each state that is not `approved` gets the refusal that is TRUE of it, with no host call', async () => {
     const seam = vi.spyOn(github, 'mergeChangeRequest');
-    const withdrawn = await mergeGateFor();
+
+    // Withdrawn: the question is gone.
+    const withdrawn = await cardWithPr();
     await adminDb.approvalGate.update({
       where: { id: withdrawn.gate!.id },
       data: { state: 'superseded' },
     });
-    await expect(
-      pullRequestMergeService.approveMergeGate(
-        { gateId: withdrawn.gate!.id, source: 'ui' },
-        fx.ctx,
-      ),
-    ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
+    await expect(retry(withdrawn.gate!.id, withdrawn.pr.id)).rejects.toBeInstanceOf(
+      ApprovalGateSupersededError,
+    );
 
-    const decided = await mergeGateFor();
+    // Changes requested: a decision, and one that merges nothing.
+    const refused = await cardWithPr();
     await adminDb.approvalGate.update({
-      where: { id: decided.gate!.id },
-      data: { state: 'approved', decidedById: fx.ownerId, decidedAt: new Date() },
+      where: { id: refused.gate!.id },
+      data: { state: 'changes_requested', decidedById: fx.ownerId, decidedAt: new Date() },
     });
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: decided.gate!.id, source: 'ui' }, fx.ctx),
-    ).rejects.toBeInstanceOf(ApprovalGateAlreadyDecidedError);
+    await expect(retry(refused.gate!.id, refused.pr.id)).rejects.toBeInstanceOf(
+      ApprovalGateAlreadyDecidedError,
+    );
+
+    // Still awaiting: there is no press to retry a member of.
+    const awaiting = await cardWithPr();
+    await expect(retry(awaiting.gate!.id, awaiting.pr.id)).rejects.toBeInstanceOf(
+      ApprovalGateNotFoundError,
+    );
+
     expect(seam).not.toHaveBeenCalled();
   });
 
-  it('a gate whose pull request is GONE is withdrawn', async () => {
-    const bare = await bareItem();
-    const gate = await adminDb.approvalGate.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-        workItemId: bare.id,
-        kind: 'pull_request_merge',
-        subjectId: 'no-such-pull-request',
-        subjectVersion: `acme/web#1@${HEAD}`,
-      },
-    });
-    await adminDb.workItem.update({ where: { id: bare.id }, data: { assigneeId: fx.ownerId } });
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: gate.id, source: 'ui' }, fx.ctx),
-    ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
-    expect((await gateRow(gate.id)).state).toBe('superseded');
+  it('a pull request this card does not deliver is superseded — and the approval is NOT withdrawn', async () => {
+    const { gate, pr } = await cardWithPr({ approved: true });
+    await adminDb.workItemDelivery.deleteMany({ where: { githubPullRequestId: pr.id } });
+
+    await expect(retry(gate!.id, pr.id)).rejects.toBeInstanceOf(ApprovalGateSupersededError);
+    // ⚠️ ONE GATE PER CARD: a member that left is not a reason to re-ask the whole set.
+    expect((await gateRow(gate!.id)).state).toBe('approved');
   });
 
-  it('a merge gate on a provider that cannot merge is a programming error, never a refusal', async () => {
-    const { repo, gate } = await mergeGateFor();
+  it('a member on a provider that cannot merge is a programming error, never a refusal', async () => {
+    const { repo, gate, pr } = await cardWithPr({ approved: true });
     await adminDb.githubRepo.update({ where: { id: repo.id }, data: { provider: 'gitlab' } });
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: gate!.id, source: 'ui' }, fx.ctx),
-    ).rejects.toThrow(/carries a merge gate/);
+    await expect(retry(gate!.id, pr.id)).rejects.toThrow(/is a member of an approved gate/);
   });
 
-  it('a seam that throws something other than a host failure is rethrown, unlogged and undecided', async () => {
-    const { gate } = await mergeGateFor();
+  it('a seam that throws something other than a host failure is rethrown, unlogged and unrecorded', async () => {
+    const { gate, pr } = await cardWithPr({ approved: true });
     vi.spyOn(github, 'mergeChangeRequest').mockRejectedValue(new Error('a bug in the provider'));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(
-      pullRequestMergeService.approveMergeGate({ gateId: gate!.id, source: 'ui' }, fx.ctx),
-    ).rejects.toThrow('a bug in the provider');
+    await expect(retry(gate!.id, pr.id)).rejects.toThrow('a bug in the provider');
     expect(logged).not.toHaveBeenCalled();
-    expect((await gateRow(gate!.id)).state).toBe('awaiting');
+    expect((await gateRow(gate!.id)).state).toBe('approved');
+    expect(
+      (await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: pr.id } })).mergeOutcomeRef,
+    ).toBeNull();
   });
 });
 
@@ -351,7 +365,7 @@ describe('the AUTO merge skips what it was not dispatched for', () => {
       }),
     ).resolves.toEqual({ outcome: 'skipped', reason: 'gone' });
 
-    const closed = await mergeGateFor({ gate: false });
+    const closed = await cardWithPr({ gate: false });
     await adminDb.githubPullRequest.update({
       where: { id: closed.pr.id },
       data: { state: 'closed' },
@@ -362,7 +376,7 @@ describe('the AUTO merge skips what it was not dispatched for', () => {
       }),
     ).resolves.toEqual({ outcome: 'skipped', reason: 'not_open' });
 
-    const gitlab = await mergeGateFor({ gate: false });
+    const gitlab = await cardWithPr({ gate: false });
     await adminDb.githubRepo.update({
       where: { id: gitlab.repo.id },
       data: { provider: 'gitlab' },
@@ -374,7 +388,7 @@ describe('the AUTO merge skips what it was not dispatched for', () => {
     ).resolves.toEqual({ outcome: 'skipped', reason: 'provider_cannot_merge' });
     expect(seam).not.toHaveBeenCalled();
 
-    const moved = await mergeGateFor({ gate: false });
+    const moved = await cardWithPr({ gate: false });
     seam.mockResolvedValueOnce({ outcome: 'refused', refusal: { code: 'subject_changed' } });
     await expect(
       pullRequestAutoMergeService.mergeOnGreen(data(moved.pr.id, moved.item.id), {
@@ -399,10 +413,10 @@ describe('the AUTO merge skips what it was not dispatched for', () => {
 });
 
 describe('the gate repository write the raise uses', () => {
-  it('create is the merge raise’s only writer and needs no mock — a sanity read of the row it writes', async () => {
-    const { gate } = await mergeGateFor();
+  it('create is the raise’s only writer and needs no mock — a sanity read of the row it writes', async () => {
+    const { gate } = await cardWithPr();
     expect(await inTx((tx) => approvalGateRepository.findById(gate!.id, tx))).toMatchObject({
-      kind: 'pull_request_merge',
+      kind: 'pull_request_approval',
       state: 'awaiting',
     });
   });

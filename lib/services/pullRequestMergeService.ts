@@ -3,10 +3,10 @@ import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import type { GitProviderId, MergeChangeRequestResult, MergeRefusalCode } from '@/lib/git/types';
-import {
-  pullRequestMergeGateHandler,
-  pullRequestSubjectVersion,
-} from '@/lib/approvalGates/pullRequestMergeHandler';
+// ⚠️ The MEMBER SPELLING, not a merge gate: `owner/name#number@headSha` is how the
+// surviving approval gate names each of its members, so the pull request's version now
+// and the version the card was approved at are comparable (MOTIR-5613).
+import { pullRequestSubjectVersion } from '@/lib/approvalGates/pullRequestMergeHandler';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateError,
@@ -22,7 +22,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
-import { membersOf } from '@/lib/approvalGates/memberVersion';
+import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type {
   ApproveAndMergeMemberOutcomeDTO,
   PullRequestApprovalMemberDTO,
@@ -33,39 +33,52 @@ import {
   approvalGatesService,
   resolveGateAuthority,
   type DecideGateInput,
-  type DecideGateOptions,
   type DecideGateResult,
 } from './approvalGatesService';
 
-// THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517; `approval-gates.md` §4's second
-// amendment, decision 4) — the one path by which approving a `pull_request_merge` gate
-// MERGES, or enqueues, its pull request.
+// THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517 · MOTIR-5613; `approval-gates.md`
+// §8's SECOND AMENDMENT, decisions 4 and 6) — the one path by which an approved card's
+// pull requests are MERGED, or enqueued.
 //
-// ⚠️ THE ORDER IS THE WHOLE DESIGN: CHECK, MERGE, THEN DECIDE. `approvalGatesService.decide`
-// is one transaction with no post-commit hook, and a decided gate is immutable. Deciding
-// first and merging second would leave a permanent approval over a merge the host
-// refused; merging inside the decision would hold a row lock across a network call. So
+// ⚠️ IT IS KEYED ON (THE CARD'S OWN GATE, ONE PULL REQUEST) — never on a gate of its own.
+// Until MOTIR-5611 each pull request carried a `pull_request_merge` gate and a merge was
+// addressed by that gate's id. There is now ONE gate per card, so a merge is addressed by
+// the card's approved `pull_request_approval` gate plus the pull request being merged, and
+// nothing here needs a merge-gate row to exist.
 //
-//   1. the gate is CHECKED — decidable by this actor, still awaiting, and still asking
-//      about the pull request as it stands (open, delivered, same head). A changed
-//      subject SUPERSEDES the gate and calls no host: it is a withdrawn question, not a
-//      refused merge;
+// ⚠️ THE ORDER IS THE WHOLE DESIGN: CHECK, MERGE, THEN RECORD.
+//
+//   1. the member is CHECKED — the card's gate is approved and decidable by this actor,
+//      and the pull request is still delivered by the card, still open and still at the
+//      head the gate was approved at. A member that no longer answers that description is
+//      `stale`: the question was withdrawn, and no host is called;
 //   2. the seam is called OUTSIDE ANY TRANSACTION;
-//   3. only on `merged` or `enqueued` is the gate decided — through the ONE decide door
-//      — and the outcome then recorded on the PULL REQUEST, never on the gate (the item
-//      page reads a gate's outcome as a status key).
+//   3. the outcome is recorded on the PULL REQUEST (`merge_authority` / `merge_outcome_ref`),
+//      which is where it belonged all along — a fact about a pull request, not about a gate.
 //
-// A refusal decides nothing, and the gate stays awaiting with its reason on screen.
-//
-// ⚠️ THE WINDOW THIS CANNOT CLOSE, NAMED: a crash between a successful merge and step 3
-// leaves the gate awaiting over a merged pull request. The merge webhook closes the pull
-// request, which withdraws the gate (`mergeGates.withdrawMergeGatesOnClose`), and the card
-// still reaches `done` through that webhook.
+// ⚠️ NOTHING IS DECIDED HERE ANY MORE. The card's one gate was decided when the person
+// pressed *Approve and merge*; a merge that follows carries that decision out, and a
+// refusal leaves the approval standing with its reason on screen. That is why a retry can
+// address a single member without asking anyone to approve anything twice.
 
-const KIND = 'pull_request_merge' as const;
+/** The one gate a merge now carries out — the card's own (MOTIR-5611). */
+const APPROVAL_KIND = 'pull_request_approval' as const;
+
+/**
+ * That gate's PERMISSION FLOOR, `pullRequestApprovalGateHandler.permission`.
+ *
+ * ⚠️ COPIED, NOT IMPORTED, AND THAT IS DELIBERATE. `pullRequestApprovalHandler` imports
+ * `workItemsService` for its status write, so importing it here evaluates that handler
+ * BEFORE `approvalGatesService` pulls in the registry — and the registry then records
+ * `undefined` for the kind still mid-evaluation, which fails every status transition in
+ * the process. It is the module cycle `deliverySetVersion.ts` exists to avoid, reached
+ * from the other side. `tests/github/pullRequestMergeEntry.test.ts` pins this constant to
+ * the handler's own value, so the copy cannot drift.
+ */
+export const APPROVAL_MERGE_PERMISSION = 'work_item:edit' as const;
 
 /** The seam's refusal, one to one onto the gate refusal a person is shown (MOTIR-5512).
- *  `subject_changed` is absent on purpose: it supersedes, it does not refuse. */
+ *  `subject_changed` is absent on purpose: it makes a member stale, it does not refuse. */
 const REFUSAL_TAG: Record<Exclude<MergeRefusalCode, 'subject_changed'>, MergeRefusalTag> = {
   checks_not_green: 'MERGE_CHECKS_NOT_GREEN',
   conflict: 'MERGE_CONFLICT',
@@ -85,80 +98,72 @@ interface MergeTarget {
   expectedHeadSha: string;
 }
 
-/** Withdraw ONE card's merge question about ONE pull request. */
-function supersedeGate(
-  gate: { workItemId: string; subjectId: string },
-  ctx: ServiceContext,
-): Promise<number> {
-  return withWorkspaceContext(ctx, (tx) =>
-    approvalGateRepository.supersedeAwaitingBySubject(
-      { kind: KIND, subjectId: gate.subjectId, workItemId: gate.workItemId },
-      tx,
-    ),
-  );
-}
-
 /**
- * STEP 1 — everything decided before a host is called. Refusals the door itself would
- * give are thrown here with the door's own errors, so a press that cannot be honoured
- * never reaches GitHub. A subject that changed answers `stale`, after the gate is
- * superseded in the same transaction.
+ * STEP 1 — everything decided before a host is called, asked about ONE member of the card's
+ * approved gate. Refusals the door itself would give are thrown here with the door's own
+ * errors, so a press that cannot be honoured never reaches GitHub. A member whose pull
+ * request has moved, closed or left the card answers `stale`, and NOTHING is written: the
+ * card's gate is already decided and there is no per-member question left to withdraw.
  */
-async function checkMergeGate(
-  gateId: string,
+async function checkMember(
+  args: { approvalGateId: string; member: MemberVersion },
   ctx: ServiceContext,
 ): Promise<{ kind: 'mergeable'; target: MergeTarget } | { kind: 'stale' }> {
+  const { approvalGateId, member } = args;
   return withWorkspaceContext(ctx, async (tx) => {
-    const gate = await approvalGateRepository.findById(gateId, tx);
-    if (!gate) throw new ApprovalGateNotFoundError(gateId);
-    if (gate.kind !== KIND) {
-      throw new Error(`approveMergeGate was handed a ${gate.kind} gate (${gateId})`);
-    }
+    const gate = await approvalGateRepository.findById(approvalGateId, tx);
+    if (!gate || gate.kind !== APPROVAL_KIND) throw new ApprovalGateNotFoundError(approvalGateId);
     const item = await workItemRepository.findById(gate.workItemId, tx);
-    if (!item || item.workspaceId !== ctx.workspaceId) throw new ApprovalGateNotFoundError(gateId);
+    if (!item || item.workspaceId !== ctx.workspaceId) {
+      throw new ApprovalGateNotFoundError(approvalGateId);
+    }
 
     // The door's two actor checks, in the door's order: the kind's floor, then §2's
-    // relationship. `decide` asks both again under its lock; asking here is what keeps
-    // an unauthorised press from merging anything first.
-    await projectAccessService.assertPermission(
-      item.projectId,
-      ctx,
-      pullRequestMergeGateHandler.permission,
-      tx,
-    );
+    // relationship. A merge carries out a decision, so the actor who may carry it out is
+    // the actor who could have made it.
+    await projectAccessService.assertPermission(item.projectId, ctx, APPROVAL_MERGE_PERMISSION, tx);
     if (!(await resolveGateAuthority(item, ctx, tx))) {
-      throw new ApprovalGateNotAuthorisedError(gateId);
+      throw new ApprovalGateNotAuthorisedError(approvalGateId);
     }
-    if (gate.state === 'superseded') throw new ApprovalGateSupersededError(gateId);
-    if (gate.state !== 'awaiting') {
+
+    if (gate.state === 'superseded') throw new ApprovalGateSupersededError(approvalGateId);
+    // A merge only ever follows an APPROVAL: changes requested on the set merges none of it.
+    if (gate.state === 'changes_requested') {
       throw new ApprovalGateAlreadyDecidedError(
-        gateId,
+        approvalGateId,
         gate.state,
         gate.decidedById,
         gate.decidedAt,
         gate.decidedByLabel,
       );
     }
+    // `awaiting` means nobody has decided anything yet, so there is no decision to carry
+    // out. Both callers commit or verify the approval before they reach here, so this is a
+    // programming error rather than a refusal a person should be shown.
+    if (gate.state !== 'approved') {
+      throw new Error(`a merge was attempted under an ${gate.state} gate (${approvalGateId})`);
+    }
 
-    const pr = await githubPullRequestRepository.findByIdWithInstallation(gate.subjectId, tx);
-    const delivered =
-      pr !== null &&
-      (await workItemDeliveryRepository.listByPullRequest(pr.id, tx)).some(
-        (row) => row.workItemId === gate.workItemId,
-      );
+    // The member must still be one of THIS card's deliveries — a pull request unlinked
+    // after the approval is no longer covered by it.
+    const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
+      gate.workItemId,
+      tx,
+    );
+    const delivery = deliveries.find(
+      (row) =>
+        `${row.repo.owner}/${row.repo.name}` === member.repo &&
+        row.pullRequest.number === member.number,
+    );
+    if (!delivery) return { kind: 'stale' };
+
+    const pr = await githubPullRequestRepository.findByIdWithInstallation(
+      delivery.pullRequest.id,
+      tx,
+    );
+    // …and it must still be the SAME COMMITS the card was approved at.
     const current = pr ? pullRequestSubjectVersion(pr) : null;
-    if (
-      !pr ||
-      pr.state !== 'open' ||
-      pr.merged ||
-      !delivered ||
-      !gate.subjectVersion ||
-      current !== gate.subjectVersion
-    ) {
-      await approvalGateRepository.supersedeAwaitingBySubject(
-        { kind: KIND, subjectId: gate.subjectId, workItemId: gate.workItemId },
-        tx,
-      );
+    if (!pr || pr.state !== 'open' || pr.merged || current !== member.subjectVersion) {
       return { kind: 'stale' };
     }
 
@@ -172,18 +177,12 @@ async function checkMergeGate(
         owner: pr.repo.owner,
         name: pr.repo.name,
         number: pr.number,
-        // The head the gate was raised on — `owner/name#number@<sha>`.
-        expectedHeadSha: gate.subjectVersion.slice(gate.subjectVersion.lastIndexOf('@') + 1),
+        // The head the card was approved on.
+        expectedHeadSha: member.headSha,
       },
     };
   });
 }
-
-const APPROVAL_KIND = 'pull_request_approval' as const;
-
-/** What {@link pullRequestMergeService.approveMergeGate} returns: the decision, and whether the
- *  host merged the pull request or added it to its merge queue. */
-export type ApproveMergeGateResult = DecideGateResult & { mergeOutcome: 'merged' | 'enqueued' };
 
 /** One member of an approve-and-merge press, and what happened to it (MOTIR-5483) — the
  *  DTO the Development frame reads it as (MOTIR-5484). */
@@ -195,112 +194,102 @@ export interface ApproveAndMergeResult {
   members: ApproveAndMergeMemberOutcome[];
 }
 
+/**
+ * MERGE OR ENQUEUE ONE checked member — steps 2 and 3, with no transaction open across the
+ * host call and nothing decided afterwards.
+ *
+ * Throws `ApprovalGateMergeRefusedError` for a host refusal (nothing is written),
+ * `ApprovalGateSupersededError` when the host reports the head moved under us, and
+ * `MergeChangeRequestError` when the host did not answer at all.
+ */
+async function mergeOrEnqueue(
+  approvalGateId: string,
+  target: MergeTarget,
+  ctx: ServiceContext,
+): Promise<'merged' | 'enqueued'> {
+  const provider = getGitProvider(target.provider);
+  // A card only reaches an approve-to-merge gate when every member is a merge candidate
+  // (`raisePullRequestApprovalGate`), so a provider without the capability here is a
+  // programming error, not a refusal.
+  if (!providerSupportsMerge(provider)) {
+    throw new Error(
+      `a ${target.provider} pull request is a member of an approved gate (${approvalGateId})`,
+    );
+  }
+  let result: MergeChangeRequestResult;
+  try {
+    result = await provider.mergeChangeRequest({
+      installationId: target.installationId,
+      owner: target.owner,
+      name: target.name,
+      number: target.number,
+      expectedHeadSha: target.expectedHeadSha,
+    });
+  } catch (err) {
+    if (err instanceof MergeChangeRequestError) {
+      console.error(
+        '[pullRequestMergeService] the host did not answer the merge; nothing recorded',
+        {
+          approvalGateId,
+          pullRequestId: target.pullRequestId,
+          reason: err.reason,
+        },
+      );
+    }
+    throw err;
+  }
+
+  if (result.outcome === 'refused') {
+    // A head that moved between the check and the merge (the host's 409) is the same
+    // withdrawn question step 1 would have found.
+    if (result.refusal.code === 'subject_changed') {
+      throw new ApprovalGateSupersededError(approvalGateId);
+    }
+    throw new ApprovalGateMergeRefusedError(approvalGateId, REFUSAL_TAG[result.refusal.code], {
+      permission: result.refusal.permission ?? null,
+      reason: result.refusal.reason ?? null,
+    });
+  }
+
+  // STEP 3 — the outcome, on the PULL REQUEST. No gate is decided by a merge any more.
+  await withWorkspaceContext(ctx, (tx) =>
+    githubPullRequestRepository.recordMotirMerge(
+      target.pullRequestId,
+      {
+        mergeAuthority: 'gate',
+        mergeOutcomeRef: result.outcome === 'merged' ? result.commitSha : `queue:${result.entryId}`,
+      },
+      tx,
+    ),
+  );
+  return result.outcome;
+}
+
 export const pullRequestMergeService = {
   /**
-   * EVERY decision a surface records enters here. An APPROVE on a merge gate merges
-   * first ({@link approveMergeGate}); everything else — `request_changes` on any kind,
-   * and every other kind — goes straight to the one decide door, unchanged.
+   * EVERY decision a surface records enters here, and since MOTIR-5613 it is a straight
+   * pass-through to the ONE decide door: there is no kind whose APPROVE merges something
+   * before it is decided. *Approve and merge* is {@link approveAndMerge}, which decides
+   * first and merges after.
+   *
+   * ⚠️ KEPT AS THE SURFACES' ENTRY POINT ON PURPOSE (MOTIR-5517). The decide route and the
+   * item page both call it rather than the door, so the ordering rule has one home if a
+   * later kind ever needs one again.
    */
   async decideGate(input: DecideGateInput, ctx: ServiceContext): Promise<DecideGateResult> {
-    if (input.decision === 'approve') {
-      const gate = await withWorkspaceContext(ctx, (tx) =>
-        approvalGateRepository.findById(input.gateId, tx),
-      );
-      if (gate?.kind === KIND) return pullRequestMergeService.approveMergeGate(input, ctx);
-    }
     return approvalGatesService.decide(input, ctx);
   },
 
   /**
-   * APPROVE a merge gate: check it, merge or enqueue its pull request, then decide it.
-   *
-   * Throws the door's own refusals (not found, not authorised, already decided,
-   * superseded), `ApprovalGateMergeRefusedError` for a host refusal — the gate stays
-   * awaiting and nothing is written — and `MergeChangeRequestError` when the host did
-   * not answer, which is logged with the gate id and decides nothing.
-   */
-  async approveMergeGate(
-    input: Omit<DecideGateInput, 'decision'>,
-    ctx: ServiceContext,
-    /** Internal — the approve-and-merge press's instant (MOTIR-5483). */
-    options: DecideGateOptions = {},
-  ): Promise<ApproveMergeGateResult> {
-    const checked = await checkMergeGate(input.gateId, ctx);
-    if (checked.kind === 'stale') throw new ApprovalGateSupersededError(input.gateId);
-    const { target } = checked;
-
-    // STEP 2 — the seam, with no transaction open.
-    const provider = getGitProvider(target.provider);
-    // A gate is only ever raised for a provider that can merge (`raiseMergeGates`), so a
-    // provider without the capability here is a programming error, not a refusal.
-    if (!providerSupportsMerge(provider)) {
-      throw new Error(`a ${target.provider} pull request carries a merge gate (${input.gateId})`);
-    }
-    let result: MergeChangeRequestResult;
-    try {
-      result = await provider.mergeChangeRequest({
-        installationId: target.installationId,
-        owner: target.owner,
-        name: target.name,
-        number: target.number,
-        expectedHeadSha: target.expectedHeadSha,
-      });
-    } catch (err) {
-      if (err instanceof MergeChangeRequestError) {
-        console.error(
-          '[pullRequestMergeService] the host did not answer the merge; nothing decided',
-          {
-            gateId: input.gateId,
-            reason: err.reason,
-          },
-        );
-      }
-      throw err;
-    }
-
-    if (result.outcome === 'refused') {
-      // A head that moved between the check and the merge (the host's 409) is the same
-      // withdrawn question step 1 would have found.
-      if (result.refusal.code === 'subject_changed') {
-        await supersedeGate(
-          { workItemId: target.workItemId, subjectId: target.pullRequestId },
-          ctx,
-        );
-        throw new ApprovalGateSupersededError(input.gateId);
-      }
-      throw new ApprovalGateMergeRefusedError(input.gateId, REFUSAL_TAG[result.refusal.code], {
-        permission: result.refusal.permission ?? null,
-        reason: result.refusal.reason ?? null,
-      });
-    }
-
-    // STEP 3 — decide through the ONE door, which re-checks everything under its lock.
-    const decided = await approvalGatesService.decide(
-      { ...input, decision: 'approve' },
-      ctx,
-      options,
-    );
-    const mergeOutcomeRef =
-      result.outcome === 'merged' ? result.commitSha : `queue:${result.entryId}`;
-    await withWorkspaceContext(ctx, (tx) =>
-      githubPullRequestRepository.recordMotirMerge(
-        target.pullRequestId,
-        { mergeAuthority: 'gate', mergeOutcomeRef },
-        tx,
-      ),
-    );
-    return { ...decided, mergeOutcome: result.outcome };
-  },
-
-  /**
    * The approve-and-merge set as the Development frame draws it on a READ (Story MOTIR-4909 ·
-   * MOTIR-5484): each member of one APPROVED `pull_request_approval` gate, with the two facts
-   * a reload still has once the press's response is gone —
+   * MOTIR-5484 · MOTIR-5613): each member of one APPROVED `pull_request_approval` gate, with
+   * the facts a reload still has once the press's response is gone —
    *
-   *   · whether the member's merge gate still AWAITS, so *Retry merge* has a gate to press;
-   *   · whether the press QUEUED it — its merge gate was decided and the pull request carries a
-   *     `queue:` outcome and has not merged — so the row reads *Queued to merge* for as long as
-   *     that is true.
+   *   · the PULL REQUEST the member names, while the card still delivers it;
+   *   · whether the press QUEUED it — the pull request carries a `queue:` outcome and has not
+   *     merged — so the row reads *Queued to merge* for as long as that is true;
+   *   · whether a RETRY is offered, which is now a fact about the pull request rather than
+   *     about a second gate: the approval stands, and this member has no merge outcome yet.
    *
    * ⚠️ NO REFUSAL REASON: the press does not persist one. Empty for a gate that is not an
    * approved approval gate on this card.
@@ -319,25 +308,23 @@ export const pullRequestMergeService = {
       ) {
         return [];
       }
-      const mergeGates = await approvalGateRepository.findByWorkItemAndKind(
+      const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
         input.workItemId,
-        KIND,
         tx,
       );
-      const pullRequests = await githubPullRequestRepository.findManyByIdsForSummary(
-        [...new Set(mergeGates.map((gate) => gate.subjectId))],
-        tx,
-      );
-      return membersOf(approval.subjectVersion).map(({ subjectVersion }) => {
-        const gates = mergeGates.filter((gate) => gate.subjectVersion === subjectVersion);
-        const awaiting = gates.find((gate) => gate.state === 'awaiting') ?? null;
-        const approved = gates.find((gate) => gate.state === 'approved') ?? null;
-        const pr = approved ? pullRequests.get(approved.subjectId) : undefined;
+      return membersOf(approval.subjectVersion).map((member) => {
+        const pr = deliveries.find(
+          (row) =>
+            `${row.repo.owner}/${row.repo.name}` === member.repo &&
+            row.pullRequest.number === member.number,
+        )?.pullRequest;
+        const outcome = pr?.mergeOutcomeRef ?? null;
         return {
-          subjectVersion,
-          awaitingMergeGateId: awaiting?.id ?? null,
-          queued:
-            pr !== undefined && !pr.merged && (pr.mergeOutcomeRef?.startsWith('queue:') ?? false),
+          subjectVersion: member.subjectVersion,
+          pullRequestId: pr?.id ?? null,
+          queued: pr !== undefined && !pr.merged && (outcome?.startsWith('queue:') ?? false),
+          // A member Motir has not merged or queued yet is the one a person can try again.
+          retryable: pr !== undefined && !pr.merged && outcome === null,
         };
       });
     });
@@ -345,24 +332,21 @@ export const pullRequestMergeService = {
 
   /**
    * APPROVE AND MERGE — the one press behind the approve-and-merge gate (Story MOTIR-4909 ·
-   * MOTIR-5483; `approval-gates.md` §8's amendment, decision 5).
+   * MOTIR-5483 · MOTIR-5613; `approval-gates.md` §8's SECOND AMENDMENT, decisions 1 and 4).
    *
-   * ⚠️ THE ORDER IS THE WHOLE DESIGN, one level up from `approveMergeGate`'s:
+   * ⚠️ THE ORDER IS THE WHOLE DESIGN:
    *
-   *   1. the APPROVAL commits first, through the ONE decide door, and the card moves
+   *   1. the card's ONE gate is decided first, through the ONE decide door, and the card moves
    *      `in_review → approved`. A refusal the door raises (not authorised, already decided,
    *      superseded) ends the press here, and nothing is merged or queued;
-   *   2. AFTER that commit, each pull request in the approved set — in `subjectVersion`'s
-   *      canonical order — is handed to the merge entry point above, which merges it or
-   *      enqueues it and decides its merge gate only on success. This method never names a
-   *      host;
-   *   3. each merge gate carries the approval's `decidedAt` (and, through the door, the same
-   *      actor and source), so the rows of one press read as one decision at one instant.
+   *   2. AFTER that commit, each member of the approved set — in `subjectVersion`'s canonical
+   *      order — is merged or enqueued by the entry point above, and its outcome recorded on
+   *      its own pull request. This method never names a host.
    *
    * EVERY member is attempted: a refusal on one does not stop the next, because the approval
-   * covers all of them. The approval stands whatever the merges do, and the result reports
-   * each member — `merged`, `enqueued`, `refused` with its typed refusal, or `no_merge_gate`
-   * when none is awaiting for that exact head.
+   * covers all of them. The approval stands whatever the merges do, and the result reports each
+   * member — `merged`, `enqueued`, `refused` with its typed refusal, or `no_merge_gate` when the
+   * member is no longer a pull request this card delivers at that head.
    */
   async approveAndMerge(
     input: Omit<DecideGateInput, 'decision'>,
@@ -377,94 +361,123 @@ export const pullRequestMergeService = {
 
     // STEP 1 — the approval, committed in the door's own transaction.
     const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
-    const decidedAt = new Date(approval.gate.decidedAt!);
 
-    // STEP 2 — each member, after that commit. A member is matched to its merge gate by the
-    // exact `owner/name#number@headSha` both versions are spelled in, so a merge gate raised
-    // for a different head is never merged on this approval.
-    const awaiting = await withWorkspaceContext(ctx, (tx) =>
-      approvalGateRepository.findAwaitingByWorkItem(approval.gate.workItemId, tx),
-    );
-    const mergeGateByVersion = new Map(
-      awaiting
-        .filter((row) => row.kind === KIND && row.subjectVersion !== null)
-        .map((row) => [row.subjectVersion!, row]),
-    );
+    // STEP 2 — each member, after that commit, addressed by (this gate, its pull request).
     const members: ApproveAndMergeMemberOutcome[] = [];
-    for (const { subjectVersion } of membersOf(approval.gate.subjectVersion)) {
-      const mergeGate = mergeGateByVersion.get(subjectVersion);
-      members.push(
-        mergeGate
-          ? await mergeMember(mergeGate, subjectVersion, input, ctx, decidedAt)
-          : { subjectVersion, mergeGateId: null, pullRequestId: null, outcome: 'no_merge_gate' },
-      );
+    for (const member of membersOf(approval.gate.subjectVersion)) {
+      members.push(await mergeMember(input.gateId, member, ctx));
     }
     return { approval, members };
   },
 
   /**
    * RETRY one refused member of an approve-and-merge press — step 2 of {@link approveAndMerge}
-   * for that ONE merge gate alone, recorded at the approval's instant. The approval must
-   * already be decided `approved`, and the merge gate must hang on the same card.
+   * for that ONE pull request alone (MOTIR-5613).
+   *
+   * ⚠️ ADDRESSED BY (THE CARD'S GATE, THE PULL REQUEST), and it decides NOTHING: the card's
+   * gate was decided when it was approved, and a retry carries that same decision out again
+   * for the one member the host refused. The approval must still stand, and the pull request
+   * must still be a member of it at the head it was approved at — otherwise this is a
+   * withdrawn question, refused with the door's own error rather than re-asked.
    */
   async retryApproveAndMergeMember(
     input: Omit<DecideGateInput, 'decision' | 'gateId'> & {
       approvalGateId: string;
-      mergeGateId: string;
+      pullRequestId: string;
     },
     ctx: ServiceContext,
   ): Promise<ApproveAndMergeMemberOutcome> {
-    const [approval, mergeGate] = await withWorkspaceContext(ctx, (tx) =>
-      Promise.all([
-        approvalGateRepository.findById(input.approvalGateId, tx),
-        approvalGateRepository.findById(input.mergeGateId, tx),
-      ]),
-    );
-    if (
-      !approval ||
-      approval.kind !== APPROVAL_KIND ||
-      approval.state !== 'approved' ||
-      !approval.decidedAt
-    ) {
-      throw new ApprovalGateNotFoundError(input.approvalGateId);
-    }
-    if (!mergeGate || mergeGate.kind !== KIND || mergeGate.workItemId !== approval.workItemId) {
-      throw new ApprovalGateNotFoundError(input.mergeGateId);
-    }
-    return mergeMember(
-      mergeGate,
-      mergeGate.subjectVersion ?? '',
-      { source: input.source, noteMd: input.noteMd },
-      ctx,
-      approval.decidedAt,
-    );
+    const found = await withWorkspaceContext(ctx, async (tx) => {
+      const approval = await approvalGateRepository.findById(input.approvalGateId, tx);
+      if (!approval || approval.kind !== APPROVAL_KIND) {
+        throw new ApprovalGateNotFoundError(input.approvalGateId);
+      }
+      // Each non-approved state gets the refusal that is TRUE of it: a withdrawn question
+      // is superseded, changes requested is a decision that merges nothing, and an
+      // awaiting gate has no press to retry a member of.
+      if (approval.state === 'superseded') {
+        throw new ApprovalGateSupersededError(input.approvalGateId);
+      }
+      if (approval.state === 'changes_requested') {
+        throw new ApprovalGateAlreadyDecidedError(
+          input.approvalGateId,
+          approval.state,
+          approval.decidedById,
+          approval.decidedAt,
+          approval.decidedByLabel,
+        );
+      }
+      if (approval.state !== 'approved' || !approval.decidedAt) {
+        throw new ApprovalGateNotFoundError(input.approvalGateId);
+      }
+      const delivered = (
+        await workItemDeliveryRepository.listByWorkItemWithChecks(approval.workItemId, tx)
+      ).find((row) => row.pullRequest.id === input.pullRequestId);
+      if (!delivered) return null;
+      // The member is matched by `owner/name#number`, so a pull request whose head has moved
+      // since the approval is found here and goes stale in the check — not silently skipped.
+      return (
+        membersOf(approval.subjectVersion).find(
+          (member) =>
+            member.repo === `${delivered.repo.owner}/${delivered.repo.name}` &&
+            member.number === delivered.pullRequest.number,
+        ) ?? null
+      );
+    });
+    // Not delivered by this card, or never a member of what was approved: there is no
+    // question to carry out, and the card's gate is not re-asked.
+    if (!found) throw new ApprovalGateSupersededError(input.approvalGateId);
+    return mergeMember(input.approvalGateId, found, ctx);
   },
 };
 
 /**
- * Merge or enqueue ONE member of an approve-and-merge press through the merge entry point,
- * and turn a refusal into a result rather than a throw — so the next member is still tried.
- * An error that is not a refusal of this member is rethrown.
+ * Merge or enqueue ONE member of an approved card through the entry point above, and turn a
+ * refusal into a result rather than a throw — so the next member is still tried. An error
+ * that is not a refusal of this member is rethrown.
  */
 async function mergeMember(
-  mergeGate: { id: string; subjectId: string },
-  subjectVersion: string,
-  input: Pick<DecideGateInput, 'source' | 'noteMd'>,
+  approvalGateId: string,
+  member: MemberVersion,
   ctx: ServiceContext,
-  decidedAt: Date,
 ): Promise<ApproveAndMergeMemberOutcome> {
-  const member = { subjectVersion, mergeGateId: mergeGate.id, pullRequestId: mergeGate.subjectId };
+  let target: MergeTarget;
   try {
-    const decided = await pullRequestMergeService.approveMergeGate(
-      { gateId: mergeGate.id, source: input.source, noteMd: input.noteMd ?? null },
-      ctx,
-      { decidedAt },
-    );
-    return { ...member, outcome: decided.mergeOutcome };
+    const checked = await checkMember({ approvalGateId, member }, ctx);
+    // ⚠️ `no_merge_gate` NO LONGER NAMES A GATE (MOTIR-5613). It is the member this card no
+    // longer delivers at the head it was approved at — nothing to merge, and nothing
+    // refused. The literal is kept so the frame's copy stays MOTIR-5615's to rename.
+    if (checked.kind === 'stale') {
+      return {
+        subjectVersion: member.subjectVersion,
+        pullRequestId: null,
+        outcome: 'no_merge_gate',
+      };
+    }
+    target = checked.target;
   } catch (err) {
     const refusal = memberRefusal(err);
     if (!refusal) throw err;
-    return { ...member, outcome: 'refused', refusal };
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: null,
+      outcome: 'refused',
+      refusal,
+    };
+  }
+
+  try {
+    const outcome = await mergeOrEnqueue(approvalGateId, target, ctx);
+    return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
+  } catch (err) {
+    const refusal = memberRefusal(err);
+    if (!refusal) throw err;
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: target.pullRequestId,
+      outcome: 'refused',
+      refusal,
+    };
   }
 }
 
