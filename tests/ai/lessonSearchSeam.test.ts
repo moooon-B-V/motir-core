@@ -121,12 +121,14 @@ describe('the client — same envelope, auth and error conventions as its neighb
       kinds: ['bug'],
       types: ['code'],
       phases: ['lay'],
+      subject: 'mcp',
       limit: 5,
     });
     expect(sentBody(fetchMock)).toMatchObject({
       kinds: ['bug'],
       types: ['code'],
       phases: ['lay'],
+      subject: 'mcp',
       limit: 5,
     });
   });
@@ -272,9 +274,20 @@ describe('an omitted axis stays ABSENT across the hop', () => {
     // Asserted on the SERIALIZED body: `{ kinds: undefined }` disappears in
     // JSON, but `{ kinds: [] }` does not — and `[]` is what the upstream SQL
     // renders as a filter matching nothing.
-    for (const axis of ['kinds', 'types', 'phases']) {
+    for (const axis of ['kinds', 'types', 'phases', 'subject']) {
       expect(body).not.toHaveProperty(axis);
     }
+  });
+
+  // MOTIR-5621 — the SCALAR fourth axis. The upstream has accepted this field
+  // since MOTIR-5080; what was missing was every hop on this side forwarding it,
+  // which is why the assertion is on the SERIALIZED body rather than on a call
+  // argument. A parameter accepted at the tool and dropped at the wire returns
+  // perfectly plausible lessons and never errors.
+  it('sends a supplied SUBJECT through to the wire', async () => {
+    const fetchMock = stubUpstream([]);
+    await projectLessonsService.searchLessons(PROJECT_ID, ctx, { ...SEARCH, subject: 'mcp' });
+    expect(sentBody(fetchMock).subject).toBe('mcp');
   });
 
   it('sends a supplied axis through unchanged', async () => {
@@ -320,6 +333,9 @@ describe('the DTO carries what the contract names and nothing more', () => {
       kinds: [],
       types: [],
       phases: [],
+      // An older motir-ai omits the field entirely; that reads as "no subject",
+      // which is the same answer as a row that genuinely carries none.
+      subject: null,
       distance: 0.5,
     });
   });
@@ -328,7 +344,41 @@ describe('the DTO carries what the contract names and nothing more', () => {
     stubUpstream([rankedRow()]);
     const res = await projectLessonsService.searchLessons(PROJECT_ID, ctx, SEARCH);
     expect(Object.keys(res.lessons[0]!).sort()).toEqual(
-      ['body', 'distance', 'howToApply', 'id', 'kinds', 'phases', 'scope', 'title', 'types'].sort(),
+      [
+        'body',
+        'distance',
+        'howToApply',
+        'id',
+        'kinds',
+        'phases',
+        'scope',
+        'subject',
+        'title',
+        'types',
+      ].sort(),
     );
+  });
+
+  // The RETURN half of the axis, and the half that makes a narrowed search
+  // readable: the result set legitimately MIXES rows carrying the subject with
+  // rows carrying none, so the field is what tells them apart.
+  it('carries a row SUBJECT back to the caller', async () => {
+    stubUpstream([
+      {
+        id: 'x',
+        title: 't',
+        body: 'b',
+        howToApply: 'h',
+        scope: 'global',
+        subject: 'mcp',
+        distance: 0.4,
+      },
+    ] as RawRankedLesson[]);
+
+    const res = await projectLessonsService.searchLessons(PROJECT_ID, ctx, {
+      ...SEARCH,
+      subject: 'mcp',
+    });
+    expect(res.lessons[0]!.subject).toBe('mcp');
   });
 });

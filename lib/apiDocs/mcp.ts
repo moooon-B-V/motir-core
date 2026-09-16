@@ -795,11 +795,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   search_lessons: {
     summary:
-      "Search recorded lessons by meaning — the shared corpus and this project's own — before you plan or build.",
-    // Re-pinned by MOTIR-4775: the description's phase axis now reads `lay` /
-    // `author`. Taken from the live handshake the gate prints, never computed by
-    // hand.
-    descriptionFingerprint: 'f6bd495dc414',
+      "Search recorded lessons by meaning — the shared corpus and this project's own — narrowed by kind, type, phase and subject, before you plan or build.",
+    // Re-pinned by MOTIR-5621: the tool gained a FOURTH narrowing axis, so the
+    // summary's list of what a caller narrows by was no longer the whole set —
+    // which is the drift this pin exists to force a re-read of, rather than a
+    // re-wrap to absorb. (MOTIR-4775 re-pinned it before, when the phase axis
+    // became `lay` / `author`.) Taken from the live handshake the gate prints,
+    // never computed by hand.
+    descriptionFingerprint: 'b7a51e9d5a29',
   },
   reinforce_lesson: {
     summary:

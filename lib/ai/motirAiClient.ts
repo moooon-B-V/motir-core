@@ -1560,6 +1560,13 @@ export interface RawRankedLesson {
   kinds?: string[];
   types?: string[];
   phases?: string[];
+  /**
+   * The SCALAR fourth axis. Optional on the wire because an older motir-ai does
+   * not send it, and absent is read as "this row carries no subject" — which is
+   * also what a row with no subject means, and the two are the same answer to
+   * the caller.
+   */
+  subject?: string | null;
   /** Cosine distance to the query; lower is nearer. */
   distance: number;
 }
@@ -1571,6 +1578,13 @@ export interface SearchLessonsRequest {
   kinds?: string[];
   types?: string[];
   phases?: string[];
+  /**
+   * The SCALAR fourth axis (MOTIR-5621) — one value or none, never a list,
+   * matching the write side and every layer beneath it. `parseSearchLessonsBody`
+   * upstream has accepted this field since MOTIR-5080, so this hop needs no
+   * co-ordinated motir-ai change to start working.
+   */
+  subject?: string;
   limit?: number;
 }
 
@@ -1590,6 +1604,11 @@ export async function searchLessons(input: SearchLessonsRequest): Promise<RawRan
       ...(input.kinds ? { kinds: input.kinds } : {}),
       ...(input.types ? { types: input.types } : {}),
       ...(input.phases ? { phases: input.phases } : {}),
+      // The scalar axis, spread for the same reason and with the same
+      // consequence: absent omits its clause upstream, and `''` would render a
+      // filter matching the lessons whose subject is the empty string, i.e.
+      // none of them.
+      ...(input.subject ? { subject: input.subject } : {}),
       ...(input.limit !== undefined ? { limit: input.limit } : {}),
     }),
   });

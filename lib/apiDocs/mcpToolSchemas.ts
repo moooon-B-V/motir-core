@@ -1595,6 +1595,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Which part of a card you are writing: "lay" (laying a level\'s children — shape, edges, coverage) or "author" (writing a body — criteria, sizing, claims). The retired spellings "skeleton" and "deepen" are still accepted and read as "lay" and "author"; they are removed in a later release. The coordinate only you can supply.',
       },
+      subject: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'WHICH SUBJECT MATTER this search is about — the FOURTH routing axis, the same one `add_lesson` records a lesson against (`data`, `jobs`, `llm`, `mcp`, …). SCALAR: one subject or none, never a list, because a lesson has one. Narrowing on it returns the lessons carrying that subject AND the lessons carrying none — an untagged lesson is MORE general than either subject, so it still reaches every query. Omitting it leaves the axis unconstrained. MEMBERSHIP IS NOT VALIDATED, exactly as on the write side: an unrecognised value is accepted and simply matches no subject-tagged row, so a typo narrows to the untagged lessons rather than erroring.',
+      },
       limit: {
         type: 'integer',
         minimum: 1,
