@@ -1961,6 +1961,49 @@ record holds then, and why a null FK would be the wrong answer.
 > decides under one gate (MOTIR-4910 / MOTIR-5590); a merge-queue EJECTION
 > (MOTIR-5461); the decision STAMP (MOTIR-5234); GitLab merge-request approvals
 > (MOTIR-5593).
+>
+> ### §8 — THIRD AMENDMENT (MOTIR-5624, 2026-09-16): EVERY door that approves the card's gate MERGES — the REST decide route included
+>
+> **The defect.** Decision 1 above is door-agnostic — _approving merges every pull
+> request_ — but MOTIR-5613 made `pullRequestMergeService.decideGate` a straight
+> pass-through to the decide door, and `POST /api/approval-gates/[id]/decide`
+> calls `decideGate`. Approving through the route therefore moved the card to
+> `approved` and merged nothing, leaving no gate for anyone to press. Only the
+> item page's _Approve and merge_ (`approveAndMerge`) merged.
+>
+> **1. ONE ARM, KEYED ON THE SURVIVING GATE** (rung 2: decision 1 above).
+> `decideGate` sends an `approve` on a `pull_request_approval` gate through the
+> press's own two steps — decide first, then merge or enqueue each member — so
+> the order MOTIR-5613 protected holds. Every other decision reaches the door
+> unchanged. The press and the route share one internal step, so they cannot
+> drift apart again. The decision still records the door it came through:
+> `source: 'api'` for the route.
+>
+> **2. THE RESPONSE GAINS `members` — ADDITIVE** (rung 3: the route returns its
+> result verbatim). The route's 200 body is the decision it always was (`gate`,
+> `effect`, `filesKept`) plus `members`: one outcome per pull request, in the
+> same shape the press returns (`merged` / `enqueued` / `refused` with its typed
+> refusal / `no_merge_gate`). It is `[]` for a decision that merged nothing. **A
+> host refusal is a MEMBER outcome of a 200, never an error status**: the
+> approval committed first and stands, every other member is still attempted,
+> and the refused one is retried from the Development frame (decision 6). So the
+> route no longer returns a merge refusal's status, or a 502 for a host that did
+> not answer, for this gate. Those now arrive as a member's `refused`
+> (`UNEXPECTED` for a host that did not answer), exactly as the press reports
+> them.
+>
+> **3. AN API CALLER MAY MERGE — NO SEPARATE KEY** (rung 3: decision 1 above and
+> §2). The route is gated on the same permission floor
+> (`work_item:edit`, `APPROVAL_MERGE_PERMISSION`) and the same §2 authority check
+> the press uses, and the merge step re-asserts both per member. Refusing the
+> verb for this kind on the route was the alternative. It was rejected because
+> it would leave the API unable to approve the card at all: under decision 1,
+> approving and merging are one decision. The retired
+> `work_item:merge_pull_request` key (MOTIR-5616) is **not** revived. Whoever may
+> approve the card's pull requests may merge them, through any door.
+>
+> **4. What this does NOT decide:** the GitHub-sync door's merge, which is
+> MOTIR-5608's under MOTIR-4910 and the same principle applied to a third door.
 
 #### What the two workflows settle, in one line each
 

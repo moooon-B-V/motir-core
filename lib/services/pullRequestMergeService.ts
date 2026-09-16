@@ -266,19 +266,43 @@ async function mergeOrEnqueue(
   return result.outcome;
 }
 
+/**
+ * A decision as a surface records it: what the door decided, plus every member the decision
+ * MERGED (MOTIR-5624). `members` is empty for every decision that merges nothing — any
+ * `request_changes`, and an `approve` on a kind that is not the approve-to-merge gate.
+ */
+export interface DecideGateWithMergeResult extends DecideGateResult {
+  members: ApproveAndMergeMemberOutcome[];
+}
+
 export const pullRequestMergeService = {
   /**
-   * EVERY decision a surface records enters here, and since MOTIR-5613 it is a straight
-   * pass-through to the ONE decide door: there is no kind whose APPROVE merges something
-   * before it is decided. *Approve and merge* is {@link approveAndMerge}, which decides
-   * first and merges after.
+   * EVERY decision a surface records enters here — the decide route and the item page's
+   * decide action both call it rather than the door (MOTIR-5517).
    *
-   * ⚠️ KEPT AS THE SURFACES' ENTRY POINT ON PURPOSE (MOTIR-5517). The decide route and the
-   * item page both call it rather than the door, so the ordering rule has one home if a
-   * later kind ever needs one again.
+   * ⚠️ AN APPROVE ON THE APPROVE-TO-MERGE GATE IS {@link approveAndMerge}, WHATEVER DOOR IT
+   * CAME THROUGH (MOTIR-5624; `approval-gates.md` §8's THIRD AMENDMENT). MOTIR-5613 made this
+   * a straight pass-through because no kind merges BEFORE it is decided — true about ORDER,
+   * and it left the REST route approving the card's one gate while merging nothing, with no
+   * gate left for anyone to press. `approveAndMerge` decides FIRST and merges after, so the
+   * order 5613 protected still holds; what this restores is that every door to the same gate
+   * means the same thing. Every other decision reaches the door unchanged.
    */
-  async decideGate(input: DecideGateInput, ctx: ServiceContext): Promise<DecideGateResult> {
-    return approvalGatesService.decide(input, ctx);
+  async decideGate(
+    input: DecideGateInput,
+    ctx: ServiceContext,
+  ): Promise<DecideGateWithMergeResult> {
+    if (input.decision === 'approve') {
+      // Routing only: the door re-reads everything the decision turns on under its own lock.
+      const gate = await withWorkspaceContext(ctx, (tx) =>
+        approvalGateRepository.findById(input.gateId, tx),
+      );
+      if (gate?.kind === APPROVAL_KIND) {
+        const { approval, members } = await approveAndMergeGate(input, ctx);
+        return { ...approval, members };
+      }
+    }
+    return { ...(await approvalGatesService.decide(input, ctx)), members: [] };
   },
 
   /**
@@ -359,16 +383,7 @@ export const pullRequestMergeService = {
     if (gate && gate.kind !== APPROVAL_KIND) {
       throw new Error(`approveAndMerge was handed a ${gate.kind} gate (${input.gateId})`);
     }
-
-    // STEP 1 — the approval, committed in the door's own transaction.
-    const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
-
-    // STEP 2 — each member, after that commit, addressed by (this gate, its pull request).
-    const members: ApproveAndMergeMemberOutcome[] = [];
-    for (const member of membersOf(approval.gate.subjectVersion)) {
-      members.push(await mergeMember(input.gateId, member, ctx));
-    }
-    return { approval, members };
+    return approveAndMergeGate(input, ctx);
   },
 
   /**
@@ -431,6 +446,26 @@ export const pullRequestMergeService = {
     return mergeMember(input.approvalGateId, found, ctx);
   },
 };
+
+/**
+ * The press's two steps, once the gate is known to be the approve-to-merge kind — shared by
+ * {@link pullRequestMergeService.approveAndMerge} and the route's `decideGate` so the two
+ * doors cannot drift apart again.
+ */
+async function approveAndMergeGate(
+  input: Omit<DecideGateInput, 'decision'>,
+  ctx: ServiceContext,
+): Promise<ApproveAndMergeResult> {
+  // STEP 1 — the approval, committed in the door's own transaction.
+  const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
+
+  // STEP 2 — each member, after that commit, addressed by (this gate, its pull request).
+  const members: ApproveAndMergeMemberOutcome[] = [];
+  for (const member of membersOf(approval.gate.subjectVersion)) {
+    members.push(await mergeMember(input.gateId, member, ctx));
+  }
+  return { approval, members };
+}
 
 /**
  * Merge or enqueue ONE member of an approved card through the entry point above, and turn a

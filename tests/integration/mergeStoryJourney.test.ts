@@ -55,11 +55,10 @@ const { POST: decideRoute } = await import('@/app/api/approval-gates/[id]/decide
 // they press is `pullRequestMergeService.approveAndMerge` — the function the item
 // page's *Approve and merge* action calls.
 //
-// ⚠️ THE REST DECIDE ROUTE IS NO LONGER THE MERGING DOOR, AND THAT IS A KNOWN DEFECT:
-// `decideGate` became a pass-through in MOTIR-5613, so approving through the route
-// records the approval and merges nothing. It is filed as MOTIR-5624, which owns
-// restoring this journey's route assertions. The route is still exercised below for
-// the verbs it still owns.
+// ⚠️ THE REST DECIDE ROUTE IS A MERGING DOOR TOO (MOTIR-5624). `decideGate` became a
+// pass-through in MOTIR-5613 and the route approved the card while merging nothing;
+// it now runs the press's own two steps for an approve on this gate, so journey 1
+// walks BOTH doors and asserts they end in the same place.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-merge-journey';
@@ -323,23 +322,87 @@ describe('journey 1 — manual, imported repository, two pull requests: approve 
     await expectNoMergeResultOnAnyGate();
   });
 
-  it('⚠️ approving through the REST ROUTE merges NOTHING — MOTIR-5624', async () => {
-    // This is a DEFECT, pinned so it cannot change silently in either direction: the
-    // route used to merge (it dispatched to `approveMergeGate`), MOTIR-5613's
-    // pass-through stopped it, and MOTIR-5624 owns deciding whether it should again.
-    // When that card lands it replaces this test with the route walking journey 1.
+  it('the REST ROUTE merges BOTH members through the press’s own path, recorded as `api` — MOTIR-5624', async () => {
     const s = await makeScenario('journey-1-route@example.com', 'manual');
-    const item = await cardWithPrs(s, [11]);
+    const item = await cardWithPrs(s, [11, 12]);
     await ci('success', 'sha-a', 11);
+    await ci('success', 'sha-b', 12);
+    const gate = await gateFor(item.id);
 
-    const res = await decide((await gateFor(item.id)).id);
+    const res = await decide(gate.id);
 
     expect(res.status).toBe(200);
-    expect((await gateRow((await gateFor(item.id, 'approved')).id)).state).toBe('approved');
+    expect(res.body).toMatchObject({ gate: { id: gate.id, state: 'approved' } });
+    expect((res.body.members as Array<{ outcome: string }>).map((m) => m.outcome)).toEqual([
+      'merged',
+      'merged',
+    ]);
+    for (const number of [11, 12]) {
+      expect(await prRow(number)).toMatchObject({
+        mergeAuthority: 'gate',
+        mergeOutcomeRef: `merge-${number}`,
+      });
+    }
+    expect(mergeCalls().filter((c) => c.method === 'PUT')).toHaveLength(2);
+    // The decision still says HOW it arrived.
+    expect(await gateRow(gate.id)).toMatchObject({ state: 'approved', decisionSource: 'api' });
+
+    // …and from here it is journey 1: the approval moved the card, the webhook finishes it.
     expect(await statusOf(item.id)).toBe('approved');
-    // …and the pull request was never merged, with no gate left to press.
+    await prDelivery('closed', 11, `subtask/${item.identifier}-11`, true);
+    await prDelivery('closed', 12, `subtask/${item.identifier}-12`, true);
+    expect(await statusOf(item.id)).toBe('done');
+
+    await expectNoMergeResultOnAnyGate();
+  });
+
+  it('through the ROUTE, a host refusal on one member leaves the approval standing and the other still merges', async () => {
+    const s = await makeScenario('journey-1-route-refused@example.com', 'manual');
+    const item = await cardWithPrs(s, [11, 12]);
+    await ci('success', 'sha-a', 11);
+    await ci('success', 'sha-b', 12);
+    const gate = await gateFor(item.id);
+    host.merge = (n) =>
+      n === 11
+        ? { status: 405, body: { message: 'Pull Request is not mergeable' } }
+        : { status: 200, body: { merged: true, sha: `merge-${n}` } };
+    host.reread = (n) => (n === 11 ? { mergeable_state: 'dirty' } : {});
+
+    const res = await decide(gate.id);
+
+    // A refusal is a MEMBER outcome of a 200, never an error status: the approval committed
+    // first, so there is nothing for a status code to report as failed.
+    expect(res.status).toBe(200);
+    expect(res.body.members).toMatchObject([
+      { outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } },
+      { outcome: 'merged' },
+    ]);
+    expect(await gateRow(gate.id)).toMatchObject({ state: 'approved', decisionSource: 'api' });
     expect(await prRow(11)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
-    expect(host.calls).toEqual([]);
+    expect(await prRow(12)).toMatchObject({ mergeAuthority: 'gate', mergeOutcomeRef: 'merge-12' });
+    expect(mergeCalls().filter((c) => c.method === 'PUT')).toHaveLength(2);
+  });
+
+  it('request_changes through the ROUTE merges nothing and calls no host', async () => {
+    const s = await makeScenario('journey-1-route-changes@example.com', 'manual');
+    const item = await cardWithPrs(s, [11, 12]);
+    await ci('success', 'sha-a', 11);
+    await ci('success', 'sha-b', 12);
+    const gate = await gateFor(item.id);
+    host.calls.length = 0;
+
+    const res = await decide(gate.id, 'request_changes');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ gate: { state: 'changes_requested' }, members: [] });
+    expect(await gateRow(gate.id)).toMatchObject({
+      state: 'changes_requested',
+      decisionSource: 'api',
+    });
+    for (const number of [11, 12]) {
+      expect(await prRow(number)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
+    }
+    expect(mergeCalls()).toEqual([]);
   });
 });
 

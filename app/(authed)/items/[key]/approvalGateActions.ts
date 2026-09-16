@@ -92,8 +92,9 @@ export async function decideApprovalGateAction(input: {
   const { gateId, decision, identifier, noteMd } = input;
   const ctx = await requireContext();
   try {
-    // Through the merge entry point (MOTIR-5517): an approve on a merge gate merges
-    // first and is decided only once it did; every other decision is the door's.
+    // Through the merge entry point (MOTIR-5517 · MOTIR-5624): an approve on the card's
+    // approve-to-merge gate is decided and then merges, exactly as the press does; every
+    // other decision is the door's.
     const { gate, filesKept } = await pullRequestMergeService.decideGate(
       // `ui` — a SERVER ACTION is a person pressing the control in Motir. It is
       // the audit's strongest claim (ADR §6a: *"a human click must be

@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import {
-  ApprovalGateError,
-  ApprovalGateMergeRefusedError,
-  type ApprovalGateErrorTag,
-} from '@/lib/approvalGates/errors';
-import { MergeChangeRequestError } from '@/lib/git/errors';
+import { ApprovalGateError, type ApprovalGateErrorTag } from '@/lib/approvalGates/errors';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
@@ -19,11 +14,15 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // verbs and the effect (`lib/approvalGates/registry.ts`); the door does not
 // branch on it, and neither does this layer.
 //
-// ⚠️ IT CALLS `pullRequestMergeService.decideGate`, NOT THE DOOR DIRECTLY (MOTIR-5517).
-// An APPROVE on a merge gate has to merge BEFORE it is decided — the door runs in one
-// transaction and cannot call a host — so that one case goes through the merge entry
-// point, which decides through the same door once the merge happened. Every other
-// decision reaches `approvalGatesService.decide` unchanged.
+// ⚠️ IT CALLS `pullRequestMergeService.decideGate`, NOT THE DOOR DIRECTLY (MOTIR-5517 ·
+// MOTIR-5624). An APPROVE on a card's approve-to-merge gate MERGES every pull request the
+// card delivers, exactly as the item page's *Approve and merge* press does — the approval
+// commits first, then each member is merged or enqueued. The response is the decision plus
+// a `members` array, one outcome per pull request (`merged` / `enqueued` / `refused` with
+// its typed refusal / `no_merge_gate`), empty for a decision that merged nothing. A host
+// refusal is a MEMBER outcome of a 200, never an error status: the approval stands
+// (`approval-gates.md` §8's THIRD AMENDMENT). Every other decision reaches
+// `approvalGatesService.decide` unchanged.
 //
 // ⚠️ ADDRESSED BY GATE, NOT BY WORK ITEM, and that is not a style choice. A card
 // carrying a repository SET legitimately holds SEVERAL simultaneous awaiting
@@ -109,25 +108,6 @@ export async function POST(
     // the other.
     const gateError = workItemGateErrorResponse(err);
     if (gateError) return gateError;
-    // The HOST refused the merge (MOTIR-5517): the same status table, plus what the
-    // refusal names — the permission to grant, the host's own reason.
-    if (err instanceof ApprovalGateMergeRefusedError) {
-      return NextResponse.json(
-        { code: err.code, error: err.message, permission: err.permission, reason: err.reason },
-        { status: APPROVAL_GATE_STATUS[err.tag] },
-      );
-    }
-    // The host did not ANSWER — no refusal to render, nothing decided. `502`: an
-    // upstream failed, which is neither the caller's fault nor Motir's refusal.
-    if (err instanceof MergeChangeRequestError) {
-      return NextResponse.json(
-        {
-          code: 'UNEXPECTED',
-          error: 'The Git host did not answer the merge; nothing was decided.',
-        },
-        { status: 502 },
-      );
-    }
     if (err instanceof ApprovalGateError) {
       return NextResponse.json(
         { code: err.code, error: err.message },
