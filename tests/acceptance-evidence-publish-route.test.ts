@@ -113,7 +113,7 @@ describe('POST acceptance-evidence (register)', () => {
   it('valid integration token + eligible (ungated off-cloud) → 201 pending, story stays in_review', async () => {
     const token = await integrationToken(fx);
     const res = await POST(
-      publishReq(token, { videoPathname: videoPathname(), commitSha: 'c1' }),
+      publishReq(token, { videoPathname: videoPathname(), commitSha: 'c1c1c1c' }),
       paramsFor(story),
     );
     expect(res.status).toBe(201);
@@ -136,7 +136,11 @@ describe('POST acceptance-evidence (register)', () => {
     });
     const token = await integrationToken(fx);
     const res = await POST(
-      publishReq(token, { videoPathname: videoPathname(), commitSha: 'c2' }, subtask.identifier),
+      publishReq(
+        token,
+        { videoPathname: videoPathname(), commitSha: 'c2c2c2c' },
+        subtask.identifier,
+      ),
       { params: Promise.resolve({ id: subtask.identifier }) },
     );
     expect(res.status).toBe(201);
@@ -235,7 +239,7 @@ describe('POST acceptance-evidence (register)', () => {
     const first = await POST(
       publishReq(token, {
         videoPathname: videoPathname(),
-        commitSha: 'dead',
+        commitSha: 'deaddead',
         producedByKey: 'MOTIR-1638',
       }),
       paramsFor(story),
@@ -244,7 +248,7 @@ describe('POST acceptance-evidence (register)', () => {
     const second = await POST(
       publishReq(token, {
         videoPathname: videoPathname(),
-        commitSha: 'dead',
+        commitSha: 'deaddead',
         producedByKey: 'MOTIR-1638',
       }),
       paramsFor(story),
@@ -256,5 +260,50 @@ describe('POST acceptance-evidence (register)', () => {
       where: { workItemId: story.id },
     });
     expect(acceptanceEvidenceCount).toBe(1);
+  });
+});
+
+// ── The commit CITATION, on the HTTP door (MOTIR-5619) ───────────────────────
+// The refusal is raised on the SERVICE, so this asserts the HTTP door surfaces
+// it — the route maps the abstract `AcceptanceEvidenceError` to its own `status`,
+// which is what makes one throw answer on both doors. The MCP door's half is
+// `tests/mcp/publishAcceptanceResultTool.test.ts`.
+
+describe('POST acceptance-evidence — commitSha', () => {
+  const SHA = '832026b77b2b276ae9ba028b47e603274a4072cd';
+
+  it('a commitSha that is not a commit id → 400 naming the field, nothing written', async () => {
+    const token = await integrationToken(fx);
+    const res = await POST(
+      publishReq(token, { videoPathname: videoPathname(), commitSha: 'not-a-commit' }),
+      paramsFor(story),
+    );
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('ACCEPTANCE_EVIDENCE_INVALID_COMMIT_SHA');
+    expect(body.error).toContain('commitSha');
+
+    expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(0);
+  });
+
+  it('a whitespace-padded, upper-case commitSha → 201 with the id stored NORMALISED', async () => {
+    const token = await integrationToken(fx);
+    const res = await POST(
+      publishReq(token, {
+        videoPathname: videoPathname(),
+        commitSha: `  ${SHA.toUpperCase()}\n`,
+      }),
+      paramsFor(story),
+    );
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { evidence: { id: string; commitSha: string | null } };
+    expect(body.evidence.commitSha).toBe(SHA);
+
+    const row = await adminDb.acceptanceEvidence.findUniqueOrThrow({
+      where: { id: body.evidence.id },
+    });
+    expect(row.commitSha).toBe(SHA);
   });
 });

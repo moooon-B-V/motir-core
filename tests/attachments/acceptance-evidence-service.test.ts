@@ -242,3 +242,122 @@ describe('generic upload allowlist stays unchanged', () => {
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE', status: 415 });
   });
 });
+
+// ── The commit CITATION (MOTIR-5619) ─────────────────────────────────────────
+// `commitSha` is the receipt's citation AND its idempotency key, and the service
+// is where both jobs read it — so this is where it is normalised and refused,
+// rather than at either of the two doors. Real Postgres: the idempotency half is
+// a claim about what is STORED, which a mock cannot answer.
+
+const SHA = '832026b77b2b276ae9ba028b47e603274a4072cd';
+
+describe('acceptanceEvidenceService — the commitSha citation', () => {
+  it('REFUSES a commitSha that is not a commit id, naming the field', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await makeStory(fx);
+
+    await expect(
+      acceptanceEvidenceService.recordFromUpload(
+        { workItemId: story.id, video: videoOf(), commitSha: 'not-a-commit' },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({
+      code: 'ACCEPTANCE_EVIDENCE_INVALID_COMMIT_SHA',
+      status: 400,
+      message: expect.stringContaining('commitSha'),
+    });
+
+    // Refused BEFORE anything is written — no row, no attachment.
+    expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(0);
+    expect(await adminDb.attachment.count({ where: { workItemId: story.id } })).toBe(0);
+  });
+
+  it('REFUSES a short id and a branch name', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await makeStory(fx);
+
+    for (const commitSha of ['abc123', 'main', 'HEAD']) {
+      await expect(
+        acceptanceEvidenceService.recordFromUpload(
+          { workItemId: story.id, video: videoOf(), commitSha },
+          fx.ctx,
+        ),
+      ).rejects.toMatchObject({ code: 'ACCEPTANCE_EVIDENCE_INVALID_COMMIT_SHA' });
+    }
+  });
+
+  it('STORES a whitespace-padded, upper-case id NORMALISED', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await makeStory(fx);
+
+    const dto = await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: videoOf(), commitSha: `  ${SHA.toUpperCase()}\n` },
+      fx.ctx,
+    );
+
+    expect(dto.commitSha).toBe(SHA);
+    const row = await adminDb.acceptanceEvidence.findUniqueOrThrow({ where: { id: dto.id } });
+    expect(row.commitSha).toBe(SHA);
+  });
+
+  // THE IDEMPOTENCY HALF. Before MOTIR-5619 the comparison was `===` on the raw
+  // string, so `"<sha>\n"` and `"<sha>"` were two keys: the redelivery
+  // SUPERSEDED the good receipt and wrote a history row — exactly what the
+  // check exists to prevent — and the panel, which renders the first seven
+  // characters, showed nothing different.
+  it('a redelivery spelling the SAME commit differently is a NO-OP, not a supersede', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await makeStory(fx);
+
+    const first = await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: videoOf('first.webm'), commitSha: SHA },
+      fx.ctx,
+    );
+
+    const redelivered = await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: videoOf('second.webm'), commitSha: `${SHA.toUpperCase()}\n` },
+      fx.ctx,
+    );
+
+    // The EXISTING receipt came back — same id, not a new one.
+    expect(redelivered.id).toBe(first.id);
+
+    // And no history row was written: one row total, still current.
+    expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(1);
+    const rows = await adminDb.acceptanceEvidence.findMany({
+      where: { workItemId: story.id, isCurrent: true },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe(first.id);
+  });
+
+  it('a DIFFERENT commit still supersedes — the no-op is keyed on the commit, not disabled', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await makeStory(fx);
+
+    const first = await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: videoOf('first.webm'), commitSha: SHA },
+      fx.ctx,
+    );
+    const second = await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: videoOf('second.webm'), commitSha: 'b'.repeat(40) },
+      fx.ctx,
+    );
+
+    expect(second.id).not.toBe(first.id);
+    expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(2);
+  });
+
+  it('an ABSENT commitSha is still accepted — the citation is optional', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await makeStory(fx);
+
+    const dto = await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: videoOf() },
+      fx.ctx,
+    );
+
+    expect(dto.commitSha).toBeNull();
+    expect(dto.status).toBe('pending');
+  });
+});

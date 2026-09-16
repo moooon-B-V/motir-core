@@ -111,7 +111,7 @@ afterAll(async () => {
 describe('the freeze seam, end to end', () => {
   it('approve → republish → NOTHING changed (the whole survival set)', async () => {
     const story = await inReviewStory();
-    await publish(story, 'signed.webm', 'aaa');
+    await publish(story, 'signed.webm', 'aaaaaaa');
 
     // Approve through the SHIPPED path, not a hand-written UPDATE — it is what
     // stamps the approver and moves the story, and this test is about what
@@ -124,7 +124,7 @@ describe('the freeze seam, end to end', () => {
     expect(before.approvedById).not.toBeNull();
     expect(before.approvedAt).not.toBeNull();
 
-    const res = await publish(story, 'later.webm', 'bbb');
+    const res = await publish(story, 'later.webm', 'bbbbbbb');
     expect(res.status).toBe(409);
 
     const after = await adminDb.acceptanceEvidence.findFirstOrThrow({
@@ -160,7 +160,7 @@ describe('the freeze seam, end to end', () => {
 
   it('ONE code, asserted at all THREE layers — a rename cannot pass by updating two', async () => {
     const story = await inReviewStory();
-    await publish(story, 'signed.webm', 'aaa');
+    await publish(story, 'signed.webm', 'aaaaaaa');
     await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
 
     // Layer 1 — the SERVICE raises the typed error (not a raw Prisma failure).
@@ -169,14 +169,14 @@ describe('the freeze seam, end to end', () => {
         {
           workItemId: story.id,
           videoPathname: `acceptance/${fx.workspaceId}/${story.id}/direct.webm`,
-          commitSha: 'ccc',
+          commitSha: 'ccccccc',
         },
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(AcceptanceEvidenceAlreadyApprovedError);
 
     // Layer 2 — the ROUTE maps it to the agreed status + code.
-    const res = await publish(story, 'later.webm', 'bbb');
+    const res = await publish(story, 'later.webm', 'bbbbbbb');
     expect(res.status).toBe(409);
     const routeCode = (await res.json()).code;
     expect(routeCode).toBe(ALREADY_APPROVED_CODE);
@@ -203,21 +203,21 @@ describe('the freeze seam, end to end', () => {
     // test and silently breaks the review loop, because a reviewer who rejects a
     // recording would never receive a corrected one.
     const pendingStory = await inReviewStory();
-    await publish(pendingStory, 'first.webm', 'aaa');
-    expect((await publish(pendingStory, 'second.webm', 'bbb')).status).toBe(201);
+    await publish(pendingStory, 'first.webm', 'aaaaaaa');
+    expect((await publish(pendingStory, 'second.webm', 'bbbbbbb')).status).toBe(201);
     expect(
       (await acceptanceEvidenceService.getCurrentForStory(pendingStory.id, fx.ctx))!.commitSha,
-    ).toBe('bbb');
+    ).toBe('bbbbbbb');
 
     const rejectedStory = await inReviewStory();
-    await publish(rejectedStory, 'first.webm', 'ccc');
+    await publish(rejectedStory, 'first.webm', 'ccccccc');
     await acceptanceEvidenceService.decide(
       { workItemId: rejectedStory.id, decision: 'request_changes' },
       fx.ctx,
     );
-    expect((await publish(rejectedStory, 'second.webm', 'ddd')).status).toBe(201);
+    expect((await publish(rejectedStory, 'second.webm', 'ddddddd')).status).toBe(201);
     const current = await acceptanceEvidenceService.getCurrentForStory(rejectedStory.id, fx.ctx);
-    expect(current!.commitSha).toBe('ddd');
+    expect(current!.commitSha).toBe('ddddddd');
     expect(current!.status).toBe('pending');
   });
 
@@ -234,11 +234,11 @@ describe('the freeze seam, end to end', () => {
 
     for (let round = 0; round < 5; round++) {
       const story = await inReviewStory();
-      await publish(story, 'first.webm', `aaa-${round}`);
+      await publish(story, 'first.webm', `aaaaaa${round}`);
 
       const [approveResult, publishResult] = await Promise.allSettled([
         acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx),
-        publish(story, 'racing.webm', `bbb-${round}`),
+        publish(story, 'racing.webm', `bbbbbb${round}`),
       ]);
 
       // The approval is never the casualty — a "fix" that serialises by refusing
@@ -276,14 +276,14 @@ describe('the freeze seam, end to end', () => {
 
       if (publishStatus === 409) {
         // The approval won: the receipt it signed is the one that is frozen.
-        expect(row.commitSha).toBe(`aaa-${round}`);
+        expect(row.commitSha).toBe(`aaaaaa${round}`);
         expect(rows).toHaveLength(1);
         outcomes.push('approval-first');
       } else {
         // The publish won: it superseded a receipt that was still `pending` at
         // the moment it held the lock, which is correct, and the approval then
         // stamped the NEW current row — the recording the reviewer is looking at.
-        expect(row.commitSha).toBe(`bbb-${round}`);
+        expect(row.commitSha).toBe(`bbbbbb${round}`);
         outcomes.push('publish-first');
       }
     }
@@ -302,13 +302,13 @@ describe('the freeze seam, end to end', () => {
     // signed receipt is the one that stays. (Its full survival set — the stamps,
     // the linked bytes, the unmoved story — is the first test in this file.)
     const approvedFirst = await inReviewStory();
-    await publish(approvedFirst, 'first.webm', 'aaa');
+    await publish(approvedFirst, 'first.webm', 'aaaaaaa');
     const decidedFirst = await acceptanceEvidenceService.decide(
       { workItemId: approvedFirst.id, decision: 'approve' },
       fx.ctx,
     );
     expect(decidedFirst.evidence.status).toBe('approved');
-    expect((await publish(approvedFirst, 'later.webm', 'bbb')).status).toBe(409);
+    expect((await publish(approvedFirst, 'later.webm', 'bbbbbbb')).status).toBe(409);
     expect((await acceptanceEvidenceService.getCurrentForStory(approvedFirst.id, fx.ctx))!.id).toBe(
       decidedFirst.evidence.id,
     );
@@ -317,11 +317,11 @@ describe('the freeze seam, end to end', () => {
     // to the new current row. This is the half the missing lock got wrong: it
     // stamped the row the publish had just superseded and unlinked.
     const publishedFirst = await inReviewStory();
-    await publish(publishedFirst, 'first.webm', 'ccc');
+    await publish(publishedFirst, 'first.webm', 'ccccccc');
     const superseded = await adminDb.acceptanceEvidence.findFirstOrThrow({
       where: { workItemId: publishedFirst.id, isCurrent: true },
     });
-    expect((await publish(publishedFirst, 'second.webm', 'ddd')).status).toBe(201);
+    expect((await publish(publishedFirst, 'second.webm', 'ddddddd')).status).toBe(201);
 
     const decidedSecond = await acceptanceEvidenceService.decide(
       { workItemId: publishedFirst.id, decision: 'approve' },
@@ -329,7 +329,7 @@ describe('the freeze seam, end to end', () => {
     );
     expect(decidedSecond.storyStatus).toBe('done');
     expect(decidedSecond.evidence.status).toBe('approved');
-    expect(decidedSecond.evidence.commitSha).toBe('ddd');
+    expect(decidedSecond.evidence.commitSha).toBe('ddddddd');
     expect(decidedSecond.evidence.id).not.toBe(superseded.id);
     // …and the displaced receipt was never signed, so nothing approved is left
     // pointing at bytes the orphan-GC will take.
