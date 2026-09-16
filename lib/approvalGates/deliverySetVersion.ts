@@ -1,4 +1,4 @@
-import { pullRequestSubjectVersion } from '@/lib/approvalGates/pullRequestMergeHandler';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 
 // THE DELIVERY SET'S VERSION — what an approve-and-merge gate names as approved (Story
@@ -9,6 +9,33 @@ import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeli
 // inside the CI promotion, which `workItemsService` imports — so a helper living beside the
 // handler (which imports `workItemsService` for its status write) would close a cycle at
 // module-evaluation time, the one `mergeGates.ts` records for the merge handler.
+
+/**
+ * ONE MEMBER's version — `owner/name#number@headSha` — for `headSha` when a caller knows
+ * it (a `pull_request` delivery carries it), else the latest check run's commit. Null when
+ * neither names a head.
+ *
+ * ⚠️ IT MOVED HERE FROM THE MERGE HANDLER (MOTIR-5616). It was written for the
+ * per-pull-request `pull_request_merge` gate, whose subject was one pull request; that kind
+ * is retired and its handler deleted, but the spelling survives it — the approve-and-merge
+ * gate names each MEMBER of its delivery set in exactly this form, and the merge entry
+ * point compares against it. This module is its right home for the reason stated above: it
+ * imports no service, so nothing that needs a member version has to reach a handler for it.
+ *
+ * ONE function, because several places write or compare it and two spellings would
+ * supersede a gate whose head never moved.
+ */
+export function pullRequestSubjectVersion(
+  pr: {
+    number: number;
+    repo: { owner: string; name: string };
+    checkRuns: Parameters<typeof liveRowsAtLatestSha>[0];
+  },
+  headSha?: string,
+): string | null {
+  const head = headSha ?? liveRowsAtLatestSha(pr.checkRuns)[0]?.commitSha;
+  return head ? `${pr.repo.owner}/${pr.repo.name}#${pr.number}@${head}` : null;
+}
 
 /**
  * The set's canonical VERSION: each member as `owner/name#number@headSha`, sorted,

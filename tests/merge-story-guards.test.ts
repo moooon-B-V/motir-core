@@ -87,7 +87,6 @@ describe('guard (a) — no GitHub merge above the provider', () => {
 describe('guard (b) — one status writer: the merge path writes no work_item status', () => {
   it('neither the handler, the entry point nor the auto merge moves a card', () => {
     for (const file of [
-      'lib/approvalGates/pullRequestMergeHandler.ts',
       'lib/services/pullRequestMergeService.ts',
       'lib/services/pullRequestAutoMergeService.ts',
     ]) {
@@ -99,8 +98,18 @@ describe('guard (b) — one status writer: the merge path writes no work_item st
 });
 
 describe('guard (d) — registry totality', () => {
-  it('pull_request_merge is a registered kind and not a declared hole', () => {
-    expect(isRegisteredGateKind('pull_request_merge')).toBe(true);
-    expect(UNREGISTERED_GATE_KINDS).not.toContain('pull_request_merge');
+  it('pull_request_merge is a DECLARED HOLE, not a registered kind (MOTIR-5616)', () => {
+    // Inverted by Bug MOTIR-5603: this guard was written when MOTIR-4793 registered the
+    // kind, and it now guards the retirement instead — re-registering it would have to
+    // pass this line first.
+    expect(isRegisteredGateKind('pull_request_merge')).toBe(false);
+    expect(UNREGISTERED_GATE_KINDS).toContain('pull_request_merge');
   });
+
+  // The other half of decision 8 — the Postgres ENUM still carries the value — is
+  // asserted where it can be read from the real catalog rather than a literal:
+  // `tests/integration/migrations/supersede-awaiting-merge-gates.test.ts` queries
+  // `pg_enum` after running the backfill. `tests/approval-gate-registry.test.ts`
+  // holds the enum's four members as a literal and checks the registry is total
+  // over them, which keeps the retired kind accounted for on this side too.
 });

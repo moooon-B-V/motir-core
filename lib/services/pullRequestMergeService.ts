@@ -5,8 +5,9 @@ import { MergeChangeRequestError } from '@/lib/git/errors';
 import type { GitProviderId, MergeChangeRequestResult, MergeRefusalCode } from '@/lib/git/types';
 // ⚠️ The MEMBER SPELLING, not a merge gate: `owner/name#number@headSha` is how the
 // surviving approval gate names each of its members, so the pull request's version now
-// and the version the card was approved at are comparable (MOTIR-5613).
-import { pullRequestSubjectVersion } from '@/lib/approvalGates/pullRequestMergeHandler';
+// and the version the card was approved at are comparable (MOTIR-5613). It lives beside
+// the set version since MOTIR-5616 retired the handler it was written in.
+import { pullRequestSubjectVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateError,

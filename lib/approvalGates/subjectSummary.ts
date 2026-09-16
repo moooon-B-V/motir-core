@@ -3,13 +3,11 @@ import type {
   ApprovalGateSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
-  PullRequestMergeSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
 import type { RegisteredGateKind, UnregisteredGateKind } from '@/lib/approvalGates/registry';
 import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
-import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 
@@ -123,25 +121,9 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
     }
     return out;
   },
-  // MOTIR-4793 — the merge kind's row names the pull request: `owner/name#number`,
-  // its title, and the head the latest checks ran on (the window the green verdict,
-  // and so the gate, was formed over).
-  async pull_request_merge(subjectIds, tx) {
-    const rows = await githubPullRequestRepository.findManyByIdsForSummary(subjectIds, tx);
-    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
-    for (const [id, row] of rows) {
-      const summary: PullRequestMergeSubjectSummaryDTO = {
-        kind: 'pull_request_merge',
-        pullRequestId: row.id,
-        repo: `${row.repo.owner}/${row.repo.name}`,
-        number: row.number,
-        title: row.title,
-        headSha: liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null,
-      };
-      out.set(id, summary);
-    }
-    return out;
-  },
+  // ⚠️ THE `pull_request_merge` LOADER WAS HERE (MOTIR-4793) and retired with its kind
+  // (MOTIR-5616). Its rows are superseded and unregistered now, so they take the
+  // not-built-yet summary below with every other kind this build does not render.
   // MOTIR-5481 — the approve-and-merge kind's row names EVERY pull request in the card's
   // delivery set. `subjectId` is the work item's own id, so one batched delivery read
   // answers every gate of the kind on the page; a card that delivers nothing is absent,

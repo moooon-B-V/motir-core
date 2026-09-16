@@ -315,14 +315,11 @@ const APPROVAL_ENFORCED: PermissionKey[] = ['approval:decide_any', 'approval:vie
  */
 const SAVED_FILTER_ANY_ENFORCED: PermissionKey[] = ['saved_filter:manage_any'];
 
-/**
- * MOTIR-4793's merge-gate key — approving a pull request's merge, the floor the
- * `pull_request_merge` handler names. Its own list on the same terms as the lists
- * above: none of the stories they record wired it. It arrives `enforced` because the
- * decide door asserts it (`assertPermission(…, handler.permission)`) in the same change
- * that registers the kind, so the catalog never advertised it with nothing consulting it.
- */
-const MERGE_GATE_ENFORCED: PermissionKey[] = ['work_item:merge_pull_request'];
+// ⚠️ `MERGE_GATE_ENFORCED` WAS HERE — MOTIR-4793's `work_item:merge_pull_request`,
+// the floor the `pull_request_merge` handler named. Bug MOTIR-5603 · MOTIR-5616
+// retired the key with the handler: a card holds ONE approve-to-merge gate whose
+// floor is `work_item:edit`. The list is deleted rather than emptied, because an
+// empty named list reads as a key that is still expected to arrive.
 
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
@@ -404,10 +401,6 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(
       ENFORCED_PERMISSIONS.filter((k) => SAVED_FILTER_ANY_ENFORCED.includes(k)).sort(),
     ).toEqual([...SAVED_FILTER_ANY_ENFORCED].sort());
-    // …and MOTIR-4793's merge-gate key, on the same terms again.
-    expect(ENFORCED_PERMISSIONS.filter((k) => MERGE_GATE_ENFORCED.includes(k)).sort()).toEqual(
-      [...MERGE_GATE_ENFORCED].sort(),
-    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
@@ -417,8 +410,7 @@ describe('enforcement — the seam that lets naming and wiring land separately',
         REMOVAL_SPLIT_ENFORCED.length +
         INTEGRATION_ENFORCED.length +
         APPROVAL_ENFORCED.length +
-        SAVED_FILTER_ANY_ENFORCED.length +
-        MERGE_GATE_ENFORCED.length,
+        SAVED_FILTER_ANY_ENFORCED.length,
     );
   });
 
@@ -570,9 +562,11 @@ describe('the work_item domain reads in order of severity (MOTIR-3629)', () => {
       'work_item:archive',
       'work_item:delete',
       'work_item:triage',
-      // MOTIR-4793 — last, and outside the severity scale above: approving a merge is
-      // the one act here that lands on the Git HOST rather than on the card.
-      'work_item:merge_pull_request',
+      // ⚠️ `work_item:merge_pull_request` SAT LAST HERE (MOTIR-4793), outside the
+      // severity scale, because approving a merge was the one act in this domain that
+      // landed on the Git HOST. MOTIR-5616 retired it: the merge is now carried out
+      // under the card's own gate on `work_item:edit`, so the domain reads as pure
+      // severity again.
     ]);
     const first = PERMISSIONS.indexOf(workItem[0]!);
     expect(PERMISSIONS.slice(first, first + workItem.length)).toEqual(workItem);

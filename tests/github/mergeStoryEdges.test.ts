@@ -7,10 +7,7 @@ import {
   ApprovalGateNotFoundError,
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
-import {
-  pullRequestMergeGateHandler,
-  pullRequestSubjectVersion,
-} from '@/lib/approvalGates/pullRequestMergeHandler';
+import { pullRequestSubjectVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { settleGreenVerdict } from '@/lib/services/mergeGates';
@@ -148,27 +145,23 @@ const gateRow = (id: string) => adminDb.approvalGate.findUniqueOrThrow({ where: 
 const setMode = (mode: 'auto' | 'manual') =>
   adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: mode } });
 
-describe('the version rule and the handler, when there is no head', () => {
+describe('the MEMBER VERSION rule, when there is no head', () => {
+  // The spelling outlived the handler it was written in: MOTIR-5616 retired the
+  // `pull_request_merge` kind and its handler, and moved this function beside the SET
+  // version, which is the only thing that still compares member versions.
   it('a pull request no check has reported on has no version', () => {
     expect(
       pullRequestSubjectVersion({ number: 7, repo: { owner: 'acme', name: 'web' }, checkRuns: [] }),
     ).toBeNull();
   });
 
-  it('a gate whose pull request no longer resolves has no version', async () => {
-    const version = await inTx((tx) =>
-      pullRequestMergeGateHandler.subjectVersion({
-        gate: {
-          id: 'g',
-          workspaceId: fx.workspaceId,
-          projectId: fx.projectId,
-          workItemId: 'w',
-          subjectId: 'no-such-pull-request',
-        },
-        tx,
-      } as never),
-    );
-    expect(version).toBeNull();
+  it('a caller that KNOWS the head names it, whatever the checks say', () => {
+    expect(
+      pullRequestSubjectVersion(
+        { number: 7, repo: { owner: 'acme', name: 'web' }, checkRuns: [] },
+        'deadbeef',
+      ),
+    ).toBe('acme/web#7@deadbeef');
   });
 });
 

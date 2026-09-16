@@ -34,6 +34,12 @@ export const APPROVAL_GATE_KINDS = [
   'design_result',
   'decision_approval',
   'pull_request_approval',
+  // ⚠️ `pull_request_merge` STAYS IN THIS TUPLE, and only here. It is the WIRE
+  // spelling of every enum member, not the list of kinds this build renders —
+  // the exhaustiveness line below is over `ApprovalGateKindDTO`, which keeps the
+  // value while the rows that carry it exist (MOTIR-5616 retired the KIND at the
+  // registry, and MOTIR-5614's backfill left those rows superseded). A parser
+  // that stopped recognising the spelling would fail to address a real row.
   'pull_request_merge',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 

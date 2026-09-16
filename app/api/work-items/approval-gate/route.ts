@@ -99,21 +99,11 @@ async function readSubject(
         ? { state: 'resolved', kind: 'design_result', evidence, filesKept }
         : { state: 'gone' };
     }
-    case 'pull_request_merge':
-      // ⚠️ RETIRED, AND UNREACHABLE FROM ANY SURFACE (Bug MOTIR-5603 · MOTIR-5615).
-      // Nothing raises this kind (MOTIR-5611), every row it left is superseded
-      // (MOTIR-5614), and the To-approve list no longer draws a row for it, so there
-      // is no door to open this arm through. What survives is a hand-typed URL naming
-      // a superseded gate, and `kind_not_built` is still the truest answer for it:
-      // this build renders no port for the kind, and after MOTIR-5616 it will not
-      // register it either.
-      //
-      // ⚠️ THE ARM CANNOT BE DELETED HERE, and that is a fact about this file rather
-      // than a choice: the switch is TOTAL over `RegisteredGateKind` with a `never`
-      // default below, so while the registry still carries the kind, removing its case
-      // is a compile error. It goes when the registry entry goes — MOTIR-5616 — in the
-      // same diff, which is also what keeps the two changes reviewable as one.
-      return { state: 'kind_not_built' };
+    // ⚠️ `pull_request_merge` HAS NO ARM, and needs none: MOTIR-5616 moved the kind to
+    // `UNREGISTERED_GATE_KINDS`, so `isRegisteredGateKind` above answers it with
+    // `kind_not_built` before this switch is reached. MOTIR-5615 wrote the reason the
+    // arm could not go earlier — this switch is total over the REGISTERED kinds, so the
+    // case could only be deleted in the same diff that unregisters the kind. This is it.
     case 'pull_request_approval':
       // REGISTERED (MOTIR-5481); its overlay PORT — the Development block — is
       // MOTIR-5437's. Until it lands the overlay draws the not-built arm, as for merge.

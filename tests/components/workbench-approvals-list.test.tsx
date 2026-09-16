@@ -274,24 +274,19 @@ describe('the Approvals list — rows with no subject to show', () => {
     // (MOTIR-5611) and every row it left is superseded (MOTIR-5614), so the only way
     // to reach one is by hand — and it falls in with the kinds this build does not
     // draw rather than being named as a pull request.
+    // Since MOTIR-5616 the kind is UNREGISTERED, so its summary is the kind alone —
+    // the same answer every kind this build does not render gets.
     const row = designRow({
       gateId: 'gate-merge',
       kind: 'pull_request_merge',
-      subject: {
-        kind: 'pull_request_merge',
-        pullRequestId: 'pr-1',
-        repo: 'acme/web',
-        number: 7,
-        title: 'The merge seam',
-        headSha: 'abc123',
-      },
+      subject: { kind: 'pull_request_merge' },
     });
     renderRows([row]);
 
     // ⚠️ THE PILL IS NOT THE POINT — the ROW is. `notBuiltYet` still ships for
     // `decision_approval`, which genuinely has no decide surface yet; what went is any
     // row naming one pull request as a decision of its own.
-    expect(screen.queryByText('acme/web#7 · pull request')).toBeNull();
+    expect(screen.queryByText(/pull request$/)).toBeNull();
     expect(screen.getByText('Motir cannot show this kind yet')).toBeTruthy();
   });
 

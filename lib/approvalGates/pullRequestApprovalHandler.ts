@@ -4,6 +4,7 @@ import type {
   GateHandler,
   GateRoutingArgs,
 } from '@/lib/approvalGates/registry';
+import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import {
@@ -29,6 +30,23 @@ import { workItemsService } from '@/lib/services/workItemsService';
  *  and Done. An INTENT the door resolves per project; see {@link approve} for why the
  *  resolved key is checked before it is written. */
 export const PULL_REQUEST_APPROVAL_TARGET = { key: 'approved', category: 'in_progress' } as const;
+
+/**
+ * The door this gate's frame carries (MOTIR-5513): the project setting that decides
+ * whether merges ask a person at all, at `PrMergeModeCard`'s `#merge-mode` anchor.
+ *
+ * ⚠️ IT MOVED HERE FROM THE MERGE HANDLER (MOTIR-5616), and moving it rather than
+ * deleting it is the point. The door was declared on `pull_request_merge`, which that
+ * card retires — and the SETTING it points at did not retire with the kind: a project
+ * whose `prMergeMode` is `manual` is precisely the project that raises THIS gate
+ * (`pullRequestApprovalGates.raisePullRequestApprovalGate` returns false for `auto`).
+ * Letting the door die with its old declaration would have removed a shipped
+ * capability inside a retirement, which is the thing a retirement must not do.
+ */
+export const MERGE_MODE_SETTINGS_DOOR: GateSettingsDoor = {
+  href: '/settings/project/approvals#merge-mode',
+  labelKey: 'mergeMode',
+};
 
 /** What the gate is about: every delivery row the run target carries, with each pull
  *  request's check rows (its head) and repository. */
@@ -85,13 +103,19 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
 
   /**
    * The FLOOR — `work_item:edit`, the design gate's. Pressing it records a decision and
-   * moves the card; the MERGE a press then performs asserts its own floor
-   * (`work_item:merge_pull_request`) on each merge gate. Who may press on top of the
-   * floor is the door's §2 rule, `resolveGateAuthority` (decision 6).
+   * moves the card; the MERGE a press then performs asserts THIS SAME floor on each
+   * member (`pullRequestMergeService`'s `APPROVAL_MERGE_PERMISSION`), because carrying a
+   * decision out is not a second decision. It named a floor of its own,
+   * `work_item:merge_pull_request`, until MOTIR-5613 re-keyed the merge onto this gate
+   * and MOTIR-5616 retired that key. Who may press on top of the floor is the door's §2
+   * rule, `resolveGateAuthority` (decision 6).
    */
   permission: 'work_item:edit',
 
   statusIntent: PULL_REQUEST_APPROVAL_TARGET,
+
+  /** The merge-mode switch, which decides whether this gate is raised at all. */
+  settingsDoor: MERGE_MODE_SETTINGS_DOOR,
 
   /**
    * APPROVE — record the decision (the door does that) and move the card to `approved`.

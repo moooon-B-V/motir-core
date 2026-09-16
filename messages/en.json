@@ -397,10 +397,6 @@
       "label": "Delete work items",
       "description": "Permanently delete a work item and everything beneath it. Cannot be undone."
     },
-    "work_item_merge_pull_request": {
-      "label": "Merge pull requests",
-      "description": "Approve a work item's pull request so Motir merges it on the Git host."
-    },
     "work_item_triage": {
       "label": "Triage requests",
       "description": "Accept, decline, promote or snooze an item in the triage queue."
