@@ -289,3 +289,99 @@ describe('the RUNNING edge variant', () => {
     expect(crossPath!.getAttribute('class')).toContain('stroke-(--el-warning)');
   });
 });
+
+// ── `litIds` — a second source for which edges stay lit (MOTIR-5639) ───────────
+//
+// Show changes dimmed the faded CARDS and left every arrow between them at full
+// strength, because the canvas decided edge visibility from the selection alone.
+// `litIds` lets a consumer name the cards whose edges stay lit when nothing is
+// selected; the selection still wins while it lasts.
+describe('PlanningCanvas — litIds', () => {
+  // a→b touches the lit set on both ends, b→c on one, c→d on neither.
+  const fourNodes: CanvasNode[] = [...nodes, { id: 'd', x: 600, y: 300 }];
+  const threeEdges: CanvasEdge[] = [
+    { from: 'a', to: 'b' },
+    { from: 'b', to: 'c' },
+    { from: 'c', to: 'd' },
+  ];
+  const opacities = () =>
+    [...screen.getByTestId('canvas-edges').querySelectorAll('path')].map(
+      (p) => (p as SVGPathElement).style.opacity,
+    );
+
+  it('without a selection, dims exactly the edges that touch no lit id — to the shipped 0.12', () => {
+    render(
+      <PlanningCanvas
+        nodes={fourNodes}
+        edges={threeEdges}
+        renderNode={renderNode}
+        litIds={new Set(['a', 'b'])}
+      />,
+    );
+    expect(opacities()).toEqual(['1', '1', '0.12']);
+  });
+
+  it('dims only — no accent ink and no wider stroke without a selection', () => {
+    render(
+      <PlanningCanvas
+        nodes={fourNodes}
+        edges={threeEdges}
+        renderNode={renderNode}
+        litIds={new Set(['a', 'b'])}
+      />,
+    );
+    const paths = [...screen.getByTestId('canvas-edges').querySelectorAll('path')];
+    paths.forEach((p) => {
+      expect(p.getAttribute('class')).not.toContain('stroke-(--el-accent-on-surface)');
+      expect(p.getAttribute('marker-end')).not.toContain('-emphasis');
+      expect(p.getAttribute('stroke-width')).toBe('2');
+    });
+  });
+
+  it('a selection wins: its own edge rule applies unchanged while litIds is set', () => {
+    render(
+      <PlanningCanvas
+        nodes={fourNodes}
+        edges={threeEdges}
+        renderNode={renderNode}
+        litIds={new Set(['a', 'b'])}
+        selectedId="d"
+      />,
+    );
+    // Only c→d touches the selection; a→b would be lit by litIds and is not.
+    expect(opacities()).toEqual(['0.12', '0.12', '1']);
+  });
+
+  it('dims no edge when litIds is null or absent', () => {
+    render(
+      <PlanningCanvas nodes={fourNodes} edges={threeEdges} renderNode={renderNode} litIds={null} />,
+    );
+    expect(opacities()).toEqual(['1', '1', '1']);
+    cleanup();
+    render(<PlanningCanvas nodes={fourNodes} edges={threeEdges} renderNode={renderNode} />);
+    expect(opacities()).toEqual(['1', '1', '1']);
+  });
+
+  it('keeps `running` and `cross` hue and weight, dimming them by the same rule', () => {
+    render(
+      <PlanningCanvas
+        nodes={fourNodes}
+        edges={[
+          { from: 'a', to: 'b', variant: 'running' },
+          { from: 'c', to: 'd', variant: 'cross' },
+        ]}
+        renderNode={renderNode}
+        litIds={new Set(['a'])}
+      />,
+    );
+    const [runningPath, crossPath] = [
+      ...screen.getByTestId('canvas-edges').querySelectorAll('path'),
+    ] as SVGPathElement[];
+    expect(runningPath!.getAttribute('class')).toContain('stroke-(--el-status-in-progress)');
+    expect(runningPath!.getAttribute('stroke-width')).toBe('3');
+    expect(runningPath!.style.opacity).toBe('1');
+    expect(crossPath!.getAttribute('class')).toContain('stroke-(--el-warning)');
+    expect(crossPath!.getAttribute('stroke-width')).toBe('2.5');
+    expect(crossPath!.style.opacity).toBe('0.12');
+  });
+});

@@ -98,6 +98,15 @@ export interface PlanningCanvasProps {
   /** The selected node — its edges (and their other ends) stay lit while every
    *  other connector dims, so the selection's dependencies/blockers stand out. */
   selectedId?: string | null;
+  /**
+   * A SECOND source for which edges stay lit, read only while nothing is
+   * selected: an edge touching any id in the set stays lit and every other edge
+   * takes the selection's dim. The consumer's Show-changes mode passes its
+   * changed cards here, so the arrows between two faded cards fade with them
+   * (MOTIR-5639). It dims only — the accent ink and the wider stroke stay the
+   * selection's. Omit (or `null`) → no edge is dimmed without a selection.
+   */
+  litIds?: ReadonlySet<string> | null;
   /** A press on empty canvas that did not pan — used to clear the selection. */
   onBackgroundClick?: () => void;
   ariaLabel?: string;
@@ -145,6 +154,7 @@ export function PlanningCanvas({
   focusNonce,
   focusScale,
   selectedId,
+  litIds,
   onBackgroundClick,
   ariaLabel,
   arrival,
@@ -457,7 +467,12 @@ export function PlanningCanvas({
             // selecting a card painted its own edges the shade of the ones it was
             // de-emphasising. `tests/theme/canvasEmphasisInkContrast.test.ts` reads
             // the token back out of this file and measures it. MOTIR-4474.
-            const lit = selectedId == null || edge.from === selectedId || edge.to === selectedId;
+            // A live selection WINS; `litIds` decides only without one, the same
+            // precedence the consumer's cards follow (MOTIR-5639).
+            const lit =
+              selectedId != null
+                ? edge.from === selectedId || edge.to === selectedId
+                : litIds == null || litIds.has(edge.from) || litIds.has(edge.to);
             // ⚠️ `running` outranks the selection emphasis and yields only to
             // `cross`. A run's live edge must stay the live one while a reader
             // clicks around the graph; `cross` stays loudest because a plan that

@@ -1149,6 +1149,95 @@ describe('ProjectRoadmapCanvas — the Show-changes count is catalogue copy', ()
   });
 });
 
+// ── Show changes dims the EDGES too (MOTIR-5639) ────────────────────────────
+//
+// The mode faded the unchanged cards and left every arrow between two of them at
+// full strength, so on a dense level the rings drowned in lines. An edge touching
+// a changed card stays lit; every other edge takes the selection's shipped 0.12.
+describe('ProjectRoadmapCanvas — Show changes dims the edges between unchanged cards', () => {
+  // A and B are the plan's; C and D are not. A→B is changed→changed, B→C
+  // changed→unchanged, C→D unchanged→unchanged.
+  const level: RoadmapLevel = {
+    nodes: [node('A', 'a'), node('B', 'b'), node('C', 'c'), node('D', 'd')],
+    deps: [
+      { from: 'A', to: 'B', variant: 'firm' },
+      { from: 'B', to: 'C', variant: 'firm' },
+      { from: 'C', to: 'D', variant: 'firm' },
+    ],
+  };
+  const emphasis = (ids: string[]) => ({
+    ids,
+    total: ids.length,
+    label: 'Show changes',
+    emptyLabel: 'None',
+    allLabel: 'All',
+    locateLabel: 'Locate',
+  });
+  const opacities = () =>
+    [...screen.getByTestId('canvas-edges').querySelectorAll('path')].map(
+      (p) => (p as SVGPathElement).style.opacity,
+    );
+  const toggle = () => screen.getByTestId('show-changes-toggle');
+
+  it('dims exactly the edges with neither end changed, while nothing is selected', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(level)}
+        emphasis={emphasis(['A', 'B'])}
+      />,
+    );
+    await screen.findByText('a');
+    // Armed on arrival (MOTIR-4020).
+    expect(toggle().getAttribute('aria-pressed')).toBe('true');
+    expect(opacities()).toEqual(['1', '1', '0.12']);
+  });
+
+  it('a selection takes over the edge dim, and clearing it restores the Show-changes dim', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(level)}
+        emphasis={emphasis(['A', 'B'])}
+      />,
+    );
+    await screen.findByText('a');
+    fireEvent.keyDown(el('D')!, { key: 'Enter' });
+    expect(el('D')!.querySelector('[data-selected]')).toBeTruthy();
+    // Today's selection rule: only D's own edge stays lit.
+    expect(opacities()).toEqual(['0.12', '0.12', '1']);
+
+    // A press on empty canvas that does not pan clears the selection.
+    const region = screen.getByRole('application');
+    fireEvent.pointerDown(region, { pointerId: 1, clientX: 5, clientY: 5, button: 0 });
+    fireEvent.pointerUp(region, { pointerId: 1, clientX: 5, clientY: 5, button: 0 });
+    expect(document.querySelector('[data-selected]')).toBeNull();
+    expect(opacities()).toEqual(['1', '1', '0.12']);
+  });
+
+  it('dims no edge with Show changes turned off', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(level)}
+        emphasis={emphasis(['A', 'B'])}
+      />,
+    );
+    await screen.findByText('a');
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute('aria-pressed')).toBe('false');
+    expect(opacities()).toEqual(['1', '1', '1']);
+  });
+
+  it('dims no edge when none of the plan’s cards is on this level', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(level)}
+        emphasis={emphasis(['elsewhere'])}
+      />,
+    );
+    await screen.findByText('a');
+    expect(opacities()).toEqual(['1', '1', '1']);
+  });
+});
+
 // ── THE LEVEL SEAM (MOTIR-3835) ─────────────────────────────────────────────
 //
 // `initialTrail` seeds the level once; these two props are the other two
