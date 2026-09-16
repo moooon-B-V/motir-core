@@ -46,7 +46,9 @@ export const howToTestService = {
       const [history, ancestors, legRuns, scopeRuns] = await Promise.all([
         testInstructionsRepository.listHistoryForWorkItem(item.id, tx),
         workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
-        dispatchRunRepository.listByWorkItem(item.id, { take: 1 }, tx),
+        // A short page, not one row: the newest leg can be a `fix` repair, which
+        // owes no record, and the run behind it is the one that does.
+        dispatchRunRepository.listByWorkItem(item.id, { take: 10 }, tx),
         dispatchRunRepository.listByScope(item.id, { take: 1 }, tx),
       ]);
 
@@ -75,7 +77,10 @@ export const howToTestService = {
             history: historyDto,
           };
         }
-        const latest = [legRuns[0], scopeRuns[0]]
+        // ⚠️ A REPAIR RUN OWES NOTHING (MOTIR-5460). `motir fix` pushes onto pull
+        // requests an EARLIER run opened and wrote How to test for; naming it as the
+        // run that owes a record would blame the repair for the delivering run's gap.
+        const latest = [legRuns.find((run) => run.command !== 'fix'), scopeRuns[0]]
           .filter((run): run is NonNullable<typeof run> => run !== undefined)
           .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
         return {
