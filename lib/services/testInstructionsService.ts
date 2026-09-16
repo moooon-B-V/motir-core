@@ -10,6 +10,7 @@ import { testInstructionsRepoRepository } from '@/lib/repositories/testInstructi
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { normalizeCommitSha } from '@/lib/git/commitSha';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import type {
   CurrentTestInstructionsDTO,
@@ -87,8 +88,10 @@ interface NormalizedContent {
   repos: NormalizedRepoSection[];
 }
 
-/** A git object id: SHA-1 (40) or SHA-256 (64), abbreviated to no fewer than 7. */
-const COMMIT_SHA = /^[0-9a-f]{7,64}$/;
+// The commit-id pattern and its normalisation moved to `@/lib/git/commitSha`
+// (MOTIR-5619) — this rule was the only one of the three publish paths that had
+// it, and the acceptance-receipt path stored whatever it was handed. Defining it
+// once is what stops the doors on one card refusing different things.
 
 function blankToNull(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -146,13 +149,11 @@ export function normalizeTestInstructionsContent(
   }
   const repos = rawRepos.map((entry, r) => {
     const field = `repos[${r}]`;
-    const commitSha = entry.commitSha.trim().toLowerCase();
-    if (!COMMIT_SHA.test(commitSha)) {
-      throw new TestInstructionsInvalidFieldError(
-        `${field}.commitSha`,
-        'expected a hex commit id of 7 to 64 characters.',
-      );
+    const sha = normalizeCommitSha(entry.commitSha);
+    if (!sha.ok) {
+      throw new TestInstructionsInvalidFieldError(`${field}.commitSha`, sha.reason);
     }
+    const commitSha = sha.commitSha;
     const repoId = blankToNull(entry.repoId);
     const repoRef = blankToNull(entry.repoRef);
     if ((repoId === null) === (repoRef === null)) {

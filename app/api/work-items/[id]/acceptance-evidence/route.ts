@@ -33,8 +33,15 @@ function parseChapters(raw: unknown): AcceptanceEvidenceChapterDTO[] {
   );
 }
 
+// ⚠️ RETURNS THE TRIMMED VALUE, not the raw one (MOTIR-5619). It tested
+// `v.trim() !== ''` and then returned `v` — an emptiness check that did not
+// normalise, so a value carrying the trailing newline a shell pipeline leaves
+// (`$(git rev-parse HEAD)` piped into JSON) passed as non-blank and was stored
+// verbatim. `commitSha` is additionally normalised and validated on the service,
+// where both doors reach it; trimming here is what the check was already
+// measuring.
 const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.trim() !== '' ? v : null;
+  typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
 
 export async function POST(
   req: Request,
