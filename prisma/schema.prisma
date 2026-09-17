@@ -2052,6 +2052,48 @@ enum PrMergeMode {
 /// approved a `pull_request_merge` gate; `auto_mode` — the project's `prMergeMode` is
 /// `auto`, and NO person was in the loop. A merge somebody made on the host carries
 /// neither, which is the honest answer rather than a gap.
+/// A GitHub REVIEW's state, as the `pull_request_review` payload reports it
+/// (Story MOTIR-4910 · MOTIR-5594; ADR §8 FOURTH AMENDMENT, decision 2).
+///
+/// All four are stored, including the two that never decide anything: the
+/// Development block draws a review that does NOT count (an approval at an
+/// earlier commit, a dismissed one), and a row it never wrote cannot be drawn.
+/// Counting is a property of the (state, commit, dismissal, permission) TUPLE
+/// read at evaluation time, never of this column alone.
+enum GithubReviewState {
+  approved
+  changes_requested
+  /// A comment-only review. Recorded, and it never counts (decision 2).
+  commented
+  /// Withdrawn on the host. A row that reaches this NEVER leaves it, so an
+  /// out-of-order redelivery cannot resurrect a dismissed review.
+  dismissed
+
+  @@map("github_review_state")
+}
+
+/// A reviewer's permission ON THE REPOSITORY when their review arrived (Story
+/// MOTIR-4910 · MOTIR-5594; ADR §8 FOURTH AMENDMENT, decision 2) — GitHub's own
+/// `permission` vocabulary, captured rather than re-read, because the question
+/// an audit asks is whether they could write AT THE TIME.
+///
+/// ⚠️ `unknown` MEANS IT COULD NOT BE READ, and it is not a synonym for `none`.
+/// A review whose permission is unknown counts for NOTHING — the decision is
+/// safe in that direction, because a person can still approve in Motir — but it
+/// must stay distinguishable from a reviewer Motir positively knows has no
+/// access.
+enum GithubRepositoryPermission {
+  admin
+  maintain
+  write
+  triage
+  read
+  none
+  unknown
+
+  @@map("github_repository_permission")
+}
+
 enum MergeAuthority {
   gate
   auto_mode
@@ -4503,6 +4545,17 @@ enum ApprovalGateAuthority {
   /// (MOTIR-5292). Until then it meant a workspace owner / admin; every such row
   /// was written by an actor who holds the key, so none is migrated.
   admin
+  /// Authority conferred by the HOST'S REVIEW PERMISSION, not by Motir's §2
+  /// relationship (ADR §8 FOURTH AMENDMENT, MOTIR-5590, decision 4). A GitHub
+  /// reviewer is not the card's assignee or reporter and holds no Motir
+  /// permission — an unmapped one holds no Motir anything — so none of the three
+  /// above is true of them, and recording one would be a claim about a
+  /// relationship that does not exist.
+  ///
+  /// ⚠️ NEVER RESOLVED BY `resolveGateAuthority`, and unreachable from a route, a
+  /// press or the MCP: it is written only by the synced decision, whose actor
+  /// arrives as an internal option. §2 is unchanged for every Motir surface.
+  github_review
 
   @@map("approval_gate_authority")
 }
@@ -6731,6 +6784,7 @@ model GithubPullRequest {
   // Every time the merge queue removed it without merging it (MOTIR-5632).
   queueExits         GithubPullRequestQueueExit[]
   queueAttempts      GithubMergeQueueAttempt[]
+  reviews            GithubPullRequestReview[]
 
   @@unique([repoId, number])
   @@index([repoId])
@@ -6777,6 +6831,73 @@ model GithubPullRequestQueueExit {
 
   @@index([pullRequestId, exitedAt])
   @@map("github_pull_request_queue_exit")
+}
+
+/// ONE GITHUB REVIEW, mirrored (Story MOTIR-4910 · MOTIR-5594; ADR
+/// `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decisions 2, 4 and 7).
+/// A `pull_request_review` delivery writes one row here; the evaluator reads them
+/// to decide the card's one approve-to-merge gate, and the Development block reads
+/// them to draw what each pull request's review says while the gate waits.
+///
+/// ⚠️ ROWS ARE RECORDED WHETHER OR NOT A GATE EXISTS (decision 8). A review given
+/// while CI was still running has nowhere to be applied yet; storing it anyway is
+/// what lets the gate, once raised, be decided from reviews that predate it
+/// instead of asking the reviewer a second time.
+///
+/// ⚠️ TENANCY IS THE PARENT'S, COPIED EXACTLY. Like `github_pull_request_queue_exit`
+/// and `github_ci_feedback_comment`, this row has NO workspace column of its own:
+/// it hangs off a pull request, and RLS does not traverse foreign keys, so its
+/// policy joins `github_pull_request → github_repo` explicitly. The `system_admin`
+/// arm admits the webhook path, which resolves its connection tier before any
+/// workspace is bound.
+model GithubPullRequestReview {
+  id String @id @default(cuid())
+
+  /// GITHUB'S OWN `review.id` — the IDEMPOTENCY KEY, unique. A redelivered
+  /// `submitted` event upserts this same row rather than writing a second one.
+  githubReviewId String @unique @map("github_review_id")
+
+  githubPullRequestId String @map("github_pull_request_id")
+
+  /// `review.user.id` — the stable identity the actor resolution joins on
+  /// (`GithubIdentity.githubUserId`), never the login, which a person can change.
+  reviewerGithubUserId String  @map("reviewer_github_user_id")
+  /// `review.user.login` — what a surface SHOWS, and the whole label when Motir
+  /// cannot map the reviewer to a member (decision 3).
+  reviewerLogin        String  @map("reviewer_login")
+  /// `review.user.type` — `User` or `Bot`. Stored as given rather than as an
+  /// enum: it is GitHub's vocabulary and it grows.
+  reviewerType         String  @map("reviewer_type")
+
+  state GithubReviewState
+
+  /// `review.commit_id` — the head the review was given AT. A review counts only
+  /// where this equals the member's head in the gate's `subjectVersion`.
+  commitSha String @map("commit_sha")
+
+  /// The reviewer's permission when the review arrived, captured rather than
+  /// re-read later (decision 2).
+  reviewerPermission GithubRepositoryPermission @map("reviewer_permission")
+
+  submittedAt DateTime @map("submitted_at")
+  /// `review.html_url`. Nullable — a payload need not carry one.
+  htmlUrl     String?  @map("html_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  pullRequest GithubPullRequest @relation(fields: [githubPullRequestId], references: [id], onDelete: Cascade)
+
+  /// The evaluator's read: every review for one pull request at one head.
+  ///
+  /// ⚠️ EXPLICITLY NAMED, and it must stay under 63 characters. The derived name
+  /// (`github_pull_request_review_github_pull_request_id_commit_sha_idx`) is 64,
+  /// and Postgres and Prisma truncate it DIFFERENTLY — Postgres cuts the tail
+  /// (`…_commit_sha_id`), Prisma keeps its `_idx` suffix (`…_commit_sh_idx`) — so
+  /// the two never agree and `migrate diff` reports a permanent spurious RENAME,
+  /// which the build job fails on. Caught by that check on this card.
+  @@index([githubPullRequestId, commitSha], map: "github_pr_review_pr_id_commit_sha_idx")
+  @@map("github_pull_request_review")
 }
 
 /// One merge-queue ATTEMPT of a pull request (Story MOTIR-5461 · MOTIR-5633;

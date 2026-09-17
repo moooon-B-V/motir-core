@@ -81,6 +81,7 @@ export function toApprovalRecordDecidedRowDto(
     state: row.state,
     decidedAt: row.decidedAt.toISOString(),
     decidedByLabel: row.decidedByLabel,
+    decisionSource: row.decisionSource,
     subjectVersion: row.subjectVersion,
     waitingSince: row.createdAt.toISOString(),
     workItem: {

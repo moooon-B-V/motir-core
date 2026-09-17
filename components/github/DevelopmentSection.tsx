@@ -18,6 +18,7 @@ import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import { GithubMark } from '@/components/icons/GithubMark';
 import { RepairFixPart } from './RepairFixPart';
 import {
   DevelopmentGateFrame,
@@ -80,6 +81,60 @@ export const PR_STATE_META: Record<
  */
 type StrandedBase = string | null;
 
+/**
+ * WHICH review chip a row shows, or `null` for none (Story MOTIR-4910 · MOTIR-5599; design
+ * `design/github/design-notes.md` § 23, Panels G1–G3).
+ *
+ * ⚠️ A PURE RESOLVER, NOT A COMPONENT, and that is load-bearing: the row chooses between
+ * this chip and the CI pill, and a component that renders `null` is still a truthy JSX
+ * element — so `chip ?? ciPill` would silently never reach the CI pill. Answering with a KEY
+ * makes the choice something the row can actually make.
+ *
+ * `null` means the row keeps its CI pill: absence of a countable review is not a state,
+ * exactly as `ci: null` draws no pill.
+ */
+type GithubReviewChipKey = 'approved' | 'changesRequested' | 'earlierCommit';
+
+export function githubReviewChipKey(
+  review: LinkedPullRequestDto['githubReview'],
+): GithubReviewChipKey | null {
+  if (!review) return null;
+  // ⚠️ A STALE CHANGES-REQUESTED IS NOT DRAWN, and that is a reported gap rather than an
+  // invented chip: § 23 draws an EARLIER-COMMIT chip for an approval only, and its copy
+  // says "Approved an earlier commit", which would be false here. It counts for nothing
+  // either way, so the row falls back to its CI pill until the design answers it.
+  if (!review.atCurrentHead) return review.state === 'approved' ? 'earlierCommit' : null;
+  return review.state === 'changes_requested' ? 'changesRequested' : 'approved';
+}
+
+/**
+ * The review chip itself.
+ *
+ * ⚠️ IT NAMES NEITHER THE HOST NOR A REVIEWER (Yue, design review 2026-09-17). The row is
+ * already a GitHub pull request and the pill it replaces says *Checks passing*, not *Checks
+ * passing on GitHub*; and a pull request can carry SEVERAL reviewers, so one login here
+ * would be a claim the row cannot make. It says the STATE.
+ */
+function GithubReviewChip({ chipKey }: { chipKey: GithubReviewChipKey }) {
+  const t = useTranslations('approvalGate.pullRequestApproval.github.chip');
+  // The SHIPPED tone axes, no new variant: an approval is the same `success` the CI pill it
+  // replaces uses, changes requested is `warning` (something is asked of you, nothing is
+  // broken), and a stale approval is deliberately TONELESS — it counts for nothing, and a
+  // colour would claim it does.
+  const pill: PillTone =
+    chipKey === 'approved'
+      ? { severity: 'success' }
+      : chipKey === 'changesRequested'
+        ? { severity: 'warning' }
+        : {};
+  return (
+    <Pill {...pill}>
+      <GithubMark className="h-3 w-3" aria-hidden />
+      {t(chipKey)}
+    </Pill>
+  );
+}
+
 function PullRequestRow({
   pr,
   strandedBase,
@@ -99,6 +154,7 @@ function PullRequestRow({
   const t = useTranslations('github');
   const state = PR_STATE_META[pr.state];
   const ci = pr.ci ? CI_STATE_META[pr.ci] : null;
+  const chipKey = githubReviewChipKey(pr.githubReview);
   const StateGlyph = state.icon;
   const PrPillGlyph = state.icon;
   return (
@@ -153,7 +209,19 @@ function PullRequestRow({
         {/* The SECOND pill slot (MOTIR-5484, §20): the CI pill, until an approve-and-merge
             press has something to say about this pull request. */}
         <MergeOutcomeSlot repo={pr.repo} number={pr.number} merged={pr.state === 'merged'}>
-          {ci ? (
+          {/* THE REVIEW CHIP REPLACES THE CI PILL, IT DOES NOT SIT BESIDE IT (Story
+              MOTIR-4910 · MOTIR-5599; design § 23, Panels G1–G3) — the same rule
+              `MergeOutcomeSlot` states for an outcome, and for the same reason: the gate
+              is raised only on an all-green set, so on a row carrying a review *Checks
+              passing* has nothing left to say.
+
+              ⚠️ IT NAMES NEITHER THE HOST NOR A REVIEWER (Yue, design review
+              2026-09-17). The row is already a GitHub pull request and the pill beside it
+              says *Checks passing*, not *Checks passing on GitHub*; and a pull request can
+              carry SEVERAL reviewers, so one login here is a claim the row cannot make. */}
+          {chipKey ? (
+            <GithubReviewChip chipKey={chipKey} />
+          ) : ci ? (
             <Pill {...ci.pill}>
               <ci.icon className="h-3 w-3" aria-hidden />
               {t(`development.ciState.${pr.ci!}`)}

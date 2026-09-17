@@ -317,7 +317,12 @@ export const approvalGateRepository = {
     id: string,
     data: {
       state: Extract<ApprovalGateState, 'approved' | 'changes_requested'>;
-      decidedById: string;
+      /** WHO said yes. NULLABLE since MOTIR-5596: a decision synced out of GitHub
+       *  may have been made by somebody with no Motir account at all, and the
+       *  column has always been nullable for the neighbouring reason (`SetNull`
+       *  when the decider is deleted). `decidedByLabel` carries the attribution in
+       *  both cases, which is why a null here never reads as *nobody decided*. */
+      decidedById: string | null;
       decidedAt: Date;
       noteMd: string | null;
       /** The subject's immutable version, from the KIND's own seam. */
@@ -824,6 +829,9 @@ const RECORD_GATE_SELECT = {
   ...AWAITING_GATE_SELECT,
   decidedAt: true,
   decidedByLabel: true,
+  // The room's person cell says WHERE a decision was made as well as who
+  // (MOTIR-5599) — the two are one question in a 144px cell.
+  decisionSource: true,
   subjectVersion: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 

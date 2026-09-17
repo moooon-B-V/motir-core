@@ -5,6 +5,7 @@ import type {
   GitProviderId,
   NormalizedChangeRequest,
   NormalizedStatusEvent,
+  RepositoryPermission as GithubRepositoryPermission,
 } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
@@ -38,6 +39,10 @@ import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { repoDeploymentService } from './repoDeploymentService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
+import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { evaluateForPullRequest } from './pullRequestReviewSync';
+import { ProviderPermissionReadError } from '@/lib/git/errors';
 import { mergeQueueExitService, type MergeQueueExitResult } from './mergeQueueExitService';
 import { mergeQueueCheckService, type MergeGroupResult } from './mergeQueueCheckService';
 
@@ -115,6 +120,31 @@ export type GithubWebhookResult =
   | {
       event: 'installation_repositories';
       outcome: 'synced' | 'skipped_unbound' | 'skipped_shared_installation' | 'malformed';
+    }
+  | {
+      // A REVIEW ON A PULL REQUEST (Story MOTIR-4910 · MOTIR-5598;
+      // `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT). Every outcome below is a
+      // 2xx: a review Motir cannot place is a fact about somebody else's repository, not a
+      // failure of this delivery, and answering non-2xx would have GitHub redeliver
+      // something that will never resolve.
+      event: 'pull_request_review';
+      outcome:
+        | 'decided_approved'
+        | 'decided_changes_requested'
+        | 'pending'
+        | 'no_awaiting_gate'
+        | 'already_decided'
+        | 'superseded'
+        // Recorded against a pull request that delivers NO work item. The row stays, so a
+        // later link and raise can still count it (decision 8).
+        | 'recorded_unlinked'
+        // The evaluation threw AFTER the row committed. The row is the retry.
+        | 'recorded_evaluation_failed'
+        | 'ignored_action'
+        | 'malformed'
+        | 'unknown_installation'
+        | 'unknown_repo'
+        | 'unknown_pull_request';
     }
   | {
       event: 'push';
@@ -209,6 +239,8 @@ export const githubWebhookService = {
         return this.handleInstallationRepositories(body);
       case 'pull_request':
         return this.handlePullRequest(body, deliveryId);
+      case 'pull_request_review':
+        return this.handlePullRequestReview(body);
       case 'push':
         return this.handlePush(body);
       case 'check_suite':
@@ -326,6 +358,159 @@ export const githubWebhookService = {
    * merged PRs land on the default branch as a push, so this one trigger also
    * covers "refresh on merge" without a second, coalescing-duplicate hook.
    */
+  /**
+   * A REVIEW ON A PULL REQUEST (Story MOTIR-4910 · MOTIR-5598;
+   * `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decisions 2, 6 and 9).
+   *
+   * Record the review, then decide the gate from the whole set. The two are deliberately
+   * separate transactions, and the ORDER is the contract: the row commits first, so a
+   * failure in the evaluation leaves a fact Motir can re-read rather than a review it never
+   * heard. There is no dead-letter, and it is not an omission — the row IS the retry, picked
+   * up by the next review on that set or by the post-raise evaluation.
+   *
+   * ⚠️ EVERY OUTCOME IS A 2xx EXCEPT A FAILED WRITE. A review of a pull request Motir does
+   * not mirror, of a repository nobody connected, or of a pull request that delivers no work
+   * item, is a fact about somebody else's repository. Answering non-2xx would ask GitHub to
+   * redeliver something that will never resolve.
+   */
+  async handlePullRequestReview(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    const event = 'pull_request_review' as const;
+    const provider = getGitProvider(PROVIDER);
+
+    const review = provider.parseReviewEvent?.(body) ?? null;
+    if (!review) return { event, outcome: 'malformed' };
+
+    // `edited` changes a review's BODY and no verdict. It is filtered here rather than at
+    // the parser so the seam stays a faithful normaliser of what the host sent.
+    if (review.action === 'edited') return { event, outcome: 'ignored_action' };
+
+    const resolved = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        review.installationId,
+        tx,
+      );
+      if (!installation) return { kind: 'unknown_installation' as const };
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        review.repo.providerRepoId,
+        tx,
+      );
+      if (!repo) return { kind: 'unknown_repo' as const };
+      const pullRequest = await githubPullRequestRepository.findByRepoAndNumber(
+        repo.id,
+        review.pullRequest.number,
+        tx,
+      );
+      if (!pullRequest) return { kind: 'unknown_pull_request' as const };
+      // The REPO says whose this is (MOTIR-1931), exactly as `handlePush` reads it.
+      return {
+        kind: 'resolved' as const,
+        pullRequestId: pullRequest.id,
+        workspaceId: repo.workspaceId,
+        owner: repo.owner,
+        name: repo.name,
+      };
+    });
+    if (resolved.kind !== 'resolved') return { event, outcome: resolved.kind };
+
+    // ⚠️ THE PERMISSION READ IS BEFORE THE WRITE AND OUTSIDE EVERY TRANSACTION. It is a
+    // network round trip to the host; inside one it would hold a pooled connection open on
+    // GitHub's latency for every review anybody submits.
+    //
+    // ⚠️ AND IT NEVER FAILS THE DELIVERY. A permission Motir could not read is recorded as
+    // `unknown`, which counts for nothing (decision 2) — the safe direction, because the
+    // person can still approve in Motir. `unknown` stays distinguishable from `none`, which
+    // is a fact about the reviewer rather than a gap in what Motir knows.
+    let reviewerPermission: GithubRepositoryPermission = 'unknown';
+    if (review.review.state === 'approved' || review.review.state === 'changes_requested') {
+      try {
+        reviewerPermission =
+          (await provider.getRepositoryPermission?.({
+            installationId: review.installationId,
+            owner: resolved.owner,
+            repo: resolved.name,
+            username: review.review.reviewer.login,
+          })) ?? 'unknown';
+      } catch (err) {
+        console.warn('[githubWebhookService] could not read a reviewer permission', {
+          pullRequestId: resolved.pullRequestId,
+          reviewId: review.review.id,
+          login: review.review.reviewer.login,
+          reason:
+            err instanceof ProviderPermissionReadError
+              ? `${err.reason}${err.status === null ? '' : ` (${err.status})`}`
+              : err instanceof Error
+                ? err.message
+                : 'unknown',
+        });
+      }
+    }
+
+    // A `dismissed` DELIVERY records the review in that state, and the repository keeps it
+    // there: a late redelivery of the original `submitted` cannot resurrect it.
+    const state = review.action === 'dismissed' ? 'dismissed' : review.review.state;
+
+    const delivers = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, resolved.workspaceId);
+      await githubPullRequestReviewRepository.upsertByGithubReviewId(
+        {
+          githubReviewId: review.review.id,
+          githubPullRequestId: resolved.pullRequestId,
+          reviewerGithubUserId: review.review.reviewer.providerUserId,
+          reviewerLogin: review.review.reviewer.login,
+          reviewerType: review.review.reviewer.type,
+          state,
+          commitSha: review.review.commitSha,
+          reviewerPermission,
+          submittedAt: review.review.submittedAt,
+          htmlUrl: review.review.htmlUrl,
+        },
+        tx,
+      );
+      const deliveries = await workItemDeliveryRepository.listByPullRequest(
+        resolved.pullRequestId,
+        tx,
+      );
+      return deliveries.length > 0;
+    });
+
+    // Recorded against a pull request nothing delivers. The row stays: a later link and
+    // raise can still count it, which is the whole point of recording reviews whether or
+    // not a gate exists (decision 8).
+    if (!delivers) return { event, outcome: 'recorded_unlinked' };
+
+    try {
+      const evaluations = await evaluateForPullRequest(
+        resolved.pullRequestId,
+        resolved.workspaceId,
+      );
+      // One pull request can deliver several cards; the delivery reports the most decisive
+      // thing that happened, in the order a reader cares about.
+      const ranked = [
+        'decided_approved',
+        'decided_changes_requested',
+        'superseded',
+        'already_decided',
+        'pending',
+        'no_awaiting_gate',
+      ] as const;
+      const outcome =
+        ranked.find((candidate) => evaluations.some((e) => e.outcome === candidate)) ??
+        'no_awaiting_gate';
+      return { event, outcome };
+    } catch (err) {
+      // ⚠️ THE ROW HAS COMMITTED, so this is a 2xx. A non-2xx would have GitHub redeliver a
+      // review Motir already holds, and the re-evaluation it would trigger is the same one
+      // the next review event performs anyway.
+      console.warn('[githubWebhookService] the review evaluation failed after recording', {
+        pullRequestId: resolved.pullRequestId,
+        reviewId: review.review.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { event, outcome: 'recorded_evaluation_failed' };
+    }
+  },
+
   async handlePush(body: Record<string, unknown>): Promise<GithubWebhookResult> {
     const provider = getGitProvider(PROVIDER);
     const push = provider.parsePushEvent(body);

@@ -42,6 +42,12 @@ export const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_ALREADY_AWAITING: 409,
   APPROVAL_GATE_KIND_UNREGISTERED: 501,
   APPROVAL_GATE_DECIDED_IMMUTABLE: 500,
+  // A caller passed `source: 'github'` without a synced reviewer, or the reverse
+  // (MOTIR-5596). Like the immutability refusal above it is a DEFECT rather than a
+  // race: no route, server action or MCP tool can produce it, so reaching a client
+  // at all means an internal caller is wrong. 500 for the same reason — sharing a
+  // status with a legitimate refusal would make the two indistinguishable.
+  APPROVAL_GATE_SYNCED_ACTOR_MISMATCH: 500,
   MERGE_CHECKS_NOT_GREEN: 409,
   MERGE_CONFLICT: 409,
   MERGE_BRANCH_PROTECTED: 409,

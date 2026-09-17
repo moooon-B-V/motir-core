@@ -485,6 +485,9 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       headline = t('decidedImmutable.title');
       break;
+    case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
+      headline = t('syncedActorMismatch.title');
+      break;
     case 'MERGE_CHECKS_NOT_GREEN':
       headline = t('mergeChecksNotGreen.title');
       break;
@@ -603,6 +606,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'alreadyAwaiting';
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       return 'decidedImmutable';
+    case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
+      return 'syncedActorMismatch';
     case 'MERGE_CHECKS_NOT_GREEN':
       return 'mergeChecksNotGreen';
     case 'MERGE_CONFLICT':
@@ -637,6 +642,7 @@ export function ApprovalGateControl({
   onDecide,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
+  const tGithub = useTranslations('approvalGate.pullRequestApproval.github');
   const tPort = useTranslations('approvalGate.port');
   const [phase, setPhase] = useState<Phase>({ kind: 'awaiting' });
   const [expanded, setExpanded] = useState(false);
@@ -854,9 +860,28 @@ export function ApprovalGateControl({
         </RecordStrip>
       ) : decided ? (
         <RecordStrip sectioned={sectioned}>
+          {/* WHO decided — and, for a decision synced out of GitHub, that it happened
+              THERE (Story MOTIR-4910 · MOTIR-5599; design § 23, Panels G4–G6). The
+              GitHub arm is a different SENTENCE rather than a suffix, because the band
+              is read as prose and *"Ada Lovelace (@ada-l) · on GitHub"* reads as a
+              handle rather than as an account of what happened. */}
           <span className="font-medium text-(--el-text)">
-            {gate.decidedByLabel ?? t('record.unattributed')}
+            {gate.decisionSource === 'github' && gate.decidedByLabel
+              ? tGithub(
+                  gate.state === 'changes_requested'
+                    ? 'record.changesRequested'
+                    : 'record.approved',
+                  { name: gate.decidedByLabel },
+                )
+              : (gate.decidedByLabel ?? t('record.unattributed'))}
           </span>
+          {/* ⚠️ A LINE, NEVER A DIMMED NAME (§6b — an unattributable presence must not
+              read as nobody). The pair (source `github`, `decidedById` null) is the
+              whole of what says *not a Motir member*, and saying it in words is what
+              stops a reader taking the bare handle for a missing name. */}
+          {gate.decisionSource === 'github' && gate.decidedById === null ? (
+            <span>{tGithub('record.notMember')}</span>
+          ) : null}
           {gate.decidedAt ? <span>{new Date(gate.decidedAt).toLocaleString()}</span> : null}
           {/* ⚠️ THE VERSION, FROM THE AUDIT COLUMN — never re-derived from
               whatever design is current now. `subjectVersion` is the immutable

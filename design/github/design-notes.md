@@ -2017,37 +2017,37 @@ CI pill**, so G1 reads as _this one has been reviewed, that one is merely green_
 > reviewer. The chip is about the pull request's STATE. The DECISION has exactly one decider —
 > the review that completed the set — and the record band names them; the row does not.
 >
-> **3. THE PILL MUST NOT EVICT THE ROW.** That one is a defect in the shipped row, not in this
-> chip — the block below.
+> **3. THE PILL MUST NOT EVICT THE ROW AT ~400px.** It did — **in the first cut of this sheet,
+> and only there.** The block below is the correction, and it corrects THIS ASSET rather than
+> the product.
 
-### ⚠️ A WIDE PILL EVICTS THE ROW AT ~400px — the shipped row, not this chip
+### ⚠️ THE NARROW PANELS WERE WRONG, AND THE PRODUCT WAS NOT — a correction
 
-Drawn at ~400px, the first cut's chip did not merely overflow: the row's **title, its repo meta
-and its link-out were all gone**, while the sibling row without a chip still showed them. The
-cause is in the base sheet, and it is two rules that only misbehave together:
+**The first cut of this sheet drew its narrow panels with the row EVICTED**: at ~400px the title,
+the repo meta and the link-out were all gone, leaving a glyph and two pills. That was real, and it
+was reported at design review. **It was a fault in THIS ASSET, not in the shipped surface** — and
+the first cut's § 23 said the opposite, naming `.pr-text { min-width: 0 }` and
+`.pr-states { flex: none }` and asserting a live defect on `main`. **That claim was false and is
+withdrawn.** It is recorded rather than deleted because the way it went wrong is the lesson.
 
-```css
-.pr-text {
-  min-width: 0;
-  flex: 1;
-} /* absorbs every shortfall, down to zero */
-.pr-states {
-  flex: none;
-} /* never shrinks */
-```
+**What actually ships.** `PullRequestRow` already wraps, and has since **MOTIR-5351 (Panel 12n)** —
+see _The narrow row_ earlier in this file, which specified it. The row is `@max-[30rem]:flex-wrap`
+inside a `<ul className="@container">`, and its pill group is
+`@max-[30rem]:order-last @max-[30rem]:basis-full @max-[30rem]:pl-[27px]`, so below a 30rem COLUMN
+the glyph, title and link-out keep line 1 and the pills drop to line 2 indented under the title.
+This sheet carries the same thing as `.pr-row.dvb-row-narrow`.
 
-The pills cannot shrink, so the TEXT pays for all of them — and `min-width: 0` lets it pay
-everything. **The review chip only made this visible.** It is reachable on `main` today with
-pills this delta does not own: `MergeOutcomeSlot` ships _Removed from the queue_ (22 characters)
-and _New commits since approval_ (26), both wider than anything drawn here.
+**What went wrong here.** A mock's `.pr-row` is a HAND-WRITTEN rendering of the component, and this
+delta's narrow panels used the plain `.pr-row` — the DESKTOP row — at 400px. The class that makes it
+a narrow row was in this sheet's own stylesheet, copied verbatim with everything else, and simply
+never applied. The panels drew a row the product does not draw, and the eviction was an artefact of
+the drawing. **They now carry `.pr-row.dvb-row-narrow`** and render as 12n does.
 
-**The rule the narrow panels draw:** the row's text keeps a legible floor and the pills **wrap
-beneath it**, so the title and the link-out are never the thing that gives way. The link-out
-stays on the first line, because it is how the row is left.
-
-**`data-narrow` in the mock stands in for the viewport** — this board renders at 1400px, so a
-`@media` rule would never fire on it. The surface implements the same thing as a real responsive
-rule, and it belongs on **every** row rather than only on reviewed ones.
+**The rule this is worth keeping for:** a mock REPRODUCES the shipped component, so a layout defect
+visible only in a mock is a defect in the mock until it has been reproduced against the component.
+Read the component's own classes before writing down that the product is broken. This sheet did not
+— it filed a bug (**MOTIR-5654**, withdrawn) and put a false fact about `main` into a design of
+record.
 
 ### The panels, the decision each depicts, and the card that builds it
 
@@ -2121,7 +2121,7 @@ is a colour one: rose would say something went wrong, and nothing did.
 
 | key        | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MOTIR-5599 | **GIVES** every panel, the chip, the record band's two line forms, the room cell and the settled row — it builds them, in `en` and `zh`. **TAKES** that the chip **replaces** the row's CI pill rather than joining it; that the chip names **neither the host nor a reviewer**; that the row's text keeps a floor and the pills **wrap** beneath it at narrow width, on EVERY row rather than only reviewed ones; and that _Not a Motir member_ is a line, never a dimmed name                                                                |
+| MOTIR-5599 | **GIVES** every panel, the chip, the record band's two line forms, the room cell and the settled row — it builds them, in `en` and `zh`. **TAKES** that the chip **replaces** the row's CI pill rather than joining it; that the chip names **neither the host nor a reviewer**; and that _Not a Motir member_ is a line, never a dimmed name. It takes NOTHING about narrow width — the row already wraps (12n / MOTIR-5351) and the chip inherits it                                                                                         |
 | MOTIR-5602 | **TAKES** that the read carries, per member, the **latest countable review's STATE** and **whether it stands at the current head** — and nothing about a person. ⚠️ AMENDED 2026-09-17: it previously also took the reviewer's login and member name. The row no longer names a reviewer, so a per-row reviewer identity is both unrendered and the WRONG SHAPE — it is one field where a pull request may have several reviewers. It must still mark a review that does NOT count, so G2 can be drawn at all rather than rendering as nothing |
 | MOTIR-5590 | **GIVES** decisions 1–6 and 10, cited per panel. **TAKES** nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | MOTIR-5608 | **TAKES** that the merge runs **after the decision commits**, so G4 is the state a reader lands on — a panel showing an approved card with un-attempted merges would contradict it                                                                                                                                                                                                                                                                                                                                                             |

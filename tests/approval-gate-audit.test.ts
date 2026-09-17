@@ -445,7 +445,7 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
     expect(values.map((v) => v.enumlabel)).toEqual(['ui', 'api', 'mcp', 'github']);
   });
 
-  it('the authority enum holds exactly §2’s three rungs', async () => {
+  it('the authority enum holds §2’s three rungs, plus the ONE value that is not a rung', async () => {
     const values = await adminDb.$queryRaw<Array<{ enumlabel: string }>>`
       SELECT e."enumlabel"
       FROM pg_enum e
@@ -453,7 +453,20 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
       WHERE t."typname" = 'approval_gate_authority'
       ORDER BY e."enumsortorder"
     `;
-    expect(values.map((v) => v.enumlabel)).toEqual(['assignee', 'reporter', 'admin']);
+    // ⚠️ `github_review` IS NOT A §2 RUNG, and this assertion's title changed rather than
+    // its list growing quietly (MOTIR-5594; ADR §8 FOURTH AMENDMENT, decision 4). A GitHub
+    // reviewer is not the card's assignee or reporter and holds no Motir permission — an
+    // unmapped one holds no Motir anything — so none of the three is true of them, and
+    // recording one would be a claim about a relationship that does not exist. It is
+    // authority conferred by the HOST's review permission, written only by the synced
+    // decision: `resolveGateAuthority` never returns it, and no route, press or MCP tool
+    // can reach it. §2 itself is unchanged for every Motir surface.
+    expect(values.map((v) => v.enumlabel)).toEqual([
+      'assignee',
+      'reporter',
+      'admin',
+      'github_review',
+    ]);
   });
 });
 

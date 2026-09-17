@@ -179,3 +179,40 @@ export class MergeChangeRequestError extends Error {
     this.status = detail.status ?? null;
   }
 }
+
+// ── A repository-permission read that produced no answer (Story MOTIR-4910 ·
+//    MOTIR-5595; `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decision 2)
+//
+// ⚠️ A 404 IS NOT THIS ERROR. GitHub answers 404 for a user with no access at all,
+// which is a real, usable answer (`none`) rather than a failure — so it is mapped,
+// not thrown. This error is for the cases where the host did not tell us: a 403, a
+// 500, a timeout. The consumer records `unknown` on it and the review then counts
+// for nothing, which is the safe direction: a person can still approve in Motir.
+
+/** A repository-permission read that could not be answered. The consumer records
+ *  `unknown` rather than guessing a permission. */
+export class ProviderPermissionReadError extends Error {
+  readonly code = 'PROVIDER_PERMISSION_READ_FAILED' as const;
+  readonly providerId: string;
+  readonly reason: 'unreachable' | 'unexpected_status';
+  readonly status: number | null;
+
+  constructor(
+    providerId: string,
+    reason: 'unreachable' | 'unexpected_status',
+    detail: { status?: number; message?: string } = {},
+  ) {
+    const what =
+      reason === 'unreachable'
+        ? 'could not be reached'
+        : `answered ${detail.status ?? 'an unexpected status'}`;
+    super(
+      `the ${providerId} repository-permission read ${what}` +
+        (detail.message ? ` (${detail.message})` : ''),
+    );
+    this.name = 'ProviderPermissionReadError';
+    this.providerId = providerId;
+    this.reason = reason;
+    this.status = detail.status ?? null;
+  }
+}

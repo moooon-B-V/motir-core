@@ -597,11 +597,38 @@ async function approveAndMergeGate(
   const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
 
   // STEP 2 — each member, after that commit, addressed by (this gate, its pull request).
-  const members: ApproveAndMergeMemberOutcome[] = [];
-  for (const member of membersOf(approval.gate.subjectVersion)) {
-    members.push(await mergeMember(input.gateId, member, ctx));
-  }
+  const members = await mergeApprovedSetMembers(input.gateId, approval.gate.subjectVersion, ctx);
   return { approval, members };
+}
+
+/**
+ * STEP 2 OF THE PRESS, ON ITS OWN — merge or enqueue every member of a gate that has just
+ * been approved, in the set's canonical order.
+ *
+ * ⚠️ EXPORTED FOR THE SYNCED PATH (Story MOTIR-4910 · MOTIR-5608; ADR §8 FOURTH AMENDMENT,
+ * decision 6), and exported rather than re-implemented ON PURPOSE. A GitHub approval decides
+ * the same gate a press decides, so it must merge the same way: same `expectedHeadSha`
+ * check, same refusal union, same `recordMotirMerge` outcome on each pull request. A second
+ * implementation would be a second set of answers to *what happened to this pull request?*,
+ * and the Development frame reads only one.
+ *
+ * ⚠️ CALL IT ONLY AFTER THE DECISION HAS COMMITTED. It merges into somebody else's
+ * repository; inside the deciding transaction it would hold the gate's row lock across a
+ * network round trip, and a host failure would roll back an approval a person made.
+ *
+ * A per-member refusal is a RESULT, not a throw, so the next member is still attempted and
+ * the approval stands either way.
+ */
+export async function mergeApprovedSetMembers(
+  approvalGateId: string,
+  subjectVersion: string | null,
+  ctx: ServiceContext,
+): Promise<ApproveAndMergeMemberOutcome[]> {
+  const members: ApproveAndMergeMemberOutcome[] = [];
+  for (const member of membersOf(subjectVersion)) {
+    members.push(await mergeMember(approvalGateId, member, ctx));
+  }
+  return members;
 }
 
 /**

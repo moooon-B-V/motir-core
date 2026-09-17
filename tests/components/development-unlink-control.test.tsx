@@ -53,6 +53,7 @@ const PR: LinkedPullRequestDto = {
   state: 'merged',
   ci: 'passing',
   url: 'https://github.com/moooon/motir-core/pull/131',
+  githubReview: null,
 };
 
 const REMOVE_ARIA = 'Remove the link to moooon/motir-core · #131';

@@ -135,6 +135,7 @@ describe('the /approvals page', () => {
               state: 'approved',
               decidedAt: new Date().toISOString(),
               decidedByLabel: 'Me <me@ex.com>',
+              decisionSource: null,
               subjectVersion: 'abcdef0123',
               waitingSince: new Date().toISOString(),
               workItem: {
@@ -203,6 +204,7 @@ describe('the /approvals page', () => {
       state: 'approved' as const,
       decidedAt: new Date().toISOString(),
       decidedByLabel: null,
+      decisionSource: null,
       subjectVersion: 'abcdef0123',
       waitingSince: new Date().toISOString(),
       workItem: {

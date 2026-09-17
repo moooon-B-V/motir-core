@@ -359,7 +359,10 @@ export function DevelopmentGateFrame({
           ? decidedByThisReader
             ? t('meta.approvedByYou', { count })
             : gate.decidedByLabel
-              ? t('meta.approved', { name: gate.decidedByLabel, count })
+              ? // The same fact, said where it happened (MOTIR-5599; design § 23).
+                gate.decisionSource === 'github'
+                ? t('github.meta.approved', { name: gate.decidedByLabel, count })
+                : t('meta.approved', { name: gate.decidedByLabel, count })
               : t('meta.count', { count })
           : gate.state === 'awaiting' && runLabel
             ? t('meta.delivered', { count, run: runLabel })

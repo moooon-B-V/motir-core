@@ -174,7 +174,19 @@ export function ApprovalRecordsList({ records }: { records: ApprovalRecordsPageD
                     gridTemplate={gridTemplate}
                     person={
                       fullView
-                        ? { label: t('columns.decidedBy'), value: row.decidedByLabel ?? t('noOne') }
+                        ? {
+                            label: t('columns.decidedBy'),
+                            // WHO and WHERE in one cell (MOTIR-5599; design § 23, Panel G7).
+                            // A decision made on GitHub says so here, because the room is
+                            // where an auditor reads decisions side by side and the door
+                            // they came through is the thing that distinguishes them.
+                            value:
+                              row.decisionSource === 'github'
+                                ? t('decidedByOnGithub', {
+                                    label: row.decidedByLabel ?? t('noOne'),
+                                  })
+                                : (row.decidedByLabel ?? t('noOne')),
+                          }
                         : undefined
                     }
                   />

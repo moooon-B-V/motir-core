@@ -13,6 +13,7 @@ export const CORE_PR: LinkedPullRequestDto = {
   state: 'open',
   ci: 'passing',
   url: 'https://github.com/moooon/motir-core/pull/131',
+  githubReview: null,
 };
 
 export const GATEWAY_PR: LinkedPullRequestDto = {
@@ -23,6 +24,7 @@ export const GATEWAY_PR: LinkedPullRequestDto = {
   state: 'open',
   ci: 'running',
   url: 'https://github.com/moooon/motir-gateway/pull/57',
+  githubReview: null,
 };
 
 export const CORE_FETCH =

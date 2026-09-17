@@ -1,0 +1,57 @@
+{
+  "_source": "https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review",
+  "_note": "Trimmed from GitHub's documented `pull_request_review` example payload: the keys the provider seam reads, plus enough surrounding structure that the shape is recognisable. Source: https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review",
+  "payload": {
+    "action": "submitted",
+    "review": {
+      "id": 999102,
+      "node_id": "PRR_kwDOAbc123",
+      "user": {
+        "login": "ada-l",
+        "id": 4242,
+        "type": "User"
+      },
+      "body": "Looks right to me.",
+      "commit_id": "cccccccccccccccccccccccccccccccccccccccc",
+      "submitted_at": "2026-09-16T09:12:00Z",
+      "state": "commented",
+      "html_url": "https://github.com/moooon/acme/pull/131#pullrequestreview-999102",
+      "author_association": "MEMBER"
+    },
+    "pull_request": {
+      "number": 131,
+      "state": "open",
+      "title": "Rate-limit the public API per key",
+      "head": {
+        "ref": "subtask/ACME-131",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "base": {
+        "ref": "main"
+      },
+      "user": {
+        "login": "motir-agent",
+        "id": 7
+      }
+    },
+    "repository": {
+      "id": 9001,
+      "name": "acme",
+      "full_name": "moooon/acme",
+      "owner": {
+        "login": "moooon",
+        "id": 55,
+        "type": "Organization"
+      }
+    },
+    "sender": {
+      "login": "ada-l",
+      "id": 4242,
+      "type": "User"
+    },
+    "installation": {
+      "id": 4206669,
+      "node_id": "MDIzOkludGVncmF0aW9u"
+    }
+  }
+}
