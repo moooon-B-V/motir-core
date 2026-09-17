@@ -8362,8 +8362,8 @@
         "next": "Your decision was not recorded. Reload to see theirs."
       },
       "superseded": {
-        "title": "A newer version was published, so this question was withdrawn.",
-        "next": "Nobody decided it. Reload to see the current version."
+        "title": "This question was withdrawn.",
+        "next": "Nobody decided it. Reload to see where it went."
       },
       "notAuthorised": {
         "title": "This decision is not yours to make.",

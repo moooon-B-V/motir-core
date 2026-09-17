@@ -229,7 +229,7 @@ describe('H · refused — every member of the union renders in place, with a ne
       refusal: { tag: 'APPROVAL_GATE_ALREADY_DECIDED', decidedByLabel: null },
       expect: /Someone decided this a moment ago\./,
     },
-    { refusal: { tag: 'APPROVAL_GATE_SUPERSEDED' }, expect: /newer version was published/ },
+    { refusal: { tag: 'APPROVAL_GATE_SUPERSEDED' }, expect: /This question was withdrawn\./ },
     { refusal: { tag: 'APPROVAL_GATE_NOT_AUTHORISED' }, expect: /not yours to make/ },
     { refusal: { tag: 'APPROVAL_GATE_NOT_FOUND' }, expect: /no longer here/ },
     { refusal: { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }, expect: /cannot decide this kind/ },
@@ -283,6 +283,37 @@ describe('H · refused — every member of the union renders in place, with a ne
       expect(screen.getByTestId('the-port')).toBeTruthy();
     },
   );
+
+  it('the SUPERSEDED refusal claims NO cause and points at NO current version (Bug MOTIR-5651)', async () => {
+    // ⚠️ THE ASSERTION IS ON WHAT THE COPY DOES **NOT** SAY, and that is the
+    // whole of this bug — the refusal-alert twin of the dead port MOTIR-5586
+    // fixed one surface over (`approvalGate.withdrawn.*`).
+    //
+    // `APPROVAL_GATE_SUPERSEDED` reaches this alert from SEVEN raise sites and
+    // only ONE of them follows a publish. Four write or read the `superseded`
+    // row: a republish (MOTIR-4913) publishes; a WITHDRAWAL (MOTIR-5574), a
+    // hand pull-back out of review or to Cancelled (MOTIR-5527) and linking an
+    // OPEN pull request (MOTIR-5534) do not. Three more raise it with no
+    // `superseded` row at all — a head that moved under the merge, a stale
+    // member on a re-queue, and a pull request that is not one of the card's
+    // deliveries (`lib/services/pullRequestMergeService.ts`).
+    //
+    // The row records `state` and nothing else (ADR `approval-gates.md` §6b),
+    // so no sentence here can name a cause honestly — and "Reload to see the
+    // current version" sends a reader who has just withdrawn their own design
+    // to look for a version that does not exist.
+    render({}, async () => ({ tag: 'APPROVAL_GATE_SUPERSEDED' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
+
+    const text = (await screen.findByRole('alert')).textContent ?? '';
+    expect(text).not.toContain('A newer version was published');
+    expect(text).not.toContain('Reload to see the current version');
+    // What survives is the fact every raise site leaves true, in the register
+    // MOTIR-5586 shipped on the port.
+    expect(text).toContain('This question was withdrawn.');
+    expect(text).toContain('Nobody decided it.');
+  });
 });
 
 describe('band 3 is a SLOT the kind fills', () => {
