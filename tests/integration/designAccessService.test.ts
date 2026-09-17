@@ -233,7 +233,8 @@ describe('Q2 — what "approved" means, and the five reasons there is no design'
       },
       fx.ctx,
     );
-    expect(await verdictFor(code as WorkItem)).toMatchObject({
+    const codeRow = await adminDb.workItem.findUniqueOrThrow({ where: { id: code.id } });
+    expect(await verdictFor(codeRow)).toMatchObject({
       verdict: 'not_approved',
       reason: 'not_a_design_card',
     });

@@ -16,7 +16,6 @@ import {
   transitionListSchema,
   updateWorkItemBodySchema,
   workItemCountSchema,
-  workItemDesignsSchema,
   workItemDetailSchema,
   workItemKeySchema,
   workItemLinkGroupsSchema,
@@ -407,7 +406,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     parameters: [keyParameter],
     response: {
       status: 200,
-      body: { kind: 'object', schema: workItemDesignsSchema },
+      body: { kind: 'object', schema: z.object({ designs: z.array(designVerdictSchema) }) },
       description: 'The design verdicts for every design card this item waits on.',
     },
     errorStatuses: [404],
@@ -545,5 +544,11 @@ export const WORK_ITEM_COMPONENTS: Readonly<Record<string, z.ZodType>> = {
   DesignAsset: designAssetSchema,
   ApprovedDesign: approvedDesignSchema,
   DesignVerdict: designVerdictSchema,
-  WorkItemDesigns: workItemDesignsSchema,
+  // ⚠️ `WorkItemDesigns` — the `{ designs: [...] }` body of `…/designs` — is
+  // deliberately NOT a component. It is an ENVELOPE, and the payload seam's own
+  // doctrine is that an envelope stays each surface's own (ADR Amendment 7 Q6):
+  // registering it would make it a SHARED RESOURCE, and the MCP coverage guard
+  // would then demand that MCP's transport shape equal v1's — which is exactly
+  // the freedom that doctrine reserves. Its VERDICTS are shared, and they are
+  // the component above.
 };

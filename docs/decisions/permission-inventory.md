@@ -549,6 +549,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/projects/[projectKey]/backlog`                  | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/backlog/work-items`       | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/folders`                  | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/designs`                  | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/plan-session`             | —     | `assertCanEdit`                                    | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/plan-session/submissions` | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/plan-session/turns`       | —     | `assertCanEdit`                                    | —          | token-scoped | R1  |
@@ -567,6 +568,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/work-items/[key]/activity`                      | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/archive`                       | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/attachments`                   | —     | `assertCanBrowse`, `attachment:create`             | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/design`                        | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/designs`                       | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/claim`                         | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/comments`                      | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/dispatch-prompt`               | —     | — none —                                           | —          | token-scoped | R1  |

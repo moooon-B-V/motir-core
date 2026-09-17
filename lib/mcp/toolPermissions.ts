@@ -33,6 +33,13 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // 'project:browse')`, lib/projects/access.ts) via `projectsService.getByKey`
   // or `workItemsService.getWorkItemByIdentifier`.
   get_work_item: 'project:browse',
+  // Story MOTIR-5553's design reads. Reading the design of the work you are
+  // about to do is browsing the project — and the key is one `CLI_TOKEN_GRANT`
+  // already carries, so a dispatched agent reaches them without the grant being
+  // widened, which is what keeps the whole feature inside a credential a
+  // sandboxed run already holds.
+  get_design: 'project:browse',
+  list_designs: 'project:browse',
   // `activityService.listHistory` asserts `project:browse` by name; `listAll`
   // reaches it through `commentsService.listComments` → `assertCanBrowse`.
   get_work_item_activity: 'project:browse',

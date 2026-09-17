@@ -357,7 +357,7 @@ export const V1_OPERATIONS = {
     path: "/api/v1/work-items/{key}/designs",
     permission: "project:browse",
     successStatus: 200,
-    responseComponent: "WorkItemDesigns",
+    responseComponent: undefined,
   },
   "listWorkItemLinks": {
     method: "GET",

@@ -1558,35 +1558,6 @@ export interface components {
             /** @enum {string} */
             reason?: "not_a_design_card" | "not_done" | "cancelled" | "withdrawn" | "no_result";
         };
-        WorkItemDesigns: {
-            designs: {
-                /** @enum {string} */
-                verdict: "approved" | "not_approved";
-                designCardKey: string;
-                designCardTitle: string;
-                design?: {
-                    designCardKey: string;
-                    designCardTitle: string;
-                    evidenceId: string;
-                    publishedAt: string;
-                    commitSha: string | null;
-                    assets: {
-                        /** @enum {string} */
-                        kind: "mock" | "image" | "note_file";
-                        sourcePath: string;
-                        fileName: string;
-                        contentType: string | null;
-                        byteSize: number | null;
-                        /** @enum {string} */
-                        state: "available" | "unavailable";
-                        url?: string;
-                        expiresAt?: string;
-                    }[];
-                };
-                /** @enum {string} */
-                reason?: "not_a_design_card" | "not_done" | "cancelled" | "withdrawn" | "no_result";
-            }[];
-        };
         Me: {
             user: {
                 id: string;
@@ -4373,7 +4344,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkItemDesigns"];
+                    "application/json": {
+                        designs: {
+                            /** @enum {string} */
+                            verdict: "approved" | "not_approved";
+                            designCardKey: string;
+                            designCardTitle: string;
+                            design?: {
+                                designCardKey: string;
+                                designCardTitle: string;
+                                evidenceId: string;
+                                publishedAt: string;
+                                commitSha: string | null;
+                                assets: {
+                                    /** @enum {string} */
+                                    kind: "mock" | "image" | "note_file";
+                                    sourcePath: string;
+                                    fileName: string;
+                                    contentType: string | null;
+                                    byteSize: number | null;
+                                    /** @enum {string} */
+                                    state: "available" | "unavailable";
+                                    url?: string;
+                                    expiresAt?: string;
+                                }[];
+                            };
+                            /** @enum {string} */
+                            reason?: "not_a_design_card" | "not_done" | "cancelled" | "withdrawn" | "no_result";
+                        }[];
+                    };
                 };
             };
             /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */

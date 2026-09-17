@@ -41,23 +41,30 @@ export const EXEMPT_TOOLS = {
     'with no REST client asking for it.',
   publish_design_result:
     'Returns the published RESULT\u2019s receipt \u2014 `{ id, workItemKey, assetCount, ' +
-    'noteTruncated, createdAt }`. `/api/v1` publishes no design-evidence component at all: the ' +
-    'design result is reached over the CI-authed `/api/work-items/[id]/design-evidence` route ' +
-    'and read by the panel server-side, neither of which is a v1 operation, so ' +
-    '`V1_RESOURCE_COMPONENTS` has nothing to derive from \u2014 by architecture rather than by ' +
-    'omission. \u26a0\ufe0f `noteTruncated` is load-bearing rather than decorative: it is how a ' +
-    'caller learns the inline note hit the 64 KiB cap and that the complete text lives in the ' +
-    '`note_file` asset, which is the difference between a rendering bound and data loss ' +
-    '(MOTIR-3782).',
+    'noteTruncated, createdAt }`. \u26a0\ufe0f `/api/v1` NOW PUBLISHES DESIGN COMPONENTS ' +
+    '(`DesignVerdict` / `ApprovedDesign` / `DesignAsset`, MOTIR-5560), so the old reason \u2014 ' +
+    'that there was nothing to derive from \u2014 is no longer true and is replaced by the part ' +
+    'that is: A RECEIPT IS NOT THE RESOURCE. Those components describe an APPROVED DESIGN as a ' +
+    'consumer reads it back; this is the acknowledgement of a WRITE, and the two share almost no ' +
+    'fields \u2014 a receipt reports what was accepted (`assetCount`, `noteTruncated`), a design ' +
+    'reports what a reader gets (the version, each asset\u2019s state, its links). Deriving one ' +
+    'from the other would force one schema to describe both, which is how a publish comes to ' +
+    'advertise fields only a read can fill. \u26a0\ufe0f `noteTruncated` is load-bearing rather ' +
+    'than decorative: it is how a caller learns the inline note hit the 64 KiB cap and that the ' +
+    'complete text lives in the `note_file` asset, which is the difference between a rendering ' +
+    'bound and data loss (MOTIR-3782).',
   create_design_upload:
     'Returns UPLOAD GRANTS \u2014 `{ workItemKey, targets: [{ kind, sourcePath, pathname, ' +
     'uploadUrl, contentType, maxBytes }] }`. A presigned PUT URL and the key it is bound to is ' +
-    'not a representation of any resource: it is a capability that expires in minutes. Same ' +
-    'boundary as the publish it is step 1 of \u2014 `/api/v1` exposes no design-evidence ' +
-    'component to derive from, by architecture rather than by omission. \u26a0\ufe0f `maxBytes` ' +
-    'is load-bearing rather than decorative: it is the org\u2019s per-file cap, and telling the ' +
-    'caller up front is the difference between a refused PUT and an opaque store error ' +
-    '(MOTIR-4750).',
+    'not a representation of any resource: it is a CAPABILITY that expires in minutes. ' +
+    '\u26a0\ufe0f That is now the WHOLE reason. `/api/v1` publishes design components as of ' +
+    'MOTIR-5560, so the old clause \u2014 no design-evidence component to derive from \u2014 is ' +
+    'false and is gone; what survives is that a grant to WRITE bytes is not a description of the ' +
+    'design those bytes become. `DesignAsset` describes a stored, published file \u2014 its ' +
+    'state, its size, a short-lived READ link; a target describes a place to PUT one that does ' +
+    'not exist yet. \u26a0\ufe0f `maxBytes` is load-bearing rather than decorative: it is the ' +
+    'org\u2019s per-file cap, and telling the caller up front is the difference between a ' +
+    'refused PUT and an opaque store error (MOTIR-4750).',
   create_acceptance_upload:
     'Returns an UPLOAD GRANT — `{ workItemKey, video: { pathname, uploadUrl, contentType, ' +
     'maxBytes }, trace }`. A presigned PUT URL and the key it is bound to is not a ' +
