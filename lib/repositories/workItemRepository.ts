@@ -171,6 +171,12 @@ export interface HomeWorkItemRow {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the Workbench row's CI badge (MOTIR-5475). In the fixed
+   *  projection because every read producing this row shape selects explicitly:
+   *  a column omitted from one arrives `undefined` at the mapper while the type
+   *  claims `string | null`. */
+  ciState: string | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -197,6 +203,11 @@ export const HOME_WORK_ITEM_SELECT = {
   identifier: true,
   title: true,
   status: true,
+  // The card's CI verdict (MOTIR-5470) — the Workbench row's badge (MOTIR-5475).
+  // Selected in the ONE shared projection for the same reason `completedAt` is:
+  // every tab reads through this constant, so adding it here is what keeps the
+  // tabs from drifting into different columns.
+  ciState: true,
   priority: true,
   assigneeId: true,
   reporterId: true,

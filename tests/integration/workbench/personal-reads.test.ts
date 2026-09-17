@@ -759,3 +759,64 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     expect(await homeService.tabCounts(hctx(fx))).toEqual(counts());
   });
 });
+
+// ── `ciState` REACHES THE WORKBENCH READS (Story MOTIR-5469 · MOTIR-5475) ─────
+//
+// ⚠️ THE FAILURE THIS GUARDS IS SILENT. Every Workbench read projects through ONE
+// shared `HOME_WORK_ITEM_SELECT`, so a column missing from it arrives `undefined`
+// at the mapper while `HomeWorkItemRowDto` claims `string | null` — the badge then
+// draws nothing, on every tab, with nothing red anywhere. `toBe('failing')` rather
+// than `toBeTruthy()` for exactly that reason.
+describe('the Workbench reads carry ciState (MOTIR-5475)', () => {
+  it('listInProgress returns it for an IMPLEMENTED card the reader is assigned', async () => {
+    // The tab the badge exists for: `HOME_SLICE_IN_PROGRESS` is a status
+    // CATEGORY, and `implemented` is in it — so a red Implemented card the reader
+    // owns is on this tab, which is the whole point of the story.
+    const fx = await makeFixture({ identifier: 'CIP' });
+    const item = await createWorkItem(fx, { kind: 'task', title: 'A red card' });
+    await own(item.id, { assignee: fx.ownerId, reporter: fx.ownerId });
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { status: 'implemented', ciState: 'failing' },
+    });
+
+    const page = await homeService.listInProgress(hctx(fx));
+    const row = page.items.find((r) => r.id === item.id);
+    expect(row).toBeDefined();
+    expect(row!.ciState).toBe('failing');
+  });
+
+  it('listWatching returns it for a watched card', async () => {
+    const fx = await makeFixture({ identifier: 'CIW' });
+    const other = await enrolMember(fx, 'ciauthor');
+    const item = await createWorkItem(fx, { kind: 'task', title: 'A watched red card' });
+    await own(item.id, { assignee: other.id, reporter: other.id });
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { status: 'implemented', ciState: 'running' },
+    });
+    await adminDb.$transaction(async (tx) => {
+      await watcherRepository.add(item.id, fx.ownerId, tx);
+    });
+
+    const page = await homeService.listWatching(hctx(fx));
+    const row = page.items.find((r) => r.id === item.id);
+    expect(row).toBeDefined();
+    expect(row!.ciState).toBe('running');
+  });
+
+  it('carries a NULL verdict as null, not as a dropped column', async () => {
+    // `null` means "no checks" and is a real answer the badge rule reads;
+    // `undefined` means the projection dropped it. Downstream they are
+    // indistinguishable, which is why the distinction is asserted here.
+    const fx = await makeFixture({ identifier: 'CIN' });
+    const item = await createWorkItem(fx, { kind: 'task', title: 'No checks' });
+    await own(item.id, { assignee: fx.ownerId, reporter: fx.ownerId });
+
+    const page = await homeService.listMyWork(hctx(fx));
+    const row = page.items.find((r) => r.id === item.id);
+    expect(row).toBeDefined();
+    expect(row!.ciState).toBeNull();
+    expect('ciState' in row!).toBe(true);
+  });
+});

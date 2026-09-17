@@ -28,6 +28,7 @@ export function toHomeWorkItemRowDto(row: HomeWorkItemRow, viewerId: string): Ho
     identifier: row.identifier,
     title: row.title,
     status: row.status,
+    ciState: row.ciState,
     priority: row.priority,
     assigneeId: row.assigneeId,
     reporterId: row.reporterId,

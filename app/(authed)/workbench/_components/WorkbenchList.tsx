@@ -6,6 +6,7 @@ import { Bot } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { Avatar, StatusValue } from '../../items/_components/issueCellPrimitives';
 import { usePeekRowClick } from '../../items/_components/IssueQuickView';
 import { IssueListPager } from '../../items/_components/IssueListPager';
@@ -158,6 +159,14 @@ function WorkbenchRow({ row, showFinished }: { row: WorkbenchRowView; showFinish
           <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
             {row.title}
           </span>
+          {/* THE CI BADGE (MOTIR-5475), in the TITLE cell and in its GLYPH form —
+              the same placement and the same shared rule as the `/items` row.
+              The column set above is UNCHANGED: the title track is the only
+              flexible one, so a ~20px glyph adds no fixed width and the row's
+              622px minimum and its measured 440px title track at 1200 both hold.
+              *Recently finished* needs no special case — it lists done-category
+              items, and `ciBadgeState` draws nothing for those. */}
+          <CiStateBadge ciState={row.ciState} statusCategory={row.statusCategory} form="glyph" />
         </span>
       </div>
 

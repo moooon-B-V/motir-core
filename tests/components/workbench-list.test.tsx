@@ -64,6 +64,7 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
     key: 1,
     title: 'An item',
     status: 'in_progress',
+    ciState: null,
     priority: 'medium',
     assigneeId: 'u1',
     reporterId: 'u1',
@@ -579,5 +580,64 @@ describe('Watching over an OFFSET page — the band arrangements the keyset neve
       'In progress',
       'To do',
     ]);
+  });
+});
+
+// ── THE CI BADGE ON A WORKBENCH ROW (Story MOTIR-5469 · MOTIR-5475) ───────────
+// Design: `design/workbench/workbench--ci-badge.mock.html`, spec
+// `design/workbench/design-notes.md` § *The CI badge (MOTIR-5471)*.
+//
+// This is the tab the badge exists for. `HOME_SLICE_IN_PROGRESS` is a status
+// CATEGORY, and `implemented` is in it — so a red Implemented card the viewer is
+// assigned to or reported IS on the In progress tab, which is exactly the card a
+// person is scanning for.
+describe('WorkbenchList — the CI badge (MOTIR-5475)', () => {
+  function badge(container: ParentNode): HTMLElement | null {
+    return container.querySelector('[data-ci-state]');
+  }
+
+  it('renders the badge for failing and for running', () => {
+    for (const state of ['failing', 'running'] as const) {
+      const { container } = renderRows(
+        [dto({ identifier: 'MOTIR-1', ciState: state })],
+        'in-progress',
+      );
+      const found = badge(container);
+      expect(found).toBeTruthy();
+      expect(found!.getAttribute('data-ci-state')).toBe(state);
+      // The ROW form: a labelled glyph, never the board card's pill — the title
+      // track cannot hold a pill at this row's 622px minimum.
+      expect(found!.getAttribute('role')).toBe('img');
+      expect(found!.getAttribute('aria-label')).toBe(
+        state === 'failing' ? 'Checks failing' : 'Checks running',
+      );
+      cleanup();
+    }
+  });
+
+  it('renders NO badge for passing or for null', () => {
+    for (const ciState of ['passing', null] as const) {
+      const { container } = renderRows([dto({ identifier: 'MOTIR-2', ciState })], 'in-progress');
+      expect(badge(container)).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('renders NO badge on a Recently finished row, structurally', () => {
+    // Not an exception: that tab lists `done`-CATEGORY items and `ciBadgeState`
+    // draws nothing for those, so the tab needs no special case and no extra
+    // column. The value stays STORED — it is simply not drawn.
+    const { container } = renderRows(
+      [
+        dto({
+          identifier: 'MOTIR-3',
+          ciState: 'failing',
+          status: 'done',
+          completedAt: '2026-08-12T00:00:00.000Z',
+        }),
+      ],
+      'finished',
+    );
+    expect(badge(container)).toBeNull();
   });
 });
