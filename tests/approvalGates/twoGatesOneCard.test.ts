@@ -261,3 +261,103 @@ describe('MOTIR-5603 — at most ONE merge gate, across the whole sequence', () 
     expect(design.map((g) => g.state)).toEqual(['awaiting']);
   });
 });
+
+describe('MOTIR-5663 — a withdrawal ASKS what the card should hold now', () => {
+  // Each withdrawer answers a narrow and correct question — *this head moved, so the
+  // gate about the old head is stale* — and none was ever in a position to ask *and
+  // what should the card have instead?* MOTIR-5604 is what that costs, already paid
+  // for once and fixed at ONE site while six others behaved the same way.
+
+  it('a push leaves NO merge gate, and the following green raises exactly one (MOTIR-5604)', async () => {
+    const s = await makeScenario('wr-5604@example.com');
+    const item = await designCard(s, 'Push then green');
+    await openLinked(item.identifier, 31);
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 31 });
+    const merge = async () =>
+      (await gatesOf(item.id))
+        .filter((g) => g.kind === 'pull_request_approval')
+        .map((g) => [g.state, g.subjectVersion]);
+    expect(await merge()).toEqual([['awaiting', 'moooon/acme#31@sha-a']]);
+
+    // THE PUSH. The re-ask runs in the same transaction and must answer *no merge
+    // gate*: the commits just changed and the new head has no verdict. A re-ask that
+    // raised here would re-ask about exactly what it had retired a statement earlier.
+    await githubWebhookService.handleEvent('pull_request', {
+      action: 'synchronize',
+      installation: INSTALLATION,
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      pull_request: {
+        number: 31,
+        state: 'open',
+        merged: false,
+        title: 'A design',
+        head: { ref: `design/${item.identifier}-31`, sha: 'sha-b' },
+        base: { ref: 'main' },
+        user: { id: 4242 },
+      },
+    });
+    expect(await merge()).toEqual([['superseded', 'moooon/acme#31@sha-a']]);
+
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 31 });
+    expect(await merge()).toEqual([
+      ['superseded', 'moooon/acme#31@sha-a'],
+      ['awaiting', 'moooon/acme#31@sha-b'],
+    ]);
+  });
+
+  it('a head move leaves the DESIGN question completely alone', async () => {
+    // A head move is about the COMMITS. Superseding a design gate because a pull
+    // request moved is this level's own defect, one direction over.
+    const s = await makeScenario('wr-design@example.com');
+    const item = await designCard(s, 'Design rides through');
+    await openLinked(item.identifier, 32);
+    const evidence = await publish(s, item.id, 'v1');
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 32 });
+    expect(await awaitingKinds(item.id)).toEqual(['design_result', 'pull_request_approval']);
+
+    await githubWebhookService.handleEvent('pull_request', {
+      action: 'synchronize',
+      installation: INSTALLATION,
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      pull_request: {
+        number: 32,
+        state: 'open',
+        merged: false,
+        title: 'A design',
+        head: { ref: `design/${item.identifier}-32`, sha: 'sha-b' },
+        base: { ref: 'main' },
+        user: { id: 4242 },
+      },
+    });
+
+    const design = (await gatesOf(item.id)).filter((g) => g.kind === 'design_result');
+    expect(design.map((g) => [g.state, g.subjectId])).toEqual([['awaiting', evidence.id]]);
+  });
+
+  it('a CLOSED member withdraws and raises nothing — there is nothing left to merge', async () => {
+    const s = await makeScenario('wr-closed@example.com');
+    const item = await designCard(s, 'Closed member');
+    await openLinked(item.identifier, 33);
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 33 });
+
+    await githubWebhookService.handleEvent('pull_request', {
+      action: 'closed',
+      installation: INSTALLATION,
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      pull_request: {
+        number: 33,
+        state: 'closed',
+        merged: false,
+        title: 'A design',
+        head: { ref: `design/${item.identifier}-33` },
+        base: { ref: 'main' },
+        user: { id: 4242 },
+      },
+    });
+
+    expect(await awaitingKinds(item.id)).toEqual([]);
+    expect((await gatesOf(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'member_closed'],
+    ]);
+  });
+});

@@ -350,7 +350,13 @@ describe('WITHDRAW — superseded when the set the gate asked about changes', ()
     expect(await awaiting(item.id)).toEqual([]);
   });
 
-  it('UNLINKING a member supersedes the gate', async () => {
+  // ⚠️ AMENDED — MOTIR-5663. The withdrawal still happens and still records
+  // `set_changed`; what is new is that the site then ASKS what the card should hold
+  // now. The remaining member is green, so the answer is a gate over the SMALLER
+  // set — which is the structural half of this level: a question retired for an
+  // excellent reason used to leave the card with none (MOTIR-5604, paid for once at
+  // one site while six others behaved the same way).
+  it('UNLINKING a member supersedes the gate and re-asks over the smaller set', async () => {
     const { s, item } = await reviewedWithGate('pa-unlink@example.com');
 
     const result = await githubPullRequestService.unlinkPullRequestByCoordinates(
@@ -359,7 +365,9 @@ describe('WITHDRAW — superseded when the set the gate asked about changes', ()
     );
 
     expect(result.removed).toBe(true);
-    expect(await awaiting(item.id)).toEqual([]);
+    expect((await awaiting(item.id)).map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#11@sha-a',
+    ]);
   });
 
   it('LINKING a new member supersedes the gate; re-linking one it already delivers does not', async () => {
@@ -485,7 +493,13 @@ describe('AMENDMENT 6 Q5 — the withdrawal records WHY, and the three PR causes
       s.ctx,
     );
 
-    expect((await approvalGates(item.id)).map((g) => g.supersededCause)).toEqual(['set_changed']);
+    // Two rows now (MOTIR-5663): the withdrawn one carrying its cause, and the
+    // fresh question over the smaller set — which carries none, because it is a
+    // question rather than a withdrawal.
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'set_changed'],
+      ['awaiting', null],
+    ]);
   });
 
   it('an AWAITING gate carries NO cause — the column describes a withdrawal, not a question', async () => {

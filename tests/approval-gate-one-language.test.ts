@@ -216,10 +216,13 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'awaiting',
       // MOTIR-5482: the approve-and-merge gate is the third kind to ASK — one per card over
       // its delivery set, raised by `pullRequestApprovalGates.ts` in the promotion.
-      callers: [
-        'lib/services/designEvidenceService.ts',
-        'lib/services/pullRequestApprovalGates.ts',
-      ],
+      // ⚠️ AMENDED ON THE RECORD — MOTIR-5663, 2026-09-17. The list SHRANK by one and
+      // gained one, and the trade is the point of the level: `gateSetFor.ts` is now the
+      // single place a gate row is created from the predicate's answer, and
+      // `pullRequestApprovalGates.ts` is a thin wrapper over it. `designEvidenceService`
+      // stays a declared caller because the publish creates the design gate inside its
+      // own evidence transaction, over the row it has just inserted.
+      callers: ['lib/services/designEvidenceService.ts', 'lib/services/gateSetFor.ts'],
     },
     {
       method: 'supersedeAwaitingByWorkItem',

@@ -144,6 +144,40 @@ describe('the STATUS funnel records `pulled_back`', () => {
   });
 });
 
+describe('MOTIR-5663 — a pull-back withdraws and raises NOTHING', () => {
+  // The one withdrawal that must NOT re-ask. Every other site retires a question
+  // because its SUBJECT moved, so the card usually still has something to decide;
+  // this one retires it because the WORK was taken back, and re-raising would put
+  // the question straight back in somebody's queue.
+
+  it('pulling back out of review leaves no awaiting gate at all', async () => {
+    await publish('v1');
+
+    await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
+
+    expect(
+      (await adminDb.approvalGate.findMany({ where: { workItemId: card.id } })).map((g) => [
+        g.state,
+        g.supersededCause,
+      ]),
+    ).toEqual([['superseded', 'pulled_back']]);
+  });
+
+  it('and so does a move to CANCELLED — a terminal card asks nothing', async () => {
+    await publish('v1');
+    await workItemsService.updateStatus(card.id, 'in_review', fx.ctx);
+
+    await workItemsService.updateStatus(card.id, 'cancelled', fx.ctx);
+
+    expect(
+      (await adminDb.approvalGate.findMany({ where: { workItemId: card.id } })).map((g) => [
+        g.state,
+        g.supersededCause,
+      ]),
+    ).toEqual([['superseded', 'pulled_back']]);
+  });
+});
+
 describe('the COLUMN itself', () => {
   it('an AWAITING gate carries no cause, and a DECIDED one is never touched by a later supersede', async () => {
     const v1 = await publish('v1');

@@ -1,7 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
-import { gateSetFor } from './gateSetFor';
-import { routingTargetId } from '@/lib/approvalGates/routing';
+import { gateSetFor, reconcileGatesFor, type MovedHead } from './gateSetFor';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 
@@ -63,36 +63,34 @@ export async function raisePullRequestApprovalGate(
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
   const set = await gateSetFor(item, tx);
-  const owed = set.awaited.find((gate) => gate.kind === KIND);
-  if (!owed) {
-    if (set.blockedMembers.length > 0) {
-      // Every caller has just judged this set green, so a member that is not a merge
-      // candidate is the refusal worth naming (MOTIR-5604): the card goes unapprovable
-      // until the next green, and nothing else on the page says why.
-      console.warn('[pullRequestApprovalGates] raise refused: a member is not a merge candidate', {
-        workItemId: item.id,
-        members: set.blockedMembers,
-      });
-    }
-    return false;
-  }
-
-  const awaiting = await approvalGateRepository.findAwaitingByWorkItem(item.id, tx);
-  if (awaiting.some((gate) => gate.kind === KIND)) return false;
-
-  await approvalGateRepository.create(
-    {
-      workspaceId: item.workspaceId,
-      projectId: item.projectId,
+  if (!set.awaited.some((gate) => gate.kind === KIND) && set.blockedMembers.length > 0) {
+    // Every caller has just judged this set green, so a member that is not a merge
+    // candidate is the refusal worth naming (MOTIR-5604): the card goes unapprovable
+    // until the next green, and nothing else on the page says why.
+    console.warn('[pullRequestApprovalGates] raise refused: a member is not a merge candidate', {
       workItemId: item.id,
-      kind: KIND,
-      subjectId: owed.subjectId,
-      subjectVersion: owed.subjectVersion,
-      routedToId: routingTargetId(item),
-    },
-    tx,
-  );
-  return true;
+      members: set.blockedMembers,
+    });
+  }
+  return (await reconcileGatesFor(item, tx)).includes(KIND);
+}
+
+/**
+ * Ask the predicate what `workItemId` should hold NOW and raise it — the statement
+ * that runs immediately after each withdrawal below (Subtask MOTIR-5663).
+ *
+ * The item is re-read on `tx` because these three functions are handed a pull
+ * request, not a card, and the raise needs the row's workspace, project and routing
+ * target. Missing means the card is not visible to this transaction, which is the
+ * same end state as nothing being owed.
+ */
+async function reraiseAfterWithdrawal(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+  movedHead?: MovedHead,
+): Promise<void> {
+  const item = await workItemRepository.findById(workItemId, tx);
+  if (item) await reconcileGatesFor(item, tx, movedHead);
 }
 
 /**
@@ -143,6 +141,13 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
       'head_moved',
       tx,
     );
+    // ⚠️ AND ASK WHAT THE CARD SHOULD HOLD NOW (MOTIR-5663). The commits just
+    // changed, so the new head has no verdict yet and the predicate answers *no
+    // merge gate* — the NEXT green raises it. That is the case worth stating,
+    // because it is the one that makes this call look pointless: it is not the
+    // re-raise that matters here, it is that the re-ask happens at all. A design
+    // gate the card is owed and does not have goes up from the same statement.
+    await reraiseAfterWithdrawal(workItemId, tx, { pullRequestId, headSha });
   }
   return withdrawn;
 }
@@ -167,6 +172,7 @@ export async function withdrawPullRequestApprovalGatesOnClose(
       'member_closed',
       tx,
     );
+    await reraiseAfterWithdrawal(workItemId, tx);
   }
   return withdrawn;
 }
@@ -181,5 +187,12 @@ export async function withdrawPullRequestApprovalGateOnSetChange(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<number> {
-  return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, 'set_changed', tx);
+  const withdrawn = await approvalGateRepository.supersedeAwaitingByWorkItem(
+    workItemId,
+    KIND,
+    'set_changed',
+    tx,
+  );
+  await reraiseAfterWithdrawal(workItemId, tx);
+  return withdrawn;
 }

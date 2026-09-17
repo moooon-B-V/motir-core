@@ -480,7 +480,13 @@ describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes'
     expect((await gatesOf(item.id)).map((g) => g.state)).toEqual(['superseded']);
   });
 
-  it('UNLINKING a member supersedes that card’s gate', async () => {
+  // ⚠️ AMENDED — MOTIR-5663. The withdrawal still happens and still records
+  // `set_changed`; what is new is that the site then ASKS what the card should hold
+  // now. The remaining member is green, so the answer is a gate over the SMALLER
+  // set — which is the structural half of this level: a question retired for an
+  // excellent reason used to leave the card with none (MOTIR-5604, paid for once at
+  // one site while six others behaved the same way).
+  it('UNLINKING a member supersedes that card’s gate and re-asks over the smaller set', async () => {
     const { s, item } = await reviewedWithOneGate('mg-unlink@example.com');
 
     const result = await githubPullRequestService.unlinkPullRequestByCoordinates(
@@ -489,7 +495,7 @@ describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes'
     );
 
     expect(result.removed).toBe(true);
-    expect(await awaitingVersions(item.id)).toEqual([]);
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a']);
   });
 });
 
