@@ -197,13 +197,36 @@ async function statusOnBoard(page: Page, cardId: string): Promise<string> {
   return column!.statusKeys[0]!;
 }
 
+// ⚠️ EVERY LOCATOR BELOW IS ROOTED AT `getByRole`, NEVER AT A TEST ID, and the
+// guard that requires it is `tests/e2e-page-rooted-locators.test.ts` (MOTIR-5037).
+// React keeps the PREVIOUS subtree mounted while the next one streams, and
+// Playwright resolves locators BEFORE filtering on visibility — so a page-rooted
+// strict `getByTestId` can match a node from the OUTGOING copy of the page, which
+// passes in review, passes locally, and loses a merge-queue slot. The
+// accessibility tree excludes both the streamed and the outgoing copy, so a role
+// root cannot see them. This spec navigates eight times; it is exactly the shape
+// the guard exists for.
+
+/** One board card — the draggable button, whose accessible name is
+ *  `boards.openIssueAria` ("Open {key}: {title}"). Matched on the KEY, so the
+ *  same helper serves the `zh` chapter, where the surrounding words differ. */
+function boardCard(page: Page, card: Card) {
+  return page.getByRole('button', { name: new RegExp(card.identifier) });
+}
+
 /** The badge inside one board card, by state. */
 function boardBadge(page: Page, card: Card, state: string) {
-  return page.getByTestId(`board-card-${card.identifier}`).locator(`[data-ci-state="${state}"]`);
+  return boardCard(page, card).locator(`[data-ci-state="${state}"]`);
+}
+
+/** One `/items` or Workbench row — both render `role="row"`, so a row is found
+ *  the way a reader finds it: by the item key it displays. */
+function itemRow(page: Page, card: Card) {
+  return page.getByRole('row').filter({ hasText: card.identifier });
 }
 
 function rowBadge(page: Page, card: Card, state: string) {
-  return page.getByTestId(`issue-row-${card.identifier}`).locator(`[data-ci-state="${state}"]`);
+  return itemRow(page, card).locator(`[data-ci-state="${state}"]`);
 }
 
 test.beforeEach(async () => {
@@ -238,45 +261,53 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
       await transition(page, card.id, 'implemented');
     }
 
-    const redRef = await openPrFor(page, red, { number: 7101 });
+    // ⚠️ THIS SPEC OWNS THE 14xxx PULL-REQUEST BLOCK, and the block is not a
+    // formality: `github_pull_request` is `@@unique([repoId, number])` and every
+    // spec seeds the SAME mirrored repo, while the acceptance lane runs many spec
+    // FILES against one database. Two specs sharing a number pass until an
+    // unrelated file joins the lane and re-partitions the shards — then the second
+    // spec's `opened` delivery resolves to the FIRST spec's change request and its
+    // card never moves, reading as a flake in a file nobody touched (MOTIR-3248).
+    // These were 71xx, which `tests/e2e/scoped-run.spec.ts` already owns.
+    const redRef = await openPrFor(page, red, { number: 14001 });
     await deliverChecks(page, {
       conclusion: 'failure',
       headSha: 'sha-red-1',
-      prNumber: 7101,
+      prNumber: 14001,
       headBranch: redRef,
     });
 
-    const amberRef = await openPrFor(page, amber, { number: 7102 });
+    const amberRef = await openPrFor(page, amber, { number: 14002 });
     await deliverChecks(page, {
       conclusion: null,
       status: 'in_progress',
       headSha: 'sha-amber-1',
-      prNumber: 7102,
+      prNumber: 14002,
       headBranch: amberRef,
     });
 
     // TWO — one red delivery and one green, in two different repositories.
-    const twoRefA = await openPrFor(page, two, { number: 7103 });
-    const twoRefB = await openPrFor(page, two, { number: 7104, repo: E2E_REPO_SECOND });
+    const twoRefA = await openPrFor(page, two, { number: 14003 });
+    const twoRefB = await openPrFor(page, two, { number: 14004, repo: E2E_REPO_SECOND });
     await deliverChecks(page, {
       conclusion: 'failure',
       headSha: 'sha-two-a',
-      prNumber: 7103,
+      prNumber: 14003,
       headBranch: twoRefA,
     });
     await deliverChecks(page, {
       conclusion: 'success',
       headSha: 'sha-two-b',
-      prNumber: 7104,
+      prNumber: 14004,
       headBranch: twoRefB,
       repo: E2E_REPO_SECOND,
     });
 
-    const doneRef = await openPrFor(page, done, { number: 7105 });
+    const doneRef = await openPrFor(page, done, { number: 14005 });
     await deliverChecks(page, {
       conclusion: 'failure',
       headSha: 'sha-done-1',
-      prNumber: 7105,
+      prNumber: 14005,
       headBranch: doneRef,
     });
     // ⚠️ DONE IS REACHED BY MERGING, NOT BY A STATUS WRITE, and the product
@@ -295,7 +326,7 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
       'pull_request',
       pullRequestPayload({
         action: 'closed',
-        number: 7105,
+        number: 14005,
         title: `feat: ${done.identifier}`,
         headRef: doneRef,
         state: 'closed',
@@ -324,34 +355,30 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
     // ⚠️ DONE draws NOTHING, though its column still reads `failing`. An old red
     // on finished work is not actionable, and this is the drawing rule the
     // filter deliberately does not share.
-    await expect(
-      page.getByTestId(`board-card-${done.identifier}`).locator('[data-ci-state]'),
-    ).toHaveCount(0);
+    await expect(boardCard(page, done).locator('[data-ci-state]')).toHaveCount(0);
     await beat();
   });
 
   await chapter('The same verdicts on the /items List, and again in the Tree', async () => {
     await page.goto('/items?view=list');
-    await expect(page.getByTestId('issue-list-table')).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Work Items' })).toBeVisible();
     // A ROW carries the GLYPH: at the row's width a labelled pill overlapped the
     // item key, so the string reaches assistive tech as the accessible name.
     await expect(rowBadge(page, red, 'failing')).toHaveAttribute('aria-label', 'Checks failing');
     await expect(rowBadge(page, amber, 'running')).toHaveAttribute('aria-label', 'Checks running');
     await expect(rowBadge(page, two, 'failing')).toBeVisible();
-    await expect(
-      page.getByTestId(`issue-row-${done.identifier}`).locator('[data-ci-state]'),
-    ).toHaveCount(0);
+    await expect(itemRow(page, done).locator('[data-ci-state]')).toHaveCount(0);
     await beat();
 
     // The Tree renders through the SAME column builder, which is exactly why it
     // is worth showing: a change that drew the badge in one view's own cell
     // would pass every List assertion above.
     await page.goto('/items?view=tree');
-    const treeRow = page.getByRole('row').filter({ hasText: red.identifier });
-    await expect(treeRow.locator('[data-ci-state="failing"]')).toHaveCount(1);
-    await expect(
-      page.getByRole('row').filter({ hasText: amber.identifier }).locator('[data-ci-state]'),
-    ).toHaveAttribute('aria-label', 'Checks running');
+    await expect(itemRow(page, red).locator('[data-ci-state="failing"]')).toHaveCount(1);
+    await expect(itemRow(page, amber).locator('[data-ci-state]')).toHaveAttribute(
+      'aria-label',
+      'Checks running',
+    );
     await beat();
   });
 
@@ -374,20 +401,21 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
 
       // ⚠️ THE EXACT ROW SET, done card included. `toHaveCount` on its own would
       // pass on three wrong rows.
-      await expect(page.getByTestId(`issue-row-${red.identifier}`)).toBeVisible();
-      await expect(page.getByTestId(`issue-row-${two.identifier}`)).toBeVisible();
-      await expect(page.getByTestId(`issue-row-${done.identifier}`)).toBeVisible();
-      await expect(page.getByTestId(`issue-row-${amber.identifier}`)).toHaveCount(0);
-      await expect(page.getByTestId('issue-list-table').getByRole('row')).toHaveCount(4); // 3 + header
+      await expect(itemRow(page, red)).toBeVisible();
+      await expect(itemRow(page, two)).toBeVisible();
+      await expect(itemRow(page, done)).toBeVisible();
+      await expect(itemRow(page, amber)).toHaveCount(0);
+      await expect(page.getByRole('table', { name: 'Work Items' }).getByRole('row')).toHaveCount(4); // 3 + header
       await beat();
     },
   );
 
   await chapter('And on the Workbench, where the day starts', async () => {
     await page.goto('/workbench?tab=in-progress');
-    await expect(
-      page.getByTestId(`workbench-row-${red.identifier}`).locator('[data-ci-state="failing"]'),
-    ).toHaveAttribute('aria-label', 'Checks failing');
+    await expect(itemRow(page, red).locator('[data-ci-state="failing"]')).toHaveAttribute(
+      'aria-label',
+      'Checks failing',
+    );
     await beat();
   });
 
@@ -399,8 +427,8 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
       conclusion: null,
       status: 'in_progress',
       headSha: 'sha-red-2',
-      prNumber: 7101,
-      headBranch: `subtask/${red.identifier}-7101`,
+      prNumber: 14001,
+      headBranch: `subtask/${red.identifier}-14001`,
     });
     expect(await verdictOnBoard(page, red.id), 'RED after the push').toBe('running');
 
@@ -414,8 +442,8 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
     await deliverChecks(page, {
       conclusion: 'success',
       headSha: 'sha-red-2',
-      prNumber: 7101,
-      headBranch: `subtask/${red.identifier}-7101`,
+      prNumber: 14001,
+      headBranch: `subtask/${red.identifier}-14001`,
     });
     expect(await verdictOnBoard(page, red.id), 'RED once green').toBe('passing');
     // Green CI is what calls a person, so the card is now In Review — and a green
@@ -423,9 +451,7 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
     expect(await statusOnBoard(page, red.id)).toBe('in_review');
 
     await gotoLoadedBoard(page);
-    await expect(
-      page.getByTestId(`board-card-${red.identifier}`).locator('[data-ci-state]'),
-    ).toHaveCount(0);
+    await expect(boardCard(page, red).locator('[data-ci-state]')).toHaveCount(0);
     await beat();
   });
 
