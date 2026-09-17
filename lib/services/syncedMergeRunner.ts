@@ -1,19 +1,24 @@
 import type { DeliverySetMember } from '@/lib/approvalGates/reviewVerdict';
+import { mergeApprovedSetMembers } from './pullRequestMergeService';
 
-// THE SEAM BETWEEN A SYNCED DECISION AND THE MERGE IT CAUSES (Story MOTIR-4910;
+// THE MERGE A SYNCED APPROVAL CAUSES (Story MOTIR-4910 · MOTIR-5608;
 // `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decision 6).
 //
-// ⚠️ A SEPARATE MODULE, AND A SEPARATE STEP, FOR THE REASON THE PRESS HAS ONE
-// (MOTIR-5483): a merge writes to somebody else's repository, and that must not happen
-// inside the transaction that decides the gate. The decision commits FIRST; the merge runs
-// after, per member, and a host refusal on one member leaves the approval standing.
+// ⚠️ A SEPARATE STEP, FOR THE REASON THE PRESS HAS ONE (MOTIR-5483): a merge writes to
+// somebody else's repository, and that must not happen inside the transaction that decides
+// the gate. The decision commits FIRST; this runs after, per member.
 //
-// ⚠️ THIS BODY IS MOTIR-5608'S TO FILL. MOTIR-5597 ships the evaluator that CALLS it — with
-// the seam asserted, so the hand-off is proven to happen exactly once on an approval and not
-// at all on any other verdict — and MOTIR-5608 replaces the no-op with the press's own
-// merge-or-enqueue path. It is declared here rather than inlined so the two cards do not
-// have to land in one commit, and so the call site is a real, spied-upon boundary rather
-// than a promise in a comment.
+// ⚠️ IT ADDS A CALLER, NOT A PATH. The work is `pullRequestMergeService`'s own step 2 —
+// `mergeApprovedSetMembers`, the same function an *Approve and merge* press runs — so the
+// `expectedHeadSha` check, the refusal union and the `recordMotirMerge` outcome on each pull
+// request are identical. A synced approval and a press differ in WHO decided and in nothing
+// else, and that sentence is only true because this file calls rather than re-implements.
+//
+// ⚠️ AND IT NEVER THROWS. By the time it runs, a decision a reviewer made has committed and
+// the card reads Approved. A throw here cannot unwind that, so it would only turn a partial
+// merge into an unhandled rejection in a webhook handler. Each member already turns a host
+// refusal into a RESULT; what this catches is the unexpected — and it logs the gate so the
+// failure is findable, because the reader's next act is the frame's own *Retry merge*.
 
 /** What a synced approval hands the merge step. */
 export interface SyncedMergeRequest {
@@ -21,7 +26,7 @@ export interface SyncedMergeRequest {
   gateId: string;
   workItemId: string;
   workspaceId: string;
-  /** Who Motir will act as for the merge: the resolved member, else the workspace owner. */
+  /** Who Motir acts as for the merge: the resolved member, else the workspace owner. */
   actorUserId: string;
   /** Every member of the approved set, at the heads the gate named. */
   members: readonly DeliverySetMember[];
@@ -30,13 +35,32 @@ export interface SyncedMergeRequest {
 /**
  * Merge, or enqueue, every member of a set a GitHub review just approved.
  *
- * ⚠️ NO-OP UNTIL MOTIR-5608. It returns without doing anything, which is the honest state of
- * the feature on this commit: the decision is recorded and the card reads Approved, and the
- * merge is the next card. It must NEVER throw — a failure here cannot unwind a decision that
- * has already committed.
+ * The members are re-derived from the gate's own `subjectVersion` inside
+ * `mergeApprovedSetMembers`, so the caller's list is what it INTENDS rather than what is
+ * merged — one reading of the set, held by the gate.
  */
-export async function runSyncedMerge(_request: SyncedMergeRequest): Promise<void> {
-  // MOTIR-5608 fills this in: the same merge-or-enqueue path an *Approve and merge* press
-  // runs, per member, recording each outcome on its own pull request.
-  return;
+export async function runSyncedMerge(request: SyncedMergeRequest): Promise<void> {
+  const ctx = { userId: request.actorUserId, workspaceId: request.workspaceId };
+  const subjectVersion = request.members.map((member) => member.subjectVersion).join(',');
+
+  try {
+    const outcomes = await mergeApprovedSetMembers(request.gateId, subjectVersion, ctx);
+    const refused = outcomes.filter((outcome) => outcome.outcome === 'refused');
+    if (refused.length > 0) {
+      // Not a failure of the decision — the approval stands and each refused member is
+      // retried from the Development frame. Logged so a host refusing every merge is
+      // visible without reading the rows one by one.
+      console.warn('[syncedMergeRunner] a member was refused by the host', {
+        gateId: request.gateId,
+        workItemId: request.workItemId,
+        refused: refused.map((outcome) => outcome.subjectVersion),
+      });
+    }
+  } catch (err) {
+    console.warn('[syncedMergeRunner] the merge after a synced approval failed', {
+      gateId: request.gateId,
+      workItemId: request.workItemId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }

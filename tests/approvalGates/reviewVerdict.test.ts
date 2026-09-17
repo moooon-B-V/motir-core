@@ -34,7 +34,12 @@ function review(
   };
 }
 
-const member = (repo: string, number: number, headSha: string) => ({ repo, number, headSha });
+const member = (repo: string, number: number, headSha: string) => ({
+  subjectVersion: `${repo}#${number}@${headSha}`,
+  repo,
+  number,
+  headSha,
+});
 
 describe('parseDeliverySetVersion (MOTIR-5597)', () => {
   it('round-trips with deliverySetVersion', () => {
@@ -45,11 +50,7 @@ describe('parseDeliverySetVersion (MOTIR-5597)', () => {
       [...members].sort().map((raw) => {
         const at = raw.lastIndexOf('@');
         const hash = raw.lastIndexOf('#', at);
-        return {
-          repo: raw.slice(0, hash),
-          number: Number(raw.slice(hash + 1, at)),
-          headSha: raw.slice(at + 1),
-        };
+        return member(raw.slice(0, hash), Number(raw.slice(hash + 1, at)), raw.slice(at + 1));
       }),
     );
   });

@@ -1,4 +1,5 @@
 import type { GithubPullRequestReview } from '@/generated/prisma/client';
+import { membersOf, type MemberVersion } from './memberVersion';
 
 // THE SET RULE, as a pure function (Story MOTIR-4910 · MOTIR-5597;
 // `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decisions 1, 2 and 3).
@@ -12,38 +13,24 @@ import type { GithubPullRequestReview } from '@/generated/prisma/client';
 // ⚠️ IT DECIDES NOTHING ABOUT A GATE. It answers *what do these rows say about this set?*
 // The gate, the lock, the refusals and the record are the door's.
 
-/** One member of a delivery set, as its `subjectVersion` names it. */
-export interface DeliverySetMember {
-  /** `owner/name`. */
-  repo: string;
-  number: number;
-  /** The head the gate ASKED about — not necessarily the pull request's head now. */
-  headSha: string;
-}
+/**
+ * One member of a delivery set, as its `subjectVersion` names it.
+ *
+ * ⚠️ IT IS `memberVersion.ts`'s TYPE, NOT A SECOND ONE, and `parseDeliverySetVersion` below
+ * is that module's `membersOf` under the name this card's criteria use. MOTIR-5597 specified
+ * a fresh parser here; the shipped one already existed, with the same format, the same
+ * skip-a-malformed-member rule and the same client-safe constraints — and two parsers for
+ * one string is precisely how a format drifts. The round-trip test still proves the inverse;
+ * it now proves it about the one implementation.
+ */
+export type DeliverySetMember = MemberVersion;
 
 /**
  * The exact inverse of `deliverySetVersion` — `owner/name#number@headSha`, sorted and
- * comma-joined, back into its members.
- *
- * A member that does not parse is DROPPED rather than guessed at, and a caller comparing
- * the count against its delivery rows is what notices. The version is written by one
- * function and read by this one, so a malformed entry means the writer changed.
+ * comma-joined, back into its members. A member that does not parse is DROPPED rather than
+ * guessed at.
  */
-export function parseDeliverySetVersion(version: string | null): DeliverySetMember[] {
-  if (!version) return [];
-  const members: DeliverySetMember[] = [];
-  for (const raw of version.split(',')) {
-    const at = raw.lastIndexOf('@');
-    const hash = raw.lastIndexOf('#', at === -1 ? undefined : at);
-    if (at === -1 || hash === -1 || hash > at) continue;
-    const repo = raw.slice(0, hash);
-    const number = Number(raw.slice(hash + 1, at));
-    const headSha = raw.slice(at + 1);
-    if (!repo || !headSha || !Number.isInteger(number) || number <= 0) continue;
-    members.push({ repo, number, headSha });
-  }
-  return members;
-}
+export const parseDeliverySetVersion = membersOf;
 
 /** The permissions that let a review COUNT — GitHub's own rule for a required approving
  *  review: approvals count from people who can write. `unknown` is NOT among them, and that
