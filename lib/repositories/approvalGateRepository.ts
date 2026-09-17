@@ -791,6 +791,9 @@ const RECORD_GATE_SELECT = {
   ...AWAITING_GATE_SELECT,
   decidedAt: true,
   decidedByLabel: true,
+  // The room's person cell says WHERE a decision was made as well as who
+  // (MOTIR-5599) — the two are one question in a 144px cell.
+  decisionSource: true,
   subjectVersion: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 

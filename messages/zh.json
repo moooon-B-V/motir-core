@@ -7562,7 +7562,8 @@
       "awaitingOwn": "没有等待你处理的审批。",
       "decidedFull": "本项目中还没有已决定的审批。",
       "decidedOwn": "你在本项目中还没有决定过审批。"
-    }
+    },
+    "decidedByOnGithub": "{label} · 在 GitHub 上"
   },
   "platformAdmin": {
     "shell": {
@@ -8519,6 +8520,21 @@
       "requeue": {
         "progress": "正在将 {pr} 放回合并队列…",
         "refusedTitle": "{pr} 未能重新排队。"
+      },
+      "github": {
+        "chip": {
+          "approved": "已批准",
+          "changesRequested": "已请求修改",
+          "earlierCommit": "批准的是较早的提交"
+        },
+        "meta": {
+          "approved": "由 {name} 在 GitHub 上批准 · {count} 个拉取请求"
+        },
+        "record": {
+          "approved": "由 {name} 在 GitHub 上批准",
+          "changesRequested": "由 {name} 在 GitHub 上请求修改",
+          "notMember": "不是 Motir 成员"
+        }
       }
     },
     "statusHeld": {

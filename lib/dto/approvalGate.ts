@@ -384,6 +384,12 @@ export interface ApprovalRecordDecidedRowDto {
    */
   decidedByLabel: string | null;
   /**
+   * THROUGH WHICH SURFACE the decision arrived (Story MOTIR-4910 · MOTIR-5599). The room's
+   * person cell reads it to add the *on GitHub* suffix, because *who* and *where* are one
+   * question in a 144px cell. Null on a row decided before the audit columns existed.
+   */
+  decisionSource: ApprovalGateDecisionSourceDTO | null;
+  /**
    * The immutable version the decision was made against — ADR §6a's field that
    * *carries the whole claim*. Null where the kind records none.
    */

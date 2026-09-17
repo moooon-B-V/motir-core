@@ -74,6 +74,7 @@ function decidedRow(over: Partial<ApprovalRecordDecidedRowDto> = {}): ApprovalRe
     state: 'changes_requested',
     decidedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
     decidedByLabel: 'Otto Other <otto@ex.com>',
+    decisionSource: null,
     subjectVersion: 'b33c4e45d0f9e8',
     waitingSince: new Date(Date.now() - 5 * 86_400_000).toISOString(),
     workItem: {
