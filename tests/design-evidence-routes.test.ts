@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from './helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
 import type { TokenScope } from '@/lib/mcp/scopes';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
@@ -1006,7 +1007,7 @@ describe('DELETE /design-evidence', () => {
             seed('mock', name, 'text/html'),
             seed('note_file', `${name}.design-notes.md`, 'text/markdown'),
           ],
-          commitSha: `sha-${name}`,
+          commitSha: shaFor(name),
         },
         card.identifier,
       ),
@@ -1104,7 +1105,7 @@ describe('a done design card is CLOSED on every HTTP door', () => {
             seed('mock', 'v1.mock.html', 'text/html'),
             seed('note_file', 'v1.design-notes.md', 'text/markdown'),
           ],
-          commitSha: 'sha-v1',
+          commitSha: shaFor('v1'),
         },
         card.identifier,
       ),
@@ -1123,7 +1124,7 @@ describe('a done design card is CLOSED on every HTTP door', () => {
             seed('mock', 'v2.mock.html', 'text/html'),
             seed('note_file', 'v2.design-notes.md', 'text/markdown'),
           ],
-          commitSha: 'sha-v2',
+          commitSha: shaFor('v2'),
         },
         card.identifier,
       ),

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { shaFor } from '../helpers/commitShaFixtures';
 import en from '@/messages/en.json';
 import { adminDb } from '@/tests/helpers/adminDb';
 import { resetDatabase } from './_helpers/db-reset';
@@ -149,7 +150,7 @@ test.describe('a done design is final until a person reopens it', () => {
     });
 
     await test.step('3 · a new version is REFUSED, and the refusal names the way forward', async () => {
-      const refused = await register(page.request, seed, v1, 'sha-v2');
+      const refused = await register(page.request, seed, v1, shaFor('v2'));
       expect(refused.status(), await refused.text()).toBe(409);
       const body = (await refused.json()) as { code: string; error: string };
       expect(body.code).toBe('DESIGN_CARD_CLOSED');
@@ -177,7 +178,7 @@ test.describe('a done design is final until a person reopens it', () => {
     });
 
     await test.step('5 · the same publish is accepted, and the new version awaits a decision', async () => {
-      const accepted = await register(page.request, seed, v1, 'sha-v2');
+      const accepted = await register(page.request, seed, v1, shaFor('v2'));
       expect(accepted.status(), await accepted.text()).toBe(201);
       const { evidence } = (await accepted.json()) as { evidence: { id: string } };
       expect(evidence.id).not.toBe(v1.evidenceId);

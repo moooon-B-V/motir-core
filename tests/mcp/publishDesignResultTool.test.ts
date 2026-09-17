@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../helpers/commitShaFixtures';
 import { randomBytes } from 'node:crypto';
 
 // The blob STORE is the only thing faked, and it is faked as a STORE rather than
@@ -224,7 +225,7 @@ describe('one call publishes a complete result — the mock and its note file', 
     const { key } = await makeItem('Design the detail page');
 
     const result = await runPublishDesignResult(
-      { key, assets: [MOCK, NOTE], commitSha: 'abc123', producedByKey: key },
+      { key, assets: [MOCK, NOTE], commitSha: shaFor('abc123'), producedByKey: key },
       fx.ctx,
     );
 
@@ -238,7 +239,7 @@ describe('one call publishes a complete result — the mock and its note file', 
     expect(evidence.noteMd).toBeNull();
     expect(evidence.noteTruncated).toBe(false);
     expect(payload(result).noteTruncated).toBe(false);
-    expect(evidence.commitSha).toBe('abc123');
+    expect(evidence.commitSha).toBe(shaFor('abc123'));
     expect(evidence.assets.map((a) => a.kind).sort()).toEqual(['mock', 'note_file']);
 
     // The bytes reached the store under THIS item's design prefix — the
@@ -274,23 +275,23 @@ describe('one call publishes a complete result — the mock and its note file', 
 
   it('a second publish SUPERSEDES rather than accumulating a second current row', async () => {
     const { key } = await makeItem('Design');
-    await runPublishDesignResult({ key, assets: [MOCK, NOTE], commitSha: 'one' }, fx.ctx);
-    await runPublishDesignResult({ key, assets: [MOCK, NOTE], commitSha: 'two' }, fx.ctx);
+    await runPublishDesignResult({ key, assets: [MOCK, NOTE], commitSha: shaFor('one') }, fx.ctx);
+    await runPublishDesignResult({ key, assets: [MOCK, NOTE], commitSha: shaFor('two') }, fx.ctx);
 
     const rows = await adminDb.designEvidence.findMany();
     expect(rows).toHaveLength(2);
     expect(rows.filter((r) => r.isCurrent)).toHaveLength(1);
-    expect(rows.find((r) => r.isCurrent)!.commitSha).toBe('two');
+    expect(rows.find((r) => r.isCurrent)!.commitSha).toBe(shaFor('two'));
   });
 
   it('is idempotent on the commit — a retry returns the existing result', async () => {
     const { key } = await makeItem('Design');
     await runPublishDesignResult(
-      { key, assets: [MOCK, NOTE], commitSha: 'same', producedByKey: key },
+      { key, assets: [MOCK, NOTE], commitSha: shaFor('same'), producedByKey: key },
       fx.ctx,
     );
     await runPublishDesignResult(
-      { key, assets: [MOCK, NOTE], commitSha: 'same', producedByKey: key },
+      { key, assets: [MOCK, NOTE], commitSha: shaFor('same'), producedByKey: key },
       fx.ctx,
     );
     expect(await adminDb.designEvidence.count()).toBe(1);
@@ -423,21 +424,21 @@ describe('a result is published ONLY while an open work item is `blocked_by` the
     const design = await makeItem('Design', 'task', { waits: false });
     const dependent = await makeWorkWaitOn(design.id, fx);
     const first = await runPublishDesignResult(
-      { key: design.key, assets: [MOCK, NOTE], commitSha: 'one' },
+      { key: design.key, assets: [MOCK, NOTE], commitSha: shaFor('one') },
       fx.ctx,
     );
     expect(first.isError, JSON.stringify(first)).toBeFalsy();
 
     await setStatus(dependent.id, 'done');
     const again = await runPublishDesignResult(
-      { key: design.key, assets: [MOCK, NOTE], commitSha: 'two' },
+      { key: design.key, assets: [MOCK, NOTE], commitSha: shaFor('two') },
       fx.ctx,
     );
     expect(JSON.stringify(again)).toContain('DESIGN_EVIDENCE_NOTHING_WAITS');
     const rows = await adminDb.designEvidence.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.isCurrent).toBe(true);
-    expect(rows[0]!.commitSha).toBe('one');
+    expect(rows[0]!.commitSha).toBe(shaFor('one'));
   });
 
   it('a dependent that closes BETWEEN the mint and the publish is seen — the refusal wins', async () => {
