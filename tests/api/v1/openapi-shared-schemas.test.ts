@@ -450,7 +450,7 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 58 declarations names a GRANTABLE permission', () => {
+  it('every one of the 61 declarations names a GRANTABLE permission', () => {
     // 52: 41, plus MOTIR-2961's `POST …/work-items/{key}/claim`, MOTIR-3017's
     // `POST …/work-items/{key}/plan-approval`, MOTIR-3049's
     // `POST …/scope-claims`, MOTIR-3586's
@@ -464,7 +464,9 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // NINE branches independently wrote the count for their own addition alone,
     // which is exactly what this number exists to catch — read it on
     // `origin/main` before merging, exactly as `V1_CONTRACT_VERSION` is.
-    expect(V1_OPERATIONS.length).toBe(58);
+    // 61 with MOTIR-5560's THREE design reads (`listWorkItemDesigns`,
+    // `getWorkItemDesign`, `listProjectDesigns`), all on `project:browse`.
+    expect(V1_OPERATIONS.length).toBe(61);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

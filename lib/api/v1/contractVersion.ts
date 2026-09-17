@@ -452,5 +452,35 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.31.0` at `3205ae235`, so this claims `1.32.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.33.0` — MOTIR-5560 adds the THREE DESIGN READS: `listWorkItemDesigns`
+ *   (`GET …/work-items/{key}/designs`), `getWorkItemDesign`
+ *   (`GET …/work-items/{key}/design`) and `listProjectDesigns`
+ *   (`GET …/projects/{projectKey}/designs`), plus the `DesignVerdict`,
+ *   `ApprovedDesign`, `DesignAsset` and `WorkItemDesigns` resources.
+ *
+ *   They exist because Motir could take a design IN and never give it back out.
+ *   An agent could only find a design by opening `design/<area>/` in a repository
+ *   checkout — so a project that does not commit its designs had no way to hand
+ *   one to a run, and a hosted agent, which works from what it is given, had none
+ *   at all. `docs/decisions/design-result.md` AMENDMENT 5 is the contract, and its
+ *   Q2 is the load-bearing part: the approved design is the version the APPROVAL
+ *   named, not the design card's current result.
+ *
+ *   ⚠️ THE LINKS RIDE ON THE SINGLE READS ONLY, and that asymmetry is the
+ *   decision rather than an omission: a presign lives 300 seconds, so a page of
+ *   twenty-five designs would mint seventy-five links that begin expiring before
+ *   the caller has read the page. The list is for FINDING a design; the single
+ *   read is for fetching one.
+ *
+ *   Additive: three new operations and four new resources (§8's first allowed
+ *   change); no declared shape changed. Gated on `project:browse`, already in
+ *   `CLI_TOKEN_GRANT` — the grant is NOT widened. All three are READS: no status,
+ *   no pull request and no cost is written, so nothing an existing operation
+ *   reports moves.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.32.0` at `6471cac0f`, so this claims `1.33.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATIONS.
  */
-export const V1_CONTRACT_VERSION = '1.32.0';
+export const V1_CONTRACT_VERSION = '1.33.0';

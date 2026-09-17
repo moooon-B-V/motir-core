@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.32.0";
+export const GENERATED_AGAINST = "1.33.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -261,6 +261,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: undefined,
   },
+  "getWorkItemDesign": {
+    method: "GET",
+    path: "/api/v1/work-items/{key}/design",
+    permission: "project:browse",
+    successStatus: 200,
+    responseComponent: "DesignVerdict",
+  },
   "getWorkItemDispatchPrompt": {
     method: "GET",
     path: "/api/v1/work-items/{key}/dispatch-prompt",
@@ -292,6 +299,13 @@ export const V1_OPERATIONS = {
   "listFolders": {
     method: "GET",
     path: "/api/v1/projects/{projectKey}/folders",
+    permission: "project:browse",
+    successStatus: 200,
+    responseComponent: undefined,
+  },
+  "listProjectDesigns": {
+    method: "GET",
+    path: "/api/v1/projects/{projectKey}/designs",
     permission: "project:browse",
     successStatus: 200,
     responseComponent: undefined,
@@ -337,6 +351,13 @@ export const V1_OPERATIONS = {
     permission: "project:browse",
     successStatus: 200,
     responseComponent: undefined,
+  },
+  "listWorkItemDesigns": {
+    method: "GET",
+    path: "/api/v1/work-items/{key}/designs",
+    permission: "project:browse",
+    successStatus: 200,
+    responseComponent: "WorkItemDesigns",
   },
   "listWorkItemLinks": {
     method: "GET",

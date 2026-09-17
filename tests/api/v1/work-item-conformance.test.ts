@@ -580,12 +580,22 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // is additionally DRIVEN end-to-end by the drift guard, so excluding it here
     // hides nothing — it keeps 11.2's guard honest about what IT covers.
     const ATTACHMENT_SUBRESOURCE = /\/attachments\//;
+    // ⚠️ Story MOTIR-5553's two DESIGN reads are excluded for the same reason,
+    // and it is the reason this guard states rather than a new one: `…/designs`
+    // and `…/design` hang off a work item because the card is what waits on the
+    // design, but they are the design-access door and their journey is its own
+    // suite (`tests/api/v1/designs-routes.test.ts`), where the permission, the
+    // 404-not-403 answer, the link asymmetry and the cursor are all driven. Both
+    // operations are additionally driven end-to-end by the drift guard, so
+    // excluding them here hides nothing.
+    const DESIGN_SUBRESOURCE = /\/(designs|design)\//;
     const shipped = v1RouteFiles(process.cwd()).filter(
       (f) =>
         f.includes('work-items') &&
         !/\/(sprints|backlog)\//.test(f) &&
         !WORK_LOOP_SUBRESOURCES.test(f) &&
-        !ATTACHMENT_SUBRESOURCE.test(f),
+        !ATTACHMENT_SUBRESOURCE.test(f) &&
+        !DESIGN_SUBRESOURCE.test(f),
     );
 
     // Enumerated rather than counted: a NEW work-item endpoint appears here as a

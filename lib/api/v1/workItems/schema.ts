@@ -1269,3 +1269,71 @@ export function commentCountFor(counts: Record<string, number>, itemId: string):
   /* v8 ignore next -- the service pre-seeds every requested id, so the fallback is unreachable */
   return counts[itemId] ?? 0;
 }
+
+// ── DESIGN (Story MOTIR-5553 · Subtask MOTIR-5560) ─────────────────────────
+//
+// The wire shapes for the three design operations, over
+// `designAccessService`'s DTOs. `docs/decisions/design-result.md` AMENDMENT 5
+// Q2 and Q6 are what they encode — in particular the discriminated verdict,
+// which is what lets a client tell *this design is approved* from each of the
+// five ways there is no design, without inspecting an empty list.
+
+/** One file of an approved design. `url` / `expiresAt` only on a SINGLE read. */
+export const designAssetSchema = z.object({
+  kind: z.enum(['mock', 'image', 'note_file']),
+  sourcePath: z.string(),
+  fileName: z.string(),
+  contentType: z.string().nullable(),
+  byteSize: z.number().int().nullable(),
+  /**
+   * `unavailable` is a NORMAL answer, not an error: only an approval pins a
+   * version's bytes, and the orphan-GC reclaims what no pin holds, so an
+   * approved design can legitimately have lost its files (AMENDMENT 5 Q6).
+   */
+  state: z.enum(['available', 'unavailable']),
+  /** A short-lived download link. Present only on an `available` asset of a
+   *  SINGLE-design read — a list never mints a presign per row. */
+  url: z.string().optional(),
+  /** When {@link url} stops working. Present exactly when `url` is. */
+  expiresAt: z.string().optional(),
+});
+export type V1DesignAsset = z.infer<typeof designAssetSchema>;
+
+/** One approved design — the version an approval named (AMENDMENT 5 Q2, Q3). */
+export const approvedDesignSchema = z.object({
+  designCardKey: z.string(),
+  designCardTitle: z.string(),
+  /** The VERSION: the design-evidence row id, whose content never changes. */
+  evidenceId: z.string(),
+  publishedAt: z.string(),
+  /** Provenance. Null is ordinary — a design published from a tree with no
+   *  commit behind it. */
+  commitSha: z.string().nullable(),
+  assets: z.array(designAssetSchema),
+});
+export type V1ApprovedDesign = z.infer<typeof approvedDesignSchema>;
+
+/**
+ * What one design card answers — approved, or WHY not.
+ *
+ * ⚠️ FIVE reasons rather than an empty result. A consumer that cannot tell
+ * `withdrawn` from `no_result`, or `not_done` from `not_a_design_card`, reports
+ * the same nothing for four different histories — and the agent reading it has
+ * no way to know whether to wait, to stop, or to say the card is mis-wired.
+ */
+export const designVerdictSchema = z.object({
+  verdict: z.enum(['approved', 'not_approved']),
+  designCardKey: z.string(),
+  designCardTitle: z.string(),
+  /** Present exactly when `verdict` is `approved`. */
+  design: approvedDesignSchema.optional(),
+  /** Present exactly when `verdict` is `not_approved`. */
+  reason: z
+    .enum(['not_a_design_card', 'not_done', 'cancelled', 'withdrawn', 'no_result'])
+    .optional(),
+});
+export type V1DesignVerdict = z.infer<typeof designVerdictSchema>;
+
+/** The `…/designs` body: one verdict per design card the item waits on. */
+export const workItemDesignsSchema = z.object({ designs: z.array(designVerdictSchema) });
+export type V1WorkItemDesigns = z.infer<typeof workItemDesignsSchema>;

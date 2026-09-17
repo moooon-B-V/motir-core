@@ -449,6 +449,30 @@ describe('every operation’s REAL response validates against its declared schem
       { key },
     );
 
+    // ── Designs (Story MOTIR-5553) ──────────────────────────────────────────
+    // Driven on a card with NO design blocker and on a card that is not a
+    // design card, so the responses validate the NOT-approved arm of the
+    // verdict — which is the shape most likely to drift, because it is the one
+    // an agent meets when something is wrong.
+    await drive(
+      'listWorkItemDesigns',
+      () => import('@/app/api/v1/work-items/[key]/designs/route'),
+      get(`/api/v1/work-items/${key}/designs`),
+      { key },
+    );
+    await drive(
+      'getWorkItemDesign',
+      () => import('@/app/api/v1/work-items/[key]/design/route'),
+      get(`/api/v1/work-items/${key}/design`),
+      { key },
+    );
+    await drive(
+      'listProjectDesigns',
+      () => import('@/app/api/v1/projects/[projectKey]/designs/route'),
+      get(`/api/v1/projects/${pk}/designs`),
+      { projectKey: pk },
+    );
+
     // ── Planning ────────────────────────────────────────────────────────────
     await drive(
       'getProjectBacklog',
