@@ -8350,8 +8350,8 @@
       "filesNotKept": "Files not kept"
     },
     "withdrawn": {
-      "port": "A newer design was published, so this question was withdrawn.",
-      "portCite": "Nobody decided it. The current version is above.",
+      "port": "This question was withdrawn.",
+      "portCite": "Nobody decided it.",
       "record": "No decision · no one to attribute",
       "at": "withdrawn {when}"
     },

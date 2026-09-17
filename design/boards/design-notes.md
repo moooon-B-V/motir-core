@@ -1487,7 +1487,14 @@ MOTIR-2425 re-avoided for `planning`. **`STATUS_KEY_EL.implemented →
 > mock corrects it in one stylesheet rule (a design draws the target); the fix
 > belongs to MOTIR-3080, not to this story.
 
-## CI at Implemented — the board shows nothing, deliberately
+## CI at Implemented — ~~the board shows nothing, deliberately~~ SUPERSEDED (MOTIR-5471)
+
+> **⚠️ THIS SECTION IS A RECORD, NOT THE SPEC.** It deferred the CI signal on a board card and
+> named the follow-up: _“Surfacing failure ON the board is a board-projection card.”_ That card is
+> **MOTIR-5469**, and its design is **§ _The CI badge (MOTIR-5471)_** below, drawn in
+> `board-card--ci-badge.mock.html`. Read that section for what the board now shows. The paragraphs
+> that follow are kept because the REASONING is still correct about the moment it was written —
+> `BoardCardDto` carried no CI field then, and adding one was outside MOTIR-2999's scope.
 
 The card asks whether a board card at Implemented surfaces anything about checks.
 **It does not**, and the reason is a boundary, not an oversight: `BoardCardDto`
@@ -1512,7 +1519,9 @@ card and is not this story's** (see below).
    every surface. This asset spends the recipe on ONE tone, because that is what
    MOTIR-2999's criterion needs. Panel 3 draws the whole ramp under the recipe so
    the option is visible and costed — it is a separate card, owned by nobody yet.
-2. **A CI signal on the board card.** Needs a projection field; see above.
+2. ~~**A CI signal on the board card.** Needs a projection field; see above.~~
+   **SUPERSEDED (MOTIR-5471)** — it is specified in § _The CI badge (MOTIR-5471)_ below, and the
+   projection field it needed is `BoardCardDto.ciState`, which MOTIR-5474 adds.
 3. **The `sienna` palette override**, which is a one-line follow-up on the token
    card if `implemented` ships before it.
 4. **Swimlanes, scrum and the board-config admin** — an eighth status reaches all
@@ -1975,3 +1984,54 @@ its panel on a static sheet instead of at the viewport origin.
 - **The picker** keeps the shipped `role="combobox"` / `role="listbox"` /
   `role="option"` structure and its `aria-activedescendant`; the ninth status adds
   an option, not a control.
+
+---
+
+## The CI badge (MOTIR-5471)
+
+**Asset: `board-card--ci-badge.mock.html`** (panels 1–5). It amends § _CI at Implemented_ above, which
+deferred exactly this, and § _Card anatomy_. Story MOTIR-5469; built by MOTIR-5474.
+
+**What it draws.** A card whose `WorkItem.ciState` reads `failing` or `running` carries a badge; one
+reading `passing` or `null` carries none, and neither does a card in the `done` CATEGORY.
+
+- **Primitive + tokens + copy are all the SHIPPED ones.** `Pill` with `severity="danger"`
+  (`--el-tint-rose`) for `failing` and `severity="warning"` (`--el-tint-peach`) for `running`; the
+  glyphs are `CircleX` and `CircleEllipsis` from `CI_STATE_META`
+  (`components/github/DevelopmentSection.tsx`); the strings are
+  `github.development.ciState.failing` / `.running`, already translated in `messages/zh.json`.
+  **No new token, no new string, no second vocabulary** — the card and its own Development section say
+  the same thing the same way.
+- **`passing` earns no badge, deliberately.** Green CI is what moves a card to In Review, so a green
+  badge would restate the column. `MOTIR-5470` makes that exact: the stored column reads `passing`
+  precisely when the promotion would promote.
+- **A `done`-category card carries none**, whatever column it sits in — a board maps statuses to
+  columns many-to-one, so the rule is the STATUS CATEGORY, never the column. A done card's old red is
+  not actionable.
+
+### The slot, and the TWO changes the badge requires
+
+**The badge is an ADDITIONAL pill in the card's existing pill row, immediately after the exclusive
+one** (`BoardCard.tsx`'s `Awaiting acceptance` / priority / `Blocked` branch). It takes no existing
+slot, so it can never hide _Blocked_ or _Awaiting acceptance_ — both render beside it.
+
+Two changes come with it, and **both were found by RENDERING the sheet, not by reading the component:**
+
+1. **The badge needs `whitespace-nowrap`.** `Pill` does not set it, and at the board's 288px column
+   the two-word label breaks inside the chip — _“Checks / failing”_ on two lines with the glyph
+   orphaned.
+2. **The pill row needs `flex-wrap`.** `BoardCard.tsx` carries none (`grep flex-wrap`: 0 hits), so a
+   second pill does not wrap — it **overflows**, pushing the story-point chip and the avatar past the
+   card's right edge. With it, the longest pairing (_Awaiting acceptance_ + _Checks running_) takes a
+   second line.
+
+**Height:** unchanged except on a card carrying BOTH pills, which grows by one 22px line plus the 6px
+row gap. That is the one height change this asset introduces, and it is recorded here against
+`board-scale.mock.html`'s per-card height rather than in that sheet, which is a record of its moment.
+
+### ⚠️ A BOARD CARD carries the LABEL; a ROW carries the GLYPH
+
+The same fact is drawn two ways, and the split is forced by a width budget rather than chosen. A board
+card has a wrapping row and 288px; an `/items` or Workbench row has a 160px title floor that a labelled
+pill overflows. `design/work-items/design-notes.md` § _The CI badge (MOTIR-5471)_ carries that
+measurement and is the authority for rows.

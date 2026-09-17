@@ -6565,6 +6565,17 @@ amendment adds one CASE to a drawn element; it draws no new element and no new s
 1. **`B` keeps the port.** A reader who may not decide can still SEE what is being decided; only the verbs are absent. Under the button-first cut this state was a sentence.
 2. **`E` keeps showing the approved version** even after a newer design is published — which is what ADR §6c's pin is FOR. Without the port, `E` is a row of metadata about something nobody can look at any more, and the pin's purpose is invisible. **§6c's pin is keyed on the SUBJECT, not on the gate kind** (re-keyed by MOTIR-4911, because a design with a pull request is approved through `pull_request_approval` and a kind-keyed pin would simply stop firing for it, silently) — so `E` draws the pinned version for BOTH arms of §8.
 3. **`G` (`superseded`) is colourless and verb-less.** Written by the PRODUCT, not a person (ADR §6b); the audit must never read it as a decision somebody made.
+
+   > **⚠️ AMENDED 2026-09-17 (Bug [MOTIR-5586](motir:cmu30qjra00g6hvoiiu6ljuhv)) — `G`'s dead port NAMES NO CAUSE AND POINTS NOWHERE. The mocks quote the superseded wording and are records of their moment; this line is the copy of record.**
+   >
+   > ~~_"A newer design was published, so this question was withdrawn." / "Nobody decided it. The current version is above."_~~ → **_"This question was withdrawn." / "Nobody decided it."_** (`approvalGate.withdrawn.port` / `.portCite`, `en` + `zh`.)
+   >
+   > **Why the fact and not the cause: FOUR product writes mark a gate `superseded`, and only ONE of them publishes anything.** A republish ([MOTIR-4913](motir:cmtt4ogzm000khutx4qaba3bp)) does; a WITHDRAWAL ([MOTIR-5574](motir:cmu2gjksk01gshztxqstqfq6i)), a hand pull-back out of review or to Cancelled ([MOTIR-5527](motir:cmu1lj5ur003thvoi12tgo8fv)) and linking an OPEN pull request ([MOTIR-5534](motir:cmu1mcnrr000ai0txplyb9iqz)) do not. On three of the four the old first sentence was simply false, and _"the current version is above"_ pointed at a port this very state draws DEAD — so it was false there even for a republish, read on the item page. **The row cannot tell the causes apart**: ADR §6b makes a supersede write `state` and nothing else, so a cause-aware sentence would first need data the gate does not store. The honest sentence is the one that holds for every writer, and dropping a claim needs no new column.
+   >
+   > **A CALLER MAY STILL SUPPLY A CAUSE, and that is the extension point rather than an exception.** `ApprovalGateControl`'s optional `withdrawnPort` prop lets a kind whose own surface KNOWS the cause pass its own two sentences — the approve-to-merge gate does ([MOTIR-5604](motir:cmu39zcqv0076hwtxfs5r2b5u): _"A push moved the head of {pr} …"_, `approvalGate.pullRequestApproval.withdrawn.*`, drawn in `design/github/design-notes.md`). **The keys amended here are the FRAME's default**, drawn whenever no caller can name the cause — which is every `design_result` gate.
+   >
+   > Nothing else about `G` moves: colourless, verb-less, dead port, and a record strip that names no actor and no decision time.
+
 4. **`X` — the port failed, so there are NO verbs.** _You cannot approve what cannot be shown._ This is the frame's premise made mechanical rather than advisory, and **it did not exist in the first cut** — a design that draws only a button has nowhere to put the failure, so the button stays live over a subject nobody can see.
 
 **The confirm (`C`) is an inline band OVER the verbs, never a modal** — a modal would take the port off screen at exactly the moment the reader wants one last look.
@@ -7938,3 +7949,68 @@ The pending notice (unchanged), `/plans/<id>`, the plan canvas, the peek, and Pr
 proposed VALUES, since a row names the relation and never the diff (MOTIR-4197's boundary). It draws no
 plan that touched only a descendant, because the relations are direct only. It changes nothing else about
 the arrived page.
+
+---
+
+## The CI badge (MOTIR-5471)
+
+**Asset: `list--ci-badge.mock.html`** (panels 6–9). It amends § _Columns_ and § _Filter builder_.
+Story MOTIR-5469; built by MOTIR-5473 (the filter field) and MOTIR-5474 (the badge).
+
+### It goes in the TITLE CELL, and it is a GLYPH — both forced by the width budget
+
+The row is a CSS grid: `minmax(10rem, 1fr) 116px 120px 150px 150px 72px 80px 108px 76px`, `gap-x-4`
+(16px × 8), `pl-4 pr-7` (44px).
+
+```
+872 fixed + 128 gaps + 44 padding + a 160px title floor = the 1204px minimum
+```
+
+**A new column is not affordable.** A ~120px _Checks_ track plus one more 16px gap takes the minimum
+to **1340px**, which clips at 1280 AND at 1200 — on a surface whose column set already clips
+(MOTIR-1307). The title cell is the row's **only flexible track**, so a badge there adds no fixed
+width and **leaves the minimum at 1204px**.
+
+**⚠️ And at that minimum the title track is only its 160px floor, which will not hold the key, a title
+AND a labelled pill.** Drawn that way the pill OVERLAPPED the item key — the cell is `min-w-0` with no
+`overflow-hidden`. **Rendering at exactly 1204px is what found it; the same sheet read fine at 1280 and
+hid the problem.**
+
+**So a ROW carries the glyph alone and a BOARD CARD carries the label.** The glyph is `CircleX` /
+`CircleEllipsis` — the same two `CI_STATE_META` uses — as a `role="img"` with the shipped
+`github.development.ciState.*` string as its accessible name and its `title`. Ink is
+`--el-danger-on-surface` for `failing` (never `--el-danger-text`, which is the ink for a danger FILL)
+and `--el-text-secondary` for `running`; both clear AA on every surface the row paints in. It carries
+`shrink-0`, so the TITLE truncates and the badge stays whole.
+
+State is still never colour alone: the two glyphs differ in SHAPE, and each has an accessible name —
+the same bargain every other icon-only affordance in this row already makes.
+
+**Measured:** at **1200** the row is 4px under its own minimum and scrolls, exactly as it does today —
+the badge neither causes that nor worsens it. At **1280** there is 76px of slack, all of which the title
+track absorbs, so more title shows and the glyph still sits at its end. **The row never grows and the
+minimum never moves.** Both views share one column builder (`issueColumns.tsx`), so this holds for List
+and Tree alike.
+
+### The _Checks_ filter field
+
+- **Group: `fields`.** `advancedFieldGroup` (`lib/issues/advancedFilterFields.ts`) returns `other` only
+  for `lbl` / `cmp` / `folder`, and `customFields` for a custom field — so `ciState` lands in `fields`.
+  It sits **after _Status_**, the field a reader pairs it with.
+- **Label:** _Checks_ (en) · _检查_ (zh).
+- **Values, worst-first** — the order `CI_STATES` declares and `foldCardCiState` applies, each carrying
+  the same glyph the badge does:
+
+  | value     | en             | zh         |
+  | --------- | -------------- | ---------- |
+  | `failing` | Checks failing | 检查失败   |
+  | `running` | Checks running | 检查运行中 |
+  | `passing` | Checks passing | 检查通过   |
+
+- **The empty pair reads _has no checks_ / _has checks_** (zh: _无检查_ / _有检查_) — not “is empty”,
+  because the column's `null` means something a reader can name: no pull request has reported and none
+  is expected to.
+- **The filter is RAW**, per the story: _Checks is any of Failing_ returns every card whose column reads
+  `failing` in ANY status, done included, and a person combines it with Status. That is deliberate — the
+  badge's done-category rule is a DRAWING rule, and making the filter share it would make a saved view
+  silently lossy.
