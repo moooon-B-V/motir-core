@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../helpers/commitShaFixtures';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -62,7 +63,7 @@ function pathnameAssets(fx: WorkItemFixture, workItemId: string, name: string) {
 
 function publishPathnames(fx: WorkItemFixture, workItemId: string, name: string) {
   return designEvidenceService.recordFromPathnames(
-    { workItemId, assets: pathnameAssets(fx, workItemId, name), commitSha: `sha-${name}` },
+    { workItemId, assets: pathnameAssets(fx, workItemId, name), commitSha: shaFor(name) },
     fx.ctx,
   );
 }
@@ -71,7 +72,7 @@ function publishBytes(fx: WorkItemFixture, workItemId: string, name: string) {
   return designEvidenceService.recordFromBytes(
     {
       workItemId,
-      commitSha: `sha-${name}`,
+      commitSha: shaFor(name),
       assets: [
         {
           kind: 'mock',

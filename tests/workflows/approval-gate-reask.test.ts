@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
@@ -82,7 +83,7 @@ async function publish(label: string) {
           pathname: notePathname,
         },
       ],
-      commitSha: `sha-${label}`,
+      commitSha: shaFor(label),
     },
     fx.ctx,
   );

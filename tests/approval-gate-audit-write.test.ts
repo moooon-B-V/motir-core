@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from './helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
@@ -96,7 +97,7 @@ afterAll(async () => {
 });
 
 /** Publish one design version through the real path; returns its evidence DTO. */
-async function publish(label: string, commitSha: string | null = `sha-${label}`) {
+async function publish(label: string, commitSha: string | null = shaFor(label)) {
   const pathname = `${designPrefix(fx.workspaceId, card.id)}${label}.mock.html`;
   store.set(pathname, { contentType: 'text/html', size: 2048 });
   const notePathname = `${designPrefix(fx.workspaceId, card.id)}${label}.design-notes.md`;
@@ -469,7 +470,7 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
     // The decision itself still landed, with the rest of its audit set — the
     // outcome being empty is a fact about the effect, not about the record.
     expect(row.state).toBe('approved');
-    expect(row.subjectVersion).toBe('sha-frame');
+    expect(row.subjectVersion).toBe(shaFor('frame'));
     expect(row.decidedUnderAuthority).toBe('reporter');
   });
 });

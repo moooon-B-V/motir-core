@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../../helpers/commitShaFixtures';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
@@ -212,7 +213,7 @@ async function publish(card: WorkItem) {
           pathname: notePathname,
         },
       ],
-      commitSha: 'sha-overlay',
+      commitSha: shaFor('overlay'),
     },
     fx.ctx,
   );

@@ -29,8 +29,14 @@ import type { DesignAssetKindDTO } from '@/lib/dto/designEvidence';
 // `withinParentKey`, the container the target must be a child of (MOTIR-3177).
 // It gates the write and is not persisted.
 
+// ⚠️ RETURNS THE TRIMMED VALUE, not the raw one (MOTIR-5620). Testing `v.trim()`
+// and then storing `v` is how `"<sha>\n"` — what a client building JSON from
+// `$(git rev-parse HEAD)` sends — reached the service as a distinct idempotency
+// key from `"<sha>"`. The service normalises the citation itself; this keeps the
+// door from handing it a value it has already looked at and not corrected, and
+// matches the acceptance route beside it.
 const strOrNull = (v: unknown): string | null =>
-  typeof v === 'string' && v.trim() !== '' ? v : null;
+  typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
 
 function parseAssets(
   raw: unknown,

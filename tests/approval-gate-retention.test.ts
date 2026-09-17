@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from './helpers/commitShaFixtures';
 import type { ApprovalGateKind, WorkItem } from '@/generated/prisma/client';
 import type { GateEffect, GateHandler } from '@/lib/approvalGates/registry';
 import { db } from '@/lib/db';
@@ -180,7 +181,7 @@ async function publish(label: string) {
           pathname: notePathname,
         },
       ],
-      commitSha: `sha-${label}`,
+      commitSha: shaFor(label),
     },
     fx.ctx,
   );

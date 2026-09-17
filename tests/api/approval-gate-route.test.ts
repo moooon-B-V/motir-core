@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../helpers/commitShaFixtures';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -121,7 +122,7 @@ async function publish(card: WorkItem) {
           pathname: notePathname,
         },
       ],
-      commitSha: 'sha-overlay',
+      commitSha: shaFor('overlay'),
     },
     fx.ctx,
   );
