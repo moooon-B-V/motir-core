@@ -258,7 +258,7 @@ function approvalQueueWindow(total: number, page: number | undefined, pageSize: 
  * WHICH projects this reader's queue may draw from — at most the ACTIVE one,
  * and NONE when they may not browse it.
  *
- * This is `homeService.activeProjectScope`'s access half, and only that half:
+ * This is `homeService.resolveActiveProjectScope`'s access half, and only that half:
  * the LIFECYCLE axis it also resolves is a fact about work-item statuses, and a
  * gate has none — a decision is not filtered by the status of the card it hangs
  * off. Resolving it here would be carrying a join this read never uses.

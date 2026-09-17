@@ -54,7 +54,7 @@ export const HOME_PAGE_SIZE = 25;
 export const HOME_FINISHED_WINDOW_DAYS = 7;
 
 /** The start of the finished window, as of now. */
-function finishedWindowStart(): Date {
+export function finishedWindowStart(): Date {
   return new Date(Date.now() - HOME_FINISHED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 }
 /** The ceiling a caller-supplied page size is clamped to. */
@@ -114,7 +114,7 @@ function clampLimit(limit: number | undefined): number {
  * after the read would shorten pages instead of failing, and "the list sometimes
  * ends early" is a bug nobody traces back to an access rule.
  */
-async function activeProjectScope(
+export async function resolveActiveProjectScope(
   ctx: HomeActorContext,
   tx: Prisma.TransactionClient,
 ): Promise<HomeProjectScope[]> {
@@ -232,7 +232,7 @@ export const homeService = {
     // fetching an empty offset. The count and the list are ONE predicate: the
     // repository's `count` twin takes the same `slice` and the same scopes.
     const { rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await activeProjectScope(ctx, tx);
+      const projectScopes = await resolveActiveProjectScope(ctx, tx);
       const found = await workItemRepository.countByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
@@ -298,7 +298,7 @@ export const homeService = {
     // the list uses, because the window is part of the predicate here and a
     // count taken without it would be a denominator for a different set.
     const { rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await activeProjectScope(ctx, tx);
+      const projectScopes = await resolveActiveProjectScope(ctx, tx);
       const countOptions = {
         slice: HOME_SLICE_DONE,
         sortField: 'completedAt' as const,
@@ -358,7 +358,7 @@ export const homeService = {
    */
   async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await activeProjectScope(ctx, tx);
+      const projectScopes = await resolveActiveProjectScope(ctx, tx);
       const [toDo, inProgress, recentlyFinished, watching, approvals] = await Promise.all([
         workItemRepository.countByAssigneeOrReporterInWorkspace(
           ctx.userId,
@@ -443,7 +443,7 @@ export const homeService = {
   async listWatching(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
     const pageSize = clampLimit(options.limit);
     const { rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await activeProjectScope(ctx, tx);
+      const projectScopes = await resolveActiveProjectScope(ctx, tx);
       // The MOVING group's own size is what splits the window. Counted with the
       // same predicate its list uses, in the same transaction as both reads —
       // so the split cannot be computed against a set that has since moved.
