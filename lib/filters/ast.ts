@@ -20,6 +20,10 @@ export type FilterCombinator = 'and' | 'or';
 export type BuiltInFilterFieldId =
   | 'kind'
   | 'status'
+  /** The card's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the *Checks* field (MOTIR-5473). Nullable: `null` is "no
+   *  checks", which the empty pair addresses. */
+  | 'ciState'
   | 'priority'
   | 'type'
   | 'assignee'

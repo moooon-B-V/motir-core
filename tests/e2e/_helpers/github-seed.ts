@@ -118,6 +118,53 @@ export function pullRequestPayload(args: {
   };
 }
 
+/** A minimal `pull_request_review` delivery — every field the provider seam's
+ *  `parseReviewEvent` reads (Story MOTIR-4910 · MOTIR-5601).
+ *
+ *  ⚠️ `commitSha` IS THE HEAD THE REVIEW WAS GIVEN AT, and it is separate from the pull
+ *  request's current head on purpose: the two differing is exactly the stale-review case, so
+ *  a helper that derived one from the other could not express it.
+ *
+ *  ⚠️ `reviewId` IS GITHUB'S OWN REVIEW ID and the idempotency key — a spec that posts the
+ *  same review twice passes the same id, and one that posts two reviews passes two. */
+export function pullRequestReviewPayload(args: {
+  number: number;
+  headSha: string;
+  /** The commit the REVIEW names; defaults to the pull request's head. */
+  commitSha?: string;
+  reviewId: number;
+  state: 'approved' | 'changes_requested' | 'commented';
+  action?: 'submitted' | 'dismissed' | 'edited';
+  reviewer: { login: string; id: number };
+  headRef?: string;
+  repo?: { providerRepoId: string; owner?: string; name?: string; defaultBranch: string };
+}): Record<string, unknown> {
+  const repo = args.repo ?? E2E_REPO;
+  return {
+    action: args.action ?? 'submitted',
+    installation: { id: Number(E2E_INSTALLATION_ID) },
+    repository: {
+      id: Number(repo.providerRepoId),
+      name: 'name' in repo ? repo.name : undefined,
+      owner: { login: 'owner' in repo ? repo.owner : undefined },
+    },
+    pull_request: {
+      number: args.number,
+      state: 'open',
+      head: { ref: args.headRef ?? `review/${args.number}`, sha: args.headSha },
+      base: { ref: repo.defaultBranch },
+    },
+    review: {
+      id: args.reviewId,
+      state: args.state,
+      commit_id: args.commitSha ?? args.headSha,
+      submitted_at: new Date().toISOString(),
+      html_url: `https://github.com/x/y/pull/${args.number}#pullrequestreview-${args.reviewId}`,
+      user: { id: args.reviewer.id, login: args.reviewer.login, type: 'User' },
+    },
+  };
+}
+
 /** A minimal `check_suite` delivery (the CI feedback path — 7.10.6): the
  *  aggregate for a commit, linked to its PR by number.
  *

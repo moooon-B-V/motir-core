@@ -1394,6 +1394,7 @@
     "advancedPickToDateAria": "Pick a {field} to date",
     "advancedBacklog": "Backlog",
     "advancedValueCount": "{count, plural, one {# value} other {# values}}",
+    "advancedFieldChecks": "Checks",
     "advancedFieldPriority": "Priority",
     "advancedFieldType": "Type",
     "advancedFieldReporter": "Reporter",
@@ -1414,6 +1415,8 @@
     "advancedOpIsNoneOf": "is none of",
     "advancedOpIsEmpty": "is empty",
     "advancedOpIsNotEmpty": "is not empty",
+    "advancedOpChecksIsEmpty": "has no checks",
+    "advancedOpChecksIsNotEmpty": "has checks",
     "advancedOpContains": "contains",
     "advancedOpNotContains": "does not contain",
     "advancedOpEq": "=",
@@ -7566,7 +7569,8 @@
       "awaitingOwn": "Nothing is waiting on you.",
       "decidedFull": "No approval in this project has been decided yet.",
       "decidedOwn": "You have not decided an approval in this project yet."
-    }
+    },
+    "decidedByOnGithub": "{label} · on GitHub"
   },
   "platformAdmin": {
     "shell": {
@@ -8413,6 +8417,10 @@
       "unexpected": {
         "title": "Your decision could not be recorded.",
         "next": "Check your connection and try again."
+      },
+      "syncedActorMismatch": {
+        "title": "Something went wrong recording this decision.",
+        "next": "Nothing was changed. Reload the page. If this keeps happening, it is a defect worth reporting."
       }
     },
     "cta": {
@@ -8519,6 +8527,21 @@
       "requeue": {
         "progress": "Adding {pr} back to its merge queue…",
         "refusedTitle": "{pr} was not queued again."
+      },
+      "github": {
+        "chip": {
+          "approved": "Approved",
+          "changesRequested": "Changes requested",
+          "earlierCommit": "Approved an earlier commit"
+        },
+        "meta": {
+          "approved": "Approved on GitHub by {name} · {count, plural, one {# pull request} other {# pull requests}}"
+        },
+        "record": {
+          "approved": "Approved on GitHub by {name}",
+          "changesRequested": "Changes requested on GitHub by {name}",
+          "notMember": "Not a Motir member"
+        }
       }
     },
     "statusHeld": {

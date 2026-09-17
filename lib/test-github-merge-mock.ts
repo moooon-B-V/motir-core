@@ -17,6 +17,8 @@
 //   - PUT  /repos/{owner}/{name}/pulls/{number}/merge   → the merge, or the host's refusal
 //   - POST /graphql (`enqueuePullRequest`)              → the queue entry
 //   - GET  /repos/{owner}/{name}/pulls/{number}/files   → the merged pull request's paths (empty)
+//   - GET  /repos/{owner}/{name}/collaborators/{login}/permission
+//                                                       → whether a REVIEWER can write (MOTIR-5595)
 //   - POST /app/installations/{id}/access_tokens        → ONLY when E2E_TEST_GITHUB_REPOS is
 //                                                         off (that seam already answers it,
 //                                                         and journals it for its own spec)
@@ -72,7 +74,33 @@ export interface GithubMergeControl {
   /** `owner/name#number` → GitHub's answer. `headSha` is the head the pull request read
    *  reports; omitted, the read reports no head and the merge's head check is skipped. */
   pullRequests?: Record<string, GithubMergeAnswer & { headSha?: string }>;
+  /** REVIEWER LOGIN → the permission the host reports for them (Story MOTIR-4910 ·
+   *  MOTIR-5595). Keys are case-insensitive, as every other key here is.
+   *
+   *  ⚠️ THE DEFAULT IS `write`, so an unconfigured reviewer COUNTS. The lane's ordinary
+   *  case is a reviewer who may approve, and making the default `none` would mean every
+   *  spec had to configure a permission before its approval did anything — a silent way
+   *  for a spec to assert that nothing happened and be right for the wrong reason.
+   *  A spec proving a drive-by reviewer decides nothing names them here explicitly.
+   *
+   *  `'404'` stands for the host's own answer for a user with no access at all, which the
+   *  provider maps to `none`; `'403'` and `'500'` drive the `ProviderPermissionReadError`
+   *  path a consumer records as `unknown`. */
+  reviewerPermissions?: Record<string, GithubReviewerPermission>;
 }
+
+/** What the fake host says about one reviewer. The six real permissions, plus the two
+ *  status codes a spec needs to drive the not-an-answer paths. */
+export type GithubReviewerPermission =
+  | 'admin'
+  | 'maintain'
+  | 'write'
+  | 'triage'
+  | 'read'
+  | 'none'
+  | '404'
+  | '403'
+  | '500';
 
 /** One outbound call the fake answered — the journal's line shape (JSONL). */
 export interface GithubMergeCall {
@@ -152,6 +180,16 @@ const PULL_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/;
 const MERGE_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/merge$/;
 const RULES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/rules\/branches\/[^?]+$/;
 const FILES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files(?:\?.*)?$/;
+const PERMISSION_PATH = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/?]+)\/permission(?:\?.*)?$/;
+
+/** A permission path's repository and username, when this seam answers for that repository. */
+function scopedPermission(path: string): { repository: string; username: string } | null {
+  const m = PERMISSION_PATH.exec(path);
+  if (!m) return null;
+  const repository = `${m[1]}/${m[2]}`;
+  if (!answersFor(readControl(), repository)) return null;
+  return { repository, username: decodeURIComponent(m[3]!) };
+}
 
 /** A path's repository and pull request, when this seam answers for that repository. */
 function scoped(pattern: RegExp, path: string): { repository: string; key: string | null } | null {
@@ -160,6 +198,17 @@ function scoped(pattern: RegExp, path: string): { repository: string; key: strin
   const repository = `${m[1]}/${m[2]}`;
   if (!answersFor(readControl(), repository)) return null;
   return { repository, key: m[3] ? `${repository}#${m[3]}` : null };
+}
+
+/** The permission this seam reports for `username`, defaulting to `write`. */
+export function reviewerPermissionFor(
+  control: GithubMergeControl,
+  username: string,
+): GithubReviewerPermission {
+  const entry = Object.entries(control.reviewerPermissions ?? {}).find(([login]) =>
+    same(login, username),
+  );
+  return entry?.[1] ?? 'write';
 }
 
 const NODE_ID_PREFIX = 'E2E_MERGE_PR_';
@@ -321,6 +370,36 @@ export function installGithubMergeMock(agent: MockAgent): void {
       const number = key ? key.slice(key.lastIndexOf('#') + 1) : '0';
       return reply(200, {
         data: { enqueuePullRequest: { mergeQueueEntry: { id: `MQE_e2e_${number}` } } },
+      });
+    })
+    .persist();
+
+  // ── A reviewer's permission on the repository (MOTIR-5595) ────────────────
+  // `getRepositoryPermission` reads this to decide whether a review COUNTS. Scoped to
+  // the repositories the control names, exactly as every intercept above is.
+  pool
+    .intercept({
+      path: (p) => PERMISSION_PATH.test(p) && scopedPermission(p) !== null,
+      method: 'GET',
+    })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const username = scopedPermission(path)!.username;
+      journal({ method: 'GET', path, body: null, pullRequest: null });
+      const permission = reviewerPermissionFor(readControl(), username);
+
+      // The host's own answer for a user with no access — the provider maps it to
+      // `none`, so a spec driving it proves the MAPPING rather than a stub of it.
+      if (permission === '404') return reply(404, { message: 'Not Found' });
+      if (permission === '403') {
+        return reply(403, { message: 'Resource not accessible by integration' });
+      }
+      if (permission === '500') return reply(500, { message: 'Server Error' });
+
+      return reply(200, {
+        permission: permission === 'maintain' || permission === 'triage' ? 'read' : permission,
+        role_name: permission,
+        user: { login: username },
       });
     })
     .persist();

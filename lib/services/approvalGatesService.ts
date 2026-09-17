@@ -26,6 +26,7 @@ import { settingsDoorFor, type GateSettingsDoor } from '@/lib/approvalGates/sett
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotAuthorisedError,
+  ApprovalGateSyncedActorMismatchError,
   ApprovalGateNotFoundError,
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
@@ -39,6 +40,8 @@ import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
 import { HOME_PAGE_SIZE, type HomeActorContext } from '@/lib/services/homeService';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -114,6 +117,28 @@ export interface DecideGateOptions {
    * (`approval-gates.md` §8's amendment, decision 5(c)).
    */
   decidedAt?: Date;
+
+  /**
+   * THE DECISION WAS MADE ON GITHUB, by somebody with no Motir session (Story
+   * MOTIR-4910 · MOTIR-5596; ADR §8 FOURTH AMENDMENT, decisions 3, 4 and 5).
+   *
+   * ⚠️ THIS IS A SECOND ACTOR SHAPE ON ONE DOOR, NOT A SECOND WRITER.
+   * `approvalGateRepository.decide` still has exactly one caller — the guard in
+   * `tests/approval-gate-one-language.test.ts` passes unedited — because a synced
+   * decision walks every step a press walks: the same lock, the same refusals, the
+   * same handler effect, the same audit set. What differs is WHO is recorded and
+   * under what authority.
+   *
+   * ⚠️ INTERNAL. No route, server action or MCP tool accepts it, and the source
+   * agreement below is what stops one claiming to be GitHub even if it could.
+   */
+  synced?: {
+    /** `review.user.id` — the stable identity the actor resolution joins on. */
+    reviewerGithubUserId: string;
+    /** `review.user.login` — what a surface SHOWS, and the whole label when Motir
+     *  cannot map the reviewer to a member. */
+    reviewerLogin: string;
+  };
 }
 
 export interface DecideGateResult {
@@ -1055,6 +1080,20 @@ export const approvalGatesService = {
     // purpose — a 404 that cannot confirm a foreign gate exists.
     if (!preread) throw new ApprovalGateNotFoundError(input.gateId);
 
+    // ── SOURCE AGREEMENT — before anything is locked, so a mismatch writes nothing.
+    //
+    // `source: 'github'` and `options.synced` say the same thing from two sides, so
+    // either without the other is a caller claiming something it cannot back. The
+    // direction that matters is the first: without this, any caller that can set
+    // `source` could write `decisionSource = github` against its own `ctx.userId` —
+    // a Motir surface claiming to be GitHub, in the one table an auditor trusts.
+    if (input.source === 'github' && !options.synced) {
+      throw new ApprovalGateSyncedActorMismatchError(input.gateId, 'source_without_actor');
+    }
+    if (options.synced && input.source !== 'github') {
+      throw new ApprovalGateSyncedActorMismatchError(input.gateId, 'actor_without_source');
+    }
+
     const handler = handlerFor(preread.gate.kind);
     const resolvedStatusKey = handler.statusIntent
       ? await workflowsService.resolveStatusKey(
@@ -1142,8 +1181,54 @@ export const approvalGatesService = {
       //     cannot drift. Its header carries the asked-never-derived rule, the
       //     which-arm-not-a-boolean rule and why the arm order is the routing
       //     order.
-      const authority: ApprovalGateAuthorityDTO | null = await resolveGateAuthority(item, ctx, tx);
+      //     ⚠️ A SYNCED DECISION SKIPS BOTH HALVES OF STEP 2, and that is decision
+      //     4 rather than a shortcut. A GitHub reviewer is not the card's assignee
+      //     or reporter and holds no Motir permission — an unmapped one holds no
+      //     Motir anything — so neither the floor nor the relationship is a
+      //     question that can be asked about them. Their entitlement was checked
+      //     against the HOST instead (`getRepositoryPermission`, decision 2), by
+      //     the evaluator, before this door was called. §2 is unchanged for every
+      //     Motir surface: `resolveGateAuthority` never returns `github_review`.
+      const authority: ApprovalGateAuthorityDTO | null = options.synced
+        ? 'github_review'
+        : await resolveGateAuthority(item, ctx, tx);
       if (!authority) throw new ApprovalGateNotAuthorisedError(input.gateId);
+
+      // THE SYNCED ACTOR, resolved UNDER THE LOCK so the membership it reads is the
+      // one at the decision rather than at the delivery.
+      //
+      // ⚠️ RESOLVING THE IDENTITY IS NOT ENOUGH — the bound user must also be a
+      // member of THIS gate's workspace. A `GithubIdentity` is global, so without
+      // the membership check a reviewer who has a Motir account in some OTHER
+      // workspace would be recorded as a member of this one, which is a false
+      // statement about who decided and about their access. The membership
+      // repository is the one `projectAccessService` itself reads.
+      let syncedActor: { userId: string | null; label: string } | null = null;
+      if (options.synced) {
+        const identity = await githubIdentityRepository.findByGithubUserId(
+          options.synced.reviewerGithubUserId,
+          tx,
+        );
+        const member = identity
+          ? await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+              identity.userId,
+              locked.workspaceId,
+              tx,
+            )
+          : null;
+        const memberUserId = member ? identity!.userId : null;
+        const memberLabel = memberUserId ? await actorLabel(memberUserId, tx) : null;
+        // ⚠️ THE UNRESOLVED LABEL IS THE LOGIN, NEVER NULL AND NEVER EMPTY (§6b —
+        // an unattributable presence must not read as nobody). `decidedById` null
+        // PLUS a label is what a surface reads as *"not a Motir member"*; a null
+        // label would make it read as *nobody decided this*.
+        syncedActor = {
+          userId: memberUserId,
+          label: memberLabel
+            ? `${memberLabel} (@${options.synced.reviewerLogin})`
+            : `@${options.synced.reviewerLogin}`,
+        };
+      }
 
       // 3 · REFUSE A GATE THAT IS NOT `awaiting`.
       //
@@ -1248,7 +1333,11 @@ export const approvalGatesService = {
         locked.id,
         {
           state: DECISION_STATE[input.decision],
-          decidedById: ctx.userId,
+          // WHO SAID YES. For a synced decision this is the resolved member, or
+          // null — never `ctx.userId`, which on that path is only the actor
+          // entitled to WRITE A STATUS from a webhook (decision 5). The two are
+          // different questions and the row keeps them apart.
+          decidedById: syncedActor ? syncedActor.userId : ctx.userId,
           decidedAt: options.decidedAt ?? new Date(),
           noteMd: input.noteMd?.trim() ? input.noteMd : null,
           // §6a's first row, answered by the KIND — never by this door. Read
@@ -1257,7 +1346,7 @@ export const approvalGatesService = {
           // What survives `decidedById`'s `SetNull`. Read in this transaction, so
           // it is the name and email as at the decision rather than as at the
           // audit.
-          decidedByLabel: await actorLabel(ctx.userId, tx),
+          decidedByLabel: syncedActor ? syncedActor.label : await actorLabel(ctx.userId, tx),
           // The rung step 2(b) actually matched, rather than re-derived later
           // against a role that may have changed.
           decidedUnderAuthority: authority,

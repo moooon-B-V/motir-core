@@ -63,6 +63,7 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     kind: 'task',
     type: null,
     status: 'todo',
+    ciState: null,
     statusLabel: 'To Do',
     statusCategory: 'todo',
     assigneeId: null,

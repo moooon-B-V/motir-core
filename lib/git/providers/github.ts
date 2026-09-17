@@ -18,6 +18,7 @@ import {
   RepoTarballUrlNotRedirectedError,
   RepoTarballUrlTimeoutError,
   RepoTarballUrlUnreachableError,
+  ProviderPermissionReadError,
 } from '../errors';
 import type {
   ChangeRequestLifecycle,
@@ -42,6 +43,10 @@ import type {
   NormalizedMergeGroupAttempt,
   NormalizedMergeQueueExit,
   NormalizedUnlinkedCheckFailure,
+  NormalizedReviewEvent,
+  NormalizedReviewState,
+  RepositoryPermission,
+  RepositoryPermissionInput,
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
 
@@ -61,6 +66,43 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /** The GitHub numeric id (repo / installation) as our string form, or null. */
+const REVIEW_ACTIONS = ['submitted', 'dismissed', 'edited'] as const;
+
+const REVIEW_STATES: readonly NormalizedReviewState[] = [
+  'approved',
+  'changes_requested',
+  'commented',
+  'dismissed',
+];
+
+/** A review's state, lower-cased before matching. The WEBHOOK sends `approved` and
+ *  the REST API sends `APPROVED` for the same fact, so a case-sensitive read would
+ *  give a consumer two vocabularies. An unrecognised state is `null`, which makes
+ *  the whole event fail to normalize rather than default to something. */
+function normalizeReviewState(value: unknown): NormalizedReviewState | null {
+  if (typeof value !== 'string') return null;
+  const lowered = value.toLowerCase();
+  return REVIEW_STATES.find((s) => s === lowered) ?? null;
+}
+
+const PERMISSIONS: readonly RepositoryPermission[] = [
+  'admin',
+  'maintain',
+  'write',
+  'triage',
+  'read',
+  'none',
+];
+
+/** One of GitHub's permission words, or `null` when the field is absent or is a
+ *  custom role name Motir does not know. `null` means "this field did not answer",
+ *  which lets the caller fall through to the next field rather than committing. */
+function normalizePermission(value: unknown): RepositoryPermission | null {
+  if (typeof value !== 'string') return null;
+  const lowered = value.toLowerCase();
+  return PERMISSIONS.find((p) => p === lowered) ?? null;
+}
+
 function idToString(value: unknown): string | null {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'string' && value.length > 0) return value;
@@ -749,6 +791,143 @@ export const githubProvider: GitProvider = {
       // reason `merged` uses it — an absent field is not a draft.
       draft: pr['draft'] === true,
     };
+  },
+
+  // ── REVIEWS (Story MOTIR-4910 · MOTIR-5595) ────────────────────────────────
+  //
+  // `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT (MOTIR-5590), decision 2.
+
+  parseReviewEvent(rawPayload: unknown): NormalizedReviewEvent | null {
+    const payload = asRecord(rawPayload);
+    if (!payload) return null;
+
+    const action = REVIEW_ACTIONS.find((a) => a === payload['action']);
+    if (!action) return null;
+
+    const review = asRecord(payload['review']);
+    const pr = asRecord(payload['pull_request']);
+    const repo = asRecord(payload['repository']);
+    if (!review || !pr || !repo) return null;
+
+    const providerRepoId = idToString(repo['id']);
+    const owner = idToString(asRecord(repo['owner'])?.['login']);
+    const name = typeof repo['name'] === 'string' ? repo['name'] : null;
+    const number = typeof pr['number'] === 'number' ? pr['number'] : null;
+
+    // The INSTALLATION is what mints the token the permission read needs, so a
+    // delivery that does not name one cannot be acted on at all.
+    const installationId = idToString(asRecord(payload['installation'])?.['id']);
+
+    const id = idToString(review['id']);
+    const commitSha = typeof review['commit_id'] === 'string' ? review['commit_id'] : null;
+    const state = normalizeReviewState(review['state']);
+
+    const reviewerRaw = asRecord(review['user']);
+    const providerUserId = idToString(reviewerRaw?.['id']);
+    const login = typeof reviewerRaw?.['login'] === 'string' ? reviewerRaw['login'] : null;
+
+    // ⚠️ EVERY ONE OF THESE IS LOAD-BEARING, so a missing one returns null rather
+    // than a partial event: without the id the row cannot be idempotent, without
+    // the commit it cannot be matched to a head, without the author it cannot be
+    // attributed or permission-checked, and without the number it belongs to no
+    // pull request.
+    if (
+      !providerRepoId ||
+      !owner ||
+      !name ||
+      number === null ||
+      !installationId ||
+      !id ||
+      !commitSha ||
+      !state ||
+      !providerUserId ||
+      !login
+    ) {
+      return null;
+    }
+
+    // `submitted_at` is absent on an `edited` delivery; the review still exists, so
+    // the event normalizes and the consumer keeps the stored timestamp.
+    const submittedAtRaw = review['submitted_at'];
+    const submittedAt =
+      typeof submittedAtRaw === 'string' && !Number.isNaN(Date.parse(submittedAtRaw))
+        ? new Date(submittedAtRaw)
+        : new Date(0);
+
+    const head = asRecord(pr['head']);
+
+    return {
+      action,
+      installationId,
+      repo: { owner, name, providerRepoId },
+      pullRequest: {
+        number,
+        headSha: typeof head?.['sha'] === 'string' ? head['sha'] : null,
+      },
+      review: {
+        id,
+        state,
+        commitSha,
+        submittedAt,
+        htmlUrl: typeof review['html_url'] === 'string' ? review['html_url'] : null,
+        reviewer: {
+          providerUserId,
+          login,
+          type: typeof reviewerRaw?.['type'] === 'string' ? reviewerRaw['type'] : 'User',
+        },
+      },
+    };
+  },
+
+  async getRepositoryPermission(input: RepositoryPermissionInput): Promise<RepositoryPermission> {
+    // `metadata: read` is what this endpoint requires, and `motir-integration`
+    // holds it (`docs/decisions/unlinked-pull-request-check.md`, the App table).
+    // https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps
+    // lists `GET /repos/{owner}/{repo}/collaborators/{username}/permission` under
+    // *Repository permissions for "Metadata"* → read, available to an installation
+    // access token.
+    const role = githubAppRoleForRepo({ owner: input.owner }, provisioningOrgLogin());
+    const { token } = await mintInstallationToken(input.installationId, role);
+
+    const url =
+      `${GITHUB_API}/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}` +
+      `/collaborators/${encodeURIComponent(input.username)}/permission`;
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+      });
+    } catch (err) {
+      throw new ProviderPermissionReadError('github', 'unreachable', {
+        message: err instanceof Error ? err.message : 'unknown',
+      });
+    }
+
+    // ⚠️ 404 IS AN ANSWER, NOT A FAILURE. GitHub answers 404 when the user has no
+    // access to the repository at all, which is exactly `none` — a fact about the
+    // person. Throwing here would record `unknown` for the commonest legitimate
+    // case and make a drive-by reviewer indistinguishable from a host outage.
+    if (res.status === 404) return 'none';
+
+    if (!res.ok) {
+      throw new ProviderPermissionReadError('github', 'unexpected_status', {
+        status: res.status,
+      });
+    }
+
+    const body = asRecord(await res.json());
+    // `role_name` carries custom roles too and is the field GitHub documents as
+    // authoritative; `permission` is the legacy base role and is the fallback.
+    return (
+      normalizePermission(body?.['role_name']) ??
+      normalizePermission(body?.['permission']) ??
+      'none'
+    );
   },
 
   // PURE, and deliberately payload-only: `merged → done` is the CANONICAL

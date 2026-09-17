@@ -1,5 +1,9 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
-import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceContext,
+} from '@/lib/workspaces/context';
 import type { GitProviderId, NormalizedStatusEvent } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
@@ -10,8 +14,8 @@ import type { ReportedCheckRun } from '@/lib/github/checkRuns';
 import { reconcileRecordedCheckSet, shaSetClaimsComplete } from './checkSetReconcile';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
-import { workItemsService } from './workItemsService';
 import { promoteDeliveredCardsOnGreen } from './ciPromotion';
+import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
@@ -32,7 +36,8 @@ import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprova
 // same head commit, UPDATES in place) THE feedback comment ON EVERY CARD THE
 // CHANGE REQUEST DELIVERS, and flips each of their `ciState` verification
 // signals — both per card since MOTIR-3770, both through the shipped services
-// (`commentsService`, `workItemsService.setCiState`), never a raw write, under
+// (`commentsService`, `deliveryVerdict.recomputeWorkItemCiState`), never a raw write,
+// under
 // `withSystemContext` (a webhook has no active workspace).
 //
 // ⚠️ ONE COMMENT PER `(changeRequest, headSha)` PER DELIVERED CARD — not per
@@ -198,6 +203,14 @@ export async function applyCiStatusFeedback(
     // as a null link column reached nothing before.
     const deliveredWorkItemIds =
       delivery.kind === 'linked' ? delivery.items.map((item) => item.id) : [];
+    // EVERY card this delivery reaches, session arm included (MOTIR-5470). The
+    // list above is deliberately linked-only, because a COMMENT needs a card of
+    // its own to hang on and a session pull request has none. The card's stored
+    // `ciState` is not like that: it is a fact about the card, and a card
+    // delivered through a run's session branch has exactly the same right to one
+    // as a linked card does. Reading the narrow list for it is defect 3 of the
+    // four MOTIR-5469 enumerates — such a card's column stayed `null` for ever.
+    const allDeliveredWorkItemIds = delivery.items.map((item) => item.id);
 
     const existing = await githubCheckRunRepository.findByKey(
       cr.id,
@@ -224,6 +237,9 @@ export async function applyCiStatusFeedback(
       /** EVERY card the pull request's delivery links name (MOTIR-3721) — empty
        *  for a session pull request, whose cards the promotion reaches instead. */
       deliveredWorkItemIds,
+      /** Every card the delivery reaches, session arm INCLUDED — the set whose
+       *  `ciState` this event recomputes (MOTIR-5470). */
+      allDeliveredWorkItemIds,
       /** The subset of them that already has a comment at this head commit. */
       commentedWorkItemIds,
       prId: cr.id,
@@ -253,12 +269,19 @@ export async function applyCiStatusFeedback(
   const [firstDelivered] = resolved.deliveredWorkItemIds;
 
   // An in-flight check: RECORD the row (conclusion 'pending') so the per-change-request
-  // "Checks running" state is derivable (MOTIR-1579), but with NONE of the terminal
-  // side-effects — no feedback comment, no `WorkItem.ciState` flip (both stay
-  // terminal-only, the MOTIR-894 contract). Nothing about the comment is written
-  // here: its identity lives in `github_ci_feedback_comment`, keyed per
-  // `(change request, head commit, card)`, and a pending conclusion reaches no
-  // card.
+  // "Checks running" state is derivable (MOTIR-1579), and — since MOTIR-5470 —
+  // RECOMPUTE the card's own `ciState` from it. Still no feedback comment: that
+  // stays terminal-only, because a comment is an announcement and there is nothing
+  // yet to announce. Its identity lives in `github_ci_feedback_comment`, keyed per
+  // `(change request, head commit, card)`, and a pending conclusion reaches no card.
+  //
+  // ⚠️ THE `ciState` HALF OF THE TERMINAL-ONLY RULE IS WHAT MOTIR-5470 REVERSES,
+  // and it is defect 1 of the four MOTIR-5469 enumerates. Under MOTIR-894 a pending
+  // check wrote no verdict at all, so a card that had gone red and whose FIX WAS
+  // ALREADY BUILDING kept reading `failing` until that new commit's first terminal
+  // check — which is precisely the window in which a person scanning for red cards
+  // would go and fix one that somebody is already fixing. The column now carries
+  // `running`, so the push itself moves the badge.
   if (event.conclusion === 'pending') {
     await withSystemContext(async (tx) => {
       await githubCheckRunRepository.upsert(
@@ -276,6 +299,12 @@ export async function applyCiStatusFeedback(
       // gate too (MOTIR-5482). `approval_gate` has no system arm: bind the tenant.
       await bindWorkspaceContext(tx, resolved.workspaceId);
       await withdrawPullRequestApprovalGatesOnHeadMove(resolved.prId, tx);
+      // The recompute runs under the SAME bound tenant (`work_item` has no system
+      // arm) and in the same transaction as the row it reads, so it cannot fold a
+      // set that is missing the row this very delivery just wrote.
+      for (const workItemId of resolved.allDeliveredWorkItemIds) {
+        await recomputeWorkItemCiState(workItemId, tx);
+      }
     });
     return {
       event: 'ci',
@@ -422,16 +451,29 @@ export async function applyCiStatusFeedback(
     return deriveRecordedCiState(resolved.prId, resolved.workspaceId, event.commitSha);
   });
 
-  // Flip the verification signal through the service (no raw work_item write) —
-  // ONCE PER DELIVERED CARD (MOTIR-3721). `ciState` is a per-card signal and this
-  // verdict is about all of them: a pull request delivering two cards leaves the
-  // second one's pill reading whatever the previous run left, which is a wrong
-  // answer rather than a missing one. Only the LINKED arm has cards to flip here:
-  // a session pull request's are reached by the promotion below, which is what
-  // that delivery is actually for.
-  for (const workItemId of resolved.deliveredWorkItemIds) {
-    await workItemsService.setCiState(workItemId, ciState, actorCtx);
-  }
+  // RECOMPUTE the verification signal for every card this delivery reaches —
+  // ONCE PER CARD, folded over that card's WHOLE delivery set (MOTIR-5470).
+  //
+  // ⚠️ THIS USED TO STAMP `ciState` — the verdict of THIS pull request, written
+  // onto each card it delivers — and that is defect 2 of the four MOTIR-5469
+  // enumerates. A card delivered by a green `motir-core` pull request and a red
+  // `motir-ai` one read whichever reported LAST, so the same card was green or red
+  // depending on webhook arrival order. The fold has no such freedom: it reads the
+  // set, so the answer is a property of the card rather than of the event.
+  //
+  // `ciState` above is still the HEAD COMMIT's aggregate for THIS pull request —
+  // it is what the feedback comment announces and what the promotion below turns
+  // on, both of which are correctly about this delivery. It is no longer what the
+  // card stores.
+  //
+  // The session arm is included now (defect 3): `allDeliveredWorkItemIds` rather
+  // than the linked-only list, so a card delivered by a run's own branch finally
+  // gets a verdict instead of a permanent `null`.
+  await withWorkspaceContext(actorCtx, async (tx) => {
+    for (const workItemId of resolved.allDeliveredWorkItemIds) {
+      await recomputeWorkItemCiState(workItemId, tx);
+    }
+  });
 
   // ── CI GREEN PROMOTES (MOTIR-3006) ──────────────────────────────────────
   // EDGE 1 of the latch: a terminal green moves every card this change request

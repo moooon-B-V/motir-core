@@ -12,18 +12,15 @@ import {
 } from './checkSetReconcile';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import {
-  deliverySetIsGreen,
-  deliveryStateForPromotion,
-  repoCannotReportChecks,
-} from '@/lib/workItems/deliverySet';
+import { collectDeliveries, classifyDeliveries } from './deliveryVerdict';
+import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { settleGreenVerdict, type AutoMergeRequest } from './mergeGates';
 import { raisePullRequestApprovalGate } from './pullRequestApprovalGates';
+import { evaluateAfterRaise } from './pullRequestReviewSync';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ContainerHasOpenChildrenError,
@@ -107,27 +104,12 @@ const TARGET_STATUS = 'in_review';
  */
 const REVIEW_STATUSES: readonly string[] = ['in_review', 'approved'];
 
-/** Every pull request that delivers this card, by id, with the check rows the
- *  verdict is derived from — the union the doc block below explains, extracted
- *  (MOTIR-4199) so the check-set reconcile can address exactly the same members
- *  the judgement will. */
-async function collectDeliveries(
-  item: { id: string; sessionBranch: string | null },
-  tx: Prisma.TransactionClient,
-): Promise<Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>> {
-  const [deliveries, linked, onBranch] = await Promise.all([
-    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
-    githubPullRequestRepository.listByWorkItemWithContext(item.id, tx),
-    item.sessionBranch
-      ? githubPullRequestRepository.listByHeadRefWithChecks(item.sessionBranch, tx)
-      : Promise.resolve([]),
-  ]);
-
-  const byId = new Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>();
-  for (const delivery of deliveries) byId.set(delivery.githubPullRequestId, delivery.pullRequest);
-  for (const pr of [...linked, ...onBranch]) byId.set(pr.id, pr);
-  return byId;
-}
+// `collectDeliveries` — every pull request that delivers this card — MOVED to
+// `deliveryVerdict.ts` (MOTIR-5470), and imported at the top of this file. It was
+// extracted here (MOTIR-4199) so the check-set reconcile could address exactly the
+// same members the judgement will; it now serves a THIRD reader, the card's own
+// stored `ciState`, which is a different question folded off the same set. Its doc
+// block, including why the set is a union, travels with it.
 
 /**
  * IS EVERY PULL REQUEST DELIVERING THIS CARD GREEN? (Story MOTIR-3655 ·
@@ -169,44 +151,17 @@ async function everyDeliveryIsGreen(
   item: { id: string; sessionBranch: string | null },
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const byId = await collectDeliveries(item, tx);
+  // ⚠️ THE SECOND QUESTION — asked inside `classifyDeliveries` (MOTIR-3823), and
+  // asked there rather than here (MOTIR-5470) because the CARD's own `ciState` has
+  // to ask exactly the same one of exactly the same members. `derivePrCiState`
+  // returns `null` both for a repository that has no CI and for one that has
+  // simply not reported yet, and the two must be read oppositely: the first is
+  // green, the second withholds. What stays HERE is the promotion's own reading of
+  // that classification — `deliveryStateForPromotion`, which maps the withholding
+  // case to `null` because `deliverySetIsGreen` has no third answer to give.
+  const members = await classifyDeliveries(item, tx);
 
-  const members = [...byId.values()].map((pr) => ({
-    repoId: pr.repoId,
-    state: derivePrCiState(pr.checkRuns),
-  }));
-
-  // ⚠️ THE SECOND QUESTION, ASKED ONLY OF THE MEMBERS THAT NEED IT (MOTIR-3823).
-  // `derivePrCiState` returns `null` both for a repository that has no CI and for
-  // one that has simply not reported yet, and the promotion must read those two
-  // oppositely: the first is green, the second withholds. The follow-up is asked
-  // of the REPOSITORY (`repoCannotReportChecks`), because the pull request cannot
-  // tell them apart. A set with no `null` in it — nearly every card — pays
-  // nothing: `silentRepoIds` is empty and the read is skipped entirely.
-  const silentRepoIds = [...new Set(members.filter((m) => m.state === null).map((m) => m.repoId))];
-  const [reporting, mergedSilent] = await Promise.all([
-    githubPullRequestRepository.listRepoIdsWithAnyCheckRun(silentRepoIds, tx),
-    githubPullRequestRepository.listRepoIdsWithAWatchedMergeWithoutChecks(silentRepoIds, tx),
-  ]);
-  const hasReported = new Set(reporting);
-  const hasMergedSilently = new Set(mergedSilent);
-  // A repository neither read returns has no history at all, so it falls to
-  // `hasEverReportedACheck: false, hasMergedWithoutAnyCheck: false` — which
-  // `repoCannotReportChecks` reads as ABLE to report, and which withholds. Every
-  // unknown here takes that direction.
-  const cannotReport = new Set(
-    silentRepoIds.filter((repoId) =>
-      repoCannotReportChecks({
-        repoId,
-        hasEverReportedACheck: hasReported.has(repoId),
-        hasMergedWithoutAnyCheck: hasMergedSilently.has(repoId),
-      }),
-    ),
-  );
-
-  return deliverySetIsGreen(
-    members.map((m) => deliveryStateForPromotion(m.state, cannotReport.has(m.repoId))),
-  );
+  return deliverySetIsGreen(members.map((m) => deliveryStateForPromotion(m.state, m.cannotReport)));
 }
 
 /**
@@ -488,7 +443,7 @@ async function settleMergesForCard(
   item: WorkItem,
   ctx: { userId: string; workspaceId: string },
   tx: Prisma.TransactionClient,
-): Promise<AutoMergeRequest[]> {
+): Promise<{ autoMerges: AutoMergeRequest[]; raisedApprovalGate: boolean }> {
   const members = await collectDeliveries(item, tx);
   const autoMerges = await settleGreenVerdict(
     { item, pullRequestIds: [...members.keys()] },
@@ -497,8 +452,13 @@ async function settleMergesForCard(
   );
   // The approve-and-merge gate over the same green set, on the same card, in the same
   // transaction and under the same row lock (MOTIR-5482) — `manual` projects only.
-  await raisePullRequestApprovalGate(item, tx);
-  return autoMerges;
+  //
+  // ⚠️ WHETHER IT RAISED IS RETURNED, because a gate raised NOW may already have its
+  // answer: reviews are recorded whether or not a gate exists (MOTIR-5597, decision 8),
+  // so an approval given while CI was still running is sitting in the database waiting
+  // for exactly this moment. The caller evaluates it AFTER this transaction commits.
+  const raisedApprovalGate = await raisePullRequestApprovalGate(item, tx);
+  return { autoMerges, raisedApprovalGate };
 }
 
 /**
@@ -535,15 +495,19 @@ async function reRaiseMergeGates(
   ctx: { userId: string; workspaceId: string },
 ): Promise<void> {
   for (const id of workItemIds) {
-    const requests = await withWorkspaceContext(ctx, async (tx) => {
+    const settled = await withWorkspaceContext(ctx, async (tx) => {
       // A card deleted since the verdict locks nothing and reads back null.
       await workItemRepository.lockById(id, tx);
       const item = await workItemRepository.findById(id, tx);
-      if (!item || !REVIEW_STATUSES.includes(item.status)) return [];
-      if (!(await isPromotable(item, tx))) return [];
+      const nothing = { autoMerges: [] as AutoMergeRequest[], raisedApprovalGate: false };
+      if (!item || !REVIEW_STATUSES.includes(item.status)) return nothing;
+      if (!(await isPromotable(item, tx))) return nothing;
       return settleMergesForCard(item, ctx, tx);
     });
-    await dispatchAutoMerges(id, requests, ctx);
+    await dispatchAutoMerges(id, settled.autoMerges, ctx);
+    // POST-COMMIT, and best-effort (MOTIR-5597, decision 8): apply the reviews that were
+    // recorded before this gate existed. It can never fail the re-raise.
+    if (settled.raisedApprovalGate) await evaluateAfterRaise(id, ctx.workspaceId);
   }
 }
 
@@ -569,18 +533,25 @@ async function promoteEach(
   for (const id of workItemIds) {
     try {
       let autoMerges: AutoMergeRequest[] = [];
+      let raisedApprovalGate = false;
       await workItemsService.updateStatus(id, TARGET_STATUS, ctx, {
         inTransaction: async (tx) => {
           // Non-null by construction: the transition above locked and wrote this row
           // in this same transaction.
           const item = (await workItemRepository.findById(id, tx))!;
-          autoMerges = await settleMergesForCard(item, ctx, tx);
+          const settled = await settleMergesForCard(item, ctx, tx);
+          autoMerges = settled.autoMerges;
+          raisedApprovalGate = settled.raisedApprovalGate;
         },
       });
       promoted.push(id);
       // AFTER the promotion committed (MOTIR-5518) — and the promotion to in_review
       // stands whatever the merge does.
       await dispatchAutoMerges(id, autoMerges, ctx);
+      // POST-COMMIT, and best-effort (MOTIR-5597, decision 8): a reviewer who approved
+      // while CI was still running is not asked a second time — their review is applied
+      // to the gate the moment it exists. A failure here leaves the promotion committed.
+      if (raisedApprovalGate) await evaluateAfterRaise(id, ctx.workspaceId);
     } catch (err) {
       if (!SKIPPABLE.some((kind) => err instanceof kind)) throw err;
       console.warn('[ciPromotion] skipped a card CI green could not promote', {

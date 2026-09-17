@@ -29,6 +29,7 @@
 //   assigned to "none of" any member list).
 
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { CI_STATES } from '@/lib/github/prCiState';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import {
   FILTER_BACKLOG_TOKEN,
@@ -58,6 +59,7 @@ export type FilterFieldType = 'enum' | 'text' | 'number' | 'date';
 export type FilterValueEditorKind =
   | 'kind-select'
   | 'status-select'
+  | 'ci-state-select'
   | 'priority-select'
   | 'type-select'
   | 'member-select'
@@ -153,6 +155,27 @@ const PRIORITIES = ['lowest', 'low', 'medium', 'high', 'highest'] as const;
 export const FILTER_FIELDS: ReadonlyArray<FilterFieldDef> = [
   enumField('kind', 'kind-select', { valueWhitelist: ISSUE_TYPES }),
   enumField('status', 'status-select'),
+  // The card's CI verdict (MOTIR-5470) — the *Checks* field, placed after Status
+  // because that is the field a reader pairs it with (design
+  // `design/work-items/design-notes.md` § *The CI badge (MOTIR-5471)*).
+  //
+  // NULLABLE, and the empty pair is the point rather than a formality: `null`
+  // means NO PULL REQUEST HAS REPORTED AND NONE IS EXPECTED TO, which a reader
+  // can name — the builder renders it as *has no checks* / *has checks* rather
+  // than the generic "is empty".
+  //
+  // ⚠️ THE WHITELIST IS `CI_STATES`, THE SAME TUPLE THE FOLD WRITES FROM
+  // (`lib/github/prCiState.ts`, MOTIR-5470) — never three strings typed out
+  // again. A filter offering a value the fold never writes returns nothing, and
+  // one missing a value the fold does write hides those cards; reading the tuple
+  // makes both unrepresentable.
+  //
+  // ⚠️ AND THE FILTER IS RAW. `Checks is any of Failing` matches every card whose
+  // column reads `failing` in ANY status, done included, and a person combines it
+  // with Status. The badge's done-category rule is a DRAWING rule and deliberately
+  // not shared here: making a saved view silently drop done cards is a worse
+  // failure than showing one.
+  enumField('ciState', 'ci-state-select', { nullable: true, valueWhitelist: CI_STATES }),
   enumField('priority', 'priority-select', { valueWhitelist: PRIORITIES }),
   // The work-item TYPE (Story 2.7) — a closed-set enum facet over the ten
   // `WorkItemType` members (the fixed enum keeps it equality/`in`, never

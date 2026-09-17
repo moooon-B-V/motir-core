@@ -43,6 +43,10 @@ import { workItemComponentRepository } from '@/lib/repositories/workItemComponen
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
+import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -1349,6 +1353,85 @@ async function recordBugFiledFinding(
     );
     if (recorded) return;
   }
+}
+
+/**
+ * WHAT EACH PULL REQUEST'S GITHUB REVIEW SAYS, for a page of Development rows (Story
+ * MOTIR-4910 · MOTIR-5602; ADR §8 FOURTH AMENDMENT, decision 2).
+ *
+ * ⚠️ ONE QUERY FOR THE WHOLE PAGE, however many rows it has. It was two until the row's
+ * chip was drawn without a reviewer (Yue, design review 2026-09-17): the identity and
+ * membership lookups existed only to name a person the row no longer names, so they went
+ * with the field. A per-row read would make rendering one card N round trips.
+ *
+ * ⚠️ THE RULE IS THE EVALUATOR'S, NOT A SECOND ONE. `countableReviewsAtHead` is the same
+ * pure function that DECIDES the gate, so a row and the gate can never disagree about what
+ * counts — which is exactly the disagreement a reader would report as a bug.
+ */
+async function readGithubReviewsForRows(
+  rows: readonly GithubPullRequestWithContext[],
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, LinkedPullRequestDto['githubReview']>> {
+  const out = new Map<string, LinkedPullRequestDto['githubReview']>();
+  if (rows.length === 0) return out;
+
+  const reviews = await githubPullRequestReviewRepository.listForPullRequests(
+    rows.map((row) => row.id),
+    tx,
+  );
+  if (reviews.length === 0) return out;
+
+  const byPullRequest = new Map<string, typeof reviews>();
+  for (const review of reviews) {
+    const list = byPullRequest.get(review.githubPullRequestId) ?? [];
+    list.push(review);
+    byPullRequest.set(review.githubPullRequestId, list);
+  }
+
+  for (const row of rows) {
+    const rowReviews = byPullRequest.get(row.id);
+    if (!rowReviews || rowReviews.length === 0) continue;
+
+    // The row's CURRENT head, read the way the gate's own version reads it.
+    const head = liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null;
+
+    const decided = head ? pickReview(countableReviewsAtHead(rowReviews, head)) : null;
+    if (decided) {
+      out.set(row.id, {
+        state: decided.state === 'changes_requested' ? 'changes_requested' : 'approved',
+        atCurrentHead: true,
+      });
+      continue;
+    }
+
+    // Nothing counts at the head. A review at an EARLIER commit is still drawn, said to be
+    // stale — the alternative reads as Motir having lost it (design § 23, Panel G2).
+    const stale = pickReview(
+      [...new Set(rowReviews.map((review) => review.commitSha))]
+        .filter((sha) => sha !== head)
+        .flatMap((sha) => countableReviewsAtHead(rowReviews, sha)),
+    );
+    if (stale) {
+      out.set(row.id, {
+        state: stale.state === 'changes_requested' ? 'changes_requested' : 'approved',
+        atCurrentHead: false,
+      });
+    }
+  }
+  return out;
+}
+
+/** The ONE review a row shows: a countable `changes_requested` outranks an approval, and the
+ *  latest of whichever wins is the one named — the row's own echo of the set rule's order. */
+function pickReview(countable: readonly CountableReview[]): CountableReview | null {
+  const newestFirst = (a: CountableReview, b: CountableReview) =>
+    b.submittedAt.getTime() - a.submittedAt.getTime() ||
+    b.githubReviewId.localeCompare(a.githubReviewId);
+  const changes = countable.filter((r) => r.state === 'changes_requested').sort(newestFirst);
+  if (changes.length > 0) return changes[0]!;
+  const approvals = countable.filter((r) => r.state === 'approved').sort(newestFirst);
+  return approvals[0] ?? null;
 }
 
 export const workItemsService = {
@@ -2680,18 +2763,28 @@ export const workItemsService = {
   /**
    * Set the CI / verification signal on a work item (Subtask 7.10.6 / MOTIR-894)
    * — the "ready/blocked" signal the CI feedback loop flips, DISTINCT from the
-   * workflow `status`: `'passing'` ⇔ the linked PR's latest checks succeeded (the
-   * item is verified; the Story roll-up counts it), `'failing'` ⇔ a terminal check
-   * failed (the item is visibly not-ready), `null` ⇔ no signal. Idempotent
+   * workflow `status`: `'passing'` ⇔ every pull request delivering the card is
+   * green (the item is verified; the Story roll-up counts it), `'failing'` ⇔ one
+   * of them has a terminal failure (the item is visibly not-ready), `'running'` ⇔
+   * the card is waiting on a verdict, `null` ⇔ no checks at all. Idempotent
    * (setting the same value is a no-op write). Tenant-gated on `ctx.workspaceId`
    * exactly like `updateStatus` — a cross-workspace id is a 404, never a leak.
    * The write goes through the service + repository (no raw `work_item` update at
    * the integration layer); no revision row (this is a signal, not a tracked
    * field edit), and no event.
+   *
+   * ⚠️ `'running'` JOINED THE RANGE WITH MOTIR-5470, AND THE VALUES ARE NOW
+   * `PrCiState`'s OWN WORDS. The column was terminal-only under the MOTIR-894
+   * contract, which is why a card whose fix was already building kept reading
+   * `failing` until the next terminal check. It is now recomputed as a FOLD over
+   * the card's whole delivery set — `deliveryVerdict.recomputeWorkItemCiState`,
+   * which is what every writer should reach for. This setter remains the write
+   * door it always was; what changed is that nothing should be stamping a single
+   * pull request's verdict through it.
    */
   async setCiState(
     workItemId: string,
-    ciState: 'passing' | 'failing' | null,
+    ciState: 'passing' | 'failing' | 'running' | null,
     ctx: ServiceContext,
   ): Promise<void> {
     await withWorkspaceContext(ctx, async (tx) => {
@@ -5849,10 +5942,11 @@ export const workItemsService = {
     workItemId: string,
     ctx: ServiceContext,
   ): Promise<LinkedPullRequestDto[]> {
-    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
-    );
-    return rows.map(toLinkedPullRequestDto);
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx);
+      const reviews = await readGithubReviewsForRows(rows, ctx.workspaceId, tx);
+      return rows.map((row) => toLinkedPullRequestDto(row, reviews.get(row.id) ?? null));
+    });
   },
 
   /**

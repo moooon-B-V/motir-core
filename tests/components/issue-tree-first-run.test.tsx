@@ -90,6 +90,7 @@ function item(key: number): WorkItemTreeRowDto {
     identifier: `PROD-${key}`,
     title: `Issue ${key}`,
     status: 'todo',
+    ciState: null,
     priority: 'medium',
     assigneeId: 'u1',
     reporterId: 'u1',

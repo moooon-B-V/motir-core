@@ -1,4 +1,5 @@
 import type { WorkItemDeliveryDto } from '@/lib/dto/github';
+import type { PrCiState } from '@/lib/github/prCiState';
 import type { RepoDelivery, RepoDeliveryState } from './repoDelivery';
 import { repoNameKey } from './repoName';
 
@@ -372,4 +373,67 @@ export function deliveryStateForPromotion(
 ): string | null {
   if (state !== null) return state;
   return cannotReportChecks ? 'passing' : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The CARD's own verdict (Story MOTIR-5469 · MOTIR-5470)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One delivery's contribution to the CARD's `ciState`, with the same second
+ * question the promotion asks (MOTIR-5470).
+ *
+ * ⚠️ IT DIFFERS FROM {@link deliveryStateForPromotion} IN EXACTLY ONE CELL, AND
+ * THAT CELL IS THE WHOLE POINT. Both map a non-null state through untouched, and
+ * both turn the `null` of a repository that CANNOT report a check into
+ * `'passing'`. They part on the remaining case — a repository that CAN report and
+ * has not yet:
+ *
+ *   - the PROMOTION maps it to `null`, because `deliverySetIsGreen` needs a value
+ *     that is not `'passing'` and the promotion has no third answer to give;
+ *   - the CARD maps it to `'running'`, because the card's column is READ BY A
+ *     PERSON and *waiting for a verdict* is exactly what they want to be told.
+ *
+ * `'running'` is not `'passing'`, so the two predicates still agree on the only
+ * question they share: {@link foldCardCiState} answers `'passing'` over a set
+ * precisely when {@link deliverySetIsGreen} answers `true` over the same set.
+ * That equivalence is asserted rather than assumed, because it is what lets the
+ * badge promise *green CI has already moved this card to In Review*.
+ */
+export function deliveryStateForCard(state: string | null, cannotReportChecks: boolean): PrCiState {
+  if (state !== null) return state as PrCiState;
+  return cannotReportChecks ? 'passing' : 'running';
+}
+
+/**
+ * FOLD a card's whole delivery set into ONE verdict (MOTIR-5470).
+ *
+ * ── Precedence: `failing` > `running` > `passing` ─────────────────────────
+ * A person scanning a board wants the worst news first. A card delivered by a
+ * red pull request and a green one is RED — that is the pull request they have
+ * to go and fix, and averaging it away is the defect this fold replaces. Below
+ * red, a set still waiting on any member is `running`: the card has no settled
+ * verdict yet, and saying `passing` while a member is mid-flight is the same
+ * mistake one value down.
+ *
+ * ── `null` means NO CHECKS, and it is not a fourth verdict ────────────────
+ * An EMPTY set folds to `null`, and so does a set none of whose members has a
+ * verdict at all. That is the same `null` {@link deliveryStateForCard} and
+ * `derivePrCiState` carry — *absence of CI is not a state* — so the badge renders
+ * nothing for it and the filter's empty pair matches it.
+ *
+ * ⚠️ AND THE LAST WRITER DOES NOT WIN ANY MORE. The column's previous writer
+ * stamped THIS pull request's verdict onto each delivered card, so a card with
+ * two pull requests read whichever reported last — a wrong answer rather than a
+ * missing one. The fold is over the SET, so the order events arrive in cannot
+ * change what the column says.
+ *
+ * Pure, and it lives beside the promotion's predicate rather than in the service,
+ * so the two readings of one delivery set cannot drift apart.
+ */
+export function foldCardCiState(states: readonly PrCiState[]): PrCiState {
+  if (states.some((s) => s === 'failing')) return 'failing';
+  if (states.some((s) => s === 'running')) return 'running';
+  if (states.some((s) => s === 'passing')) return 'passing';
+  return null;
 }

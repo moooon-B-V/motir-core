@@ -53,6 +53,11 @@ export interface HomeWorkItemRowDto {
   title: string;
   /** The raw workflow status KEY (not the label) — the caller resolves display. */
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the Workbench row's CI badge (MOTIR-5475). The row draws the
+   *  GLYPH form only, and only `failing` / `running` off the `done` category
+   *  (`ciBadgeState`), which is why *Recently finished* needs no special case. */
+  ciState: string | null;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

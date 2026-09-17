@@ -139,6 +139,12 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
 
   // Documentation we LINK to. A link is rendered for a human to click; the
   // server never requests it, so no data of ours reaches these.
+  // A CITATION IN A CODE COMMENT, not a rendered link and not a request. MOTIR-5595's
+  // `getRepositoryPermission` names the GitHub documentation page that states the App
+  // permission the endpoint requires, so a later reader can check the claim rather than
+  // trust it. Nothing resolves the string at runtime.
+  'docs.github.com':
+    'documentation URL cited in a code comment (MOTIR-5595); never rendered and never requested',
   'docs.claude.com': 'documentation link shown to the user',
   'developers.openai.com': 'documentation link shown to the user',
   'developers.google.com': 'documentation link shown to the user',

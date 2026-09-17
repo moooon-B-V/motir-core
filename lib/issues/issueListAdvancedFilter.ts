@@ -172,6 +172,13 @@ export interface AdvancedBuilderRow {
 const SUPPORTED_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   'kind-select',
   'status-select',
+  // Story MOTIR-5469 · MOTIR-5473: the Checks (`ciState`) condition row. THIS
+  // LINE IS THE FIELD'S ADMISSION TO THE MENU — the registry entry, the
+  // predicate, the SQL column and the value editor all worked without it, and
+  // the field was simply absent from the picker, which is the 2.7.6 failure
+  // recorded below happening a second time. A registry addition is not shipped
+  // until its editor kind is named here.
+  'ci-state-select',
   'priority-select',
   // Story 2.7 (2.7.6): the work-item `type` facet. Its value editor ships in
   // AdvancedFilterValueEditor, but this allowlist (the builder's field-menu

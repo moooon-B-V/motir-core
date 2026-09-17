@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { CircleAlert, Clock, GripVertical, Hash } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
+import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { formatStoryPoints } from '@/lib/estimation/scales';
 import type { BoardCardDto } from '@/lib/dto/boards';
@@ -84,7 +85,13 @@ export function BoardCardView({
         {card.title}
       </span>
 
-      <span className="flex items-center gap-1.5">
+      {/* ⚠️ `flex-wrap` is REQUIRED by the CI badge (MOTIR-5474, design
+          `board-card--ci-badge.mock.html` panel 4). This row had none, so a SECOND
+          pill did not wrap — it OVERFLOWED, pushing the story-point chip and the
+          avatar past the card's right edge. With it, the longest pairing
+          (`Awaiting acceptance` + `Checks running`) takes a second line and the
+          card grows by one 22px line plus the 6px gap, only in that case. */}
+      <span className="flex flex-wrap items-center gap-1.5">
         {/* A story in review is AWAITING ACCEPTANCE (MOTIR-1636) — an info-tone
             pill in the same slot as the readiness/priority chip, distinct from
             the warning "Blocked" pill. Blocked cards swap the priority chip for a
@@ -104,6 +111,12 @@ export function BoardCardView({
             {t('blocked')}
           </Pill>
         )}
+        {/* THE CI BADGE (MOTIR-5474), in the slot the design gives it: an
+            ADDITIONAL pill immediately after the exclusive one, never replacing
+            it — so `Blocked` and `Awaiting acceptance` both survive beside it.
+            It draws only `failing` / `running`, and only off the `done`
+            category; `ciBadgeState` is the shared rule. */}
+        <CiStateBadge ciState={card.ciState} statusCategory={card.statusCategory} />
         {/* The story-point chip — `design/boards/board.mock.html`'s `.pts`
             (mono, semibold, `--el-text-secondary`), in the slot the design
             gives it: directly after the priority chip, before the spacer. The

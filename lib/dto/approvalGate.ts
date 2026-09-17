@@ -91,8 +91,13 @@ export type ApprovalGateStateDTO = 'awaiting' | 'approved' | 'changes_requested'
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
  *  answer *"was this person entitled?"* without re-deriving a role that has
- *  since changed. */
-export type ApprovalGateAuthorityDTO = 'assignee' | 'reporter' | 'admin';
+ *  since changed.
+ *
+ *  `github_review` is NOT a §2 rung (ADR §8 FOURTH AMENDMENT, MOTIR-5590,
+ *  decision 4): it is authority conferred by the HOST's review permission, and it
+ *  is written only by the synced decision. `resolveGateAuthority` never returns
+ *  it, so no Motir surface can produce one. */
+export type ApprovalGateAuthorityDTO = 'assignee' | 'reporter' | 'admin' | 'github_review';
 
 /** Through which surface the decision arrived (ADR §6a, with `github` added by
  *  §6b's amendment). Mirrors the `ApprovalGateDecisionSource` Prisma enum. A
@@ -378,6 +383,12 @@ export interface ApprovalRecordDecidedRowDto {
    * Null only on a row decided before the audit columns existed.
    */
   decidedByLabel: string | null;
+  /**
+   * THROUGH WHICH SURFACE the decision arrived (Story MOTIR-4910 · MOTIR-5599). The room's
+   * person cell reads it to add the *on GitHub* suffix, because *who* and *where* are one
+   * question in a 144px cell. Null on a row decided before the audit columns existed.
+   */
+  decisionSource: ApprovalGateDecisionSourceDTO | null;
   /**
    * The immutable version the decision was made against — ADR §6a's field that
    * *carries the whole claim*. Null where the kind records none.

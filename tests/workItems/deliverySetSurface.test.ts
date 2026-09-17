@@ -36,6 +36,7 @@ function pr(
     state: 'open',
     ci: null,
     url: `https://github.com/${repoLabel}/pull/${number}`,
+    githubReview: null,
     ...over,
   };
 }

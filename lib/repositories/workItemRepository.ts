@@ -127,6 +127,11 @@ export interface WorkItemForestRow {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the `/items` row's CI badge (MOTIR-5474). A plain `String?`
+   *  column; it is in the fixed projection because these reads select explicitly
+   *  and a column left out of one is silently `undefined` at the mapper. */
+  ciState: string | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -166,6 +171,12 @@ export interface HomeWorkItemRow {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the Workbench row's CI badge (MOTIR-5475). In the fixed
+   *  projection because every read producing this row shape selects explicitly:
+   *  a column omitted from one arrives `undefined` at the mapper while the type
+   *  claims `string | null`. */
+  ciState: string | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -192,6 +203,11 @@ export const HOME_WORK_ITEM_SELECT = {
   identifier: true,
   title: true,
   status: true,
+  // The card's CI verdict (MOTIR-5470) — the Workbench row's badge (MOTIR-5475).
+  // Selected in the ONE shared projection for the same reason `completedAt` is:
+  // every tab reads through this constant, so adding it here is what keeps the
+  // tabs from drifting into different columns.
+  ciState: true,
   priority: true,
   assigneeId: true,
   reporterId: true,
@@ -484,6 +500,11 @@ export interface WorkItemListRow {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the `/items` row's CI badge (MOTIR-5474). A plain `String?`
+   *  column; it is in the fixed projection because these reads select explicitly
+   *  and a column left out of one is silently `undefined` at the mapper. */
+  ciState: string | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -1387,6 +1408,38 @@ export const workItemRepository = {
       where: { sessionBranch, workspaceId },
       orderBy: { key: 'asc' },
     });
+  },
+
+  /**
+   * The ids of every NON-ARCHIVED card sitting on one of these session branches —
+   * {@link findBySessionBranch} for a batch, in one query (MOTIR-5472).
+   *
+   * The CI-state backfill's session arm: it holds a whole workspace's head refs
+   * and wants the cards on any of them, which as N separate reads would be one
+   * query per pull request in the tenant. Ids only, because its caller hands each
+   * one to the recompute and re-reads the row under that card's own lock.
+   *
+   * ⚠️ The caller must have BOUND the workspace — `work_item` has no
+   * `system_admin` arm, so an unbound read returns zero rows and raises nothing.
+   * `workspaceId` is still in the predicate rather than left to the GUC alone:
+   * the binding admits the read, the column is what scopes it.
+   */
+  async listIdsBySessionBranches(
+    sessionBranches: readonly string[],
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (sessionBranches.length === 0) return [];
+    const rows = await tx.workItem.findMany({
+      where: {
+        workspaceId,
+        archivedAt: null,
+        sessionBranch: { in: [...sessionBranches] },
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => r.id);
   },
 
   /**
@@ -3009,7 +3062,7 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemForestRow[]>`
       WITH RECURSIVE forest AS (
         SELECT w."id", w."parentId", w."kind", w."type", w."key", w."identifier",
-               w."title", w."status", w."priority", w."assigneeId", w."reporterId",
+               w."title", w."status", w."ciState", w."priority", w."assigneeId", w."reporterId",
                w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt",
                ${hasDescriptionSql('w')} AS "hasDescription", 1 AS depth
           FROM "work_item" w
@@ -3020,7 +3073,7 @@ export const workItemRepository = {
             AND ${notInTriageSql('w')}
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."type", c."key", c."identifier",
-               c."title", c."status", c."priority", c."assigneeId", c."reporterId",
+               c."title", c."status", c."ciState", c."priority", c."assigneeId", c."reporterId",
                c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt",
                ${hasDescriptionSql('c')} AS "hasDescription", p.depth + 1
           FROM "work_item" c
@@ -3038,6 +3091,7 @@ export const workItemRepository = {
              f."identifier",
              f."title",
              f."status",
+             f."ciState",
              f."priority"::text   AS "priority",
              f."assigneeId",
              f."reporterId",
@@ -3094,6 +3148,7 @@ export const workItemRepository = {
              w."identifier",
              w."title",
              w."status",
+             w."ciState",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",
@@ -3243,6 +3298,7 @@ export const workItemRepository = {
              w."identifier",
              w."title",
              w."status",
+             w."ciState",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",
@@ -3727,6 +3783,7 @@ export const workItemRepository = {
              w."identifier",
              w."title",
              w."status",
+             w."ciState",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",
@@ -5229,6 +5286,7 @@ function boardCardFilterSql(filter?: BoardCardFilter): Prisma.Sql {
 const FILTER_FIELD_COLUMN_SQL: Record<Exclude<BuiltInFilterFieldId, 'text'>, Prisma.Sql> = {
   kind: Prisma.sql`w."kind"::text`,
   status: Prisma.sql`w."status"`,
+  ciState: Prisma.sql`w."ciState"`,
   priority: Prisma.sql`w."priority"::text`,
   type: Prisma.sql`w."type"::text`,
   assignee: Prisma.sql`w."assigneeId"`,

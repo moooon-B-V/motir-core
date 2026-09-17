@@ -71,6 +71,32 @@ export interface LinkedPullRequestDto {
   ci: 'passing' | 'failing' | 'running' | null;
   /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
   url: string;
+  /**
+   * WHAT THIS PULL REQUEST'S REVIEW ON GITHUB SAYS (Story MOTIR-4910 · MOTIR-5602;
+   * `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decision 2; design
+   * `design/github/design-notes.md` § 23, Panels G1–G3).
+   *
+   * Null when nothing countable has been said: no reviews, only `commented` ones, only
+   * dismissed ones, or only reviews from somebody who cannot write. Absence of a review is
+   * not a state, exactly as `ci: null` renders no CI pill.
+   *
+   * ⚠️ `atCurrentHead: false` IS DRAWN, NOT DROPPED. A review given at an earlier commit
+   * counts for nothing (decision 2), but a reader who can see that an approval exists and
+   * cannot see that it is stale would conclude Motir had lost it. The surface says which.
+   *
+   * ⚠️ IT NAMES NO REVIEWER, and that is a DECISION rather than an omission (Yue, design
+   * review 2026-09-17; design § 23). This carried `reviewerLogin` and `memberName` until the
+   * row's chip was drawn — and a pull request can have SEVERAL reviewers, so ONE identity per
+   * row is the wrong cardinality whatever renders it: it would carry whichever countable
+   * review happened to be latest and read as though that person were *the* reviewer. The row
+   * says what the pull request's review STATE is. The DECISION has exactly one decider, and
+   * the gate's own `decidedById` / `decidedByLabel` carry them. A surface that later wants
+   * reviewers on a row asks for a LIST, not for this field back.
+   */
+  githubReview: {
+    state: 'approved' | 'changes_requested';
+    atCurrentHead: boolean;
+  } | null;
   /* ⚠️ `linkedManually` WAS HERE and is removed by MOTIR-4894, along with the
    * "linked manually" suffix it fed. It said the link was DECLARED rather than
    * inferred by the MOTIR-892 auto-resolver, and MOTIR-3674 deleted that

@@ -1394,6 +1394,7 @@
     "advancedPickToDateAria": "选择{field}结束日期",
     "advancedBacklog": "待办事项",
     "advancedValueCount": "{count, plural, other {#个值}}",
+    "advancedFieldChecks": "检查",
     "advancedFieldPriority": "优先级",
     "advancedFieldType": "工作类型",
     "advancedFieldReporter": "创建人",
@@ -1414,6 +1415,8 @@
     "advancedOpIsNoneOf": "不为其中任一",
     "advancedOpIsEmpty": "为空",
     "advancedOpIsNotEmpty": "不为空",
+    "advancedOpChecksIsEmpty": "无检查",
+    "advancedOpChecksIsNotEmpty": "有检查",
     "advancedOpContains": "包含",
     "advancedOpNotContains": "不包含",
     "advancedOpEq": "=",
@@ -7562,7 +7565,8 @@
       "awaitingOwn": "没有等待你处理的审批。",
       "decidedFull": "本项目中还没有已决定的审批。",
       "decidedOwn": "你在本项目中还没有决定过审批。"
-    }
+    },
+    "decidedByOnGithub": "{label} · 在 GitHub 上"
   },
   "platformAdmin": {
     "shell": {
@@ -8409,6 +8413,10 @@
       "unexpected": {
         "title": "无法记录你的决定。",
         "next": "请检查网络连接后重试。"
+      },
+      "syncedActorMismatch": {
+        "title": "记录这个决定时出错了。",
+        "next": "没有任何内容被更改。请重新加载页面。若反复出现，这是一个值得上报的缺陷。"
       }
     },
     "cta": {
@@ -8515,6 +8523,21 @@
       "requeue": {
         "progress": "正在将 {pr} 放回合并队列…",
         "refusedTitle": "{pr} 未能重新排队。"
+      },
+      "github": {
+        "chip": {
+          "approved": "已批准",
+          "changesRequested": "已请求修改",
+          "earlierCommit": "批准的是较早的提交"
+        },
+        "meta": {
+          "approved": "由 {name} 在 GitHub 上批准 · {count} 个拉取请求"
+        },
+        "record": {
+          "approved": "由 {name} 在 GitHub 上批准",
+          "changesRequested": "由 {name} 在 GitHub 上请求修改",
+          "notMember": "不是 Motir 成员"
+        }
       }
     },
     "statusHeld": {

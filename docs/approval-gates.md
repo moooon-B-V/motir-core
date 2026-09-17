@@ -154,6 +154,43 @@ Progress**) that a person makes. The next run publishes a new design, which
 raises a new gate to be decided on its own terms. No agent ever reopens a card
 for you.
 
+## Approving on GitHub
+
+If your team reviews code on GitHub, you do not have to approve a second time in
+Motir. **Approving every one of a card's pull requests on GitHub approves the card**,
+and — because approving is the instruction to merge — those pull requests then merge,
+or join their repository's merge queue, exactly as if someone had pressed _Approve
+and merge_ here.
+
+**Every one of them, at the commit that would be merged.** A card can deliver several
+pull requests, and the question Motir asks is about all of them together. So one
+approval out of two changes nothing yet: the card keeps waiting, and the row you
+approved shows **Approved** so you can see where it has got to. The moment the last
+one is approved, the card moves to **Approved** and the merges start.
+
+**Which approvals count** — the same ones GitHub itself counts:
+
+- the reviewer can write to the repository;
+- the review is at the pull request's **current commit**. If someone pushes after
+  you approve, your approval no longer describes the code, and the row says
+  _Approved an earlier commit_ rather than silently ignoring it;
+- the review has not been dismissed, and a comment-only review is not an approval.
+
+**Requesting changes on GitHub** is an answer too: it decides the card's question,
+records who asked and that it happened on GitHub, and merges nothing. The card stays
+in review.
+
+**A reviewer who has no Motir account.** This is ordinary on a repository Motir
+hosts, and the record says so plainly rather than leaving a blank: it names their
+GitHub handle and adds **Not a Motir member**. The approval counts exactly the same
+— what changes is only how much Motir can tell you about who they are.
+
+**Motir never writes to your review history.** It posts no review, no comment and no
+status to GitHub, in either direction. Approving in Motir approves in Motir.
+
+**In a project that merges automatically** no approval is asked for at all, so a
+review on GitHub is recorded and decides nothing; the merge is the automatic one.
+
 ## What the decision keeps a record of
 
 Every decided gate is written down as evidence, not as a status change with a

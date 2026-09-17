@@ -380,6 +380,44 @@ export const githubPullRequestRepository = {
     return rows.map((row) => row.repoId);
   },
 
+  /**
+   * Every DISTINCT head ref a pull request sits on, with the workspace of the
+   * repository it belongs to — the CI-state backfill's SECOND candidate arm
+   * (MOTIR-5472).
+   *
+   * ── Why this arm exists at all ────────────────────────────────────────────
+   * A `motir auto` run integrates its cards onto one session branch and opens ONE
+   * pull request for it, which is linked to nothing. Such a card is reachable
+   * only through `work_item.session_branch = pr.head_ref`, which is precisely why
+   * the old writer never wrote it a verdict. The delivery arm cannot see it.
+   *
+   * ── Why it comes from the PULL REQUEST side ───────────────────────────────
+   * The candidate is a WORK ITEM, and `work_item` carries no `system_admin` arm,
+   * so a cross-tenant scan of it is silently empty. `github_pull_request` and
+   * `github_repo` are both armed, so the sweep reads the head refs here — under
+   * system context, admitted — and then binds each workspace to ask its own cards
+   * which of them sit on one. The tenant travels with the ref for the same reason
+   * it travels with a delivery row: it is resolved from data, never passed in.
+   *
+   * `$queryRaw` because the distinct pair spans the repo join, which Prisma's
+   * `distinct` cannot express — the sanctioned repository escape, still one
+   * operation.
+   */
+  async listHeadRefsWithWorkspace(
+    tx: Prisma.TransactionClient,
+    opts: { workspaceId?: string } = {},
+  ): Promise<Array<{ workspaceId: string; headRef: string }>> {
+    const rows = await tx.$queryRaw<Array<{ workspaceId: string; headRef: string }>>`
+      SELECT DISTINCT r."workspace_id" AS "workspaceId", pr."head_ref" AS "headRef"
+      FROM "github_pull_request" pr
+      JOIN "github_repo" r ON r."id" = pr."repo_id"
+      WHERE pr."head_ref" <> ''
+        ${opts.workspaceId ? Prisma.sql`AND r."workspace_id" = ${opts.workspaceId}` : Prisma.empty}
+      ORDER BY "workspaceId" ASC, "headRef" ASC
+    `;
+    return rows;
+  },
+
   /** One PR by its internal id, with its repo + parent installation (the
    *  workspace-tenancy chain the explicit-link service validates) + check rows
    *  (the returned DTO). Read guarding a write → takes `tx`. Null when absent. */
