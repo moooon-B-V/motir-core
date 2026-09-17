@@ -8357,7 +8357,16 @@
       "port": "This question was withdrawn.",
       "portCite": "Nobody decided it.",
       "record": "No decision · no one to attribute",
-      "at": "withdrawn {when}"
+      "at": "withdrawn {when}",
+      "cause": {
+        "republished": "A newer design was published, so this question was withdrawn.",
+        "withdrawn": "The design result was withdrawn, so this question went with it.",
+        "head_moved": "A push moved the commits, so this question was withdrawn.",
+        "member_closed": "A pull request closed, so this question was withdrawn.",
+        "set_changed": "The pull requests changed, so this question was withdrawn.",
+        "pulled_back": "The work was pulled back out of review, so this question was withdrawn.",
+        "unknown": "This question was withdrawn. The reason was not recorded."
+      }
     },
     "refusal": {
       "alreadyDecided": {

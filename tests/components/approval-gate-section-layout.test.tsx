@@ -42,6 +42,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedById: null,
   decidedAt: null,
   noteMd: null,
+  supersededCause: null,
   subjectVersion: '9840d00ea1b2',
   decidedByLabel: null,
   routedToId: 'user-2',
@@ -150,7 +151,9 @@ describe('ApprovalGateControl layout="section" (MOTIR-5569)', () => {
 
   it('superseded — the dead port, and no verb', () => {
     renderFrame(SUPERSEDED, 'section');
-    expect(screen.getByText(en.approvalGate.withdrawn.port)).toBeTruthy();
+    // MOTIR-5667: no cause on this fixture reads as `unknown` — the reason was
+    // not recorded, which is what a row predating the column honestly is.
+    expect(screen.getByText(en.approvalGate.withdrawn.cause.unknown)).toBeTruthy();
     expect(screen.queryByTestId('the-port')).toBeNull();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });

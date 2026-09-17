@@ -23,6 +23,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedById: null,
   decidedAt: null,
   noteMd: null,
+  supersededCause: null,
   subjectVersion: 'moooon-B-V/motir-core#2845@9840d00ea1b2',
   decidedByLabel: null,
   routedToId: 'user-2',

@@ -27,6 +27,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedById: null,
   decidedAt: null,
   noteMd: null,
+  supersededCause: null,
   subjectVersion: null,
   decidedByLabel: null,
   routedToId: 'user-2',
@@ -113,9 +114,9 @@ describe('ApprovalGateControl layout="flush" (MOTIR-5484)', () => {
       withdrawnPort: { port: 'A push moved the head of #88.', cite: 'Nobody decided it.' },
     });
     expect(screen.getByText('A push moved the head of #88.')).toBeTruthy();
-    expect(screen.queryByText(en.approvalGate.withdrawn.port)).toBeNull();
+    expect(screen.queryByText(en.approvalGate.withdrawn.cause.unknown)).toBeNull();
     cleanup();
     renderFrame({ gate: superseded });
-    expect(screen.getByText(en.approvalGate.withdrawn.port)).toBeTruthy();
+    expect(screen.getByText(en.approvalGate.withdrawn.cause.unknown)).toBeTruthy();
   });
 });

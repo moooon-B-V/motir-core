@@ -39,7 +39,20 @@ export type GateRefusal =
        */
       decidedByLabel: string | null;
     }
-  | { tag: 'APPROVAL_GATE_SUPERSEDED' }
+  | {
+      tag: 'APPROVAL_GATE_SUPERSEDED';
+      /**
+       * WHY the question was withdrawn, when the refusing path read it under its
+       * lock (Story MOTIR-5652 · Subtask MOTIR-5667; `design-result.md` AMENDMENT
+       * 6 Q5). Null is a real answer — the caller had only the state — and the
+       * copy then says a true, vaguer sentence rather than guessing one.
+       *
+       * ⚠️ A FIELD ON AN EXISTING MEMBER, not a new tag: `REFUSAL_TAGS_ARE_TOTAL`
+       * is unchanged, which is MOTIR-5232's deliberate compile-break to make and
+       * not this card's.
+       */
+      supersedeCause: string | null;
+    }
   | { tag: 'APPROVAL_GATE_NOT_AUTHORISED' }
   | { tag: 'APPROVAL_GATE_NOT_FOUND' }
   | { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }
@@ -99,7 +112,12 @@ export const REFUSAL_TAGS_ARE_TOTAL: UnhandledGateRefusalTags extends never ? tr
  */
 export function toGateRefusal(
   code: unknown,
-  extra?: { decidedByLabel?: string | null; permission?: string | null; reason?: string | null },
+  extra?: {
+    decidedByLabel?: string | null;
+    permission?: string | null;
+    reason?: string | null;
+    supersedeCause?: string | null;
+  },
 ): GateRefusal {
   switch (code) {
     case 'APPROVAL_GATE_ALREADY_DECIDED':
@@ -108,6 +126,7 @@ export function toGateRefusal(
         decidedByLabel: extra?.decidedByLabel ?? null,
       };
     case 'APPROVAL_GATE_SUPERSEDED':
+      return { tag: 'APPROVAL_GATE_SUPERSEDED', supersedeCause: extra?.supersedeCause ?? null };
     case 'APPROVAL_GATE_NOT_AUTHORISED':
     case 'APPROVAL_GATE_NOT_FOUND':
     case 'APPROVAL_GATE_KIND_UNREGISTERED':

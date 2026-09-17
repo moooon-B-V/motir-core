@@ -329,6 +329,7 @@ function decision(id: string, state: ApprovalGateDTO['state']) {
     decidedById: null,
     decidedAt: null,
     noteMd: null,
+    supersededCause: null,
     subjectVersion: null,
     decidedByLabel: null,
     routedToId: null,

@@ -141,7 +141,8 @@ async function checkMember(
       throw new ApprovalGateNotAuthorisedError(approvalGateId);
     }
 
-    if (gate.state === 'superseded') throw new ApprovalGateSupersededError(approvalGateId);
+    if (gate.state === 'superseded')
+      throw new ApprovalGateSupersededError(approvalGateId, gate.supersededCause);
     // A merge only ever follows an APPROVAL: changes requested on the set merges none of it.
     if (gate.state === 'changes_requested') {
       throw new ApprovalGateAlreadyDecidedError(
@@ -840,6 +841,8 @@ function memberRefusal(err: unknown): GateRefusal | null {
   if (err instanceof ApprovalGateAlreadyDecidedError) {
     return toGateRefusal(err.tag, { decidedByLabel: err.decidedByLabel });
   }
+  if (err instanceof ApprovalGateSupersededError)
+    return toGateRefusal(err.tag, { supersedeCause: err.supersedeCause });
   if (err instanceof ApprovalGateError) return toGateRefusal(err.tag);
   if (err instanceof PermissionDeniedError) return toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED');
   if (err instanceof ProjectNotFoundError) return toGateRefusal('APPROVAL_GATE_NOT_FOUND');

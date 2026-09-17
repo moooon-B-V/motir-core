@@ -1237,7 +1237,8 @@ export const approvalGatesService = {
       // Collapsing them would make the surface say "somebody already decided
       // this" about a question nobody answered — the one sentence the audit must
       // never be able to produce.
-      if (locked.state === 'superseded') throw new ApprovalGateSupersededError(input.gateId);
+      if (locked.state === 'superseded')
+        throw new ApprovalGateSupersededError(input.gateId, locked.supersededCause);
       if (locked.state !== 'awaiting') {
         throw new ApprovalGateAlreadyDecidedError(
           input.gateId,
