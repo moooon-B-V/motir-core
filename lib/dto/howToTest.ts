@@ -89,20 +89,51 @@ export interface HowToTestRunDto {
   label: string;
 }
 
-/** The current run's record — what is ONE for the run. */
+/**
+ * WHO wrote a record (Story MOTIR-5450 · Subtask MOTIR-5454).
+ *
+ * `approval-gates.md` §9's 2026-09-17 amendment, point 1: TWO AUTHOR KINDS, ONE
+ * RECORD, ONE WRITER. A record written by a dispatch run is a `run` author; one
+ * written by a person from the item page is a `person` author. They are the same
+ * row in the same table, written by the same `testInstructionsService.publish`,
+ * and the block renders them identically apart from this line.
+ *
+ * `userId` is NULL when the publisher's account was deleted — `published_by_id`
+ * is `SetNull`, like every audit stamp on the row — and the label is then the
+ * product's standing string for an attribution whose referent is gone. It is
+ * never blank: a missing author reads as a removed member, not as nobody.
+ */
+export type HowToTestAuthorDto =
+  | { kind: 'run'; runId: string; label: string }
+  | { kind: 'person'; userId: string | null; label: string };
+
+/** The current record — what is ONE for the run target. */
 export interface HowToTestRecordDto {
   id: string;
+  /**
+   * ⚠️ SUPERSEDED BY {@link HowToTestRecordDto.author}, and kept only until the
+   * block reads it. `run` can name a dispatch run and nothing else, so a
+   * person's record reads as `null` here — indistinguishable from an agent
+   * record whose run was pruned. `HowToTestBlock` still reads it today; the
+   * DOORS card (MOTIR-5455) moves the block onto `author` and DELETES this
+   * field. Do not add a new reader.
+   */
   run: HowToTestRunDto | null;
+  /** WHO wrote it — a run or a person. Always present. */
+  author: HowToTestAuthorDto;
   createdAt: string;
-  /** The agent's rich-text How to test, as written. */
+  /** The rich-text How to test, as its author wrote it. */
   bodyMd: string;
   previewPath: string | null;
 }
 
-/** An earlier run's record, for the "Earlier runs" disclosure. */
+/** An earlier record, for the "Earlier versions" disclosure. */
 export interface HowToTestHistoryEntryDto {
   recordId: string;
+  /** ⚠️ Superseded by {@link HowToTestHistoryEntryDto.author} — see the record's note. */
   run: HowToTestRunDto | null;
+  /** WHO wrote it — a run or a person. Always present. */
+  author: HowToTestAuthorDto;
   createdAt: string;
 }
 

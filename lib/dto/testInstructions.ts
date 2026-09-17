@@ -6,6 +6,8 @@
 // 2026-09-13 amendment): one rich-text body for the run, and one section per
 // repository the run touched (the commit it was written for).
 
+import type { HowToTestAuthorDto } from '@/lib/dto/howToTest';
+
 /** One repository's section of a run's HOW TO TEST. */
 export interface TestInstructionsRepoDTO {
   /** The `GithubRepo` id the section is keyed on. */
@@ -49,6 +51,13 @@ export interface CurrentTestInstructionsDTO {
   record:
     | (Omit<TestInstructionsDTO, 'repos'> & {
         repos: Array<TestInstructionsRepoDTO & { repoName: string | null }>;
+        /**
+         * WHO wrote it — a run or a person (MOTIR-5454). The same mapping the
+         * item page's block reads, from the same `lib/howToTest/author` helper,
+         * so a CLI rendering this into a pull-request body and a reviewer
+         * reading the card name the author identically.
+         */
+        author: HowToTestAuthorDto;
       })
     | null;
 }

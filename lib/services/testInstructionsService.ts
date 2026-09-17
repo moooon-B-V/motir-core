@@ -13,6 +13,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { normalizeCommitSha } from '@/lib/git/commitSha';
 import { liveHeadSha, pickPullRequest } from '@/lib/howToTest/assemble';
+import { authorOf } from '@/lib/howToTest/author';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import type {
   CurrentTestInstructionsDTO,
@@ -486,17 +488,26 @@ export const testInstructionsService = {
     ctx: ServiceContext,
   ): Promise<CurrentTestInstructionsDTO> {
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
-    const record = await this.getCurrentForWorkItem(item.id, ctx);
-    if (!record) return { workItemKey: item.identifier, record: null };
-    const repos = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) => projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
+    await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
+    const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+
+    // WITH its run (MOTIR-5454): this response names the AUTHOR, and a run is
+    // named by the command and start time its row carries, not by its id.
+    const row = await withWorkspaceContext(binding, (tx) =>
+      testInstructionsRepository.findCurrentForWorkItemWithRun(item.id, tx),
     );
+    if (!row) return { workItemKey: item.identifier, record: null };
+    const record = toTestInstructionsDto(row);
+
+    const [repos, publishers] = await Promise.all([
+      withWorkspaceContext(binding, (tx) =>
+        projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
+      ),
+      row.publishedById !== null ? userRepository.findByIds([row.publishedById]) : [],
+    ]);
     const nameOf = new Map(
-      repos.flatMap((row) =>
-        row.githubRepo
-          ? [[row.githubRepo.id, `${row.githubRepo.owner}/${row.githubRepo.name}`]]
-          : [],
+      repos.flatMap((r) =>
+        r.githubRepo ? [[r.githubRepo.id, `${r.githubRepo.owner}/${r.githubRepo.name}`]] : [],
       ),
     );
     return {
@@ -507,6 +518,7 @@ export const testInstructionsService = {
           ...section,
           repoName: nameOf.get(section.repoId) ?? null,
         })),
+        author: authorOf(row, new Map(publishers.map((user) => [user.id, user.name] as const))),
       },
     };
   },

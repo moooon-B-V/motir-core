@@ -2249,6 +2249,17 @@ export interface components {
             key: string;
             record: {
                 dispatchRunId: string | null;
+                author: {
+                    /** @constant */
+                    kind: "run";
+                    runId: string;
+                    label: string;
+                } | {
+                    /** @constant */
+                    kind: "person";
+                    userId: string | null;
+                    label: string;
+                };
                 createdAt: string;
                 bodyMd: string;
                 previewPath: string | null;

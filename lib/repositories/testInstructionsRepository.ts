@@ -64,6 +64,24 @@ export const testInstructionsRepository = {
   },
 
   /**
+   * The CURRENT record for one run target, with its sections AND the run that
+   * wrote it — the read that can answer WHO (MOTIR-5454).
+   *
+   * Separate from {@link testInstructionsRepository.findCurrentForWorkItem}
+   * rather than widening it: that one is `publish`'s idempotency read, taken
+   * under a row lock on the publish path, and it has no use for the join.
+   */
+  async findCurrentForWorkItemWithRun(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<TestInstructionsHistoryRow | null> {
+    return tx.testInstructions.findFirst({
+      where: { workItemId, isCurrent: true },
+      include: { ...WITH_REPOS, dispatchRun: { select: { command: true, startedAt: true } } },
+    });
+  },
+
+  /**
    * Every CURRENT record for a BATCH of run targets, with sections, in a
    * batch-size-independent number of queries — the read behind a page that
    * renders several items' blocks (MOTIR-5333). An empty batch short-circuits.

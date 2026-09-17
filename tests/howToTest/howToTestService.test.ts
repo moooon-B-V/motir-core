@@ -11,6 +11,8 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { repoDeploymentRepository } from '@/lib/repositories/repoDeploymentRepository';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
+import { ERASED_USER_NAME } from '@/lib/users/accountErasure';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import {
   assembleHowToTestRepo,
@@ -719,5 +721,176 @@ describe('howToTestService.getForWorkItem', () => {
 
     expect(dto.repos).toHaveLength(3);
     expect(forThree).toBe(forOne);
+  });
+});
+
+// ── WHO wrote it (Story MOTIR-5450 · Subtask MOTIR-5454) ──────────────────────
+//
+// `approval-gates.md` §9's 2026-09-17 amendment, point 1: TWO AUTHOR KINDS, ONE
+// RECORD, ONE WRITER. The cases are chosen so a plausible broken implementation
+// fails:
+//
+//   - the person case asserts `record.run` is STILL null beside a filled
+//     `author`, so an implementation that quietly repurposed `run` fails;
+//   - the history case carries one row of EACH kind, so a mapper that reads the
+//     current record's author and reuses it fails;
+//   - the deleted-publisher case asserts a non-empty label with a null userId,
+//     so returning the raw (null) name — or an empty string — fails.
+
+describe('howToTestService — the record carries its AUTHOR', () => {
+  it("a PERSON's record: kind person, their id and display name, with `run` still null", async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'By a person' });
+    const web = await connectRepo(fx, 'web');
+    await testInstructionsService.publish(
+      { workItemId: card.id, bodyMd: BODY, repos: [{ repoId: web.id, commitSha: HEAD }] },
+      fx.ctx,
+    );
+    const actor = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    expect(dto.record?.author).toEqual({
+      kind: 'person',
+      userId: fx.ctx.userId,
+      label: actor.name,
+    });
+    // The superseded field is untouched — the DOORS card removes it, not this one.
+    expect(dto.record?.run).toBeNull();
+  });
+
+  it("a RUN's record: kind run, the run id, and the label `run` already carried", async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'By a run' });
+    const web = await connectRepo(fx, 'web');
+    const startedAt = new Date('2026-09-17T12:04:00Z');
+    const run = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'run',
+        status: 'running',
+        startedAt,
+        cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
+      },
+    });
+    await testInstructionsService.publish(
+      {
+        workItemId: card.id,
+        bodyMd: BODY,
+        repos: [{ repoId: web.id, commitSha: HEAD }],
+        attributeToRunningDispatch: true,
+      },
+      fx.ctx,
+    );
+
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    const label = dispatchRunLabel('run', startedAt);
+    expect(dto.record?.author).toEqual({ kind: 'run', runId: run.id, label });
+    expect(dto.record?.run).toEqual({ runId: run.id, label });
+  });
+
+  it('HISTORY carries an author per row — one of each kind, newest first', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Both kinds' });
+    const web = await connectRepo(fx, 'web');
+    const startedAt = new Date('2026-09-17T12:04:00Z');
+    const run = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        command: 'run',
+        status: 'running',
+        startedAt,
+        cards: { create: { workspaceId: fx.workspaceId, workItemId: card.id, position: 0 } },
+      },
+    });
+    // The run wrote it first; a person then corrected it.
+    await testInstructionsService.publish(
+      {
+        workItemId: card.id,
+        bodyMd: BODY,
+        repos: [{ repoId: web.id, commitSha: HEAD }],
+        attributeToRunningDispatch: true,
+      },
+      fx.ctx,
+    );
+    await testInstructionsService.publish(
+      {
+        workItemId: card.id,
+        bodyMd: `${BODY}\n\nCorrected.`,
+        repos: [{ repoId: web.id, commitSha: HEAD }],
+      },
+      fx.ctx,
+    );
+    const actor = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    expect(dto.record?.author).toEqual({
+      kind: 'person',
+      userId: fx.ctx.userId,
+      label: actor.name,
+    });
+    expect(dto.history).toHaveLength(1);
+    expect(dto.history[0]!.author).toEqual({
+      kind: 'run',
+      runId: run.id,
+      label: dispatchRunLabel('run', startedAt),
+    });
+  });
+
+  it('a DELETED publisher is named, never left blank — userId null, the former-member label', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Author gone' });
+    const web = await connectRepo(fx, 'web');
+
+    const author = await usersService.createUser({
+      email: 'gone@ex.com',
+      password: 'hunter2hunter2',
+      name: 'Gone',
+    });
+    await workspacesService.addMember({ userId: author.id, workspaceId: fx.workspaceId });
+    await projectMembersService.addMember({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: author.id,
+      role: 'member',
+    });
+    await testInstructionsService.publish(
+      { workItemId: card.id, bodyMd: BODY, repos: [{ repoId: web.id, commitSha: HEAD }] },
+      { userId: author.id, workspaceId: fx.workspaceId },
+    );
+
+    // `published_by_id` is SetNull, so deleting the account leaves the record
+    // with no id to look a name up by — which is the case the label must cover.
+    await adminDb.user.delete({ where: { id: author.id } });
+
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    expect(dto.record?.author).toEqual({
+      kind: 'person',
+      userId: null,
+      label: ERASED_USER_NAME,
+    });
+    expect(dto.record?.author.label).not.toBe('');
+  });
+
+  it('resolves every publisher in ONE query, whatever the number of versions', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Many versions' });
+    const web = await connectRepo(fx, 'web');
+    for (let i = 0; i < 5; i++) {
+      await testInstructionsService.publish(
+        {
+          workItemId: card.id,
+          bodyMd: `${BODY}\n\nv${i}`,
+          repos: [{ repoId: web.id, commitSha: HEAD }],
+        },
+        fx.ctx,
+      );
+    }
+    const spy = vi.spyOn(userRepository, 'findByIds');
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    expect(dto.history).toHaveLength(4);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });

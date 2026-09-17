@@ -319,9 +319,18 @@ describe('earlier runs (Panel 12j)', () => {
           {
             recordId: 'rec-0',
             run: { runId: 'run-301', label: 'Run #301' },
+            author: { kind: 'run', runId: 'run-301', label: 'Run #301' },
             createdAt: '2026-09-11T09:00:00.000Z',
           },
-          { recordId: 'rec-00', run: null, createdAt: '2026-09-10T09:00:00.000Z' },
+          {
+            recordId: 'rec-00',
+            run: null,
+            // A record with no dispatch run is a PERSON's, under §9's
+            // 2026-09-17 amendment — which is exactly the row `run: null`
+            // could not describe.
+            author: { kind: 'person', userId: 'user-ada', label: 'Ada' },
+            createdAt: '2026-09-10T09:00:00.000Z',
+          },
         ],
       }),
     );
