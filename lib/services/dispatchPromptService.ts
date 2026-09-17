@@ -11,6 +11,8 @@ import { listDispatchRepoNames, resolveDispatchRepoForItem } from '@/lib/workIte
 import { resolveDispatchRepo } from '@/lib/workItems/targetRepo';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { designAccessService } from '@/lib/services/designAccessService';
+import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -210,6 +212,7 @@ export const dispatchPromptService = {
       repoDelivery,
       runScope,
       openDependentKeys,
+      designReference,
     ] = await Promise.all([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -241,6 +244,19 @@ export const dispatchPromptService = {
       item.type === 'design'
         ? resolveOpenDependentKeys(item.id, ctx)
         : Promise.resolve([] as string[]),
+      // The DESIGNS this card waits on (MOTIR-5563) — a peer read beside
+      // `resolveBlockerKeys`, over the same `is_blocked_by` edges, so the
+      // designs the prompt names and the blockers it lists can never disagree
+      // about what this card is waiting for.
+      //
+      // ⚠️ NO REFUSAL PATH, deliberately. A design that could not be resolved
+      // must never stop a card being dispatched: the prompt simply renders no
+      // DESIGN REFERENCE, and the `code` steps' look-with-`list_designs`-first
+      // instruction is what covers the gap. An empty array is also the ordinary
+      // answer for the many cards that wait on no design at all.
+      designAccessService
+        .designsForWorkItem(item.identifier, ctx)
+        .catch(() => [] as DesignVerdictDto[]),
     ]);
 
     const targetRepo = dispatchRepo?.name ?? null;
@@ -258,6 +274,7 @@ export const dispatchPromptService = {
       blockerKeys,
       openDependentKeys,
       advisories,
+      designReference,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
       projectKey: project.identifier,
