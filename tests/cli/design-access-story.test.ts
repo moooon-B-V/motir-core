@@ -48,6 +48,7 @@ const { truncateAuthTables } = await import('../helpers/db');
 const { adminDb } = await import('../helpers/adminDb');
 const { startMcpHttpServer } = await import('../helpers/mcpHttpServer');
 const { makeCliWorkspace, writeFakeAgent } = await import('../helpers/cliHarness');
+import { shaFor } from '../helpers/commitShaFixtures';
 
 // STORY E2E — EVERY AGENT RUN IS HANDED THE APPROVED DESIGN IT BUILDS AGAINST
 // (Story MOTIR-5553 · Subtask MOTIR-5567).
@@ -154,7 +155,7 @@ async function publishDesign(fx: WorkItemFixture, cardId: string): Promise<strin
     return { kind: f.kind, sourcePath: f.sourcePath, pathname };
   });
   const evidence = await designEvidenceService.recordFromPathnames(
-    { workItemId: cardId, assets, commitSha: 'sha-e2e' },
+    { workItemId: cardId, assets, commitSha: shaFor('e2e') },
     fx.ctx,
   );
   return evidence.id;

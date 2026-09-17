@@ -24,6 +24,7 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { makeWorkItemFixture } = await import('../fixtures/workItemFixtures');
 const { adminDb } = await import('../helpers/adminDb');
 const { truncateAuthTables } = await import('../helpers/db');
+import { shaFor } from '../helpers/commitShaFixtures';
 
 // THE DISPATCHED PROMPT CARRIES THE DESIGN (Story MOTIR-5553 · Subtask
 // MOTIR-5563), end to end on real Postgres.
@@ -99,7 +100,7 @@ async function publish(card: WorkItem, label: string): Promise<string> {
   ];
   for (const a of assets) store.set(a.pathname, { contentType: 'text/html', size: 64 });
   const evidence = await designEvidenceService.recordFromPathnames(
-    { workItemId: card.id, assets, commitSha: `sha-${label}` },
+    { workItemId: card.id, assets, commitSha: shaFor(label) },
     fx.ctx,
   );
   return evidence.id;

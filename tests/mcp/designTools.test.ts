@@ -30,6 +30,7 @@ const { makeWorkItemFixture } = await import('../fixtures');
 const { truncateAuthTables } = await import('../helpers/db');
 const { adminDb } = await import('../helpers/adminDb');
 const { makeWorkWaitOn } = await import('../helpers/designWaits');
+import { shaFor } from '../helpers/commitShaFixtures';
 
 // `get_design` / `list_designs` (Story MOTIR-5553 · Subtask MOTIR-5561).
 //
@@ -82,7 +83,7 @@ async function publishAndApprove(card: WorkItem, label: string): Promise<string>
   ];
   for (const a of assets) store.set(a.pathname, { contentType: 'text/html', size: 64 });
   const evidence = await designEvidenceService.recordFromPathnames(
-    { workItemId: card.id, assets, commitSha: `sha-${label}` },
+    { workItemId: card.id, assets, commitSha: shaFor(label) },
     fx.ctx,
   );
   const gate = await adminDb.approvalGate.findFirstOrThrow({
@@ -420,7 +421,7 @@ describe('the empty project page says WHY it is empty', () => {
             pathname: `${prefix}u.md`,
           },
         ],
-        commitSha: 'sha-u',
+        commitSha: shaFor('u'),
       },
       fx.ctx,
     );

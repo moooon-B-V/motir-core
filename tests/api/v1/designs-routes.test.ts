@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import type { WorkItem } from '@/generated/prisma/client';
+import { shaFor } from '../../helpers/commitShaFixtures';
 
 // The blob STORE is the one mocked external — nothing else is. The permission
 // gate, the verdict ladder, the presign and the cursor all run for real against
@@ -87,7 +88,7 @@ async function publishAndApprove(card: WorkItem, label: string): Promise<string>
   ];
   for (const a of assets) store.set(a.pathname, { contentType: 'text/html', size: 64 });
   const evidence = await designEvidenceService.recordFromPathnames(
-    { workItemId: card.id, assets, commitSha: `sha-${label}` },
+    { workItemId: card.id, assets, commitSha: shaFor(label) },
     caller.ctx,
   );
   const gate = await adminDb.approvalGate.findFirstOrThrow({

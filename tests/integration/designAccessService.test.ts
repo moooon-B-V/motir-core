@@ -44,6 +44,7 @@ const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
+import { shaFor } from '../helpers/commitShaFixtures';
 
 let fx: WorkItemFixture;
 /** Subtasks need a parent; one story per test holds every card it creates. */
@@ -108,7 +109,7 @@ async function publish(card: WorkItem, label: string, assetCount = 2): Promise<s
     });
   }
   const result = await designEvidenceService.recordFromPathnames(
-    { workItemId: card.id, assets, commitSha: `sha-${label}` },
+    { workItemId: card.id, assets, commitSha: shaFor(label) },
     fx.ctx,
   );
   return result.id;
@@ -156,7 +157,7 @@ describe('Q2 — what "approved" means, and the five reasons there is no design'
     expect(verdict.verdict).toBe('approved');
     if (verdict.verdict !== 'approved') throw new Error('unreachable');
     expect(verdict.design.evidenceId).toBe(v1);
-    expect(verdict.design.commitSha).toBe('sha-v1');
+    expect(verdict.design.commitSha).toBe(shaFor('v1'));
     // The mock, its delta and the note file — the whole set, in render order.
     expect(verdict.design.assets.map((a) => a.kind)).toEqual(['mock', 'mock', 'note_file']);
     expect(verdict.design.assets.map((a) => a.fileName)).toEqual([
@@ -275,7 +276,7 @@ describe('Q2 — the ladder: the version the APPROVAL named, not the version tha
     expect(verdict.verdict).toBe('approved');
     if (verdict.verdict !== 'approved') throw new Error('unreachable');
     expect(verdict.design.evidenceId).toBe(x);
-    expect(verdict.design.commitSha).toBe('sha-x');
+    expect(verdict.design.commitSha).toBe(shaFor('x'));
   });
 
   it('arm 2 — a card whose only approval left a PIN and no `design_result` gate', async () => {
@@ -536,5 +537,27 @@ describe('Q6 — listing, links, and what a caller may not see', () => {
     await expect(
       designAccessService.listApprovedDesigns(other.projectIdentifier, {}, fx.ctx),
     ).rejects.toThrow();
+  });
+});
+
+describe('the batched repository reads short-circuit on an EMPTY input', () => {
+  it('issues no query at all, so a caller can ask unconditionally', async () => {
+    // The four batched reads exist so `resolveLadder` can call them without
+    // first checking whether it has anything to ask about. Each therefore
+    // short-circuits on an empty list rather than sending `IN ()` to Postgres —
+    // and the guards are asserted here because the SERVICE never reaches them
+    // (it returns early itself), so nothing else in the suite covers them.
+    const { designEvidenceRepository } =
+      await import('@/lib/repositories/designEvidenceRepository');
+    const { withWorkspaceServiceContext } = await import('@/lib/workspaces/context');
+
+    await withWorkspaceServiceContext(fx.workspaceId, async (tx) => {
+      expect(await designEvidenceRepository.findManyWithAssetsByIds([], tx)).toEqual(new Map());
+      expect(await designEvidenceRepository.findCurrentByWorkItems([], tx)).toEqual(new Map());
+      expect(await designEvidenceRepository.findNewestPinnedByWorkItems([], tx)).toEqual(new Map());
+      expect(await designEvidenceRepository.findWorkItemIdsWithAnyResult([], tx)).toEqual(
+        new Set(),
+      );
+    });
   });
 });

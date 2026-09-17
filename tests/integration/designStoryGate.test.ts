@@ -38,6 +38,7 @@ const { MOTIR_DESIGN_DIR_ENV } = await import('../../packages/cli/src/designFile
 const { createV1ProjectCaller } = await import('../fixtures/apiV1Fixtures');
 const { truncateAuthTables } = await import('../helpers/db');
 const { adminDb } = await import('../helpers/adminDb');
+import { shaFor } from '../helpers/commitShaFixtures';
 
 // STORY VITEST GATE — EVERY AGENT RUN IS HANDED THE APPROVED DESIGN IT BUILDS
 // AGAINST (Story MOTIR-5553 · Subtask MOTIR-5566).
@@ -132,7 +133,7 @@ async function publish(card: WorkItem, label: string): Promise<string> {
   ];
   for (const a of assets) store.set(a.pathname, { contentType: 'text/html', size: 64 });
   const evidence = await designEvidenceService.recordFromPathnames(
-    { workItemId: card.id, assets, commitSha: `sha-${label}` },
+    { workItemId: card.id, assets, commitSha: shaFor(label) },
     caller.ctx,
   );
   return evidence.id;
