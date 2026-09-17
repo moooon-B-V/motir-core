@@ -157,7 +157,27 @@ describe('state G — superseded', () => {
   it('says the question was withdrawn', () => {
     const { container } = render({ gate: WITHDRAWN });
     expect(screen.getByText('Withdrawn')).toBeTruthy();
-    expect(container.textContent).toContain('A newer design was published');
+    expect(container.textContent).toContain('This question was withdrawn');
+  });
+
+  it('claims NO cause and NO current version — four writers supersede, one publishes (Bug MOTIR-5586)', () => {
+    // ⚠️ THE ASSERTION IS ON WHAT THE COPY DOES **NOT** SAY, and that is the
+    // whole of this bug. `superseded` is written by FOUR product paths and only
+    // one of them publishes anything: a republish (MOTIR-4913), a WITHDRAWAL
+    // (MOTIR-5574), a hand pull-back out of review or to Cancelled
+    // (MOTIR-5527), and linking an OPEN pull request (MOTIR-5534). The row
+    // records `state` and nothing else (ADR `approval-gates.md` §6b), so the
+    // frame cannot tell them apart — which makes a sentence that NAMES a cause
+    // false three times out of four, and the pointer "the current version is
+    // above" false over a dead port with nothing above it.
+    //
+    // This gate is the withdrawal case: no current evidence, nothing newer.
+    const { container } = render({ gate: WITHDRAWN });
+    expect(container.textContent).not.toContain('A newer design was published');
+    expect(container.textContent).not.toContain('The current version is above');
+    // What survives is the fact every writer leaves true.
+    expect(container.textContent).toContain('This question was withdrawn');
+    expect(container.textContent).toContain('Nobody decided it');
   });
 
   it('renders a DEAD port — the subject is NOT shown', () => {

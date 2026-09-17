@@ -254,6 +254,17 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       await expect(
         page.getByRole('main').getByText('No decision · no one to attribute'),
       ).toBeVisible();
+      // ⚠️ ADDED BY MOTIR-5586, alongside the record line above rather than in
+      // place of it. THIS is the surface the bug was observed on: state `G`'s
+      // dead port told the reviewer who had just withdrawn this very result
+      // that a newer design had been published and to look above, where the
+      // port is dead and nothing is current. Four writers mark a gate
+      // `superseded` and only a republish publishes anything, so the port
+      // claims no cause and points nowhere.
+      await expect(page.getByRole('main').getByText('This question was withdrawn.')).toBeVisible();
+      await expect(page.getByRole('main').getByText('Nobody decided it.')).toBeVisible();
+      await expect(page.getByRole('main')).not.toContainText('A newer design was published');
+      await expect(page.getByRole('main')).not.toContainText('The current version is above');
       await expect(page.getByRole('link', { name: 'Review & approve' })).toHaveCount(0);
       await expect(page.locator('iframe')).toHaveCount(0);
 

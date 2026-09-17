@@ -1513,7 +1513,8 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
       commitSha: {
         type: 'string',
-        description: 'The commit the assets were published from. Also the idempotency key.',
+        description:
+          'The commit the assets were published from, as 7 to 64 HEX characters — a full object id or an abbreviation of it, never a branch name or "HEAD". Surrounding whitespace and upper-case hex are accepted and stored normalised; anything else is refused naming this field. ALSO THE IDEMPOTENCY KEY: re-publishing the same commit + producedByKey returns the existing result instead of superseding it — which is why it is stored canonical, so two spellings of one commit are one key and a reviewer mid-review does not lose the version they were answering about. The format is checked; whether the commit EXISTS is not.',
       },
       producedByKey: {
         type: 'string',

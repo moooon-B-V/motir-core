@@ -86,6 +86,34 @@ export class DesignEvidenceNotAChildError extends DesignEvidenceError {
 }
 
 /**
+ * A publish reported a `commitSha` that is not a commit id (MOTIR-5620) — the
+ * design result's CITATION, and the only thing tying the mocks a reviewer is
+ * approving to the code they were drawn against. Refused on the SERVICE, so both
+ * entry points (the MCP tool and the HTTP route) answer identically;
+ * `lib/git/commitSha.ts` supplies the pattern and the reason, shared with the
+ * acceptance receipt and `publish_test_instructions`. → 400.
+ *
+ * ⚠️ IT IS ALSO THE IDEMPOTENCY KEY, which is the half that damages a person's
+ * work rather than the data. A redelivery spelling one commit two ways used to
+ * supersede the current result AND mark the prior version's `awaiting` gate
+ * `superseded` — so a reviewer mid-review lost the question they were answering,
+ * for a value that differed by a trailing newline. Storing the canonical form is
+ * what makes two spellings one key.
+ *
+ * ⚠️ THE FORMAT IS ALL THIS RULES ON. A 40-character string of valid hex naming
+ * no commit anywhere passes. Verifying EXISTENCE needs the host, costs an API
+ * call on the publish path, and is its own card.
+ */
+export class DesignEvidenceCommitShaError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_INVALID_COMMIT_SHA' as const;
+  readonly status = 400;
+  constructor(reason: string) {
+    super(`commitSha: ${reason}`);
+    this.name = 'DesignEvidenceCommitShaError';
+  }
+}
+
+/**
  * A publish reported a blob pathname OUTSIDE this item's
  * `design/<workspaceId>/<workItemId>/` prefix — a caller trying to register an
  * arbitrary / cross-tenant blob. Rejected before any DB write. → 400.

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../helpers/commitShaFixtures';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -245,7 +246,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
           seedAsset(fx, card.id, { kind: 'mock', name: 'v1.mock.html', contentType: 'text/html' }),
           note(fx, card.id, 'v1.mock.html'),
         ],
-        commitSha: 'sha-1',
+        commitSha: shaFor('1'),
       },
       fx.ctx,
     );
@@ -256,7 +257,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
           seedAsset(fx, card.id, { kind: 'mock', name: 'v2.mock.html', contentType: 'text/html' }),
           note(fx, card.id, 'v2.mock.html'),
         ],
-        commitSha: 'sha-2',
+        commitSha: shaFor('2'),
       },
       fx.ctx,
     );
@@ -291,7 +292,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
         seedAsset(fx, card.id, { kind: 'mock', name: 'one.mock.html', contentType: 'text/html' }),
         note(fx, card.id, 'one.mock.html'),
       ],
-      commitSha: 'same-sha',
+      commitSha: shaFor('same'),
       producedByKey: 'MOTIR-2669',
     };
 
@@ -761,7 +762,10 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
     // Both outcomes are legal: the loser either waits on the row lock and
     // supersedes cleanly, or loses the partial-unique slot and surfaces the
     // typed conflict. What is NOT legal is two current rows.
-    const results = await Promise.allSettled([publish('race-a'), publish('race-b')]);
+    const results = await Promise.allSettled([
+      publish(shaFor('race-a')),
+      publish(shaFor('race-b')),
+    ]);
     expect(results.some((r) => r.status === 'fulfilled')).toBe(true);
     for (const r of results) {
       if (r.status === 'rejected') {
@@ -778,7 +782,7 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
 
-    for (const sha of ['s1', 's2', 's3']) {
+    for (const sha of ['s1', 's2', 's3'].map(shaFor)) {
       await designEvidenceService.recordFromPathnames(
         {
           workItemId: card.id,
@@ -914,7 +918,7 @@ describe('designEvidenceService.withdrawCurrentForWorkItem', () => {
           seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' }),
           note(fx, workItemId, name),
         ],
-        commitSha: `sha-${name}`,
+        commitSha: shaFor(name),
         producedByKey: 'MOTIR-2669',
       },
       fx.ctx,
@@ -1179,7 +1183,7 @@ describe('AMENDMENT 4 — a result is published only while OPEN work waits on th
           seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' }),
           note(fx, workItemId, name),
         ],
-        commitSha: `sha-${name}`,
+        commitSha: shaFor(name),
       },
       fx.ctx,
     );
@@ -1319,7 +1323,7 @@ describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request rais
           seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' }),
           note(fx, workItemId, name),
         ],
-        commitSha: `sha-${name}`,
+        commitSha: shaFor(name),
       },
       fx.ctx,
     );
