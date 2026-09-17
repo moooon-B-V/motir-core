@@ -182,6 +182,14 @@ export async function recomputeWorkItemCiState(
   if (!locked) return null;
 
   const item = await workItemRepository.findById(workItemId, tx);
+  /* v8 ignore next -- NO PRODUCER CAN DRIVE THIS, and the invariant that makes it
+     so is asserted rather than assumed: `lockById` is `SELECT id … WHERE id = $1
+     FOR UPDATE` and `findById` is `findUnique({ where: { id } })`, both unfiltered
+     on the SAME immutable id inside ONE transaction — so a granted lock implies a
+     readable row. `tests/github/ciStateStoryGate.test.ts` §6 pins exactly that, so
+     a `findById` that starts filtering on something `lockById` does not fails
+     THERE rather than turning a live card's verdict into a silent `null`. The
+     guard stays because the read is nullable and the compiler says so. */
   if (!item) return null;
 
   const members = await classifyDeliveries({ id: item.id, sessionBranch: item.sessionBranch }, tx);

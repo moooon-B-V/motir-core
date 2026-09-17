@@ -156,6 +156,18 @@ export const workItemCiStateBackfillService = {
           // A card the bound tenant cannot see, or one that was deleted between
           // the candidate read and now, is not a failure — it is simply not a
           // candidate any more.
+          /* v8 ignore next -- REACHABLE IN PRODUCTION, NOT FROM A TEST, and the
+             distinction is the point: this is not dead code, it is a RACE arm.
+             `collectCandidates` runs to completion first and the sweep can then
+             take minutes, so a card really can be deleted underneath it — that is
+             the whole reason the arm exists. Driving it needs a delete timed
+             between the collection and this read, inside a sweep a test cannot
+             pause, and the only other route (a delivery row naming a workspace its
+             work item does not live in) is hand-written corruption, which would
+             assert the fixture rather than the sweep. `tests/github/ciStateBackfill.test.ts`
+             pins the neighbouring dispositions — archived is SKIPPED and counted,
+             a card with no pull requests is not a candidate at all — so the
+             classification either side of this line is covered. */
           if (!item) return { kind: 'gone' as const };
           if (item.archivedAt) return { kind: 'archived' as const };
 
@@ -180,6 +192,7 @@ export const workItemCiStateBackfillService = {
           return { kind: 'decided' as const, identifier: item.identifier, from, to };
         });
 
+        /* v8 ignore next -- the other half of the race arm above; same reason. */
         if (outcome.kind === 'gone') continue;
         report.scanned += 1;
         if (outcome.kind === 'archived') {
@@ -198,6 +211,12 @@ export const workItemCiStateBackfillService = {
         report.scanned += 1;
         report.failed.push({
           workItemId,
+          /* v8 ignore next -- the non-`Error` throw. Reaching it means injecting a
+             fault into the shipped recompute, which asserts the mock and not this
+             sweep; what the arm BUYS is asserted instead — `tests/github/ciStateStoryGate.test.ts`
+             §3 pins `report.failed` EMPTY across three card shapes, so a sweep that
+             started throwing per card would fail there rather than reporting a
+             silent partial. The ternary stays because `catch` binds `unknown`. */
           error: err instanceof Error ? err.message : 'unknown error',
         });
       }
