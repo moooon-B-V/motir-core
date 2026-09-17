@@ -270,6 +270,19 @@ export interface AgentInvocation {
   promptFile: string | null;
   /** The prompt as read back from `$MOTIR_PROMPT_FILE`. */
   promptFromFile: string | null;
+  /**
+   * The value of `$MOTIR_DESIGN_DIR` (Story MOTIR-5553 · Subtask MOTIR-5567) —
+   * where the run put the approved design, or `null` when it put none there.
+   *
+   * ⚠️ `null` IS THE INFORMATIVE VALUE. An unset variable is precisely what
+   * tells a real agent to fetch the design itself, so a test that could only
+   * see the happy path could not tell "the design landed" from "the design was
+   * skipped and nobody said so".
+   */
+  designDir: string | null;
+  /** Every file under `$MOTIR_DESIGN_DIR`, relative to it, sorted. `[]` when
+   *  the variable is unset or the directory does not exist. */
+  designFiles: string[];
   argv: string[];
 }
 
@@ -363,7 +376,7 @@ export function writeFakeAgent(dir: string): FakeAgent {
   writeFileSync(
     script,
     `#!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
@@ -385,6 +398,21 @@ function readStdin() {
 
 const stdin = await readStdin();
 const promptFile = process.env.MOTIR_PROMPT_FILE ?? null;
+// The APPROVED DESIGN the run put on disk (MOTIR-5567). Recorded by LISTING it
+// rather than by trusting the variable: a set variable pointing at an empty or
+// missing directory is the exact failure the all-or-nothing rule forbids, and
+// it is invisible to anything that only reads the environment.
+const designDir = process.env.MOTIR_DESIGN_DIR ?? null;
+function listDesign(root, prefix) {
+  if (!existsSync(root)) return [];
+  const out = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const rel = prefix ? prefix + '/' + entry.name : entry.name;
+    if (entry.isDirectory()) out.push(...listDesign(join(root, entry.name), rel));
+    else out.push(rel);
+  }
+  return out;
+}
 appendFileSync(
   LOG,
   JSON.stringify({
@@ -392,6 +420,8 @@ appendFileSync(
     stdin,
     promptFile,
     promptFromFile: promptFile && existsSync(promptFile) ? readFileSync(promptFile, 'utf8') : null,
+    designDir,
+    designFiles: designDir ? listDesign(designDir, '').sort() : [],
     argv: process.argv.slice(2),
   }) + '\\n',
 );

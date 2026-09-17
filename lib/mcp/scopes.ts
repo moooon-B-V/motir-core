@@ -186,6 +186,8 @@ export const CLI_TOKEN_SCOPES: TokenScope[] = ['read', 'work_items:write', 'inte
  */
 export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_work_item: 'read',
+  get_design: 'read',
+  list_designs: 'read',
   get_work_item_activity: 'read',
   list_ready: 'read',
   next_ready: 'read',

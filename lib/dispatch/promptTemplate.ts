@@ -16,6 +16,7 @@ import type {
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import { splitPlanBody } from '@/lib/markdown/planBody';
+import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 
 // The canonical DISPATCH-PROMPT grammar (Story 7.9 · MOTIR-1802) — the
 // open-core, deterministic rebuild of the cancelled 7.7.2 `generate_prompt` job.
@@ -89,6 +90,31 @@ export const RENDERED_SURFACE_TRIGGER =
  * asserts it equals the REGISTERED tool name, so a rename fails there.
  */
 export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
+
+/**
+ * The two DESIGN tools this prompt names, and the variable the CLI sets
+ * (Story MOTIR-5553 · Subtask MOTIR-5563).
+ *
+ * Literals, because this module is a leaf that imports nothing from `lib/mcp/`
+ * — the same reason {@link HOW_TO_TEST_TOOL_NAME} is one — and
+ * `tests/dispatch/promptTemplate.test.ts` asserts each against the REGISTERED
+ * tool name, so a rename fails there rather than in a prompt an agent reads six
+ * weeks later.
+ */
+export const GET_DESIGN_TOOL_NAME = 'get_design';
+export const LIST_DESIGNS_TOOL_NAME = 'list_designs';
+
+/**
+ * The environment variable the CLI sets when it has put the design on disk.
+ *
+ * ⚠️ THE OTHER HALF OF THIS NAME LIVES IN `packages/cli/src/designFiles.ts`, and
+ * the two are pinned equal by a test in this module's suite — the only place
+ * both are reachable, since this file cannot import a CLI module and that
+ * package cannot import `lib/`. A drift makes this prompt name a variable
+ * nothing sets, which reads to the agent as *there is no design*: the failure
+ * with no error message.
+ */
+export const DESIGN_DIR_ENV = 'MOTIR_DESIGN_DIR';
 
 /**
  * Named slots the Epic-9 enrichment cards fill — the ONE extension point this
@@ -268,6 +294,16 @@ export interface DispatchPromptSource {
    * (`designEvidenceService.findWaitingDependentIds`, the one read both use).
    */
   openDependentKeys: string[];
+  /**
+   * The DESIGNS this card waits on (Story MOTIR-5553 · Subtask MOTIR-5563) —
+   * one verdict per work item it is `blocked_by` whose type is `design`,
+   * resolved by `designAccessService` and never re-derived here.
+   *
+   * EMPTY renders nothing at all, which is the ordinary case: most cards wait on
+   * no design. It is the ABSENCE that the `code` steps then handle, by telling
+   * an agent about to build a rendered surface to go and look.
+   */
+  designReference?: DesignVerdictDto[];
   parent: { key: string; title: string } | null;
   projectName: string;
   /** The project key, e.g. `PROD` — the identifier prefix. */
@@ -346,6 +382,12 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above and every file it names under "Context refs".',
     '2. Implement the change, following the repository conventions in its CLAUDE.md',
     '   (auto-loaded when you enter the repo) — do not restate or re-derive them.',
+    `   ⚠️ If this change ${RENDERED_SURFACE_TRIGGER}`,
+    '   and NO DESIGN REFERENCE is listed in CONTEXT above, do not draw it from',
+    `   imagination: look first with the ${LIST_DESIGNS_TOOL_NAME} tool (\`blockersOf\` this`,
+    '   card, then the project’s designs by path). If an approved design draws the',
+    '   surface, build to it. If nothing does, STOP through THE CARD IS WRONG below and',
+    '   ask for a `type: design` card beside this one, with this card blocked_by it.',
     '3. Ship the TESTS that cover the change in the SAME change set: the new logic,',
     '   every new branch, and the error / edge cases. Code without tests is incomplete.',
     '4. Run the repository checks (lint, typecheck, formatting, build) plus the test',
@@ -503,9 +545,12 @@ function designResultSteps(openDependentKeys: readonly string[]): string[] {
     '   this in the SAME iteration that produced the asset, while the files are in',
     '   front of you.',
     '',
-    '   The REPOSITORY stays the source of truth: the published result is the',
-    '   card’s view of the asset and is',
-    '   never a replacement for committing the two files.',
+    '   THE PUBLISHED RESULT IS THE SOURCE OF TRUTH (design-result.md AMENDMENT 5',
+    '   Q1). It is what every later run is handed and what a reviewer decides on.',
+    '   Committing the two files to the repository is OPTIONAL — useful where the',
+    '   team keeps its designs beside the code, and never the authority. Where a',
+    '   committed copy and the published result differ, the published result is',
+    '   the design.',
     '',
     '   And nothing else will make this call. A design card whose result never',
     '   arrives looks exactly like one that succeeded — files written, commit',
@@ -828,6 +873,109 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   return lines;
 }
 
+/**
+ * The DESIGN REFERENCE block (Story MOTIR-5553 · Subtask MOTIR-5563) — what this
+ * card is supposed to be built against, and what to do when there is nothing.
+ *
+ * ⚠️ IT RENDERS FOR EVERY TYPE, not only for UI code. A design decides more than
+ * pixels: which element owns which behaviour, what a surface is allowed to
+ * assume. A service card whose design blocker moved is as wrong as a component
+ * card, and it is the one least likely to go looking.
+ *
+ * ⚠️ AND AN EMPTY LIST RENDERS NOTHING. Most cards wait on no design, and a
+ * block saying so on every one of them is a block agents learn to skip — which
+ * is exactly the block that must be read on the cards that do have one. The
+ * ABSENCE is handled where it bites instead, in the `code` steps.
+ */
+function designReferenceSection(verdicts: readonly DesignVerdictDto[]): string[] {
+  // ⚠️ A `not_a_design_card` VERDICT IS DROPPED HERE, and the asymmetry with the
+  // service is deliberate. `designAccessService` answers for EVERY blocker,
+  // including the ones that are not design cards, because an API caller asking
+  // *what designs does this card wait on* is entitled to be told that a blocker
+  // it expected to be a design is not one. An AGENT is not: almost every card
+  // has a non-design blocker, so rendering those would put a DESIGN REFERENCE
+  // block on almost every prompt, filled with lines saying nothing — and a block
+  // that is usually noise is a block agents learn to skip, which is exactly the
+  // block that must be read on the cards that do have a design.
+  const relevant = verdicts.filter(
+    (v) => v.verdict === 'approved' || v.reason !== 'not_a_design_card',
+  );
+  if (relevant.length === 0) return [];
+
+  const lines: string[] = ['', 'DESIGN REFERENCE — what this card is built against'];
+  const approved = relevant.filter((v) => v.verdict === 'approved');
+  const refused = relevant.filter((v) => v.verdict !== 'approved');
+
+  for (const verdict of approved) {
+    if (verdict.verdict !== 'approved') continue;
+    const { design } = verdict;
+    lines.push(
+      '',
+      `  ${verdict.designCardKey} — ${verdict.designCardTitle}`,
+      `    APPROVED, version ${design.evidenceId}`,
+    );
+    for (const asset of design.assets) {
+      lines.push(
+        asset.state === 'available'
+          ? `      ${asset.kind}  ${asset.sourcePath}`
+          : `      ${asset.kind}  ${asset.sourcePath}  (UNAVAILABLE — this approved ` +
+              'version’s files were reclaimed; it is still the approved design)',
+      );
+    }
+    lines.push(
+      `    WHERE THE FILES ARE: if $${DESIGN_DIR_ENV} is set in your environment, they are`,
+      `    already on disk at $${DESIGN_DIR_ENV}/${verdict.designCardKey}/<sourcePath>. If it is`,
+      `    NOT set, fetch them NOW with the ${GET_DESIGN_TOOL_NAME} tool on`,
+      `    ${verdict.designCardKey} — its links expire within minutes, so download them before`,
+      '    you read or plan anything, into a directory OUTSIDE the repository checkout so',
+      '    the design never lands in your diff.',
+    );
+  }
+
+  if (approved.length > 0) {
+    lines.push(
+      '',
+      '  HOW TO READ A MOCK. Open the *.mock.html SOURCE, not a rendering of it, and',
+      '  read EVERY panel: a mock is usually a multi-panel board (closed vs open, empty',
+      '  vs populated), and a single view hides elements the source names. A file whose',
+      '  name carries `--` is a DELTA mock: it holds only what CHANGED about an earlier',
+      '  surface, and its note section names the mock it amends — fetch that base with',
+      `  ${LIST_DESIGNS_TOOL_NAME} using its path as \`pathPrefix\`, and read both.`,
+    );
+  }
+
+  for (const verdict of refused) {
+    if (verdict.verdict !== 'not_approved') continue;
+    lines.push(
+      '',
+      `  ${verdict.designCardKey} — ${verdict.designCardTitle}`,
+      `    NO APPROVED DESIGN (${verdict.reason}). This card waits on that design card,`,
+      '    and it has no approved result to build against.',
+    );
+  }
+
+  lines.push(
+    '',
+    '  ⚠️ THE DESIGN GATE — CHECK IT BEFORE YOU BUILD ANYTHING VISIBLE.',
+    '  Your blockers being done means the design CARD is finished. It does not mean a',
+    '  design exists, and it does not mean the design draws what you have to build. So',
+    '  look, and STOP in either of these two cases:',
+    '',
+    '    (a) any design above is NOT approved; or',
+    '    (b) you must build an ELEMENT no approved design draws — a whole panel,',
+    '        control, section or screen. An unspecified DETAIL is not this: a hover',
+    '        tint, a focus ring, an obvious empty-state string are yours to decide from',
+    '        the design system. A piece of UI nobody drew is not.',
+    '',
+    '  In either case do NOT build it and do NOT draw it yourself. Stop through THE CARD',
+    '  IS WRONG below, and ask for a NEW `type: design` card placed BESIDE this card —',
+    '  the same parent, never a child of it — that `relates_to` the design card(s) named',
+    '  above, with this card `blocked_by` it. The old design card stays done: it is the',
+    '  record of what was decided, not a slot to overwrite.',
+  );
+  return lines;
+}
+
 /** The CONTEXT section's fact lines + the card's narrative body. */
 function contextSection(
   src: DispatchPromptSource,
@@ -896,6 +1044,11 @@ function contextSection(
   // Sibling to the lessons slot, and for the same reason: something the agent
   // must know BEFORE it starts, not something it would find in the card body.
   facts.push(...advisorySection(src.advisories ?? []));
+
+  // The DESIGN this card is built against (MOTIR-5563) — beside the advisories
+  // and for the same reason: something the agent must know BEFORE it starts,
+  // not something it would find by reading the card body.
+  facts.push(...designReferenceSection(src.designReference ?? []));
 
   facts.push('', 'CARD DESCRIPTION');
   facts.push('', narrative.length > 0 ? narrative : '(The card carries no description body.)');

@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **66 tools**.
+`initialize` handshake and registers **68 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -907,6 +907,69 @@ Three things to know when paging:
 
 Read-scoped, and access-gated exactly like the UI: an item in another workspace
 (or one the token's role cannot browse) is an indistinguishable not-found.
+
+#### `list_designs`
+
+**What am I building against?** With `blockersOf`, the design cards a work item
+is `blocked_by`, each with a verdict; without it, a page of the project's
+APPROVED designs.
+
+| Input        | Type   | Required | Notes                                                                                                                |
+| ------------ | ------ | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | The project key, e.g. `"ACME"`. Case-insensitive.                                                                    |
+| `blockersOf` | string | no       | A work item key. Answers the designs THAT item waits on instead of the project page; the filters below do not apply. |
+| `pathPrefix` | string | no       | Only designs holding a file whose repository path starts with this — how a delta mock's amended BASE is found.       |
+| `query`      | string | no       | A case-insensitive substring of the design card's TITLE.                                                             |
+| `cursor`     | string | no       | Opaque page cursor from a previous call's `nextCursor`.                                                              |
+| `limit`      | number | no       | Page size (1–100, default 25).                                                                                       |
+
+**Output** — `structuredContent`: with `blockersOf`, `{ designs: DesignVerdict[] }`;
+otherwise `{ items: ApprovedDesign[], nextCursor }`. Both derive from the
+`/api/v1` design components, so the two surfaces cannot drift.
+
+**No download links, on either arm.** A link lives minutes, so a page of them
+would expire before you read the list. Find the design here; call
+[`get_design`](#get_design) for links minted when you actually fetch.
+
+#### `get_design`
+
+The APPROVED design of ONE design card, with short-lived links to its files.
+
+| Input | Type   | Required | Notes                                                                                     |
+| ----- | ------ | -------- | ----------------------------------------------------------------------------------------- |
+| `key` | string | yes      | The DESIGN CARD's identifier, e.g. `"ACME-7"` — not the key of the card that waits on it. |
+
+**Output** — `structuredContent`: a `DesignVerdict`. `approved` carries the
+design — its **version** (`evidenceId`), `publishedAt`, `commitSha` (which may
+be null) and every asset with its `kind`, `sourcePath`, `fileName`,
+`contentType`, `byteSize` and `state`, plus a `url` and `expiresAt` on each
+`available` one.
+
+**The answer is a VERDICT, not a design or nothing.** `not_approved` names one
+of five reasons, and they call for different actions:
+
+| `reason`            | what it means                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| `not_done`          | The design card has not reached Done. Approved-with-an-open-pull-request counts as NOT done. |
+| `cancelled`         | The card was cancelled; nothing it drew is going to be built.                                |
+| `withdrawn`         | A result was published and then TAKEN BACK — different from never having had one.            |
+| `no_result`         | The card is Done but never published a result. The surface is undesigned.                    |
+| `not_a_design_card` | That card's `type` is not `design`, so it draws nothing.                                     |
+
+**The version is the one the APPROVAL named**, never simply the card's current
+result: a design approved and then republished before its merge would otherwise
+be reported as approved when nobody approved it
+(`docs/decisions/design-result.md` AMENDMENT 5 Q2).
+
+**⚠️ The links EXPIRE within minutes.** Download every file as soon as you get
+them — `curl -fsSL -o <fileName> "<url>"` — into a directory OUTSIDE the
+repository checkout, so the design never lands in your diff, and call again for
+fresh links if they lapse. An asset whose `state` is `unavailable` has no link
+and never will: that approved version's files were reclaimed, which is a real
+answer rather than an error, and it is still the design that was approved.
+
+Both tools are read-scoped on `project:browse` — a key `CLI_TOKEN_GRANT` already
+carries, so a dispatched agent reaches them without the grant being widened.
 
 ### Work-item writes
 

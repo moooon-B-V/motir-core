@@ -4,8 +4,11 @@ import {
   branchSlug,
   FINDINGS_POLICY_TOKENS,
   FULL_FINDINGS_POLICY,
+  DESIGN_DIR_ENV,
+  GET_DESIGN_TOOL_NAME,
   HOW_TO_TEST_TOOL_NAME,
   LINKING_RATIONALE,
+  LIST_DESIGNS_TOOL_NAME,
   NO_INJECTIONS,
   parseFindingsPolicy,
   RENDERED_SURFACE_TRIGGER,
@@ -13,6 +16,9 @@ import {
 } from '@/lib/dispatch/promptTemplate';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME } from '@/lib/mcp/tools/publishTestInstructions';
+import { GET_DESIGN_TOOL_NAME as REGISTERED_GET_DESIGN } from '@/lib/mcp/tools/getDesign';
+import { LIST_DESIGNS_TOOL_NAME as REGISTERED_LIST_DESIGNS } from '@/lib/mcp/tools/listDesigns';
+import { MOTIR_DESIGN_DIR_ENV as CLI_MOTIR_DESIGN_DIR_ENV } from '../../packages/cli/src/designFiles';
 import { splitPlanBody } from '@/lib/markdown/planBody';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type { WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -335,10 +341,20 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       expect(prompt).toContain('card empty');
     });
 
-    it('keeps the repository the source of truth, and asks for the evidence id', () => {
+    it('makes the PUBLISHED RESULT the source of truth, and asks for the evidence id', () => {
+      // ⚠️ AMENDED ON THE RECORD (MOTIR-5563). This test asserted the opposite —
+      // `REPOSITORY stays the source of truth` and `never a replacement for
+      // committing the two files` — and `design-result.md` AMENDMENT 5 Q1
+      // RETIRES that rule: a project may not commit its designs at all, and a
+      // hosted agent has no checkout to read them from. The retired phrases are
+      // asserted ABSENT rather than merely un-asserted, so a revert is a red test
+      // rather than a silent return.
       const prompt = designPrompt();
-      expect(prompt).toContain('REPOSITORY stays the source of truth');
-      expect(prompt).toContain('never a replacement for committing the two files');
+      expect(prompt).not.toContain('REPOSITORY stays the source of truth');
+      expect(prompt).not.toContain('never a replacement for committing the two files');
+      expect(prompt).toContain('THE PUBLISHED RESULT IS THE SOURCE OF TRUTH');
+      expect(prompt).toContain('Committing the two files to the repository is OPTIONAL');
+      expect(prompt).toContain('the published result is');
       expect(prompt).toContain('evidence id');
     });
 
@@ -1853,5 +1869,143 @@ describe('assembleDispatchPrompt — HOW TO TEST is per RUN, on the run target (
   it('names the REGISTERED tool, so a rename fails here', () => {
     expect(HOW_TO_TEST_TOOL_NAME).toBe(PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(HOW_TO_TEST_TOOL_NAME);
+  });
+});
+
+describe('DESIGN REFERENCE — what this card is built against (MOTIR-5563)', () => {
+  const approvedVerdict = (over: Record<string, unknown> = {}) => ({
+    verdict: 'approved' as const,
+    designCardKey: 'PROD-42',
+    designCardTitle: 'Draw the ready-set filter bar',
+    design: {
+      designCardKey: 'PROD-42',
+      designCardTitle: 'Draw the ready-set filter bar',
+      evidenceId: 'ev_abc123',
+      publishedAt: '2026-09-15T10:00:00.000Z',
+      commitSha: 'deadbeef',
+      assets: [
+        {
+          kind: 'mock' as const,
+          sourcePath: 'design/work-items/ready-bar.mock.html',
+          fileName: 'ready-bar.mock.html',
+          contentType: 'text/html',
+          byteSize: 4096,
+          state: 'available' as const,
+        },
+        {
+          kind: 'note_file' as const,
+          sourcePath: 'design/work-items/design-notes.md',
+          fileName: 'design-notes.md',
+          contentType: 'text/markdown',
+          byteSize: 2048,
+          state: 'available' as const,
+        },
+      ],
+      ...over,
+    },
+  });
+
+  it('renders the key, the VERSION, every sourcePath, the dir path and the fetch fallback', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ designReference: [approvedVerdict()] as never }),
+    );
+    expect(prompt).toContain('DESIGN REFERENCE — what this card is built against');
+    expect(prompt).toContain('PROD-42 — Draw the ready-set filter bar');
+    // The VERSION, which is what makes the reference checkable later.
+    expect(prompt).toContain('APPROVED, version ev_abc123');
+    expect(prompt).toContain('design/work-items/ready-bar.mock.html');
+    expect(prompt).toContain('design/work-items/design-notes.md');
+    // BOTH ways of getting the files, because only the launcher knows which applies.
+    expect(prompt).toContain(`$${DESIGN_DIR_ENV}/PROD-42/<sourcePath>`);
+    expect(prompt).toContain(GET_DESIGN_TOOL_NAME);
+    expect(prompt).toContain('expire within minutes');
+    expect(prompt).toContain('OUTSIDE the repository checkout');
+    // How to READ one — the source, every panel, and the delta's base.
+    expect(prompt).toContain('*.mock.html SOURCE, not a rendering');
+    expect(prompt).toContain('read EVERY panel');
+    expect(prompt).toContain(LIST_DESIGNS_TOOL_NAME);
+  });
+
+  it('an UNAVAILABLE asset is named as such and not silently dropped', () => {
+    const verdict = approvedVerdict();
+    verdict.design.assets[0]!.state = 'unavailable' as never;
+    const { prompt } = assembleDispatchPrompt(source({ designReference: [verdict] as never }));
+    expect(prompt).toContain('design/work-items/ready-bar.mock.html');
+    expect(prompt).toContain('UNAVAILABLE');
+    expect(prompt).toContain('it is still the approved design');
+  });
+
+  it('a NOT-approved verdict renders its reason and the THE CARD IS WRONG instruction', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({
+        designReference: [
+          {
+            verdict: 'not_approved',
+            designCardKey: 'PROD-42',
+            designCardTitle: 'Draw the ready-set filter bar',
+            reason: 'not_done',
+          },
+        ] as never,
+      }),
+    );
+    expect(prompt).toContain('NO APPROVED DESIGN (not_done)');
+    expect(prompt).toContain('Stop through THE CARD');
+    // The SHAPE of the correction, which is the part an agent gets wrong.
+    expect(prompt).toContain('BESIDE this card');
+    expect(prompt).toContain('never a child of it');
+    expect(prompt).toContain('`relates_to` the design card(s) named');
+    expect(prompt).toContain('blocked_by');
+    expect(prompt).toContain('The old design card stays done');
+  });
+
+  it('the gate distinguishes an unspecified ELEMENT from an unspecified DETAIL', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ designReference: [approvedVerdict()] as never }),
+    );
+    expect(prompt).toContain('a whole panel,');
+    expect(prompt).toContain('An unspecified DETAIL is not this');
+    expect(prompt).toContain('hover');
+  });
+
+  it('an EMPTY designReference renders NO BLOCK — the ordinary card is unchanged', () => {
+    // The HEADING, not the phrase: the `code` steps' look-first instruction
+    // legitimately says the words "NO DESIGN REFERENCE is listed", and asserting
+    // on the phrase would make this test pass only while that sentence is absent.
+    const heading = 'DESIGN REFERENCE — what this card is built against';
+    expect(assembleDispatchPrompt(source({ designReference: [] })).prompt).not.toContain(heading);
+    // And an omitted field behaves identically to an empty one.
+    expect(assembleDispatchPrompt(source()).prompt).not.toContain(heading);
+  });
+
+  it('a `code` card with NO design reference is told to LOOK first', () => {
+    const { prompt } = assembleDispatchPrompt(source({ designReference: [] }));
+    expect(prompt).toContain(`If this change ${RENDERED_SURFACE_TRIGGER}`);
+    expect(prompt).toContain(`look first with the ${LIST_DESIGNS_TOOL_NAME} tool`);
+    expect(prompt).toContain('If nothing does, STOP through THE CARD IS WRONG');
+  });
+
+  it('names the REGISTERED tools, so a rename fails here', () => {
+    expect(MCP_TOOL_NAMES).toContain(GET_DESIGN_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(LIST_DESIGNS_TOOL_NAME);
+    expect(GET_DESIGN_TOOL_NAME).toBe(REGISTERED_GET_DESIGN);
+    expect(LIST_DESIGNS_TOOL_NAME).toBe(REGISTERED_LIST_DESIGNS);
+  });
+
+  it('names the variable the CLI actually sets — the two cannot drift', () => {
+    // ⚠️ THE ONLY PLACE BOTH VALUES ARE REACHABLE. This module cannot import a
+    // CLI module and the CLI package cannot import `lib/`, so the equality is
+    // pinned here, reading the CLI's own exported constant. A drift makes the
+    // prompt name a variable nothing sets, which reads to the agent as "there
+    // is no design" — a failure with no error message.
+    expect(DESIGN_DIR_ENV).toBe(CLI_MOTIR_DESIGN_DIR_ENV);
+  });
+
+  it('no longer tells an agent the REPOSITORY is the design’s source of truth', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ type: 'design', openDependentKeys: ['PROD-9'] }),
+    );
+    expect(prompt).not.toContain('The REPOSITORY stays the source of truth');
+    expect(prompt).toContain('THE PUBLISHED RESULT IS THE SOURCE OF TRUTH');
+    expect(prompt).toContain('Committing the two files to the repository is OPTIONAL');
   });
 });

@@ -511,6 +511,20 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'One item in full — description, status, parent or folder, children, dependency edges, and a readiness verdict.',
     descriptionFingerprint: 'ea684127e0a8',
   },
+  get_design: {
+    // Story MOTIR-5553 · MOTIR-5561.
+    summary:
+      'The APPROVED design of one design card, with short-lived links to its files — or which of five reasons there is none.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '88b29f21f0bd',
+  },
+  list_designs: {
+    // Story MOTIR-5553 · MOTIR-5561.
+    summary:
+      'What a card is meant to be built against (`blockersOf`), or a page of the project’s approved designs. No links — take those from `get_design`.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '5698221bd478',
+  },
   get_work_item_activity: {
     summary:
       "One page of an item's discussion and change trail: comment threads and history, interleaved.",

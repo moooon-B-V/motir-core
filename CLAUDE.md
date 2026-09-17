@@ -701,8 +701,15 @@ when something waits on its answer. So:
 
 Three things follow when you do publish, and the second is the one that bites:
 
-- **You still commit both files.** The published result is the card's VIEW of
-  the asset; the repository stays the source of truth.
+- **⚠️ THE PUBLISHED RESULT IS THE SOURCE OF TRUTH — committing the files is
+  OPTIONAL** (`docs/decisions/design-result.md` AMENDMENT 5 Q1, which RETIRES the
+  sentence that used to stand here: _"the repository stays the source of
+  truth"_). The published result is what every later agent run is handed, what
+  the read doors return, and what a reviewer decides on. Committing the two files
+  beside the code is useful where a team keeps its designs there — and it is
+  never the authority: **where a committed copy and the published result differ,
+  the published result is the design.** A project that commits nothing still has
+  designs its agents can build against, which is the whole point of the change.
 - **⚠️ NOTHING ELSE MAKES THAT CALL, AND A MISSING PUBLISH LOOKS EXACTLY LIKE A
   SUCCESSFUL RUN.** There is no CI step, no check and no background job behind
   it. A design card that something waits on, that writes its files, lands its

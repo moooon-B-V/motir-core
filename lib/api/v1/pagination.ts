@@ -273,6 +273,11 @@ export const V1_COLLECTIONS = [
   'workItemActivityComments',
   'workItemActivityHistory',
   'folders',
+  // Story MOTIR-5553's approved-design listing. Its position is the design
+  // card's `key` NUMBER, not a row id and not a timestamp: a republish moves a
+  // card's newest result forward in time, so a time-ordered cursor would walk
+  // that card across page boundaries and show it twice or not at all.
+  'projectDesigns',
 ] as const;
 
 /** The name a cursor carries so it can only be replayed at its own collection. */

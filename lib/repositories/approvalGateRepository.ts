@@ -152,6 +152,44 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The most recently DECIDED `approved` gate of one kind, for MANY work items
+   * — arm (a) of `design-result.md` AMENDMENT 5 Q2's ladder (Story MOTIR-5553 ·
+   * Subtask MOTIR-5557). Returned as a MAP keyed by work-item id.
+   *
+   * ⚠️ DELIBERATELY NOT {@link findLatestByWorkItem}, and the difference is the
+   * whole point rather than a narrowing. That one answers *what question is on
+   * this card right now*, so it prefers an AWAITING row — the live question. An
+   * approved design is a question that was ANSWERED, so a card that has since
+   * been reopened and is awaiting a second decision must still resolve to what
+   * the FIRST decision named until the second is made. Reading through the other
+   * door would return the awaiting row, whose `subjectId` names a version nobody
+   * has approved yet — the exact substitution Q2 exists to prevent.
+   *
+   * ⚠️ ORDERED ON `decidedAt`, not `createdAt`. Approvals accumulate (ADR §6d)
+   * and a reopened card's second gate is created later AND decided later, so the
+   * two agree — but the ordering that is CORRECT is the one over decisions,
+   * because it is a decision this is looking for.
+   *
+   * ONE query for the whole set; the per-item head is taken in memory, because
+   * the row count per card is the number of times it was approved.
+   */
+  async findLatestApprovedByWorkItems(
+    workItemIds: string[],
+    kind: ApprovalGateKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, ApprovalGate>> {
+    if (workItemIds.length === 0) return new Map();
+    const client = tx ?? dbRead;
+    const rows = await client.approvalGate.findMany({
+      where: { workItemId: { in: workItemIds }, kind, state: 'approved' },
+      orderBy: { decidedAt: 'desc' },
+    });
+    const head = new Map<string, ApprovalGate>();
+    for (const row of rows) if (!head.has(row.workItemId)) head.set(row.workItemId, row);
+    return head;
+  },
+
+  /**
    * LOCK one gate row and return the fields a DECISION is derived from
    * (MOTIR-4790's decide door, step 1).
    *

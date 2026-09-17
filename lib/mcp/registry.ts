@@ -4,6 +4,8 @@ import { permissionGatedServer } from './permissionGate';
 import { rateLimitedServer } from './rateLimitGate';
 import { strictInputServer } from './strictInput';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
+import { GET_DESIGN_TOOL_NAME, registerGetDesign } from './tools/getDesign';
+import { LIST_DESIGNS_TOOL_NAME, registerListDesigns } from './tools/listDesigns';
 import {
   GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
   registerGetWorkItemActivity,
@@ -119,6 +121,8 @@ export const MCP_SERVER_INFO = { name: 'motir', version: '0.1.0' } as const;
 /** Stable tool names — exported so consumers/tests reference them by constant. */
 export const MCP_TOOL_NAMES = [
   GET_WORK_ITEM_TOOL_NAME,
+  GET_DESIGN_TOOL_NAME,
+  LIST_DESIGNS_TOOL_NAME,
   GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
   LIST_READY_TOOL_NAME,
   NEXT_READY_TOOL_NAME,
@@ -234,6 +238,8 @@ export function registerMcpTools(
   const target = meterBillableTools ? rateLimitedServer(granted, resolveContext) : granted;
   // Read + dispatch tools (7.8.4).
   registerGetWorkItem(target, resolveContext);
+  registerGetDesign(target, resolveContext);
+  registerListDesigns(target, resolveContext);
   // The DISCUSSION read (MOTIR-1999) — a card's comments + change trail, the
   // read half `add_comment` never had. Deliberately NOT folded into
   // get_work_item: that aggregate is one round-trip and must stay one, so the
