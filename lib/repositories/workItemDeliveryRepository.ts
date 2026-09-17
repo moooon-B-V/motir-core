@@ -267,6 +267,38 @@ export const workItemDeliveryRepository = {
   },
 
   /**
+   * EVERY card that has a delivery link at all, with the workspace each one
+   * belongs to — the CI-state backfill's first candidate arm (MOTIR-5472).
+   *
+   * The workspace comes off the DELIVERY ROW, never from caller input: the
+   * backfill holds no tenant of its own, and `work_item` has no `system_admin`
+   * arm, so every card it touches has to be reached by binding a workspace this
+   * read resolved (`repoSetCompletionService.reevaluateItem`'s rule, one level
+   * up). The row is the trusted source for exactly that reason — a workspace
+   * passed in would fail as a cross-tenant read rather than an empty one.
+   *
+   * Armed for the system flag by
+   * `20260828120000_work_item_delivery_system_arm`, so a cross-tenant sweep under
+   * `withSystemContext` is ADMITTED rather than silently empty.
+   *
+   * Distinct on the card: a card delivered by three pull requests is ONE
+   * candidate, because the recompute folds its whole set in one pass. Ordered by
+   * id so a paged sweep is deterministic.
+   */
+  async listDeliveredWorkItemRefs(
+    tx: Prisma.TransactionClient,
+    opts: { workspaceId?: string } = {},
+  ): Promise<Array<{ workItemId: string; workspaceId: string }>> {
+    const rows = await tx.workItemDelivery.findMany({
+      where: opts.workspaceId ? { workspaceId: opts.workspaceId } : {},
+      select: { workItemId: true, workspaceId: true },
+      distinct: ['workItemId'],
+      orderBy: { workItemId: 'asc' },
+    });
+    return rows;
+  },
+
+  /**
    * Every card a BATCH of pull requests delivers, in (pull request, link age)
    * order — {@link listByPullRequest} for a list, in one query (MOTIR-3756).
    *

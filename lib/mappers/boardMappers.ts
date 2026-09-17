@@ -5,6 +5,7 @@ import type {
   Sprint,
   WorkItem,
 } from '@/generated/prisma/client';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   BoardCardDto,
   BoardColumnConfigDto,
@@ -92,7 +93,18 @@ export function toBoardColumnStatusDto(row: BoardColumnStatus): BoardColumnStatu
  */
 export function toBoardCardDto(
   row: WorkItem,
-  opts: { ready: boolean; awaitingAcceptance?: boolean; swimlaneKey?: string },
+  opts: {
+    ready: boolean;
+    awaitingAcceptance?: boolean;
+    swimlaneKey?: string;
+    /**
+     * The row's status CATEGORY (MOTIR-5474). Resolved by the CALLER, which holds
+     * the project's workflow already — the mapper takes whole `WorkItem` rows and
+     * a status row's category is not on them, so deriving it here would mean a
+     * read per card. `null` when the row's status maps to no live status.
+     */
+    statusCategory?: StatusCategoryDto | null;
+  },
 ): BoardCardDto {
   const dto: BoardCardDto = {
     id: row.id,
@@ -111,6 +123,8 @@ export function toBoardCardDto(
     position: row.position,
     ready: opts.ready,
     awaitingAcceptance: opts.awaitingAcceptance ?? false,
+    ciState: row.ciState,
+    statusCategory: opts.statusCategory ?? null,
   };
   if (opts.swimlaneKey !== undefined) dto.swimlaneKey = opts.swimlaneKey;
   return dto;

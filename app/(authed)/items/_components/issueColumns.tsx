@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
@@ -79,6 +80,16 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
           <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
             {r.title}
           </span>
+          {/* THE CI BADGE (MOTIR-5474), in the TITLE cell and in its GLYPH form —
+              both forced by the row's width budget, measured in
+              `design/work-items/design-notes.md` § *The CI badge (MOTIR-5471)*.
+              The title track is this row's ONLY flexible column, so a badge here
+              adds no fixed width and leaves the row's 1204px minimum untouched; a
+              dedicated *Checks* column would take it to 1340px and clip at both
+              1280 and 1200. The glyph carries `shrink-0`, so the TITLE truncates
+              and the badge stays whole. List and Tree share this builder, so both
+              views render it identically. */}
+          <CiStateBadge ciState={r.ciState} statusCategory={r.statusCategory} form="glyph" />
         </span>
       ),
     },

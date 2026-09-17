@@ -2377,13 +2377,31 @@ model WorkItem {
   // on GitHub. `"passing"` ⇔ the latest checks succeeded (the item is VERIFIED —
   // the Story-level "N of M verified" roll-up counts these); `"failing"` ⇔ a
   // terminal check failed (the item is visibly NOT-ready — the dispatched agent
-  // sees it needs another pass WITHOUT leaving Motir). `null` ⇔ no CI signal yet
-  // (never dispatched, or checks still pending). Set ONLY by the CI feedback loop
-  // (`githubWebhookService` → `workItemsService.setCiState`), never by a user
-  // edit — DISTINCT from `status` (the workflow lifecycle): a merged item can
+  // sees it needs another pass WITHOUT leaving Motir).
+  //
+  // ⚠️ IT IS THE CARD'S AGGREGATE OVER ITS WHOLE DELIVERY SET, NOT ONE PULL
+  // REQUEST'S VERDICT (Story MOTIR-5469 · MOTIR-5470). Folded over every pull
+  // request that delivers the card — its delivery links, its mirrored rows and
+  // its session branch — with precedence `failing` > `running` > `passing`:
+  //   `failing`  ⇔ at least one delivering pull request has a terminal failure;
+  //   `running`  ⇔ none is failing and at least one is still waiting on a verdict
+  //               (`running` IS written now — it was terminal-only under
+  //               MOTIR-894, which is why a card whose fix was already building
+  //               kept reading `failing`);
+  //   `passing`  ⇔ every member that can report has passed — which holds exactly
+  //               when `everyDeliveryIsGreen` does, so a card reading `passing`
+  //               is one CI has already promoted;
+  //   `null`     ⇔ NO member has a verdict (no deliveries, or none has reported
+  //               and none is expected to). Absence of CI is not a state.
+  //
+  // RECOMPUTED, never stamped, by `deliveryVerdict.recomputeWorkItemCiState` —
+  // the one writer — from the CI feedback loop (both the terminal AND the pending
+  // arm) and from all four link doors, under the card's row lock. Never a user
+  // edit, and DISTINCT from `status` (the workflow lifecycle): a merged item can
   // still be `failing`. A plain `String?` matching this table's camelCase,
   // no-`@map` columns; not an enum (a third provider-neutral value would be a
-  // contained change, and the roll-up filters on the literal).
+  // contained change, and the roll-up filters on the literal `'passing'`, which
+  // `running` deliberately does not match).
   ciState               String?
   // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
   // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The

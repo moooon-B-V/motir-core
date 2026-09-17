@@ -918,3 +918,59 @@ describe('IssueAdvancedFilter — the Folder row', () => {
     expect(screen.getByText('is none of Unknown value')).toBeTruthy();
   });
 });
+
+// ── THE *CHECKS* FIELD IN THE BUILDER (Story MOTIR-5469 · MOTIR-5473) ─────────
+// Design: `design/work-items/list--ci-badge.mock.html` panel 8, spec
+// `design/work-items/design-notes.md` § *The CI badge (MOTIR-5471)*.
+describe('IssueAdvancedFilter — the Checks field (MOTIR-5473)', () => {
+  it('picks Checks → Failing and emits the AST', () => {
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Checks' }));
+
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Checks values' }));
+    fireEvent.click(screen.getByRole('option', { name: /Checks failing/ }));
+
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'ciState', operator: 'is_any_of', value: ['failing'] }],
+    });
+  });
+
+  it('offers the three verdicts WORST-FIRST, the order the fold applies', () => {
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Checks' }));
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Checks values' }));
+
+    const labels = screen
+      .getAllByRole('option')
+      .map((o) => o.textContent ?? '')
+      .filter((text) => text.includes('Checks '));
+    expect(labels).toEqual(['Checks failing', 'Checks running', 'Checks passing']);
+  });
+
+  it('words the empty pair as HAS NO CHECKS / HAS CHECKS, not "is empty"', () => {
+    // The column's `null` means *no pull request has reported and none is
+    // expected to* — a real answer a reader can name, which is why this field
+    // overrides the generic empty pair.
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Checks' }));
+
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Operator' }));
+    expect(screen.getByRole('option', { name: 'has no checks' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'has checks' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'is empty' })).toBeNull();
+  });
+});

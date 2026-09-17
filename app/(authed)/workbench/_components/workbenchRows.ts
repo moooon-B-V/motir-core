@@ -48,6 +48,9 @@ export interface WorkbenchRowView {
   statusLabel: string;
   /** Lifecycle category → the Pill tone; null when unclassifiable. */
   statusCategory: StatusCategoryDto | null;
+  /** The item's CI verdict (MOTIR-5470) — drawn through the shared badge and the
+   *  shared `ciBadgeState` rule, the same pair the board and `/items` use. */
+  ciState: string | null;
   /**
    * ISO-8601 moment it finished, or null on everything that has not.
    *
@@ -102,6 +105,7 @@ export function toWorkbenchRowViews(
       status: row.status,
       statusLabel: status?.label ?? row.status,
       statusCategory: status?.category ?? null,
+      ciState: row.ciState,
       completedAt: row.completedAt,
     };
   });

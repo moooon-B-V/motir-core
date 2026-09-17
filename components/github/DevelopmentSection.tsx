@@ -1,10 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import {
-  CircleCheck,
   CircleDashed,
-  CircleEllipsis,
   CircleQuestionMark,
-  CircleX,
   ExternalLink,
   FolderGit2,
   GitMerge,
@@ -28,6 +25,7 @@ import {
   type DevelopmentGateRead,
 } from './DevelopmentGateFrame';
 import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
+import { CI_STATE_META } from './ciStateMeta';
 import { QueueExitAutoPart, type AutoQueueExits } from './QueueExitAutoPart';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
@@ -64,14 +62,10 @@ export const PR_STATE_META: Record<
   closed: { icon: GitPullRequestClosed, pill: { severity: 'danger' } },
 };
 
-const CI_STATE_META: Record<
-  NonNullable<LinkedPullRequestDto['ci']>,
-  { icon: ComponentType<{ className?: string }>; pill: PillTone }
-> = {
-  passing: { icon: CircleCheck, pill: { severity: 'success' } },
-  failing: { icon: CircleX, pill: { severity: 'danger' } },
-  running: { icon: CircleEllipsis, pill: { severity: 'warning' } },
-};
+// `CI_STATE_META` MOVED to `./ciStateMeta` (MOTIR-5474) — the board card, the
+// `/items` rows and the Workbench row render the same verdict now, and a second
+// map would be a second vocabulary for one fact. Imported at the top of this file;
+// the pill below is unchanged.
 
 /**
  * A pull request that MERGED, but onto a base that is not its repository's

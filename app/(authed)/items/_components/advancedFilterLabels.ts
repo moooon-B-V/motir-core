@@ -23,6 +23,7 @@ export type DynamicFieldLabels = ReadonlyMap<FilterFieldId, string>;
 const FIELD_LABEL_KEYS: Partial<Record<FilterFieldId, string>> = {
   kind: 'filterKind',
   status: 'status',
+  ciState: 'advancedFieldChecks',
   priority: 'advancedFieldPriority',
   type: 'advancedFieldType',
   assignee: 'assignee',
@@ -83,6 +84,33 @@ const OPERATOR_LABEL_KEYS: Record<FilterOperatorId, string> = {
   in_next_days: 'advancedOpInNextDays',
 };
 
-export function advancedOperatorLabel(t: Translate, operator: FilterOperatorId): string {
-  return t(OPERATOR_LABEL_KEYS[operator]);
+/**
+ * PER-FIELD overrides of the empty pair (MOTIR-5473).
+ *
+ * `is_empty` / `is_not_empty` read as "is empty" / "is not empty" everywhere, and
+ * for most fields that is right: an absent assignee or sprint is an absence with
+ * no better name. For a field whose `null` MEANS something a reader can name, the
+ * generic wording throws that meaning away — `ciState`'s `null` is *no pull
+ * request has reported and none is expected to*, which is a real answer rather
+ * than a blank.
+ *
+ * Keyed on the field, so a field with no entry keeps the generic pair and nothing
+ * else moves. Exported for the test that asserts every key resolves.
+ */
+export const FIELD_EMPTY_OPERATOR_KEYS: Partial<
+  Record<FilterFieldId, Partial<Record<FilterOperatorId, string>>>
+> = {
+  ciState: {
+    is_empty: 'advancedOpChecksIsEmpty',
+    is_not_empty: 'advancedOpChecksIsNotEmpty',
+  },
+};
+
+export function advancedOperatorLabel(
+  t: Translate,
+  operator: FilterOperatorId,
+  field?: FilterFieldId,
+): string {
+  const override = field ? FIELD_EMPTY_OPERATOR_KEYS[field]?.[operator] : undefined;
+  return t(override ?? OPERATOR_LABEL_KEYS[operator]);
 }

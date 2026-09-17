@@ -198,7 +198,7 @@ export function AdvancedFilterSummary({
               {advancedFieldLabel(t, condition.field, dynamicLabels)}
             </strong>
             <span className="min-w-0 truncate">
-              {advancedOperatorLabel(t, condition.operator)}
+              {advancedOperatorLabel(t, condition.operator, condition.field)}
               {values !== null ? ` ${values}` : ''}
             </span>
           </button>

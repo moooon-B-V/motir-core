@@ -97,6 +97,7 @@ function item(key: number, over: Partial<WorkItemTreeRowDto> = {}): WorkItemTree
     identifier: `PROD-${key}`,
     title: `Issue ${key}`,
     status: 'todo',
+    ciState: null,
     priority: 'medium',
     assigneeId: 'u1',
     reporterId: 'u1',

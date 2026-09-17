@@ -309,6 +309,7 @@ describe('toArchivedRows', () => {
       identifier: 'PROD-49',
       title: 'A bug',
       status: 'in_review',
+      ciState: null,
       priority: 'medium',
       assigneeId: null,
       reporterId: 'u1',

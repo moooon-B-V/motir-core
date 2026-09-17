@@ -44,6 +44,10 @@ export interface IssueRowData {
    * Pill showing the raw key), mirroring the detail page's ChildList.
    */
   statusCategory: StatusCategoryDto | null;
+  /** The item's CI verdict over its whole delivery set (MOTIR-5470). The row draws
+   *  the GLYPH form only, and only for `failing` / `running` off the `done`
+   *  category — `ciBadgeState`, shared with the board card (MOTIR-5474). */
+  ciState: string | null;
   /** The raw assignee userId (or null) — what the inline AssigneePicker edits +
    *  `updateIssueAction` commits (2.5.5); `assigneeName` is its display. */
   assigneeId: string | null;
@@ -131,6 +135,7 @@ function shapeRowData(
     status: item.status,
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,
+    ciState: item.ciState,
     assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
     updatedAt: item.updatedAt,

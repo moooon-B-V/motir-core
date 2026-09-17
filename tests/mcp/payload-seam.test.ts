@@ -551,6 +551,7 @@ describe('presentMcpWorkItemRow — the search row', () => {
     storyPoints: null,
     updatedAt: '2026-08-06T00:00:00.000Z',
     hasDescription: true,
+    ciState: null,
   };
 
   it('carries `key` as the identifier, the numeric key beside it, and the count', () => {

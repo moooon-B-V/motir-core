@@ -137,6 +137,7 @@ function listItem(over: Partial<WorkItemListItemDto>): WorkItemListItemDto {
     identifier: 'MOTIR-1',
     title: 'T',
     status: 'todo',
+    ciState: null,
     priority: 'medium',
     assigneeId: null,
     reporterId: 'u_1',
