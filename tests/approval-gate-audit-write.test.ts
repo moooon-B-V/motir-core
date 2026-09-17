@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from './helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
@@ -96,7 +97,7 @@ afterAll(async () => {
 });
 
 /** Publish one design version through the real path; returns its evidence DTO. */
-async function publish(label: string, commitSha: string | null = `sha-${label}`) {
+async function publish(label: string, commitSha: string | null = shaFor(label)) {
   const pathname = `${designPrefix(fx.workspaceId, card.id)}${label}.mock.html`;
   store.set(pathname, { contentType: 'text/html', size: 2048 });
   const notePathname = `${designPrefix(fx.workspaceId, card.id)}${label}.design-notes.md`;

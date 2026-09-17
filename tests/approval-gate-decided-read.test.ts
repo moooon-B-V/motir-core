@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from './helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -112,7 +113,7 @@ async function publish(label: string) {
           pathname: notePathname,
         },
       ],
-      commitSha: `sha-${label}`,
+      commitSha: shaFor(label),
     },
     fx.ctx,
   );
@@ -298,7 +299,7 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     // The two DIFFER, which is the whole point — and the pinned one is v1.
     expect(current!.id).toBe(v2.id);
     expect(subject.evidence!.id).toBe(v1.id);
-    expect(subject.evidence!.commitSha).toBe('sha-v1');
+    expect(subject.evidence!.commitSha).toBe(shaFor('v1'));
     expect(subject.filesKept).toBe(true);
   });
 
