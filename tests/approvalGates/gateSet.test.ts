@@ -33,6 +33,7 @@ const input = (over: Partial<GateSetInput> = {}): GateSetInput => ({
   members: [],
   prMergeMode: 'manual',
   cardIsTerminal: false,
+  designApprovalStandsForMerge: false,
   workItemId: WORK_ITEM,
   ...over,
 });

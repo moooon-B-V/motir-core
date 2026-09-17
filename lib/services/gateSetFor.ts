@@ -1,6 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
+  designApprovalStandsForMerge,
   resolveGateSet,
   type AwaitableGateKind,
   type GateSet,
@@ -121,6 +122,7 @@ export async function gateSetFor(
     currentDesignEvidence: currentDesign
       ? { id: currentDesign.id, commitSha: currentDesign.commitSha }
       : null,
+    designApprovalStandsForMerge: designApprovalStandsForMerge(currentDesign, latestDesignGate),
     latestDesignGate,
     latestMergeGate,
     members,

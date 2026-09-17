@@ -24,6 +24,14 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 
 const store = new Map<string, { contentType: string; size: number }>();
 
+/** Every job the promotion enqueues — the channel a HELD merge comes back on. */
+const sent: Array<{ name: string; data: Record<string, unknown> }> = [];
+vi.mock('@/lib/jobs/sendEvent', () => ({
+  sendEvent: async (name: string, data: Record<string, unknown>) => {
+    sent.push({ name, data });
+  },
+}));
+
 vi.mock('@/lib/blob/uploader', () => ({
   putAttachment: vi.fn(),
   putPrivateAttachment: vi.fn(),
@@ -41,6 +49,7 @@ const { githubInstallationService } = await import('@/lib/services/githubInstall
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
 const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
+const { pullRequestMergeService } = await import('@/lib/services/pullRequestMergeService');
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-two-gates';
@@ -165,6 +174,7 @@ const awaitingKinds = async (workItemId: string) =>
 
 beforeEach(async () => {
   store.clear();
+  sent.length = 0;
   await truncateAuthTables();
   _resetInstallationTokenCache();
   await adminDb.$executeRawUnsafe('TRUNCATE TABLE "approval_gate" RESTART IDENTITY CASCADE');
@@ -359,5 +369,41 @@ describe('MOTIR-5663 — a withdrawal ASKS what the card should hold now', () =>
     expect((await gatesOf(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
       ['superseded', 'member_closed'],
     ]);
+  });
+});
+
+describe('AMENDMENT 6 Q4 — a design approved BEFORE green: the merge is held, then carried', () => {
+  it('no second press: the next green merges instead of asking again', async () => {
+    // The design gate rises on PUBLISH and the merge gate on GREEN, so the primary can
+    // be pressed first. Q4: "the decision stands and the merge follows on the next green
+    // verdict, with no second press." A merge gate raised at that moment would BE the
+    // second press — a question whose answer is already on the record.
+    const s = await makeScenario('q4-held@example.com');
+    const item = await designCard(s, 'Approved before green');
+    await openLinked(item.identifier, 41);
+    const evidence = await publish(s, item.id, 'v1');
+    // No CI verdict yet, so the card holds the design question ALONE.
+    expect(await awaitingKinds(item.id)).toEqual(['design_result']);
+
+    const design = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: item.id, kind: 'design_result' },
+    });
+    const pressed = await pullRequestMergeService.approveAndMerge(
+      { gateId: design.id, source: 'ui' },
+      s.ctx,
+    );
+    // The press is NOT refused, and it merges nothing yet — there is nothing green.
+    expect(pressed.approval.gate.state).toBe('approved');
+    expect(pressed.members).toEqual([]);
+    expect(pressed.approval.gate.subjectId).toBe(evidence.id);
+
+    sent.length = 0;
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 41 });
+
+    // NO merge gate is raised — the predicate answers the same question the press did.
+    expect(await awaitingKinds(item.id)).toEqual([]);
+    // …and the merge is carried out on the promotion's own post-commit channel, the one
+    // `auto` mode already uses. One approval, one merge, no second press.
+    expect(sent.filter((e) => e.name === 'pull-request/auto-merge.requested')).toHaveLength(1);
   });
 });
