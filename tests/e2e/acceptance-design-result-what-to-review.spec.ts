@@ -25,7 +25,8 @@ import en from '@/messages/en.json';
 // turned away at the door, and so is a publish nothing waits on. An old result
 // still opens, as files. And on a design card whose pull requests carry the
 // decision, the design sits INSIDE the Development block — design, How to test,
-// then the pull requests — with no design approval of its own.
+// then the pull requests. (Its LAST claim — *with no design approval of its own* —
+// was reversed by MOTIR-5652; see the amendment in the Workbench chapter.)
 //
 // ── WHAT IS REAL ────────────────────────────────────────────────────────────
 //
@@ -107,9 +108,23 @@ test.describe('a design result shows only what to review', () => {
       await page.goto('/workbench?tab=approvals');
       const table = page.getByRole('table', { name: en.workbench.tabs.toApprove });
       const rows = table.getByTestId(/^approval-row-/);
-      // ONE decision waits: the design card with pull requests raised none (Q8).
-      await expect(rows).toHaveCount(1);
-      await expect(rows.filter({ hasText: TITLES.withPrs })).toHaveCount(0);
+      // ⚠️ AMENDED 2026-09-17 — Bug MOTIR-5652 · Subtask MOTIR-5669, and it is a
+      // RECEIPT-LIFECYCLE judgement worth reading before it is copied.
+      //
+      // This asserted *ONE decision waits: the design card with pull requests
+      // raised none (Q8)*. `design-result.md` AMENDMENT 6 Q1 REVERSES Q8: such a
+      // card raises a design gate again, and it is the PRIMARY. So both cards now
+      // wait, and the second row is the thing this level exists to restore.
+      //
+      // `acceptance-receipt-lifecycle.md` says an acceptance spec going red on a
+      // pull request that did not change its story must be DISPOSITIONED, never
+      // edited to match today. This pull request DOES change its story's subject,
+      // deliberately and by an approved plan, which is the case that rule is not
+      // about — so the assertion is amended in place with this note rather than
+      // the spec being promoted or retired. If that reading is wrong, the remedy
+      // is a disposition of the whole spec, not a re-edit of this line.
+      await expect(rows).toHaveCount(2);
+      await expect(rows.filter({ hasText: TITLES.withPrs })).toHaveCount(1);
 
       await rows
         .first()
