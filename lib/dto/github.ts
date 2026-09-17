@@ -71,6 +71,27 @@ export interface LinkedPullRequestDto {
   ci: 'passing' | 'failing' | 'running' | null;
   /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
   url: string;
+  /**
+   * WHAT THIS PULL REQUEST'S REVIEW ON GITHUB SAYS (Story MOTIR-4910 · MOTIR-5602;
+   * `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decision 2; design
+   * `design/github/design-notes.md` § 23, Panels G1–G3).
+   *
+   * Null when nothing countable has been said: no reviews, only `commented` ones, only
+   * dismissed ones, or only reviews from somebody who cannot write. Absence of a review is
+   * not a state, exactly as `ci: null` renders no CI pill.
+   *
+   * ⚠️ `atCurrentHead: false` IS DRAWN, NOT DROPPED. A review given at an earlier commit
+   * counts for nothing (decision 2), but a reader who can see that an approval exists and
+   * cannot see that it is stale would conclude Motir had lost it. The surface says which.
+   */
+  githubReview: {
+    state: 'approved' | 'changes_requested';
+    reviewerLogin: string;
+    /** The Motir member the reviewer resolves to IN THIS WORKSPACE, else null — the pair
+     *  (a review, a null name) is what reads as *not a Motir member*. */
+    memberName: string | null;
+    atCurrentHead: boolean;
+  } | null;
   /* ⚠️ `linkedManually` WAS HERE and is removed by MOTIR-4894, along with the
    * "linked manually" suffix it fed. It said the link was DECLARED rather than
    * inferred by the MOTIR-892 auto-resolver, and MOTIR-3674 deleted that

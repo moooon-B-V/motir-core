@@ -62,6 +62,25 @@ export const githubIdentityRepository = {
     return tx.githubIdentity.findUnique({ where: { githubUserId } });
   },
 
+  /**
+   * MANY GitHub users resolved to their bound Motir identities, in ONE query (Story
+   * MOTIR-4910 · MOTIR-5602) — the batch form of `findByGithubUserId`.
+   *
+   * The Development block draws a review per pull-request row, and asking one row at a time
+   * is N round trips to render one card. A GitHub user with no binding is simply ABSENT from
+   * the result, which is the honest shape: the caller renders that as *not a Motir member*.
+   */
+  async findByGithubUserIds(
+    githubUserIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<GithubIdentity, 'userId' | 'githubUserId' | 'githubLogin'>[]> {
+    if (githubUserIds.length === 0) return [];
+    return tx.githubIdentity.findMany({
+      where: { githubUserId: { in: [...githubUserIds] } },
+      select: { userId: true, githubUserId: true, githubLogin: true },
+    });
+  },
+
   /** Create-or-refresh the acting user's identity binding (re-auth updates the
    *  login / avatar / token in place, keyed on the unique `user_id`). */
   async upsertForUser(

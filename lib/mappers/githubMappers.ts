@@ -68,8 +68,15 @@ export function toGithubInstallationDTO(
  * derives from the check rows at the latest recorded commit, and the link-out
  * URL is composed here so the client never string-builds it.
  */
-export function toLinkedPullRequestDto(row: GithubPullRequestWithContext): LinkedPullRequestDto {
+export function toLinkedPullRequestDto(
+  row: GithubPullRequestWithContext,
+  /** What this pull request's GitHub review says, already computed by the caller
+   *  (MOTIR-5602). The mapper stays pure: the review needs two batched reads and a rule,
+   *  and a mapper that did them would make one row a query. */
+  githubReview: LinkedPullRequestDto['githubReview'] = null,
+): LinkedPullRequestDto {
   return {
+    githubReview,
     id: row.id,
     title: row.title ?? row.headRef,
     repo: `${row.repo.owner}/${row.repo.name}`,

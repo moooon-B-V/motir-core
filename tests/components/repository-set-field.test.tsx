@@ -52,6 +52,7 @@ function delivery(
       state,
       ci: null,
       url: `https://github.com/${repoLabel}/pull/${number}`,
+      githubReview: null,
     },
     baseRef,
     defaultBranch,

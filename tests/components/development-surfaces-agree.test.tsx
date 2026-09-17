@@ -65,6 +65,7 @@ const OPEN_PR: LinkedPullRequestDto = {
   state: 'open',
   ci: 'running',
   url: 'https://github.com/moooon-B-V/motir-core/pull/2120',
+  githubReview: null,
 };
 
 const DATA: QuickViewData = {

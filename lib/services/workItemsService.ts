@@ -43,6 +43,11 @@ import { workItemComponentRepository } from '@/lib/repositories/workItemComponen
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
+import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
+import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -1349,6 +1354,112 @@ async function recordBugFiledFinding(
     );
     if (recorded) return;
   }
+}
+
+/**
+ * WHAT EACH PULL REQUEST'S GITHUB REVIEW SAYS, for a page of Development rows (Story
+ * MOTIR-4910 · MOTIR-5602; ADR §8 FOURTH AMENDMENT, decision 2).
+ *
+ * ⚠️ TWO QUERIES FOR THE WHOLE PAGE, however many rows and reviewers it has: one
+ * `listForPullRequests` and one identity lookup. A per-row read would make rendering one
+ * card N round trips, and the membership check is folded into the same pass.
+ *
+ * ⚠️ THE RULE IS THE EVALUATOR'S, NOT A SECOND ONE. `countableReviewsAtHead` is the same
+ * pure function that DECIDES the gate, so a row and the gate can never disagree about what
+ * counts — which is exactly the disagreement a reader would report as a bug.
+ */
+async function readGithubReviewsForRows(
+  rows: readonly GithubPullRequestWithContext[],
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, LinkedPullRequestDto['githubReview']>> {
+  const out = new Map<string, LinkedPullRequestDto['githubReview']>();
+  if (rows.length === 0) return out;
+
+  const reviews = await githubPullRequestReviewRepository.listForPullRequests(
+    rows.map((row) => row.id),
+    tx,
+  );
+  if (reviews.length === 0) return out;
+
+  // The reviewers this page names, resolved to members of THIS workspace. An identity is
+  // global, so the membership half is what stops a reviewer with an account elsewhere
+  // rendering as a member here.
+  const identities = await githubIdentityRepository.findByGithubUserIds(
+    [...new Set(reviews.map((review) => review.reviewerGithubUserId))],
+    tx,
+  );
+  const memberships = await workspaceMembershipRepository.findByWorkspaceIdsAndUserIds(
+    [workspaceId],
+    identities.map((identity) => identity.userId),
+    tx,
+  );
+  const memberUserIds = new Set(memberships.map((membership) => membership.userId));
+  const users = await userRepository.findByIds(
+    identities.filter((i) => memberUserIds.has(i.userId)).map((i) => i.userId),
+    tx,
+  );
+  const nameByUserId = new Map(users.map((user) => [user.id, user.name ?? user.email]));
+  const memberNameByGithubUserId = new Map(
+    identities
+      .filter((identity) => memberUserIds.has(identity.userId))
+      .map((identity) => [identity.githubUserId, nameByUserId.get(identity.userId) ?? null]),
+  );
+
+  const byPullRequest = new Map<string, typeof reviews>();
+  for (const review of reviews) {
+    const list = byPullRequest.get(review.githubPullRequestId) ?? [];
+    list.push(review);
+    byPullRequest.set(review.githubPullRequestId, list);
+  }
+
+  for (const row of rows) {
+    const rowReviews = byPullRequest.get(row.id);
+    if (!rowReviews || rowReviews.length === 0) continue;
+
+    // The row's CURRENT head, read the way the gate's own version reads it.
+    const head = liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null;
+
+    const decided = head ? pickReview(countableReviewsAtHead(rowReviews, head)) : null;
+    if (decided) {
+      out.set(row.id, {
+        state: decided.state === 'changes_requested' ? 'changes_requested' : 'approved',
+        reviewerLogin: decided.reviewerLogin,
+        memberName: memberNameByGithubUserId.get(decided.reviewerGithubUserId) ?? null,
+        atCurrentHead: true,
+      });
+      continue;
+    }
+
+    // Nothing counts at the head. A review at an EARLIER commit is still drawn, said to be
+    // stale — the alternative reads as Motir having lost it (design § 23, Panel G2).
+    const stale = pickReview(
+      [...new Set(rowReviews.map((review) => review.commitSha))]
+        .filter((sha) => sha !== head)
+        .flatMap((sha) => countableReviewsAtHead(rowReviews, sha)),
+    );
+    if (stale) {
+      out.set(row.id, {
+        state: stale.state === 'changes_requested' ? 'changes_requested' : 'approved',
+        reviewerLogin: stale.reviewerLogin,
+        memberName: memberNameByGithubUserId.get(stale.reviewerGithubUserId) ?? null,
+        atCurrentHead: false,
+      });
+    }
+  }
+  return out;
+}
+
+/** The ONE review a row shows: a countable `changes_requested` outranks an approval, and the
+ *  latest of whichever wins is the one named — the row's own echo of the set rule's order. */
+function pickReview(countable: readonly CountableReview[]): CountableReview | null {
+  const newestFirst = (a: CountableReview, b: CountableReview) =>
+    b.submittedAt.getTime() - a.submittedAt.getTime() ||
+    b.githubReviewId.localeCompare(a.githubReviewId);
+  const changes = countable.filter((r) => r.state === 'changes_requested').sort(newestFirst);
+  if (changes.length > 0) return changes[0]!;
+  const approvals = countable.filter((r) => r.state === 'approved').sort(newestFirst);
+  return approvals[0] ?? null;
 }
 
 export const workItemsService = {
@@ -5849,10 +5960,11 @@ export const workItemsService = {
     workItemId: string,
     ctx: ServiceContext,
   ): Promise<LinkedPullRequestDto[]> {
-    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
-    );
-    return rows.map(toLinkedPullRequestDto);
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx);
+      const reviews = await readGithubReviewsForRows(rows, ctx.workspaceId, tx);
+      return rows.map((row) => toLinkedPullRequestDto(row, reviews.get(row.id) ?? null));
+    });
   },
 
   /**

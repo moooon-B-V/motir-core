@@ -26,6 +26,7 @@ const webhookPr: LinkedPullRequestDto = {
   state: 'open',
   ci: null,
   url: 'https://github.com/moooon/motir-core/pull/11',
+  githubReview: null,
 };
 const pickerPr: LinkedPullRequestDto = {
   id: 'pr-picker-57',
@@ -35,6 +36,7 @@ const pickerPr: LinkedPullRequestDto = {
   state: 'merged',
   ci: null,
   url: 'https://github.com/moooon/motir-gateway/pull/57',
+  githubReview: null,
 };
 
 describe('DevelopmentSectionBody — the pr-meta line (MOTIR-1596 · MOTIR-4894)', () => {
