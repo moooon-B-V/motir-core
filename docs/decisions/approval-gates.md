@@ -2486,6 +2486,65 @@ repositories produce no preview has two paths rather than three, and says so.
 > The three paths, the _an unavailable path is SAID_ rule and the self-hosted
 > scope above are unchanged.
 
+> ### 9 — AMENDMENT: a PERSON writes How to test too (MOTIR-5450, 2026-09-17), DECIDED BY THE REQUESTER (Yue, 2026-09-17)
+>
+> _"how to test should be able to added/edited manually, the human should be
+> able to do the same job too, the human can already link the PRs, add/edit how
+> to test should be the same"_ — Yue, 2026-09-17.
+>
+> _"the human should be able to add what an agent can add"_ — Yue, 2026-09-17.
+>
+> The amendment above settles the UNIT (the run) and leaves the AUTHOR implicit,
+> because at the time an agent was the only one. Read literally, that makes How
+> to test agent-only: a pull request a person delivered and linked by hand
+> reaches its approve-to-merge gate with a _No How to test_ callout, and a wrong
+> agent record can only be corrected by starting another run. Motir treats
+> people as first-class executors (Principle #12), so this amendment settles the
+> author:
+>
+> 1. **Two author kinds, one record, one writer.** A record is written by a RUN
+>    — over `publish_test_instructions`, with `dispatchRunId` set while a
+>    dispatch is running — or by a PERSON, from the item page, with
+>    `dispatchRunId` null and `publishedById` the person. **Both go through
+>    `testInstructionsService.publish`.** There is no second write path, no
+>    second evidence field and no second table, and the block renders the two
+>    kinds identically apart from the author line.
+> 2. **PARITY: a person may add everything an agent may add.** A person sets
+>    every field `publish` accepts, under the same validation and the same caps:
+>    - the **rich-text body** (`bodyMd`), with headings, lists, links and fenced
+>      code blocks _with their language_;
+>    - the **preview path** (`previewPath`);
+>    - the **repository sections** (`repos[]`): each one a project repository
+>      (`repos[].repo`) and the commit it was written for
+>      (`repos[].commitSha`).
+>
+>    **Anything a person cannot set that an agent can is a defect against this
+>    point.**
+>
+> 3. **Suggested, never forced.** When the form opens it is filled in: on Edit,
+>    from the current record; on Add, one section per repository with a linked
+>    pull request — the item's own first, then its descendants', bound by the
+>    read's `pickPullRequest` — carrying that pull request's live head
+>    (`liveHeadSha`) as the commit. The person may change a commit, add a section
+>    for any project repository, or remove one. Validation is `publish`'s own: at
+>    least one section, a 7–64 hex commit, a repository in the project, and no
+>    repository twice. **A linked pull request is not required**, because an
+>    agent does not need one either.
+> 4. **Who may write, and versions.** A person needs **`work_item:edit`** on the
+>    item's project — the permission the explicit pull-request link and
+>    `publish_test_instructions` both assert
+>    (`githubPullRequestService.linkPullRequest*`). Only the RUN TARGET gets a
+>    door; a `tested_via_ancestor` child shows its pointer and no door. A save is
+>    a new current record and the previous one moves to history (point 5 of the
+>    amendment above — newest wins, in both directions). Identical content writes
+>    nothing.
+> 5. **The pull-request body is a SNAPSHOT.** Point 3 of the amendment above says
+>    the pull-request body and the record carry _"the same content"_. That is
+>    amended to **the same content at the run's close-out**: after close-out
+>    Motir's record is authoritative, and a person's later edit does not rewrite
+>    the pull-request body. The quick-view peek and the approval overlay's port
+>    (MOTIR-5214 / MOTIR-5438) draw no edit door.
+
 ---
 
 ## Consequences
