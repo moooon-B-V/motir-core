@@ -470,7 +470,7 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
     // The decision itself still landed, with the rest of its audit set — the
     // outcome being empty is a fact about the effect, not about the record.
     expect(row.state).toBe('approved');
-    expect(row.subjectVersion).toBe('sha-frame');
+    expect(row.subjectVersion).toBe(shaFor('frame'));
     expect(row.decidedUnderAuthority).toBe('reporter');
   });
 });
