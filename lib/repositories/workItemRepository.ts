@@ -1325,6 +1325,38 @@ export const workItemRepository = {
   },
 
   /**
+   * The ids of every NON-ARCHIVED card sitting on one of these session branches —
+   * {@link findBySessionBranch} for a batch, in one query (MOTIR-5472).
+   *
+   * The CI-state backfill's session arm: it holds a whole workspace's head refs
+   * and wants the cards on any of them, which as N separate reads would be one
+   * query per pull request in the tenant. Ids only, because its caller hands each
+   * one to the recompute and re-reads the row under that card's own lock.
+   *
+   * ⚠️ The caller must have BOUND the workspace — `work_item` has no
+   * `system_admin` arm, so an unbound read returns zero rows and raises nothing.
+   * `workspaceId` is still in the predicate rather than left to the GUC alone:
+   * the binding admits the read, the column is what scopes it.
+   */
+  async listIdsBySessionBranches(
+    sessionBranches: readonly string[],
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (sessionBranches.length === 0) return [];
+    const rows = await tx.workItem.findMany({
+      where: {
+        workspaceId,
+        archivedAt: null,
+        sessionBranch: { in: [...sessionBranches] },
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /**
    * WHICH REPOSITORIES HAS EACH OF THESE PROJECTS NAMED ON ITS WORK — the
    * evidence that a project has CHOSEN a repository rather than merely being
    * allowed to reach one (MOTIR-4821).

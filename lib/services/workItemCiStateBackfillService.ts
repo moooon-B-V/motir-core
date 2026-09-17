@@ -1,0 +1,208 @@
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import type { PrCiState } from '@/lib/github/prCiState';
+import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { classifyDeliveries, recomputeWorkItemCiState } from './deliveryVerdict';
+import { deliveryStateForCard, foldCardCiState } from '@/lib/workItems/deliverySet';
+
+// BACKFILL `WorkItem.ciState` FOR THE CARDS THAT ALREADY EXIST (MOTIR-5472).
+//
+// ── Why a backfill is owed at all ───────────────────────────────────────────
+// MOTIR-5470 makes every FUTURE event write the right answer. It does nothing for
+// the rows already in the table, and those rows are wrong in ways that will never
+// self-correct, because the correction would have to come from an event that is
+// not coming:
+//
+//   * a card whose pull requests have all finished — the checks are done, so no
+//     further check event will ever fire for it;
+//   * a card delivered through a run's session branch, which the old writer never
+//     wrote at all and which is therefore `null` however red its build;
+//   * a card whose stale value is the verdict of whichever of its pull requests
+//     reported last.
+//
+// A badge and a filter read this column, so every one of those is a card a person
+// will look for and not find, or find and not need.
+//
+// ── IT NEVER RE-IMPLEMENTS THE FOLD ─────────────────────────────────────────
+// Each card is handed to `recomputeWorkItemCiState` — the SAME function the live
+// path calls. A backfill that folded the set in SQL would be a second opinion
+// about one card, and the two would drift on the first amendment to either. That
+// is the one rule this file must not break, and it is why the service is thin.
+//
+// ── RESUMABLE RATHER THAN ALL-OR-NOTHING ────────────────────────────────────
+// ONE TRANSACTION PER CARD, so a run killed partway keeps every card it already
+// converged, and the re-run resumes from the rest. A card that FAILS is recorded
+// with its error and the sweep moves on: one bad row does not cost the others
+// their progress.
+//
+// ── IDEMPOTENT BY CONSTRUCTION ──────────────────────────────────────────────
+// The recompute writes only when the value changed, so a second run over
+// unchanged data reports `changed: 0` and performs zero writes. That is a
+// property of the recompute rather than of a candidate query that shrinks, which
+// is what lets `--dry-run` predict a real run exactly: both fold the same set,
+// and only one of them writes.
+
+/** One card whose verdict the sweep moved. */
+export interface CiStateBackfillChange {
+  workItemId: string;
+  identifier: string;
+  from: PrCiState;
+  to: PrCiState;
+}
+
+export interface CiStateBackfillFailure {
+  workItemId: string;
+  error: string;
+}
+
+export interface CiStateBackfillReport {
+  dryRun: boolean;
+  /** Candidate cards examined — those with at least one delivery-set member. */
+  scanned: number;
+  changed: CiStateBackfillChange[];
+  unchanged: number;
+  /** Candidates skipped because the card is ARCHIVED. A human decided this card
+   *  should not be worked; recomputing its badge is not the sweep's business. */
+  skippedArchived: number;
+  failed: CiStateBackfillFailure[];
+}
+
+export interface CiStateBackfillOptions {
+  dryRun: boolean;
+  workspaceId?: string;
+}
+
+/**
+ * The candidate set: every non-archived card with at least one member
+ * `collectDeliveries` would return, paired with the workspace to bind for it.
+ *
+ * TWO ARMS, because the two ways a pull request reaches a card are reachable from
+ * opposite directions (see each repository method's own header):
+ *   * a `work_item_delivery` row — read straight off the delivery table, which is
+ *     armed for the system flag;
+ *   * a `session_branch` equal to some pull request's head ref — read from the
+ *     PULL REQUEST side, because `work_item` has no `system_admin` arm and a
+ *     cross-tenant scan of it would be silently empty rather than refused.
+ *
+ * Deduplicated on the card: a card that is both linked AND on a session branch is
+ * one candidate, since the recompute folds its whole set either way.
+ */
+async function collectCandidates(
+  opts: CiStateBackfillOptions,
+): Promise<Array<{ workItemId: string; workspaceId: string }>> {
+  const byId = new Map<string, string>();
+
+  const scope = opts.workspaceId ? { workspaceId: opts.workspaceId } : {};
+
+  const delivered = await withSystemContext((tx) =>
+    workItemDeliveryRepository.listDeliveredWorkItemRefs(tx, scope),
+  );
+  for (const row of delivered) byId.set(row.workItemId, row.workspaceId);
+
+  const headRefs = await withSystemContext((tx) =>
+    githubPullRequestRepository.listHeadRefsWithWorkspace(tx, scope),
+  );
+  // Grouped so each workspace is bound ONCE rather than per ref.
+  const refsByWorkspace = new Map<string, string[]>();
+  for (const { workspaceId, headRef } of headRefs) {
+    const bucket = refsByWorkspace.get(workspaceId);
+    if (bucket) bucket.push(headRef);
+    else refsByWorkspace.set(workspaceId, [headRef]);
+  }
+  for (const [workspaceId, refs] of refsByWorkspace) {
+    const ids = await withSystemContext(async (tx) => {
+      // ⚠️ BIND BEFORE THE FIRST `work_item` STATEMENT — it has no `system_admin`
+      // arm, so an unbound read here returns ZERO ROWS and raises nothing, which
+      // would present as "no session-branch cards" for a tenant full of them.
+      await bindWorkspaceContext(tx, workspaceId);
+      return workItemRepository.listIdsBySessionBranches(refs, workspaceId, tx);
+    });
+    for (const id of ids) if (!byId.has(id)) byId.set(id, workspaceId);
+  }
+
+  return [...byId.entries()]
+    .map(([workItemId, workspaceId]) => ({ workItemId, workspaceId }))
+    .sort((a, b) => (a.workItemId < b.workItemId ? -1 : 1));
+}
+
+export const workItemCiStateBackfillService = {
+  /**
+   * Recompute `WorkItem.ciState` for every card that has pull requests.
+   *
+   * `dryRun` folds exactly what a real run would fold and reports the same
+   * `from → to` pairs, writing nothing — it re-reads the card inside its own
+   * transaction and computes the verdict without the write, rather than
+   * predicting one. Both paths call into `deliveryVerdict`, so a dry run cannot
+   * disagree with the run it is rehearsing.
+   */
+  async backfillCiState(opts: CiStateBackfillOptions): Promise<CiStateBackfillReport> {
+    const candidates = await collectCandidates(opts);
+
+    const report: CiStateBackfillReport = {
+      dryRun: opts.dryRun,
+      scanned: 0,
+      changed: [],
+      unchanged: 0,
+      skippedArchived: 0,
+      failed: [],
+    };
+
+    for (const { workItemId, workspaceId } of candidates) {
+      try {
+        const outcome = await withSystemContext(async (tx) => {
+          await bindWorkspaceContext(tx, workspaceId);
+          const item = await workItemRepository.findById(workItemId, tx);
+          // A card the bound tenant cannot see, or one that was deleted between
+          // the candidate read and now, is not a failure — it is simply not a
+          // candidate any more.
+          if (!item) return { kind: 'gone' as const };
+          if (item.archivedAt) return { kind: 'archived' as const };
+
+          const from = (item.ciState ?? null) as PrCiState;
+
+          if (opts.dryRun) {
+            // The same classification the recompute folds, without the lock or
+            // the write: there is nothing to serialize against when nothing is
+            // written, and taking a row lock per card on a rehearsal would block
+            // live traffic for the length of the sweep.
+            const members = await classifyDeliveries(
+              { id: item.id, sessionBranch: item.sessionBranch },
+              tx,
+            );
+            const to = foldCardCiState(
+              members.map((m) => deliveryStateForCard(m.state, m.cannotReport)),
+            );
+            return { kind: 'decided' as const, identifier: item.identifier, from, to };
+          }
+
+          const to = await recomputeWorkItemCiState(workItemId, tx);
+          return { kind: 'decided' as const, identifier: item.identifier, from, to };
+        });
+
+        if (outcome.kind === 'gone') continue;
+        report.scanned += 1;
+        if (outcome.kind === 'archived') {
+          report.skippedArchived += 1;
+          continue;
+        }
+        if (outcome.from === outcome.to) report.unchanged += 1;
+        else
+          report.changed.push({
+            workItemId,
+            identifier: outcome.identifier,
+            from: outcome.from,
+            to: outcome.to,
+          });
+      } catch (err) {
+        report.scanned += 1;
+        report.failed.push({
+          workItemId,
+          error: err instanceof Error ? err.message : 'unknown error',
+        });
+      }
+    }
+
+    return report;
+  },
+};
