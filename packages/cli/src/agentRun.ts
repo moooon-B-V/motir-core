@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ParsedAgentCommand } from './agentProfiles.js';
 import { CliError } from './errors.js';
+import { DESIGN_SUBDIR, MOTIR_DESIGN_DIR_ENV } from './designFiles.js';
 
 // Running the user's OWN coding agent (Subtask 7.9.3 · MOTIR-881). BYOK: the
 // agent binary, its credential, and its model are the user's — Motir launches
@@ -125,6 +126,25 @@ export interface RunAgentOptions {
    * the same reason, at the one place every chunk passes through.
    */
   onOutput?: (chunk: string) => void;
+  /**
+   * Put the card's APPROVED DESIGN in the run's own directory before the spawn
+   * (Story MOTIR-5553 · Subtask MOTIR-5562).
+   *
+   * Called with the design root — `<the run directory>/design` — and resolves
+   * `true` only when EVERY file landed, which is the only case in which the
+   * child is given `$MOTIR_DESIGN_DIR`. Anything else resolves `false`, having
+   * already cleaned up and warned, and the run continues: the prompt's fetch
+   * instruction is written for exactly that case.
+   *
+   * ⚠️ IT LIVES HERE, not in the caller, because the directory it writes into is
+   * this function's — created by `tempDirFactory` and removed in the `finally`
+   * below. That is what makes *the design is gone when the run ends* true by
+   * construction rather than by somebody remembering to delete it.
+   *
+   * ⚠️ AND A THROW IS THE SAME AS `false`. A design that could not be fetched is
+   * a degraded run, never a broken one, so nothing it does may fail the dispatch.
+   */
+  materializeDesigns?: (designRoot: string) => Promise<boolean>;
   /** Injectable seams for the tests — never overridden in production. */
   spawnFn?: (cmd: string, args: string[], opts: SpawnOptions) => ChildProcess;
   tempDirFactory?: () => string;
@@ -150,6 +170,18 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
   const reportFile = join(dir, 'agent-report.json');
   writeFileSync(promptFile, opts.prompt, { mode: PROMPT_FILE_MODE });
 
+  // The DESIGN, before the spawn (MOTIR-5562). A throw is swallowed for the same
+  // reason a `false` is honoured: fetching a design may never fail a dispatch.
+  const designRoot = join(dir, DESIGN_SUBDIR);
+  let designReady = false;
+  if (opts.materializeDesigns) {
+    try {
+      designReady = await opts.materializeDesigns(designRoot);
+    } catch {
+      designReady = false;
+    }
+  }
+
   try {
     const result = await new Promise<Omit<AgentRunResult, 'model'>>((resolve, reject) => {
       const tee = opts.onOutput;
@@ -164,6 +196,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
           ...(opts.env ?? process.env),
           MOTIR_PROMPT_FILE: promptFile,
           MOTIR_AGENT_REPORT: reportFile,
+          // Set ONLY when every file landed. An unset variable is what tells the
+          // agent to follow the prompt's fetch instruction instead, so setting it
+          // over a partial directory would be the one lie this design forbids.
+          ...(designReady ? { [MOTIR_DESIGN_DIR_ENV]: designRoot } : {}),
         },
       });
 

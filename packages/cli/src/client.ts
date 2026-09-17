@@ -1,4 +1,5 @@
 import { normalizeServerUrl } from './config/userConfig.js';
+import type { DesignsResponse } from './designFiles.js';
 import { V1Transport } from './transport.js';
 import { encodeFilterParam } from './adapters/filterParam.js';
 import {
@@ -1473,6 +1474,20 @@ export class MotirClient {
   async readWorkItem(key: string): Promise<{ detail: WorkItemDetail; payload: unknown }> {
     const body = await this.v1.request('getWorkItem', { path: { key } });
     return { detail: toWorkItemDetail(body), payload: body };
+  }
+
+  /**
+   * The APPROVED DESIGNS this work item waits on (Story MOTIR-5553 · Subtask
+   * MOTIR-5562) — one verdict per design card it is `blocked_by`.
+   *
+   * Returned as the server's own body rather than a narrowed view model: the one
+   * consumer is the design MATERIALIZER, which needs the asset paths, their
+   * states and their short-lived urls, and a view model shaped for a renderer
+   * would drop exactly those. The generated validator is what makes the type
+   * true, so there is no `as` on the path the payload takes.
+   */
+  async listWorkItemDesigns(key: string): Promise<DesignsResponse> {
+    return this.v1.request('listWorkItemDesigns', { path: { key } });
   }
 
   /**
