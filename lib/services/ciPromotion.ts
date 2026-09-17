@@ -24,6 +24,7 @@ import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { settleGreenVerdict, type AutoMergeRequest } from './mergeGates';
 import { raisePullRequestApprovalGate } from './pullRequestApprovalGates';
+import { evaluateAfterRaise } from './pullRequestReviewSync';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ContainerHasOpenChildrenError,
@@ -488,7 +489,7 @@ async function settleMergesForCard(
   item: WorkItem,
   ctx: { userId: string; workspaceId: string },
   tx: Prisma.TransactionClient,
-): Promise<AutoMergeRequest[]> {
+): Promise<{ autoMerges: AutoMergeRequest[]; raisedApprovalGate: boolean }> {
   const members = await collectDeliveries(item, tx);
   const autoMerges = await settleGreenVerdict(
     { item, pullRequestIds: [...members.keys()] },
@@ -497,8 +498,13 @@ async function settleMergesForCard(
   );
   // The approve-and-merge gate over the same green set, on the same card, in the same
   // transaction and under the same row lock (MOTIR-5482) — `manual` projects only.
-  await raisePullRequestApprovalGate(item, tx);
-  return autoMerges;
+  //
+  // ⚠️ WHETHER IT RAISED IS RETURNED, because a gate raised NOW may already have its
+  // answer: reviews are recorded whether or not a gate exists (MOTIR-5597, decision 8),
+  // so an approval given while CI was still running is sitting in the database waiting
+  // for exactly this moment. The caller evaluates it AFTER this transaction commits.
+  const raisedApprovalGate = await raisePullRequestApprovalGate(item, tx);
+  return { autoMerges, raisedApprovalGate };
 }
 
 /**
@@ -535,15 +541,19 @@ async function reRaiseMergeGates(
   ctx: { userId: string; workspaceId: string },
 ): Promise<void> {
   for (const id of workItemIds) {
-    const requests = await withWorkspaceContext(ctx, async (tx) => {
+    const settled = await withWorkspaceContext(ctx, async (tx) => {
       // A card deleted since the verdict locks nothing and reads back null.
       await workItemRepository.lockById(id, tx);
       const item = await workItemRepository.findById(id, tx);
-      if (!item || !REVIEW_STATUSES.includes(item.status)) return [];
-      if (!(await isPromotable(item, tx))) return [];
+      const nothing = { autoMerges: [] as AutoMergeRequest[], raisedApprovalGate: false };
+      if (!item || !REVIEW_STATUSES.includes(item.status)) return nothing;
+      if (!(await isPromotable(item, tx))) return nothing;
       return settleMergesForCard(item, ctx, tx);
     });
-    await dispatchAutoMerges(id, requests, ctx);
+    await dispatchAutoMerges(id, settled.autoMerges, ctx);
+    // POST-COMMIT, and best-effort (MOTIR-5597, decision 8): apply the reviews that were
+    // recorded before this gate existed. It can never fail the re-raise.
+    if (settled.raisedApprovalGate) await evaluateAfterRaise(id, ctx.workspaceId);
   }
 }
 
@@ -569,18 +579,25 @@ async function promoteEach(
   for (const id of workItemIds) {
     try {
       let autoMerges: AutoMergeRequest[] = [];
+      let raisedApprovalGate = false;
       await workItemsService.updateStatus(id, TARGET_STATUS, ctx, {
         inTransaction: async (tx) => {
           // Non-null by construction: the transition above locked and wrote this row
           // in this same transaction.
           const item = (await workItemRepository.findById(id, tx))!;
-          autoMerges = await settleMergesForCard(item, ctx, tx);
+          const settled = await settleMergesForCard(item, ctx, tx);
+          autoMerges = settled.autoMerges;
+          raisedApprovalGate = settled.raisedApprovalGate;
         },
       });
       promoted.push(id);
       // AFTER the promotion committed (MOTIR-5518) — and the promotion to in_review
       // stands whatever the merge does.
       await dispatchAutoMerges(id, autoMerges, ctx);
+      // POST-COMMIT, and best-effort (MOTIR-5597, decision 8): a reviewer who approved
+      // while CI was still running is not asked a second time — their review is applied
+      // to the gate the moment it exists. A failure here leaves the promotion committed.
+      if (raisedApprovalGate) await evaluateAfterRaise(id, ctx.workspaceId);
     } catch (err) {
       if (!SKIPPABLE.some((kind) => err instanceof kind)) throw err;
       console.warn('[ciPromotion] skipped a card CI green could not promote', {
