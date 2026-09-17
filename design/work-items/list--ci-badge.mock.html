@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · The CI badge on a list / tree row, and the Checks filter field (MOTIR-5471)</title>
+    <title>
+      Design mock · The CI badge on a list / tree row, and the Checks filter field (MOTIR-5471)
+    </title>
     <!--
       DELTA MOCK — Subtask MOTIR-5471 (Story MOTIR-5469). Spec:
       boards/design-notes.md § "The CI badge (MOTIR-5471)".
@@ -3656,376 +3658,233 @@
   </head>
   <body>
     <h1>The CI badge on a list / tree row, and the Checks filter field (MOTIR-5471)</h1>
-    <p class="mk-lede">Design asset for <strong>MOTIR-5471</strong> (story MOTIR-5469). It <strong>amends</strong> <code>design/work-items/list.mock.html</code> § <em>Columns</em> and <code>design/work-items/filter-builder.mock.html</code> § <em>Filter builder</em>. The rows are the <strong>real shipped markup</strong>, lifted whole from the sheet that dumped <code>IssueListTable</code>; every width below is drawn at its stated pixel width rather than described.</p>
+    <p class="mk-lede">
+      Design asset for <strong>MOTIR-5471</strong> (story MOTIR-5469). It <strong>amends</strong>
+      <code>design/work-items/list.mock.html</code> § <em>Columns</em> and
+      <code>design/work-items/filter-builder.mock.html</code> § <em>Filter builder</em>. The rows
+      are the <strong>real shipped markup</strong>, lifted whole from the sheet that dumped
+      <code>IssueListTable</code>; every width below is drawn at its stated pixel width rather than
+      described.
+    </p>
 
-    <div class="panel-label">Panel 6 — in the TITLE CELL, and as a GLYPH — both forced by the width budget</div>
+    <div class="panel-label">
+      Panel 6 — in the TITLE CELL, and as a GLYPH — both forced by the width budget
+    </div>
     <div class="panel">
-      <p class="mk-note">The row is a CSS grid: <code>minmax(10rem, 1fr) 116px 120px 150px 150px 72px 80px 108px 76px</code>, <code>gap-x-4</code> (16px × 8), <code>pl-4 pr-7</code> (44px). <strong>872 fixed + 128 gaps + 44 padding + a 160px title floor = the 1204px minimum</strong> the work-items notes record. <strong>A NEW COLUMN IS NOT AFFORDABLE:</strong> a ~120px Checks track plus one more 16px gap takes the minimum to <strong>1340px</strong>, which clips at 1280 AND at 1200 — on a surface whose column set already clips (MOTIR-1307). The title cell is the row’s ONLY flexible track, so a badge there costs <strong>no fixed width and leaves the minimum at 1204px</strong>. <strong>⚠️ AND AT THAT MINIMUM THE TITLE TRACK IS ONLY ITS 160px FLOOR, which will not hold the key, a title AND a labelled pill</strong> — drawn that way the pill overlapped the item key, because the cell is <code>min-w-0</code> with no <code>overflow-hidden</code>. Rendering at exactly 1204px is what found it; the same sheet read fine at 1280 and hid it. <strong>So a ROW carries the GLYPH alone</strong> (<code>role="img"</code>, the shipped string as its accessible name) <strong>and a BOARD CARD carries the label.</strong> State is still never colour alone — the two glyphs differ in SHAPE, the same bargain every other icon-only affordance in this row already makes. Both views share one column builder (<code>issueColumns.tsx</code>), so this holds for List and Tree alike.</p>
-<div class="ci-grid"><div><p class="ci-cap">at the 1204px MINIMUM — unchanged by the badge</p><div style="width:1204px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                role="row"
-                data-testid="issue-row-MOTIR-3004"
-                class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                style="
-                  grid-template-columns:
-                    minmax(10rem, 1fr)
-                    116px 120px 150px 150px 72px 80px 108px 76px;
-                  height: 44px;
-                "
-              >
-                <div role="cell" class="flex min-w-0 items-center">
-                  <a
-                    aria-label="MOTIR-3004 A finished run reports implemented"
-                    class="absolute inset-0 z-0 focus:outline-none"
-                    href="/items/MOTIR-3004"
-                  ></a
-                  ><span class="flex min-w-0 items-center gap-2"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
-                      aria-hidden="true"
-                    >
-                      <path d="M13 5h8"></path>
-                      <path d="M13 12h8"></path>
-                      <path d="M13 19h8"></path>
-                      <path d="m3 17 2 2 4-4"></path>
-                      <path d="m3 7 2 2 4-4"></path></svg
-                    ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)"
-                      >MOTIR-3004</span
-                    ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                      >A finished run reports implemented</span
-                    ></span
+      <p class="mk-note">
+        The row is a CSS grid:
+        <code>minmax(10rem, 1fr) 116px 120px 150px 150px 72px 80px 108px 76px</code>,
+        <code>gap-x-4</code> (16px × 8), <code>pl-4 pr-7</code> (44px).
+        <strong
+          >872 fixed + 128 gaps + 44 padding + a 160px title floor = the 1204px minimum</strong
+        >
+        the work-items notes record. <strong>A NEW COLUMN IS NOT AFFORDABLE:</strong> a ~120px
+        Checks track plus one more 16px gap takes the minimum to <strong>1340px</strong>, which
+        clips at 1280 AND at 1200 — on a surface whose column set already clips (MOTIR-1307). The
+        title cell is the row’s ONLY flexible track, so a badge there costs
+        <strong>no fixed width and leaves the minimum at 1204px</strong>.
+        <strong
+          >⚠️ AND AT THAT MINIMUM THE TITLE TRACK IS ONLY ITS 160px FLOOR, which will not hold the
+          key, a title AND a labelled pill</strong
+        >
+        — drawn that way the pill overlapped the item key, because the cell is
+        <code>min-w-0</code> with no <code>overflow-hidden</code>. Rendering at exactly 1204px is
+        what found it; the same sheet read fine at 1280 and hid it.
+        <strong>So a ROW carries the GLYPH alone</strong> (<code>role="img"</code>, the shipped
+        string as its accessible name) <strong>and a BOARD CARD carries the label.</strong> State is
+        still never colour alone — the two glyphs differ in SHAPE, the same bargain every other
+        icon-only affordance in this row already makes. Both views share one column builder
+        (<code>issueColumns.tsx</code>), so this holds for List and Tree alike.
+      </p>
+      <div class="ci-grid">
+        <div>
+          <p class="ci-cap">at the 1204px MINIMUM — unchanged by the badge</p>
+          <div
+            style="
+              width: 1204px;
+              overflow-x: auto;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+            "
+          >
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-3004"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="
+                grid-template-columns:
+                  minmax(10rem, 1fr)
+                  116px 120px 150px 150px 72px 80px 108px 76px;
+                height: 44px;
+              "
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-3004 A finished run reports implemented"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-3004"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                    aria-hidden="true"
                   >
-                <span class="inline-flex shrink-0 items-center" style="color:var(--el-danger-on-surface)" title="Checks failing" role="img" aria-label="Checks failing" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg></span></div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="text-(--el-text-secondary)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-arrow-up h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <path d="m5 12 7-7 7 7"></path>
-                      <path d="M12 19V5"></path></svg
-                    >High</span
+                    <path d="M13 5h8"></path>
+                    <path d="M13 12h8"></path>
+                    <path d="M13 19h8"></path>
+                    <path d="m3 17 2 2 4-4"></path>
+                    <path d="m3 7 2 2 4-4"></path></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)">MOTIR-3004</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >A finished run reports implemented</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-danger-on-surface)"
+                  title="Checks failing"
+                  role="img"
+                  aria-label="Checks failing"
+                  data-ci="failing"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-x h-3 w-3"
+                    aria-hidden="true"
                   >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="text-(--el-text-muted)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span
-                    class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
-                    aria-label="Estimate: 3"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
-                      aria-hidden="true"
-                    >
-                      <line x1="4" x2="20" y1="9" y2="9"></line>
-                      <line x1="4" x2="20" y1="15" y2="15"></line>
-                      <line x1="10" x2="8" y1="3" y2="21"></line>
-                      <line x1="16" x2="14" y1="3" y2="21"></line></svg
-                    >3</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
-                    style="
-                      background-color: color-mix(
-                        in srgb,
-                        var(--el-status-implemented) 14%,
-                        var(--el-surface)
-                      );
-                    "
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-circle-ellipsis h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <path d="M17 12h.01"></path>
-                      <path d="M12 12h.01"></path>
-                      <path d="M7 12h.01"></path></svg
-                    >Implemented</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="flex items-center justify-end gap-0.5"
-                    ><button
-                      type="button"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-controls="radix-_r_l_"
-                      data-state="closed"
-                      aria-label="Actions for MOTIR-3004"
-                      class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-ellipsis h-4 w-4"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="1"></circle>
-                        <circle cx="19" cy="12" r="1"></circle>
-                        <circle cx="5" cy="12" r="1"></circle>
-                      </svg></button
-                  ></span>
-                </div>
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="m15 9-6 6"></path>
+                    <path d="m9 9 6 6"></path></svg
+                ></span>
               </div>
-<div
-                role="row"
-                data-testid="issue-row-MOTIR-5470"
-                class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                style="
-                  grid-template-columns:
-                    minmax(10rem, 1fr)
-                    116px 120px 150px 150px 72px 80px 108px 76px;
-                  height: 44px;
-                "
-              >
-                <div role="cell" class="flex min-w-0 items-center">
-                  <a
-                    aria-label="MOTIR-5470 A finished run reports implemented"
-                    class="absolute inset-0 z-0 focus:outline-none"
-                    href="/items/MOTIR-5470"
-                  ></a
-                  ><span class="flex min-w-0 items-center gap-2"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
-                      aria-hidden="true"
-                    >
-                      <path d="M13 5h8"></path>
-                      <path d="M13 12h8"></path>
-                      <path d="M13 19h8"></path>
-                      <path d="m3 17 2 2 4-4"></path>
-                      <path d="m3 7 2 2 4-4"></path></svg
-                    ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)"
-                      >MOTIR-5470</span
-                    ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                      >A finished run reports implemented</span
-                    ></span
-                  >
-                <span class="inline-flex shrink-0 items-center" style="color:var(--el-text-secondary)" title="Checks running" role="img" aria-label="Checks running" data-ci="running"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-ellipsis h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M17 12h.01"></path><path d="M12 12h.01"></path><path d="M7 12h.01"></path></svg></span></div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="text-(--el-text-secondary)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-arrow-up h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <path d="m5 12 7-7 7 7"></path>
-                      <path d="M12 19V5"></path></svg
-                    >High</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="text-(--el-text-muted)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span
-                    class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
-                    aria-label="Estimate: 3"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
-                      aria-hidden="true"
-                    >
-                      <line x1="4" x2="20" y1="9" y2="9"></line>
-                      <line x1="4" x2="20" y1="15" y2="15"></line>
-                      <line x1="10" x2="8" y1="3" y2="21"></line>
-                      <line x1="16" x2="14" y1="3" y2="21"></line></svg
-                    >3</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
-                    style="
-                      background-color: color-mix(
-                        in srgb,
-                        var(--el-status-implemented) 14%,
-                        var(--el-surface)
-                      );
-                    "
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-circle-ellipsis h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <path d="M17 12h.01"></path>
-                      <path d="M12 12h.01"></path>
-                      <path d="M7 12h.01"></path></svg
-                    >Implemented</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="flex items-center justify-end gap-0.5"
-                    ><button
-                      type="button"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-controls="radix-_r_l_"
-                      data-state="closed"
-                      aria-label="Actions for MOTIR-5470"
-                      class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-ellipsis h-4 w-4"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="1"></circle>
-                        <circle cx="19" cy="12" r="1"></circle>
-                        <circle cx="5" cy="12" r="1"></circle>
-                      </svg></button
-                  ></span>
-                </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">—</span>
               </div>
-<div
-                role="row"
-                data-testid="issue-row-MOTIR-894"
-                class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                style="
-                  grid-template-columns:
-                    minmax(10rem, 1fr)
-                    116px 120px 150px 150px 72px 80px 108px 76px;
-                  height: 44px;
-                "
-              >
-                <div role="cell" class="flex min-w-0 items-center">
-                  <a
-                    aria-label="MOTIR-894 A finished run reports implemented"
-                    class="absolute inset-0 z-0 focus:outline-none"
-                    href="/items/MOTIR-894"
-                  ></a
-                  ><span class="flex min-w-0 items-center gap-2"
-                    ><svg
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path></svg
+                  >High</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="text-(--el-text-muted)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span
+                  class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
+                  aria-label="Estimate: 3"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
+                    aria-hidden="true"
+                  >
+                    <line x1="4" x2="20" y1="9" y2="9"></line>
+                    <line x1="4" x2="20" y1="15" y2="15"></line>
+                    <line x1="10" x2="8" y1="3" y2="21"></line>
+                    <line x1="16" x2="14" y1="3" y2="21"></line></svg
+                  >3</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
+                  style="
+                    background-color: color-mix(
+                      in srgb,
+                      var(--el-status-implemented) 14%,
+                      var(--el-surface)
+                    );
+                  "
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M17 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M7 12h.01"></path></svg
+                  >Implemented</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="flex items-center justify-end gap-0.5"
+                  ><button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_l_"
+                    data-state="closed"
+                    aria-label="Actions for MOTIR-3004"
+                    class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
                       height="24"
@@ -4035,28 +3894,194 @@
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                      class="lucide lucide-ellipsis h-4 w-4"
                       aria-hidden="true"
                     >
-                      <path d="M13 5h8"></path>
-                      <path d="M13 12h8"></path>
-                      <path d="M13 19h8"></path>
-                      <path d="m3 17 2 2 4-4"></path>
-                      <path d="m3 7 2 2 4-4"></path></svg
-                    ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)"
-                      >MOTIR-894</span
-                    ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                      >A finished run reports implemented</span
-                    ></span
+                      <circle cx="12" cy="12" r="1"></circle>
+                      <circle cx="19" cy="12" r="1"></circle>
+                      <circle cx="5" cy="12" r="1"></circle>
+                    </svg></button
+                ></span>
+              </div>
+            </div>
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-5470"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="
+                grid-template-columns:
+                  minmax(10rem, 1fr)
+                  116px 120px 150px 150px 72px 80px 108px 76px;
+                height: 44px;
+              "
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-5470 A finished run reports implemented"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-5470"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                    aria-hidden="true"
                   >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="text-(--el-text-secondary)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
-                    ><svg
+                    <path d="M13 5h8"></path>
+                    <path d="M13 12h8"></path>
+                    <path d="M13 19h8"></path>
+                    <path d="m3 17 2 2 4-4"></path>
+                    <path d="m3 7 2 2 4-4"></path></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)">MOTIR-5470</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >A finished run reports implemented</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-text-secondary)"
+                  title="Checks running"
+                  role="img"
+                  aria-label="Checks running"
+                  data-ci="running"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M17 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M7 12h.01"></path></svg
+                ></span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path></svg
+                  >High</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="text-(--el-text-muted)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span
+                  class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
+                  aria-label="Estimate: 3"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
+                    aria-hidden="true"
+                  >
+                    <line x1="4" x2="20" y1="9" y2="9"></line>
+                    <line x1="4" x2="20" y1="15" y2="15"></line>
+                    <line x1="10" x2="8" y1="3" y2="21"></line>
+                    <line x1="16" x2="14" y1="3" y2="21"></line></svg
+                  >3</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
+                  style="
+                    background-color: color-mix(
+                      in srgb,
+                      var(--el-status-implemented) 14%,
+                      var(--el-surface)
+                    );
+                  "
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M17 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M7 12h.01"></path></svg
+                  >Implemented</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="flex items-center justify-end gap-0.5"
+                  ><button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_l_"
+                    data-state="closed"
+                    aria-label="Actions for MOTIR-5470"
+                    class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
                       height="24"
@@ -4066,40 +4091,169 @@
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      class="lucide lucide-arrow-up h-3 w-3"
+                      class="lucide lucide-ellipsis h-4 w-4"
                       aria-hidden="true"
                     >
-                      <path d="m5 12 7-7 7 7"></path>
-                      <path d="M12 19V5"></path></svg
-                    >High</span
+                      <circle cx="12" cy="12" r="1"></circle>
+                      <circle cx="19" cy="12" r="1"></circle>
+                      <circle cx="5" cy="12" r="1"></circle>
+                    </svg></button
+                ></span>
+              </div>
+            </div>
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-894"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="
+                grid-template-columns:
+                  minmax(10rem, 1fr)
+                  116px 120px 150px 150px 72px 80px 108px 76px;
+                height: 44px;
+              "
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-894 A finished run reports implemented"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-894"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                    aria-hidden="true"
                   >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                    <path d="M13 5h8"></path>
+                    <path d="M13 12h8"></path>
+                    <path d="M13 19h8"></path>
+                    <path d="m3 17 2 2 4-4"></path>
+                    <path d="m3 7 2 2 4-4"></path></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)">MOTIR-894</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >A finished run reports implemented</span
+                  ></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up h-3 w-3"
+                    aria-hidden="true"
                   >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path></svg
+                  >High</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="text-(--el-text-muted)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span
+                  class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
+                  aria-label="Estimate: 3"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
+                    aria-hidden="true"
                   >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="text-(--el-text-muted)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span
-                    class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
-                    aria-label="Estimate: 3"
-                    ><svg
+                    <line x1="4" x2="20" y1="9" y2="9"></line>
+                    <line x1="4" x2="20" y1="15" y2="15"></line>
+                    <line x1="10" x2="8" y1="3" y2="21"></line>
+                    <line x1="16" x2="14" y1="3" y2="21"></line></svg
+                  >3</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
+                  style="
+                    background-color: color-mix(
+                      in srgb,
+                      var(--el-status-implemented) 14%,
+                      var(--el-surface)
+                    );
+                  "
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M17 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M7 12h.01"></path></svg
+                  >Implemented</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="flex items-center justify-end gap-0.5"
+                  ><button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_l_"
+                    data-state="closed"
+                    aria-label="Actions for MOTIR-894"
+                    class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
                       height="24"
@@ -4109,101 +4263,220 @@
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
+                      class="lucide lucide-ellipsis h-4 w-4"
                       aria-hidden="true"
                     >
-                      <line x1="4" x2="20" y1="9" y2="9"></line>
-                      <line x1="4" x2="20" y1="15" y2="15"></line>
-                      <line x1="10" x2="8" y1="3" y2="21"></line>
-                      <line x1="16" x2="14" y1="3" y2="21"></line></svg
-                    >3</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
-                    style="
-                      background-color: color-mix(
-                        in srgb,
-                        var(--el-status-implemented) 14%,
-                        var(--el-surface)
-                      );
-                    "
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-circle-ellipsis h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <path d="M17 12h.01"></path>
-                      <path d="M12 12h.01"></path>
-                      <path d="M7 12h.01"></path></svg
-                    >Implemented</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="flex items-center justify-end gap-0.5"
-                    ><button
-                      type="button"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-controls="radix-_r_l_"
-                      data-state="closed"
-                      aria-label="Actions for MOTIR-894"
-                      class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-ellipsis h-4 w-4"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="1"></circle>
-                        <circle cx="19" cy="12" r="1"></circle>
-                        <circle cx="5" cy="12" r="1"></circle>
-                      </svg></button
-                  ></span>
-                </div>
-              </div></div></div></div>
+                      <circle cx="12" cy="12" r="1"></circle>
+                      <circle cx="19" cy="12" r="1"></circle>
+                      <circle cx="5" cy="12" r="1"></circle>
+                    </svg></button
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="panel-label">Panel 7 — measured at 1200 and at 1280</div>
     <div class="panel">
-      <p class="mk-note">The two widths the card asks for, drawn at exactly those pixel widths so the reading is measured rather than asserted. At <strong>1200</strong> the row is 4px under its own minimum and scrolls — <em>as it already does today</em>, which is the point: the badge does not cause it and does not worsen it. At <strong>1280</strong> there is 76px of slack, all of which the title track absorbs, so the badge sits beside the title with the title still ellipsising rather than the row growing.</p>
-<div class="ci-grid"><div><p class="ci-cap">1200 — scrolls, exactly as today</p><div style="width:1200px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                role="row"
-                data-testid="issue-row-MOTIR-3004"
-                class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                style="
-                  grid-template-columns:
-                    minmax(10rem, 1fr)
-                    116px 120px 150px 150px 72px 80px 108px 76px;
-                  height: 44px;
-                "
-              >
-                <div role="cell" class="flex min-w-0 items-center">
-                  <a
-                    aria-label="MOTIR-3004 A finished run reports implemented"
-                    class="absolute inset-0 z-0 focus:outline-none"
-                    href="/items/MOTIR-3004"
-                  ></a
-                  ><span class="flex min-w-0 items-center gap-2"
-                    ><svg
+      <p class="mk-note">
+        The two widths the card asks for, drawn at exactly those pixel widths so the reading is
+        measured rather than asserted. At <strong>1200</strong> the row is 4px under its own minimum
+        and scrolls — <em>as it already does today</em>, which is the point: the badge does not
+        cause it and does not worsen it. At <strong>1280</strong> there is 76px of slack, all of
+        which the title track absorbs, so the badge sits beside the title with the title still
+        ellipsising rather than the row growing.
+      </p>
+      <div class="ci-grid">
+        <div>
+          <p class="ci-cap">1200 — scrolls, exactly as today</p>
+          <div
+            style="
+              width: 1200px;
+              overflow-x: auto;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+            "
+          >
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-3004"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="
+                grid-template-columns:
+                  minmax(10rem, 1fr)
+                  116px 120px 150px 150px 72px 80px 108px 76px;
+                height: 44px;
+              "
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-3004 A finished run reports implemented"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-3004"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M13 5h8"></path>
+                    <path d="M13 12h8"></path>
+                    <path d="M13 19h8"></path>
+                    <path d="m3 17 2 2 4-4"></path>
+                    <path d="m3 7 2 2 4-4"></path></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)">MOTIR-3004</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >A finished run reports implemented</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-danger-on-surface)"
+                  title="Checks failing"
+                  role="img"
+                  aria-label="Checks failing"
+                  data-ci="failing"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-x h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="m15 9-6 6"></path>
+                    <path d="m9 9 6 6"></path></svg
+                ></span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path></svg
+                  >High</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="text-(--el-text-muted)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span
+                  class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
+                  aria-label="Estimate: 3"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
+                    aria-hidden="true"
+                  >
+                    <line x1="4" x2="20" y1="9" y2="9"></line>
+                    <line x1="4" x2="20" y1="15" y2="15"></line>
+                    <line x1="10" x2="8" y1="3" y2="21"></line>
+                    <line x1="16" x2="14" y1="3" y2="21"></line></svg
+                  >3</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
+                  style="
+                    background-color: color-mix(
+                      in srgb,
+                      var(--el-status-implemented) 14%,
+                      var(--el-surface)
+                    );
+                  "
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M17 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M7 12h.01"></path></svg
+                  >Implemented</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="flex items-center justify-end gap-0.5"
+                  ><button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_l_"
+                    data-state="closed"
+                    aria-label="Actions for MOTIR-3004"
+                    class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
                       height="24"
@@ -4213,28 +4486,206 @@
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                      class="lucide lucide-ellipsis h-4 w-4"
                       aria-hidden="true"
                     >
-                      <path d="M13 5h8"></path>
-                      <path d="M13 12h8"></path>
-                      <path d="M13 19h8"></path>
-                      <path d="m3 17 2 2 4-4"></path>
-                      <path d="m3 7 2 2 4-4"></path></svg
-                    ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)"
-                      >MOTIR-3004</span
-                    ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                      >A finished run reports implemented</span
-                    ></span
+                      <circle cx="12" cy="12" r="1"></circle>
+                      <circle cx="19" cy="12" r="1"></circle>
+                      <circle cx="5" cy="12" r="1"></circle>
+                    </svg></button
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="ci-cap">1280 — 76px of slack in the title track</p>
+          <div
+            style="
+              width: 1280px;
+              overflow-x: auto;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+            "
+          >
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-3004"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="
+                grid-template-columns:
+                  minmax(10rem, 1fr)
+                  116px 120px 150px 150px 72px 80px 108px 76px;
+                height: 44px;
+              "
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-3004 A finished run reports implemented"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-3004"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                    aria-hidden="true"
                   >
-                <span class="inline-flex shrink-0 items-center" style="color:var(--el-danger-on-surface)" title="Checks failing" role="img" aria-label="Checks failing" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg></span></div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="text-(--el-text-secondary)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
-                    ><svg
+                    <path d="M13 5h8"></path>
+                    <path d="M13 12h8"></path>
+                    <path d="M13 19h8"></path>
+                    <path d="m3 17 2 2 4-4"></path>
+                    <path d="m3 7 2 2 4-4"></path></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)">MOTIR-3004</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >A finished run reports implemented</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-danger-on-surface)"
+                  title="Checks failing"
+                  role="img"
+                  aria-label="Checks failing"
+                  data-ci="failing"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-x h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="m15 9-6 6"></path>
+                    <path d="m9 9 6 6"></path></svg
+                ></span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-arrow-up h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path></svg
+                  >High</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="flex min-w-0 items-center gap-2"
+                  ><span
+                    class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
+                    aria-hidden="true"
+                    >Y</span
+                  ><span class="truncate text-(--el-text-secondary)">Yue</span></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="text-(--el-text-muted)">—</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span
+                  class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
+                  aria-label="Estimate: 3"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
+                    aria-hidden="true"
+                  >
+                    <line x1="4" x2="20" y1="9" y2="9"></line>
+                    <line x1="4" x2="20" y1="15" y2="15"></line>
+                    <line x1="10" x2="8" y1="3" y2="21"></line>
+                    <line x1="16" x2="14" y1="3" y2="21"></line></svg
+                  >3</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
+                  style="
+                    background-color: color-mix(
+                      in srgb,
+                      var(--el-status-implemented) 14%,
+                      var(--el-surface)
+                    );
+                  "
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M17 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M7 12h.01"></path></svg
+                  >Implemented</span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center justify-end">
+                <span class="flex items-center justify-end gap-0.5"
+                  ><button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_l_"
+                    data-state="closed"
+                    aria-label="Actions for MOTIR-3004"
+                    class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    <svg
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
                       height="24"
@@ -4244,304 +4695,399 @@
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      class="lucide lucide-arrow-up h-3 w-3"
+                      class="lucide lucide-ellipsis h-4 w-4"
                       aria-hidden="true"
                     >
-                      <path d="m5 12 7-7 7 7"></path>
-                      <path d="M12 19V5"></path></svg
-                    >High</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="text-(--el-text-muted)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span
-                    class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
-                    aria-label="Estimate: 3"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
-                      aria-hidden="true"
-                    >
-                      <line x1="4" x2="20" y1="9" y2="9"></line>
-                      <line x1="4" x2="20" y1="15" y2="15"></line>
-                      <line x1="10" x2="8" y1="3" y2="21"></line>
-                      <line x1="16" x2="14" y1="3" y2="21"></line></svg
-                    >3</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
-                    style="
-                      background-color: color-mix(
-                        in srgb,
-                        var(--el-status-implemented) 14%,
-                        var(--el-surface)
-                      );
-                    "
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-circle-ellipsis h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <path d="M17 12h.01"></path>
-                      <path d="M12 12h.01"></path>
-                      <path d="M7 12h.01"></path></svg
-                    >Implemented</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="flex items-center justify-end gap-0.5"
-                    ><button
-                      type="button"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-controls="radix-_r_l_"
-                      data-state="closed"
-                      aria-label="Actions for MOTIR-3004"
-                      class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-ellipsis h-4 w-4"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="1"></circle>
-                        <circle cx="19" cy="12" r="1"></circle>
-                        <circle cx="5" cy="12" r="1"></circle>
-                      </svg></button
-                  ></span>
-                </div>
-              </div></div></div><div><p class="ci-cap">1280 — 76px of slack in the title track</p><div style="width:1280px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                role="row"
-                data-testid="issue-row-MOTIR-3004"
-                class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                style="
-                  grid-template-columns:
-                    minmax(10rem, 1fr)
-                    116px 120px 150px 150px 72px 80px 108px 76px;
-                  height: 44px;
-                "
-              >
-                <div role="cell" class="flex min-w-0 items-center">
-                  <a
-                    aria-label="MOTIR-3004 A finished run reports implemented"
-                    class="absolute inset-0 z-0 focus:outline-none"
-                    href="/items/MOTIR-3004"
-                  ></a
-                  ><span class="flex min-w-0 items-center gap-2"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
-                      aria-hidden="true"
-                    >
-                      <path d="M13 5h8"></path>
-                      <path d="M13 12h8"></path>
-                      <path d="M13 19h8"></path>
-                      <path d="m3 17 2 2 4-4"></path>
-                      <path d="m3 7 2 2 4-4"></path></svg
-                    ><span class="shrink-0 font-mono text-xs text-(--el-text-muted)"
-                      >MOTIR-3004</span
-                    ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                      >A finished run reports implemented</span
-                    ></span
-                  >
-                <span class="inline-flex shrink-0 items-center" style="color:var(--el-danger-on-surface)" title="Checks failing" role="img" aria-label="Checks failing" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg></span></div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="text-(--el-text-secondary)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-arrow-up h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <path d="m5 12 7-7 7 7"></path>
-                      <path d="M12 19V5"></path></svg
-                    >High</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      class="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[10px] font-semibold text-(--el-text-inverted)"
-                      aria-hidden="true"
-                      >Y</span
-                    ><span class="truncate text-(--el-text-secondary)">Yue</span></span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="text-(--el-text-muted)">—</span>
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span
-                    class="inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) w-full justify-end"
-                    aria-label="Estimate: 3"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-hash h-3 w-3 shrink-0 text-(--el-text-faint)"
-                      aria-hidden="true"
-                    >
-                      <line x1="4" x2="20" y1="9" y2="9"></line>
-                      <line x1="4" x2="20" y1="15" y2="15"></line>
-                      <line x1="10" x2="8" y1="3" y2="21"></line>
-                      <line x1="16" x2="14" y1="3" y2="21"></line></svg
-                    >3</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
-                    style="
-                      background-color: color-mix(
-                        in srgb,
-                        var(--el-status-implemented) 14%,
-                        var(--el-surface)
-                      );
-                    "
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-circle-ellipsis h-3 w-3"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <path d="M17 12h.01"></path>
-                      <path d="M12 12h.01"></path>
-                      <path d="M7 12h.01"></path></svg
-                    >Implemented</span
-                  >
-                </div>
-                <div role="cell" class="flex min-w-0 items-center justify-end">
-                  <span class="flex items-center justify-end gap-0.5"
-                    ><button
-                      type="button"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-controls="radix-_r_l_"
-                      data-state="closed"
-                      aria-label="Actions for MOTIR-3004"
-                      class="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-ellipsis h-4 w-4"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="1"></circle>
-                        <circle cx="19" cy="12" r="1"></circle>
-                        <circle cx="5" cy="12" r="1"></circle>
-                      </svg></button
-                  ></span>
-                </div>
-              </div></div></div></div>
+                      <circle cx="12" cy="12" r="1"></circle>
+                      <circle cx="19" cy="12" r="1"></circle>
+                      <circle cx="5" cy="12" r="1"></circle>
+                    </svg></button
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="panel-label">Panel 8 — the <em>Checks</em> filter field</div>
     <div class="panel">
-      <p class="mk-note">Its GROUP is <code>fields</code>: <code>advancedFieldGroup</code> (<code>lib/issues/advancedFilterFields.ts</code>) returns <code>other</code> only for <code>lbl</code> / <code>cmp</code> / <code>folder</code> and <code>customFields</code> for a custom field, so everything else — <code>ciState</code> included — lands in <code>fields</code>. It sits after <em>Status</em>, because that is the field a reader pairs it with. The value editor offers the three states <strong>worst-first</strong>, the order <code>CI_STATES</code> declares and the fold uses, each carrying the SAME glyph the badge does. The empty pair reads <strong><em>has no checks</em> / <em>has checks</em></strong> — not “is empty”, because the column’s <code>null</code> means something a reader can name.</p>
-<div class="ci-grid"><div><p class="ci-cap">the field menu · group “Fields”</p><div style="width:320px;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg);padding:8px"><div style="padding:var(--spacing-control-y) var(--spacing-control-x);border-radius:var(--radius-control);font-size:13px;color:var(--el-text)">Kind</div><div style="padding:var(--spacing-control-y) var(--spacing-control-x);border-radius:var(--radius-control);font-size:13px;color:var(--el-text)">Status</div><div style="padding:var(--spacing-control-y) var(--spacing-control-x);border-radius:var(--radius-control);font-size:13px;color:var(--el-text);background:var(--el-surface);font-weight:600">Checks</div><div style="padding:var(--spacing-control-y) var(--spacing-control-x);border-radius:var(--radius-control);font-size:13px;color:var(--el-text)">Priority</div><div style="padding:var(--spacing-control-y) var(--spacing-control-x);border-radius:var(--radius-control);font-size:13px;color:var(--el-text)">Type</div><div style="padding:var(--spacing-control-y) var(--spacing-control-x);border-radius:var(--radius-control);font-size:13px;color:var(--el-text)">Assignee</div><div style="padding:var(--spacing-control-y) var(--spacing-control-x);border-radius:var(--radius-control);font-size:13px;color:var(--el-text)">Sprint</div></div></div><div><p class="ci-cap">the value editor · en</p><div style="width:320px;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg);padding:8px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;gap:8px;padding:var(--spacing-control-y) var(--spacing-control-x)"><span style="width:14px;height:14px;border:1px solid var(--el-border-strong);border-radius:4px;display:inline-block"></span><span class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-rose) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg>Checks failing</span></div><div style="display:flex;align-items:center;gap:8px;padding:var(--spacing-control-y) var(--spacing-control-x)"><span style="width:14px;height:14px;border:1px solid var(--el-border-strong);border-radius:4px;display:inline-block"></span><span class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0" data-ci="running"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-ellipsis h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M17 12h.01"></path><path d="M12 12h.01"></path><path d="M7 12h.01"></path></svg>Checks running</span></div><div style="display:flex;align-items:center;gap:8px;padding:var(--spacing-control-y) var(--spacing-control-x)"><span style="width:14px;height:14px;border:1px solid var(--el-border-strong);border-radius:4px;display:inline-block"></span><span class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent whitespace-nowrap">Checks passing</span></div><div style="border-top:1px solid var(--el-border-soft);margin-top:4px;padding-top:8px;font-size:13px;color:var(--el-text-secondary)">Checks <strong>has no checks</strong> &nbsp;·&nbsp; Checks <strong>has checks</strong></div></div></div><div><p class="ci-cap">the value editor · zh</p><div style="width:320px;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg);padding:8px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;gap:8px;padding:var(--spacing-control-y) var(--spacing-control-x)"><span style="width:14px;height:14px;border:1px solid var(--el-border-strong);border-radius:4px;display:inline-block"></span><span class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-rose) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg>检查失败</span></div><div style="display:flex;align-items:center;gap:8px;padding:var(--spacing-control-y) var(--spacing-control-x)"><span style="width:14px;height:14px;border:1px solid var(--el-border-strong);border-radius:4px;display:inline-block"></span><span class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0" data-ci="running"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-ellipsis h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M17 12h.01"></path><path d="M12 12h.01"></path><path d="M7 12h.01"></path></svg>检查运行中</span></div><div style="display:flex;align-items:center;gap:8px;padding:var(--spacing-control-y) var(--spacing-control-x)"><span style="width:14px;height:14px;border:1px solid var(--el-border-strong);border-radius:4px;display:inline-block"></span><span class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent whitespace-nowrap">检查通过</span></div><div style="border-top:1px solid var(--el-border-soft);margin-top:4px;padding-top:8px;font-size:13px;color:var(--el-text-secondary)">检查 <strong>无检查</strong> &nbsp;·&nbsp; 检查 <strong>有检查</strong></div></div></div></div>
+      <p class="mk-note">
+        Its GROUP is <code>fields</code>:
+        <code>advancedFieldGroup</code> (<code>lib/issues/advancedFilterFields.ts</code>) returns
+        <code>other</code> only for <code>lbl</code> / <code>cmp</code> / <code>folder</code> and
+        <code>customFields</code> for a custom field, so everything else —
+        <code>ciState</code> included — lands in <code>fields</code>. It sits after <em>Status</em>,
+        because that is the field a reader pairs it with. The value editor offers the three states
+        <strong>worst-first</strong>, the order <code>CI_STATES</code> declares and the fold uses,
+        each carrying the SAME glyph the badge does. The empty pair reads
+        <strong><em>has no checks</em> / <em>has checks</em></strong> — not “is empty”, because the
+        column’s <code>null</code> means something a reader can name.
+      </p>
+      <div class="ci-grid">
+        <div>
+          <p class="ci-cap">the field menu · group “Fields”</p>
+          <div
+            style="
+              width: 320px;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+              padding: 8px;
+            "
+          >
+            <div
+              style="
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+                border-radius: var(--radius-control);
+                font-size: 13px;
+                color: var(--el-text);
+              "
+            >
+              Kind
+            </div>
+            <div
+              style="
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+                border-radius: var(--radius-control);
+                font-size: 13px;
+                color: var(--el-text);
+              "
+            >
+              Status
+            </div>
+            <div
+              style="
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+                border-radius: var(--radius-control);
+                font-size: 13px;
+                color: var(--el-text);
+                background: var(--el-surface);
+                font-weight: 600;
+              "
+            >
+              Checks
+            </div>
+            <div
+              style="
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+                border-radius: var(--radius-control);
+                font-size: 13px;
+                color: var(--el-text);
+              "
+            >
+              Priority
+            </div>
+            <div
+              style="
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+                border-radius: var(--radius-control);
+                font-size: 13px;
+                color: var(--el-text);
+              "
+            >
+              Type
+            </div>
+            <div
+              style="
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+                border-radius: var(--radius-control);
+                font-size: 13px;
+                color: var(--el-text);
+              "
+            >
+              Assignee
+            </div>
+            <div
+              style="
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+                border-radius: var(--radius-control);
+                font-size: 13px;
+                color: var(--el-text);
+              "
+            >
+              Sprint
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="ci-cap">the value editor · en</p>
+          <div
+            style="
+              width: 320px;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+              padding: 8px;
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+              "
+            >
+              <span
+                style="
+                  width: 14px;
+                  height: 14px;
+                  border: 1px solid var(--el-border-strong);
+                  border-radius: 4px;
+                  display: inline-block;
+                "
+              ></span
+              ><span
+                class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-rose) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0"
+                data-ci="failing"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-circle-x h-3 w-3"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="m15 9-6 6"></path>
+                  <path d="m9 9 6 6"></path></svg
+                >Checks failing</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+              "
+            >
+              <span
+                style="
+                  width: 14px;
+                  height: 14px;
+                  border: 1px solid var(--el-border-strong);
+                  border-radius: 4px;
+                  display: inline-block;
+                "
+              ></span
+              ><span
+                class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0"
+                data-ci="running"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-circle-ellipsis h-3 w-3"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M17 12h.01"></path>
+                  <path d="M12 12h.01"></path>
+                  <path d="M7 12h.01"></path></svg
+                >Checks running</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+              "
+            >
+              <span
+                style="
+                  width: 14px;
+                  height: 14px;
+                  border: 1px solid var(--el-border-strong);
+                  border-radius: 4px;
+                  display: inline-block;
+                "
+              ></span
+              ><span
+                class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent whitespace-nowrap"
+                >Checks passing</span
+              >
+            </div>
+            <div
+              style="
+                border-top: 1px solid var(--el-border-soft);
+                margin-top: 4px;
+                padding-top: 8px;
+                font-size: 13px;
+                color: var(--el-text-secondary);
+              "
+            >
+              Checks <strong>has no checks</strong> &nbsp;·&nbsp; Checks <strong>has checks</strong>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="ci-cap">the value editor · zh</p>
+          <div
+            style="
+              width: 320px;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+              padding: 8px;
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+              "
+            >
+              <span
+                style="
+                  width: 14px;
+                  height: 14px;
+                  border: 1px solid var(--el-border-strong);
+                  border-radius: 4px;
+                  display: inline-block;
+                "
+              ></span
+              ><span
+                class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-rose) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0"
+                data-ci="failing"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-circle-x h-3 w-3"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="m15 9-6 6"></path>
+                  <path d="m9 9 6 6"></path></svg
+                >检查失败</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+              "
+            >
+              <span
+                style="
+                  width: 14px;
+                  height: 14px;
+                  border: 1px solid var(--el-border-strong);
+                  border-radius: 4px;
+                  display: inline-block;
+                "
+              ></span
+              ><span
+                class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent whitespace-nowrap shrink-0"
+                data-ci="running"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-circle-ellipsis h-3 w-3"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M17 12h.01"></path>
+                  <path d="M12 12h.01"></path>
+                  <path d="M7 12h.01"></path></svg
+                >检查运行中</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: var(--spacing-control-y) var(--spacing-control-x);
+              "
+            >
+              <span
+                style="
+                  width: 14px;
+                  height: 14px;
+                  border: 1px solid var(--el-border-strong);
+                  border-radius: 4px;
+                  display: inline-block;
+                "
+              ></span
+              ><span
+                class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent whitespace-nowrap"
+                >检查通过</span
+              >
+            </div>
+            <div
+              style="
+                border-top: 1px solid var(--el-border-soft);
+                margin-top: 4px;
+                padding-top: 8px;
+                font-size: 13px;
+                color: var(--el-text-secondary);
+              "
+            >
+              检查 <strong>无检查</strong> &nbsp;·&nbsp; 检查 <strong>有检查</strong>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="panel-label">Panel 9 — DARK</div>
     <div class="panel">
-      <p class="mk-note">Same rows, same tokens, the theme flipped on the wrapper. Nothing below is theme-specific.</p>
-<div class="ci-grid"><div data-theme="dark" data-appearance-scope class="ci-dark" style="width:100%"><div><p class="ci-cap">dark · 1204</p><div style="width:1204px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
+      <p class="mk-note">
+        Same rows, same tokens, the theme flipped on the wrapper. Nothing below is theme-specific.
+      </p>
+      <div class="ci-grid">
+        <div data-theme="dark" data-appearance-scope class="ci-dark" style="width: 100%">
+          <div>
+            <p class="ci-cap">dark · 1204</p>
+            <div
+              style="
+                width: 1204px;
+                overflow-x: auto;
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                background: var(--el-page-bg);
+              "
+            >
+              <div
                 role="row"
                 data-testid="issue-row-MOTIR-3004"
                 class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
@@ -4583,7 +5129,31 @@
                       >A finished run reports implemented</span
                     ></span
                   >
-                <span class="inline-flex shrink-0 items-center" style="color:var(--el-danger-on-surface)" title="Checks failing" role="img" aria-label="Checks failing" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg></span></div>
+                  <span
+                    class="inline-flex shrink-0 items-center"
+                    style="color: var(--el-danger-on-surface)"
+                    title="Checks failing"
+                    role="img"
+                    aria-label="Checks failing"
+                    data-ci="failing"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-x h-3 w-3"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="m15 9-6 6"></path>
+                      <path d="m9 9 6 6"></path></svg
+                  ></span>
+                </div>
                 <div role="cell" class="flex min-w-0 items-center">
                   <span class="text-(--el-text-secondary)">—</span>
                 </div>
@@ -4714,7 +5284,7 @@
                   ></span>
                 </div>
               </div>
-<div
+              <div
                 role="row"
                 data-testid="issue-row-MOTIR-5470"
                 class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
@@ -4756,7 +5326,32 @@
                       >A finished run reports implemented</span
                     ></span
                   >
-                <span class="inline-flex shrink-0 items-center" style="color:var(--el-text-secondary)" title="Checks running" role="img" aria-label="Checks running" data-ci="running"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-ellipsis h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M17 12h.01"></path><path d="M12 12h.01"></path><path d="M7 12h.01"></path></svg></span></div>
+                  <span
+                    class="inline-flex shrink-0 items-center"
+                    style="color: var(--el-text-secondary)"
+                    title="Checks running"
+                    role="img"
+                    aria-label="Checks running"
+                    data-ci="running"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-ellipsis h-3 w-3"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M17 12h.01"></path>
+                      <path d="M12 12h.01"></path>
+                      <path d="M7 12h.01"></path></svg
+                  ></span>
+                </div>
                 <div role="cell" class="flex min-w-0 items-center">
                   <span class="text-(--el-text-secondary)">—</span>
                 </div>
@@ -4886,8 +5481,11 @@
                       </svg></button
                   ></span>
                 </div>
-              </div></div></div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-
   </body>
 </html>

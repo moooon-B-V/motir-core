@@ -3884,460 +3884,629 @@
   </head>
   <body>
     <h1>The CI badge on a Workbench row (MOTIR-5471)</h1>
-    <p class="mk-lede">Design asset for <strong>MOTIR-5471</strong> (story MOTIR-5469). It <strong>amends</strong> <code>design/workbench/workbench.mock.html</code> § <em>Layout</em>. The rows are the <strong>real shipped markup</strong>, lifted whole from that sheet.</p>
+    <p class="mk-lede">
+      Design asset for <strong>MOTIR-5471</strong> (story MOTIR-5469). It <strong>amends</strong>
+      <code>design/workbench/workbench.mock.html</code> § <em>Layout</em>. The rows are the
+      <strong>real shipped markup</strong>, lifted whole from that sheet.
+    </p>
 
     <div class="panel-label">Panel 10 — the Workbench row, on <em>In progress</em></div>
     <div class="panel">
-      <p class="mk-note">The Workbench’s own column set is <code>minmax(10rem, 1fr) 96px 140px 108px</code> — Title · Your role · Assignee · Status — with the same <code>gap-x-4</code> and <code>pl-4 pr-7</code>. <strong>344 fixed + 48 gaps + 44 padding + a 160px title floor = 596px</strong>, against the <strong>622px</strong> minimum <code>design-notes.md</code> § <em>Layout</em> records, and a measured title track of <strong>440px at 1200</strong>. The badge takes the title cell here for the same reason it does on <code>/items</code> — it is the only flexible track — so <strong>the 1200 fit is untouched: no fixed width is added, and 440px of title track absorbs it.</strong></p>
-<div class="ci-grid"><div><p class="ci-cap">at the 622px minimum</p><div style="width:622px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                        role="row"
-                        data-testid="issue-row-MOTIR-4782"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-4782"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-4782</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        <span class="inline-flex shrink-0 items-center" style="color:var(--el-danger-on-surface)" title="Checks failing" role="img" aria-label="Checks failing" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg></span></div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div>
-<div
-                        role="row"
-                        data-testid="issue-row-MOTIR-5470"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-5470 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-5470"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-5470</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        <span class="inline-flex shrink-0 items-center" style="color:var(--el-text-secondary)" title="Checks running" role="img" aria-label="Checks running" data-ci="running"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-ellipsis h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M17 12h.01"></path><path d="M12 12h.01"></path><path d="M7 12h.01"></path></svg></span></div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div>
-<div
-                        role="row"
-                        data-testid="issue-row-MOTIR-894"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-894 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-894"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-894</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div></div></div><div><p class="ci-cap">1200 — the shipped fit, preserved</p><div style="width:1200px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                        role="row"
-                        data-testid="issue-row-MOTIR-4782"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-4782"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-4782</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        <span class="inline-flex shrink-0 items-center" style="color:var(--el-danger-on-surface)" title="Checks failing" role="img" aria-label="Checks failing" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg></span></div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div></div></div></div>
+      <p class="mk-note">
+        The Workbench’s own column set is <code>minmax(10rem, 1fr) 96px 140px 108px</code> — Title ·
+        Your role · Assignee · Status — with the same <code>gap-x-4</code> and
+        <code>pl-4 pr-7</code>.
+        <strong>344 fixed + 48 gaps + 44 padding + a 160px title floor = 596px</strong>, against the
+        <strong>622px</strong> minimum <code>design-notes.md</code> § <em>Layout</em> records, and a
+        measured title track of <strong>440px at 1200</strong>. The badge takes the title cell here
+        for the same reason it does on <code>/items</code> — it is the only flexible track — so
+        <strong
+          >the 1200 fit is untouched: no fixed width is added, and 440px of title track absorbs
+          it.</strong
+        >
+      </p>
+      <div class="ci-grid">
+        <div>
+          <p class="ci-cap">at the 622px minimum</p>
+          <div
+            style="
+              width: 622px;
+              overflow-x: auto;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+            "
+          >
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-4782"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-4782"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344" />
+                    <path d="m9 11 3 3L22 4" /></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-4782</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-danger-on-surface)"
+                  title="Checks failing"
+                  role="img"
+                  aria-label="Checks failing"
+                  data-ci="failing"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-x h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="m15 9-6 6"></path>
+                    <path d="m9 9 6 6"></path></svg
+                ></span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">Unassigned</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                  >To Do</span
+                >
+              </div>
+            </div>
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-5470"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-5470 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-5470"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344" />
+                    <path d="m9 11 3 3L22 4" /></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-5470</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-text-secondary)"
+                  title="Checks running"
+                  role="img"
+                  aria-label="Checks running"
+                  data-ci="running"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M17 12h.01"></path>
+                    <path d="M12 12h.01"></path>
+                    <path d="M7 12h.01"></path></svg
+                ></span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">Unassigned</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                  >To Do</span
+                >
+              </div>
+            </div>
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-894"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-894 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-894"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344" />
+                    <path d="m9 11 3 3L22 4" /></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-894</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH</span
+                  ></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">Unassigned</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                  >To Do</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="ci-cap">1200 — the shipped fit, preserved</p>
+          <div
+            style="
+              width: 1200px;
+              overflow-x: auto;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+            "
+          >
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-4782"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-4782"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344" />
+                    <path d="m9 11 3 3L22 4" /></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-4782</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-danger-on-surface)"
+                  title="Checks failing"
+                  role="img"
+                  aria-label="Checks failing"
+                  data-ci="failing"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-x h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="m15 9-6 6"></path>
+                    <path d="m9 9 6 6"></path></svg
+                ></span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">Unassigned</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                  >To Do</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="panel-label">Panel 11 — <em>Recently finished</em> shows NO badge, structurally</div>
+    <div class="panel-label">
+      Panel 11 — <em>Recently finished</em> shows NO badge, structurally
+    </div>
     <div class="panel">
-      <p class="mk-note">That tab lists cards in the <code>done</code> CATEGORY, and the badge’s rule is that a done-category card carries none. So the tab needs no special case and no extra column: the same rule that governs the board card governs it. Drawn to make the absence deliberate rather than an omission.</p>
-<div class="ci-grid"><div><p class="ci-cap">Recently finished · ciState may read failing · NOTHING drawn</p><div style="width:622px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                        role="row"
-                        data-testid="issue-row-MOTIR-894"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-894 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-894"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-894</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div>
-<div
-                        role="row"
-                        data-testid="issue-row-MOTIR-3685"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-3685 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-3685"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-3685</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div></div></div></div>
+      <p class="mk-note">
+        That tab lists cards in the <code>done</code> CATEGORY, and the badge’s rule is that a
+        done-category card carries none. So the tab needs no special case and no extra column: the
+        same rule that governs the board card governs it. Drawn to make the absence deliberate
+        rather than an omission.
+      </p>
+      <div class="ci-grid">
+        <div>
+          <p class="ci-cap">Recently finished · ciState may read failing · NOTHING drawn</p>
+          <div
+            style="
+              width: 622px;
+              overflow-x: auto;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+            "
+          >
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-894"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-894 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-894"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344" />
+                    <path d="m9 11 3 3L22 4" /></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-894</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH</span
+                  ></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">Unassigned</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                  >To Do</span
+                >
+              </div>
+            </div>
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-3685"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-3685 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-3685"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344" />
+                    <path d="m9 11 3 3L22 4" /></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-3685</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH</span
+                  ></span
+                >
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">Unassigned</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                  >To Do</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="panel-label">Panel 12 — ~400px and DARK</div>
     <div class="panel">
-      <p class="mk-note">At ~400px the row is far under its 622px minimum and already scrolls horizontally — the Workbench’s existing behaviour, which the badge neither causes nor changes.</p>
-<div class="ci-grid"><div><p class="ci-cap">~400px — scrolls, as today</p><div style="width:400px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                        role="row"
-                        data-testid="issue-row-MOTIR-4782"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-4782"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-4782</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        <span class="inline-flex shrink-0 items-center" style="color:var(--el-danger-on-surface)" title="Checks failing" role="img" aria-label="Checks failing" data-ci="failing"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6"></path><path d="m9 9 6 6"></path></svg></span></div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div></div></div><div data-theme="dark" data-appearance-scope class="ci-dark"><div><p class="ci-cap">dark · 622</p><div style="width:622px;overflow-x:auto;border:1px solid var(--el-border);border-radius:var(--radius-card);background:var(--el-page-bg)"><div
-                        role="row"
-                        data-testid="issue-row-MOTIR-4782"
-                        class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
-                        style="
-                          grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px;
-                          height: 44px;
-                        "
-                      >
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <a
-                            aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
-                            class="absolute inset-0 z-0 focus:outline-none"
-                            href="/items/MOTIR-4782"
-                          ></a
-                          ><span class="flex min-w-0 items-center gap-2"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
-                              />
-                              <path d="m9 11 3 3L22 4" /></svg
-                            ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
-                              >MOTIR-4782</span
-                            ><span
-                              class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
-                              >The Workbench PAGE — /home moves to /workbench behind
-                              AUTHED_LANDING_PATH</span
-                            ></span
-                          >
-                        <span class="inline-flex shrink-0 items-center" style="color:var(--el-text-secondary)" title="Checks running" role="img" aria-label="Checks running" data-ci="running"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-ellipsis h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M17 12h.01"></path><path d="M12 12h.01"></path><path d="M7 12h.01"></path></svg></span></div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span class="text-(--el-text-secondary)">Unassigned</span>
-                        </div>
-                        <div role="cell" class="flex min-w-0 items-center">
-                          <span
-                            class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
-                            >To Do</span
-                          >
-                        </div>
-                      </div></div></div></div></div>
+      <p class="mk-note">
+        At ~400px the row is far under its 622px minimum and already scrolls horizontally — the
+        Workbench’s existing behaviour, which the badge neither causes nor changes.
+      </p>
+      <div class="ci-grid">
+        <div>
+          <p class="ci-cap">~400px — scrolls, as today</p>
+          <div
+            style="
+              width: 400px;
+              overflow-x: auto;
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              background: var(--el-page-bg);
+            "
+          >
+            <div
+              role="row"
+              data-testid="issue-row-MOTIR-4782"
+              class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+              style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+            >
+              <div role="cell" class="flex min-w-0 items-center">
+                <a
+                  aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                  class="absolute inset-0 z-0 focus:outline-none"
+                  href="/items/MOTIR-4782"
+                ></a
+                ><span class="flex min-w-0 items-center gap-2"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344" />
+                    <path d="m9 11 3 3L22 4" /></svg
+                  ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                    >MOTIR-4782</span
+                  ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    >The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH</span
+                  ></span
+                >
+                <span
+                  class="inline-flex shrink-0 items-center"
+                  style="color: var(--el-danger-on-surface)"
+                  title="Checks failing"
+                  role="img"
+                  aria-label="Checks failing"
+                  data-ci="failing"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-circle-x h-3 w-3"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="m15 9-6 6"></path>
+                    <path d="m9 9 6 6"></path></svg
+                ></span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span class="text-(--el-text-secondary)">Unassigned</span>
+              </div>
+              <div role="cell" class="flex min-w-0 items-center">
+                <span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                  >To Do</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <div data-theme="dark" data-appearance-scope class="ci-dark">
+          <div>
+            <p class="ci-cap">dark · 622</p>
+            <div
+              style="
+                width: 622px;
+                overflow-x: auto;
+                border: 1px solid var(--el-border);
+                border-radius: var(--radius-card);
+                background: var(--el-page-bg);
+              "
+            >
+              <div
+                role="row"
+                data-testid="issue-row-MOTIR-4782"
+                class="group relative grid items-center gap-x-4 border-b border-(--el-border) pr-7 pl-4 last:border-b-0 hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2"
+                style="grid-template-columns: minmax(10rem, 1fr) 96px 140px 108px; height: 44px"
+              >
+                <div role="cell" class="flex min-w-0 items-center">
+                  <a
+                    aria-label="MOTIR-4782 The Workbench PAGE — /home moves to /workbench behind AUTHED_LANDING_PATH"
+                    class="absolute inset-0 z-0 focus:outline-none"
+                    href="/items/MOTIR-4782"
+                  ></a
+                  ><span class="flex min-w-0 items-center gap-2"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-square-check-big text-(--el-type-task) h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.344"
+                      />
+                      <path d="m9 11 3 3L22 4" /></svg
+                    ><span class="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+                      >MOTIR-4782</span
+                    ><span class="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                      >The Workbench PAGE — /home moves to /workbench behind
+                      AUTHED_LANDING_PATH</span
+                    ></span
+                  >
+                  <span
+                    class="inline-flex shrink-0 items-center"
+                    style="color: var(--el-text-secondary)"
+                    title="Checks running"
+                    role="img"
+                    aria-label="Checks running"
+                    data-ci="running"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-circle-ellipsis h-3 w-3"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M17 12h.01"></path>
+                      <path d="M12 12h.01"></path>
+                      <path d="M7 12h.01"></path></svg
+                  ></span>
+                </div>
+                <div role="cell" class="flex min-w-0 items-center">
+                  <span class="truncate text-xs text-(--el-text-secondary)">Reported</span>
+                </div>
+                <div role="cell" class="flex min-w-0 items-center">
+                  <span class="text-(--el-text-secondary)">Unassigned</span>
+                </div>
+                <div role="cell" class="flex min-w-0 items-center">
+                  <span
+                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                    >To Do</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-
   </body>
 </html>
