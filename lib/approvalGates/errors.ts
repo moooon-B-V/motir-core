@@ -212,9 +212,9 @@ export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
 }
 
 /**
- * The gate's SUBJECT was superseded, so the question was WITHDRAWN — a newer
- * design result is current and this gate asks about a version the product has
- * moved past (ADR §6b).
+ * The gate's question was WITHDRAWN, so there is nothing left to decide — the
+ * gate is `superseded`, or the press found the subject no longer describes what
+ * it was raised about (ADR §6b).
  *
  * A SEPARATE error from {@link ApprovalGateAlreadyDecidedError} on purpose, and
  * the separation is the same one §6b makes in the state set: `superseded` is
@@ -223,18 +223,36 @@ export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
  * decided this"* about a question nobody answered — which is precisely the
  * sentence the audit must never be able to produce.
  *
- * ⚠️ Nothing WRITES `superseded` yet: the supersede predicate and the retirement
- * of a prior awaiting gate are MOTIR-4913's, `blocked_by` this card. The refusal
- * ships here regardless, because the state is in the Prisma enum today and a
- * door that is total over its kinds owes the same totality over its states — the
- * alternative is a row this door would fall through and decide.
+ * ⚠️ AND IT NAMES NO CAUSE — deliberately (Bug MOTIR-5651), for the same reason
+ * MOTIR-5586 took the cause out of state `G`'s dead port. This error reaches a
+ * reader from SEVEN raise sites and only ONE of them follows a publish.
+ *
+ * FOUR write or read the `superseded` row, and the gate carries nothing that
+ * tells them apart — §6b makes a supersede write `state` and nothing else:
+ *
+ *   - a republish (MOTIR-4913) — publishes something;
+ *   - a WITHDRAWAL (`withdrawCurrentForWorkItem`, MOTIR-5574) — publishes nothing;
+ *   - a hand pull-back out of review or to Cancelled (MOTIR-5527) — nothing;
+ *   - linking an OPEN pull request (MOTIR-5534) — nothing; the decision moved
+ *     to the pull request.
+ *
+ * THREE more raise it with no `superseded` row at all, in
+ * `lib/services/pullRequestMergeService.ts`: a head that moved between the
+ * check and the merge (the host's `subject_changed` 409), a stale member on a
+ * re-queue, and a pull request that is not one of the card's deliveries.
+ *
+ * So a message naming a publish was false on six of the seven. What survives is
+ * the fact every raise site leaves true, and dropping a claim needs no new
+ * column. A caller whose own surface KNOWS the cause says so there — the
+ * approve-to-merge gate does, via `ApprovalGateControl`'s `withdrawnPort`
+ * (MOTIR-5604).
  */
 export class ApprovalGateSupersededError extends ApprovalGateError {
   readonly tag = 'APPROVAL_GATE_SUPERSEDED' as const;
   readonly code = 'APPROVAL_GATE_SUPERSEDED' as const;
   constructor(readonly gateId: string) {
     super(
-      `Approval gate ${gateId} was superseded — a newer version of its subject has been published, so this question has been withdrawn.`,
+      `Approval gate ${gateId} was superseded — this question has been withdrawn and nobody decided it.`,
     );
     this.name = 'ApprovalGateSupersededError';
   }
