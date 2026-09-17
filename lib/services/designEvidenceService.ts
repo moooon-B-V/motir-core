@@ -9,6 +9,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
+import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -344,13 +345,18 @@ async function assertCardOpen(
   // it returns no statuses and raises nothing, so every card would read as open
   // and the refusal would never fire (`tests/rls/call-site-guard.test.ts`).
   if (!tx) {
-    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (bound) =>
-      assertStatusOpen(item, ctx, bound),
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (bound) => {
+        await assertStatusOpen(item, ctx, bound);
+        await assertDesignSettled(item, ctx, bound);
+      },
     );
   }
   await workItemRepository.lockById(item.id, tx);
   const current = (await workItemRepository.findById(item.id, tx)) ?? item;
-  return assertStatusOpen(current, ctx, tx);
+  await assertStatusOpen(current, ctx, tx);
+  return assertDesignSettled(current, ctx, tx);
 }
 
 async function assertStatusOpen(
@@ -366,6 +372,70 @@ async function assertStatusOpen(
   if (isTerminalStatus(item, terminalByProject)) {
     throw new DesignCardClosedError(item.identifier, item.status);
   }
+}
+
+/**
+ * Refuse any change to a design the card's reviewer has ALREADY APPROVED, while
+ * the card is still standing on that approval (Story MOTIR-5652 · Subtask
+ * MOTIR-5661; `docs/decisions/design-result.md` AMENDMENT 6 Q3).
+ *
+ * {@link assertStatusOpen} closes a `done` card, and in the two-gate model an
+ * approved design card is NOT yet `done` — the merge writes `done`. AMENDMENT 5
+ * Q2 named the window that leaves, in its own words: *"a card at `approved` with
+ * an open pull request is not yet `done`, so a publish in that window supersedes
+ * the approved version and the merge would leave `done` with a version nobody
+ * approved."* This is the second, earlier condition that closes it. The
+ * status-keyed refusal above is untouched; nothing is removed.
+ *
+ * **Three things decide it, and each one is load-bearing:**
+ *
+ * · **`approved`, NOT merely `decided`.** `changes_requested` is a decision too,
+ *   and it is the one that ASKS FOR A NEW VERSION — refusing a republish on it
+ *   would break the review loop the verb exists for. (AMENDMENT 6 Q3 said
+ *   "decided"; the correction is recorded on that Q.)
+ * · **Over the CARD'S CURRENT RESULT.** An approval of v1 says nothing about a
+ *   card whose current result is already v2, and an AWAITING gate closes nothing
+ *   at all — a question nobody has answered is exactly what a republish is for.
+ * · **WITH AN OPEN DELIVERY.** A merge is what would ship the unapproved version,
+ *   so an open pull request is what makes the window a window. Without one there
+ *   is nothing to ship and the approve → reopen → republish → approve cycle §6d
+ *   blesses is untouched (`tests/approval-gate-decided-read.test.ts` drives it).
+ * · **AT OR ABOVE THE REVIEW BAND.** This is the door back. A person pulling the
+ *   card out of review is the deliberate re-open AMENDMENT 6 Q3 asks for, and
+ *   the SAME move withdraws every awaiting question with the cause
+ *   `pulled_back`, so the merge gate cannot carry an unapproved design to `done`
+ *   behind it. Nothing mutates the approved gate itself: a decided row is frozen
+ *   by `trg_approval_gate_decided_immutable` (MOTIR-4912), and it is the record
+ *   of what somebody agreed to — see the correction on Q3.
+ */
+async function assertDesignSettled(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const approved = (
+    await approvalGateRepository.findLatestApprovedByWorkItems([item.id], 'design_result', tx)
+  ).get(item.id);
+  if (!approved) return;
+
+  const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, tx);
+  if (!current || current.id !== approved.subjectId) return;
+
+  if ((await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) === 0) return;
+
+  const statuses = await workflowsService.listStatusesByProject(
+    item.projectId,
+    ctx.workspaceId,
+    tx,
+  );
+  const rank = rankOfStatus(item.status, statuses, {
+    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
+    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
+    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+  });
+  if (rank < RUNG_RANK.in_review) return;
+
+  throw DesignCardClosedError.becauseApproved(item.identifier, item.status);
 }
 
 /**

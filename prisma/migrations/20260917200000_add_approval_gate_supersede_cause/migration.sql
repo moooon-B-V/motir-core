@@ -38,7 +38,6 @@ CREATE TYPE "approval_gate_supersede_cause" AS ENUM (
   'member_closed',
   'set_changed',
   'pulled_back',
-  'reopened_by_hand',
   'unknown'
 );
 

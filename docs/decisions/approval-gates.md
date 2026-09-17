@@ -1081,9 +1081,11 @@ has several open pull requests and therefore several simultaneous awaiting gates
 >
 > **A `superseded` row now carries a CAUSE**, from a closed vocabulary with one
 > value per writing path and **no value meaning _unsaid_**: `republished` ·
-> `withdrawn` · `head_moved` · `member_closed` · `set_changed` · `pulled_back` ·
-> `reopened_by_hand`. The full table, with which path writes each, is
-> `design-result.md` AMENDMENT 6 Q5.
+> `withdrawn` · `head_moved` · `member_closed` · `set_changed` · `pulled_back`.
+> The full table, with which path writes each, is `design-result.md`
+> AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
+> amendment was written and removed before it shipped — MOTIR-5661 found that a
+> decided gate cannot be updated at all, so nothing was left to write it.)
 >
 > **Rows superseded before this amendment carry an UNKNOWN value**, which a
 > surface renders as _the reason was not recorded_ — never as one of the real

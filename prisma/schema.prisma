@@ -4562,7 +4562,6 @@ enum ApprovalGateSupersedeCause {
   /// The work was pulled out of review, or moved to Cancelled.
   pulled_back
   /// A person re-opened a decided design gate (AMENDMENT 6 Q3's door back).
-  reopened_by_hand
   /// Written ONLY by MOTIR-5659's backfill: this row predates the column.
   unknown
 

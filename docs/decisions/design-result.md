@@ -1188,8 +1188,26 @@ true because of Q3.
 
 #### Q3 — a DECIDED design gate CLOSES the design, and this closes AMENDMENT 5 Q2's window
 
-**Once the card's `design_result` gate is decided, the design is settled:
-publish, upload and withdraw are refused on that card, WHATEVER its status.**
+**Once the card's `design_result` gate is APPROVED over its current result, and a
+pull request is open to merge it, publish, upload and withdraw are refused on
+that card while it stands on that approval — `done` or not.**
+
+Three conditions, and each one is doing work:
+
+1. **APPROVED, not merely decided** — correction 1 below.
+2. **Over the card's CURRENT result** — an approval of v1 closes nothing on a
+   card whose current result is already v2, and an AWAITING gate closes nothing
+   at all.
+3. **With an OPEN delivery, at or above the review band** — a merge is what would
+   ship the unapproved version, so an open pull request is what makes this a
+   window; and the band is the door back (correction 2 below). With nothing open
+   there is nothing to ship, and §6d's approve → reopen → republish → approve
+   cycle is untouched.
+
+> ⚠️ **CORRECTED WHEN IT WAS BUILT — MOTIR-5661, 2026-09-17.** This Q was written
+> as _"once the gate is DECIDED … WHATEVER its status"_, and both halves were
+> wrong in ways the build found. The corrections are below, at the two paragraphs
+> they belong to, and the rule above is what ships.
 
 An agent returning to a failed pull request therefore **cannot re-add or
 re-publish the design asset**. That is what makes Q2's sentence true rather than
@@ -1201,15 +1219,44 @@ testing the card's STATUS (`done`), and under Q1 an approved design card is **no
 yet `done`** — the merge writes `done`. AMENDMENT 5 Q2 states the gap in its own
 words: _"the approval named X, a publish makes Y current, the merge writes
 `done`, and the current result of a `done` design card is Y, **a version nobody
-approved**."_ **Move the test from the STATUS to the DECIDED GATE.** MOTIR-5552's
+approved**."_ **Move the test from the STATUS to the APPROVED GATE.** MOTIR-5552's
 refusals and their way-forward copy stay; only what they key on changes.
 
-**The door back is a person, deliberately.** Reopening the card by hand
-withdraws the decided design gate — recording the cause `reopened_by_hand` (Q5)
-— so a fresh version can be published and re-approved. This does not contradict
-§6c's _an answer outlives its subject_: that rule is about a decided gate
-surviving its subject being superseded underneath it, not about a person
-choosing to re-open the question.
+> ⚠️ **CORRECTION 1 — `approved`, not `decided`.** `changes_requested` is a
+> decision too, and it is the one whose entire purpose is to ASK FOR A NEW
+> VERSION. Keying the refusal on _decided_ would refuse the republish the verb
+> exists to request, breaking the review loop instead of closing a window. Only
+> an APPROVAL settles a design.
+
+**The door back is a person, deliberately.** Reopening the card by hand — the
+ordinary pull-back out of the review band — lets a fresh version be published and
+re-approved. That is why condition 3 reads the band: it is exactly what a person
+leaves when they re-open the card.
+
+> ⚠️ **CORRECTION 2 — the re-open does NOT touch the approved gate, and the
+> original sentence could not have been built.** This Q said reopening
+> _"withdraws the decided design gate — recording the cause `reopened_by_hand`"_.
+> A decided gate cannot be updated at all: `trg_approval_gate_decided_immutable`
+> (MOTIR-4912) refuses every UPDATE of a row at `approved` or
+> `changes_requested` except the two user FKs going NULL, and that guard is the
+> audit's integrity, not an obstacle to route around. **Measured, not reasoned**:
+> the update raises `AG_DECIDED_IMMUTABLE` (`ERRCODE 23514`).
+>
+> So the re-open is the pull-back the product already has. It costs nothing new
+> and it is stronger than the original: the SAME move withdraws every awaiting
+> question on the card with the cause `pulled_back`, so the merge gate cannot
+> carry an unapproved design to `done` behind the re-open. The approved gate
+> stays approved — it is the record of what somebody agreed to, and AMENDMENT 5
+> Q2 arm (a) goes on reading it until a second approval lands.
+>
+> **`reopened_by_hand` is REMOVED from Q5's vocabulary.** It was minted for the
+> mechanism this correction retires, and a value nothing writes is the shape Q5
+> set out to avoid — the same reason no `pull_request_linked` member was minted.
+> Neither the enum nor its migration had left this branch when it was removed.
+
+This does not contradict §6c's _an answer outlives its subject_: that rule is
+about a decided gate surviving its subject being superseded underneath it, and
+here nothing supersedes it at all.
 
 **An AWAITING design gate is untouched by this Q.** A republish while the
 decision is still open supersedes and refuses exactly as §6b and Q8 point 3
@@ -1252,15 +1299,14 @@ is silent.
 **A supersede now records WHY, from a closed vocabulary with one value per
 writing path and no value meaning _unsaid_:**
 
-| cause              | written when                                                       |
-| ------------------ | ------------------------------------------------------------------ |
-| `republished`      | a newer design version superseded the one the gate asked about     |
-| `withdrawn`        | the design result was withdrawn                                    |
-| `head_moved`       | a member's head moved, so the commits are not the ones asked about |
-| `member_closed`    | a member pull request closed                                       |
-| `set_changed`      | a delivery row joined or left the card                             |
-| `pulled_back`      | the work was pulled out of review, or moved to Cancelled           |
-| `reopened_by_hand` | a person re-opened a decided design gate (Q3)                      |
+| cause           | written when                                                       |
+| --------------- | ------------------------------------------------------------------ |
+| `republished`   | a newer design version superseded the one the gate asked about     |
+| `withdrawn`     | the design result was withdrawn                                    |
+| `head_moved`    | a member's head moved, so the commits are not the ones asked about |
+| `member_closed` | a member pull request closed                                       |
+| `set_changed`   | a delivery row joined or left the card                             |
+| `pulled_back`   | the work was pulled out of review, or moved to Cancelled           |
 
 **No cause is minted for the pull-request-LINK path** — the one that retires a
 design gate when an open pull request is linked (AMENDMENT 4 Q8). Q7 retires that
