@@ -155,6 +155,47 @@ async function finish(runId: string): Promise<void> {
   await adminDb.dispatchRun.update({ where: { id: runId }, data: { status: 'succeeded' } });
 }
 
+let prNumber = 1;
+/**
+ * A pull request in `repoId`, LINKED to `workItemId` by a delivery row, with one
+ * check row per entry in `checks` — the shape the draft read binds a suggested
+ * section to. No check rows means no head has been reported, which is the case
+ * that must suggest a NULL commit rather than inventing one.
+ */
+async function linkedPr(
+  fx: WorkItemFixture,
+  workItemId: string,
+  repoId: string,
+  headRef: string,
+  checks: Array<{ name: string; conclusion: string; sha: string }> = [],
+) {
+  const row = await adminDb.githubPullRequest.create({
+    data: {
+      repoId,
+      number: prNumber++,
+      state: 'open',
+      merged: false,
+      headRef,
+      baseRef: 'main',
+      title: 'A change',
+    },
+  });
+  await adminDb.workItemDelivery.create({
+    data: { workspaceId: fx.workspaceId, workItemId, githubPullRequestId: row.id, repoId },
+  });
+  for (const c of checks) {
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: row.id,
+        commitSha: c.sha,
+        checkName: c.name,
+        conclusion: c.conclusion,
+      },
+    });
+  }
+  return row;
+}
+
 async function rowsFor(workItemId: string) {
   return adminDb.testInstructions.findMany({
     where: { workItemId },
@@ -658,5 +699,248 @@ describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
     const err = new TestInstructionsRepoNotInProjectError('acme/web', []);
     expect(err.message).toContain('the project has no connected repositories');
     expect(err.message).not.toContain('Use one of');
+  });
+});
+
+// ── the DRAFT a person's form opens on (Story MOTIR-5450 · Subtask MOTIR-5453) ──
+//
+// `approval-gates.md` §9's 2026-09-17 amendment, point 3: SUGGESTED, NEVER
+// FORCED. The cases are chosen so a plausible broken implementation fails:
+//
+//   - the no-checks case asserts a NULL commit, so an implementation that
+//     reaches for the pull request's `headRef` — or for any non-head sha lying
+//     around — fails rather than suggesting a commit nobody reported;
+//   - the descendant case gives the STORY no delivery of its own, so an
+//     implementation reading only the item's own deliveries returns no sections;
+//   - the own-before-descendant case puts a pull request in the SAME repository
+//     on both tiers, so a flat scan picks the child's and fails;
+//   - the record case asserts `source: 'record'` on a section whose repository
+//     ALSO has a linked pull request, so an implementation that prefers the
+//     live head over the stored commit fails;
+//   - the permission case uses a CUSTOM role that can browse but not edit, and
+//     asserts the same actor CAN read — so a `project:browse` gate would pass it.
+
+describe('testInstructionsService.getDraftForWorkItem', () => {
+  it('EDITING: the current record fills the form, every section `source: record`, even where the repository has a live pull request', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'A story run' });
+    const web = await connectRepo(fx, 'web');
+    const api = await connectRepo(fx, 'api');
+    // A live pull request whose head DIFFERS from the record's stored commit:
+    // the draft must offer the record's, because Edit re-opens what was saved.
+    await linkedPr(fx, story.id, web, 'parent/MOTIR-1-web', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+    await testInstructionsService.publish(
+      input(story.id, web, { repos: [section(web), section(api, { commitSha: SHA_B })] }),
+      fx.ctx,
+    );
+
+    const draft = await testInstructionsService.getDraftForWorkItem(story.id, fx.ctx);
+    expect(draft.bodyMd).toBe(BODY);
+    expect(draft.previewPath).toBe('/items/ACME-7');
+    expect(draft.sections).toEqual([
+      { repoId: web, repoName: 'moooon/web', commitSha: SHA_A, source: 'record' },
+      { repoId: api, repoName: 'moooon/api', commitSha: SHA_B, source: 'record' },
+    ]);
+  });
+
+  it("ADDING: no record, one section per linked pull request with that pull request's live head", async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'No record yet' });
+    const web = await connectRepo(fx, 'web');
+    await linkedPr(fx, card.id, web, 'subtask/MOTIR-2-web', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+
+    const draft = await testInstructionsService.getDraftForWorkItem(card.id, fx.ctx);
+    expect(draft.bodyMd).toBe('');
+    expect(draft.previewPath).toBeNull();
+    expect(draft.sections).toEqual([
+      { repoId: web, repoName: 'moooon/web', commitSha: SHA_B, source: 'pull_request' },
+    ]);
+  });
+
+  it('ADDING: a pull request with NO check row suggests a NULL commit — the form asks, because `publish` requires one', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'No checks yet' });
+    const web = await connectRepo(fx, 'web');
+    await linkedPr(fx, card.id, web, 'subtask/MOTIR-3-web');
+
+    const draft = await testInstructionsService.getDraftForWorkItem(card.id, fx.ctx);
+    expect(draft.sections).toEqual([
+      { repoId: web, repoName: 'moooon/web', commitSha: null, source: 'pull_request' },
+    ]);
+  });
+
+  it("ADDING: a story with no delivery of its own takes its section from a CHILD's pull request", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'A child',
+      parentId: story.id,
+    });
+    const web = await connectRepo(fx, 'web');
+    await linkedPr(fx, child.id, web, 'subtask/MOTIR-4-child', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+
+    const draft = await testInstructionsService.getDraftForWorkItem(story.id, fx.ctx);
+    expect(draft.sections).toEqual([
+      { repoId: web, repoName: 'moooon/web', commitSha: SHA_B, source: 'pull_request' },
+    ]);
+  });
+
+  it("ADDING: the item's OWN pull request wins over a child's in the SAME repository", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'A child',
+      parentId: story.id,
+    });
+    const web = await connectRepo(fx, 'web');
+    // The child's first, so a flat scan in link order would take it.
+    await linkedPr(fx, child.id, web, 'subtask/MOTIR-5-child', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+    await linkedPr(fx, story.id, web, 'parent/MOTIR-5-story', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_A },
+    ]);
+
+    const draft = await testInstructionsService.getDraftForWorkItem(story.id, fx.ctx);
+    expect(draft.sections).toEqual([
+      { repoId: web, repoName: 'moooon/web', commitSha: SHA_A, source: 'pull_request' },
+    ]);
+  });
+
+  it('ADDING: neither a record nor a linked pull request is LEGAL — no sections, and the project repositories to choose from', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Bare' });
+    const web = await connectRepo(fx, 'web');
+    const api = await connectRepo(fx, 'api');
+    // A repository connected but NOT linked to the project: not offerable.
+    await connectRepo(fx, 'unlinked', false);
+
+    const draft = await testInstructionsService.getDraftForWorkItem(card.id, fx.ctx);
+    expect(draft.sections).toEqual([]);
+    expect(draft.projectRepos).toEqual(
+      expect.arrayContaining([
+        { repoId: web, repoName: 'moooon/web' },
+        { repoId: api, repoName: 'moooon/api' },
+      ]),
+    );
+    expect(draft.projectRepos).toHaveLength(2);
+  });
+
+  it('refuses an actor whose CUSTOM role can browse but lacks work_item:edit — the draft exists only for someone who may SAVE it', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Guarded' });
+    await connectRepo(fx, 'web');
+
+    const viewer = await usersService.createUser({
+      email: 'draft-viewer@ex.com',
+      password: 'hunter2hunter2',
+      name: 'Viewer',
+    });
+    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    const browseOnly = await projectRoleDefinitionService.create({
+      projectId: fx.projectId,
+      ctx: fx.ctx,
+      name: 'Browse only',
+      permissions: ['project:browse', 'comment:add'],
+    });
+    await projectMembersService.addMember({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: viewer.id,
+      role: 'member',
+    });
+    await projectMembersService.setRole({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: viewer.id,
+      role: browseOnly.id,
+    });
+    const viewerCtx = { userId: viewer.id, workspaceId: fx.workspaceId };
+
+    // The control: the same actor CAN read, so the refusal below is about edit.
+    await expect(
+      testInstructionsService.getCurrentForWorkItem(card.id, viewerCtx),
+    ).resolves.toBeNull();
+
+    const err = await testInstructionsService
+      .getDraftForWorkItem(card.id, viewerCtx)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('work_item:edit');
+  });
+
+  it('refuses an unknown work item', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      testInstructionsService.getDraftForWorkItem('does-not-exist', fx.ctx),
+    ).rejects.toBeInstanceOf(TestInstructionsWorkItemNotFoundError);
+  });
+});
+
+describe('the PARITY path — one writer, two author kinds (MOTIR-5450)', () => {
+  it('a PERSON saving through `publish` writes `dispatchRunId: null` and `publishedById` that person, while a RUN in flight is attributed to the run', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Both authors' });
+    const web = await connectRepo(fx, 'web');
+    // A dispatch run IS running against this card — so `dispatchRunId: null`
+    // below is the flag's doing, not the absence of a run to attribute to.
+    const runId = await runningRunFor(fx, card.id);
+
+    const person = await testInstructionsService.publish(
+      input(card.id, web, { attributeToRunningDispatch: false }),
+      fx.ctx,
+    );
+    expect(person.created).toBe(true);
+    expect(person.record).toMatchObject({
+      dispatchRunId: null,
+      publishedById: fx.ctx.userId,
+      isCurrent: true,
+    });
+
+    const agent = await testInstructionsService.publish(
+      input(card.id, web, {
+        attributeToRunningDispatch: true,
+        bodyMd: `${BODY}\n\nWritten by the run.`,
+      }),
+      fx.ctx,
+    );
+    expect(agent.record).toMatchObject({ dispatchRunId: runId, isCurrent: true });
+
+    // ONE record table, one writer: the person's row is history, not a parallel
+    // shape, and the two differ only in who is recorded as the author.
+    const rows = await rowsFor(card.id);
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((r) => r.isCurrent)).toHaveLength(1);
+    expect(rows.map((r) => r.dispatchRunId)).toEqual([null, runId]);
+    await finish(runId);
+  });
+
+  it("a person's identical re-save writes nothing — the same idempotency an agent's retry gets", async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Re-save' });
+    const web = await connectRepo(fx, 'web');
+
+    const first = await testInstructionsService.publish(
+      input(card.id, web, { attributeToRunningDispatch: false }),
+      fx.ctx,
+    );
+    const second = await testInstructionsService.publish(
+      input(card.id, web, { attributeToRunningDispatch: false }),
+      fx.ctx,
+    );
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.record.id).toBe(first.record.id);
+    expect(await rowsFor(card.id)).toHaveLength(1);
   });
 });
