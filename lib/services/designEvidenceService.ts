@@ -327,9 +327,11 @@ async function assertSomethingWaits(
  * the same predicate readiness applies to a `blocked_by` edge, never by
  * comparing a key to `'done'`, so a renamed done status is closed too.
  *
- * ⚠️ It reads the CARD's status, never a gate. A design approved through its
- * pull request raises no `design_result` gate (AMENDMENT 4 Q8) and is closed
- * exactly the same.
+ * ⚠️ It reads the CARD's status, never a gate — and that is now a DIVISION OF
+ * LABOUR rather than the whole rule. It used to be the whole rule because a
+ * design card with an open pull request raised no gate to read (AMENDMENT 4 Q8);
+ * such a card raises one again (MOTIR-5662), and the gate-keyed half is
+ * {@link assertDesignSettled}, which runs beside this one.
  *
  * Without a `tx` it tests the status the caller already read — the courtesy
  * pre-check that stops a doomed publish uploading anything. With one it LOCKS

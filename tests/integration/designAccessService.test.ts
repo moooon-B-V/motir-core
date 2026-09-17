@@ -14,12 +14,20 @@ import { makeWorkWaitOn } from '../helpers/designWaits';
 // door downstream reads this service rather than re-deriving it:
 //
 //   arm 1  the decided `approved` `design_result` gate's `subjectId`
-//   arm 2  the newest pinned row        (AMENDMENT 4 Q8's no-gate path)
-//   arm 3  the current row              (a `done` card no gate ever decided)
+//   arm 2  the current row              (a `done` card no gate ever decided)
+//
+// ⚠️ A THIRD ARM STOOD BETWEEN THEM — *the newest pinned row* — and retired with
+// MOTIR-5665 (`design-result.md` AMENDMENT 6 Q6). It existed for AMENDMENT 4 Q8's
+// no-gate path alone: a design card with an open delivering pull request raised no
+// `design_result` gate, so the pin was all the decision left behind. That card
+// raises a gate again (MOTIR-5662), so every approval leaves arm 1's evidence and
+// the pinned arm had no live input. Its two tests went with it; the `pinnedAt`
+// WRITE did not — §6c's retention reads it, and that is asserted below.
 //
 // The window that motivates arm 1 is driven end to end below: approve X, publish
 // Y while the card is still open, close the card, and assert the service hands
-// back X.
+// back X. **That window is now the ORDINARY case**, so arm 1 is more load-bearing
+// than when it was written, not less.
 //
 // The object store is the one mocked external (no store runs in the vitest
 // lanes), mocked as a STORE so a publish's authoritative `head` reads what was
@@ -279,45 +287,25 @@ describe('Q2 — the ladder: the version the APPROVAL named, not the version tha
     expect(verdict.design.commitSha).toBe(shaFor('x'));
   });
 
-  it('arm 2 — a card whose only approval left a PIN and no `design_result` gate', async () => {
-    const card = await designCard('Pinned only');
+  it('the `pinnedAt` WRITE survives the arm that read it — MOTIR-5665 retired a reader, not a column', async () => {
+    // The hazard this card exists for: a column whose only visible reader has gone
+    // reads as dead, and the next person to touch retention has to work out from
+    // first principles whether the pin is still needed. It is — §6c's retention is
+    // what keeps an approved version's files out of the orphan-GC's reach, and
+    // `tests/approval-gate-retention.test.ts` drives that read through the real GC.
+    // What is asserted HERE is the half this card could have broken: the write.
+    const card = await designCard('Pin survives');
     await dependentOn(card.id);
     const v1 = await publish(card, 'v1');
 
-    // AMENDMENT 4 Q8's path, reproduced by its effects: the approve-to-merge
-    // gate pinned the then-current row, and no `design_result` gate survives.
-    await adminDb.designEvidence.update({
-      where: { id: v1 },
-      data: { pinnedAt: new Date() },
-    });
-    await adminDb.approvalGate.deleteMany({ where: { workItemId: card.id } });
-    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
+    await approve(v1);
 
-    const verdict = await verdictFor(card);
-    expect(verdict.verdict).toBe('approved');
-    if (verdict.verdict !== 'approved') throw new Error('unreachable');
-    expect(verdict.design.evidenceId).toBe(v1);
+    expect(
+      (await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1 } })).pinnedAt,
+    ).not.toBeNull();
   });
 
-  it('arm 2 takes the NEWEST pin — approvals accumulate across a reopen (§6d)', async () => {
-    const card = await designCard('Approved twice');
-    await dependentOn(card.id);
-    const v1 = await publish(card, 'v1');
-    await adminDb.designEvidence.update({
-      where: { id: v1 },
-      data: { pinnedAt: new Date(Date.now() - 60_000) },
-    });
-    const v2 = await publish(card, 'v2');
-    await adminDb.designEvidence.update({ where: { id: v2 }, data: { pinnedAt: new Date() } });
-    await adminDb.approvalGate.deleteMany({ where: { workItemId: card.id } });
-    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
-
-    const verdict = await verdictFor(card);
-    if (verdict.verdict !== 'approved') throw new Error('expected approved');
-    expect(verdict.design.evidenceId).toBe(v2);
-  });
-
-  it('arm 3 — a done design card no gate ever decided falls to its current row', async () => {
+  it('arm 2 — a done design card no gate ever decided falls to its current row', async () => {
     const card = await designCard('Closed by hand');
     await dependentOn(card.id);
     const v1 = await publish(card, 'v1');
@@ -554,7 +542,6 @@ describe('the batched repository reads short-circuit on an EMPTY input', () => {
     await withWorkspaceServiceContext(fx.workspaceId, async (tx) => {
       expect(await designEvidenceRepository.findManyWithAssetsByIds([], tx)).toEqual(new Map());
       expect(await designEvidenceRepository.findCurrentByWorkItems([], tx)).toEqual(new Map());
-      expect(await designEvidenceRepository.findNewestPinnedByWorkItems([], tx)).toEqual(new Map());
       expect(await designEvidenceRepository.findWorkItemIdsWithAnyResult([], tx)).toEqual(
         new Set(),
       );
