@@ -9,6 +9,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
+import { gateSetFor } from '@/lib/services/gateSetFor';
 import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -717,18 +718,23 @@ async function persistEvidence(
     // This is `routeTo`'s FIRST caller. It had none because its parameter type
     // demanded the gate row, which does not exist at the moment routing must be
     // answered; `GateRoutingArgs` is that knot untied.
-    // ⚠️ NO DESIGN GATE WHILE A PULL REQUEST IS OPEN (MOTIR-5534; AMENDMENT 4 Q8).
-    // A design card that has opened one or more pull requests — in any number of
-    // repositories — is decided by the approve-to-merge gate over its whole
-    // delivery set, and approving that merges them. A `design_result` gate beside
-    // it would ask the same person a second question about the same change, and
-    // answering it would move nothing. The evidence above is still recorded and
-    // the prior version still superseded; only the question is not asked. It is
-    // the same read `designResultHandler.approve` makes, so the two ends of the
-    // rule agree on what "open" means.
-    if ((await workItemDeliveryRepository.countOpenByWorkItem(args.item.id, tx)) > 0) {
-      return (await designEvidenceRepository.findById(evidence.id, tx))!;
-    }
+    // ⚠️ THE Q8 SUPPRESSION IS GONE (Story MOTIR-5652 · Subtask MOTIR-5662;
+    // AMENDMENT 6 Q1 reverses AMENDMENT 4 Q8). This block used to return early
+    // when the card had an open delivering pull request, on the reasoning that
+    // the approve-to-merge gate would carry the design decision. It did not: the
+    // merge gate then refused on the run target, so a design card with a
+    // published result and an open pull request had NO question at all — green
+    // CI, In Review, and nothing to press. Two locally-careful suppressions, and
+    // neither author could see the hole from their own card.
+    //
+    // ⚠️ AND THIS SITE NO LONGER DECIDES. It asks the predicate what the card
+    // should hold and creates the design gate it names — so the card can, and
+    // now does, hold TWO gates of different kinds, with the design one primary.
+    // MOTIR-5603's invariant is about ONE MERGE gate per card and is untouched.
+    const owed = (await gateSetFor(args.item, tx)).awaited.find(
+      (gate) => gate.kind === 'design_result',
+    );
+    if (!owed) return (await designEvidenceRepository.findById(evidence.id, tx))!;
 
     const routedToId = handlerFor('design_result').routeTo({ item: args.item, ctx, tx });
 
@@ -738,7 +744,13 @@ async function persistEvidence(
         projectId: args.item.projectId,
         workItemId: args.item.id,
         kind: 'design_result',
-        subjectId: evidence.id,
+        subjectId: owed.subjectId,
+        // ⚠️ WRITTEN FROM THE PREDICATE, and it used to be left null. A design
+        // gate's subject id already identifies it (an evidence row is
+        // immutable), so nothing READ this — but leaving it null made the row
+        // unable to say which commit the design was drawn at, which is the same
+        // silence MOTIR-5659 removed from a supersede.
+        subjectVersion: owed.subjectVersion,
         routedToId,
       },
       tx,

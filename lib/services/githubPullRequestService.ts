@@ -5,7 +5,6 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { withdrawPullRequestApprovalGateOnSetChange } from './pullRequestApprovalGates';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
@@ -43,33 +42,17 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
  *  link picker's quick-search window). */
 const PR_CANDIDATE_LIMIT = 10;
 
-/**
- * A pull request that is OPEN on a design card makes the card's decision the
- * approve-to-merge gate, so a `design_result` gate still AWAITING on it is retired
- * in the link's own transaction (MOTIR-5534; `docs/decisions/design-result.md`
- * AMENDMENT 4 Q8). The first link and every later one run it — with no awaiting
- * gate it matches nothing — and a DECIDED gate is never touched: an answer
- * outlives its subject. A merged or closed pull request decides nothing, so its
- * link retires nothing.
- */
-async function retireDesignGateForOpenPullRequest(
-  workItemId: string,
-  pullRequestState: string,
-  tx: Prisma.TransactionClient,
-): Promise<void> {
-  if (pullRequestState !== 'open') return;
-  await approvalGateRepository.supersedeAwaitingByWorkItem(
-    workItemId,
-    'design_result',
-    // A delivery row joined the card, which is exactly `set_changed` — and no
-    // `pull_request_linked` member was minted for this one write, because
-    // AMENDMENT 6 Q7 RETIRES this path outright (MOTIR-5662). Minting a cause
-    // for a caller we are about to delete would leave the vocabulary carrying a
-    // value nothing writes, which is the shape Q5 set out to avoid.
-    'set_changed',
-    tx,
-  );
-}
+// ⚠️ `retireDesignGateForOpenPullRequest` STOOD HERE AND IS RETIRED (Story
+// MOTIR-5652 · Subtask MOTIR-5662; `docs/decisions/design-result.md` AMENDMENT 6
+// Q1 and Q7, reversing AMENDMENT 4 Q8 / MOTIR-5534). Linking an OPEN pull request
+// superseded an awaiting `design_result` gate, on the reasoning that the card's
+// approve-to-merge gate now carried the design decision. **A link is evidence the
+// design gate is ABOUT, not an answer to it** — and the merge gate it deferred to
+// then refused on the run target, leaving the card with no question at all.
+//
+// Both of its call sites go with it. Nothing replaces them: a link changes the
+// DELIVERY set, which `withdrawPullRequestApprovalGateOnSetChange` already
+// handles, and the design question is untouched by it.
 
 export const githubPullRequestService = {
   /**
@@ -261,7 +244,6 @@ export const githubPullRequestService = {
       );
       // A NEW member changes the set an approve-and-merge gate asked about.
       if (!alreadyDelivered) await withdrawPullRequestApprovalGateOnSetChange(currentItemId, tx);
-      await retireDesignGateForOpenPullRequest(currentItemId, pr.state, tx);
       // …and it changes the set the card's own CI verdict is folded over, so the
       // verdict is recomputed in the same transaction (MOTIR-5470). This is
       // defect 4 of the four MOTIR-5469 enumerates: linking a red pull request to
@@ -480,7 +462,6 @@ export const githubPullRequestService = {
         // ever had.
         await recomputeWorkItemCiState(input.workItemId, tx);
       }
-      await retireDesignGateForOpenPullRequest(input.workItemId, updated.state, tx);
 
       return {
         link: toLinkedPullRequestDto(updated),

@@ -31,11 +31,13 @@ import type { ApprovalGateState } from '@/generated/prisma/client';
 // adds no query, no writer and no lock ordering — and its tests need no fixtures.
 // It imports one TYPE and nothing else.
 //
-// ⚠️ AND IT HAS NO CALLER YET (MOTIR-5660). The conversion of the eleven sites is
-// MOTIR-5662 (the raisers) and MOTIR-5663 (the withdrawers). This module ships
-// alone so it can be reviewed as an ANSWER — read against AMENDMENT 6 line by
-// line — before any behaviour depends on it. A card that both defined the rule
-// and applied it could not be reviewed for the rule.
+// ⚠️ ITS INPUTS ARE LOADED IN EXACTLY ONE PLACE — `lib/services/gateSetFor.ts`
+// (MOTIR-5662). A caller that gathered some of them itself could answer half the
+// question inline and ask the predicate the other half, which is the shape all
+// three defects above already have. It shipped with NO caller at all (MOTIR-5660)
+// so it could be reviewed as an ANSWER, read against AMENDMENT 6 line by line,
+// before any behaviour depended on it; the RAISERS were converted by MOTIR-5662
+// and the WITHDRAWERS are MOTIR-5663's.
 
 /** The kinds this predicate decides between. */
 export type AwaitableGateKind = 'design_result' | 'pull_request_approval';
@@ -119,20 +121,36 @@ export interface GateSet {
 /**
  * Does this gate already ANSWER the question, rather than ask it?
  *
- * A gate `approved` or `changes_requested` over the same subject AND the same
- * version is a decision somebody made about exactly this thing. `awaiting` is the
- * question still open — which still belongs in `awaited`, so a reconciling caller
- * leaves it alone instead of superseding and re-raising an identical row (the
- * idempotence MOTIR-5670 tests hardest).
+ * A gate `approved` or `changes_requested` over the same subject is a decision
+ * somebody made about exactly this thing. `awaiting` is the question still open —
+ * which still belongs in `awaited`, so a reconciling caller leaves it alone
+ * instead of superseding and re-raising an identical row (the idempotence
+ * MOTIR-5670 tests hardest).
+ *
+ * ⚠️ `versionIdentifies` IS NOT A CONVENIENCE — the two kinds identify their
+ * subject differently, and conflating them is wrong in both directions
+ * (MOTIR-5662).
+ *
+ * · A MERGE gate's `subjectId` is the CARD, which never changes, so only the
+ *   version says which commits were answered. Ignoring it would let one approval
+ *   silence every later set of commits — the opposite of MOTIR-5632.
+ * · A DESIGN gate's `subjectId` is a `design_evidence` row, and those are
+ *   IMMUTABLE: a new commit means a new publish means a new row. The id is
+ *   therefore the whole identity, and requiring the version to match as well
+ *   would re-ask a question somebody has already answered whenever the two
+ *   spellings differ — which they do for every design gate raised before this
+ *   card, all of which carry a null `subjectVersion`.
  */
 function alreadyDecided(
   gate: ExistingGate | null,
   subjectId: string,
   subjectVersion: string | null,
+  versionIdentifies: boolean,
 ): boolean {
   if (gate === null) return false;
   if (gate.state !== 'approved' && gate.state !== 'changes_requested') return false;
-  return gate.subjectId === subjectId && gate.subjectVersion === subjectVersion;
+  if (gate.subjectId !== subjectId) return false;
+  return versionIdentifies ? gate.subjectVersion === subjectVersion : true;
 }
 
 /**
@@ -181,7 +199,7 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   const evidence = input.currentDesignEvidence;
   if (
     evidence !== null &&
-    !alreadyDecided(input.latestDesignGate, evidence.id, evidence.commitSha)
+    !alreadyDecided(input.latestDesignGate, evidence.id, evidence.commitSha, false)
   ) {
     awaited.push({
       kind: 'design_result',
@@ -197,7 +215,7 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     input.prMergeMode === 'manual' &&
     everyMemberMergeable &&
     version !== null &&
-    !alreadyDecided(input.latestMergeGate, input.workItemId, version)
+    !alreadyDecided(input.latestMergeGate, input.workItemId, version, true)
   ) {
     awaited.push({
       kind: 'pull_request_approval',

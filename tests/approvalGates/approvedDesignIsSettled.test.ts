@@ -168,34 +168,20 @@ async function openPullRequest(number = 7) {
 }
 
 /**
- * Publish v1 and record an APPROVAL of it, leaving the card where it is.
+ * Link an open pull request, publish v1, and approve it through the REAL decide
+ * door — leaving the card in review with an approved design and a merge pending.
  *
- * ⚠️ THE APPROVAL IS WRITTEN DIRECTLY, and that is a statement about TODAY's
- * code rather than a shortcut. The state this card exists for — an approved
- * design gate on a card that is not yet `done` — is not reachable through the
- * decide door on this branch: with no open pull request the approval is TERMINAL
- * and writes `done` itself, and WITH one the publish raises no design gate at
- * all (AMENDMENT 4 Q8). That second half IS Bug MOTIR-5652, and MOTIR-5662 /
- * MOTIR-5664 are the children that make the state reachable; MOTIR-5668 drives
- * the whole sequence through the doors once they have.
- *
- * What is under test HERE is the refusal, and the refusal reads the row. So the
- * row is written the way the decide door writes it — subject, version, decider,
- * timestamp — and the doors that must refuse are driven for real.
+ * That is the whole window, and it became reachable through the doors with
+ * MOTIR-5662: before it, a publish onto a card with an open pull request raised no
+ * design gate at all (AMENDMENT 4 Q8), so there was nothing to approve. With the
+ * gate raised again the approval is NOT terminal — the merge writes `done` (§8) —
+ * so the card stays where it is, which is exactly the state under test.
  */
 async function publishAndApprove(label = 'v1') {
+  await openPullRequest();
   const v = await publish(label);
   const gate = await gateFor(v.id);
-  await adminDb.approvalGate.update({
-    where: { id: gate.id },
-    data: {
-      state: 'approved',
-      decidedAt: new Date(),
-      decidedById: fx.ctx.userId,
-      decidedByLabel: 'Tester',
-      decisionSource: 'ui',
-    },
-  });
+  await approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx);
   card = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
   return v;
 }
@@ -208,7 +194,6 @@ describe('the window: an APPROVED design on a card that is not yet `done`', () =
     describe(`with the card at \`${status}\``, () => {
       beforeEach(async () => {
         await publishAndApprove();
-        await openPullRequest();
         if (status === 'approved') {
           await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'approved' } });
           card = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
@@ -272,7 +257,6 @@ describe('what the refusal must NOT close', () => {
     // Reached by approving v1, pulling back, publishing v2 — so the approved
     // gate is real and simply no longer names the current result.
     const v1 = await publishAndApprove();
-    await openPullRequest();
     await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
     const v2 = await publish('v2');
     await workItemsService.updateStatus(card.id, 'in_review', fx.ctx);
@@ -284,9 +268,8 @@ describe('what the refusal must NOT close', () => {
 });
 
 describe('the door back is a person', () => {
-  it('refused, then reopened by hand, then published — and the first approval is left standing', async () => {
+  it('refused, then reopened by hand, then published and RE-APPROVED — the first approval left standing', async () => {
     const v1 = await publishAndApprove();
-    await openPullRequest();
     await expect(publish('v2')).rejects.toMatchObject({ code: 'DESIGN_CARD_CLOSED' });
 
     // THE REOPEN. The ordinary hand pull-back out of the review band — which is
@@ -296,19 +279,19 @@ describe('the door back is a person', () => {
 
     const v2 = await publish('v2');
     expect(v2.id).not.toBe(v1.id);
+    await workItemsService.updateStatus(card.id, 'in_review', fx.ctx);
+    const gate2 = await gateFor(v2.id);
+    await approvalGatesService.decide(
+      { gateId: gate2.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
 
-    // The FIRST approval is untouched — a decided row is frozen by
-    // `trg_approval_gate_decided_immutable`, and it is the record of what
-    // somebody agreed to. AMENDMENT 5 Q2 arm (a) goes on reading it until a
-    // second approval lands.
+    // Two approvals, ACCUMULATING (§6d), each naming its own version — and the
+    // first is untouched. A decided row is frozen by
+    // `trg_approval_gate_decided_immutable`, and it is the record of what somebody
+    // agreed to; AMENDMENT 5 Q2 arm (a) reads it until the second lands.
     expect(await gateFor(v1.id)).toMatchObject({ state: 'approved', supersededCause: null });
-
-    // ⚠️ THE RE-APPROVAL IS NOT ASSERTED HERE, and the reason is the bug this
-    // story is fixing: with an open pull request the publish raises NO design
-    // gate at all (AMENDMENT 4 Q8), so there is nothing to approve. MOTIR-5662
-    // and MOTIR-5664 restore it, and MOTIR-5668 drives reopen → publish →
-    // re-approve end to end once they have.
-    expect(await adminDb.approvalGate.findFirst({ where: { subjectId: v2.id } })).toBeNull();
+    expect(await gateFor(v2.id)).toMatchObject({ state: 'approved' });
   });
 
   it('a DECIDED gate cannot be superseded at all — the guard the re-open does not route around', async () => {

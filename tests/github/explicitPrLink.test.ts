@@ -714,8 +714,20 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
   });
 });
 
-// ── MOTIR-5534 (AMENDMENT 4 Q8): an OPEN pull request retires an awaiting design gate ──
-describe('linking an OPEN pull request retires an AWAITING design gate (MOTIR-5534)', () => {
+// ── REVERSED — MOTIR-5662 (AMENDMENT 6 Q1/Q7), reversing MOTIR-5534 (AMENDMENT 4 Q8) ──
+//
+// These four tests pinned the old rule: linking an OPEN pull request superseded an
+// awaiting `design_result` gate, because the approve-to-merge gate was taken to
+// carry the design decision. It did not carry it — the merge gate then refused on
+// the run target, and a design card with a published result and an open pull
+// request held NO question at all (MOTIR-5652). **A link is evidence the design
+// gate is ABOUT, not an answer to it.**
+//
+// The suite is kept, with its assertions inverted rather than deleted, because
+// *"linking leaves the design gate standing"* is precisely the sentence that would
+// otherwise have no test — and the two cases that were already no-ops (a decided
+// gate, a merged pull request) still are, for their own unchanged reasons.
+describe('linking an OPEN pull request LEAVES an awaiting design gate standing (MOTIR-5662)', () => {
   async function designCardWithGate(
     s: Awaited<ReturnType<typeof makeScenario>>,
     state: 'awaiting' | 'approved',
@@ -740,7 +752,7 @@ describe('linking an OPEN pull request retires an AWAITING design gate (MOTIR-55
     return { item, gate };
   }
 
-  it('a first link of an open pull request supersedes the awaiting gate, in the link itself', async () => {
+  it('a first link of an open pull request leaves the awaiting gate standing', async () => {
     const s = await makeScenario({
       email: 'q8-link@example.com',
       installationId: INST_A,
@@ -758,7 +770,7 @@ describe('linking an OPEN pull request retires an AWAITING design gate (MOTIR-55
     await githubPullRequestService.linkPullRequest(item.id, prId, s.ctx);
 
     expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
-      'superseded',
+      'awaiting',
     );
   });
 
@@ -813,7 +825,7 @@ describe('linking an OPEN pull request retires an AWAITING design gate (MOTIR-55
     );
   });
 
-  it('the coordinates door (an agent after `gh pr create`) retires it the same way', async () => {
+  it('the coordinates door (an agent after `gh pr create`) leaves it standing too', async () => {
     const s = await makeScenario({
       email: 'q8-coords@example.com',
       installationId: INST_A,
@@ -836,7 +848,7 @@ describe('linking an OPEN pull request retires an AWAITING design gate (MOTIR-55
     );
 
     expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
-      'superseded',
+      'awaiting',
     );
   });
 });
