@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../helpers/commitShaFixtures';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -387,7 +388,7 @@ describe('the publish → read seam', () => {
             seedAsset(fx, item.id, { kind: 'mock', name, contentType: 'text/html' }),
             noteAsset(fx, item.id, `${name}.design-notes.md`),
           ],
-          commitSha: `sha-${i}`,
+          commitSha: shaFor(`${i}`),
         },
         fx.ctx,
       );
@@ -395,7 +396,7 @@ describe('the publish → read seam', () => {
 
     const read = await designEvidenceService.getCurrentForWorkItem(item.id, fx.ctx);
 
-    expect(read!.commitSha).toBe('sha-1');
+    expect(read!.commitSha).toBe(shaFor('1'));
     expect(read!.assets).toHaveLength(2);
     expect(read!.assets[0]!.sourcePath).toBe('design/work-items/second.mock.html');
   });

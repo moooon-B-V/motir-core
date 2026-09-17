@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { shaFor } from '../helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
@@ -126,7 +127,7 @@ function mcpPublish(card: WorkItem, label: string) {
           contentBase64: b64(`# ${label}`),
         },
       ],
-      commitSha: `sha-${label}`,
+      commitSha: shaFor(label),
     },
     fx.ctx,
   );
@@ -152,7 +153,7 @@ function servicePublish(card: WorkItem, label: string) {
           pathname: `${prefix}${label}.md`,
         },
       ],
-      commitSha: `sha-${label}`,
+      commitSha: shaFor(label),
     },
     fx.ctx,
   );
@@ -290,7 +291,7 @@ describe('(3) door parity — every door that reaches the guard answers DESIGN_C
                     pathname: `${prefix}v2.md`,
                   },
                 ],
-                commitSha: 'sha-v2',
+                commitSha: shaFor('v2'),
               }),
               params,
             ),

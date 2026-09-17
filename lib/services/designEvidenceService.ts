@@ -19,6 +19,7 @@ import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
   DesignCardClosedError,
   DesignEvidenceBlobMissingError,
+  DesignEvidenceCommitShaError,
   DesignEvidenceEmptyError,
   DesignEvidenceImageRetiredError,
   DesignEvidenceMockRequiredError,
@@ -33,6 +34,7 @@ import {
   DesignEvidenceSupersedeConflictError,
 } from '@/lib/designEvidence/errors';
 import { toDesignEvidenceDto } from '@/lib/mappers/designEvidenceMappers';
+import { normalizeCommitSha } from '@/lib/git/commitSha';
 import type {
   DesignAssetKindDTO,
   DesignEvidenceDTO,
@@ -367,9 +369,43 @@ async function assertStatusOpen(
 }
 
 /**
+ * The design result's `commitSha`, canonical — or a typed refusal naming the
+ * field (MOTIR-5620).
+ *
+ * ⚠️ CALLED ON THE SERVICE, NOT ON EITHER DOOR, AND THAT IS THE WHOLE POINT.
+ * This path has TWO entry points — the MCP tool and
+ * `POST /api/work-items/[id]/design-evidence` — and a guard written at one of
+ * them is absent the first time anything reaches the other. Both doors map on
+ * the abstract `DesignEvidenceError`, so a throw here is already a typed refusal
+ * on each of them with no door-side wiring at all. Same shape, and the same
+ * shared guard, as `normalizeReceiptCommitSha` one file over.
+ *
+ * ⚠️ THE RESULT FEEDS BOTH JOBS. The value returned here is what the idempotency
+ * lookup COMPARES and what `persistEvidence` STORES, so the compared value and
+ * the stored value cannot differ — which is the only reason the `===` in
+ * {@link findIdempotentExisting} is sound.
+ *
+ * An ABSENT citation stays absent: the field is optional, and a result with no
+ * commit publishes fine (it simply cites nothing, and idempotency is skipped).
+ */
+function normalizeDesignCommitSha(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const result = normalizeCommitSha(raw);
+  if (!result.ok) throw new DesignEvidenceCommitShaError(result.reason);
+  return result.commitSha;
+}
+
+/**
  * Idempotency: a CI redelivery of the SAME commit+producer is a no-op — the
  * current result already records it, so return it (no re-upload, no duplicate
  * history row). Null when there is no matching current result.
+ *
+ * ⚠️ THE COMPARISON IS `===` ON THE STORED STRING, so it is only sound because
+ * the value reaching it has been through {@link normalizeDesignCommitSha} and
+ * the value it compares against was stored the same way. Two spellings of one
+ * commit were two keys until they were (MOTIR-5620) — and the second key did not
+ * merely write a history row, it marked the prior version's awaiting gate
+ * `superseded` under a reviewer who was mid-review.
  */
 async function findIdempotentExisting(
   workItemId: string,
@@ -741,12 +777,12 @@ export const designEvidenceService = {
     await assertCardOpen(item, ctx);
     await assertSomethingWaits(item, ctx);
 
-    const idempotent = await findIdempotentExisting(
-      item.id,
-      input.commitSha,
-      input.producedByKey,
-      ctx,
-    );
+    // AFTER the access gate, so a caller who cannot see the item still gets the
+    // 404-not-403 answer rather than learning its citation was malformed. ONE
+    // normalisation, feeding both the idempotency lookup and the persist below.
+    const commitSha = normalizeDesignCommitSha(input.commitSha);
+
+    const idempotent = await findIdempotentExisting(item.id, commitSha, input.producedByKey, ctx);
     if (idempotent) return idempotent;
 
     // SECURITY: every reported pathname MUST live under this item's design
@@ -789,7 +825,7 @@ export const designEvidenceService = {
         {
           item,
           artifacts,
-          commitSha: input.commitSha ?? null,
+          commitSha,
           ciRunUrl: input.ciRunUrl ?? null,
           producedByKey: input.producedByKey ?? null,
         },
@@ -842,6 +878,12 @@ export const designEvidenceService = {
     assertResultShape(input.assets, input.noteMd);
     await assertCardOpen(item, ctx);
     await assertSomethingWaits(item, ctx);
+    // Refuse a malformed citation HERE rather than letting `recordFromPathnames`
+    // do it, for the same reason the two gates above are re-asserted: this door
+    // UPLOADS before it delegates, so a refusal further down would leave orphan
+    // objects in the store. Normalising twice is free — the canonical form is a
+    // fixed point.
+    normalizeDesignCommitSha(input.commitSha);
 
     const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
     const prefix = designPrefix(ctx.workspaceId, item.id);
