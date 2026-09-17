@@ -177,6 +177,79 @@ export interface NormalizedPushEvent {
   headSha: string | null;
 }
 
+// ── A REVIEW on a change request (Story MOTIR-4910 · MOTIR-5595) ─────────────
+//
+// `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT (MOTIR-5590), decision 2.
+// Every other webhook event reaches `githubWebhookService` through the provider
+// seam rather than by reading the host's payload directly, and a review does too,
+// so the GitLab story supplies the same shape rather than a second vocabulary.
+
+/** A review's state, normalized. The four GitHub reports, and the same four a
+ *  merge-request approval maps onto. `commented` is carried even though it never
+ *  decides anything: the Development block draws reviews that do not count. */
+export type NormalizedReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/** What happened to the review itself — NOT what it says. `edited` is a body edit
+ *  and changes no verdict; it is normalized so a consumer can decide to ignore it
+ *  explicitly rather than by failing to parse it. */
+export type NormalizedReviewAction = 'submitted' | 'dismissed' | 'edited';
+
+/** WHO reviewed, in the host's own terms. `providerUserId` is the stable identity
+ *  the actor resolution joins on; `login` is what a surface shows. */
+export interface NormalizedReviewer {
+  providerUserId: string;
+  login: string;
+  /** `User` or `Bot` on GitHub, as given. Not an enum: it is the host's vocabulary
+   *  and it grows. */
+  type: string;
+}
+
+/** ONE review, normalized off a `pull_request_review` delivery. */
+export interface NormalizedReviewEvent {
+  action: NormalizedReviewAction;
+  installationId: string;
+  repo: { owner: string; name: string; providerRepoId: string };
+  /** The pull request as the DELIVERY reports it. `headSha` is the pull request's
+   *  CURRENT head, which is not necessarily the commit the review was given at —
+   *  `review.commitSha` is that, and the two differing is exactly the stale-review
+   *  case (decision 2). */
+  pullRequest: { number: number; headSha: string | null };
+  review: {
+    /** The host's own review id — the idempotency key a consumer stores. */
+    id: string;
+    state: NormalizedReviewState;
+    /** `review.commit_id` — the head the review was given AT. */
+    commitSha: string;
+    submittedAt: Date;
+    htmlUrl: string | null;
+    reviewer: NormalizedReviewer;
+  };
+}
+
+/** A reviewer's permission ON a repository, normalized (decision 2). GitHub's own
+ *  vocabulary, which GitLab's access levels map onto.
+ *
+ *  ⚠️ `unknown` MEANS IT COULD NOT BE READ and is NOT a synonym for `none`. A
+ *  review whose permission is unknown counts for nothing — the decision is safe in
+ *  that direction — but it must stay distinguishable from a reviewer positively
+ *  known to have no access, which is a fact rather than a gap. */
+export type RepositoryPermission =
+  | 'admin'
+  | 'maintain'
+  | 'write'
+  | 'triage'
+  | 'read'
+  | 'none'
+  | 'unknown';
+
+/** What a repository-permission read needs. `username` is the host's login. */
+export interface RepositoryPermissionInput {
+  installationId: string;
+  owner: string;
+  repo: string;
+  username: string;
+}
+
 /** The lifecycle of ONE deployment status a repository's host reported, normalized
  *  across providers (Story MOTIR-4906 · MOTIR-5329). A CLOSED union so every
  *  consumer's `switch` is total and a compiler proves a new member is handled.

@@ -8,6 +8,9 @@ import type {
   NormalizedInstallation,
   NormalizedPushEvent,
   NormalizedRepo,
+  NormalizedReviewEvent,
+  RepositoryPermission,
+  RepositoryPermissionInput,
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
@@ -335,6 +338,57 @@ export interface GitProvider {
    * (MOTIR-893). PURE.
    */
   parsePushEvent(rawPayload: unknown): NormalizedPushEvent | null;
+
+  // --- REVIEWS (Story MOTIR-4910 · MOTIR-5595) -------------------------------
+  //
+  // `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT (MOTIR-5590), decision
+  // 2. A GitHub approval decides the card's one approve-to-merge gate, and both
+  // halves of that — WHAT the review says, and whether its author was entitled to
+  // say it — are host facts. They reach `githubWebhookService` through this seam
+  // for the same reason every other event does: so the consumer holds no
+  // host-specific type, and the GitLab story supplies the same shape rather than a
+  // second vocabulary.
+  //
+  // ⚠️ BOTH OPTIONAL, in the idiom `mergeChangeRequest?` established. GitLab's
+  // approval model is genuinely different — it has approval RULES with counts —
+  // and nothing here is written to generalise to it, so GitLab must compile
+  // WITHOUT these rather than ship stubs modelling a capability it does not have
+  // (the "define the interface alongside a real implementation" rule this seam was
+  // built on). A consumer checks for the capability and no-ops without it.
+
+  /**
+   * Normalize a raw REVIEW webhook payload into the provider-agnostic shape, or
+   * `null` when it is not one we handle (a different event, an unrecognised state,
+   * or a malformed body). PURE.
+   *
+   * ⚠️ NULL, NEVER A PARTIAL EVENT. A review missing its id, its commit, its
+   * author or its pull-request number cannot be stored idempotently or matched to
+   * a head, and a consumer that received a half-filled one would decide a gate on
+   * a guess. Missing is missing.
+   *
+   * ⚠️ THE STATE IS NORMALIZED CASE-INSENSITIVELY, and that is a real host
+   * difference rather than defensiveness: the WEBHOOK sends `approved` and the
+   * REST API sends `APPROVED`, so a consumer reading both would otherwise see two
+   * vocabularies for one fact.
+   */
+  parseReviewEvent?(rawPayload: unknown): NormalizedReviewEvent | null;
+
+  /**
+   * Read whether `username` can WRITE to a repository — the entitlement half of
+   * decision 2, and the reason an approval from a drive-by reader decides nothing.
+   *
+   * ⚠️ A 404 IS AN ANSWER (`none`), not a failure: GitHub answers 404 for a user
+   * with no access at all. Anything else the host could not answer — a 403, a 500,
+   * a timeout — throws `ProviderPermissionReadError`, and the consumer records
+   * `unknown`. The two must stay distinguishable: `none` is a fact about the
+   * person, `unknown` is a gap in what Motir knows, and only the second one is
+   * ever worth retrying.
+   *
+   * It reads the permission AT THE MOMENT the review arrived, because that is the
+   * question an audit asks — a reviewer whose access is revoked next week was
+   * still entitled when they approved.
+   */
+  getRepositoryPermission?(input: RepositoryPermissionInput): Promise<RepositoryPermission>;
 
   // --- CI-minutes metering (Story MOTIR-1775 · MOTIR-1896) -------------------
   //
