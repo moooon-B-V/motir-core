@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import * as approvalGatesService from '@/lib/services/approvalGatesService';
+import { ApprovalGateSupersededError } from '@/lib/approvalGates/errors';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -407,6 +409,42 @@ describe('a review on a CHILD’s pull request decides the RUN TARGET (MOTIR-559
     expect((await gateRow(gate!.id)).state).toBe('approved');
     const childGates = await adminDb.approvalGate.findMany({ where: { workItemId: child.id } });
     expect(childGates).toHaveLength(0);
+  });
+});
+
+describe('the two arms that only run when something moves underneath (MOTIR-5600 §1)', () => {
+  it('stays PENDING when nobody can author the status write', async () => {
+    // No member for the reviewer AND no workspace owner: `changeRequestStatusSync`'s own
+    // fallback has nothing to fall back to. The reviews stay recorded and the next
+    // evaluation tries again — the decision is deferred, never guessed at.
+    const { item, gate, members } = await scenario({ withGate: true });
+    await recordReview(members.web);
+    await recordReview(members.api);
+    await adminDb.workspaceMembership.deleteMany({
+      where: { workspaceId: fx.workspaceId, role: 'owner' },
+    });
+
+    const outcome = await evaluateForWorkItem(item.id, fx.workspaceId);
+
+    expect(outcome.outcome).toBe('pending');
+    expect((await gateRow(gate!.id)).state).toBe('awaiting');
+    expect(mergeSpy).not.toHaveBeenCalled();
+  });
+
+  it('reports SUPERSEDED when the question is withdrawn between the read and the decision', async () => {
+    // The set changed after the verdict was computed, so the door refuses. It is an ordinary
+    // answer on this path — the delivery is acked and nothing is retried for ever.
+    const { item, members } = await scenario({ withGate: true });
+    await recordReview(members.web);
+    await recordReview(members.api);
+    vi.spyOn(approvalGatesService.approvalGatesService, 'decide').mockRejectedValue(
+      new ApprovalGateSupersededError('gate-gone'),
+    );
+
+    const outcome = await evaluateForWorkItem(item.id, fx.workspaceId);
+
+    expect(outcome.outcome).toBe('superseded');
+    expect(mergeSpy).not.toHaveBeenCalled();
   });
 });
 
