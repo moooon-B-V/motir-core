@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
@@ -302,7 +301,11 @@ describe('github_pull_request_review — the rows the sync writes (MOTIR-5594)',
   it('carries `github_review` on the authority enum, and Postgres accepts it', async () => {
     // The member the decide door (MOTIR-5596) will write. Asserted against the live
     // type rather than the schema file, because the migration is what ships.
-    const values = await db.$queryRawUnsafe<Array<{ enumlabel: string }>>(
+    // ⚠️ `adminDb`, NOT `db`. This is a fixture READBACK, which is what the admin client is
+    // for (MOTIR-2513's two-client model) — and a raw statement on the SINGLETON under
+    // `tests/` is counted by `tests/rls/test-singleton-statement-guard.test.ts`, whose
+    // ceiling exists precisely so this shape cannot grow unnoticed.
+    const values = await adminDb.$queryRawUnsafe<Array<{ enumlabel: string }>>(
       `SELECT enumlabel FROM pg_enum e
        JOIN pg_type t ON t.oid = e.enumtypid
        WHERE t.typname = 'approval_gate_authority'

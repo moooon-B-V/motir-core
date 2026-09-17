@@ -557,7 +557,7 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
     // service was written for. A key GAINED is as observable as one lost, which
     // is why it is edited here deliberately rather than discovered in CI.
     expect(Object.keys(dto).sort()).toEqual(
-      ['ci', 'id', 'number', 'repo', 'state', 'title', 'url'].sort(),
+      ['ci', 'githubReview', 'id', 'number', 'repo', 'state', 'title', 'url'].sort(),
     );
     expect(dto).toMatchObject({ state: 'merged', number: 11, repo: 'moooon-B-V/motir-core' });
   });

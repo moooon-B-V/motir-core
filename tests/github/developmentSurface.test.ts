@@ -189,6 +189,11 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'open',
         ci: 'running',
         url: 'https://github.com/moooon/acme/pull/41',
+        // MOTIR-5602: what this pull request's review on GitHub says. Null here because
+        // nobody has reviewed it — absence of a countable review is not a state, exactly
+        // as `ci: null` draws no pill. It stays inside `toEqual` for the same reason `id`
+        // does: the key must be PRESENT.
+        githubReview: null,
       },
     ]);
 
@@ -242,6 +247,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'merged',
         ci: null, // no check rows → no CI pill
         url: 'https://github.com/moooon/acme/pull/7',
+        githubReview: null, // MOTIR-5602 — nobody reviewed it
       },
     ]);
   });
