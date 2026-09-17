@@ -2127,3 +2127,200 @@ is a colour one: rose would say something went wrong, and nothing did.
 | MOTIR-5608 | **TAKES** that the merge runs **after the decision commits**, so G4 is the state a reader lands on — a panel showing an approved card with un-attempted merges would contradict it                                                                                                                                                                                                                                                                                                                                                             |
 | MOTIR-5601 | **GIVES** G1 → G4 → G6 as the acceptance video's script. **TAKES** nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | MOTIR-5609 | **GIVES** the one-gate model every panel assumes. **TAKES** nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+## 24 · A person WRITES and EDITS How to test — the Add and Edit doors, the form, and _Written by {person}_ (MOTIR-5452, 2026-09-17)
+
+**AMENDS § 20** — Panels **12a** (the part with a record), **12i** (record missing) and **12m** (a
+child's pointer) — for ONE change: the How-to-test part gains WRITE doors, so a person holding
+`work_item:edit` can **add** a record where there is none and **edit** the current one.
+
+**Asset:** `design/github/github--how-to-test-form.mock.html`, a delta mock beside
+`github.mock.html`. It holds only the panels that change; `github.mock.html` is a record of what
+shipped and is not edited.
+
+> **⚠️ Panels 13a–13h, and § 24 — not the 12p–12w and § 21 MOTIR-5452 reserved.** The card was
+> authored 2026-09-14, when both ranges were free. § 20's verbs delta (MOTIR-5480) took 12p–12w on
+> 2026-09-15 and §§ 21–23 landed on 2026-09-16/17. § 21 and § 22 now cite `12p`, `12s`, `12t`, `12u`
+> and `12v` BY NUMBER, so reusing the range would silently re-point those citations at a different
+> drawing. 13a–13h is the next free contiguous block. The panels, their order and their contents are
+> the card's, unchanged; only the labels moved. Recorded on the card.
+
+### The rule it draws — PARITY
+
+`docs/decisions/approval-gates.md` § 9's **2026-09-17 amendment**, point 2: _"a person may add
+everything an agent may add … Anything a person cannot set that an agent can is a defect against this
+point."_ So this is **not a lighter, human-flavoured field**. Every control on the sheet exists
+because one `publish` input needs a door, and the parity table below maps them one to one. There is
+one record, one writer (`testInstructionsService.publish`) and two author kinds.
+
+Point 3 is the other half: **suggested, never forced.** The form opens filled in from what Motir
+already knows, and every value stays editable.
+
+### Access path
+
+Item page (`/items/{key}`) → the **Development** card → the **How to test** part. Both doors live
+inside that part:
+
+- **Add how to test** — under the missing callout (13a), when the item is a RUN TARGET with no
+  current record.
+- **Edit** — in the part's head, opposite the author line (13a), when a record exists.
+
+The card head keeps **+ Link pull request** and gains nothing: the two are different objects, and the
+head belongs to the pull requests.
+
+### The panels, and the card that builds each
+
+| panel   | what it depicts                                                                                  | built by   |
+| ------- | ------------------------------------------------------------------------------------------------ | ---------- |
+| **13a** | the doors — **Add** under the owed-by callout, **Add** with no run to name, **Edit** in the head | MOTIR-5455 |
+| **13b** | the form filled in, desktop and dark — body · preview path · repository rows · Save / Cancel     | MOTIR-5455 |
+| **13c** | a section whose pull request has reported no head — the commit empty, required, and saying why   | MOTIR-5455 |
+| **13d** | dirty · saving · every refusal `publish` can return, each beside its field                       | MOTIR-5455 |
+| **13e** | no linked pull request — legal, the repository picker open and focused                           | MOTIR-5455 |
+| **13f** | after save — _Written by {person}_, and _Earlier versions_ holding both kinds                    | MOTIR-5455 |
+| **13g** | ~400px — the form, and the saved state                                                           | MOTIR-5455 |
+| **13h** | no door — a viewer without `work_item:edit`, a child of a container run, the approval port       | MOTIR-5455 |
+
+### The PARITY table — one row per `publish` input
+
+Read this as the checklist point 2 asks for: a `publish` input with no control is the defect.
+
+| `publish` input     | the control that sets it                                                                                        | where it is suggested from                                                                       |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `bodyMd`            | the **Body** field — the shipped `MarkdownEditor` at `size="full"`, including a code block's **language** field | the current record on Edit; empty on Add                                                         |
+| `previewPath`       | the **Preview path** input, optional, hint _a path such as /items/ACME-7_                                       | the current record on Edit; empty on Add                                                         |
+| `repos[].repo`      | a **repository row**, added by _+ Add repository_ (a `Combobox` over `projectRepos`) and removable              | one row per repository with a linked pull request — the item's own before its descendants'       |
+| `repos[].commitSha` | that row's **commit** input                                                                                     | the bound pull request's `liveHeadSha`, or **empty and required** when no check has reported one |
+
+`attributeToRunningDispatch` has no control, deliberately: it is how the SERVICE distinguishes the
+two author kinds, and a person's save leaves it false. It is not a field a person sets.
+
+### The code block's LANGUAGE is the parity row that needed a component change
+
+The rendered block prints each fence's language above the code (§ 20, _The content is RICH TEXT_).
+The shipped editor's **Code block** button calls `toggleCodeBlock()` and sets none, and no control
+shows or changes one — so without this, a person's rich text would be strictly poorer than an
+agent's, which point 2 forbids. **13b** draws the field on a focused code block: a small monospace
+input in the block's own bar, showing the current language, typed or cleared. **MOTIR-5458 owns how
+it behaves** (the input rule, serialisation, the load → edit → save round trip); this section owns
+only where it sits and what it looks like.
+
+### Decisions
+
+| #   | decision                                                                                        | why                                                                                                                                                                                         |
+| --- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Add sits under the missing callout, not in the card head**                                    | the head is the pull requests' (`+ Link pull request`); the callout is where a reader learns the record is missing, so it is where the remedy belongs                                       |
+| 2   | **The missing callout STAYS when the door is shown**                                            | a person writing one by hand does not make the run's omission untrue, and the _owed by_ line is the only record of which run skipped it                                                     |
+| 3   | **Edit sits in the part head, opposite the author line**                                        | that line is already about what the record IS rather than what it says; the verb belongs beside it                                                                                          |
+| 4   | **A person may edit a RUN's record**                                                            | the amendment's own reason: _"a wrong agent record can only be fixed by starting another run"_. The run's text is not destroyed — the save makes a new version and this one becomes history |
+| 5   | **Refusals are `publish`'s own strings, inline beside their field**                             | one service refuses both authors, so a second human-facing phrasing would be a second contract to keep in step                                                                              |
+| 6   | **A refusal keeps the draft**                                                                   | the body is the expensive part of the input; clearing it to report a bad commit is the worst possible trade                                                                                 |
+| 7   | **An unknown commit is empty and required, with the reason in the row**                         | the head is only known once a check reports one; inventing a value for a field `publish` validates would be worse than asking, and without the reason it reads as a bug                     |
+| 8   | **No linked pull request is a legal starting state**                                            | point 3 says so outright — _"because an agent does not need one either"_                                                                                                                    |
+| 9   | **The shipped _Earlier runs (n)_ string is REPLACED by _Earlier versions (n)_, not paralleled** | once a person can write one, _runs_ is the wrong noun for the list; two strings for one disclosure is how two author kinds start to look like two features                                  |
+| 10  | **No door in the approval port or the quick-view peek**                                         | the port is where a person is asked to DECIDE on this evidence; a control to change the evidence inside the question stops it being a gate. The item page is one click away                 |
+| 11  | **No door on a child of a container run**                                                       | the record belongs to the run target and a child is not one; two places to write one record is the second write path point 1 forbids                                                        |
+
+### Fields read
+
+Additions to § 20's Fields-read table — everything else it lists is unchanged.
+
+| field                                | from                             | drawn in       |
+| ------------------------------------ | -------------------------------- | -------------- |
+| `record.author` / `history[].author` | `HowToTestDto` (MOTIR-5454)      | 13f            |
+| `sections[].source`                  | `HowToTestDraftDTO` (MOTIR-5453) | 13b (_from …_) |
+| `sections[].commitSha` (nullable)    | `HowToTestDraftDTO`              | 13c            |
+| `projectRepos[]`                     | `HowToTestDraftDTO`              | 13e (picker)   |
+
+`author.kind` is what the line reads from: `run` renders the run's label as § 20 already draws it,
+`person` renders the display name. A deleted publisher reads **Former member** — the product's
+standing string for an attribution whose referent is gone, and the same literal an erased profile
+carries — never a blank.
+
+### Primitives, tokens and accessibility
+
+**Composed, not drawn:** `PullRequestRow` and the caption (§ 19); the part grammar (`Part` /
+`PartHead`); the rendered body and `CopyableCodeBlock` (Panels 12a / 12d); the missing callout
+(12i); the child pointer (12m); `Button` in its primary / secondary / ghost variants at `sm`;
+the text input; `Combobox` (Panel 5b's grammar); `MarkdownEditor` at `size="full"`, whose toolbar
+set and order are the component's own.
+
+**Added by this sheet** — the `htf-` block: the form shell, the field / label / hint rhythm, the
+code block's language field, the repository rows, the inline refusal, the saving state, and the
+~400px stacking.
+
+**Ink.** Every hint, provenance line and caption on a tinted or soft surface is
+`--el-text-secondary`, never `--el-text-muted` (4.12–4.34:1 on `--el-surface` / `--el-surface-soft`
+/ `--el-muted`) and never `--el-text-faint` (AA on nothing). A refusal is
+**`--el-danger-on-surface`**, never `--el-danger-text` — that token is the ink FOR a danger fill and
+renders white on a page in every light palette.
+
+**Shape.** `--radius-card` for the form and the rows, `--radius-input` for the editor and inputs,
+`--radius-control` for the toolbar and icon buttons; `--spacing-card-padding`, `--spacing-input-x`,
+`--height-input`, `--height-btn-sm`. No raw radius, padding or height anywhere in the additions.
+
+**Accessibility.** The form is a `role="group"` labelled _How to test_; the editor keeps the
+component's `role="toolbar"` / `aria-label="Formatting"` and its per-button `aria-label`; every
+commit input is labelled by its repository; each refusal sits next to the control it is about; the
+picker is the shipped listbox. The saving state disables every control including Cancel.
+
+### Copy — `en` + `zh`
+
+| key                                | en                                                                                 | zh                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `howToTest.add`                    | Add how to test                                                                    | 添加测试方法                                         |
+| `howToTest.edit`                   | Edit                                                                               | 编辑                                                 |
+| `howToTest.form.label`             | How to test                                                                        | 测试方法                                             |
+| `howToTest.form.body`              | Body                                                                               | 正文                                                 |
+| `howToTest.form.previewPath`       | Preview path                                                                       | 预览路径                                             |
+| `howToTest.form.optional`          | optional                                                                           | 可选                                                 |
+| `howToTest.form.previewPathHint`   | a path such as /items/ACME-7                                                       | 形如 /items/ACME-7 的路径                            |
+| `howToTest.form.repos`             | Repositories                                                                       | 代码库                                               |
+| `howToTest.form.addRepo`           | Add repository                                                                     | 添加代码库                                           |
+| `howToTest.form.removeRepo`        | Remove {repo}                                                                      | 移除 {repo}                                          |
+| `howToTest.form.commitLabel`       | Commit for {repo}                                                                  | {repo} 的提交                                        |
+| `howToTest.form.commitPlaceholder` | paste the commit                                                                   | 粘贴提交号                                           |
+| `howToTest.form.fromPr`            | from pull request #{number}                                                        | 来自拉取请求 #{number}                               |
+| `howToTest.form.fromRecord`        | from the current version                                                           | 来自当前版本                                         |
+| `howToTest.form.fromYou`           | added by you                                                                       | 由你添加                                             |
+| `howToTest.form.noHeadYet`         | CI has not reported a head for this pull request yet — paste the commit you tested | CI 尚未报告此拉取请求的头部提交 — 请粘贴你测试的提交 |
+| `howToTest.form.dirty`             | Unsaved changes                                                                    | 有未保存的更改                                       |
+| `howToTest.form.saving`            | Saving…                                                                            | 保存中…                                              |
+| `howToTest.form.save`              | Save                                                                               | 保存                                                 |
+| `howToTest.form.cancel`            | Cancel                                                                             | 取消                                                 |
+| `howToTest.form.codeLanguage`      | Language                                                                           | 语言                                                 |
+| `howToTest.writtenByPerson`        | Written by {name}                                                                  | 由 {name} 编写                                       |
+| `howToTest.earlierVersions`        | Earlier versions ({count})                                                         | 早前版本（{count}）                                  |
+
+**The product's own nouns**: _work item_, _pull request_, _repository_. No _card_ and no _issue_ as
+product copy anywhere on the sheet. `howToTest.earlierVersions` **replaces** the shipped
+`howToTest.earlierRuns` (decision 9); the refusal strings are `publish`'s and are not re-keyed.
+
+### Scope
+
+**Drawn:** the two doors, the form in every state parity requires, the refusals, the saved record
+with its author, history of both kinds, ~400px, and the three places that get NO door. **Not drawn,
+and whose it is:** the Server Actions, the form component and the catalog entries — MOTIR-5455; the
+editor's language behaviour — MOTIR-5458; the draft read — MOTIR-5453; the author on the read —
+MOTIR-5454; the parity vitest — MOTIR-5456; the E2E and its acceptance video — MOTIR-5457. Panels
+12a / 12i / 12m are unchanged and composed or abbreviated on the sheet; the approval port
+(MOTIR-5438) is shown only to draw its absence of a door.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' design/github/github--how-to-test-form.mock.html | sort -u`. The keys
+the sheet carries beyond this section's are `github--fix-callout.mock.html`'s stylesheet and sprite
+provenance, carried verbatim, and GIVE or TAKE nothing here.
+
+| key        | GIVES / TAKES                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5455 | **GIVES** every panel, the copy table, the decisions and the tokens above — it builds the doors and the form. **TAKES** decision 9: it RETIRES the shipped `howToTest.earlierRuns` string rather than adding a second one, in both catalogs                   |
+| MOTIR-5458 | **GIVES** the language field its place and its look (13b, 13g). **TAKES** that the field must be reachable **on a focused code block** and must round-trip an unknown language — the drawing assumes both                                                     |
+| MOTIR-5453 | **GIVES** `sections[].source` and `projectRepos` a drawing (the _from …_ line, the picker). **TAKES** that `commitSha` is nullable and that the null case is a DISTINCT drawn state (13c), not an empty input — so the read must not substitute a placeholder |
+| MOTIR-5454 | **GIVES** `author` the line it renders in (13f). **TAKES** that a deleted publisher's label is non-blank, which is what lets the line be drawn without an empty-author state                                                                                  |
+| MOTIR-5456 | **GIVES** the refusal set (13d) as its assertion list. **TAKES** nothing                                                                                                                                                                                      |
+| MOTIR-5457 | **GIVES** 13a → 13b → 13f → 13d → 13h as its script. **TAKES** nothing                                                                                                                                                                                        |
+| MOTIR-5438 | **nothing either way** — the port is not redrawn; decision 10 only records that it draws no door                                                                                                                                                              |
+| MOTIR-5452 | this card                                                                                                                                                                                                                                                     |
+
+Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
