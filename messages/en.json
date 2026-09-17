@@ -7539,7 +7539,16 @@
         "more": "+{count} more",
         "openRow": "Open {key} {title}",
         "openWorkItem": "Open work item"
+      },
+      "live": {
+        "new": "New",
+        "decidedElsewhere": "Decided elsewhere"
       }
+    },
+    "live": {
+      "new": "New",
+      "decidedElsewhere": "Decided elsewhere",
+      "reconnecting": "Reconnecting…"
     }
   },
   "approvalRecords": {

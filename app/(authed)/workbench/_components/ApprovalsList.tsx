@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { IssueListPager } from '../../items/_components/IssueListPager';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 import { ApprovalRow, APPROVALS_GRID_TEMPLATE } from '@/components/approvals/ApprovalRow';
+import { useLiveRows } from './useLiveRows';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), built to
@@ -30,6 +31,11 @@ export function ApprovalsList({
 }) {
   const t = useTranslations('workbench.approvals');
   const router = useRouter();
+  // THE LIVE RULE, for the one tab § 20's settled-row decision is about
+  // (Story MOTIR-5238 · MOTIR-5242). The reset key is the "next load" § 26
+  // names: a `router.refresh()` keeps the address and holds its rows, a pager
+  // move changes the page and starts clean.
+  const live = useLiveRows(rows, `approvals:${pagination.page}`, (row) => row.gateId);
 
   return (
     <div
@@ -56,8 +62,17 @@ export function ApprovalsList({
           </div>
         </div>
         <div role="rowgroup">
-          {rows.map((row) => (
-            <ApprovalRow key={row.gateId} record={{ section: 'awaiting', row }} />
+          {live.rows.map((row) => (
+            <ApprovalRow
+              key={row.gateId}
+              // ⚠️ A HELD ROW IS STILL RENDERED — § 26's rule, and the one thing
+              // a naive live list gets wrong: the read returns only `awaiting`
+              // gates, so a row somebody else decided is simply absent from the
+              // next one, and removing it is § 20's settled rule being overturned
+              // by a mechanism rather than by a decision.
+              record={{ section: live.heldIds.has(row.gateId) ? 'held' : 'awaiting', row }}
+              arrived={live.arrivedIds.has(row.gateId)}
+            />
           ))}
         </div>
       </div>

@@ -7535,7 +7535,16 @@
         "more": "另有 {count} 个",
         "openRow": "打开 {key} {title}",
         "openWorkItem": "打开工作项"
+      },
+      "live": {
+        "new": "新增",
+        "decidedElsewhere": "已由他人决定"
       }
+    },
+    "live": {
+      "new": "新增",
+      "decidedElsewhere": "已由他人决定",
+      "reconnecting": "正在重新连接…"
     }
   },
   "approvalRecords": {

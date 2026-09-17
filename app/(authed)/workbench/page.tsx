@@ -19,6 +19,7 @@ import { resolveWorkbenchLanding, workbenchLandingHref } from '@/lib/workbench/l
 import { parsePage } from '@/lib/issues/issueListView';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { WorkbenchTabs } from './_components/WorkbenchTabs';
+import { WorkbenchLive, WorkbenchReconnecting } from './_components/WorkbenchLive';
 import { WorkbenchList } from './_components/WorkbenchList';
 import { ApprovalsTab } from './_components/ApprovalsTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
@@ -296,48 +297,63 @@ export default async function WorkbenchPage({
         </div>
       </header>
 
-      <div className="flex flex-col gap-3">
-        <WorkbenchTabs active={tab} counts={counts} />
+      {/* ⚠️ ONE STREAM, HELD HERE (Story MOTIR-5238 · MOTIR-5242). The host
+          subscribes and hands the signal down; every consumer — the five lists,
+          the strip, the approval overlay — reads the context rather than opening
+          a connection of its own, which is the fan-out `useRunEvents.ts`'s header
+          records. A nudge is a `router.refresh()`, so the window and the counts
+          re-read through the SAME `Promise.all` above and land in one page state
+          (§ 21's rule, and § 26's amendment to it). */}
+      <WorkbenchLive>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <WorkbenchTabs active={tab} counts={counts} />
+            {/* Beside the strip at `≥ md`, and BELOW it at `< md` — the strip
+                already scrolls at that width, and a chip inside a scrolling
+                track is a chip that can be scrolled out of sight (§ 26). */}
+            <WorkbenchReconnecting />
+          </div>
 
-        {/* The window caption — a bounded list that does not say what bounds it
+          {/* The window caption — a bounded list that does not say what bounds it
             reads as a list that is missing things, and the second sentence is
             there because the first raises the question it answers. It sits above
             the EMPTY state too: "nothing finished this week" is the same claim
             about the same window. */}
-        {tab === 'finished' ? (
-          <p className="text-xs text-(--el-text-secondary)">
-            {t('finishedWindow', { days: HOME_FINISHED_WINDOW_DAYS })}
-          </p>
-        ) : null}
+          {tab === 'finished' ? (
+            <p className="text-xs text-(--el-text-secondary)">
+              {t('finishedWindow', { days: HOME_FINISHED_WINDOW_DAYS })}
+            </p>
+          ) : null}
 
-        {/* ⚠️ AN EMPTY TAB RENDERS ITS EMPTY STATE AND NOTHING ELSE — no list
+          {/* ⚠️ AN EMPTY TAB RENDERS ITS EMPTY STATE AND NOTHING ELSE — no list
             box, and NO PAGER (`design/workbench/` Panel 10). "A pager on every
             tab", read literally, would put `Showing 0–0 of 0` under an empty
             state: a second, quieter way of saying what the empty state has just
             said in a sentence. The pager lives INSIDE `WorkbenchList`, so this
             branch gets that for free rather than by remembering to suppress it. */}
-        {isApprovals ? (
-          /* ⚠️ WINDOW 2, and it is INSIDE the page rather than a `loading.tsx`.
+          {isApprovals ? (
+            /* ⚠️ WINDOW 2, and it is INSIDE the page rather than a `loading.tsx`.
              `design/shell/design-notes.md`'s navigation-pending grammar is
              explicit that a route boundary can flush the response head before
              the page's gate has run — which is why this repo has none, and why
              the boundary sits here, below the session and active-project reads
              that decide who may see this page. The fallback is the list's own
              shape so the frame does not shift when the rows arrive. */
-          <Suspense fallback={<ApprovalsPending />}>
-            <ApprovalsTab ctx={ctx} page={page} />
-          </Suspense>
-        ) : isEmpty ? (
-          <EmptyTab tab={tab} />
-        ) : (
-          <WorkbenchList
-            rows={rows}
-            label={t(TAB_LABEL_KEY[tab])}
-            tab={tab}
-            pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
-          />
-        )}
-      </div>
+            <Suspense fallback={<ApprovalsPending />}>
+              <ApprovalsTab ctx={ctx} page={page} />
+            </Suspense>
+          ) : isEmpty ? (
+            <EmptyTab tab={tab} />
+          ) : (
+            <WorkbenchList
+              rows={rows}
+              label={t(TAB_LABEL_KEY[tab])}
+              tab={tab}
+              pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
+            />
+          )}
+        </div>
+      </WorkbenchLive>
 
       {/* The quick-view peek — the SAME `?peek=` island /items, /ready and the
           board mount. Opening a row here is not a different interaction, so it
