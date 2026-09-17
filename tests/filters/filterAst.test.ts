@@ -28,6 +28,19 @@ function sampleValue(field: FilterFieldId, operator: FilterOperatorId): FilterCo
       if (field === 'type') return ['code', 'design'];
       if (field === 'assignee') return ['user-1', FILTER_UNASSIGNED_TOKEN];
       if (field === 'sprint') return ['sprint-1', 'backlog'];
+      // ⚠️ A CLOSED-SET FIELD SAMPLES FROM ITS OWN WHITELIST, and this branch is
+      // here because the fallback below is the STATUS sample — project-defined
+      // keys that no other enum field accepts. `ciState` (MOTIR-5473) fell
+      // through to it and produced `['todo', 'in_progress']`, which
+      // `validateFilterAst` rejects by name; the URL-codec suite never noticed,
+      // because encoding does not validate, and the STORED path went red.
+      // Reading the whitelist makes that unrepresentable for the next field too,
+      // rather than adding a second line to a list nobody knows to update. The
+      // explicit cases above stay: they pin the exact values older suites read.
+      {
+        const def = FILTER_FIELDS.find((f) => f.id === field);
+        if (def?.valueWhitelist) return [...def.valueWhitelist].slice(0, 2);
+      }
       return ['todo', 'in_progress'];
     case 'is_empty':
     case 'is_not_empty':
@@ -63,6 +76,38 @@ function everyConditionShape(): FilterCondition[] {
     })),
   );
 }
+
+// ⚠️ THE CONTROL THE SAMPLER NEVER HAD (MOTIR-5477, after MOTIR-5473).
+//
+// `everyConditionShape()` feeds two very different suites: this file's CODEC
+// round-trip, which only encodes and decodes, and the saved-filter STORED path
+// in `tests/integration/saved-filters/`, which validates. So a sample that is
+// well-FORMED but not LEGAL — the right JSON shape carrying a value its field
+// rejects — round-trips perfectly here and throws there. That is exactly what
+// `ciState` did: it fell through to the status sample, this file stayed green,
+// and `Vitest (7/12)` went red on a suite the card's own directory list did not
+// name.
+//
+// One assertion closes it. The generator is the shared fixture for the whole
+// registry, so "every sample it produces is a legal condition" is a property of
+// the generator, and it belongs beside the generator rather than in whichever
+// suite happens to validate.
+describe('the shared sampler only ever produces LEGAL conditions', () => {
+  it('validates every (field, operator) sample against the registry', () => {
+    const failures: string[] = [];
+    for (const condition of everyConditionShape()) {
+      try {
+        validateFilterAst({ combinator: 'and', conditions: [condition] });
+      } catch (err) {
+        failures.push(
+          `${condition.field}|${condition.operator} = ${JSON.stringify(condition.value)}: ` +
+            `${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    expect(failures, `samples the registry refuses:\n${failures.join('\n')}`).toEqual([]);
+  });
+});
 
 describe('encodeFilterParam / decodeFilterParam — the round-trip property', () => {
   it('round-trips an AST containing every registered (field, operator) shape', () => {
