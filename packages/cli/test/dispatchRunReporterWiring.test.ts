@@ -76,6 +76,9 @@ async function throughLeg(over: { status?: string; pushed?: boolean; exitCode?: 
   const input: DispatchLegInput = {
     client: {
       getWorkItem: async () => ({ item: { status: over.status ?? 'in_progress' } }) as never,
+      // MOTIR-5562: the leg reads the card's approved designs before the
+      // spawn. No design in these fixtures, so the materializer is a no-op.
+      listWorkItemDesigns: async () => ({ designs: [] }),
     },
     rootDir: ROOT,
     key: 'PROD-1',
@@ -178,7 +181,10 @@ describe('BOTH per-card pipelines report, and they report the same thing', () =>
     const reporter = recorder();
     const primary = target();
     await runDispatchLeg({
-      client: { getWorkItem: async () => ({ item: { status: 'in_review' } }) as never },
+      client: {
+        getWorkItem: async () => ({ item: { status: 'in_review' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
       rootDir: ROOT,
       key: 'PROD-1',
       dispatch: PROMPT,
@@ -243,7 +249,10 @@ describe('the pipelines default to the NULL reporter', () => {
   it('the leg runs unchanged with no reporter at all', async () => {
     const primary = target();
     const verdict = await runDispatchLeg({
-      client: { getWorkItem: async () => ({ item: { status: 'in_review' } }) as never },
+      client: {
+        getWorkItem: async () => ({ item: { status: 'in_review' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
       rootDir: ROOT,
       key: 'PROD-1',
       dispatch: PROMPT,

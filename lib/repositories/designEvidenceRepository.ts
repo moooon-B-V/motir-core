@@ -103,6 +103,94 @@ export const designEvidenceRepository = {
   },
 
   /**
+   * SEVERAL results by id, WITH their assets — the batched form of
+   * {@link findById} (Story MOTIR-5553 · Subtask MOTIR-5557).
+   *
+   * ⚠️ NOT {@link findManyByIds}, which counts assets for a queue ROW. The
+   * approved-design read hands an agent the FILES, so it needs them joined —
+   * and it needs them for every design card the run's card waits on at once,
+   * which is what makes this a batch rather than a loop over {@link findById}.
+   */
+  async findManyWithAssetsByIds(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, DesignEvidenceWithAssets>> {
+    if (ids.length === 0) return new Map();
+    const rows = await tx.designEvidence.findMany({
+      where: { id: { in: ids } },
+      include: WITH_ASSETS,
+    });
+    return new Map(rows.map((row) => [row.id, row]));
+  },
+
+  /**
+   * The CURRENT row for MANY work items — arm (c) of AMENDMENT 5 Q2's ladder,
+   * batched (Subtask MOTIR-5557). The partial-unique index guarantees at most
+   * one current row per item, so the map is unambiguous by construction.
+   */
+  async findCurrentByWorkItems(
+    workItemIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, DesignEvidenceWithAssets>> {
+    if (workItemIds.length === 0) return new Map();
+    const rows = await tx.designEvidence.findMany({
+      where: { workItemId: { in: workItemIds }, isCurrent: true, withdrawnAt: null },
+      include: WITH_ASSETS,
+    });
+    return new Map(rows.map((row) => [row.workItemId, row]));
+  },
+
+  /**
+   * The NEWEST PINNED, non-withdrawn row for MANY work items — arm (b) of
+   * AMENDMENT 5 Q2's ladder, batched (Subtask MOTIR-5557).
+   *
+   * ⚠️ NEWEST, because pins ACCUMULATE. §6d: a card approved, reopened and
+   * approved again holds two pinned rows, both fetchable, and the one a run
+   * should build against is the one the LATEST approval bought. `pinnedAt` is
+   * the first approval's timestamp on any one row ({@link pinById} does not
+   * re-stamp), so ordering on it orders the DECISIONS.
+   *
+   * One query for the whole set; the per-item head is taken in memory because
+   * the row count per card is the number of times it was approved — a handful,
+   * not a page.
+   */
+  async findNewestPinnedByWorkItems(
+    workItemIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, DesignEvidenceWithAssets>> {
+    if (workItemIds.length === 0) return new Map();
+    const rows = await tx.designEvidence.findMany({
+      where: { workItemId: { in: workItemIds }, pinnedAt: { not: null }, withdrawnAt: null },
+      include: WITH_ASSETS,
+      orderBy: { pinnedAt: 'desc' },
+    });
+    const head = new Map<string, DesignEvidenceWithAssets>();
+    for (const row of rows) if (!head.has(row.workItemId)) head.set(row.workItemId, row);
+    return head;
+  },
+
+  /**
+   * WHICH of these work items have any `design_evidence` row at all — what
+   * separates AMENDMENT 5 Q2's `withdrawn` from its `no_result` (Subtask
+   * MOTIR-5557). A card whose ladder resolves nothing but which HAS rows had
+   * its last word taken back; a card with no rows never published one, and a
+   * consumer that cannot tell them apart reports the same empty answer for two
+   * opposite histories — the ambiguity `withdrawnAt` was added to remove.
+   */
+  async findWorkItemIdsWithAnyResult(
+    workItemIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Set<string>> {
+    if (workItemIds.length === 0) return new Set();
+    const rows = await tx.designEvidence.findMany({
+      where: { workItemId: { in: workItemIds } },
+      select: { workItemId: true },
+      distinct: ['workItemId'],
+    });
+    return new Set(rows.map((row) => row.workItemId));
+  },
+
+  /**
    * LOCK the current row for a work item before the supersede decides on it.
    * The supersede is read-derived — it reads which row is current, then writes
    * based on that — so a plain read-then-write races: two publishes both read

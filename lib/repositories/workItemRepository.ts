@@ -2367,6 +2367,44 @@ export const workItemRepository = {
   },
 
   /**
+   * ONE PAGE of a project's cards of a given `type` at a given status key,
+   * newest key first — the candidate read behind `designAccessService`'s
+   * approved-design listing (Story MOTIR-5553 · Subtask MOTIR-5557).
+   *
+   * ⚠️ THE CURSOR IS THE `key` NUMBER, not a timestamp, and the caller's
+   * comment says why: a republish moves a card's newest result forward in time,
+   * so a time-ordered cursor walks that card across page boundaries and shows it
+   * twice or not at all. A key never moves.
+   *
+   * `take` is passed through verbatim so the caller can over-read by one and
+   * report `nextCursor` from what EXISTS rather than inferring it from a full
+   * page.
+   */
+  async findByProjectTypeAndStatusPage(
+    projectId: string,
+    filter: { type: WorkItemType; statusKey: string; beforeKey?: number; titleContains?: string },
+    take: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? dbRead;
+    return client.workItem.findMany({
+      where: {
+        projectId,
+        archivedAt: null,
+        triagedAt: null, // read-exclusion (Subtask 6.11.3)
+        type: filter.type,
+        status: filter.statusKey,
+        ...(filter.beforeKey !== undefined ? { key: { lt: filter.beforeKey } } : {}),
+        ...(filter.titleContains
+          ? { title: { contains: filter.titleContains, mode: 'insensitive' as const } }
+          : {}),
+      },
+      orderBy: { key: 'desc' },
+      take,
+    });
+  },
+
+  /**
    * Direct (non-archived) children of a work item, ordered by fractional
    * `position`. One level only — for the full subtree use `findSubtree`.
    */

@@ -959,6 +959,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_design: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The DESIGN CARD\'s identifier — the project key, a dash, the number (e.g. "ACME-7"), case-insensitive. Not the key of the card that waits on the design: for that, call `list_designs` with `blockersOf`.',
+      },
+    },
+    required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_plan: {
     type: 'object',
     properties: {
@@ -1119,6 +1133,50 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  list_designs: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value. Case-insensitive.',
+      },
+      blockersOf: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'A work item key (e.g. "ACME-7"). When given, the answer is ONE VERDICT PER DESIGN CARD that work item is `blocked_by` — the designs it is supposed to be built against — instead of a page of the project’s designs. The other filters do not apply.',
+      },
+      pathPrefix: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'Return only designs holding a file whose repository path starts with this prefix — how a delta mock’s amended BASE is found (e.g. `design/work-items/`). Ignored with `blockersOf`.',
+      },
+      query: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'A case-insensitive substring of the design card’s TITLE. Ignored with `blockersOf`.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'Opaque page cursor from a previous call’s `nextCursor`. Ignored with `blockersOf`.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+        description: 'Page size (1–100, default 25). Ignored with `blockersOf`.',
+      },
+    },
+    required: ['projectKey'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

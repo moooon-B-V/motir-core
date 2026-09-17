@@ -11,6 +11,7 @@ import { execCommand, workReachedRemote, type CommandRunner } from './git.js';
 import type { DispatchPrompt, MotirClient } from './client.js';
 import type { ParsedAgentCommand } from './agentProfiles.js';
 import { createLegLogTee } from './agentLogTee.js';
+import { fetchPresignedAsset, materializeDesignsFor } from './designFiles.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from './dispatchRunReporter.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the one implementation of
@@ -77,7 +78,7 @@ export type DispatchLegVerdict =
   | { kind: 'succeeded'; model: string | null; suspects: SuspectDispatch[] };
 
 export interface DispatchLegInput {
-  client: Pick<MotirClient, 'getWorkItem'>;
+  client: Pick<MotirClient, 'getWorkItem' | 'listWorkItemDesigns'>;
   /** The link root, for `materializeDispatchCheckouts`. */
   rootDir: string;
   key: string;
@@ -109,6 +110,7 @@ export interface DispatchLegInput {
     command: ParsedAgentCommand;
     prompt: string;
     cwd: string;
+    materializeDesigns?: (designRoot: string) => Promise<boolean>;
   }) => Promise<AgentRunResult>;
   run?: CommandRunner;
   /**
@@ -178,6 +180,13 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     command: agent,
     prompt: dispatch.prompt,
     cwd: primary.cwd,
+    // The card's APPROVED DESIGN, into the run's own directory (MOTIR-5562).
+    // Built here because this is where the client and the key are both in hand;
+    // it is `runAgent` that owns the directory and removes it with the run.
+    materializeDesigns: materializeDesignsFor(key, {
+      readDesigns: (k) => client.listWorkItemDesigns(k),
+      fetchAsset: fetchPresignedAsset,
+    }),
     ...(logTee ? { onOutput: logTee.write } : {}),
   });
   // The tail, BEFORE the exit event, so the transcript a reader sees ends where

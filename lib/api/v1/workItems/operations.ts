@@ -4,8 +4,11 @@ import { v1CursorSchema } from '@/lib/api/v1/openapi/envelopes';
 import { defineOperation, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import {
+  approvedDesignSchema,
   attachmentSchema,
   commentThreadSchema,
+  designAssetSchema,
+  designVerdictSchema,
   createWorkItemBodySchema,
   linkPullRequestBodySchema,
   linkedPullRequestSchema,
@@ -393,6 +396,72 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [403, 404, 422],
   }),
   defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/designs',
+    operationId: 'listWorkItemDesigns',
+    summary: 'The approved designs a work item waits on',
+    description:
+      'One verdict per work item this one is `blocked_by`, in key order — the design an agent is handed before it builds (`docs/decisions/design-result.md` AMENDMENT 5 Q4). A verdict is `approved` with the version an APPROVAL named, or `not_approved` with one of five reasons: the blocker is not a design card, the design card is not `done`, it was cancelled, its result was withdrawn, or it never published one. ⚠️ The approved design is NOT simply the card’s current result: a design card approved and then republished before its merge would otherwise hand back a version nobody approved (AMENDMENT 5 Q2). Every `available` asset of an `approved` verdict carries a short-lived `url` and its `expiresAt`; an `unavailable` asset — an approved version whose bytes the orphan-GC reclaimed — carries neither, and that is a real answer rather than a failure.',
+    permission: 'project:browse',
+    parameters: [keyParameter],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: z.object({ designs: z.array(designVerdictSchema) }) },
+      description: 'The design verdicts for every design card this item waits on.',
+    },
+    errorStatuses: [404],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/design',
+    operationId: 'getWorkItemDesign',
+    summary: 'One design card’s approved design',
+    description:
+      'The verdict for ONE design card, addressed by its own key — the read behind following a design a `…/designs` verdict named, and behind finding a delta mock’s amended base by its `sourcePath`. Same verdict rules and same link terms as `…/designs`.',
+    permission: 'project:browse',
+    parameters: [keyParameter],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: designVerdictSchema },
+      description: 'The design card’s verdict.',
+    },
+    errorStatuses: [404],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/designs',
+    operationId: 'listProjectDesigns',
+    summary: 'Browse a project’s approved designs',
+    description:
+      'A cursor-paged collection of the project’s APPROVED designs, newest first — what an agent browses when the design it was handed is not the one it needs. A design still under review is not listed: it is not something to build against. ⚠️ NO download links: a list would mint one presign per row, and every one of them would start expiring before the caller read the page. Take links from `GET /api/v1/work-items/{key}/design` on the design you actually want.',
+    permission: 'project:browse',
+    parameters: [
+      projectKeyParameter,
+      ...pageParameters,
+      {
+        name: 'pathPrefix',
+        in: 'query' as const,
+        required: false,
+        description:
+          'Return only designs holding an asset whose repository `sourcePath` starts with this prefix — how a delta mock’s amended base is found (AMENDMENT 5 Q6).',
+        schema: z.string().min(1),
+      },
+      {
+        name: 'query',
+        in: 'query' as const,
+        required: false,
+        description: 'A case-insensitive substring of the design card’s title.',
+        schema: z.string().min(1),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'page', item: approvedDesignSchema },
+      description: 'A page of approved designs.',
+    },
+    errorStatuses: [404, 422],
+  }),
+  defineOperation({
     method: 'POST',
     path: '/api/v1/work-items/{key}/attachments',
     operationId: 'uploadWorkItemAttachment',
@@ -469,4 +538,17 @@ export const WORK_ITEM_COMPONENTS: Readonly<Record<string, z.ZodType>> = {
   CommentThread: commentThreadSchema,
   TransitionList: transitionListSchema,
   Attachment: attachmentSchema,
+  // Story MOTIR-5553's design reads. NAMED components rather than inline
+  // shapes, because the MCP tools derive their payloads from this document
+  // (MOTIR-5561) — an inline schema has nothing to resolve against.
+  DesignAsset: designAssetSchema,
+  ApprovedDesign: approvedDesignSchema,
+  DesignVerdict: designVerdictSchema,
+  // ⚠️ `WorkItemDesigns` — the `{ designs: [...] }` body of `…/designs` — is
+  // deliberately NOT a component. It is an ENVELOPE, and the payload seam's own
+  // doctrine is that an envelope stays each surface's own (ADR Amendment 7 Q6):
+  // registering it would make it a SHARED RESOURCE, and the MCP coverage guard
+  // would then demand that MCP's transport shape equal v1's — which is exactly
+  // the freedom that doctrine reserves. Its VERDICTS are shared, and they are
+  // the component above.
 };

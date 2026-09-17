@@ -1700,6 +1700,19 @@ export default defineConfig({
         'lib/services/designEvidenceService.ts',
         'lib/repositories/designEvidenceRepository.ts',
         'lib/mappers/designEvidenceMappers.ts',
+        // Story MOTIR-5553 · Subtask MOTIR-5566 — the APPROVED-DESIGN READ and
+        // the doors over it. `lib/dto/designAccess.ts` is deliberately ABSENT
+        // for the same reason `dto/designEvidence.ts` is: it declares types
+        // only, so a floor on it would be a floor on nothing.
+        'lib/services/designAccessService.ts',
+        'lib/mappers/designAccessMappers.ts',
+        'lib/api/v1/workItems/designPresenter.ts',
+        'lib/mcp/tools/getDesign.ts',
+        'lib/mcp/tools/listDesigns.ts',
+        'lib/mcp/payloads/designs.ts',
+        'app/api/v1/work-items/**/designs/route.ts',
+        'app/api/v1/work-items/**/design/route.ts',
+        'app/api/v1/projects/**/designs/route.ts',
         'lib/designEvidence/errors.ts',
         'lib/designEvidence/publishAuth.ts',
         'lib/publishAuth/ciPublishAuth.ts',
@@ -4312,6 +4325,18 @@ export default defineConfig({
           lines: 90,
         },
         'lib/mappers/designEvidenceMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-5553 · Subtask MOTIR-5566 — the approved-design read and
+        // its doors, GATED rather than merely reported. They decide which design
+        // an agent is handed, so an uncovered branch here is a run built against
+        // a version nobody approved.
+        'lib/services/designAccessService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/designAccessMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workItems/designPresenter.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/getDesign.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/listDesigns.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/work-items/**/designs/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/work-items/**/design/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/projects/**/designs/route.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/designEvidence/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/designEvidence/publishAuth.ts': { branches: 90, functions: 90, lines: 90 },
         // The shared CI-publisher gate MOTIR-2667 extracted, plus the acceptance

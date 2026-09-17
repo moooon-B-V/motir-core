@@ -75,6 +75,9 @@ async function leg(
         order.push('replan-read');
         return { item: { status: over.status ?? 'in_progress' } } as never;
       },
+      // MOTIR-5562: the leg reads the card's approved designs before the
+      // spawn. No design in these fixtures, so the materializer is a no-op.
+      listWorkItemDesigns: async () => ({ designs: [] }),
     },
     rootDir: ROOT,
     key: 'PROD-1',

@@ -112,6 +112,8 @@ type DerivedToolName = Exclude<McpToolName, ExemptToolName>;
 const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   // 11.6.2 — the proving tool
   get_work_item: true,
+  get_design: true,
+  list_designs: true,
   // 11.6.3 — the work-item family (MOTIR-2229)
   search_work_items: true,
   list_ready: true,

@@ -32,7 +32,17 @@
   the asset set is two files; **§1's `image` row and note-section scoping, and
   AMENDMENT 2 Q2, are superseded**; its **Q8** (MOTIR-5533) adds that a design
   card with an open linked pull request — one or many — shows its result INSIDE
-  the Development block and raises no `design_result` gate). **Read all four before treating §1, §6 or
+  the Development block and raises no `design_result` gate) and **AMENDMENT 5**
+  (MOTIR-5555, 2026-09-17 — **the published result is the design's SOURCE OF
+  TRUTH** and a repository copy is optional; what "approved" means to a
+  consumer is the version the APPROVAL named, resolved gate-subject → pin →
+  current, on a card at `done`, with five named no-design reasons; a run is
+  handed the approved design of the design cards its card waits on, in
+  `$MOTIR_DESIGN_DIR` or by fetching it; `list_designs` / `get_design` and the
+  `/api/v1` operations browse the rest on `project:browse`; and a `done` blocker
+  only lets a run START. **Its Q2 answers the window `approval-gates.md` §6c's
+  second amendment part 7 left open, and supersedes the reading that the
+  approved design is the CURRENT result of a `done` design card.**). **Read all five before treating §1, §6 or
   AMENDMENT 2 Q2/Q3 as current.** The title still names "the CI trigger" because that is
   what this record decided and every citation of it lands here; AMENDMENT 2 is
   where it stops being true.
@@ -921,6 +931,180 @@ left unsaid, and what the shipped publish contradicted (it raised a
    results, and `approval-gates.md` §6c's pin — an approval through
    `pull_request_approval` pins the current design version, which
    `approvalGatesService.decide` already does for every kind.
+
+### AMENDMENT 5 (MOTIR-5555, 2026-09-17): the published result is the design's SOURCE OF TRUTH — what "approved" means to a run, the version it is handed, where the files land, and the run-time design gate
+
+**What changed, in one sentence.** An agent used to find a design by opening
+`design/<area>/` in a repository checkout, and Motir — which stores every
+published result — had no door that gave one back. **The published result is now
+the source of truth**, a run is handed the approved design of the design cards
+its card waits on, and it may browse the rest through read doors that did not
+exist. Story MOTIR-5553 implements it; the decisions below are Yue's, settled in
+conversation on 2026-09-14/15 (rung 3), written down once so the read service,
+the `/api/v1` and MCP doors, the dispatched prompt, the CLI and the runbook each
+implement ONE text. **No application behaviour ships in this card.**
+
+**Why.** Two things break the repository as the authority. A project may not
+commit its designs to a repository at all, and nothing else could hand an agent
+a design: `app/api/work-items/[id]/design-evidence/route.ts` exports only `POST`
+and `DELETE`, no MCP tool reads a result, and `lib/dispatch/promptTemplate.ts`'s
+`code` steps name only the card's context refs. Meanwhile every published result
+is already stored, versioned, with the approved version pinned. Motir could take
+a design in and never give it back out.
+
+#### Q1 — the SOURCE OF TRUTH is the published result
+
+**The published design result governs.** A repository copy under
+`design/<area>/` is **optional and never the authority**; where both exist and
+differ, the published result is the design. A project that commits nothing to a
+repository still has designs its agents can build against.
+
+This supersedes two sentences that have been read as current for months, both
+listed with their sweeper in Q8.
+
+#### Q2 — what "approved" means to a consumer: the version the APPROVAL named, not the version that is current
+
+**This is the question `approval-gates.md` §6c's second amendment part 7
+deliberately left open and handed here**, and the answer is not the one this
+card was drafted with.
+
+**The window.** §6c's second amendment closes the `done` category: a `done`
+design card accepts no new version. It closes nothing earlier. A design card
+with an open linked pull request is approved through `pull_request_approval`,
+which writes `approved` (§2b), and only the MERGE writes `done`. Between the two
+the card is open, so a publish still supersedes — the approval named X, a
+publish makes Y current, the merge writes `done`, and _the current result of a
+`done` design card_ is Y, **a version nobody approved**.
+
+**So current-ness is not the identity.** The approved design of a design card is
+resolved in this order, and the first arm that answers wins:
+
+| #   | arm                                                                                                               | why it is the authority there                                                                                                                                                                                                                                                                                                                   |
+| --- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a   | the **`subjectId` of the card's most recent DECIDED `approved` `design_result` gate** — that `DesignEvidence` row | the gate row is the audit of _what was decided_, and `designResultHandler.resolveSubject` never re-points it at a newer version: _"the version the reviewer never saw"_ is exactly what it refuses                                                                                                                                              |
+| b   | otherwise the card's **newest pinned** (`pinnedAt`) non-withdrawn row                                             | AMENDMENT 4 Q8's path: a card with an open delivering pull request raises **no** `design_result` gate (`designResultHandler.currentSubject` returns null on it), so there is no gate to read — but `approvalGatesService.decide` pins the CURRENT row on **every** approving kind, so the merge approval's pin is what the decision left behind |
+| c   | otherwise the **current** (`isCurrent`), non-withdrawn row                                                        | a `done` design card no gate ever decided — closed by hand, or published before gates existed. There is no approval to honour, so the card's own latest word stands                                                                                                                                                                             |
+
+**And the card must be `done`.** Not the `done` CATEGORY — `cancelled` sits in
+it — but the status key `done`. `approved` is not enough: it is the state in
+which the window above is still open.
+
+**Anything else is NO DESIGN, named by reason** rather than returned empty, so a
+consumer can say which of five things happened:
+
+| reason              | when                                                           |
+| ------------------- | -------------------------------------------------------------- |
+| `not_a_design_card` | the blocker's `type` is not `design`                           |
+| `not_done`          | a `design` card at any status but `done` — `approved` included |
+| `cancelled`         | the card was cancelled                                         |
+| `withdrawn`         | the row the ladder resolved is withdrawn (`withdrawnAt` set)   |
+| `no_result`         | the card has no `design_evidence` row at all                   |
+
+**What makes this sound**, and both invariants are load-bearing rather than
+decorative: a card cannot reach Done while its approval is pending
+([MOTIR-4887](motir:cmts0dtc3000lhwoiykn5j8i9)), and a `done` design card
+accepts no new version (§6c's second amendment, `DESIGN_CARD_CLOSED`). Arm (a)
+closes the one window those two leave between them.
+
+> **⚠️ ARM (a) CAN RESOLVE TO A ROW WHOSE BYTES ARE GONE, AND THAT IS CORRECT
+> RATHER THAN A HOLE.** `approvalGatesService.decide` pins the row that is
+> CURRENT at decision time, not the row the gate was asked about, and reports the
+> difference as `filesKept: false` when a racing republish moved it. So an
+> approved version can be superseded without its attachments being pinned, and
+> the orphan-GC reclaims them after §4's 7-day window. The read door reports
+> those assets `unavailable` (Q6). It does **not** silently fall to the next arm:
+> handing a run a version nobody approved is the failure this whole Q exists to
+> prevent, and _the approved design's files are gone_ is a true answer a person
+> can act on.
+
+#### Q3 — the version IDENTITY is the `DesignEvidence` row id
+
+**A version is its row id.** A row's content never changes after publish — the
+repository's only updates touch `isCurrent`, `pinnedAt` and the `withdrawn*`
+columns (`designEvidenceRepository.markSupersededByWorkItem`, `pinById`,
+`withdrawById`) — so the id alone names what was approved, with no revision
+number to keep.
+
+**Not `commitSha`**, which is provenance and may be null: a design published from
+a tree with no commit behind it is an ordinary case, and
+`designResultHandler.subjectVersion` already records that approval with a null
+version rather than refusing it. [MOTIR-5232](motir:cmtxm4wkh00fkhztx19vzvkgi)'s
+stamp reads `subjectVersion ?? ''`, so such a design is not weaker there either.
+
+#### Q4 — what a run is handed BY DEFAULT: the designs its card waits on, and nothing else
+
+For each work item the run's card is `blocked_by` whose `type` is `design`: that
+card's approved design (Q2) with **every asset** — the mock(s), delta mocks
+included, and the note file — or its no-design reason.
+
+**Not the project's other designs.** Handing an agent every design in the project
+buries the one it is building against, and everything else is one `get_design`
+call away (Q6).
+
+#### Q5 — WHERE the files land: the run's own directory, all or nothing, gone with the run
+
+**When the launcher can materialize them** — the CLI's `motir run` — it writes
+them into the run's own temporary directory, the one the prompt file and
+`$MOTIR_AGENT_REPORT` already live in, and hands the agent **`$MOTIR_DESIGN_DIR`**.
+
+- **All or nothing.** A partial directory is worse than none: an agent that finds
+  two of three mocks has no way to know a third existed, and designs to what it
+  can see. A fetch that cannot complete leaves no directory and the prompt says
+  to fetch instead.
+- **Removed with the run**, exactly as the rest of that directory is. The design
+  is not a checkout artifact and nothing should inherit it.
+
+**When nothing materialized them** — `--print`, a runbook session, a future
+hosted harness — **the agent fetches them itself** through `get_design`. The
+dispatched prompt names both cases, so an agent that finds no `$MOTIR_DESIGN_DIR`
+is told what to do rather than concluding there is no design.
+
+#### Q6 — BROWSING further: approved designs only, on `project:browse`, behind short-lived links
+
+MCP `list_designs` / `get_design` and the matching `/api/v1` operations return
+**approved designs only** (Q2), assert **`project:browse`** — the key
+`CLI_TOKEN_GRANT` already carries, which is left unchanged — and hand back
+**short-lived download links** (the `signedDownloadUrl` presign), never file
+bytes in a payload.
+
+- **An asset whose stored file is gone reports `unavailable`**, never a broken
+  link. Reclamation is a normal outcome here (§4, and Q2's `filesKept` note), so
+  a consumer needs to tell _gone_ from _failed_.
+- **A delta mock's amended base is found by its `sourcePath`** through these same
+  doors — the field `DesignAsset` already carries for provenance.
+
+#### Q7 — the RUN-TIME design gate: a `done` blocker only lets the run START
+
+A card's `done` blockers say the design card is finished. They do not say a
+design exists, and they do not say it draws what this card must build.
+
+**So the run looks.** When a design the card waits on resolves to **no design**
+(Q2), or the approved design does not draw an **element** the card must build —
+an unspecified ELEMENT, not an unspecified detail; `run.md`'s two senses are
+unchanged — the run **stops through the dispatched prompt's THE CARD IS WRONG
+branch**.
+
+**The correction is a PROPOSED new `type: design` card, placed BESIDE the card**
+(the same parent, never a child of it) and `relates_to` **the old design card,
+which stays `done`**. The old card is the record of what was decided; it is not
+reopened to make room for a second decision. **Only a `bug` is ever created
+directly** — everything else is a proposal a person approves.
+
+#### Q8 — what this supersedes, and which card sweeps each home
+
+| superseded sentence                                                                          | where it lives                            | swept by                                |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------- |
+| _"the repository stays the source of truth"_                                                 | `motir-core/CLAUDE.md` § Design assets    | the dispatched-prompt card (MOTIR-5563) |
+| the matching source-of-truth sentence in the `code` steps                                    | `lib/dispatch/promptTemplate.ts`          | the dispatched-prompt card (MOTIR-5563) |
+| the design-reference rule's _"The FIRST step is to open the `design/` folder"_, and guard #3 | `motir-meta` `prompts/run.md`             | the runbook card (MOTIR-5564)           |
+| the `motir-core/design/<area>/` source-of-truth row                                          | `motir-meta` `prompts/_shared.md`         | the runbook card (MOTIR-5564)           |
+| the precondition ladder's design clause                                                      | `motir-meta` `prompts/plan-rules/`        | the runbook card (MOTIR-5564)           |
+| `THE_DESIGN_GATE`'s asset clause                                                             | `motir-ai` `src/llm/planningRulePacks.ts` | the motir-ai card (MOTIR-5565)          |
+
+**What this amendment does NOT re-decide:** §6c and its two amendments, and
+AMENDMENT 4's contents rules (Q1's shape, Q2's publish-only-when-work-waits, the
+two-file set, the delta mock, the note as a link). Q2 above answers the one
+question §6c part 7 handed here; it changes nothing §6c decided.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 
