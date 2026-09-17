@@ -27,7 +27,7 @@ cannot. Read on 2026-08-27 with an App JWT signed by the deployed
 
 | App                                           | id      | permissions                                                                                                                                                                                 | events                                                                                 |
 | --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **`motir-integration`** — the user-facing one | 4206669 | `checks: read` · **`contents: write`** · `deployments: read` · `issues: read` · `merge_queues: read` · `metadata: read` · **`pull_requests: write`** · `security_events: read`              | `check_run`, `check_suite`, `deployment_status`, `merge_group`, `pull_request`, `push` |
+| **`motir-integration`** — the user-facing one | 4206669 | `checks: read` · **`contents: write`** · `deployments: read` · `issues: read` · `merge_queues: read` · `metadata: read` · **`pull_requests: write`** · `security_events: read`              | `check_run`, `check_suite`, `deployment_status`, `merge_group`, `pull_request`, `pull_request_review`, `push` |
 | `motir-studio` — provisioning                 | 4445390 | `actions: read` · `administration: write` · `contents: write` · `metadata: read` · `organization_actions_variables: write` · `organization_self_hosted_runners: write` · `workflows: write` | `workflow_job`                                                                         |
 
 > **Amended 2026-09-14 (MOTIR-4787).** The `motir-integration` row was re-read
@@ -46,6 +46,25 @@ cannot. Read on 2026-08-27 with an App JWT signed by the deployed
 > `GET /orgs/moooon-B-V/installations`. They are what `approval-gates.md` §4
 > THIRD AMENDMENT, decision 8 needs to name the check a merge queue failed on
 > (MOTIR-5633). Neither grants a write.
+
+> **Amended 2026-09-17 (MOTIR-5591).** The **`pull_request_review`** event was
+> added to `motir-integration`, read back from `GET https://api.github.com/app`
+> with an App JWT signed by the deployed key inside the `motir-core` Fly
+> machine. It is what Story MOTIR-4910 needs: until it was ticked, a reviewer
+> pressing *Approve* on GitHub reached nothing, and every test stayed green
+> while the sync was inert in production. **No permission changed** — review
+> events ride on `pull_requests`, already `write` since MOTIR-4787 — so unlike
+> the two amendments above there was no consent to accept, GitHub showed no
+> prompt on save, and `GET /orgs/moooon-B-V/installations` was not re-read: an
+> App's declared event list is what GitHub delivers on, and it cannot lag behind
+> a pending consent the way a permission set can. `pull_request_review_comment`
+> was deliberately NOT subscribed; nothing reads it.
+>
+> ⚠️ **This table, not a work item's prose, is the list.** MOTIR-5591's own
+> description enumerated the App's events as five, dropping `merge_group`, while
+> citing this table — which has carried six since the amendment above — as its
+> source. Nothing had drifted; the card was written before that amendment landed
+> and was read afterwards. A card body is a snapshot of the day it was authored.
 
 **There is no `checks: write` and no `statuses` permission at all**, on either
 App. `motir-studio` is not a fallback: it is installed only on `motir-projects`
