@@ -89,6 +89,17 @@ function summarize(verdict: LinkedVerdict): string {
       );
       continue;
     }
+    // ⚠️ THE TWO NULL ARMS BELOW ARE DEFENSIVE AND UNREACHABLE FOR AN
+    // `available` ASSET, by the invariant `designAccessService` maintains: a
+    // size comes from the asset's Attachment, and an asset HAS an Attachment
+    // exactly when it is `available` (`toApprovedDesignAssetDto` derives the
+    // state from that same row), so a `null` size here would mean the state and
+    // the attachment disagreed. The link is the same shape one layer out —
+    // `downloadLinks` mints one per available asset. They are kept because a
+    // future door could widen the DTO, and they are IGNORED rather than covered
+    // with a fixture that asserts a state the service cannot produce.
+    // `tests/mcp/designTools.test.ts` pins the invariant itself instead.
+    /* v8 ignore next 3 -- unreachable: an `available` asset always has an attachment and a link */
     const size = asset.byteSize === null ? '' : `  ${asset.byteSize} bytes`;
     lines.push(`  ${asset.kind}  ${asset.sourcePath}${size}`);
     if (asset.url) lines.push(`      ${asset.url}`);

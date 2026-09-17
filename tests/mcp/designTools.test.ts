@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { WorkItem } from '@/generated/prisma/client';
 
 // The blob STORE is the one mocked external. The verdict ladder, the permission
@@ -18,7 +20,7 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
 const { runGetDesign, GET_DESIGN_TOOL_NAME } = await import('@/lib/mcp/tools/getDesign');
 const { runListDesigns, LIST_DESIGNS_TOOL_NAME } = await import('@/lib/mcp/tools/listDesigns');
 const { TOOL_PERMISSIONS, CLI_TOKEN_GRANT } = await import('@/lib/mcp/toolPermissions');
-const { MCP_TOOL_NAMES } = await import('@/lib/mcp/registry');
+const { MCP_TOOL_NAMES, buildMcpServer } = await import('@/lib/mcp/registry');
 const { isExemptTool } = await import('@/lib/mcp/payloads/exemptions');
 const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
@@ -262,5 +264,170 @@ describe('`list_designs`', () => {
     );
     expect((result.structuredContent as { designs: unknown[] }).designs).toEqual([]);
     expect(textOf(result)).toMatch(/waits on no design cards/);
+  });
+});
+
+describe('the REGISTERED tools — driven through a real MCP handshake', () => {
+  // The suites above call `runGetDesign` / `runListDesigns` directly, which is
+  // the right altitude for behaviour. This one goes through `registerTool` and
+  // the client, because that path carries two arms nothing else reaches: the
+  // registration itself, and the `toToolError` wrapper that turns a thrown
+  // service error into a tool RESULT rather than a transport failure.
+  async function connectClient(ctx: typeof fx.ctx): Promise<InstanceType<typeof Client>> {
+    const server = buildMcpServer(() => ctx);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'design-tools', version: '0.0.0' });
+    await client.connect(clientTransport);
+    return client;
+  }
+
+  it('both tools appear in `tools/list` with their titles and schemas', async () => {
+    const client = await connectClient(fx.ctx);
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).toContain(GET_DESIGN_TOOL_NAME);
+    expect(names).toContain(LIST_DESIGNS_TOOL_NAME);
+
+    const get = tools.find((t) => t.name === GET_DESIGN_TOOL_NAME)!;
+    expect(get.inputSchema.required).toEqual(['key']);
+    const list = tools.find((t) => t.name === LIST_DESIGNS_TOOL_NAME)!;
+    expect(list.inputSchema.required).toEqual(['projectKey']);
+    // The optional filters are ADVERTISED — an agent picks `blockersOf` off this
+    // surface, so a schema that omitted it would hide the common case.
+    expect(Object.keys(list.inputSchema.properties ?? {}).sort()).toEqual(
+      ['blockersOf', 'cursor', 'limit', 'pathPrefix', 'projectKey', 'query'].sort(),
+    );
+  });
+
+  it('a real approved design comes back through the handshake, in both channels', async () => {
+    const card = await designCard('Through the wire');
+    await makeWorkWaitOn(card.id, fx, { title: 'Build it' });
+    const evidenceId = await publishAndApprove(card, 'v1');
+
+    const client = await connectClient(fx.ctx);
+    const result = (await client.callTool({
+      name: GET_DESIGN_TOOL_NAME,
+      arguments: { key: card.identifier },
+    })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+    expect(result.isError).toBeFalsy();
+    expect(textOf(result)).toContain(evidenceId);
+  });
+
+  it('an UNKNOWN key becomes a tool ERROR RESULT, never a transport failure', async () => {
+    const client = await connectClient(fx.ctx);
+    // This is the `toToolError` arm: the service throws `WorkItemNotFoundError`
+    // and the agent must get a readable result it can act on, not a broken call.
+    const result = (await client.callTool({
+      name: GET_DESIGN_TOOL_NAME,
+      arguments: { key: `${fx.projectIdentifier}-9999` },
+    })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+    expect(result.isError).toBe(true);
+    expect(textOf(result).length).toBeGreaterThan(0);
+
+    const listed = (await client.callTool({
+      name: LIST_DESIGNS_TOOL_NAME,
+      arguments: { projectKey: 'NOSUCHPROJECT' },
+    })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+    expect(listed.isError).toBe(true);
+  });
+
+  it('`list_designs` reaches both arms through the wire', async () => {
+    const card = await designCard('Listed through the wire');
+    const dependent = await makeWorkWaitOn(card.id, fx, { title: 'Build it' });
+    await publishAndApprove(card, 'v1');
+    const client = await connectClient(fx.ctx);
+
+    const blockers = (await client.callTool({
+      name: LIST_DESIGNS_TOOL_NAME,
+      arguments: { projectKey: fx.projectIdentifier, blockersOf: dependent.key },
+    })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+    expect(blockers.isError).toBeFalsy();
+    expect(textOf(blockers)).toContain(card.identifier);
+
+    const page = (await client.callTool({
+      name: LIST_DESIGNS_TOOL_NAME,
+      arguments: { projectKey: fx.projectIdentifier, query: 'through the wire', limit: 5 },
+    })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+    expect(page.isError).toBeFalsy();
+    expect(textOf(page)).toContain(card.identifier);
+  });
+});
+
+describe('the invariant behind the defensive arms', () => {
+  it('an AVAILABLE asset always carries both a size and a link — the state and the attachment agree', async () => {
+    // `getDesign.ts` carries two null-guards on an available asset's size and
+    // link, ignored for coverage because the service cannot produce that state:
+    // `toApprovedDesignAssetDto` derives `available` FROM the attachment the
+    // size comes from, and `downloadLinks` mints one link per available asset.
+    // This asserts the invariant rather than fabricating a state to exercise
+    // the guard — the guard exists for a future door, not for today's.
+    const card = await designCard('Invariant');
+    await makeWorkWaitOn(card.id, fx, { title: 'Build it' });
+    await publishAndApprove(card, 'v1');
+
+    const result = await runGetDesign({ key: card.identifier }, fx.ctx);
+    const payload = result.structuredContent as {
+      design: { assets: Array<{ state: string; byteSize: number | null; url?: string }> };
+    };
+    for (const asset of payload.design.assets) {
+      if (asset.state !== 'available') continue;
+      expect(asset.byteSize).not.toBeNull();
+      expect(typeof asset.url).toBe('string');
+    }
+    expect(payload.design.assets.some((a) => a.state === 'available')).toBe(true);
+  });
+
+  it('`list_designs` tells the agent there are MORE pages when there are', async () => {
+    for (let i = 0; i < 2; i += 1) {
+      const card = await designCard(`Paged ${i}`);
+      await makeWorkWaitOn(card.id, fx, { title: `Build ${i}` });
+      await publishAndApprove(card, `p${i}`);
+    }
+    const result = await runListDesigns({ projectKey: fx.projectIdentifier, limit: 1 }, fx.ctx);
+    const page = result.structuredContent as { nextCursor: string | null };
+    expect(page.nextCursor).not.toBeNull();
+    // The PROSE has to say so too: an agent reading only the summary would
+    // otherwise take the first page for the whole project.
+    expect(textOf(result)).toContain('More: pass cursor');
+  });
+});
+
+describe('the empty project page says WHY it is empty', () => {
+  it('names the rule rather than answering a bare empty list', async () => {
+    // A design still under review is deliberately not listed. An agent that got
+    // an empty page with no explanation would reasonably conclude the project
+    // has no designs — and go and improvise one.
+    const card = await designCard('Under review, so unlisted');
+    await makeWorkWaitOn(card.id, fx, { title: 'Build it' });
+    // Published but NOT approved.
+    const prefix = designPrefix(fx.workspaceId, card.id);
+    for (const path of [`${prefix}u.mock.html`, `${prefix}u.md`]) {
+      store.set(path, { contentType: 'text/html', size: 64 });
+    }
+    await designEvidenceService.recordFromPathnames(
+      {
+        workItemId: card.id,
+        assets: [
+          {
+            kind: 'mock',
+            sourcePath: 'design/frame/u.mock.html',
+            pathname: `${prefix}u.mock.html`,
+          },
+          {
+            kind: 'note_file',
+            sourcePath: 'design/frame/design-notes.md',
+            pathname: `${prefix}u.md`,
+          },
+        ],
+        commitSha: 'sha-u',
+      },
+      fx.ctx,
+    );
+
+    const result = await runListDesigns({ projectKey: fx.projectIdentifier }, fx.ctx);
+    expect((result.structuredContent as { items: unknown[] }).items).toEqual([]);
+    expect(textOf(result)).toContain('No approved designs matched');
+    expect(textOf(result)).toContain('not something to build against');
   });
 });
