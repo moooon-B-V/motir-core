@@ -271,6 +271,11 @@ export const boardsService = {
 
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const terminalKeys = terminalKeySet(statuses);
+    // Status KEY → its CATEGORY, for the CI badge's done-category rule
+    // (MOTIR-5474). Built from the workflow this projection already loaded, so it
+    // costs no read: the badge rule is keyed on the CATEGORY rather than on the
+    // column, because a board maps statuses to columns many-to-one.
+    const categoryByStatusKey = new Map(statuses.map((s) => [s.key, s.category]));
 
     // column id → its mapped LIVE statuses; plus the set of all mapped status
     // ids (any status NOT in it is unmapped). A mapping to a deleted status is
@@ -448,6 +453,7 @@ export const boardsService = {
           ready: readyById.get(r.id) ?? true,
           awaitingAcceptance: awaitingAcceptanceIds.has(r.id),
           swimlaneKey: swimlaneKeyByCard.get(r.id),
+          statusCategory: categoryByStatusKey.get(r.status) ?? null,
         }),
       ),
       totalCount: b.totalCount,
@@ -644,6 +650,11 @@ export const boardsService = {
         return {
           row,
           appliedStatus,
+          // The CATEGORY of the status actually applied (MOTIR-5474). Resolved
+          // HERE because the workflow is in scope inside this transaction and the
+          // caller holds only a status key; the moved card's DTO needs it for the
+          // CI badge's done-category rule.
+          appliedStatusCategory: statuses.find((st) => st.key === appliedStatus)?.category ?? null,
           transition,
           columnName: column.name,
           swimlaneGroupBy: board.swimlaneGroupBy,
@@ -663,7 +674,8 @@ export const boardsService = {
       }
       throw err;
     }
-    const { row, appliedStatus, transition, columnName, swimlaneGroupBy } = moved;
+    const { row, appliedStatus, appliedStatusCategory, transition, columnName, swimlaneGroupBy } =
+      moved;
 
     // A cross-column move IS a status transition — emit the same
     // `work-item/transitioned` event the direct updateStatus path emits
@@ -696,7 +708,11 @@ export const boardsService = {
       ctx,
     );
     return {
-      card: toBoardCardDto(row, { ready, swimlaneKey: swimlaneKeyByCard.get(row.id) }),
+      card: toBoardCardDto(row, {
+        ready,
+        swimlaneKey: swimlaneKeyByCard.get(row.id),
+        statusCategory: appliedStatusCategory,
+      }),
       appliedStatus,
       column: { id: target.toColumnId, name: columnName },
     };

@@ -12,7 +12,7 @@
 // what the optimistic-update reconcile needs, the UI already holds the avatar.)
 
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
-import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type { StatusCategoryDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 import type { SprintStateDto } from '@/lib/dto/sprints';
 import type { FilterAst } from '@/lib/filters/ast';
@@ -165,6 +165,23 @@ export interface BoardCardDto {
   /** A story in `in_review` whose CURRENT AcceptanceEvidence is pending — drives
    *  the board "Awaiting acceptance" badge (MOTIR-1636). */
   awaitingAcceptance: boolean;
+  /**
+   * The card's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   * MOTIR-5470) — `failing` / `running` / `passing` / `null`. The board draws
+   * only `failing` and `running`, and only off the `done` category; the rule is
+   * `ciBadgeState`, shared with the list, tree and Workbench rows (MOTIR-5474).
+   *
+   * The board already reads whole `WorkItem` rows, so this costs no extra query.
+   */
+  ciState: string | null;
+  /**
+   * The card's status CATEGORY, resolved SERVER-SIDE from the workflow the board
+   * projection already loads — the client never re-derives it, and the badge rule
+   * is keyed on the CATEGORY rather than on the column because a board maps
+   * statuses to columns many-to-one (a Done column can hold several statuses, and
+   * a done status can sit in a column that is not the Done one).
+   */
+  statusCategory: StatusCategoryDto | null;
   /**
    * The lane this card belongs to under the board's active swimlane group-by
    * (Subtask 3.3.4), resolved SERVER-SIDE so the client never re-derives it:

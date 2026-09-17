@@ -127,6 +127,11 @@ export interface WorkItemForestRow {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the `/items` row's CI badge (MOTIR-5474). A plain `String?`
+   *  column; it is in the fixed projection because these reads select explicitly
+   *  and a column left out of one is silently `undefined` at the mapper. */
+  ciState: string | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -433,6 +438,11 @@ export interface WorkItemListRow {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — the `/items` row's CI badge (MOTIR-5474). A plain `String?`
+   *  column; it is in the fixed projection because these reads select explicitly
+   *  and a column left out of one is silently `undefined` at the mapper. */
+  ciState: string | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -2938,7 +2948,7 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemForestRow[]>`
       WITH RECURSIVE forest AS (
         SELECT w."id", w."parentId", w."kind", w."type", w."key", w."identifier",
-               w."title", w."status", w."priority", w."assigneeId", w."reporterId",
+               w."title", w."status", w."ciState", w."priority", w."assigneeId", w."reporterId",
                w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt",
                ${hasDescriptionSql('w')} AS "hasDescription", 1 AS depth
           FROM "work_item" w
@@ -2949,7 +2959,7 @@ export const workItemRepository = {
             AND ${notInTriageSql('w')}
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."type", c."key", c."identifier",
-               c."title", c."status", c."priority", c."assigneeId", c."reporterId",
+               c."title", c."status", c."ciState", c."priority", c."assigneeId", c."reporterId",
                c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt",
                ${hasDescriptionSql('c')} AS "hasDescription", p.depth + 1
           FROM "work_item" c
@@ -2967,6 +2977,7 @@ export const workItemRepository = {
              f."identifier",
              f."title",
              f."status",
+             f."ciState",
              f."priority"::text   AS "priority",
              f."assigneeId",
              f."reporterId",
@@ -3023,6 +3034,7 @@ export const workItemRepository = {
              w."identifier",
              w."title",
              w."status",
+             w."ciState",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",
@@ -3172,6 +3184,7 @@ export const workItemRepository = {
              w."identifier",
              w."title",
              w."status",
+             w."ciState",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",
@@ -3656,6 +3669,7 @@ export const workItemRepository = {
              w."identifier",
              w."title",
              w."status",
+             w."ciState",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",

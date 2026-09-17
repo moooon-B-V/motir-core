@@ -23,6 +23,8 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     identifier: `PROD-${over.key}`,
     title: `Card ${over.key}`,
     status: 'todo',
+    ciState: null,
+    statusCategory: 'todo',
     priority: 'medium',
     assigneeId: null,
     dueDate: null,

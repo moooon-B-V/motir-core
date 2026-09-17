@@ -123,6 +123,7 @@ function toRow(
     kind: dto.kind,
     type: dto.type,
     status: dto.status,
+    ciState: null,
     statusLabel: meta?.label ?? dto.status,
     statusCategory: meta?.category ?? null,
     assigneeId: dto.assigneeId,

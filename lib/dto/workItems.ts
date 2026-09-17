@@ -635,6 +635,11 @@ export interface WorkItemTreeNodeDto {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — `failing` / `running` / `passing` / `null`. The row draws only
+   *  `failing` and `running`, and only off the `done` category (`ciBadgeState`,
+   *  MOTIR-5474); the raw value travels so every surface applies ONE rule. */
+  ciState: string | null;
   // The remaining core properties the list row shows alongside status/assignee
   // (the same fields the detail page's core-fields panel carries): priority,
   // reporter, due date, estimate. `reporterId` is always set; `dueDate` is a
@@ -888,6 +893,11 @@ export interface WorkItemListItemDto {
   identifier: string;
   title: string;
   status: string;
+  /** The item's CI verdict over its whole delivery set (`WorkItem.ciState`,
+   *  MOTIR-5470) — `failing` / `running` / `passing` / `null`. The row draws only
+   *  `failing` and `running`, and only off the `done` category (`ciBadgeState`,
+   *  MOTIR-5474); the raw value travels so every surface applies ONE rule. */
+  ciState: string | null;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

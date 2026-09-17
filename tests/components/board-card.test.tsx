@@ -28,6 +28,8 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     position: 'a0',
     ready: true,
     awaitingAcceptance: false,
+    ciState: null,
+    statusCategory: 'todo',
     ...over,
   };
 }
@@ -207,5 +209,126 @@ describe('BoardCard', () => {
     );
     fireEvent.click(screen.getByTestId('board-card-PROD-9'));
     expect(onOpen).toHaveBeenCalledWith('PROD-9');
+  });
+});
+
+// ── THE CI BADGE (Story MOTIR-5469 · MOTIR-5474) ──────────────────────────────
+// Design: `design/boards/board-card--ci-badge.mock.html`, spec
+// `design/boards/design-notes.md` § *The CI badge (MOTIR-5471)*.
+//
+// The badge is an ADDITIONAL pill in the card's existing pill row, immediately
+// after the exclusive one — so it can never hide `Blocked` or `Awaiting
+// acceptance`, which is the question the design card was asked to answer.
+describe('BoardCard — the CI badge (MOTIR-5474)', () => {
+  it('renders the text AND the glyph for failing and for running', () => {
+    // State is carried by text and icon, never colour alone (finding #35), so
+    // both halves are asserted rather than just the string.
+    for (const [state, label] of [
+      ['failing', 'Checks failing'],
+      ['running', 'Checks running'],
+    ] as const) {
+      render(
+        <BoardCard
+          card={card({ id: `c-${state}`, key: 1, ciState: state })}
+          assigneeName={null}
+          onOpenQuickView={vi.fn()}
+        />,
+      );
+      const badge = screen.getByText(label);
+      expect(badge).toBeTruthy();
+      // The glyph rides inside the same pill, and the two states use DIFFERENT
+      // shapes — which is what lets the row's icon-only form stay legible.
+      const pill = badge.closest('[data-ci-state]');
+      expect(pill?.getAttribute('data-ci-state')).toBe(state);
+      expect(pill?.querySelector('svg')).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it('renders NO badge for passing or for null', () => {
+    // `passing` earns none because green CI is what moves a card to In Review —
+    // a green badge would restate the column. `null` is "no checks", not a state.
+    for (const ciState of ['passing', null] as const) {
+      render(
+        <BoardCard
+          card={card({ id: 'c-none', key: 2, ciState })}
+          assigneeName={null}
+          onOpenQuickView={vi.fn()}
+        />,
+      );
+      expect(screen.queryByText(/^Checks /)).toBeNull();
+      expect(document.querySelector('[data-ci-state]')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('renders NOTHING on a done-category card, whatever the column says', () => {
+    // The rule is the status CATEGORY, not the column: a board maps statuses to
+    // columns many-to-one, and a done card's old red is not actionable. The value
+    // stays STORED — it is simply not drawn.
+    render(
+      <BoardCard
+        card={card({ id: 'c-done', key: 3, ciState: 'failing', statusCategory: 'done' })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('Checks failing')).toBeNull();
+  });
+
+  it('renders the badge BESIDE Blocked — neither hides the other', () => {
+    // The case the design card was asked about. `ready: false` is what swaps the
+    // priority chip for `Blocked`; the badge is added rather than substituted, so
+    // both survive.
+    render(
+      <BoardCard
+        card={card({ id: 'c-blocked', key: 4, ciState: 'failing', ready: false })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByText('Checks failing')).toBeTruthy();
+  });
+
+  it('renders the badge BESIDE Awaiting acceptance — neither hides the other', () => {
+    render(
+      <BoardCard
+        card={card({ id: 'c-await', key: 5, ciState: 'running', awaitingAcceptance: true })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Awaiting acceptance')).toBeTruthy();
+    expect(screen.getByText('Checks running')).toBeTruthy();
+  });
+
+  it('WRAPS its pill row, so a second pill cannot overflow the card', () => {
+    // ⚠️ This is the change rendering found and reading did not: `BoardCard.tsx`
+    // carried no `flex-wrap`, so at the board's 288px column a second pill pushed
+    // the story-point chip and the avatar past the card's right edge. Asserted on
+    // the class because a happy-dom render has no layout to measure.
+    const { container } = render(
+      <BoardCard
+        card={card({ id: 'c-wrap', key: 6, ciState: 'running', awaitingAcceptance: true })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    const row = container.querySelector('[data-ci-state]')?.parentElement;
+    expect(row?.className).toContain('flex-wrap');
+  });
+
+  it('pins the badge label against breaking inside the chip', () => {
+    // The other rendering find: `Pill` sets no `whitespace-nowrap`, so "Checks
+    // failing" broke onto two lines inside the chip with the glyph orphaned.
+    render(
+      <BoardCard
+        card={card({ id: 'c-nowrap', key: 7, ciState: 'failing' })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    expect(document.querySelector('[data-ci-state]')?.className).toContain('whitespace-nowrap');
   });
 });

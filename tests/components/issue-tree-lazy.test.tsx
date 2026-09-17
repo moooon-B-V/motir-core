@@ -82,6 +82,7 @@ function node(over: Partial<WorkItemTreeRowDto> & { id: string; key: number }): 
     identifier: `PROD-${over.key}`,
     title: `Issue ${over.key}`,
     status: 'todo',
+    ciState: null,
     priority: 'medium',
     assigneeId: 'u1',
     reporterId: 'u1',

@@ -147,6 +147,7 @@ function listRow(): IssueRowData {
     kind: 'task',
     type: null,
     status: 'todo',
+    ciState: null,
     statusLabel: 'To Do',
     statusCategory: 'todo',
     assigneeId: null,
