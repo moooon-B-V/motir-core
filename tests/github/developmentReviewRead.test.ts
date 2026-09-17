@@ -2,7 +2,6 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
 import { usersService } from '@/lib/services/usersService';
-import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
@@ -134,12 +133,9 @@ describe('a row carries its GitHub review (MOTIR-5602)', () => {
     await review(prs[0]!);
 
     const [row] = await rowsFor(item.id);
-    expect(row!.githubReview).toEqual({
-      state: 'approved',
-      reviewerLogin: 'ada-l',
-      memberName: null,
-      atCurrentHead: true,
-    });
+    // It says the STATE and nothing about a person (Yue, design review 2026-09-17): a pull
+    // request can carry several reviewers, so one identity per row is the wrong cardinality.
+    expect(row!.githubReview).toEqual({ state: 'approved', atCurrentHead: true });
   });
 
   it('marks an approval at an EARLIER commit as stale rather than dropping it', async () => {
@@ -163,11 +159,7 @@ describe('a row carries its GitHub review (MOTIR-5602)', () => {
     });
 
     const [row] = await rowsFor(item.id);
-    expect(row!.githubReview).toMatchObject({
-      state: 'changes_requested',
-      reviewerLogin: 'objector',
-      atCurrentHead: true,
-    });
+    expect(row!.githubReview).toEqual({ state: 'changes_requested', atCurrentHead: true });
   });
 
   it('is NULL when nothing countable was said', async () => {
@@ -189,8 +181,10 @@ describe('a row carries its GitHub review (MOTIR-5602)', () => {
   });
 });
 
-describe('WHO the review names (MOTIR-5602)', () => {
-  it('carries the member name when the reviewer is a member of THIS workspace', async () => {
+describe('the row names NO reviewer (MOTIR-5602, amended at design review)', () => {
+  it('says nothing about a person even when the reviewer IS a resolvable member', async () => {
+    // The identity resolves perfectly well — and the row still carries only the state. The
+    // decision's decider is on the GATE (`decidedById` / `decidedByLabel`), not on a row.
     const { item, prs } = await card();
     const user = await usersService.createUser({
       email: 'ada@example.com',
@@ -211,35 +205,22 @@ describe('WHO the review names (MOTIR-5602)', () => {
     await review(prs[0]!);
 
     const [row] = await rowsFor(item.id);
-    expect(row!.githubReview).toMatchObject({ memberName: 'Ada Lovelace', reviewerLogin: 'ada-l' });
+    expect(Object.keys(row!.githubReview!).sort()).toEqual(['atCurrentHead', 'state']);
   });
 
-  it('carries a NULL name for an identity that belongs to another workspace', async () => {
+  it('reads the SAME for two different reviewers on one pull request', async () => {
+    // The case that made a single identity wrong: several reviewers, one row.
     const { item, prs } = await card();
-    const stranger = await usersService.createUser({
-      email: 'stranger@example.com',
-      password: PASSWORD,
-      name: 'Stranger',
-    });
-    // An identity is global; membership is what makes them a member HERE.
-    await workspacesService.createWorkspace({ name: 'Elsewhere', ownerUserId: stranger.id });
-    await adminDb.githubIdentity.create({
-      data: {
-        userId: stranger.id,
-        githubUserId: '4242',
-        githubLogin: 'ada-l',
-        accessTokenEncrypted: 'enc',
-      },
-    });
-    await review(prs[0]!);
+    await review(prs[0]!, { githubUserId: '4242', login: 'ada-l' });
+    await review(prs[0]!, { githubUserId: '9999', login: 'grace-h' });
 
     const [row] = await rowsFor(item.id);
-    expect(row!.githubReview).toMatchObject({ memberName: null, reviewerLogin: 'ada-l' });
+    expect(row!.githubReview).toEqual({ state: 'approved', atCurrentHead: true });
   });
 });
 
 describe('the read is BATCHED (MOTIR-5602)', () => {
-  it('costs ONE review query and ONE identity query for three rows and two reviewers', async () => {
+  it('costs ONE review query for three rows and two reviewers', async () => {
     const { item, prs } = await card(3);
     await review(prs[0]!, { githubUserId: '4242', login: 'ada-l' });
     await review(prs[1]!, { githubUserId: '9999', login: 'grace-h' });
@@ -251,18 +232,21 @@ describe('the read is BATCHED (MOTIR-5602)', () => {
     expect(reviews.queries).toBe(1);
     expect(reviews.result).toHaveLength(3);
 
+    // ⚠️ AND NO IDENTITY QUERY AT ALL. The identity and membership lookups existed only to
+    // name a person the row no longer names, and they went with the field.
     const identities = await countDelegateCalls('githubIdentity', 'findMany', () =>
       rowsFor(item.id),
     );
-    expect(identities.queries).toBe(1);
+    expect(identities.queries).toBe(0);
   });
 
-  it('asks NOTHING about identities when no review was recorded', async () => {
+  it('short-circuits when no review was recorded', async () => {
     const { item } = await card(2);
-    const identities = await countDelegateCalls('githubIdentity', 'findMany', () =>
+    const reviews = await countDelegateCalls('githubPullRequestReview', 'findMany', () =>
       rowsFor(item.id),
     );
-    // The short-circuit is real: no reviews, no reviewers to resolve.
-    expect(identities.queries).toBe(0);
+    // One query asks the question; nothing follows it when the answer is empty.
+    expect(reviews.queries).toBe(1);
+    expect(reviews.result.every((row) => row.githubReview === null)).toBe(true);
   });
 });

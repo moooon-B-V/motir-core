@@ -83,13 +83,18 @@ export interface LinkedPullRequestDto {
    * ⚠️ `atCurrentHead: false` IS DRAWN, NOT DROPPED. A review given at an earlier commit
    * counts for nothing (decision 2), but a reader who can see that an approval exists and
    * cannot see that it is stale would conclude Motir had lost it. The surface says which.
+   *
+   * ⚠️ IT NAMES NO REVIEWER, and that is a DECISION rather than an omission (Yue, design
+   * review 2026-09-17; design § 23). This carried `reviewerLogin` and `memberName` until the
+   * row's chip was drawn — and a pull request can have SEVERAL reviewers, so ONE identity per
+   * row is the wrong cardinality whatever renders it: it would carry whichever countable
+   * review happened to be latest and read as though that person were *the* reviewer. The row
+   * says what the pull request's review STATE is. The DECISION has exactly one decider, and
+   * the gate's own `decidedById` / `decidedByLabel` carry them. A surface that later wants
+   * reviewers on a row asks for a LIST, not for this field back.
    */
   githubReview: {
     state: 'approved' | 'changes_requested';
-    reviewerLogin: string;
-    /** The Motir member the reviewer resolves to IN THIS WORKSPACE, else null — the pair
-     *  (a review, a null name) is what reads as *not a Motir member*. */
-    memberName: string | null;
     atCurrentHead: boolean;
   } | null;
   /* ⚠️ `linkedManually` WAS HERE and is removed by MOTIR-4894, along with the

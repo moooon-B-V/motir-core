@@ -44,7 +44,6 @@ import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldD
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
-import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
@@ -1360,9 +1359,10 @@ async function recordBugFiledFinding(
  * WHAT EACH PULL REQUEST'S GITHUB REVIEW SAYS, for a page of Development rows (Story
  * MOTIR-4910 · MOTIR-5602; ADR §8 FOURTH AMENDMENT, decision 2).
  *
- * ⚠️ TWO QUERIES FOR THE WHOLE PAGE, however many rows and reviewers it has: one
- * `listForPullRequests` and one identity lookup. A per-row read would make rendering one
- * card N round trips, and the membership check is folded into the same pass.
+ * ⚠️ ONE QUERY FOR THE WHOLE PAGE, however many rows it has. It was two until the row's
+ * chip was drawn without a reviewer (Yue, design review 2026-09-17): the identity and
+ * membership lookups existed only to name a person the row no longer names, so they went
+ * with the field. A per-row read would make rendering one card N round trips.
  *
  * ⚠️ THE RULE IS THE EVALUATOR'S, NOT A SECOND ONE. `countableReviewsAtHead` is the same
  * pure function that DECIDES the gate, so a row and the gate can never disagree about what
@@ -1382,30 +1382,6 @@ async function readGithubReviewsForRows(
   );
   if (reviews.length === 0) return out;
 
-  // The reviewers this page names, resolved to members of THIS workspace. An identity is
-  // global, so the membership half is what stops a reviewer with an account elsewhere
-  // rendering as a member here.
-  const identities = await githubIdentityRepository.findByGithubUserIds(
-    [...new Set(reviews.map((review) => review.reviewerGithubUserId))],
-    tx,
-  );
-  const memberships = await workspaceMembershipRepository.findByWorkspaceIdsAndUserIds(
-    [workspaceId],
-    identities.map((identity) => identity.userId),
-    tx,
-  );
-  const memberUserIds = new Set(memberships.map((membership) => membership.userId));
-  const users = await userRepository.findByIds(
-    identities.filter((i) => memberUserIds.has(i.userId)).map((i) => i.userId),
-    tx,
-  );
-  const nameByUserId = new Map(users.map((user) => [user.id, user.name ?? user.email]));
-  const memberNameByGithubUserId = new Map(
-    identities
-      .filter((identity) => memberUserIds.has(identity.userId))
-      .map((identity) => [identity.githubUserId, nameByUserId.get(identity.userId) ?? null]),
-  );
-
   const byPullRequest = new Map<string, typeof reviews>();
   for (const review of reviews) {
     const list = byPullRequest.get(review.githubPullRequestId) ?? [];
@@ -1424,8 +1400,6 @@ async function readGithubReviewsForRows(
     if (decided) {
       out.set(row.id, {
         state: decided.state === 'changes_requested' ? 'changes_requested' : 'approved',
-        reviewerLogin: decided.reviewerLogin,
-        memberName: memberNameByGithubUserId.get(decided.reviewerGithubUserId) ?? null,
         atCurrentHead: true,
       });
       continue;
@@ -1441,8 +1415,6 @@ async function readGithubReviewsForRows(
     if (stale) {
       out.set(row.id, {
         state: stale.state === 'changes_requested' ? 'changes_requested' : 'approved',
-        reviewerLogin: stale.reviewerLogin,
-        memberName: memberNameByGithubUserId.get(stale.reviewerGithubUserId) ?? null,
         atCurrentHead: false,
       });
     }
