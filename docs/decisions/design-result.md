@@ -1252,16 +1252,21 @@ is silent.
 **A supersede now records WHY, from a closed vocabulary with one value per
 writing path and no value meaning _unsaid_:**
 
-| cause                 | written when                                                       |
-| --------------------- | ------------------------------------------------------------------ |
-| `republished`         | a newer design version superseded the one the gate asked about     |
-| `withdrawn`           | the design result was withdrawn                                    |
-| `pull_request_linked` | **retired** — the path itself is retired by Q7                     |
-| `head_moved`          | a member's head moved, so the commits are not the ones asked about |
-| `member_closed`       | a member pull request closed                                       |
-| `set_changed`         | a delivery row joined or left the card                             |
-| `pulled_back`         | the work was pulled out of review, or moved to Cancelled           |
-| `reopened_by_hand`    | a person re-opened a decided design gate (Q3)                      |
+| cause              | written when                                                       |
+| ------------------ | ------------------------------------------------------------------ |
+| `republished`      | a newer design version superseded the one the gate asked about     |
+| `withdrawn`        | the design result was withdrawn                                    |
+| `head_moved`       | a member's head moved, so the commits are not the ones asked about |
+| `member_closed`    | a member pull request closed                                       |
+| `set_changed`      | a delivery row joined or left the card                             |
+| `pulled_back`      | the work was pulled out of review, or moved to Cancelled           |
+| `reopened_by_hand` | a person re-opened a decided design gate (Q3)                      |
+
+**No cause is minted for the pull-request-LINK path** — the one that retires a
+design gate when an open pull request is linked (AMENDMENT 4 Q8). Q7 retires that
+path outright, so a member for it would enter the vocabulary with nothing left to
+write it. Until the path is deleted its single write records `set_changed`, which
+is what a delivery row joining the card literally is.
 
 **Rows superseded before this amendment carry an UNKNOWN value**, and a surface
 must render it as _the reason was not recorded_ — never as one of the real

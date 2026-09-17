@@ -3032,7 +3032,14 @@ export const workItemsService = {
           system: false,
         })
       ) {
-        await approvalGateRepository.supersedeAllAwaitingByWorkItem(workItemId, tx);
+        await approvalGateRepository.supersedeAllAwaitingByWorkItem(
+          workItemId,
+          // The WORK moved backwards under the question — out of review, or to
+          // Cancelled. Nothing about the design or the pull requests changed
+          // (AMENDMENT 6 Q5).
+          'pulled_back',
+          tx,
+        );
       }
     }
 

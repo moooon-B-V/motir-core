@@ -428,3 +428,93 @@ describe('one transaction, one gate per card, however the events arrive', () => 
     expect(transitioned[0]!.gatesAtSend).toBe(1);
   });
 });
+
+describe('AMENDMENT 6 Q5 — the withdrawal records WHY, and the three PR causes are distinct', () => {
+  // Until MOTIR-5659 a superseded row carried `state` and nothing else, so every
+  // surface describing one had to guess — and MOTIR-5586 / MOTIR-5651 are the two
+  // that guessed "a newer design was published" over all of them. The three
+  // withdrawals below are three different sentences a person should be told, and
+  // the point of these assertions is that the ROW can now tell them apart. A
+  // single `expect(state).toBe('superseded')` passes with all three wired to one
+  // cause, which is the state this story is undoing.
+
+  it('a moved HEAD records `head_moved`', async () => {
+    const { item } = await reviewedWithGate('pa-cause-head@example.com');
+
+    await ci({ conclusion: null, status: 'in_progress', headSha: 'sha-a2', number: 11 });
+
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'head_moved'],
+    ]);
+  });
+
+  it('a CLOSED member records `member_closed`', async () => {
+    const { item } = await reviewedWithGate('pa-cause-closed@example.com');
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('closed', 12, `subtask/${item.identifier}-12`),
+    );
+
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'member_closed'],
+    ]);
+  });
+
+  // Two tests rather than one: each scenario reuses the same pull-request numbers,
+  // and only `beforeEach` truncates — a second `reviewedWithGate` in one test
+  // inherits the first card's green check rows and never passes through
+  // `implemented`.
+  it('a member JOINING the set records `set_changed`', async () => {
+    const { item } = await reviewedWithGate('pa-cause-join@example.com');
+
+    await openLinked(item.identifier, 14);
+
+    expect((await approvalGates(item.id)).map((g) => g.supersededCause)).toEqual(['set_changed']);
+  });
+
+  it('a member LEAVING the set records `set_changed` too', async () => {
+    const { s, item } = await reviewedWithGate('pa-cause-unlink@example.com');
+
+    await githubPullRequestService.unlinkPullRequestByCoordinates(
+      { workItemId: item.id, projectId: s.project.id, owner: 'moooon', name: 'acme', number: 12 },
+      s.ctx,
+    );
+
+    expect((await approvalGates(item.id)).map((g) => g.supersededCause)).toEqual(['set_changed']);
+  });
+
+  it('an AWAITING gate carries NO cause — the column describes a withdrawal, not a question', async () => {
+    const { item } = await reviewedWithGate('pa-cause-awaiting@example.com');
+
+    expect((await awaiting(item.id)).map((g) => g.supersededCause)).toEqual([null]);
+  });
+
+  it('a cause is not an ACTOR: the withdrawal still writes no decider, authority or note', async () => {
+    // §6b's invariant, re-asserted because this story is the first thing to add a
+    // column to that write. A cause says what happened to the SUBJECT; it must
+    // not become the toehold by which a product write starts looking like a
+    // person's answer.
+    const { item } = await reviewedWithGate('pa-cause-noactor@example.com');
+
+    await ci({ conclusion: null, status: 'in_progress', headSha: 'sha-a2', number: 11 });
+
+    const [row] = await approvalGates(item.id);
+    expect(row).toMatchObject({ state: 'superseded', supersededCause: 'head_moved' });
+    expect({
+      decidedById: row!.decidedById,
+      decidedAt: row!.decidedAt,
+      decidedByLabel: row!.decidedByLabel,
+      decidedUnderAuthority: row!.decidedUnderAuthority,
+      decisionSource: row!.decisionSource,
+      noteMd: row!.noteMd,
+    }).toEqual({
+      decidedById: null,
+      decidedAt: null,
+      decidedByLabel: null,
+      decidedUnderAuthority: null,
+      decisionSource: null,
+      noteMd: null,
+    });
+  });
+});

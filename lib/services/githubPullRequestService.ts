@@ -58,7 +58,17 @@ async function retireDesignGateForOpenPullRequest(
   tx: Prisma.TransactionClient,
 ): Promise<void> {
   if (pullRequestState !== 'open') return;
-  await approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, 'design_result', tx);
+  await approvalGateRepository.supersedeAwaitingByWorkItem(
+    workItemId,
+    'design_result',
+    // A delivery row joined the card, which is exactly `set_changed` — and no
+    // `pull_request_linked` member was minted for this one write, because
+    // AMENDMENT 6 Q7 RETIRES this path outright (MOTIR-5662). Minting a cause
+    // for a caller we are about to delete would leave the vocabulary carrying a
+    // value nothing writes, which is the shape Q5 set out to avoid.
+    'set_changed',
+    tx,
+  );
 }
 
 export const githubPullRequestService = {

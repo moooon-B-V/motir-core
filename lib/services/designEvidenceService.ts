@@ -500,7 +500,15 @@ async function persistEvidence(
     // Unconditional rather than gated on `prior`: a first publish has no gate to
     // retire, so the predicate matches nothing, and a condition here would have
     // to be derived from the very read this statement must precede.
-    await approvalGateRepository.supersedeAwaitingByWorkItem(args.item.id, 'design_result', tx);
+    await approvalGateRepository.supersedeAwaitingByWorkItem(
+      args.item.id,
+      'design_result',
+      // A NEWER VERSION is the cause here, and it is the one cause the two
+      // surfaces MOTIR-5586 and MOTIR-5651 had to stop asserting because the row
+      // could not tell them apart (AMENDMENT 6 Q5). From this write on they can.
+      'republished',
+      tx,
+    );
 
     // Lock BEFORE reading what to supersede — the decision is read-derived, so
     // an unlocked read lets two publishes both target the same current row.
@@ -978,7 +986,14 @@ export const designEvidenceService = {
         //
         // If there turns out to be no current result, the refusal below rolls
         // this back with everything else, so a refused withdrawal retires nothing.
-        await approvalGateRepository.supersedeAwaitingByWorkItem(item.id, 'design_result', tx);
+        await approvalGateRepository.supersedeAwaitingByWorkItem(
+          item.id,
+          'design_result',
+          // The result itself is going away — not being replaced. A reviewer asked
+          // about bytes that will not exist when they answer (AMENDMENT 6 Q5).
+          'withdrawn',
+          tx,
+        );
 
         // Lock BEFORE reading which row to withdraw — the decision is
         // read-derived exactly as the supersede's is, so an unlocked read lets a

@@ -141,7 +141,12 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
       asked: gate.subjectVersion,
       current,
     });
-    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, tx);
+    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      KIND,
+      'head_moved',
+      tx,
+    );
   }
   return withdrawn;
 }
@@ -160,7 +165,12 @@ export async function withdrawPullRequestApprovalGatesOnClose(
     pullRequestId,
     tx,
   )) {
-    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, tx);
+    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      KIND,
+      'member_closed',
+      tx,
+    );
   }
   return withdrawn;
 }
@@ -175,5 +185,5 @@ export async function withdrawPullRequestApprovalGateOnSetChange(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<number> {
-  return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, tx);
+  return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, 'set_changed', tx);
 }
