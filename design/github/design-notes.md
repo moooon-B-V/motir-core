@@ -2000,18 +2000,67 @@ nothing left to say. It is also the only thing that fits — drawn as a third pi
 collapses to two characters at 1400px, which is how this was found. **A row with no review keeps its
 CI pill**, so G1 reads as _this one has been reviewed, that one is merely green_.
 
+> **⚠️ AMENDED AT DESIGN REVIEW (Yue, 2026-09-17), and the first cut is kept visible because it
+> was wrong in a way worth remembering.** The chip first read
+> ~~_Approved on GitHub · @ada-l_~~. Three corrections — two about words, one about layout:
+>
+> **1. THE ROW DOES NOT NAME THE HOST.** _Approved_ is enough. The row IS a GitHub pull request
+> — its meta line reads `moooon/motir-core · #131` and its link-out goes there — and the pill
+> beside it says _Checks passing_, never _Checks passing on GitHub_. A chip that named the host
+> would be the only element on the row that felt the need to. **Provenance is still stated where
+> it is load-bearing**: the record band (G4–G6) says _Approved on GitHub by…_, because there the
+> question is which DOOR decided the card's gate, and `decisionSource` is the audit's own field.
+>
+> **2. THE ROW DOES NOT NAME A REVIEWER.** ~~`· @login`~~ is gone. **A pull request can carry
+> SEVERAL reviewers**, so one login on the row is a claim the row cannot make: it would show
+> whichever countable review happened to be latest and read as though that person were _the_
+> reviewer. The chip is about the pull request's STATE. The DECISION has exactly one decider —
+> the review that completed the set — and the record band names them; the row does not.
+>
+> **3. THE PILL MUST NOT EVICT THE ROW.** That one is a defect in the shipped row, not in this
+> chip — the block below.
+
+### ⚠️ A WIDE PILL EVICTS THE ROW AT ~400px — the shipped row, not this chip
+
+Drawn at ~400px, the first cut's chip did not merely overflow: the row's **title, its repo meta
+and its link-out were all gone**, while the sibling row without a chip still showed them. The
+cause is in the base sheet, and it is two rules that only misbehave together:
+
+```css
+.pr-text {
+  min-width: 0;
+  flex: 1;
+} /* absorbs every shortfall, down to zero */
+.pr-states {
+  flex: none;
+} /* never shrinks */
+```
+
+The pills cannot shrink, so the TEXT pays for all of them — and `min-width: 0` lets it pay
+everything. **The review chip only made this visible.** It is reachable on `main` today with
+pills this delta does not own: `MergeOutcomeSlot` ships _Removed from the queue_ (22 characters)
+and _New commits since approval_ (26), both wider than anything drawn here.
+
+**The rule the narrow panels draw:** the row's text keeps a legible floor and the pills **wrap
+beneath it**, so the title and the link-out are never the thing that gives way. The link-out
+stays on the first line, because it is how the row is left.
+
+**`data-narrow` in the mock stands in for the viewport** — this board renders at 1400px, so a
+`@media` rule would never fire on it. The surface implements the same thing as a real responsive
+rule, and it belongs on **every** row rather than only on reviewed ones.
+
 ### The panels, the decision each depicts, and the card that builds it
 
-| panel | state                                                                                                                                                                                                                                 | status rail | gate                | decision | built by   |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------- | -------- | ---------- |
-| G1    | **One of two approved on GitHub** — row A carries _Approved on GitHub · @login_ (mint) in place of its CI pill, row B keeps _Checks passing_. The frame keeps **Approve and merge**: a person in Motir may still decide the set       | In Review   | `awaiting`          | 1        | MOTIR-5599 |
-| G2    | **An approval at an EARLIER commit** — _Approved an earlier commit · @login_, **neutral, never rose**. Nothing went wrong; it simply does not count. The same treatment covers a reviewer without write access and a dismissed review | In Review   | `awaiting`          | 2        | MOTIR-5599 |
-| G3    | **Changes requested on GitHub** — the first countable one on any member decides; the band reads _Changes requested on GitHub by {name}_ and **the card stays In Review** (a gate's state is not a work item's status, § 6b)           | In Review   | `changes_requested` | 1        | MOTIR-5599 |
-| G4    | **Approved on GitHub by a member, and MERGING** — the band names them with their login and commit count; the rows are already _Merging_ / _Queued to merge_. **No _Ready to merge_ press: the merge was not left for anyone**         | Approved    | `approved`          | 3, 6     | MOTIR-5599 |
-| G5    | **One member REFUSED by the host** — that row keeps the shipped _Not merged yet · Retry merge_, honest here because a merge was attempted; the sibling shows _Merged_ and the band still reads Approved                               | Approved    | `approved`          | 6        | MOTIR-5599 |
-| G6    | **Approved by someone who is NOT a Motir member** — _Approved on GitHub by @login_, with **_Not a Motir member_ on a line of its own**. The merge follows identically                                                                 | Approved    | `approved`          | 3        | MOTIR-5599 |
-| G7    | **The Approvals room's decided row** — the _Decided by_ cell reads _{name} · on GitHub_ or _@login · on GitHub_, truncating at 144px as it already does                                                                               | —           | `approved`          | 3        | MOTIR-5599 |
-| G8    | **The To-approve tab** — the card's one gate is decided, so its row **settles in place** (the shipped decided-row treatment) and the strip's count drops by one. **No second row follows it**                                         | —           | `approved`          | 1, 6     | MOTIR-5599 |
+| panel | state                                                                                                                                                                                                                         | status rail | gate                | decision | built by   |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------- | -------- | ---------- |
+| G1    | **One of two approved on GitHub** — row A carries _Approved_ (mint) in place of its CI pill, row B keeps _Checks passing_. The frame keeps **Approve and merge**: a person in Motir may still decide the set                  | In Review   | `awaiting`          | 1        | MOTIR-5599 |
+| G2    | **An approval at an EARLIER commit** — _Approved an earlier commit_, **neutral, never rose**. Nothing went wrong; it simply does not count. The same treatment covers a reviewer without write access and a dismissed review  | In Review   | `awaiting`          | 2        | MOTIR-5599 |
+| G3    | **Changes requested on GitHub** — the first countable one on any member decides; the band reads _Changes requested on GitHub by {name}_ and **the card stays In Review** (a gate's state is not a work item's status, § 6b)   | In Review   | `changes_requested` | 1        | MOTIR-5599 |
+| G4    | **Approved on GitHub by a member, and MERGING** — the band names them with their login and commit count; the rows are already _Merging_ / _Queued to merge_. **No _Ready to merge_ press: the merge was not left for anyone** | Approved    | `approved`          | 3, 6     | MOTIR-5599 |
+| G5    | **One member REFUSED by the host** — that row keeps the shipped _Not merged yet · Retry merge_, honest here because a merge was attempted; the sibling shows _Merged_ and the band still reads Approved                       | Approved    | `approved`          | 6        | MOTIR-5599 |
+| G6    | **Approved by someone who is NOT a Motir member** — _Approved on GitHub by @login_, with **_Not a Motir member_ on a line of its own**. The merge follows identically                                                         | Approved    | `approved`          | 3        | MOTIR-5599 |
+| G7    | **The Approvals room's decided row** — the _Decided by_ cell reads _{name} · on GitHub_ or _@login · on GitHub_, truncating at 144px as it already does                                                                       | —           | `approved`          | 3        | MOTIR-5599 |
+| G8    | **The To-approve tab** — the card's one gate is decided, so its row **settles in place** (the shipped decided-row treatment) and the strip's count drops by one. **No second row follows it**                                 | —           | `approved`          | 1, 6     | MOTIR-5599 |
 
 ### What this delta does NOT draw, and why each absence is deliberate
 
@@ -2031,8 +2080,8 @@ CI pill**, so G1 reads as _this one has been reviewed, that one is merely green_
 
 | key                       | `en`                                              | `zh`                                            | where                       |
 | ------------------------- | ------------------------------------------------- | ----------------------------------------------- | --------------------------- |
-| `chip.approved`           | Approved on GitHub                                | 已在 GitHub 上批准                              | G1 · the row's second slot  |
-| `chip.changesRequested`   | Changes requested on GitHub                       | 已在 GitHub 上请求修改                          | G3 · the row's second slot  |
+| `chip.approved`           | Approved                                          | 已批准                                          | G1 · the row's second slot  |
+| `chip.changesRequested`   | Changes requested                                 | 已请求修改                                      | G3 · the row's second slot  |
 | `chip.earlierCommit`      | Approved an earlier commit                        | 批准的是较早的提交                              | G2 · the row's second slot  |
 | `record.approved`         | Approved on GitHub by {name} · {time} · {commits} | 由 {name} 在 GitHub 上批准 · {time} · {commits} | G4 / G6 · the record band   |
 | `record.changesRequested` | Changes requested on GitHub by {name}             | 由 {name} 在 GitHub 上请求修改                  | G3 · the record band        |
@@ -2041,21 +2090,26 @@ CI pill**, so G1 reads as _this one has been reviewed, that one is merely green_
 
 `{name}` is the member's display name where Motir resolved the reviewer, and the bare `@login`
 where it did not — one key, two labels, because the sentence is the same sentence. `{commits}` reuses
-the shipped `record.commits` plural. **The handle is always monospace** (`.ghr-login`), as every
-login on this sheet and in the room is.
+the shipped `record.commits` plural.
+
+**A handle appears in exactly two places, and a ROW is not one of them** (Yue, 2026-09-17): the
+record band, which names the one person who decided the card's gate, and the Approvals room's
+person cell, which is the same fact in a table. Where it appears it is monospace (`.ghr-login`),
+as every login in the product is. The chips carry no handle at all — a pull request can have
+several reviewers, and the row is about the pull request's state.
 
 ### Primitives, tokens and accessibility
 
-| element                     | primitive / class                      | token                                                                   |
-| --------------------------- | -------------------------------------- | ----------------------------------------------------------------------- |
-| review chip, counting       | `Pill` `tone="mint"` · `.ghr-chip`     | the mint tint's fill with `--el-text-strong`, as every counting pill    |
-| review chip, does not count | `Pill` `tone="neutral"` · `.ghr-stale` | `--el-text-secondary` — **AA on all four surfaces in both themes**      |
-| review chip, changes        | `Pill` `tone="peach"` · `.ghr-chip`    | the peach tint, the same one _Not merged yet_ uses                      |
-| the GitHub mark             | `#i-github`                            | `currentColor`, inheriting the chip's or the band's ink                 |
-| the reviewer's handle       | `.ghr-login`                           | `--font-mono`, 11px                                                     |
-| _Not a Motir member_        | `.ghr-sub`                             | `--el-text-secondary`, indented under the line it qualifies             |
-| the room's person cell      | `.ghr-room-person`                     | `--el-text-secondary`, `text-xs`, truncates at 144px                    |
-| the settled To-approve row  | `.ghr-ta-settled`                      | `opacity: 0.7` — the shipped decided-row treatment, not a colour change |
+| element                     | primitive / class                                               | token                                                                   |
+| --------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| review chip, counting       | `Pill` `tone="mint"` · `.ghr-chip`                              | the mint tint's fill with `--el-text-strong`, as every counting pill    |
+| review chip, does not count | `Pill` `tone="neutral"` · `.ghr-stale`                          | `--el-text-secondary` — **AA on all four surfaces in both themes**      |
+| review chip, changes        | `Pill` `tone="peach"` · `.ghr-chip`                             | the peach tint, the same one _Not merged yet_ uses                      |
+| the GitHub mark             | `#i-github`                                                     | `currentColor`, inheriting the chip's or the band's ink                 |
+| the reviewer's handle       | `.ghr-login` — record band and room cell ONLY, never a row chip | `--font-mono`, 11px                                                     |
+| _Not a Motir member_        | `.ghr-sub`                                                      | `--el-text-secondary`, indented under the line it qualifies             |
+| the room's person cell      | `.ghr-room-person`                                              | `--el-text-secondary`, `text-xs`, truncates at 144px                    |
+| the settled To-approve row  | `.ghr-ta-settled`                                               | `opacity: 0.7` — the shipped decided-row treatment, not a colour change |
 
 **No `--el-text-muted` and no `--el-text-faint` carries text on this sheet**, in either layer: every
 secondary string is `--el-text-secondary`, which is 6.18–6.80:1 on the page, `--el-surface`,
@@ -2065,11 +2119,11 @@ is a colour one: rose would say something went wrong, and nothing did.
 
 ### GIVES / TAKES
 
-| key        | GIVES / TAKES                                                                                                                                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MOTIR-5599 | **GIVES** every panel, the chip, the record band's two line forms, the room cell and the settled row — it builds them, in `en` and `zh`. **TAKES** that the chip **replaces** the row's CI pill rather than joining it, and that _Not a Motir member_ is a line, never a dimmed name |
-| MOTIR-5602 | **TAKES** that the read carries, per member, the **latest countable review's state, its reviewer login, and whether that login resolves to a Motir member** — and that it must also mark a review that does NOT count, so G2 can be drawn at all rather than rendering as nothing    |
-| MOTIR-5590 | **GIVES** decisions 1–6 and 10, cited per panel. **TAKES** nothing                                                                                                                                                                                                                   |
-| MOTIR-5608 | **TAKES** that the merge runs **after the decision commits**, so G4 is the state a reader lands on — a panel showing an approved card with un-attempted merges would contradict it                                                                                                   |
-| MOTIR-5601 | **GIVES** G1 → G4 → G6 as the acceptance video's script. **TAKES** nothing                                                                                                                                                                                                           |
-| MOTIR-5609 | **GIVES** the one-gate model every panel assumes. **TAKES** nothing                                                                                                                                                                                                                  |
+| key        | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5599 | **GIVES** every panel, the chip, the record band's two line forms, the room cell and the settled row — it builds them, in `en` and `zh`. **TAKES** that the chip **replaces** the row's CI pill rather than joining it; that the chip names **neither the host nor a reviewer**; that the row's text keeps a floor and the pills **wrap** beneath it at narrow width, on EVERY row rather than only reviewed ones; and that _Not a Motir member_ is a line, never a dimmed name                                                                |
+| MOTIR-5602 | **TAKES** that the read carries, per member, the **latest countable review's STATE** and **whether it stands at the current head** — and nothing about a person. ⚠️ AMENDED 2026-09-17: it previously also took the reviewer's login and member name. The row no longer names a reviewer, so a per-row reviewer identity is both unrendered and the WRONG SHAPE — it is one field where a pull request may have several reviewers. It must still mark a review that does NOT count, so G2 can be drawn at all rather than rendering as nothing |
+| MOTIR-5590 | **GIVES** decisions 1–6 and 10, cited per panel. **TAKES** nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| MOTIR-5608 | **TAKES** that the merge runs **after the decision commits**, so G4 is the state a reader lands on — a panel showing an approved card with un-attempted merges would contradict it                                                                                                                                                                                                                                                                                                                                                             |
+| MOTIR-5601 | **GIVES** G1 → G4 → G6 as the acceptance video's script. **TAKES** nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| MOTIR-5609 | **GIVES** the one-gate model every panel assumes. **TAKES** nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |

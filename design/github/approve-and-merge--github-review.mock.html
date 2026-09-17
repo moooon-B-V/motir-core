@@ -3219,6 +3219,36 @@
       .ghr-note-card b {
         color: var(--el-text);
       }
+      /* ════════════════════════════════════════════════════════════════════════════
+         THE NARROW ROW — a wide pill must not EVICT the row (Yue, design review
+         2026-09-17).
+         ════════════════════════════════════════════════════════════════════════════
+         ⚠️ THE CAUSE IS THE SHIPPED ROW, NOT THE CHIP. `.pr-text` is
+         `min-width: 0; flex: 1` beside `.pr-states { flex: none }`, so the pills never
+         shrink and the TEXT absorbs every shortfall — all the way to zero. At ~400px a
+         wide pill therefore takes the title, the repo meta AND the link-out with it.
+         The review chip only made it visible: `Removed from the queue` and
+         `New commits since approval` ship TODAY and are wider than anything here.
+
+         THE RULE: the text keeps a legible floor, and the pills WRAP beneath it rather
+         than pushing it out. The link-out stays on the first line, because it is how the
+         row is left.
+
+         `data-narrow` stands in for the viewport — this board renders at 1400px, so a
+         `@media` rule would never fire on it. The SURFACE implements the same thing as a
+         real responsive rule.
+         class="flex-wrap min-w-[12ch] justify-end" */
+      [data-narrow] .pr-row {
+        flex-wrap: wrap;
+      }
+      [data-narrow] .pr-text {
+        min-width: 12ch;
+      }
+      [data-narrow] .pr-states {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        margin-left: auto;
+      }
     </style>
   </head>
   <body>
@@ -4152,8 +4182,7 @@
                         ><span class="pill pill-sky"
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-mint ghr-chip"
-                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved on GitHub
-                          · <span class="ghr-login">@ada-l</span></span
+                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -4277,8 +4306,7 @@
                         ><span class="pill pill-sky"
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-mint ghr-chip"
-                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved on GitHub
-                          · <span class="ghr-login">@ada-l</span></span
+                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -4335,7 +4363,7 @@
         </div>
         <div class="dvb-col">
           <div class="panel-label">Panel G1 · <b>narrow (~400px)</b></div>
-          <div class="panel" style="max-width: 400px">
+          <div class="panel" style="max-width: 400px" data-narrow>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
               <div class="detail-title">Throttle the public API end to end</div>
@@ -4386,8 +4414,7 @@
                         ><span class="pill pill-sky"
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-mint ghr-chip"
-                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved on GitHub
-                          · <span class="ghr-login">@ada-l</span></span
+                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -4500,7 +4527,7 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-neutral ghr-chip ghr-stale"
                           ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved an earlier
-                          commit · <span class="ghr-login">@ada-l</span></span
+                          commit</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -4617,7 +4644,7 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-neutral ghr-chip ghr-stale"
                           ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved an earlier
-                          commit · <span class="ghr-login">@ada-l</span></span
+                          commit</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -4674,7 +4701,7 @@
         </div>
         <div class="dvb-col">
           <div class="panel-label">Panel G2 · <b>narrow (~400px)</b></div>
-          <div class="panel" style="max-width: 400px">
+          <div class="panel" style="max-width: 400px" data-narrow>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
               <div class="detail-title">Throttle the public API end to end</div>
@@ -4726,7 +4753,7 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-neutral ghr-chip ghr-stale"
                           ><svg aria-hidden="true"><use href="#i-github" /></svg>Approved an earlier
-                          commit · <span class="ghr-login">@ada-l</span></span
+                          commit</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -4839,8 +4866,8 @@
                         ><span class="pill pill-sky"
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-peach ghr-chip"
-                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Changes requested
-                          on GitHub · <span class="ghr-login">@ada-l</span></span
+                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Changes
+                          requested</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -4952,8 +4979,8 @@
                         ><span class="pill pill-sky"
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-peach ghr-chip"
-                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Changes requested
-                          on GitHub · <span class="ghr-login">@ada-l</span></span
+                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Changes
+                          requested</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -5008,7 +5035,7 @@
         </div>
         <div class="dvb-col">
           <div class="panel-label">Panel G3 · <b>narrow (~400px)</b></div>
-          <div class="panel" style="max-width: 400px">
+          <div class="panel" style="max-width: 400px" data-narrow>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
               <div class="detail-title">Throttle the public API end to end</div>
@@ -5059,8 +5086,8 @@
                         ><span class="pill pill-sky"
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-peach ghr-chip"
-                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Changes requested
-                          on GitHub · <span class="ghr-login">@ada-l</span></span
+                          ><svg aria-hidden="true"><use href="#i-github" /></svg>Changes
+                          requested</span
                         ></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
@@ -5339,7 +5366,7 @@
         </div>
         <div class="dvb-col">
           <div class="panel-label">Panel G4 · <b>narrow (~400px)</b></div>
-          <div class="panel" style="max-width: 400px">
+          <div class="panel" style="max-width: 400px" data-narrow>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
               <div class="detail-title">Throttle the public API end to end</div>
@@ -5676,7 +5703,7 @@
         </div>
         <div class="dvb-col">
           <div class="panel-label">Panel G5 · <b>narrow (~400px)</b></div>
-          <div class="panel" style="max-width: 400px">
+          <div class="panel" style="max-width: 400px" data-narrow>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
               <div class="detail-title">Throttle the public API end to end</div>
@@ -6006,7 +6033,7 @@
         </div>
         <div class="dvb-col">
           <div class="panel-label">Panel G6 · <b>narrow (~400px)</b></div>
-          <div class="panel" style="max-width: 400px">
+          <div class="panel" style="max-width: 400px" data-narrow>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
               <div class="detail-title">Throttle the public API end to end</div>
