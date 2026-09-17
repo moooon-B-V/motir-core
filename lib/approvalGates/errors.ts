@@ -59,6 +59,7 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_SUPERSEDED'
   | 'APPROVAL_GATE_NOT_AUTHORISED'
   | 'APPROVAL_GATE_KIND_UNREGISTERED'
+  | 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH'
   // MERGE tier — the HOST refused a merge the card's approve-to-merge gate
   // performs (Story MOTIR-4882 · MOTIR-5512; `approval-gates.md` §4, second
   // amendment decision 8, and §8's SECOND AMENDMENT, which keeps this union whole
@@ -260,6 +261,40 @@ export class ApprovalGateNotAuthorisedError extends ApprovalGateError {
       `Only the work item's assignee — or its reporter when it has no assignee — or a workspace admin may decide approval gate ${gateId}.`,
     );
     this.name = 'ApprovalGateNotAuthorisedError';
+  }
+}
+
+/**
+ * `source: 'github'` and the SYNCED ACTOR must arrive together (Story MOTIR-4910 ·
+ * MOTIR-5596; ADR §8 FOURTH AMENDMENT, decision 3).
+ *
+ * The two say the same thing from different sides — *this decision was made on
+ * GitHub, by somebody with no Motir session* — so either without the other is a
+ * caller claiming something it cannot back. It is refused in BOTH directions and
+ * deliberately so:
+ *
+ *  · `source: 'github'` with no synced actor would write `decisionSource = github`
+ *    against `ctx.userId`, i.e. a Motir surface claiming to be GitHub. That is the
+ *    one sentence the audit must never be able to produce, and it is exactly what
+ *    a route or an MCP tool would produce if it could pass the source freely.
+ *  · a synced actor with any other source would record a GitHub reviewer as though
+ *    a person had clicked in Motir.
+ *
+ * Nothing is written on either arm: the refusal is raised before the transaction.
+ */
+export class ApprovalGateSyncedActorMismatchError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH' as const;
+  readonly code = 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH' as const;
+  constructor(
+    readonly gateId: string,
+    readonly detail: 'source_without_actor' | 'actor_without_source',
+  ) {
+    super(
+      detail === 'source_without_actor'
+        ? `Approval gate ${gateId} was decided with source 'github' but no synced reviewer — only the GitHub review sync may claim that source.`
+        : `Approval gate ${gateId} was decided with a synced GitHub reviewer but a source other than 'github'.`,
+    );
+    this.name = 'ApprovalGateSyncedActorMismatchError';
   }
 }
 

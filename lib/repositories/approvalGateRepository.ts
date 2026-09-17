@@ -279,7 +279,12 @@ export const approvalGateRepository = {
     id: string,
     data: {
       state: Extract<ApprovalGateState, 'approved' | 'changes_requested'>;
-      decidedById: string;
+      /** WHO said yes. NULLABLE since MOTIR-5596: a decision synced out of GitHub
+       *  may have been made by somebody with no Motir account at all, and the
+       *  column has always been nullable for the neighbouring reason (`SetNull`
+       *  when the decider is deleted). `decidedByLabel` carries the attribution in
+       *  both cases, which is why a null here never reads as *nobody decided*. */
+      decidedById: string | null;
       decidedAt: Date;
       noteMd: string | null;
       /** The subject's immutable version, from the KIND's own seam. */

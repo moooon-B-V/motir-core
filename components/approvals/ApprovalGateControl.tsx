@@ -475,6 +475,9 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       headline = t('decidedImmutable.title');
       break;
+    case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
+      headline = t('syncedActorMismatch.title');
+      break;
     case 'MERGE_CHECKS_NOT_GREEN':
       headline = t('mergeChecksNotGreen.title');
       break;
@@ -593,6 +596,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'alreadyAwaiting';
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
       return 'decidedImmutable';
+    case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
+      return 'syncedActorMismatch';
     case 'MERGE_CHECKS_NOT_GREEN':
       return 'mergeChecksNotGreen';
     case 'MERGE_CONFLICT':

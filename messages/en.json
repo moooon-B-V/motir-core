@@ -8413,6 +8413,10 @@
       "unexpected": {
         "title": "Your decision could not be recorded.",
         "next": "Check your connection and try again."
+      },
+      "syncedActorMismatch": {
+        "title": "Something went wrong recording this decision.",
+        "next": "Nothing was changed. Reload the page. If this keeps happening, it is a defect worth reporting."
       }
     },
     "cta": {
