@@ -5824,9 +5824,14 @@
           picker focused and open over <b>the project&rsquo;s repositories</b> —
           <span class="mono">projectRepos</span> from the draft read, the same set
           <span class="mono">resolveProjectRepoSections</span> validates a save against. This state
-          is <b>not an error</b>: the amendment&rsquo;s point 3 says a linked pull request is not
-          required, <i>&ldquo;because an agent does not need one either&rdquo;</i>. The picker is
-          Panel 5b&rsquo;s <span class="mono">Combobox</span> grammar verbatim.
+          is <b>not an error</b>, and the picker is <b>unconditional</b> rather than a fallback for
+          it: <b>Motir does not decide how a team works</b>. A team may keep its pull requests on
+          the host and its work items here and never link the two, or link one and have touched a
+          second repository &mdash; and must still be able to write How to test. The linked set is
+          Motir&rsquo;s best GUESS, so it SUGGESTS the sections and never RESTRICTS them; deriving
+          them would make linking a precondition for describing your work (&sect; 24, decisions 8
+          and 8b). The picker is Panel 5b&rsquo;s <span class="mono">Combobox</span> grammar
+          verbatim.
         </p>
       </div>
       <div class="dvb-col">
