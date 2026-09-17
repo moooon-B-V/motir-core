@@ -2529,7 +2529,16 @@ repositories produce no preview has two paths rather than three, and says so.
 >    for any project repository, or remove one. Validation is `publish`'s own: at
 >    least one section, a 7–64 hex commit, a repository in the project, and no
 >    repository twice. **A linked pull request is not required**, because an
->    agent does not need one either.
+>    agent does not need one either — and, the stronger reason (Yue,
+>    2026-09-17): **Motir does not decide how a team works.** A team may keep its
+>    pull requests in GitHub and its work items in Motir and never link the two,
+>    and that team must still be able to write How to test. Requiring a link
+>    before the door opens would make Motir's own convention a precondition for
+>    describing your work. **The repository sections are therefore SUGGESTED from
+>    the linked pull requests and never RESTRICTED to them**: a person may name
+>    any repository of the project, including one with no pull request at all,
+>    and including a second repository when only the first was linked. Motir
+>    guards how Motir works; it does not guard how the team does.
 > 4. **Who may write, and versions.** A person needs **`work_item:edit`** on the
 >    item's project — the permission the explicit pull-request link and
 >    `publish_test_instructions` both assert
