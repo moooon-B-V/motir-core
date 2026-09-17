@@ -50,6 +50,8 @@ const { githubWebhookService } = await import('@/lib/services/githubWebhookServi
 const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { pullRequestMergeService } = await import('@/lib/services/pullRequestMergeService');
+const { reconcileGatesFor } = await import('@/lib/services/gateSetFor');
+const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-two-gates';
@@ -405,5 +407,81 @@ describe('AMENDMENT 6 Q4 — a design approved BEFORE green: the merge is held, 
     // …and the merge is carried out on the promotion's own post-commit channel, the one
     // `auto` mode already uses. One approval, one merge, no second press.
     expect(sent.filter((e) => e.name === 'pull-request/auto-merge.requested')).toHaveLength(1);
+  });
+});
+
+describe("MOTIR-5670 — the card's own status change re-asks", () => {
+  // ⚠️ THE MEASUREMENT THIS CARD REQUIRED, KEPT AS THE TEST. The card was written
+  // from a reading of the code rather than an observed failure, and its own first
+  // deliverable was to settle that. What the measurement found, on this branch:
+  //
+  //   · green at `in_progress`, then → `implemented`: a gate DOES appear. The
+  //     CI-GREEN LATCH (MOTIR-3006) already covers it — a card ARRIVING at
+  //     `implemented` re-reads its green verdict. That is the path a run takes, so
+  //     the card's premise is FALSIFIED for the ordinary case.
+  //   · green at `in_progress`, then → `in_review` without passing `implemented`:
+  //     NOTHING appeared. The latch watches one rung. That residual is real and is
+  //     MOTIR-5652's own shape reached by another road — green, in review, nothing
+  //     to press — so it is what the trigger was built for.
+
+  async function greenBeforeEligible(email: string, number: number) {
+    const s = await makeScenario(email);
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Green before eligible' },
+      s.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await openLinked(item.identifier, number);
+    // The link may promote it; hold it below the band so the green lands on a card
+    // neither of `promoteDeliveredCardsOnGreen`'s populations contains.
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
+    await ci({ conclusion: 'success', headSha: 'sha-early', number });
+    expect(await awaitingKinds(item.id)).toEqual([]);
+    return { s, item };
+  }
+
+  it('reaching `in_review` WITHOUT passing `implemented` raises the gate, with no new CI delivery', async () => {
+    const { s, item } = await greenBeforeEligible('wake-review@example.com', 51);
+
+    await workItemsService.updateStatus(item.id, 'in_review', s.ctx);
+
+    const [gate] = await gatesOf(item.id);
+    expect(gate).toMatchObject({
+      kind: 'pull_request_approval',
+      state: 'awaiting',
+      subjectVersion: 'moooon/acme#51@sha-early',
+    });
+  });
+
+  it('is IDEMPOTENT — asking again writes no row and moves no version', async () => {
+    // The property to test hardest: re-asking must never supersede and re-raise an
+    // identical gate. That would churn `subjectVersion`, rewrite the audit trail,
+    // and re-ask a question somebody had already answered. Driven through the
+    // helper itself, because every legal second STATUS move from here is either
+    // held by the gate this raised or is a pull-back.
+    const { s, item } = await greenBeforeEligible('wake-idem@example.com', 52);
+    await workItemsService.updateStatus(item.id, 'in_review', s.ctx);
+    const before = await gatesOf(item.id);
+    expect(before).toHaveLength(1);
+
+    await withWorkspaceContext(s.ctx, async (tx) => {
+      const row = await tx.workItem.findUniqueOrThrow({ where: { id: item.id } });
+      expect(await reconcileGatesFor(row, tx)).toEqual([]);
+      expect(await reconcileGatesFor(row, tx)).toEqual([]);
+    });
+
+    expect(await gatesOf(item.id)).toEqual(before);
+  });
+
+  it('a PULL-BACK still withdraws, and is not undone by the re-ask one statement later', async () => {
+    const { s, item } = await greenBeforeEligible('wake-pullback@example.com', 53);
+    await workItemsService.updateStatus(item.id, 'in_review', s.ctx);
+    expect(await awaitingKinds(item.id)).toEqual(['pull_request_approval']);
+
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+
+    expect((await gatesOf(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'pulled_back'],
+    ]);
   });
 });

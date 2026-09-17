@@ -1,3 +1,6 @@
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
@@ -317,5 +320,47 @@ describe("resolveGateSet — MOTIR-5666: Q4's carry is ONE-TIME", () => {
 
     expect(set.awaited.map((g) => g.kind)).toEqual(['pull_request_approval']);
     expect(set.awaited[0]!.subjectVersion).toBe('moooon/motir-core#10@aaa1');
+  });
+});
+
+describe('resolveGateSet — ONE home, and every trigger goes through it', () => {
+  // The whole reason the decision is a pure predicate: adding a trigger must
+  // duplicate no logic, because duplicating it is how this family reached six
+  // defects. A second caller of `resolveGateSet` would be a second place the
+  // inputs are assembled, which is the same mistake one layer out.
+  const sourceFiles = () =>
+    execSync("grep -rl 'resolveGateSet' lib || true", { cwd: process.cwd(), encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean);
+
+  it('is CALLED from exactly one module — `gateSetFor`, the one loader', () => {
+    const callers = sourceFiles().filter(
+      (file) =>
+        file !== 'lib/approvalGates/gateSet.ts' &&
+        readFileSync(join(process.cwd(), file), 'utf8').includes('resolveGateSet('),
+    );
+
+    expect(callers).toEqual(['lib/services/gateSetFor.ts']);
+  });
+
+  it('and every TRIGGER reaches it through `reconcileGatesFor`, never by re-deriving', () => {
+    // The triggers as they stand: the CI promotion (through
+    // `raisePullRequestApprovalGate`, a thin wrapper), the three merge-gate
+    // withdrawers' re-ask, the design publish, the status funnel, and the
+    // 30-minute reconcile. Each names the helper; none names the predicate.
+    const triggers = execSync("grep -rl 'reconcileGatesFor\\|gateSetFor(' lib/services || true", {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter(Boolean)
+      .filter((file) => file !== 'lib/services/gateSetFor.ts');
+
+    expect(triggers.length).toBeGreaterThan(0);
+    for (const file of triggers) {
+      expect(
+        `${file}: ${readFileSync(join(process.cwd(), file), 'utf8').includes('resolveGateSet(')}`,
+      ).toBe(`${file}: false`);
+    }
   });
 });
