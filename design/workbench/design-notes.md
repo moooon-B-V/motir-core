@@ -1044,6 +1044,16 @@ rule, in one sentence: a decided row keeps its position, swaps its Decide cell
 for a state pill, and leaves on the NEXT LOAD — it never vanishes under the
 cursor.**
 
+> **⚠️ AMENDED 2026-09-17 by MOTIR-5239** (Story
+> [MOTIR-5238](motir:cmtxm4x2e00fwhztxbr4hkj9s)) — **this rule SURVIVES live-ness,
+> and § 26 states the rule that makes it survive: _a nudge ADDS and UPDATES; it
+> never REMOVES._** A list that re-read itself on a nudge would remove a row
+> somebody else had just decided, because the tab reads `state = awaiting` — which
+> is this rule being overturned by a mechanism rather than by a decision. Nothing
+> below changes: what § 26 adds is the HELD row, for the case this section did not
+> have to consider because nothing re-read itself. See § 26 ·
+> `workbench--live.mock.html`, Panel 3.
+
 **Why.** This is a SHARED queue: routing shows a gate to one person, but ADR §2
 lets an ADMIN press any gate, so a row can be decided by somebody else while you
 are reading it. (Before §2's 2026-09-11 amendment the reporter of an ASSIGNED
@@ -2014,3 +2024,237 @@ track absorbs a ~20px glyph.** No new column, so nothing in § _Layout_'s budget
 
 At ~400px the row is far under its 622px minimum and already scrolls horizontally — the Workbench's
 existing behaviour, which the badge neither causes nor changes.
+
+---
+
+## 26 · WHAT LIVE LOOKS LIKE — MOTIR-5239
+
+**AMENDS § 20** (the To-approve row, and its POST-DECISION rule) **and § 22** (the
+approval overlay) for Story
+[MOTIR-5238](motir:cmtxm4x2e00fwhztxbr4hkj9s), card
+[MOTIR-5239](motir:cmtxm4x5800fyhztxp88bxw52). It is the layout source of truth for
+**MOTIR-5242** (the host and its lists) and **MOTIR-5243** (the open approval), which
+carry it in `blocked_by`.
+
+| Surface                 | Asset                                        | Notes                                                                                                                                                                   |
+| ----------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The Workbench, LIVE** | **`workbench--live.mock.html`** (HTML delta) | A row arriving and a count moving · reconnecting · DECISION 1, the held row · DECISION 2, the notice in the overlay · the notice and the refusal side by side · narrow. |
+
+**Panels:** 1 a row arrives and the count moves · 2 reconnecting · 3 DECISION 1, a row
+that left the awaiting set · 4 DECISION 2, the notice in the open approval · 5 the
+notice and the refusal side by side · 6 narrow (`< md`).
+
+**It is a DELTA and holds only what live-ness changes.** The strip, the shell, the
+five-tab composition, the pager, the empty states, the frame, the exit row, the
+address and the fill form are all composed from the assets that own them
+(`workbench.mock.html`, `approvals-row.mock.html`, `approval-overlay.mock.html`) and
+are not re-decided here. Every row in it is `ApprovalsList` / `ApprovalRow`'s own
+emitted markup; the four edits the asset makes are listed in its header comment.
+
+### ⚠️ AMENDED 2026-09-17 by MOTIR-5239 — § 20's POST-DECISION rule SURVIVES live-ness, and here is the rule that makes it
+
+§ 20 settled, with its reasons, that **a decided row keeps its position, swaps its
+Decide cell for a state pill, and leaves on the NEXT LOAD — it never vanishes under
+the cursor**, because _"a surface that sometimes removes a row silently and sometimes
+explains one teaches the reader that disappearance is ambiguous, which is the most
+expensive thing a queue can teach."_
+
+**A list that re-reads itself on a nudge removes that row.** The tab reads
+`state = awaiting`, so a row somebody else has just decided is simply absent from the
+next read. That is § 20's rule being overturned BY A MECHANISM rather than by a
+decision, and this amendment refuses it.
+
+> **THE RULE — A NUDGE ADDS AND UPDATES. IT NEVER REMOVES.** A row that is in the
+> reader's list stays in the reader's list until the NEXT LOAD — a navigation, a tab
+> switch, a pager move, a reload. A row that has left the awaiting set is HELD in
+> place, its subject and work-item ink go `--el-text-secondary`, its verb is replaced
+> by the colourless **Decided elsewhere** pill, and it still opens. The strip count
+> goes DOWN with it, because § 20's count is about what is AWAITING and a held row is
+> a receipt, not a member.
+
+**The two candidates this rejects, and why neither is the shape:**
+
+- **_A row the reader has already SETTLED is held until they navigate._** It protects
+  the rows THIS reader decided — which the product already handles, through
+  `lib/approvals/decidedGates.ts` (§ 22 planning flag 2). The hazard is the row
+  somebody ELSE decided, which this reader never touched, so the rule is correct
+  about a case that was not in danger and silent about the one that was.
+- **_A row the reader INTERACTED with is exempt._** The same defect, stated as an
+  exemption: interaction is not what makes a disappearance ambiguous. A reader who has
+  been reading a queue for a minute and looks back to find one fewer row cannot tell
+  whether they misremembered, whether a filter moved, or whether something was
+  decided — and they did not interact with any of it.
+
+**What is NOT amended:** the settled TREATMENT itself (§ 20 owns it, and the held row
+uses it), the state pills, the column set, the narrow reflow, the token map, and the
+rule that a row this reader decided settles from the write's own response.
+
+**Why the held row's pill says _Decided elsewhere_ rather than naming the state.** The
+tab's read returns only `awaiting` gates and the stream carries no content, so when a
+row leaves the set the surface knows THAT it left and not WHERE it went. **Drawing a
+state it cannot read would be the surface guessing**, and `approved` / `changes
+requested` / `withdrawn` are three different pieces of news. So the pill says the true
+thing — it is no longer yours to decide — and the row still opens, where the frame
+shows the real record: who decided, when, and on which bytes. Colourless for § 20's own
+reason: a tinted pill would let a reader take somebody else's answer for their own.
+
+### DECISION 2 — an open approval learns its subject MOVED
+
+**The case, from the story:** a person is holding the full-screen approval open and
+reading a design at full size — which is the entire reason that surface exists — and
+the design is republished under them. Interrupting them costs their attention at the
+moment they are giving it. Saying nothing means they finish, press Approve, and meet
+the stale refusal instead. **Neither is right, and the third option is the answer.**
+
+> **THE RULE — SAY NOTHING LOUDLY, AND MAKE IT IMPOSSIBLE TO MISS WHEN THEY LOOK UP.**
+> A persistent, non-modal notice is drawn as **band 3's first child, immediately above
+> the verbs**. It does not move, does not animate, does not steal focus and does not
+> dismiss itself. It is INFORMATIVE: the verbs stay exactly as they were.
+
+**Three constraints the drawing answers, each of them a thing a later change is likely
+to break:**
+
+1. **THE PORT IS NOT COVERED, TAKEN AWAY, OR REFLOWED.** The notice is inside band 3,
+   which is anchored to the bottom edge of the screen, so band 3 grows downward-inward
+   and the port's scroll container loses one line at its BOTTOM edge. **The port keeps
+   its `scrollTop`, so the sentence the reader is on does not move.** Nothing is
+   overlaid on the design, and nothing above the notice re-lays out. (A notice drawn
+   at the TOP, near the port, would reflow the thing being read — which is the one
+   move this surface may not make.)
+2. **IT IS A NOTICE, NOT A GATE.** The stamp is what actually prevents a wrong
+   approval (`docs/decisions/approval-gates.md` § 6a — the decision records the
+   subject's immutable version, and a press against a superseded gate is REFUSED
+   server-side). A notice can be missed, so drawing it as a blocking banner, or
+   disabling the verbs behind it, would claim a guarantee it cannot make and would
+   make this surface a precondition when it is not. The verbs stay live and the
+   refusal stays the guarantee.
+3. **IT IS TELLABLE FROM THE REFUSAL IT PRECEDES.** Panel 5 draws the two side by
+   side. **The notice is about the SUBJECT and arrives BEFORE the press, so it offers
+   a way forward; the refusal is about the PRESS and arrives AFTER it, so it reports
+   that nothing was recorded.** Neither repeats the other's words — which is what
+   stops a reader who saw the first from reading the second as the same message
+   repeating, and wondering why their press did not land.
+
+**Why the notice carries NO TINT, on a surface whose product language for _out of
+date_ is yellow.** `--el-tint-yellow` is already spent inside this frame: band 1's
+state pill reads **Awaiting you** in it. A second yellow in the same 720px, meaning
+something else, is a reader's problem rather than a palette question — so the notice
+is drawn on `--el-surface-soft` with an `--el-border` hairline, and carries its meaning
+in a `TriangleAlert` glyph and in WORDS (finding #35's rule, applied in the direction
+that is always safe: never rest a state on colour, and where colour is taken, do not
+take it twice).
+
+### The copy — `en` and `zh`
+
+| key                                 | `en`                                                | `zh`                               |
+| ----------------------------------- | --------------------------------------------------- | ---------------------------------- |
+| `approvalOverlay.moved.title`       | This design was republished while you were reading. | 你正在阅读时，该设计已被重新发布。 |
+| `approvalOverlay.moved.consequence` | Approving this version will be refused.             | 批准此版本将被拒绝。               |
+| `approvalOverlay.moved.action`      | Reopen                                              | 重新打开                           |
+| `workbench.live.new`                | New                                                 | 新增                               |
+| `workbench.live.decidedElsewhere`   | Decided elsewhere                                   | 已由他人决定                       |
+| `workbench.live.reconnecting`       | Reconnecting…                                       | 正在重新连接…                      |
+
+**These are DRAFTS for the catalog**, exactly as § 20's were: MOTIR-5242 and
+MOTIR-5243 own their `en` + `zh` entries. `moved.consequence` deliberately states the
+CONSEQUENCE rather than the mechanism — a reader does not need to know what a stamp is
+to know that this press will not land. **`Reopen` is the verb because the address
+survives a republish** (§ 22 — a gate is addressed by `(work item, kind)`, so the same
+link opens the current question); it is not _Reload_, which would suggest the page.
+
+### The ARRIVAL and the COUNT
+
+**A row arrives in its ORDERED POSITION and carries a `New` chip until the next load.**
+On this tab the order is `createdAt asc` (§ 20), so an arrival lands at the BOTTOM and
+nothing the reader was looking at moves. **The chip is a WORD in the shipped neutral
+`Pill`, not a tint and not an animation** — a sudden silent insertion teaches a reader
+to distrust what they have already read, and a flash or a slide moves a surface whose
+whole promise is that it can be left alone.
+
+**The COUNT moves and is NOT marked.** A number that changes is self-evident; a badge
+that pulses is a second thing to look at on a page the reader is deliberately not
+watching. **The strip and the list move in ONE page state** — § 21's rule, restated for
+a live surface: a frame that moves one moves both, so a count of 4 above a list of 3 is
+a state this surface never renders.
+
+**On a list ordered `updatedAt desc` — the three work tabs — an arrival lands at the
+TOP.** The rule is the same and so is the treatment; what differs is that rows below it
+shift by one row's height. That is acceptable on those tabs and would not be on this
+one, which is why the order each tab already has is what decides it rather than a
+second rule.
+
+### RECONNECTING — and what it is NOT
+
+**It is not loading, and the difference is the whole of its treatment.** Loading means
+_there is nothing on your screen yet_ (§ 22's Panel 5b: muted blocks at the real
+proportions, `aria-busy`, so an answer that arrives does not reflow the screen).
+Reconnecting means _everything on your screen is real and may be a few seconds old_.
+
+So: **the rows keep their full ink, nothing pulses, nothing is greyed, and no skeleton
+appears.** The only new element is a quiet chip beside the strip — the shipped chip
+recipe (`--el-chip-bg` + `--el-chip-border` + `--el-text-secondary`), a `RefreshCw`
+glyph and the word. **It offers no action**, because there is nothing for a reader to
+do: `useRunEvents`' backoff already retries to a 15s ceiling, and the watermark resumes
+with neither a replay nor a gap. It leaves when the stream reconnects.
+
+**At `< md` it is drawn BELOW the strip rather than beside it** — the strip already
+scrolls at that width (§ _Narrow: the strip SCROLLS_), and a chip inside a scrolling
+track is a chip that can be scrolled out of sight.
+
+### Token map — this amendment's own elements
+
+| Element                      | Colour                                                      | Shape                                   |
+| ---------------------------- | ----------------------------------------------------------- | --------------------------------------- |
+| the `New` chip               | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary` | `--radius-badge` · `--spacing-chip-x/y` |
+| the `Decided elsewhere` pill | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary` | `--radius-badge` · `--spacing-chip-x/y` |
+| a HELD row's ink             | `--el-text-secondary` — § 20's AA note applies unchanged    | —                                       |
+| the reconnecting chip        | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary` | `--radius-badge` · `--spacing-chip-x/y` |
+| its `RefreshCw` glyph        | `currentColor` (`--el-text-secondary`)                      | `h-3.5 w-3.5`                           |
+| the moved notice             | `--el-surface-soft` · `--el-border` · `--el-text-strong`    | `--radius-card`                         |
+| its `TriangleAlert` glyph    | `--el-text-strong`                                          | `h-4 w-4`                               |
+| its `Reopen` action          | the shipped secondary `Button`                              | `--radius-btn` · `--height-btn-sm`      |
+
+**A HELD row's ink is `--el-text-secondary`, not `--el-text-muted`**, for the reason
+§ 20 records on the record: muted is 4.12–4.34:1 on `--el-surface`, which is this row's
+HOVER fill, so it would drop below AA in the one moment a pointer is on it. No raw hex
+and no raw shape utilities anywhere in the asset.
+
+### GIVES / TAKES — every card this amendment names
+
+Scope: every `MOTIR-<n>` in this section plus the mock's annotation prose, grepped over
+the story's SUBTREE. Axes: ELEMENT (what is drawn), STRUCTURE (where it sits), PREMISE
+(what it assumes).
+
+| card                                                      | GIVES                                                                                                                                                                                                                                                                                                                                            | TAKES                                                                                                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5242** (the host, the lists, the counts)          | **ELEMENT:** the `New` chip, the held row's ink and pill, the reconnecting chip. **STRUCTURE:** a nudge ADDS and UPDATES and never REMOVES; the arrival lands in its ordered position; the chip beside the strip at `≥ md` and below it at `< md`. **PREMISE:** the count decrements with a held row, and strip and list move in one page state. | Nothing. Its stream, its hook and its one-connection rule are the parent story's and are untouched here.                                                  |
+| **MOTIR-5243** (the open approval)                        | **ELEMENT:** the notice, its glyph, its two sentences, its `Reopen` action, and its `en` + `zh` drafts. **STRUCTURE:** band 3's first child, above the verbs, with the port keeping its `scrollTop`. **PREMISE:** it is informative and the verbs stay live, because the stamp is the guarantee.                                                 | Nothing. It does not decide what the frame's bands contain, and this section does not re-open § 22's fill form.                                           |
+| **MOTIR-5238** (the story)                                | **Both decisions it named as owed to this card, SETTLED**, as rules its code cards are closed against.                                                                                                                                                                                                                                           | Nothing.                                                                                                                                                  |
+| **MOTIR-5240 / MOTIR-5241** (the read, the stream)        | **PREMISE, and it is the one that constrains them:** the surface needs to know WHICH TABS moved and nothing else — no row content — and a held row means the client must tolerate a row the read no longer returns.                                                                                                                              | Nothing. The watermark's shape and the stream's frame are theirs; this section reads them and draws against them.                                         |
+| **MOTIR-5147 / MOTIR-4794** (§ 20's row)                  | Nothing they do not already own. The held row USES their settled treatment; the drawn rows are `ApprovalRow`'s own markup.                                                                                                                                                                                                                       | **Nothing is taken, and the boundary is stated:** § 20's post-decision rule is honoured, not re-opened — this amendment says HOW a live re-read obeys it. |
+| **MOTIR-5222 / MOTIR-5224 / MOTIR-5225** (§ 22's overlay) | Nothing they do not already own. The notice is composed INTO the frame they specify, and the exit row, the address, the fill form and every state are theirs, unchanged.                                                                                                                                                                         | **One element of band 3's box:** band 3 may now carry a full-width first child. Its verbs, its consequence line and its refusal are untouched.            |
+| **MOTIR-5302** (`ApprovalRow`)                            | A drawn consumer for two more row conditions — the arrived chip and the held pill — both inside the one row grammar rather than beside it.                                                                                                                                                                                                       | Nothing. Neither condition adds a column or a band.                                                                                                       |
+| **MOTIR-4908**                                            | Nothing — named only as a boundary this asset does not cross. The pending-decision indicator is that story's, and nothing here draws or reads one.                                                                                                                                                                                               | Nothing.                                                                                                                                                  |
+
+### ⚠️ Planning flags — surfaced by this pass
+
+1. **The held row needs a SIGNAL the list can watch, and one already exists.**
+   `lib/approvals/decidedGates.ts` carries a decision made in the overlay to
+   `ApprovalsList`'s client island (§ 22 planning flag 2). A row held because SOMEBODY
+   ELSE decided arrives by a different route — the live re-read finds it absent — so
+   **MOTIR-5242** owns turning that absence into the held treatment rather than into a
+   removal. Named here because the two paths produce the same row state and should not
+   grow two implementations of it.
+2. **A row held for a whole session is a list that only grows.** The rule is bounded by
+   the NEXT LOAD, and every ordinary use of this surface reaches one quickly (a tab
+   switch, a pager move, a reload). A reader who leaves the Workbench open for a day
+   without navigating would accumulate held rows, and **no card in this story caps
+   that**. It is not a defect of the rule — a cap is exactly the silent removal the
+   rule refuses — but if it ever becomes real, the answer is a LOAD the reader asks
+   for, never a quiet sweep.
+3. **The three work tabs' arrival treatment is drawn but not exercised here.** This
+   asset draws the arrival on the To-approve tab, whose `createdAt asc` order puts it
+   at the bottom. `updatedAt desc` puts it at the top and shifts the rows below it; the
+   rule and the chip are the same, and **MOTIR-5242** should assert the chip on at
+   least one `updatedAt desc` tab so the treatment is not accidentally
+   approvals-only.
