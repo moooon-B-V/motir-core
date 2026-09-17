@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
+import {
+  encodeFilterParam,
+  type FilterAst,
+  type FilterConditionValue,
+  type FilterOperatorId,
+} from '@/lib/filters/ast';
 import { FILTER_FIELDS, type FilterFieldDef } from '@/lib/filters/registry';
 import { EMPTY_FILTER, type IssueFilter } from '@/lib/issues/issueListFilter';
 import {
@@ -224,6 +229,11 @@ describe('advancedBuilderFields (the registry-driven field menu)', () => {
     expect(advancedBuilderFields().map((f) => f.id)).toEqual([
       'kind',
       'status',
+      // Story MOTIR-5469 · MOTIR-5473: the Checks facet, registry-ordered right
+      // after `status`, admitted by the `ci-state-select` editor kind. This list
+      // is the menu's contract: a field the gate drops disappears from HERE and
+      // nowhere else, so the assertion is what makes the drop visible.
+      'ciState',
       'priority',
       // Story 2.7 (2.7.6): the work-item `type` facet — registry-ordered right
       // after `priority`. Its `type-select` editor is now in the builder's
@@ -325,5 +335,46 @@ describe('the builder row model (pending rows never reach the URL)', () => {
       '2026-06-01',
     );
     expect(carryValueAcrossOperator(created, 'on_or_after', 'between', '2026-06-01')).toBeNull();
+  });
+});
+
+// MOTIR-5473 — the *Checks* field is NOT facet-expressible, and that needs
+// asserting rather than assuming.
+//
+// The card's decision is that `ciState` does not join `FACET_EXPRESSIBLE`: there
+// is no quick facet for it, so any `ciState` row exceeds the facets and the filter
+// is managed in Advanced. Nothing in the registry enforces that — a field is
+// facet-expressible exactly when somebody adds it to that map — so the guard is a
+// test or it is nothing.
+describe('the Checks field exceeds the facets (MOTIR-5473)', () => {
+  it('is true for a ciState row, on every operator the field offers', () => {
+    const rows: Array<[FilterOperatorId, FilterConditionValue]> = [
+      ['is_any_of', ['failing']],
+      ['is_none_of', ['failing']],
+      ['is_empty', null],
+      ['is_not_empty', null],
+    ];
+    for (const [operator, value] of rows) {
+      expect(
+        astExceedsFacets({
+          combinator: 'and',
+          conditions: [{ field: 'ciState', operator, value }],
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it('is true even beside a row that IS facet-expressible', () => {
+    // The gate is over the WHOLE ast: one inexpressible row is enough, and a
+    // status row beside it must not make the pair look facet-managed.
+    expect(
+      astExceedsFacets({
+        combinator: 'and',
+        conditions: [
+          { field: 'status', operator: 'is_any_of', value: ['todo'] },
+          { field: 'ciState', operator: 'is_any_of', value: ['failing'] },
+        ],
+      }),
+    ).toBe(true);
   });
 });

@@ -14,6 +14,8 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
+import { CI_STATE_META } from '@/components/github/ciStateMeta';
+import { CI_STATES } from '@/lib/github/prCiState';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 import { statusDotColor } from '@/lib/workflows/statusColor';
 import { labelTint } from '@/lib/labels/labelTint';
@@ -363,6 +365,8 @@ export function AdvancedFilterValueEditor({
   const tType = useTranslations('labels.issueType');
   const tStatus = useTranslations('labels.defaultStatus');
   const tPriority = useTranslations('labels.priority');
+  // The badge's own strings, so the builder and the row cannot disagree.
+  const tGithub = useTranslations('github');
   const tWorkType = useTranslations('labels.workItemType');
   const tFolders = useTranslations('folders');
   const [query, setQuery] = useState('');
@@ -387,6 +391,17 @@ export function AdvancedFilterValueEditor({
           id: s.key,
           label: DEFAULT_STATUS_KEYS.has(s.key) ? tStatus(s.key) : s.label,
           glyph: statusGlyph(s),
+        }));
+      // The three CI verdicts, WORST-FIRST — the order `CI_STATES` declares and
+      // `foldCardCiState` applies, so the menu reads in the same order as the
+      // fold's precedence. Each carries the SAME glyph the badge draws
+      // (`CI_STATE_META`), so a value in the builder and a badge on a row are
+      // recognisably the same thing.
+      case 'ci-state-select':
+        return CI_STATES.map((state) => ({
+          id: state,
+          label: tGithub(`development.ciState.${state}`),
+          glyph: CI_STATE_META[state].icon,
         }));
       case 'priority-select':
         return PRIORITIES.map((p) => ({
@@ -451,6 +466,7 @@ export function AdvancedFilterValueEditor({
     tStatus,
     tPriority,
     tWorkType,
+    tGithub,
   ]);
 
   const valuesAria = t('advancedValuesAria', { field: fieldLabel });
@@ -477,6 +493,7 @@ export function AdvancedFilterValueEditor({
 
     case 'kind-select':
     case 'status-select':
+    case 'ci-state-select':
     case 'priority-select':
     case 'type-select':
     case 'member-select':

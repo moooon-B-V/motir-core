@@ -121,6 +121,7 @@ async function seedMatrix(): Promise<Seeded> {
       estimateMinutes: 60,
       descriptionMd: 'Stack trace points at the token refresh path.',
       type: 'code',
+      ciState: 'failing',
     },
   });
   await adminDb.workItem.update({
@@ -135,6 +136,7 @@ async function seedMatrix(): Promise<Seeded> {
       storyPoints: 2,
       estimateMinutes: null,
       type: 'manual',
+      ciState: 'running',
     },
   });
   await adminDb.workItem.update({
@@ -149,6 +151,7 @@ async function seedMatrix(): Promise<Seeded> {
       storyPoints: null,
       estimateMinutes: 30,
       descriptionMd: 'Needs oauth scopes documented for the chart read.',
+      ciState: 'passing',
     },
   });
   await adminDb.workItem.update({
@@ -365,6 +368,15 @@ const CASES: MatrixCase[] = [
   // type (enum, nullable — leaf-only: a=code, b=manual, c/d untyped → the
   // empty pair is the "untyped" bucket; is_none_of includes the NULLs per the
   // Jira rule, mirroring the assignee/sprint nullable-enum cases below)
+  // ciState (enum, NULLABLE) — the *Checks* field (MOTIR-5473). a=failing,
+  // b=running, c=passing, d=null. `is_none_of` INCLUDES the null row, the same
+  // nullable-column behaviour `type` documents one block down: without the
+  // empty sentinel in the list, "none of failing" is true of a row with no
+  // verdict at all.
+  builtin('ciState', 'is_any_of', ['failing'], ['a']),
+  builtin('ciState', 'is_none_of', ['failing'], ['b', 'c', 'd']),
+  builtin('ciState', 'is_empty', null, ['d']),
+  builtin('ciState', 'is_not_empty', null, ['a', 'b', 'c']),
   builtin('type', 'is_any_of', ['code'], ['a']),
   builtin('type', 'is_none_of', ['code'], ['b', 'c', 'd']),
   builtin('type', 'is_empty', null, ['c', 'd']),

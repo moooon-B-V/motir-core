@@ -23,6 +23,7 @@ import {
   UnknownFilterOperatorError,
 } from '@/lib/filters/errors';
 import { compileFilterConditionsSql } from '@/lib/repositories/workItemRepository';
+import { CI_STATES } from '@/lib/github/prCiState';
 
 // The operator registry's TOTALITY (mistake #29) — the enumeration test the
 // 6.1.1 card pins: every registered (field × operator) has a working
@@ -271,5 +272,52 @@ describe('compiled fragments are parameterized-only (the injection AC)', () => {
     for (const { label, text } of compiled) {
       expect(text, `${label} must not read CURRENT_DATE`).not.toContain('CURRENT_DATE');
     }
+  });
+});
+
+// MOTIR-5473 — the *Checks* field's value space is the fold's own tuple.
+describe('the ciState field validates against CI_STATES (MOTIR-5473)', () => {
+  it('accepts every verdict the fold can write', () => {
+    for (const state of CI_STATES) {
+      expect(() =>
+        validateFilterAst({
+          combinator: 'and',
+          conditions: [{ field: 'ciState', operator: 'is_any_of', value: [state] }],
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it('refuses an unknown value', () => {
+    expect(() =>
+      validateFilterAst({
+        combinator: 'and',
+        conditions: [{ field: 'ciState', operator: 'is_any_of', value: ['green'] }],
+      }),
+    ).toThrow(InvalidFilterValueError);
+  });
+
+  it('offers the empty pair, because the column is nullable and its null MEANS something', () => {
+    // `null` is "no pull request has reported and none is expected to" — a real
+    // answer, which is why the field is nullable and the builder words the pair
+    // as *has no checks* / *has checks* rather than "is empty".
+    for (const operator of ['is_empty', 'is_not_empty'] as const) {
+      expect(() =>
+        validateFilterAst({
+          combinator: 'and',
+          conditions: [{ field: 'ciState', operator, value: null }],
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it('draws its whitelist FROM the fold rather than restating it', () => {
+    // If `CI_STATES` grew a fourth verdict, the filter would accept it with no
+    // edit here — which is the property that keeps the filter and the fold from
+    // disagreeing about what the column can hold.
+    const def = FILTER_FIELDS.find((f) => f.id === 'ciState');
+    expect(def).toBeDefined();
+    expect(def!.valueWhitelist).toBe(CI_STATES);
+    expect(def!.nullable).toBe(true);
   });
 });

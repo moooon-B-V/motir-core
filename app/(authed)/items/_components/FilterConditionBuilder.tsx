@@ -318,7 +318,7 @@ export function FilterConditionBuilder({
         const rowStale = rowValueIds.some((v) => stale.staleValueIds.has(v));
         const operatorOptions: ComboboxOption<FilterOperatorId>[] = def.operators.map((op) => ({
           value: op,
-          label: advancedOperatorLabel(t, op),
+          label: advancedOperatorLabel(t, op, def.id),
         }));
         return (
           <div

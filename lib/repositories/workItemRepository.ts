@@ -5183,6 +5183,7 @@ function boardCardFilterSql(filter?: BoardCardFilter): Prisma.Sql {
 const FILTER_FIELD_COLUMN_SQL: Record<Exclude<BuiltInFilterFieldId, 'text'>, Prisma.Sql> = {
   kind: Prisma.sql`w."kind"::text`,
   status: Prisma.sql`w."status"`,
+  ciState: Prisma.sql`w."ciState"`,
   priority: Prisma.sql`w."priority"::text`,
   type: Prisma.sql`w."type"::text`,
   assignee: Prisma.sql`w."assigneeId"`,
