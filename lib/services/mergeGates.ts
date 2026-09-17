@@ -79,11 +79,15 @@ async function designApprovalHolds(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const [currentDesign, latestDesignGate] = await Promise.all([
+  const [currentDesign, latestDesignGate, latestMergeGate] = await Promise.all([
     designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
     approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
+    approvalGateRepository.findLatestByWorkItem(workItemId, 'pull_request_approval', tx),
   ]);
-  return designApprovalStandsForMerge(currentDesign, latestDesignGate);
+  // The same ONE-TIME clause the predicate applies: once a merge gate has existed,
+  // the commits are the merge gate's question and a later green is not this
+  // approval's to carry (MOTIR-5666).
+  return latestMergeGate === null && designApprovalStandsForMerge(currentDesign, latestDesignGate);
 }
 
 export async function settleGreenVerdict(

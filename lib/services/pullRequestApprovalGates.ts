@@ -1,6 +1,6 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
-import { gateSetFor, reconcileGatesFor, type MovedHead } from './gateSetFor';
+import { gateSetFor, reconcileGatesFor, type GateSetSignals } from './gateSetFor';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -87,10 +87,10 @@ export async function raisePullRequestApprovalGate(
 async function reraiseAfterWithdrawal(
   workItemId: string,
   tx: Prisma.TransactionClient,
-  movedHead?: MovedHead,
+  signals: GateSetSignals = {},
 ): Promise<void> {
   const item = await workItemRepository.findById(workItemId, tx);
-  if (item) await reconcileGatesFor(item, tx, movedHead);
+  if (item) await reconcileGatesFor(item, tx, signals);
 }
 
 /**
@@ -147,7 +147,7 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
     // because it is the one that makes this call look pointless: it is not the
     // re-raise that matters here, it is that the re-ask happens at all. A design
     // gate the card is owed and does not have goes up from the same statement.
-    await reraiseAfterWithdrawal(workItemId, tx, { pullRequestId, headSha });
+    await reraiseAfterWithdrawal(workItemId, tx, { movedHead: { pullRequestId, headSha } });
   }
   return withdrawn;
 }

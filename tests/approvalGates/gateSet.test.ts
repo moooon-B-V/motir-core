@@ -284,3 +284,38 @@ describe('resolveGateSet — purity', () => {
     expect(members.map((m) => m.memberVersion)).toEqual(GREEN_TWO.map((m) => m.memberVersion));
   });
 });
+
+describe("resolveGateSet — MOTIR-5666: Q4's carry is ONE-TIME", () => {
+  const evidence = { id: 'ev-1', commitSha: 'sha-design' };
+
+  it('a standing design approval carries the merge while the card has never held a merge gate', () => {
+    const set = resolveGateSet(
+      input({
+        currentDesignEvidence: evidence,
+        latestDesignGate: decided('ev-1', 'sha-design'),
+        designApprovalStandsForMerge: true,
+        members: GREEN_ONE,
+      }),
+    );
+
+    expect(set.awaited.map((g) => g.kind)).toEqual([]);
+  });
+
+  it('…and stops carrying it the moment a merge gate has existed — a PUSH is a new question', () => {
+    // Without this the design approval would go on authorising every future green,
+    // merging code nobody approved. Found by building the ejection card, from a
+    // push after an ejection raising nothing.
+    const set = resolveGateSet(
+      input({
+        currentDesignEvidence: evidence,
+        latestDesignGate: decided('ev-1', 'sha-design'),
+        designApprovalStandsForMerge: true,
+        latestMergeGate: decided(WORK_ITEM, 'moooon/motir-core#10@old'),
+        members: GREEN_ONE,
+      }),
+    );
+
+    expect(set.awaited.map((g) => g.kind)).toEqual(['pull_request_approval']);
+    expect(set.awaited[0]!.subjectVersion).toBe('moooon/motir-core#10@aaa1');
+  });
+});

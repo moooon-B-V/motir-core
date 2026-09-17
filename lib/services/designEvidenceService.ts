@@ -403,13 +403,24 @@ async function assertStatusOpen(
  *   so an open pull request is what makes the window a window. Without one there
  *   is nothing to ship and the approve → reopen → republish → approve cycle §6d
  *   blesses is untouched (`tests/approval-gate-decided-read.test.ts` drives it).
- * · **AT OR ABOVE THE REVIEW BAND.** This is the door back. A person pulling the
- *   card out of review is the deliberate re-open AMENDMENT 6 Q3 asks for, and
- *   the SAME move withdraws every awaiting question with the cause
- *   `pulled_back`, so the merge gate cannot carry an unapproved design to `done`
- *   behind it. Nothing mutates the approved gate itself: a decided row is frozen
- *   by `trg_approval_gate_decided_immutable` (MOTIR-4912), and it is the record
- *   of what somebody agreed to — see the correction on Q3.
+ * · **AT OR ABOVE `implemented`.** This is the door back, and the RUNG is the
+ *   decision. `implemented` is the rung that claims *the branch is pushed and the
+ *   pull request is open* — from there up the card is OFFERING commits, and the
+ *   design that ships with them is settled. Below it the work is being reworked,
+ *   which is exactly when a design may legitimately change. A person pulling the
+ *   card back to `in_progress` is therefore the deliberate re-open AMENDMENT 6 Q3
+ *   asks for, and the SAME move withdraws every awaiting question with the cause
+ *   `pulled_back`, so no merge gate survives it to carry an unapproved design to
+ *   `done`. Nothing mutates the approved gate itself: a decided row is frozen by
+ *   `trg_approval_gate_decided_immutable` (MOTIR-4912), and it is the record of
+ *   what somebody agreed to.
+ *
+ *   ⚠️ **IT WAS `in_review` AND THAT WAS WRONG — corrected by MOTIR-5666, which
+ *   found the falsifier rather than reasoning about it.** A merge-queue ejection
+ *   moves every card it delivers to `implemented` (§4's THIRD AMENDMENT), which
+ *   sat one rung BELOW the old band — so the ordinary shape this refusal was
+ *   written for, *the queue ejects the pull request and an agent comes back and
+ *   re-publishes the asset*, was the one shape it let through.
  */
 async function assertDesignSettled(
   item: WorkItem,
@@ -436,7 +447,7 @@ async function assertDesignSettled(
     implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
     approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
   });
-  if (rank < RUNG_RANK.in_review) return;
+  if (rank < RUNG_RANK.implemented) return;
 
   throw DesignCardClosedError.becauseApproved(item.identifier, item.status);
 }

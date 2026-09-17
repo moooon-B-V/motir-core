@@ -1183,6 +1183,22 @@ This is [MOTIR-5461](motir:cmu1aiteu00behyoic0vnik35)'s _Queue again_ keyed to
 the merge gate rather than to a single card-level approval: the design decision
 is what is REUSED, and the merge question is what is RE-ASKED.
 
+> ⚠️ **AND THAT SENTENCE IS THE MECHANISM, not an illustration of one — recorded
+> when this was built (MOTIR-5666).** _Re-opens_ does NOT mean a fresh `awaiting`
+> merge gate appears. §4's THIRD AMENDMENT decision 6 already holds an ejected
+> card at `implemented` with **no awaiting gate**, deliberately, so that a green
+> check at the same head cannot re-ask about commits somebody has approved; a gate
+> raised on ejection would be that same second ask arriving from another
+> direction, and it contradicts MOTIR-5632 as squarely as it contradicts decision 6. The merge question comes back through the two doors that already exist —
+> **Queue again**, which reuses the decision while the head is unchanged, and a
+> **PUSH**, whose new head supersedes the gate with `head_moved` and whose next
+> green raises a fresh one.
+>
+> What this Q owns, and what is asserted, is the other half: **none of those
+> touches the DESIGN gate.** An ejection, a merge refusal and a push each leave it
+> exactly as decided, and Q3's refusal stops the design being swapped underneath
+> it in the meantime.
+
 **So a failure after approval can only be about the COMMITS** — which is only
 true because of Q3.
 
@@ -1198,11 +1214,21 @@ Three conditions, and each one is doing work:
 2. **Over the card's CURRENT result** — an approval of v1 closes nothing on a
    card whose current result is already v2, and an AWAITING gate closes nothing
    at all.
-3. **With an OPEN delivery, at or above the review band** — a merge is what would
+3. **With an OPEN delivery, at or above `implemented`** — a merge is what would
    ship the unapproved version, so an open pull request is what makes this a
-   window; and the band is the door back (correction 2 below). With nothing open
+   window; and the rung is the door back (correction 2 below). With nothing open
    there is nothing to ship, and §6d's approve → reopen → republish → approve
    cycle is untouched.
+
+> ⚠️ **CORRECTION 3 — the rung is `implemented`, not `in_review` (MOTIR-5666).**
+> It was written as the review band, and a merge-queue ejection moves every card
+> it delivers to `implemented` (§4's THIRD AMENDMENT) — one rung BELOW it. So the
+> ordinary shape this refusal exists for, _the queue ejects the pull request and
+> an agent comes back and re-publishes the asset_, was the one shape it let
+> through. `implemented` is the rung that claims the branch is pushed and the pull
+> request is open: from there up the card is OFFERING commits, and below it the
+> work is being reworked, which is exactly when a design may legitimately change.
+> Found by building Q2's card, not by re-reading this one.
 
 > ⚠️ **CORRECTED WHEN IT WAS BUILT — MOTIR-5661, 2026-09-17.** This Q was written
 > as _"once the gate is DECIDED … WHATEVER its status"_, and both halves were

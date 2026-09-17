@@ -44,6 +44,11 @@ export interface MovedHead {
   headSha: string | undefined;
 }
 
+/** What the CALLING EVENT knows that the card's rows do not yet say. */
+export interface GateSetSignals {
+  movedHead?: MovedHead;
+}
+
 /** What a raise did, or why it did not — enough for a caller to log a true sentence. */
 export interface GateSetForResult extends GateSet {
   /**
@@ -73,7 +78,7 @@ export interface GateSetForResult extends GateSet {
 export async function gateSetFor(
   item: WorkItem,
   tx: Prisma.TransactionClient,
-  movedHead?: MovedHead,
+  signals: GateSetSignals = {},
 ): Promise<GateSetForResult> {
   const [currentDesign, latestDesignGate, latestMergeGate, deliveries, mode, terminalByProject] =
     await Promise.all([
@@ -96,6 +101,7 @@ export async function gateSetFor(
     // `withdrawPullRequestApprovalGatesOnHeadMove` already threads into
     // `deliveryMemberVersion` — without it the re-ask would raise a fresh gate
     // over exactly the commits the withdrawal just retired.
+    const movedHead = signals.movedHead;
     const moved =
       movedHead !== undefined &&
       movedHead.pullRequestId === delivery.githubPullRequestId &&
@@ -112,7 +118,7 @@ export async function gateSetFor(
     members.push({
       memberVersion: deliveryMemberVersion(
         delivery,
-        moved ? movedHead!.headSha : (head ?? undefined),
+        moved ? signals.movedHead!.headSha : (head ?? undefined),
       ),
       isMergeCandidate: head !== null,
     });
@@ -161,9 +167,9 @@ export async function gateSetFor(
 export async function reconcileGatesFor(
   item: WorkItem,
   tx: Prisma.TransactionClient,
-  movedHead?: MovedHead,
+  signals: GateSetSignals = {},
 ): Promise<AwaitableGateKind[]> {
-  const set = await gateSetFor(item, tx, movedHead);
+  const set = await gateSetFor(item, tx, signals);
   if (set.awaited.length === 0) return [];
 
   const awaiting = await approvalGateRepository.findAwaitingByWorkItem(item.id, tx);

@@ -729,6 +729,13 @@ async function mergeMember(
   } catch (err) {
     const refusal = memberRefusal(err);
     if (!refusal) throw err;
+    // ⚠️ THE APPROVAL STANDS AND NO GATE IS RE-RAISED (Subtask MOTIR-5666). A
+    // refusal is news about the COMMITS, and the merge question comes back as
+    // RETRY on the decision that already stands — §4's THIRD AMENDMENT decision 6,
+    // which AMENDMENT 6 Q2 names as its own mechanism. Raising a fresh gate would
+    // ask about commits somebody approved a moment ago. The DESIGN gate is
+    // untouched for the same reason, and cannot be swapped underneath the standing
+    // approval either (MOTIR-5661).
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: target.pullRequestId,

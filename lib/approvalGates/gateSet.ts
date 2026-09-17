@@ -221,7 +221,17 @@ export function designApprovalStandsForMerge(
  *  3. **The MERGE question** is owed in a `manual` project when the card delivers at
  *     least one pull request, EVERY member could be merged now, no decision has
  *     already answered these exact commits, and no standing design approval already
- *     authorises the merge (Q4 — asking there would be the second press Q4 forbids). The candidacy check is MOTIR-5604's and
+ *     authorises the merge (Q4 — asking there would be the second press Q4 forbids).
+ *
+ *     ⚠️ **A FAILED MERGE DOES NOT PUT THE QUESTION BACK HERE**, and that is a rule
+ *     rather than an omission (MOTIR-5666). AMENDMENT 6 Q2 — *the merge gate
+ *     re-opens alone* — names its own mechanism in its next sentence: it is
+ *     MOTIR-5461's **Queue again**, keyed to the merge gate. §4's THIRD AMENDMENT
+ *     decision 6 holds an ejected card at `implemented` with NO awaiting gate
+ *     precisely so a green at the same head cannot re-ask about commits somebody
+ *     already approved; raising one here would be that second ask, arriving from a
+ *     different direction. The routes back are Queue again (reuse the decision) and
+ *     a PUSH (a new head, a new question) — and neither is the design's. The candidacy check is MOTIR-5604's and
  *     the same-commits check is MOTIR-5632's; both survive as inputs rather than as
  *     guards scattered across raisers.
  *  4. **The DESIGN gate is primary** whenever both are owed (Q1). A merge gate owed
@@ -245,15 +255,19 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   }
 
   const version = setVersion(input.members);
+  // ⚠️ Q4'S CARRY IS ONE-TIME, AND ONLY WHILE THE CARD HAS NO MERGE GATE AT ALL
+  // (MOTIR-5666 found this; MOTIR-5664 shipped it without the second clause). Q4
+  // holds the merge a press made BEFORE the set went green and lets it follow on
+  // the next verdict. Once a merge gate has existed — raised, approved, ejected —
+  // the commits have a history of their own, and a later PUSH is a new question
+  // about new commits. Without this clause the design approval would go on
+  // authorising every future green, merging code nobody approved.
+  const carriedByDesign = input.designApprovalStandsForMerge && input.latestMergeGate === null;
+  const answered =
+    carriedByDesign || alreadyDecided(input.latestMergeGate, input.workItemId, version, true);
   const everyMemberMergeable =
     input.members.length > 0 && input.members.every((member) => member.isMergeCandidate);
-  if (
-    input.prMergeMode === 'manual' &&
-    !input.designApprovalStandsForMerge &&
-    everyMemberMergeable &&
-    version !== null &&
-    !alreadyDecided(input.latestMergeGate, input.workItemId, version, true)
-  ) {
+  if (input.prMergeMode === 'manual' && !answered && everyMemberMergeable && version !== null) {
     awaited.push({
       kind: 'pull_request_approval',
       subjectId: input.workItemId,
