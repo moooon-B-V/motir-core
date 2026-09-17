@@ -190,9 +190,19 @@ export interface ApprovalGateControlProps {
    */
   recordDetail?: ReactNode;
   /**
-   * State `G`'s dead-port words, when the KIND withdraws for its own reason (MOTIR-5484:
-   * a push moved a pull request's head, not a newer design). Absent, the frame's own
-   * words render.
+   * State `G`'s dead-port words, when the KIND knows its own reason for the withdrawal
+   * (MOTIR-5484 / MOTIR-5604: a push moved a pull request's head). Absent, the frame's
+   * own words render.
+   *
+   * ⚠️ AND THE FRAME'S OWN WORDS NAME NO CAUSE — deliberately (Bug MOTIR-5586). FOUR
+   * product writes mark a gate `superseded` and only ONE publishes anything: a republish
+   * (MOTIR-4913) does; a withdrawal (MOTIR-5574), a hand pull-back out of review or to
+   * Cancelled (MOTIR-5527) and linking an OPEN pull request (MOTIR-5534) do not. The ROW
+   * cannot tell them apart — ADR §6b makes a supersede write `state` and nothing else —
+   * so the default said "A newer design was published … The current version is above"
+   * over a DEAD port, which was false three times in four and pointed nowhere even on the
+   * fourth. The default is now the fact every writer leaves true, and THIS PROP is where
+   * a cause belongs: a kind whose own surface knows why supplies its own two sentences.
    */
   withdrawnPort?: { port: ReactNode; cite: ReactNode };
   /**
