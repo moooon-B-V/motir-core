@@ -25,10 +25,10 @@ cannot. Read on 2026-08-27 with an App JWT signed by the deployed
 `GITHUB_APP_PRIVATE_KEY`, `GET https://api.github.com/app`, from inside the
 `motir-core` Fly machine (the only place the key exists):
 
-| App                                           | id      | permissions                                                                                                                                                                                 | events                                                                                 |
-| --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| App                                           | id      | permissions                                                                                                                                                                                 | events                                                                                                        |
+| --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | **`motir-integration`** — the user-facing one | 4206669 | `checks: read` · **`contents: write`** · `deployments: read` · `issues: read` · `merge_queues: read` · `metadata: read` · **`pull_requests: write`** · `security_events: read`              | `check_run`, `check_suite`, `deployment_status`, `merge_group`, `pull_request`, `pull_request_review`, `push` |
-| `motir-studio` — provisioning                 | 4445390 | `actions: read` · `administration: write` · `contents: write` · `metadata: read` · `organization_actions_variables: write` · `organization_self_hosted_runners: write` · `workflows: write` | `workflow_job`                                                                         |
+| `motir-studio` — provisioning                 | 4445390 | `actions: read` · `administration: write` · `contents: write` · `metadata: read` · `organization_actions_variables: write` · `organization_self_hosted_runners: write` · `workflows: write` | `workflow_job`                                                                                                |
 
 > **Amended 2026-09-14 (MOTIR-4787).** The `motir-integration` row was re-read
 > from `GET /orgs/moooon-B-V/installations` (installation `144235820`'s granted
@@ -51,7 +51,7 @@ cannot. Read on 2026-08-27 with an App JWT signed by the deployed
 > added to `motir-integration`, read back from `GET https://api.github.com/app`
 > with an App JWT signed by the deployed key inside the `motir-core` Fly
 > machine. It is what Story MOTIR-4910 needs: until it was ticked, a reviewer
-> pressing *Approve* on GitHub reached nothing, and every test stayed green
+> pressing _Approve_ on GitHub reached nothing, and every test stayed green
 > while the sync was inert in production. **No permission changed** — review
 > events ride on `pull_requests`, already `write` since MOTIR-4787 — so unlike
 > the two amendments above there was no consent to accept, GitHub showed no
