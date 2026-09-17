@@ -7949,3 +7949,68 @@ The pending notice (unchanged), `/plans/<id>`, the plan canvas, the peek, and Pr
 proposed VALUES, since a row names the relation and never the diff (MOTIR-4197's boundary). It draws no
 plan that touched only a descendant, because the relations are direct only. It changes nothing else about
 the arrived page.
+
+---
+
+## The CI badge (MOTIR-5471)
+
+**Asset: `list--ci-badge.mock.html`** (panels 6–9). It amends § _Columns_ and § _Filter builder_.
+Story MOTIR-5469; built by MOTIR-5473 (the filter field) and MOTIR-5474 (the badge).
+
+### It goes in the TITLE CELL, and it is a GLYPH — both forced by the width budget
+
+The row is a CSS grid: `minmax(10rem, 1fr) 116px 120px 150px 150px 72px 80px 108px 76px`, `gap-x-4`
+(16px × 8), `pl-4 pr-7` (44px).
+
+```
+872 fixed + 128 gaps + 44 padding + a 160px title floor = the 1204px minimum
+```
+
+**A new column is not affordable.** A ~120px _Checks_ track plus one more 16px gap takes the minimum
+to **1340px**, which clips at 1280 AND at 1200 — on a surface whose column set already clips
+(MOTIR-1307). The title cell is the row's **only flexible track**, so a badge there adds no fixed
+width and **leaves the minimum at 1204px**.
+
+**⚠️ And at that minimum the title track is only its 160px floor, which will not hold the key, a title
+AND a labelled pill.** Drawn that way the pill OVERLAPPED the item key — the cell is `min-w-0` with no
+`overflow-hidden`. **Rendering at exactly 1204px is what found it; the same sheet read fine at 1280 and
+hid the problem.**
+
+**So a ROW carries the glyph alone and a BOARD CARD carries the label.** The glyph is `CircleX` /
+`CircleEllipsis` — the same two `CI_STATE_META` uses — as a `role="img"` with the shipped
+`github.development.ciState.*` string as its accessible name and its `title`. Ink is
+`--el-danger-on-surface` for `failing` (never `--el-danger-text`, which is the ink for a danger FILL)
+and `--el-text-secondary` for `running`; both clear AA on every surface the row paints in. It carries
+`shrink-0`, so the TITLE truncates and the badge stays whole.
+
+State is still never colour alone: the two glyphs differ in SHAPE, and each has an accessible name —
+the same bargain every other icon-only affordance in this row already makes.
+
+**Measured:** at **1200** the row is 4px under its own minimum and scrolls, exactly as it does today —
+the badge neither causes that nor worsens it. At **1280** there is 76px of slack, all of which the title
+track absorbs, so more title shows and the glyph still sits at its end. **The row never grows and the
+minimum never moves.** Both views share one column builder (`issueColumns.tsx`), so this holds for List
+and Tree alike.
+
+### The _Checks_ filter field
+
+- **Group: `fields`.** `advancedFieldGroup` (`lib/issues/advancedFilterFields.ts`) returns `other` only
+  for `lbl` / `cmp` / `folder`, and `customFields` for a custom field — so `ciState` lands in `fields`.
+  It sits **after _Status_**, the field a reader pairs it with.
+- **Label:** _Checks_ (en) · _检查_ (zh).
+- **Values, worst-first** — the order `CI_STATES` declares and `foldCardCiState` applies, each carrying
+  the same glyph the badge does:
+
+  | value     | en             | zh         |
+  | --------- | -------------- | ---------- |
+  | `failing` | Checks failing | 检查失败   |
+  | `running` | Checks running | 检查运行中 |
+  | `passing` | Checks passing | 检查通过   |
+
+- **The empty pair reads _has no checks_ / _has checks_** (zh: _无检查_ / _有检查_) — not “is empty”,
+  because the column's `null` means something a reader can name: no pull request has reported and none
+  is expected to.
+- **The filter is RAW**, per the story: _Checks is any of Failing_ returns every card whose column reads
+  `failing` in ANY status, done included, and a person combines it with Status. That is deliberate — the
+  badge's done-category rule is a DRAWING rule, and making the filter share it would make a saved view
+  silently lossy.

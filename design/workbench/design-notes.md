@@ -1985,3 +1985,32 @@ should know it describes the destination rather than the present.
 | **[MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37)** (the bug)             | The drawn state of its own fix                                                                                          | Nothing                                                                                                                                   |
 
 Fixture items use `MOTIR-4931` and link to nothing.
+
+---
+
+## The CI badge (MOTIR-5471)
+
+**Asset: `workbench--ci-badge.mock.html`** (panels 10–12). It amends § _Layout_. Story MOTIR-5469;
+built by MOTIR-5475.
+
+**The column set is untouched.** `minmax(10rem, 1fr) 96px 140px 108px` — Title · Your role · Assignee ·
+Status — with the same `gap-x-4` and `pl-4 pr-7`: `344 fixed + 48 gaps + 44 padding + a 160px title
+floor = 596px`, against the **622px** minimum § _Layout_ records, and a measured title track of **440px
+at 1200**.
+
+**The badge takes the title cell, as a GLYPH**, for the same reason and in the same form as on
+`/items` — `design/work-items/design-notes.md` § _The CI badge (MOTIR-5471)_ carries the measurement and
+is the authority. **The 1200 fit is therefore untouched: no fixed width is added, and 440px of title
+track absorbs a ~20px glyph.** No new column, so nothing in § _Layout_'s budget moves.
+
+**Per tab:**
+
+- **_In progress_** — the tab the badge is for. A card whose run opened pull requests sits at
+  `implemented` both while its checks run and after they fail, and this is where its owner sees which.
+- **_Recently finished_** — **never shows it, structurally rather than by exception.** That tab lists
+  cards in the `done` CATEGORY, and the badge's rule is that a done-category card carries none. The tab
+  needs no special case and no extra column; the same rule that governs the board card governs it.
+- **_Watching_** — follows the same rule as _In progress_: drawn when the card is not done.
+
+At ~400px the row is far under its 622px minimum and already scrolls horizontally — the Workbench's
+existing behaviour, which the badge neither causes nor changes.
