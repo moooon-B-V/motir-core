@@ -473,7 +473,11 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
     expect(rows[0]!).toMatchObject({ conclusion: 'pending' });
     expect(await adminDb.githubCiFeedbackComment.count({ where: { commitSha: 'sha1' } })).toBe(0);
     expect(await commentsOn(s.item.id)).toHaveLength(0);
-    expect(await ciStateOf(s.item.id)).toBeNull();
+    // ⚠️ `running` since MOTIR-5470 — the card's column is no longer terminal-only.
+    // It moves on the GitLab provider exactly as on the GitHub one BECAUSE both
+    // normalize into the one shared consumer; a provider that diverged here would
+    // be the defect (the MOTIR-1475 rule this file exists to hold).
+    expect(await ciStateOf(s.item.id)).toBe('running');
   });
 
   it('a skipped/manual pipeline (neutral) stays a full no-op — nothing recorded', async () => {
@@ -488,7 +492,10 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
     const githubCheckRunCount = await adminDb.githubCheckRun.count();
     expect(githubCheckRunCount).toBe(0);
     expect(await commentsOn(s.item.id)).toHaveLength(0);
-    expect(await ciStateOf(s.item.id)).toBeNull();
+    // Still a full no-op: it recorded nothing, so there is nothing for the fold
+    // to read. `running` is what the card already read from its own open merge
+    // request (MOTIR-5470) — the check count above is what says the no-op held.
+    expect(await ciStateOf(s.item.id)).toBe('running');
   });
 
   it('a pipeline for an MR with NO linked work item is a clean no-op', async () => {

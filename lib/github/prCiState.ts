@@ -20,7 +20,18 @@
 
 import { liveCheckRows, type SuiteScopedCheckRow } from './checkSuites';
 
-export type PrCiState = 'passing' | 'failing' | 'running' | null;
+/**
+ * The three CI verdicts, as a tuple (MOTIR-5470).
+ *
+ * ONE source for the value set, so the derivation, the card's stored column and
+ * the *Checks* filter field's whitelist cannot drift apart — a filter offering a
+ * value the fold never writes, or missing one it does, is a filter that silently
+ * returns nothing. Ordered worst-first, which is both the fold's own precedence
+ * (`foldCardCiState`) and the order the filter's value editor offers them in.
+ */
+export const CI_STATES = ['failing', 'running', 'passing'] as const;
+
+export type PrCiState = (typeof CI_STATES)[number] | null;
 
 export interface PrCheckRunSlice extends SuiteScopedCheckRow {
   commitSha: string;

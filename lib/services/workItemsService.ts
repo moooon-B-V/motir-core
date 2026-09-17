@@ -2680,18 +2680,28 @@ export const workItemsService = {
   /**
    * Set the CI / verification signal on a work item (Subtask 7.10.6 / MOTIR-894)
    * — the "ready/blocked" signal the CI feedback loop flips, DISTINCT from the
-   * workflow `status`: `'passing'` ⇔ the linked PR's latest checks succeeded (the
-   * item is verified; the Story roll-up counts it), `'failing'` ⇔ a terminal check
-   * failed (the item is visibly not-ready), `null` ⇔ no signal. Idempotent
+   * workflow `status`: `'passing'` ⇔ every pull request delivering the card is
+   * green (the item is verified; the Story roll-up counts it), `'failing'` ⇔ one
+   * of them has a terminal failure (the item is visibly not-ready), `'running'` ⇔
+   * the card is waiting on a verdict, `null` ⇔ no checks at all. Idempotent
    * (setting the same value is a no-op write). Tenant-gated on `ctx.workspaceId`
    * exactly like `updateStatus` — a cross-workspace id is a 404, never a leak.
    * The write goes through the service + repository (no raw `work_item` update at
    * the integration layer); no revision row (this is a signal, not a tracked
    * field edit), and no event.
+   *
+   * ⚠️ `'running'` JOINED THE RANGE WITH MOTIR-5470, AND THE VALUES ARE NOW
+   * `PrCiState`'s OWN WORDS. The column was terminal-only under the MOTIR-894
+   * contract, which is why a card whose fix was already building kept reading
+   * `failing` until the next terminal check. It is now recomputed as a FOLD over
+   * the card's whole delivery set — `deliveryVerdict.recomputeWorkItemCiState`,
+   * which is what every writer should reach for. This setter remains the write
+   * door it always was; what changed is that nothing should be stamping a single
+   * pull request's verdict through it.
    */
   async setCiState(
     workItemId: string,
-    ciState: 'passing' | 'failing' | null,
+    ciState: 'passing' | 'failing' | 'running' | null,
     ctx: ServiceContext,
   ): Promise<void> {
     await withWorkspaceContext(ctx, async (tx) => {

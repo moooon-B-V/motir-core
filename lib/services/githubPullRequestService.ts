@@ -7,6 +7,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { withdrawPullRequestApprovalGateOnSetChange } from './pullRequestApprovalGates';
+import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -251,6 +252,14 @@ export const githubPullRequestService = {
       // A NEW member changes the set an approve-and-merge gate asked about.
       if (!alreadyDelivered) await withdrawPullRequestApprovalGateOnSetChange(currentItemId, tx);
       await retireDesignGateForOpenPullRequest(currentItemId, pr.state, tx);
+      // …and it changes the set the card's own CI verdict is folded over, so the
+      // verdict is recomputed in the same transaction (MOTIR-5470). This is
+      // defect 4 of the four MOTIR-5469 enumerates: linking a red pull request to
+      // a card used to leave that card's `ciState` reading whatever it read
+      // before — green, or nothing at all — until the NEXT check event happened
+      // to fire, which for a pull request whose checks have already finished is
+      // never. The link is exactly the moment the answer changes.
+      if (!alreadyDelivered) await recomputeWorkItemCiState(currentItemId, tx);
       return toLinkedPullRequestDto(pr);
     }).then(async (dto) => {
       // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
@@ -453,6 +462,13 @@ export const githubPullRequestService = {
       );
       if (!alreadyDelivered) {
         await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
+        // The AGENT's link door owes the recompute exactly as the picker's does
+        // (MOTIR-5470). It is the arm that matters MORE, not less: this is the
+        // call a run makes seconds after `gh pr create`, so it is the one that
+        // decides what a card's badge says for the whole life of that pull
+        // request — and the one that can write the FIRST delivery a card has
+        // ever had.
+        await recomputeWorkItemCiState(input.workItemId, tx);
       }
       await retireDesignGateForOpenPullRequest(input.workItemId, updated.state, tx);
 
@@ -526,6 +542,13 @@ export const githubPullRequestService = {
       // about (MOTIR-5482). The per-pull-request gate retired with MOTIR-5611.
       if (count > 0) {
         await withdrawPullRequestApprovalGateOnSetChange(workItemId, tx);
+        // And the card's CI verdict is folded over that same set, so removing a
+        // member re-decides it (MOTIR-5470). This direction is the one that
+        // strands a card visibly: retracting a mis-linked RED pull request left
+        // the card reading `failing` with nothing red left on it, and no event
+        // was ever coming to correct it — the pull request it would have come
+        // from is the one that just stopped delivering this card.
+        await recomputeWorkItemCiState(workItemId, tx);
       }
       return { removed: count > 0 };
     }).then(async (result) => {
@@ -605,9 +628,12 @@ export const githubPullRequestService = {
       // the one named here and keeps the other three, which is the difference
       // between a correction and a retraction.
       const count = await workItemDeliveryRepository.remove(input.workItemId, pr.id, tx);
-      // The same withdrawal the sibling arm makes (MOTIR-5482).
+      // The same withdrawal the sibling arm makes (MOTIR-5482), and the same
+      // recompute (MOTIR-5470) — all four link doors change the delivery set, so
+      // all four re-decide the verdict folded over it.
       if (count > 0) {
         await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
+        await recomputeWorkItemCiState(input.workItemId, tx);
       }
       return { removed: count > 0, pullRequestId: pr.id };
     }).then(async (result) => {

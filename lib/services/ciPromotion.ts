@@ -12,12 +12,8 @@ import {
 } from './checkSetReconcile';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import {
-  deliverySetIsGreen,
-  deliveryStateForPromotion,
-  repoCannotReportChecks,
-} from '@/lib/workItems/deliverySet';
+import { collectDeliveries, classifyDeliveries } from './deliveryVerdict';
+import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
@@ -107,27 +103,12 @@ const TARGET_STATUS = 'in_review';
  */
 const REVIEW_STATUSES: readonly string[] = ['in_review', 'approved'];
 
-/** Every pull request that delivers this card, by id, with the check rows the
- *  verdict is derived from — the union the doc block below explains, extracted
- *  (MOTIR-4199) so the check-set reconcile can address exactly the same members
- *  the judgement will. */
-async function collectDeliveries(
-  item: { id: string; sessionBranch: string | null },
-  tx: Prisma.TransactionClient,
-): Promise<Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>> {
-  const [deliveries, linked, onBranch] = await Promise.all([
-    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
-    githubPullRequestRepository.listByWorkItemWithContext(item.id, tx),
-    item.sessionBranch
-      ? githubPullRequestRepository.listByHeadRefWithChecks(item.sessionBranch, tx)
-      : Promise.resolve([]),
-  ]);
-
-  const byId = new Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>();
-  for (const delivery of deliveries) byId.set(delivery.githubPullRequestId, delivery.pullRequest);
-  for (const pr of [...linked, ...onBranch]) byId.set(pr.id, pr);
-  return byId;
-}
+// `collectDeliveries` — every pull request that delivers this card — MOVED to
+// `deliveryVerdict.ts` (MOTIR-5470), and imported at the top of this file. It was
+// extracted here (MOTIR-4199) so the check-set reconcile could address exactly the
+// same members the judgement will; it now serves a THIRD reader, the card's own
+// stored `ciState`, which is a different question folded off the same set. Its doc
+// block, including why the set is a union, travels with it.
 
 /**
  * IS EVERY PULL REQUEST DELIVERING THIS CARD GREEN? (Story MOTIR-3655 ·
@@ -169,44 +150,17 @@ async function everyDeliveryIsGreen(
   item: { id: string; sessionBranch: string | null },
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const byId = await collectDeliveries(item, tx);
+  // ⚠️ THE SECOND QUESTION — asked inside `classifyDeliveries` (MOTIR-3823), and
+  // asked there rather than here (MOTIR-5470) because the CARD's own `ciState` has
+  // to ask exactly the same one of exactly the same members. `derivePrCiState`
+  // returns `null` both for a repository that has no CI and for one that has
+  // simply not reported yet, and the two must be read oppositely: the first is
+  // green, the second withholds. What stays HERE is the promotion's own reading of
+  // that classification — `deliveryStateForPromotion`, which maps the withholding
+  // case to `null` because `deliverySetIsGreen` has no third answer to give.
+  const members = await classifyDeliveries(item, tx);
 
-  const members = [...byId.values()].map((pr) => ({
-    repoId: pr.repoId,
-    state: derivePrCiState(pr.checkRuns),
-  }));
-
-  // ⚠️ THE SECOND QUESTION, ASKED ONLY OF THE MEMBERS THAT NEED IT (MOTIR-3823).
-  // `derivePrCiState` returns `null` both for a repository that has no CI and for
-  // one that has simply not reported yet, and the promotion must read those two
-  // oppositely: the first is green, the second withholds. The follow-up is asked
-  // of the REPOSITORY (`repoCannotReportChecks`), because the pull request cannot
-  // tell them apart. A set with no `null` in it — nearly every card — pays
-  // nothing: `silentRepoIds` is empty and the read is skipped entirely.
-  const silentRepoIds = [...new Set(members.filter((m) => m.state === null).map((m) => m.repoId))];
-  const [reporting, mergedSilent] = await Promise.all([
-    githubPullRequestRepository.listRepoIdsWithAnyCheckRun(silentRepoIds, tx),
-    githubPullRequestRepository.listRepoIdsWithAWatchedMergeWithoutChecks(silentRepoIds, tx),
-  ]);
-  const hasReported = new Set(reporting);
-  const hasMergedSilently = new Set(mergedSilent);
-  // A repository neither read returns has no history at all, so it falls to
-  // `hasEverReportedACheck: false, hasMergedWithoutAnyCheck: false` — which
-  // `repoCannotReportChecks` reads as ABLE to report, and which withholds. Every
-  // unknown here takes that direction.
-  const cannotReport = new Set(
-    silentRepoIds.filter((repoId) =>
-      repoCannotReportChecks({
-        repoId,
-        hasEverReportedACheck: hasReported.has(repoId),
-        hasMergedWithoutAnyCheck: hasMergedSilently.has(repoId),
-      }),
-    ),
-  );
-
-  return deliverySetIsGreen(
-    members.map((m) => deliveryStateForPromotion(m.state, cannotReport.has(m.repoId))),
-  );
+  return deliverySetIsGreen(members.map((m) => deliveryStateForPromotion(m.state, m.cannotReport)));
 }
 
 /**

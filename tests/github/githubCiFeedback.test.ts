@@ -312,7 +312,12 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     const githubCheckRunCount = await adminDb.githubCheckRun.count();
     expect(githubCheckRunCount).toBe(0); // nothing recorded
     expect(await commentsOn(item.id)).toHaveLength(0); // the real item is untouched
-    expect(await ciStateOf(item.id)).toBeNull();
+    // ⚠️ `running`, not null, since MOTIR-5470 — and the assertion is SHARPER for
+    // it. The real item has a linked pull request of its own that has not
+    // reported, which is exactly what `running` means; what this test is about is
+    // that #99's SUCCESS did not leak onto it, and `passing` is the value that
+    // would prove it had. Asserting null could no longer distinguish the two.
+    expect(await ciStateOf(item.id)).toBe('running');
   });
 
   it('an in-flight (pending) conclusion is RECORDED as a pending row — still no comment, no signal (MOTIR-1579)', async () => {
@@ -333,15 +338,22 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
       }),
     );
     // The row exists (the Development surface derives "Checks running" from
-    // it) but the TERMINAL side-effects stay terminal-only (MOTIR-894): no
-    // feedback comment, no ciState flip.
+    // it) and the COMMENT stays terminal-only: an announcement needs something to
+    // announce.
+    //
+    // ⚠️ THE `ciState` HALF OF THE TERMINAL-ONLY CONTRACT IS GONE (MOTIR-5470).
+    // MOTIR-894 made the column terminal-only, which is why a card whose fix was
+    // already building kept reading `failing` until the new commit's first
+    // terminal check. The column now carries `running`, so a pending check MOVES
+    // it — deliberately, and this assertion is the record of that reversal rather
+    // than a test bending to the code.
     expect(res).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
     const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]!).toMatchObject({ conclusion: 'pending' });
     expect(await feedbackRecords('sha1')).toEqual([]);
     expect(await commentsOn(item.id)).toHaveLength(0);
-    expect(await ciStateOf(item.id)).toBeNull();
+    expect(await ciStateOf(item.id)).toBe('running');
   });
 
   it('a NEUTRAL (skipped / stale) conclusion stays a full no-op — nothing recorded', async () => {
@@ -360,7 +372,12 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     const githubCheckRunCount = await adminDb.githubCheckRun.count();
     expect(githubCheckRunCount).toBe(0);
     expect(await commentsOn(item.id)).toHaveLength(0);
-    expect(await ciStateOf(item.id)).toBeNull();
+    // The neutral conclusion is still a full no-op — it recorded nothing, so
+    // there is nothing for the fold to read. `running` is what the card ALREADY
+    // read from its own open pull request before this event (MOTIR-5470), not
+    // something this event wrote: the check count above is what says the no-op
+    // held.
+    expect(await ciStateOf(item.id)).toBe('running');
   });
 
   it('a pending RE-RUN preserves the feedback-comment link, and the later terminal conclusion updates that SAME comment', async () => {
@@ -381,8 +398,11 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(await ciStateOf(item.id)).toBe('passing');
 
     // 2. A re-run starts (pending at the SAME pr/sha/check): the row converges
-    //    to 'pending' but KEEPS the comment link, and the item's terminal-only
-    //    signal is untouched.
+    //    to 'pending' and KEEPS the comment link — and since MOTIR-5470 the
+    //    card's signal goes back to `running` with it. That is the point of the
+    //    card rather than a side effect: a re-run IS the card waiting on a
+    //    verdict again, and leaving it `passing` is asserting a verdict that has
+    //    been withdrawn. The COMMENT is the thing that stays put here.
     const pendingRes = await githubWebhookService.handleEvent(
       'check_suite',
       checkSuitePayload({
@@ -399,7 +419,7 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     // The pending upsert must not lose the comment already recorded for this
     // commit — the record is per card now, so that is what the assertion reads.
     expect(await feedbackRecords('sha1')).toMatchObject([{ commentId: afterSuccess[0]!.id }]);
-    expect(await ciStateOf(item.id)).toBe('passing'); // terminal-only signal untouched
+    expect(await ciStateOf(item.id)).toBe('running'); // the verdict is withdrawn
 
     // 3. The re-run concludes FAILURE → the SAME comment updates in place
     //    (never a duplicate) and the signal flips.
