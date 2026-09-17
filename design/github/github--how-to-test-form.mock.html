@@ -1,3 +1,7 @@
+<p class="htf-hint">
+  No pull request is linked, so there is nothing to check out. Write the instructions; repositories
+  appear here on their own if you link one.
+</p>
 <!doctype html>
 <html lang="en" data-theme="light">
   <head>
@@ -32,10 +36,10 @@
           components/markdown/CopyableCodeBlock.tsx. The saved state re-renders through them.
         · THE MISSING CALLOUT — Panel 12i's `.dvb-callout-missing`, which the Add door joins.
         · THE CHILD POINTER — Panel 12m, unchanged, and shown here only to draw its NO DOOR.
-        · THE BUTTONS, THE INPUTS AND THE PICKER — `.btn` / `.btn-primary` / `.btn-secondary` /
-          `.btn-ghost`, `.picker-search`, `.combo-input` / `.combo-pop` / `.picker-option`,
-          `.form-actions`, `.form-error`, `.link-form`: Panel 5's own grammar, already in this
-          stylesheet.
+        · THE BUTTONS AND THE INPUTS — `.btn` / `.btn-primary` / `.btn-secondary` /
+          `.btn-ghost`, `.form-actions`, `.form-error`, `.link-form`: Panel 5's own grammar,
+          already in this stylesheet. NO repository PICKER: the sections are Motir's to derive,
+          never a control (§ 24, decisions 8 and 8b).
         · THE EDITOR — components/ui/MarkdownEditor.tsx at `size="full"`. Its toolbar set is that
           component's own, in its own order (Bold · Italic · Strikethrough · Heading · Quote ·
           Code block · Bulleted list · Numbered list · Task list · Link), and the chrome is its
@@ -3344,7 +3348,7 @@
 
       /* ── The REPOSITORY sections — one row per `repos[]` entry ───────────
          Repository name, the commit it was written for, and where the suggested
-         value came from. A row is removable; `+ Add repository` is Panel 5b's
+         value came from. The set is DERIVED from the linked pull requests and is
          Combobox over the project's repositories. */
       .htf-repos {
         display: flex;
@@ -3393,22 +3397,6 @@
         font-size: 11.5px;
         color: var(--el-text-secondary);
       }
-      .htf-row-remove {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        height: var(--height-input);
-        width: var(--height-input);
-        border: 0;
-        background: transparent;
-        border-radius: var(--radius-control);
-        color: var(--el-text-secondary);
-        cursor: pointer;
-      }
-      .htf-row-remove svg {
-        width: 15px;
-        height: 15px;
-      }
 
       /* An INLINE refusal, next to the field it is about. `publish`'s own
          message, verbatim. --el-danger-on-surface, never --el-danger-text
@@ -3456,10 +3444,6 @@
       .htf-narrow .htf-repo-name {
         grid-row: 1;
         grid-column: 1;
-      }
-      .htf-narrow .htf-row-remove {
-        grid-row: 1;
-        grid-column: 2;
       }
       .htf-narrow .htf-repo-commit {
         grid-row: 2;
@@ -4907,13 +4891,6 @@
                           />
                           <span class="htf-from">from pull request #131</span>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-core"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                       <div class="htf-repo-row">
                         <span class="htf-repo-name"
@@ -4928,24 +4905,8 @@
                           />
                           <span class="htf-from">from pull request #88</span>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-ai"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                     </div>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      type="button"
-                      style="align-self: flex-start"
-                    >
-                      <svg aria-hidden="true" style="width: 14px; height: 14px">
-                        <use href="#i-plus" /></svg
-                      >Add repository
-                    </button>
                   </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
@@ -5125,13 +5086,6 @@
                           />
                           <span class="htf-from">from pull request #131</span>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-core"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                       <div class="htf-repo-row">
                         <span class="htf-repo-name"
@@ -5146,24 +5100,8 @@
                           />
                           <span class="htf-from">from pull request #88</span>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-ai"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                     </div>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      type="button"
-                      style="align-self: flex-start"
-                    >
-                      <svg aria-hidden="true" style="width: 14px; height: 14px">
-                        <use href="#i-plus" /></svg
-                      >Add repository
-                    </button>
                   </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
@@ -5243,13 +5181,6 @@
                           />
                           <span class="htf-from">from pull request #131</span>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-core"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                       <div class="htf-repo-row">
                         <span class="htf-repo-name"
@@ -5271,24 +5202,8 @@
                             >
                           </p>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-ai"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                     </div>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      type="button"
-                      style="align-self: flex-start"
-                    >
-                      <svg aria-hidden="true" style="width: 14px; height: 14px">
-                        <use href="#i-plus" /></svg
-                      >Add repository
-                    </button>
                   </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
@@ -5579,86 +5494,8 @@
                             ><span>expected a hex commit id of 7 to 64 characters.</span>
                           </p>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-core"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
-                      </div>
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>acme/unrelated</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for acme/unrelated"
-                            value="3f2a91c"
-                            data-invalid
-                          />
-                          <span class="htf-from">added by you</span>
-                          <p class="htf-error">
-                            <svg aria-hidden="true"><use href="#i-circle-alert" /></svg
-                            ><span
-                              >acme/unrelated is not one of this project&rsquo;s repositories —
-                              moooon/motir-core, moooon/motir-ai, moooon/motir-gateway.</span
-                            >
-                          </p>
-                        </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove acme/unrelated"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
-                      </div>
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-core</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-core"
-                            value="aa11bb2"
-                            data-invalid
-                          />
-                          <span class="htf-from">added by you</span>
-                          <p class="htf-error">
-                            <svg aria-hidden="true"><use href="#i-circle-alert" /></svg
-                            ><span
-                              >this repository already has a section — give one entry per
-                              repository.</span
-                            >
-                          </p>
-                        </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-core"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                     </div>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      type="button"
-                      style="align-self: flex-start"
-                    >
-                      <svg aria-hidden="true" style="width: 14px; height: 14px">
-                        <use href="#i-plus" /></svg
-                      >Add repository
-                    </button>
-                    <p class="htf-error">
-                      <svg aria-hidden="true"><use href="#i-circle-alert" /></svg
-                      ><span>give one entry per repository the run pushed to — at least one.</span>
-                    </p>
                   </div>
                   <div class="form-actions">
                     <span class="htf-dirty">Unsaved changes</span>
@@ -5671,18 +5508,21 @@
           </div>
         </div>
         <p class="panel-note">
-          Six refusals, each drawn <b>beside the field it is about</b> and each in
-          <span class="mono">publish</span>&rsquo;s own words, not a re-worded human copy — the same
-          service refuses an agent, so a second phrasing would be a second contract.
-          <span class="mono">TestInstructionsInvalidFieldError</span>: an empty body · a preview
-          path that is not a single-slash path · a commit that is not 7&ndash;64 hex · the same
-          repository twice · no section at all.
+          <b>Three</b> refusals, each drawn <b>beside the field it is about</b> and each in
+          <span class="mono">publish</span>&rsquo;s own words, not a re-worded human copy &mdash;
+          the same service refuses an agent, so a second phrasing would be a second contract.
+          <span class="mono">TestInstructionsInvalidFieldError</span>: an empty body &middot; a
+          preview path that is not a single-slash path &middot; a commit that is not 7&ndash;64 hex.
           <span class="mono">TestInstructionsCapExceededError</span>: the body over 32&nbsp;KiB
-          (also <span class="mono">previewPath</span> over 500 characters and more than 8 sections).
-          <span class="mono">TestInstructionsRepoNotInProjectError</span>: a repository outside the
-          project, <b>naming the valid set</b> as the error does. <b>The draft is kept</b> — a
-          refusal never clears what was typed. Shown together here; a save surfaces the ones its own
-          input earned.
+          (also <span class="mono">previewPath</span> over 500 characters).
+          <b>The draft is kept</b> &mdash; a refusal never clears what was typed.
+          <b>⚠️ Three refusals this panel used to draw are GONE</b>, because the controls that
+          reached them are: <i>a repository not in the project</i> and
+          <i>the same repository twice</i> were only reachable through a picker a person no longer
+          has, and <i>no section at all</i> stops being a refusal once
+          <span class="mono">publish</span> accepts zero sections (&sect; 24, decision 8b&rsquo;s
+          build dependency). Removing a control removes its failure modes; that is most of the
+          argument for removing it.
         </p>
       </div>
       <div class="dvb-col">
@@ -5795,20 +5635,10 @@
                   <div class="htf-field">
                     <span class="htf-label">Repositories</span>
                     <div class="htf-repos"></div>
-                    <div class="combo-input">
-                      <svg aria-hidden="true" style="width: 14px; height: 14px">
-                        <use href="#i-plus" /></svg
-                      ><span>motir-</span><span class="htf-caret"></span>
-                    </div>
-                    <div class="combo-pop" role="listbox" aria-label="Project repositories">
-                      <div class="picker-option" role="option" aria-selected="true">
-                        <span>moooon/motir-ai</span><span class="htf-from">in this project</span>
-                      </div>
-                      <div class="picker-option" role="option" aria-selected="false">
-                        <span>moooon/motir-gateway</span
-                        ><span class="htf-from">in this project</span>
-                      </div>
-                    </div>
+                    <p class="htf-hint">
+                      No pull request is linked, so there is nothing to check out. Write the
+                      instructions &mdash; a repository appears here on its own if one is linked.
+                    </p>
                   </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
@@ -5820,18 +5650,21 @@
           </div>
         </div>
         <p class="panel-note">
-          With nothing linked there are no suggested sections, so the form opens with the repository
-          picker focused and open over <b>the project&rsquo;s repositories</b> —
-          <span class="mono">projectRepos</span> from the draft read, the same set
-          <span class="mono">resolveProjectRepoSections</span> validates a save against. This state
-          is <b>not an error</b>, and the picker is <b>unconditional</b> rather than a fallback for
-          it: <b>Motir does not decide how a team works</b>. A team may keep its pull requests on
-          the host and its work items here and never link the two, or link one and have touched a
-          second repository &mdash; and must still be able to write How to test. The linked set is
-          Motir&rsquo;s best GUESS, so it SUGGESTS the sections and never RESTRICTS them; deriving
-          them would make linking a precondition for describing your work (&sect; 24, decisions 8
-          and 8b). The picker is Panel 5b&rsquo;s <span class="mono">Combobox</span> grammar
-          verbatim.
+          <b>The case this whole part exists for</b> (Yue, 2026-09-17):
+          <i
+            >&ldquo;a human developing team may not have the regulation to link the PR in the work
+            item &mdash; they can manage the PR in github and manage the task in motir and add how
+            to test in motir. We don&rsquo;t decide how they should work.&rdquo;</i
+          >
+          So there is <b>no repository control at all</b>: a person writes the instructions and
+          saves. Repositories are Motir&rsquo;s to fill in when it knows them, never a form a person
+          is walked through. <b>This state is not an error and not a degraded mode</b> &mdash; it is
+          the ordinary way a team that keeps its pull requests on the host uses How to test. &sect;
+          24, decisions 8 and 8b.
+          <b>⚠️ It needs <span class="mono">publish</span> to accept ZERO sections</b>, which it
+          does not today (<span class="mono"
+            >&apos;give one entry per repository the run pushed to — at least one.&apos;</span
+          >). That is this drawing&rsquo;s one build dependency.
         </p>
       </div>
       <div class="dvb-col">
@@ -6268,13 +6101,6 @@ git fetch origin &#x27;acme-31-rate-limit&#x27; &amp;&amp; git checkout &#x27;ac
                           />
                           <span class="htf-from">from pull request #131</span>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-core"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                       <div class="htf-repo-row">
                         <span class="htf-repo-name"
@@ -6289,24 +6115,8 @@ git fetch origin &#x27;acme-31-rate-limit&#x27; &amp;&amp; git checkout &#x27;ac
                           />
                           <span class="htf-from">from pull request #88</span>
                         </div>
-                        <button
-                          class="htf-row-remove"
-                          type="button"
-                          aria-label="Remove moooon/motir-ai"
-                        >
-                          <svg aria-hidden="true"><use href="#i-trash" /></svg>
-                        </button>
                       </div>
                     </div>
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      type="button"
-                      style="align-self: flex-start"
-                    >
-                      <svg aria-hidden="true" style="width: 14px; height: 14px">
-                        <use href="#i-plus" /></svg
-                      >Add repository
-                    </button>
                   </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
