@@ -8,6 +8,7 @@ import * as workItemsRoute from '@/app/api/%5Ftest/work-items/route';
 import * as workItemLinksRoute from '@/app/api/%5Ftest/work-item-links/route';
 import * as legalManifestRoute from '@/app/api/%5Ftest/legal-manifest/route';
 import * as docsUrlRoute from '@/app/api/%5Ftest/docs-url/route';
+import * as monitorPollRoute from '@/app/api/%5Ftest/monitors/poll/route';
 import { productionGate } from '@/app/api/%5Ftest/_helpers';
 import { LEGAL_DOCUMENTS_ENV } from '@/lib/legal/documents';
 import { DOCS_URL_ENV } from '@/lib/docs/links';
@@ -62,6 +63,21 @@ describe('_test/work-item-links route — production gating', () => {
     await assertGated(workItemLinksRoute.GET, url);
     await assertGated(workItemLinksRoute.POST, url);
     await assertGated(workItemLinksRoute.DELETE, url);
+  });
+});
+
+describe('_test/monitors/poll route — production gating (MOTIR-4929 · MOTIR-5584)', () => {
+  it('returns 404 for POST when NODE_ENV=production, before reading a session or a body', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_PROD_HARNESS', '');
+    const res = await monitorPollRoute.POST(
+      new Request('http://localhost/api/_test/monitors/poll', {
+        method: 'POST',
+        body: JSON.stringify({ connectionId: 'anything' }),
+      }),
+    );
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code?: string }).code).toBe('NOT_FOUND');
   });
 });
 
