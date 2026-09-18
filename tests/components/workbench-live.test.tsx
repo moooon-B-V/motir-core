@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { mergeHeldRows, arrivedRowIds } from '@/lib/workbench/liveRows';
+import { announceGateDecided } from '@/lib/approvals/decidedGates';
 
 // THE WORKBENCH, LIVE (Story MOTIR-5238 · Subtask MOTIR-5242) — the client half.
 //
@@ -89,6 +90,13 @@ function controllableStream() {
     async send(frame: { moved: string[]; cursor: string }) {
       await act(async () => {
         controller?.enqueue(encoder.encode(`event: watermark\ndata: ${JSON.stringify(frame)}\n\n`));
+        await Promise.resolve();
+      });
+    },
+    /** A frame exactly as written — including shapes a server would never send. */
+    async sendRaw(data: string) {
+      await act(async () => {
+        controller?.enqueue(encoder.encode(`event: watermark\ndata: ${data}\n\n`));
         await Promise.resolve();
       });
     },
@@ -338,5 +346,224 @@ describe('the RULE itself, without React', () => {
   it('names no arrivals on a first reading, and only the new ones after', () => {
     expect([...arrivedRowIds(null, [{ id: 'a' }], id)]).toEqual([]);
     expect([...arrivedRowIds([{ id: 'a' }], [{ id: 'a' }, { id: 'b' }], id)]).toEqual(['b']);
+  });
+});
+
+describe('the CONNECTION\u2019s own arms — what a percentage cannot see', () => {
+  it('treats a non-OK response as a drop: it says reconnecting and tries again', async () => {
+    const calls: string[] = [];
+    let attempt = 0;
+    const encoder = new TextEncoder();
+    let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        calls.push(String(input));
+        attempt += 1;
+        // The FIRST connection is refused outright — a 503 from a proxy, the
+        // ordinary shape of a deploy. The hook must treat it as a drop rather
+        // than as a stream it can read.
+        if (attempt === 1) return Promise.resolve(new Response('nope', { status: 503 }));
+        return Promise.resolve(
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(c) {
+                controller = c;
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      }),
+    );
+
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('workbench-reconnecting')).toBeTruthy();
+
+    // The backoff is real time; the retry lands, and the chip clears.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+    });
+    expect(calls.length).toBeGreaterThan(1);
+    await act(async () => {
+      controller?.enqueue(
+        encoder.encode(
+          `event: watermark\ndata: ${JSON.stringify({ moved: [], cursor: 'w1.x' })}\n\n`,
+        ),
+      );
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('workbench-reconnecting')).toBeNull();
+  });
+
+  it('RESUMES from the cursor it was last given', async () => {
+    const stream = controllableStream();
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+    // The first connection carries no `since` — this reader has seen nothing.
+    expect(stream.calls[0]).not.toContain('since=');
+
+    await stream.send({ moved: ['toDo'], cursor: 'w1.held' });
+    await stream.drop();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+    });
+
+    // ⚠️ THE RECONNECT PRESENTS THE WATERMARK, which is what makes it neither a
+    // replay nor a gap: the server compares rather than replaying a position.
+    expect(stream.calls.at(-1)).toContain(`since=${encodeURIComponent('w1.held')}`);
+  });
+
+  it('ignores a frame it cannot read rather than nudging on it', async () => {
+    const stream = controllableStream();
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+
+    // A frame whose `moved` is not a list, and one naming a tab that is not a
+    // tab. Neither is a nudge: this surface re-reads on what it understands.
+    await stream.sendRaw(JSON.stringify({ moved: 'everything', cursor: 'w1.a' }));
+    await stream.sendRaw(JSON.stringify({ moved: ['not-a-tab'], cursor: 'w1.b' }));
+    expect(refresh).not.toHaveBeenCalled();
+
+    // And a frame with no cursor still nudges — the cursor is how a RECONNECT
+    // resumes, not a condition for applying what a frame says.
+    await stream.sendRaw(JSON.stringify({ moved: ['toDo'] }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays reconnecting across a SECOND failure, and backs off further', async () => {
+    let attempts = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        attempts += 1;
+        return Promise.resolve(new Response('nope', { status: 503 }));
+      }),
+    );
+
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('workbench-reconnecting')).toBeTruthy();
+
+    // ⚠️ THE SECOND DROP MUST NOT RE-ANNOUNCE. The chip is already up, so the
+    // state is left exactly as it is — a surface that re-rendered the whole
+    // Workbench on every failed retry would be paying for the outage twice.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+    });
+    expect(attempts).toBeGreaterThan(1);
+    expect(screen.getAllByTestId('workbench-reconnecting')).toHaveLength(1);
+  });
+
+  it('ABORTS on unmount — nothing is left reading for a reader who has gone', async () => {
+    const stream = controllableStream();
+    let view!: ReturnType<typeof renderWithIntl>;
+    await act(async () => {
+      view = renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+    const opened = stream.calls.length;
+
+    await act(async () => {
+      view.unmount();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+    });
+
+    // The abort ends the pump; no reconnect is attempted for an unmounted host.
+    expect(stream.calls.length).toBe(opened);
+  });
+});
+
+describe('a row THIS READER decided survives a frame, with its state pill', () => {
+  it('keeps the settled row in place when the re-read no longer returns it', async () => {
+    controllableStream();
+    const rows = [row('gate-1', 5147, 'The first'), row('gate-2', 4942, 'The second')];
+    let view!: ReturnType<typeof renderWithIntl>;
+    await act(async () => {
+      view = renderWithIntl(
+        <WorkbenchLive>
+          <ApprovalsList rows={rows} label="To approve" pagination={PAGE} />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+
+    // THE READER DECIDES IT — in the overlay, which announces through the store
+    // the list watches (`lib/approvals/decidedGates.ts`). The row settles where
+    // it is, with the state it reached.
+    await act(async () => {
+      // The store keys on the GATE's id, which is the row's `gateId`.
+      announceGateDecided({
+        gate: {
+          id: 'gate-2',
+          workItemId: 'wi-4942',
+          kind: 'design_result',
+          state: 'approved',
+          subjectId: 'ev-4942',
+          subjectVersion: '9840d00ea1b2',
+          decidedAt: new Date().toISOString(),
+          decidedByLabel: 'Zhu Yue',
+          noteMd: null,
+          createdAt: new Date().toISOString(),
+          outcomeRef: null,
+        } as never,
+        filesKept: true,
+      });
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Approved')).toBeTruthy();
+
+    // NOW THE SERVER RE-READS, and no longer returns it — the tab reads
+    // `state = awaiting`. § 20's rule is that the row stays until the next LOAD,
+    // and this is the path that would otherwise delete it.
+    await act(async () => {
+      view.rerender(
+        <WorkbenchLive>
+          <ApprovalsList rows={[rows[0]!]} label="To approve" pagination={{ ...PAGE, total: 1 }} />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('approval-row-gate-2')).toBeTruthy();
+    // ⚠️ AND IT KEEPS THE STATE IT REACHED, not the colourless *Decided
+    // elsewhere*: this reader knows what they did, and the announcement is what
+    // the row shows. The held treatment is for a row whose outcome this surface
+    // never learned.
+    expect(screen.getByText('Approved')).toBeTruthy();
+    expect(screen.queryByText('Decided elsewhere')).toBeNull();
   });
 });

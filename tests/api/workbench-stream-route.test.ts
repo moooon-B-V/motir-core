@@ -333,3 +333,44 @@ describe('A DISCONNECT STOPS THE POLL — the only thing that ever ends this str
     expect(spy.mock.calls.length).toBe(settled);
   });
 });
+
+describe('A MID-STREAM FAILURE is a terminal `error` FRAME, never a status', () => {
+  it('writes the frame the shipped contract specifies once the headers have gone', async () => {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    // The first read succeeds — it is the one that happens BEFORE the stream is
+    // constructed, and it is what makes a refusal a real status. Everything
+    // after it is inside an open response, where the only thing left to say is
+    // a frame.
+    let call = 0;
+    // ⚠️ THE ORIGINAL IS CAPTURED BEFORE THE SPY REPLACES IT. `vi.importActual`
+    // hands back the same service object this spy patched, so calling through it
+    // re-enters the mock — the first read then throws too, and the test fails
+    // for the opposite reason to the one it is about.
+    const real = workbenchWatermarkService.read.bind(workbenchWatermarkService);
+    vi.spyOn(workbenchWatermarkService, 'read').mockImplementation(async (...args) => {
+      call += 1;
+      if (call === 1) return real(...args);
+      throw new Error('the database went away');
+    });
+
+    const res = await GET(req('/api/workbench/stream'));
+    expect(res.status).toBe(200);
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    const deadline = Date.now() + 6_000;
+    while (!text.includes('event: error') && Date.now() < deadline) {
+      const chunk = await Promise.race([
+        reader.read(),
+        sleep(deadline - Date.now()).then(() => ({ done: true, value: undefined }) as const),
+      ]);
+      if (chunk.done || !chunk.value) break;
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    await reader.cancel();
+
+    expect(text).toContain('event: error');
+    expect(text).toContain('INTERNAL_ERROR');
+    expect(text).toContain('the database went away');
+  });
+});
