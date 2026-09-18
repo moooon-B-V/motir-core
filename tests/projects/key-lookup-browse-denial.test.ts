@@ -221,6 +221,16 @@ const ROUTES: { route: string; call: Call }[] = [
       ),
   },
   {
+    // MOTIR-5579: the minimum-level write. A valid level, so the request reaches
+    // the lookup rather than 400ing on the value.
+    route: 'PATCH monitors/[connectionId]',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/monitors/[connectionId]/route')).PATCH(
+        json('PATCH', { minimumLevel: 'error' }),
+        p({ key, connectionId: 'connection-1' }),
+      ),
+  },
+  {
     route: 'GET monitors/available',
     call: async (key) =>
       (await import('@/app/api/projects/[key]/monitors/available/route')).GET(get(), p({ key })),

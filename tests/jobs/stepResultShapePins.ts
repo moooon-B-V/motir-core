@@ -261,6 +261,19 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ discrepancies: Array<{ containerCount: number; containerMinutes: number; driftMinutes: number; exceedsTolerance: boolean; fleetJobCount: number; meteredMinutes: number; repoName: string }>; org: string; outcome: "reconciled"; periodStart: Date; repos: Array<{ containerCount: number; containerMinutes: number; driftMinutes: number; exceedsTolerance: boolean; fleetJobCount: number; meteredMinutes: number; repoName: string }> } | { outcome: "skipped"; reason: "metering_disabled" }',
   },
+  'list-pollable-connections': {
+    file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
+    shape: 'Array<{ id: string; workspaceId: string }>',
+  },
+  'dispatch-polls': {
+    file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
+    shape: '{ dispatched: number }',
+  },
+  poll: {
+    file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
+    shape:
+      '{ filed: number; pages: number; refiled: number; skipped: number; status: "failed" | "ok"; updated: number }',
+  },
   'reconcile-open-deliveries-v2': {
     file: 'lib/jobs/definitions/pullRequestReconcile.ts',
     shape:

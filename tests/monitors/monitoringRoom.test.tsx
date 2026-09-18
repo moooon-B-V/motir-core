@@ -42,6 +42,12 @@ function connection(slug: string): MonitorConnectionDto {
     healthCheckedAt: '2026-09-12T10:00:00.000Z',
     orgSlug: 'acme-inc',
     createdAt: '2026-09-09T10:00:00.000Z',
+    minimumLevel: null,
+    lastPolledAt: null,
+    lastPollStatus: null,
+    lastPollError: null,
+    lastPollFiledCount: null,
+    lastPollSucceededAt: null,
   };
 }
 

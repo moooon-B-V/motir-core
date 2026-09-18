@@ -213,6 +213,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // still opens no database, renders nothing, and imports only a data module
   // from `lib/`, so it carries no meaningful coverage into the merged report.
   'tests/legal/egress-manifest-guard.test.ts',
+  // ── tests/monitors/ — the monitor-INGESTION guards (MOTIR-4929 · MOTIR-5583) ─
+  // Text walks of `lib/` + `app/` + `scripts/` (one production caller of
+  // `listIssuesSince`) and of the ingestion service (placement from one place).
+  // No database, no render, only `node:fs` / `node:path`.
+  'tests/monitors/monitorIngestionGuards.test.ts',
   // ── tests/legal/ — the content/legal ABSENCE guard (MOTIR-4104) ──────────
   // The same shape as its neighbour above and as `abandonedPath` further up: it
   // walks `app/` + `lib/` + `components/` through `contentLegalReaderGuard.ts`,

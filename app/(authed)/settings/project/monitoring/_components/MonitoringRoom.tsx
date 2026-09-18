@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -15,11 +15,13 @@ import {
   X,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/Button';
+import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { useToast } from '@/components/ui/Toast';
 import type { MonitorConnectionDto, MonitorConnectionViewDto } from '@/lib/dto/monitors';
+import { isMonitorLevel, MONITOR_LEVELS } from '@/lib/monitors/levels';
 import type { MonitorBannerTone, MonitoringBannerCopy } from '@/lib/monitors/returnBanner';
 import { monitorConnectHref } from '@/lib/monitors/returnSurface';
 import { recheckMonitorHealthAction } from '../actions';
@@ -42,7 +44,21 @@ export interface MonitoringRoomProps {
   checkedLabel: string | null;
   /** "Bound N days ago" per connection id, formatted on the server. */
   boundLabels: Record<string, string>;
+  /** Each row's poll line per connection id — DECIDED and FORMATTED on the
+   *  server (MOTIR-5582): the overdue threshold is the reconciler's own
+   *  constant, in a server-only module. A row with no entry shows none. */
+  pollLines?: Record<string, PollLineView>;
 }
+
+/**
+ * One row's ingestion line, as the server decided it (`lib/monitors/pollLine.ts`)
+ * — `design-notes.md` §12's state table, with every time already a string.
+ */
+export type PollLineView =
+  | { kind: 'waiting' }
+  | { kind: 'ok'; ago: string; filedCount: number }
+  | { kind: 'overdue'; since: string }
+  | { kind: 'failed'; reason: string; lastSuccess: string | null };
 
 const BANNER_CLASS: Record<MonitorBannerTone, string> = {
   success: 'bg-(--el-success-surface) text-(--el-text-strong)',
@@ -68,6 +84,7 @@ export function MonitoringRoom({
   banner,
   checkedLabel,
   boundLabels,
+  pollLines = {},
 }: MonitoringRoomProps) {
   const t = useTranslations('monitoring');
   const router = useRouter();
@@ -237,32 +254,16 @@ export function MonitoringRoom({
             </p>
             <ul className="flex flex-col gap-2">
               {view.connections.map((connection) => (
-                <li
+                <ConnectionRow
                   key={connection.id}
-                  className="flex items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-3.5 py-3"
-                >
-                  <Bug
-                    className="size-[18px] flex-none text-(--el-icon-muted)"
-                    aria-hidden="true"
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                    <span className="font-mono text-sm font-semibold text-(--el-text)">
-                      {connection.externalProjectSlug}
-                    </span>
-                    <span className="font-sans text-xs text-(--el-text-secondary)">
-                      {boundLabels[connection.id]}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t('row.disconnect', { slug: connection.externalProjectSlug })}
-                    disabled={busy !== null}
-                    onClick={() => setRemoving(connection)}
-                    className="inline-flex size-(--height-control) flex-none items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) hover:bg-(--el-surface) hover:text-(--el-text) disabled:opacity-50"
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                  </button>
-                </li>
+                  projectKey={projectKey}
+                  connection={connection}
+                  boundLabel={boundLabels[connection.id]}
+                  pollLine={pollLines[connection.id] ?? null}
+                  roomBusy={busy !== null}
+                  onDisconnect={() => setRemoving(connection)}
+                  onSaved={() => router.refresh()}
+                />
               ))}
             </ul>
             <div>
@@ -339,6 +340,184 @@ export function MonitoringRoom({
         </Modal.Footer>
       </Modal>
     </div>
+  );
+}
+
+/** The level control's value for "every level" — the stored `null`. */
+const EVERY_LEVEL = 'every';
+type LevelValue = typeof EVERY_LEVEL | (typeof MONITOR_LEVELS)[number];
+
+/**
+ * ONE monitored project (MOTIR-5582, `design-notes.md` §12): the slug, the
+ * `Bound …` line, the poll line beneath it, the minimum-level control, and the
+ * disconnect action.
+ *
+ * ⚠️ PAGE STATE AFTER THE LEVEL WRITE. The control's own value is the edited
+ * field's cell, so it shows the WRITE'S RESPONSE the moment it resolves rather
+ * than waiting on a refresh; the row is then refreshed through `router.refresh()`
+ * — the room's one refresh mechanism, the picker's `onBound` — so the server's
+ * read and this cell agree. A refused write keeps the stored value and says so
+ * on the row, never across the room.
+ */
+function ConnectionRow({
+  projectKey,
+  connection,
+  boundLabel,
+  pollLine,
+  roomBusy,
+  onDisconnect,
+  onSaved,
+}: {
+  projectKey: string;
+  connection: MonitorConnectionDto;
+  boundLabel: string | undefined;
+  pollLine: PollLineView | null;
+  roomBusy: boolean;
+  onDisconnect: () => void;
+  onSaved: () => void;
+}) {
+  const t = useTranslations('monitoring');
+  const [saving, setSaving] = useState(false);
+  const [refused, setRefused] = useState(false);
+  // The write's answer, keyed to the stored value it replaced, so a later
+  // refresh that brings a DIFFERENT stored value (another person's change) wins.
+  const [saved, setSaved] = useState<{ base: string | null; value: string | null } | null>(null);
+  const stored =
+    saved && saved.base === connection.minimumLevel ? saved.value : connection.minimumLevel;
+
+  const options: ComboboxOption<LevelValue>[] = [
+    { value: EVERY_LEVEL, label: t('row.level.every') },
+    ...MONITOR_LEVELS.map((level) => ({ value: level, label: level })),
+  ];
+
+  async function choose(value: LevelValue) {
+    const minimumLevel = value === EVERY_LEVEL ? null : value;
+    if (minimumLevel === stored) return;
+    setSaving(true);
+    setRefused(false);
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectKey)}/monitors/${encodeURIComponent(connection.id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ minimumLevel }),
+        },
+      );
+      if (!res.ok) {
+        setRefused(true);
+        return;
+      }
+      const dto = (await res.json()) as MonitorConnectionDto;
+      setSaved({ base: connection.minimumLevel, value: dto.minimumLevel });
+      onSaved();
+    } catch {
+      setRefused(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-3.5 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Bug className="size-[18px] flex-none text-(--el-icon-muted)" aria-hidden="true" />
+        <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          <span className="font-mono text-sm font-semibold text-(--el-text)">
+            {connection.externalProjectSlug}
+          </span>
+          <span className="font-sans text-xs text-(--el-text-secondary)">{boundLabel}</span>
+          {pollLine ? <PollLine line={pollLine} /> : null}
+        </span>
+        <span className="flex flex-none items-center gap-2">
+          <span className="font-sans text-xs text-(--el-text-secondary)" aria-hidden="true">
+            {t('row.level.label')}
+          </span>
+          <Combobox<LevelValue>
+            label={t('row.level.label')}
+            options={options}
+            // A stored value outside the vocabulary filters nothing (`meetsMinimumLevel`),
+            // so it reads as what it does: every level.
+            value={saving ? null : stored !== null && isMonitorLevel(stored) ? stored : EVERY_LEVEL}
+            placeholder={t('row.level.saving')}
+            disabled={saving || roomBusy}
+            onChange={(value) => void choose(value)}
+            footer={t('row.level.helper')}
+            className="min-w-[9rem]"
+          />
+        </span>
+        <button
+          type="button"
+          aria-label={t('row.disconnect', { slug: connection.externalProjectSlug })}
+          disabled={roomBusy || saving}
+          onClick={onDisconnect}
+          className="inline-flex size-(--height-control) flex-none items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) hover:bg-(--el-surface) hover:text-(--el-text) disabled:opacity-50"
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+      {refused ? (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2 font-sans text-xs text-(--el-warning-text)"
+        >
+          <TriangleAlert
+            className="mt-px size-3.5 flex-none text-(--el-warning)"
+            aria-hidden="true"
+          />
+          <span>
+            {t.rich('row.level.failed', {
+              b: (chunks) => <b className="font-semibold">{chunks}</b>,
+            })}
+          </span>
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+/** The poll line beneath `Bound …` — quiet for waiting / recent ok, a filled
+ *  warning line for overdue / failed (§12). The failure reason is the stored
+ *  string, rendered verbatim: this component never words or summarises it. */
+function PollLine({ line }: { line: PollLineView }) {
+  const t = useTranslations('monitoring');
+  const b = (chunks: ReactNode) => <b className="font-semibold">{chunks}</b>;
+
+  if (line.kind === 'waiting' || line.kind === 'ok') {
+    return (
+      <span className="font-sans text-xs text-(--el-text-secondary)" data-poll-state={line.kind}>
+        {line.kind === 'waiting' ? t('row.poll.waiting') : t('row.poll.ok', { ago: line.ago })}
+        {line.kind === 'ok' && line.filedCount > 0 ? (
+          <>
+            {' · '}
+            <span className="text-(--el-text-strong)">
+              {t.rich('row.poll.filed', { count: line.filedCount, b })}
+            </span>
+          </>
+        ) : null}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      data-poll-state={line.kind}
+      className="mt-1 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-2.5 py-1.5 font-sans text-xs text-(--el-warning-text)"
+    >
+      <TriangleAlert className="mt-px size-3.5 flex-none text-(--el-warning)" aria-hidden="true" />
+      <span>
+        {line.kind === 'overdue' ? (
+          t.rich('row.poll.overdue', { since: line.since, b })
+        ) : (
+          <>
+            {t.rich('row.poll.failed', { reason: line.reason, b })}
+            {line.lastSuccess ? (
+              <> {t('row.poll.lastSuccess', { when: line.lastSuccess })}</>
+            ) : null}
+          </>
+        )}
+      </span>
+    </span>
   );
 }
 

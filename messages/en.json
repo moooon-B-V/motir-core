@@ -8700,7 +8700,22 @@
     },
     "row": {
       "bound": "Bound {when}",
-      "disconnect": "Stop monitoring {slug}"
+      "disconnect": "Stop monitoring {slug}",
+      "level": {
+        "label": "Minimum level",
+        "every": "Every level",
+        "helper": "Choosing a lower level also checks earlier issues since this project was first monitored.",
+        "saving": "Saving…",
+        "failed": "<b>Couldn't change level.</b> Nothing changed — try again."
+      },
+      "poll": {
+        "waiting": "Waiting for the first check",
+        "ok": "Checked for new errors {ago}",
+        "filed": "{count, plural, one {<b># bug filed</b>} other {<b># bugs filed</b>}}",
+        "overdue": "<b>No check since {since}.</b> Two scheduled checks were missed.",
+        "failed": "<b>Couldn't check for new errors:</b> {reason}",
+        "lastSuccess": "Last successful check {when}."
+      }
     },
     "confirm": {
       "cancel": "Cancel",
