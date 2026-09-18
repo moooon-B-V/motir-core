@@ -123,6 +123,8 @@ export const FAST_LANE_CONSUMER_IDS = [
   // MOTIR-3579 — the plan-drift consumer joined the lane; see the reasoning
   // beside its entry in `lib/jobs/latencyBudget.ts`, which this list mirrors.
   'plan-drift/transitioned',
+  // MOTIR-5703 — the resolve-back, admitted deliberately (lib/jobs/latencyBudget.ts).
+  'monitor-issue-resolve',
   'status-derivation/transitioned',
   'watcher-notify/transitioned',
 ];
