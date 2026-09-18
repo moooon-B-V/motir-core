@@ -205,6 +205,7 @@ describe('monitor_installation / monitor_connection RLS', () => {
             workspaceId: b.workspaceId,
             externalProjectId: 'ext-forged',
             externalProjectSlug: 'forged',
+            boundByUserId: a.userId,
           },
           tx,
         ),
@@ -311,6 +312,7 @@ describe('binding the same monitored project twice', () => {
             workspaceId: a.workspaceId,
             externalProjectId,
             externalProjectSlug: 'contended',
+            boundByUserId: a.userId,
           },
           tx,
         );
@@ -364,6 +366,7 @@ describe('binding the same monitored project twice', () => {
           workspaceId: a.workspaceId,
           externalProjectId: a.externalProjectId,
           externalProjectSlug: 'shared-monitored-project',
+          boundByUserId: a.userId,
         },
         tx,
       );
@@ -387,6 +390,7 @@ describe('binding the same monitored project twice', () => {
           workspaceId: a.workspaceId,
           externalProjectId: 'ext-worker',
           externalProjectSlug: 'worker',
+          boundByUserId: a.userId,
         },
         tx,
       );

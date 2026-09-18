@@ -157,6 +157,7 @@ describe('the binding write classifies a unique violation by the index it names'
     installationId: 'i1',
     externalProjectId: 'e1',
     externalProjectSlug: 'web',
+    boundByUserId: 'u1',
   };
   const txRejecting = (error: unknown) =>
     ({

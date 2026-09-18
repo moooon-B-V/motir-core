@@ -22,6 +22,9 @@ export interface CreateMonitorConnectionInput {
   workspaceId: string;
   externalProjectId: string;
   externalProjectSlug: string;
+  /** The person binding it — whose identity the reconciler files bugs as
+   *  (MOTIR-4929). Required: a new binding always has a binder. */
+  boundByUserId: string;
 }
 
 /** A binding joined to the fields of its grant that a render needs — and to none
@@ -180,6 +183,96 @@ export const monitorConnectionRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     return tx.monitorConnection.count({ where: { installationId } });
+  },
+
+  // ── INGESTION STATE (Story MOTIR-4929 · Subtask MOTIR-5576) ──────────────────
+
+  /**
+   * EVERY binding the reconciling poll should visit, across every workspace.
+   *
+   * Called under SYSTEM context (the `monitor_connection_workspace_or_system`
+   * policy's system arm): the scheduled tick does not know whose connections
+   * exist until it has read them. Ordered by id so a tick's fan-out is stable.
+   * Each row carries its `installationId` (where the credential lives) and its
+   * `boundByUserId` (whose identity files the bugs).
+   */
+  async listForPolling(tx: Prisma.TransactionClient): Promise<MonitorConnection[]> {
+    return tx.monitorConnection.findMany({ orderBy: { id: 'asc' } });
+  },
+
+  /** Record what the last poll did — the line the Monitoring room shows. */
+  async recordPollOutcome(
+    id: string,
+    outcome: {
+      status: 'ok' | 'failed';
+      error: string | null;
+      filedCount: number | null;
+      polledAt: Date;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorConnection> {
+    return tx.monitorConnection.update({
+      where: { id },
+      data: {
+        lastPolledAt: outcome.polledAt,
+        lastPollStatus: outcome.status,
+        lastPollError: outcome.error,
+        lastPollFiledCount: outcome.filedCount,
+        // Only a SUCCESS moves this, so a failing row can still say when it
+        // last worked (MOTIR-5575 §12).
+        ...(outcome.status === 'ok' ? { lastPollSucceededAt: outcome.polledAt } : {}),
+      },
+    });
+  },
+
+  /**
+   * Move the watermark FORWARD to `to` — a compare-and-set, in ONE statement.
+   *
+   * It applies only when BOTH hold at the moment of the write:
+   *   · the minimum level is still the one the poll read at its start
+   *     (`expectedMinimumLevel`, compared null-safely). A LOWERING that landed
+   *     mid-poll rewound the watermark on purpose, so the poll's advance must
+   *     not undo it — and a lowering is always a change of level;
+   *   · the stored watermark is null or EARLIER than `to`. A watermark never
+   *     moves backwards, whatever order two polls finish in.
+   *
+   * One `UPDATE … WHERE`, so Postgres re-evaluates the predicate against the
+   * committed row when it had to wait for a concurrent writer — that is what
+   * makes the CAS race-free rather than a read-then-write. Returns whether it
+   * applied.
+   */
+  async advanceWatermark(
+    id: string,
+    to: Date,
+    expectedMinimumLevel: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ applied: boolean }> {
+    const result = await tx.monitorConnection.updateMany({
+      where: {
+        id,
+        minimumLevel: expectedMinimumLevel,
+        OR: [{ lastSeenWatermark: null }, { lastSeenWatermark: { lt: to } }],
+      },
+      data: { lastSeenWatermark: to },
+    });
+    return { applied: result.count === 1 };
+  },
+
+  /**
+   * Store a new minimum level, and — when `rewind` — reset the watermark to null
+   * so the next poll re-reads everything since the binding was made. The caller
+   * decides `rewind` (a lowering does; a raise does not).
+   */
+  async setMinimumLevel(
+    id: string,
+    level: string | null,
+    rewind: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorConnection> {
+    return tx.monitorConnection.update({
+      where: { id },
+      data: { minimumLevel: level, ...(rewind ? { lastSeenWatermark: null } : {}) },
+    });
   },
 
   /** Remove one binding. `deleteMany` (not `delete`) so a retried disconnect

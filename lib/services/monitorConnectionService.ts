@@ -235,6 +235,10 @@ export const monitorConnectionService = {
           workspaceId: ctx.workspaceId,
           externalProjectId: input.externalProjectId,
           externalProjectSlug: input.externalProjectSlug,
+          // WHOSE identity the reconciler files this binding's bugs as
+          // (MOTIR-4929 · MOTIR-5576) — the person binding it, never a system
+          // principal and never someone substituted later.
+          boundByUserId: ctx.userId,
         },
         tx,
       );
