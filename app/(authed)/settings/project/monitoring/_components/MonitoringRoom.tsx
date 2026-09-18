@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -9,6 +10,7 @@ import {
   CircleAlert,
   CircleCheckBig,
   Info,
+  LoaderCircle,
   RefreshCw,
   Trash2,
   TriangleAlert,
@@ -19,6 +21,7 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { SectionLabel } from '@/components/ui/SectionLabel';
+import { Switch } from '@/components/ui/Switch';
 import { useToast } from '@/components/ui/Toast';
 import type { MonitorConnectionDto, MonitorConnectionViewDto } from '@/lib/dto/monitors';
 import { isMonitorLevel, MONITOR_LEVELS } from '@/lib/monitors/levels';
@@ -48,6 +51,10 @@ export interface MonitoringRoomProps {
    *  server (MOTIR-5582): the overdue threshold is the reconciler's own
    *  constant, in a server-only module. A row with no entry shows none. */
   pollLines?: Record<string, PollLineView>;
+  /** When each row's last FAILED resolve-back happened, formatted on the server
+   *  like every other time here (Story MOTIR-4931 · MOTIR-5707). A row with no
+   *  recorded failure has no entry. */
+  syncErrorLabels?: Record<string, string>;
 }
 
 /**
@@ -85,6 +92,7 @@ export function MonitoringRoom({
   checkedLabel,
   boundLabels,
   pollLines = {},
+  syncErrorLabels = {},
 }: MonitoringRoomProps) {
   const t = useTranslations('monitoring');
   const router = useRouter();
@@ -260,6 +268,7 @@ export function MonitoringRoom({
                   connection={connection}
                   boundLabel={boundLabels[connection.id]}
                   pollLine={pollLines[connection.id] ?? null}
+                  syncErrorWhen={syncErrorLabels[connection.id] ?? null}
                   roomBusy={busy !== null}
                   onDisconnect={() => setRemoving(connection)}
                   onSaved={() => router.refresh()}
@@ -364,6 +373,7 @@ function ConnectionRow({
   connection,
   boundLabel,
   pollLine,
+  syncErrorWhen,
   roomBusy,
   onDisconnect,
   onSaved,
@@ -372,12 +382,14 @@ function ConnectionRow({
   connection: MonitorConnectionDto;
   boundLabel: string | undefined;
   pollLine: PollLineView | null;
+  syncErrorWhen: string | null;
   roomBusy: boolean;
   onDisconnect: () => void;
   onSaved: () => void;
 }) {
   const t = useTranslations('monitoring');
   const [saving, setSaving] = useState(false);
+  const [syncSaving, setSyncSaving] = useState(false);
   const [refused, setRefused] = useState(false);
   // The write's answer, keyed to the stored value it replaced, so a later
   // refresh that brings a DIFFERENT stored value (another person's change) wins.
@@ -449,7 +461,7 @@ function ConnectionRow({
         <button
           type="button"
           aria-label={t('row.disconnect', { slug: connection.externalProjectSlug })}
-          disabled={roomBusy || saving}
+          disabled={roomBusy || saving || syncSaving}
           onClick={onDisconnect}
           className="inline-flex size-(--height-control) flex-none items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) hover:bg-(--el-surface) hover:text-(--el-text) disabled:opacity-50"
         >
@@ -472,7 +484,188 @@ function ConnectionRow({
           </span>
         </p>
       ) : null}
+      <SyncBand
+        projectKey={projectKey}
+        connection={connection}
+        syncErrorWhen={syncErrorWhen}
+        onPendingChange={setSyncSaving}
+        onSaved={onSaved}
+      />
     </li>
+  );
+}
+
+type SyncKey = 'resolveOnDone' | 'syncAssignee';
+
+/**
+ * The row's SYNC band (Story MOTIR-4931 · MOTIR-5707; `design-notes.md` §13) —
+ * the two per-connection direction switches, under the row's top line, and the
+ * connection's last FAILED resolve-back directly under the switch it belongs to.
+ *
+ * - WRITE ON TOGGLE, one key at a time: the switch moves at once, is disabled
+ *   with "Saving…" after its label while the PATCH is in flight, and then shows
+ *   the response DTO's value. The OTHER switch stays operable — the writes are
+ *   independent keys (§13 decision 5).
+ * - A refused write returns the switch to the stored value and shows the
+ *   failed-save line under the band. It never turns the grant degraded.
+ * - OPERABLE on a degraded grant: a switch is a Motir-side preference and makes
+ *   no provider call (§13 decision 4), so nothing here reads the grant's health.
+ * - The failure line renders only while `lastSyncError` is set; "never resolved"
+ *   and "last resolve succeeded" both render nothing (§13 decision 3). The
+ *   provider's reason is shown verbatim — never worded or summarised here.
+ */
+function SyncBand({
+  projectKey,
+  connection,
+  syncErrorWhen,
+  onPendingChange,
+  onSaved,
+}: {
+  projectKey: string;
+  connection: MonitorConnectionDto;
+  syncErrorWhen: string | null;
+  onPendingChange: (pending: boolean) => void;
+  onSaved: () => void;
+}) {
+  const t = useTranslations('monitoring');
+  // The value the switch shows while its write is in flight, per key.
+  const [pending, setPending] = useState<Partial<Record<SyncKey, boolean>>>({});
+  // The write's answer, keyed to the stored value it replaced — the level
+  // control's rule: a later refresh bringing a DIFFERENT stored value wins.
+  const [saved, setSaved] = useState<Partial<Record<SyncKey, { base: boolean; value: boolean }>>>(
+    {},
+  );
+  const [refused, setRefused] = useState(false);
+  // The row's Disconnect is disabled while either switch is saving (§13 decision 5).
+  const anyPending = Object.keys(pending).length > 0;
+  useEffect(() => onPendingChange(anyPending), [anyPending, onPendingChange]);
+
+  const shown = (key: SyncKey): boolean => {
+    const inFlight = pending[key];
+    if (inFlight !== undefined) return inFlight;
+    const answer = saved[key];
+    return answer && answer.base === connection[key] ? answer.value : connection[key];
+  };
+
+  async function toggle(key: SyncKey, next: boolean) {
+    setPending((current) => ({ ...current, [key]: next }));
+    setRefused(false);
+    const settle = () =>
+      setPending((current) => {
+        const rest = { ...current };
+        delete rest[key];
+        return rest;
+      });
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectKey)}/monitors/${encodeURIComponent(connection.id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          // SPARSE: only the key that changed (MOTIR-5706's PATCH).
+          body: JSON.stringify({ [key]: next }),
+        },
+      );
+      if (!res.ok) {
+        setRefused(true);
+        return;
+      }
+      const dto = (await res.json()) as MonitorConnectionDto;
+      setSaved((current) => ({ ...current, [key]: { base: connection[key], value: dto[key] } }));
+      onSaved();
+    } catch {
+      setRefused(true);
+    } finally {
+      settle();
+    }
+  }
+
+  const b = (chunks: ReactNode) => <b className="font-semibold">{chunks}</b>;
+  const items: { key: SyncKey; copy: 'resolve' | 'assignee' }[] = [
+    { key: 'resolveOnDone', copy: 'resolve' },
+    { key: 'syncAssignee', copy: 'assignee' },
+  ];
+
+  return (
+    <div
+      className="ml-[30px] flex flex-col gap-2.5 border-t border-(--el-border-soft) pt-2.5"
+      data-testid="monitor-sync-band"
+    >
+      <span className="font-sans text-xs text-(--el-text-secondary)">{t('row.sync.label')}</span>
+      {items.map(({ key, copy }) => {
+        const labelId = `sync-${connection.id}-${key}`;
+        const inFlight = pending[key] !== undefined;
+        return (
+          <div key={key} className="flex items-start gap-2.5">
+            <Switch
+              checked={shown(key)}
+              onCheckedChange={(next) => void toggle(key, next)}
+              disabled={inFlight}
+              aria-labelledby={labelId}
+              className="mt-px"
+            />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex items-center gap-2 font-sans text-[13px] font-medium text-(--el-text)">
+                <span id={labelId}>{t(`row.sync.${copy}.label`)}</span>
+                {inFlight ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-normal text-(--el-text-secondary)">
+                    <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                    {t('row.sync.saving')}
+                  </span>
+                ) : null}
+              </span>
+              <span className="font-sans text-xs text-(--el-text-secondary)">
+                {t(`row.sync.${copy}.hint`)}
+              </span>
+              {key === 'resolveOnDone' && connection.lastSyncError !== null ? (
+                <span
+                  data-testid="monitor-sync-failure"
+                  className="mt-1 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-2.5 py-1.5 font-sans text-xs text-(--el-warning-text)"
+                >
+                  <TriangleAlert
+                    className="mt-px size-3.5 flex-none text-(--el-warning)"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {t.rich('row.sync.resolveFailed', {
+                      key: connection.lastSyncErrorWorkItemIdentifier ?? '—',
+                      reason: connection.lastSyncError,
+                      b,
+                      link: (chunks) =>
+                        connection.lastSyncErrorWorkItemIdentifier ? (
+                          <Link
+                            href={`/items/${encodeURIComponent(connection.lastSyncErrorWorkItemIdentifier)}`}
+                            className="font-mono text-(--el-link) underline-offset-2 hover:underline"
+                          >
+                            {chunks}
+                          </Link>
+                        ) : (
+                          chunks
+                        ),
+                    })}
+                    {syncErrorWhen ? (
+                      <> {t('row.sync.resolveFailedWhen', { when: syncErrorWhen })}</>
+                    ) : null}
+                  </span>
+                </span>
+              ) : null}
+            </span>
+          </div>
+        );
+      })}
+      {refused ? (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2 font-sans text-xs text-(--el-warning-text)"
+        >
+          <TriangleAlert
+            className="mt-px size-3.5 flex-none text-(--el-warning)"
+            aria-hidden="true"
+          />
+          <span>{t.rich('row.sync.failed', { b })}</span>
+        </p>
+      ) : null}
+    </div>
   );
 }
 
