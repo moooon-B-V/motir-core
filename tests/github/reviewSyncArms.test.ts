@@ -17,6 +17,12 @@ import * as mergeService from '@/lib/services/pullRequestMergeService';
 // demand — running many at once and hoping is the definition of a flaky test. But the method
 // TAKES its transaction client, so the race can be handed to it exactly rather than waited
 // for. Nothing here touches a database.
+//
+// ⚠️ THE RACE IS NOW SIGNALLED BY AN EMPTY INSERT, NOT BY A THROWN P2002 (MOTIR-5693). The
+// write is `createManyAndReturn` + `skipDuplicates` — `INSERT … ON CONFLICT DO NOTHING` —
+// because a raised P2002 ABORTS the enclosing Postgres transaction and the recovery read
+// could never run inside it. So the loser is handed `[]` here, exactly as Postgres hands it
+// `0 rows`, and the arm that used to be reached by rejecting is reached by returning nothing.
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -37,18 +43,22 @@ const INPUT = {
 
 const WINNER = { id: 'row-1', githubReviewId: 'gh-race-1', state: 'approved' };
 
-/** A transaction client that answers exactly the three calls the upsert makes. */
+/** A transaction client that answers exactly the three calls the upsert makes.
+ *
+ *  `insertReturns` is what `ON CONFLICT DO NOTHING` gives back: `[row]` when this
+ *  caller created it, `[]` when the unique already held — which IS the lost race. */
 function stubTx(opts: {
   updatedCount: number;
-  createThrows?: unknown;
+  insertReturns?: unknown[];
+  insertThrows?: unknown;
   findUniqueReturns?: unknown;
 }): Prisma.TransactionClient {
   return {
     githubPullRequestReview: {
       updateMany: vi.fn().mockResolvedValue({ count: opts.updatedCount }),
-      create: vi.fn().mockImplementation(() => {
-        if (opts.createThrows) return Promise.reject(opts.createThrows);
-        return Promise.resolve(WINNER);
+      createManyAndReturn: vi.fn().mockImplementation(() => {
+        if (opts.insertThrows) return Promise.reject(opts.insertThrows);
+        return Promise.resolve(opts.insertReturns ?? [WINNER]);
       }),
       findUnique: vi.fn().mockResolvedValue(opts.findUniqueReturns ?? null),
     },
@@ -57,12 +67,9 @@ function stubTx(opts: {
 
 describe('the upsert LOSES the unique race (MOTIR-5600 §1)', () => {
   it('observes the winner’s row instead of throwing', async () => {
-    // The row did not exist when this caller looked, and did by the time it inserted.
-    const tx = stubTx({
-      updatedCount: 0,
-      createThrows: Object.assign(new Error('unique'), { code: 'P2002' }),
-      findUniqueReturns: WINNER,
-    });
+    // The row did not exist when this caller looked, and did by the time it inserted — so
+    // Postgres skipped the insert and handed back no rows.
+    const tx = stubTx({ updatedCount: 0, insertReturns: [], findUniqueReturns: WINNER });
 
     // ⚠️ NEITHER CALLER THROWS AND EXACTLY ONE ROW EXISTS — that is the promise the webhook
     // arm rests on, because two copies of one delivery arriving at once is ordinary.
@@ -73,23 +80,24 @@ describe('the upsert LOSES the unique race (MOTIR-5600 §1)', () => {
 
   it('RETHROWS a failure that is not the race — a real error is not swallowed as one', async () => {
     const boom = Object.assign(new Error('connection reset'), { code: 'P1001' });
-    const tx = stubTx({ updatedCount: 0, createThrows: boom });
+    const tx = stubTx({ updatedCount: 0, insertThrows: boom });
 
-    // The catch is keyed on P2002 precisely so it cannot absorb anything else.
+    // ⚠️ THERE IS NO `catch` LEFT TO GET THIS WRONG, and that is the improvement rather than
+    // an accident of this test: the duplicate is absorbed by Postgres at the INSERT, so a
+    // real failure has nothing between it and the caller.
     await expect(githubPullRequestReviewRepository.upsertByGithubReviewId(INPUT, tx)).rejects.toBe(
       boom,
     );
   });
 
-  it('RETHROWS when the race is claimed but no winner can be read back', async () => {
-    // P2002 with nothing to find means the conflict was not the one this arm models, so
-    // answering with a row would be an invention.
-    const p2002 = Object.assign(new Error('unique'), { code: 'P2002' });
-    const tx = stubTx({ updatedCount: 0, createThrows: p2002, findUniqueReturns: null });
+  it('throws when the insert was skipped but no winner can be read back', async () => {
+    // Nothing inserted and nothing to find means the conflict was not the one this arm
+    // models, so answering with a row would be an invention. The message names the review.
+    const tx = stubTx({ updatedCount: 0, insertReturns: [], findUniqueReturns: null });
 
-    await expect(githubPullRequestReviewRepository.upsertByGithubReviewId(INPUT, tx)).rejects.toBe(
-      p2002,
-    );
+    await expect(
+      githubPullRequestReviewRepository.upsertByGithubReviewId(INPUT, tx),
+    ).rejects.toThrow(/gh-race-1 was neither inserted nor found/);
   });
 
   it('throws a NAMED error when an updated row vanishes underneath the read', async () => {

@@ -208,6 +208,13 @@ function stubMerge(answers: Record<number, MergeChangeRequestResult>) {
     .mockImplementation(async (args) => answers[args.number]!);
 }
 
+/** What a settled promise REJECTED with, as text — the message an assertion prints
+ *  when it fails. `String(reason)` keeps a Prisma error's code and meta, which is
+ *  the part that names the defect class. */
+function reasonOf(settled: PromiseSettledResult<unknown>): string {
+  return settled.status === 'rejected' ? String(settled.reason) : '';
+}
+
 describe('§2 seam — delivery → row → verdict → door → status → MERGE (MOTIR-5600)', () => {
   it('one approval leaves the gate awaiting; the second decides it AND merges both members', async () => {
     const s = await scenario('gate-seam@example.com');
@@ -399,8 +406,12 @@ describe('§3 guards — the ones coverage cannot see (MOTIR-5600)', () => {
       githubWebhookService.handleEvent('pull_request_review', body, 'redeliver-b'),
     ]);
 
-    expect(a.status).toBe('fulfilled');
-    expect(b.status).toBe('fulfilled');
+    // ⚠️ REPORT THE REASON, never just the status (MOTIR-5693). This assertion
+    // spent a day being re-run as a flake because `'rejected'` names no class: the
+    // cause was a `25P02` raised two layers down, and it only became readable when
+    // a SIBLING test happened to print its own. A rejection here now says why.
+    expect(a.status, reasonOf(a)).toBe('fulfilled');
+    expect(b.status, reasonOf(b)).toBe('fulfilled');
     await expect(
       adminDb.githubPullRequestReview.count({ where: { githubReviewId: '5002' } }),
     ).resolves.toBe(1);

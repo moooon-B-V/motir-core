@@ -94,6 +94,24 @@ async function connectRepo(
 }
 
 /**
+ * Resolve once some backend in THIS test database is blocked on a lock — the
+ * deterministic signal that a racing write has reached the unique index and is
+ * waiting on an uncommitted winner. A signal, not a sleep: it polls the server's
+ * own view of who is waiting.
+ */
+async function waitUntilABackendWaitsOnALock(): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const rows = await adminDb.$queryRaw<{ waiting: bigint }[]>`
+      SELECT count(*) AS waiting FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+    if (Number(rows[0]?.waiting ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error('no backend ever waited on a lock — the race was not forced');
+}
+
+/**
  * Wrap a real transaction client so every property access and every `$queryRaw`
  * call is recorded — the instrument behind the "ONE query" assertion. Only
  * `$queryRaw` is intercepted; everything else passes through untouched, so the
@@ -533,6 +551,52 @@ describe('uniqueness — one repository, at most once per PROJECT', () => {
         },
       }),
     ).rejects.toMatchObject({ code: 'P2002' });
+  });
+
+  it('a LOST RACE on the realize path is the claim error — the loser neither 500s nor is told to rename (MOTIR-5273)', async () => {
+    // Two claims of one repository into one project at once, forced to collide at
+    // the INDEX rather than at the pre-check: the winner's claim is held open and
+    // uncommitted, so the loser's pre-check reads nothing, its UPDATE waits on
+    // `@@unique([projectId, githubRepoId])`, and it receives the `23505` when the
+    // winner commits. That is the path whose translator read the absent
+    // `meta.target` and re-threw the raw Prisma error — a 500 out of a service
+    // whose contract says a raw P2002 never escapes.
+    const fx = await makeWorkItemFixture();
+    const repo = await connectRepo(fx.workspaceId, 'shared-repo');
+    const winner = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'shared-repo' },
+      fx.ctx,
+    );
+    const loserRow = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'shared-repo-again' },
+      fx.ctx,
+    );
+
+    let loser: Promise<unknown> | undefined;
+    await adminDb.$transaction(
+      async (tx) => {
+        await tx.projectRepo.update({
+          where: { id: winner.id },
+          data: { githubRepoId: repo.id, state: 'connected' },
+        });
+        loser = projectRepoSetService.attachRealizedRepoRow(loserRow.id, repo.id, fx.ctx).then(
+          () => 'fulfilled',
+          (err: unknown) => err,
+        );
+        await waitUntilABackendWaitsOnALock();
+      },
+      { timeout: 20_000 },
+    );
+
+    const outcome = await loser;
+    expect(outcome).toBeInstanceOf(RealizedRepoAlreadyClaimedError);
+    expect(outcome).not.toBeInstanceOf(ProjectRepoNameTakenError);
+    expect(outcome).not.toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+    // …and the loser's row is untouched: nothing half-claimed it.
+    const persisted = await adminDb.projectRepo.findUnique({ where: { id: loserRow.id } });
+    expect(persisted?.githubRepoId).toBeNull();
   });
 
   it('permits MANY unrealized rows — a NULL claim is not a claim', async () => {

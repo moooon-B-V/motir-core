@@ -56,6 +56,10 @@ import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
+import {
+  monitorConnectionPoll,
+  monitorIssueReconcileTick,
+} from './definitions/monitorIssueReconcile';
 import { accountErasureSweep } from './definitions/accountErasureSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
@@ -128,4 +132,8 @@ export const jobDefinitions = [
   accountErasureSweep,
   pullRequestReconcile,
   pullRequestAutoMerge,
+  // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
+  // its per-connection fan-out.
+  monitorIssueReconcileTick,
+  monitorConnectionPoll,
 ];

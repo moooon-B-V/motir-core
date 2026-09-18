@@ -8711,7 +8711,22 @@
     },
     "row": {
       "bound": "{when}绑定",
-      "disconnect": "停止监控 {slug}"
+      "disconnect": "停止监控 {slug}",
+      "level": {
+        "label": "最低级别",
+        "every": "所有级别",
+        "helper": "选择更低的级别后，也会检查自开始监控此项目以来更早的问题。",
+        "saving": "正在保存…",
+        "failed": "<b>无法更改级别。</b>未做任何更改——请重试。"
+      },
+      "poll": {
+        "waiting": "等待首次检查",
+        "ok": "{ago}检查了新错误",
+        "filed": "{count, plural, other {<b>已提交 # 个缺陷</b>}}",
+        "overdue": "<b>自 {since} 起未检查。</b>已错过两次计划检查。",
+        "failed": "<b>无法检查新错误：</b>{reason}",
+        "lastSuccess": "上次成功检查：{when}。"
+      }
     },
     "confirm": {
       "cancel": "取消",

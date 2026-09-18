@@ -47,8 +47,20 @@ export interface FakeMonitorState {
   /** How many refreshes have been asked for, and what the next one returns. */
   refreshCount: number;
   /** Set to make the next call of that operation fail — how a test drives the
-   *  `degraded` path and the typed-refusal path without a network. */
+   *  `degraded` path and the typed-refusal path without a network. Fails with
+   *  a 401 unless {@link failNextStatus} names another status for it. */
   failNext: Set<string>;
+  /**
+   * The STATUS (and optionally the provider's words) the next failure of an
+   * operation carries — so a test, and the E2E, can force a NON-credential
+   * failure (a 500) and see that it is NOT read as a revoked grant (MOTIR-5577).
+   * Setting an entry arms the failure on its own; it is consumed with it. An
+   * operation armed only through {@link failNext} keeps the 401 default.
+   */
+  failNextStatus: Map<string, { status: number; reason?: string }>;
+  /** How many issues one `listIssuesSince` page holds — small in a test that
+   *  drives the poll across several pages. */
+  pageSize: number;
 }
 
 const freshState = (): FakeMonitorState => ({
@@ -84,6 +96,8 @@ const freshState = (): FakeMonitorState => ({
   resolvedIssues: [],
   refreshCount: 0,
   failNext: new Set(),
+  failNextStatus: new Map(),
+  pageSize: 100,
 });
 
 let state: FakeMonitorState = freshState();
@@ -97,10 +111,16 @@ export function resetFakeMonitorProvider(): void {
 }
 
 function guard(operation: string): void {
-  if (state.failNext.has(operation)) {
+  const withStatus = state.failNextStatus.get(operation);
+  if (state.failNext.has(operation) || withStatus) {
     state.failNext.delete(operation);
+    state.failNextStatus.delete(operation);
+    const status = withStatus?.status ?? 401;
     // The provider's OWN words, which is what the settings surface renders.
-    throw new MonitorProviderCallError(operation, 401, 'The authorization has been revoked.');
+    const reason =
+      withStatus?.reason ??
+      (status === 401 ? 'The authorization has been revoked.' : `The provider answered ${status}.`);
+    throw new MonitorProviderCallError(operation, status, reason);
   }
 }
 
@@ -152,12 +172,24 @@ export const fakeMonitorProvider: MonitorProvider = {
     return [...state.projects];
   },
 
-  async listIssuesSince({ cursor }): Promise<NormalizedMonitorIssuePage> {
+  /**
+   * The SAME contract as the real adapter (MOTIR-5577): only issues last seen
+   * strictly after `lastSeenAfter`, newest-last-seen first, in pages of
+   * `state.pageSize`, with `null` as the last page's cursor. The cursor is the
+   * offset into that ordered list — opaque to the caller, as Sentry's is.
+   */
+  async listIssuesSince({ lastSeenAfter, cursor }): Promise<NormalizedMonitorIssuePage> {
     guard('listIssuesSince');
-    // One page, then the end — enough to exercise a poll's cursor handling
-    // without pretending to be a pagination engine.
-    if (cursor) return { issues: [], nextCursor: null };
-    return { issues: [...state.issues], nextCursor: null };
+    const since = lastSeenAfter?.getTime() ?? Number.NEGATIVE_INFINITY;
+    const ordered = state.issues
+      .filter((issue) => issue.lastSeenAt.getTime() > since)
+      .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
+    const offset = cursor ? Number(cursor) || 0 : 0;
+    const end = offset + Math.max(1, state.pageSize);
+    return {
+      issues: ordered.slice(offset, end).map((issue) => ({ ...issue })),
+      nextCursor: end < ordered.length ? String(end) : null,
+    };
   },
 
   async resolveIssue({ externalIssueId }): Promise<void> {

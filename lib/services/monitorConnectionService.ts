@@ -7,7 +7,9 @@ import type {
 } from '@/lib/dto/monitors';
 import { toMonitorConnectionDto, readOrgSlug } from '@/lib/mappers/monitorMappers';
 import { getMonitorProvider } from '@/lib/monitors';
+import { isLowerThan, isMonitorLevel } from '@/lib/monitors/levels';
 import {
+  InvalidMonitorLevelError,
   MonitorConnectionNotFoundError,
   MonitorGrantNotFoundError,
   MonitorProviderCallError,
@@ -235,6 +237,10 @@ export const monitorConnectionService = {
           workspaceId: ctx.workspaceId,
           externalProjectId: input.externalProjectId,
           externalProjectSlug: input.externalProjectSlug,
+          // WHOSE identity the reconciler files this binding's bugs as
+          // (MOTIR-4929 · MOTIR-5576) — the person binding it, never a system
+          // principal and never someone substituted later.
+          boundByUserId: ctx.userId,
         },
         tx,
       );
@@ -246,6 +252,53 @@ export const monitorConnectionService = {
          reads back the row it created, inside the same transaction". */
       if (!created) throw new MonitorConnectionNotFoundError(input.externalProjectId);
       return toMonitorConnectionDto(created);
+    });
+  },
+
+  /**
+   * Set one binding's MINIMUM LEVEL — the one per-connection control over what
+   * files a bug (Story MOTIR-4929 · Subtask MOTIR-5579).
+   *
+   * `null` means every level; anything else must be one of `MONITOR_LEVELS`, or
+   * it is {@link InvalidMonitorLevelError} (400). A binding in another project —
+   * or another workspace, which RLS makes the same answer — is
+   * {@link MonitorConnectionNotFoundError} (404), with no existence leak.
+   *
+   * ⚠️ LOWERING REWINDS, RAISING DOES NOT. Lowering admits levels the poll has
+   * already read past and skipped, so the watermark is reset to `null` and the
+   * next poll re-reads everything last seen since the binding was made — dedup
+   * on the provider's issue id is what makes that re-read safe. Raising admits
+   * nothing new and never un-files what was filed.
+   *
+   * The decision reads the level it REPLACES, so the row is LOCKED first: two
+   * concurrent changes must not both decide against the same stale value. The
+   * poll's own watermark advance is a compare-and-set on the level it read, so a
+   * lowering that lands mid-poll is not undone by that poll finishing.
+   */
+  async setMinimumLevel(
+    projectId: string,
+    connectionId: string,
+    level: unknown,
+    ctx: ServiceContext,
+  ): Promise<MonitorConnectionDto> {
+    return inProject(projectId, ctx, async (tx) => {
+      if (level !== null && !isMonitorLevel(level)) throw new InvalidMonitorLevelError(level);
+
+      await monitorConnectionRepository.lockById(connectionId, tx);
+      const existing = await monitorConnectionRepository.findById(connectionId, tx);
+      if (!existing || existing.projectId !== projectId) {
+        throw new MonitorConnectionNotFoundError(connectionId);
+      }
+
+      const rewind = isLowerThan(level, existing.minimumLevel);
+      await monitorConnectionRepository.setMinimumLevel(connectionId, level, rewind, tx);
+
+      const rows = await monitorConnectionRepository.listForProject(projectId, tx);
+      const updated = rows.find((row) => row.id === connectionId);
+      /* v8 ignore next -- unreachable: the row was locked and written in this
+         transaction, under the same binding. */
+      if (!updated) throw new MonitorConnectionNotFoundError(connectionId);
+      return toMonitorConnectionDto(updated);
     });
   },
 

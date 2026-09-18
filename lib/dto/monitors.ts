@@ -27,6 +27,25 @@ export interface MonitorConnectionDto {
    *  secret — it is what the room says the connection is TO. */
   orgSlug: string | null;
   createdAt: string;
+
+  // ── INGESTION STATE (Story MOTIR-4929 · Subtask MOTIR-5579) ─────────────────
+  // What the room shows about whether this binding's issues are ARRIVING. Every
+  // field is computed on the server and read straight off the stored row, so no
+  // component derives any of it. All `null` on a never-polled row.
+
+  /** The lowest level that files a bug; `null` = every level (the default). */
+  minimumLevel: string | null;
+  /** When a poll last RAN, as ISO — successful or not. */
+  lastPolledAt: string | null;
+  /** The last poll's outcome; `null` = never polled. */
+  lastPollStatus: 'ok' | 'failed' | null;
+  /** Why the last poll failed, in words a person can act on. */
+  lastPollError: string | null;
+  /** How many bugs the last successful poll filed. */
+  lastPollFiledCount: number | null;
+  /** When a poll last came back `ok`, as ISO — so a FAILING row can still say
+   *  when it last worked (the design delta, MOTIR-5575 §12). */
+  lastPollSucceededAt: string | null;
 }
 
 /** A monitored project the actor could bind but has not — the picker's row. */
@@ -53,6 +72,11 @@ export interface MonitorConnectionViewDto {
    *  value read off `connections[0]` does not exist there. */
   healthCheckedAt: string | null;
   connections: MonitorConnectionDto[];
+}
+
+/** Change one binding's minimum level (MOTIR-5579). `null` = every level. */
+export interface SetMonitorMinimumLevelInput {
+  minimumLevel: string | null;
 }
 
 /** Bind one monitored project to this Motir project. */

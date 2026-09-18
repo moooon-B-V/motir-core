@@ -13,6 +13,13 @@ export function readOrgSlug(metadata: unknown): string | null {
   return typeof slug === 'string' && slug.length > 0 ? slug : null;
 }
 
+/** The stored poll status, narrowed to the two values the poll writes. A value
+ *  it never writes reads as "never polled" rather than as a status the room
+ *  has no copy for. */
+function toPollStatus(value: string | null): 'ok' | 'failed' | null {
+  return value === 'ok' || value === 'failed' ? value : null;
+}
+
 export function toMonitorConnectionDto(row: MonitorConnectionWithGrant): MonitorConnectionDto {
   return {
     id: row.id,
@@ -26,5 +33,11 @@ export function toMonitorConnectionDto(row: MonitorConnectionWithGrant): Monitor
     healthCheckedAt: row.installation.healthCheckedAt?.toISOString() ?? null,
     orgSlug: readOrgSlug(row.installation.metadata),
     createdAt: row.createdAt.toISOString(),
+    minimumLevel: row.minimumLevel,
+    lastPolledAt: row.lastPolledAt?.toISOString() ?? null,
+    lastPollStatus: toPollStatus(row.lastPollStatus),
+    lastPollError: row.lastPollError,
+    lastPollFiledCount: row.lastPollFiledCount,
+    lastPollSucceededAt: row.lastPollSucceededAt?.toISOString() ?? null,
   };
 }
