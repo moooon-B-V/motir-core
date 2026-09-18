@@ -274,6 +274,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ filed: number; pages: number; refiled: number; skipped: number; status: "failed" | "ok"; updated: number }',
   },
+  'resolve-linked-issues': {
+    file: 'lib/jobs/definitions/monitorIssueResolve.ts',
+    shape: '{ failed: number; gone: number; links: number; resolved: number; skipped: number }',
+  },
   'reconcile-open-deliveries-v2': {
     file: 'lib/jobs/definitions/pullRequestReconcile.ts',
     shape:
