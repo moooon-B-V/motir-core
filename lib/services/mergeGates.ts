@@ -42,10 +42,18 @@ export interface AutoMergeRequest {
  * ⚠️ A green pull request always HAS a head: `derivePrCiState` answers `passing` only
  * over a non-empty set of rows at the latest sha, so the head is read from that same
  * set rather than checked for separately.
+ *
+ * ⚠️ AND A DRAFT IS NOT A CANDIDATE (MOTIR-5699). A draft is its author saying *not
+ * ready*, and the host refuses to merge one — so a green draft that counted here put an
+ * approve-and-merge question on somebody's To approve that could only fail when
+ * pressed. The lifecycle seam has refused drafts since MOTIR-4968; this is the same
+ * fact reaching the gate. Only `true` refuses: `null` is a row written before
+ * MOTIR-5002 persisted the flag, and inventing draft-ness for it would strand a card
+ * nobody drafted.
  */
 export function mergeCandidateHead(
   pr:
-    | (Pick<GithubPullRequestWithInstallation, 'state' | 'merged' | 'checkRuns'> & {
+    | (Pick<GithubPullRequestWithInstallation, 'state' | 'merged' | 'draft' | 'checkRuns'> & {
         repo: { provider: string };
       })
     | null,
@@ -54,6 +62,7 @@ export function mergeCandidateHead(
     pr === null ||
     pr.state !== 'open' ||
     pr.merged ||
+    pr.draft === true ||
     !providerSupportsMerge(getGitProvider(pr.repo.provider as GitProviderId)) ||
     derivePrCiState(pr.checkRuns) !== 'passing'
   ) {

@@ -109,7 +109,9 @@ const DELIBERATELY_SYSTEM_ONLY: Record<string, Verdict> = {};
  * machine. That is good design and it is opaque to a name-resolving walk.
  */
 const WALLED_SITES: Record<string, string> = {
-  'lib/services/changeRequestStatusSync.ts#syncChangeRequestStatus':
+  // Re-keyed by MOTIR-5699: the body moved into `syncOnce` behind a wrapper that
+  // runs the ready-flip re-ask; the transaction and its `resolveContext` are unchanged.
+  'lib/services/changeRequestStatusSync.ts#syncOnce':
     'resolveContext ∈ { resolveGithubChangeRequestContext, resolveGitlabChangeRequestContext }. ' +
     'GitHub: github_installation + github_repo (both armed), THEN resolveBoundMember → ' +
     'github_identity (armed) + workspace_membership (NOT armed) — THE DEFECT, and the ' +
