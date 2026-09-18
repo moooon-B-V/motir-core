@@ -2323,3 +2323,171 @@ provenance, carried verbatim, and GIVE or TAKE nothing here.
 | MOTIR-5452 | this card                                                                                                                                                                                                                                                                                                                                             |
 
 Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
+
+## 25 · How to test is the INSTRUCTIONS — the repository sub-block is RETIRED, and _stale_ is one line in the part (MOTIR-5694, 2026-09-18)
+
+Task [MOTIR-5694](motir:cmu71l7k0009chvoik3uv99dz) · built by
+[MOTIR-5691](motir:cmu6xvom400p3hvoi9vu64qis).
+
+**AMENDS § 20** — Panels **12a** (a run's record), **12g** (stale) and **12k** (a repository with no
+section) — and **§ 24** — Panels **13e** (its caption), **13f** and **13g** (a person's saved
+record, desktop and ~400px). ONE change: the bordered per-repository sub-block that § 20 drew under
+the body — **In the preview · Locally · What CI proved** — comes out of How to test.
+
+**Asset:** `design/github/github--how-to-test-no-repo-blocks.mock.html` (+ its `.png`), a delta
+mock beside the two bases, holding only the panels that change, each light and dark.
+`github.mock.html` and `github--how-to-test-form.mock.html` are records of what was decided and are
+not edited.
+
+### The decision, and the requester's reasoning
+
+> **Yue, 2026-09-18:** _"why do we need the block? for a technical user who wants to pull the code
+> locally knows well how to pull the code. the PR is linked. for a non-technical user that
+> information is useless anyway. and how to test steps should be the same doesn't matter it's local
+> or online in the preview."_
+
+| the sub-block drew                                         | whose fact                    | already reachable                                                                                                                  |
+| ---------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| _Locally_ — `git fetch origin <ref> && git checkout <ref>` | the pull request              | the row one line above links out to the host, which shows the branch and its own checkout instructions                             |
+| _In the preview_                                           | the deployment at that head   | a preview is **per system** — one configured environment for every work item — not a per-head derivation. Motir reports none today |
+| _What CI proved_                                           | the pull request's check runs | the row already carries a CI pill, and the host has the full list a click away                                                     |
+
+The third sentence of the quote is the one that decides it: **the steps read the same locally or on
+a deployed environment, so they never branch on environment — and the environment therefore does
+not belong inside the instructions.** The first two dispose of the only readers the block had: one
+who needs no help checking out a branch, and one who cannot use the command at all.
+
+### The rule, going forward
+
+**How to test is the INSTRUCTIONS; a pull request's facts belong to the pull request.** The part is
+the `h4`, the author line, the body (with its copyable code blocks) and _Earlier versions (n)_ —
+free text that a run or a person writes, owned by whoever wrote it. Anything that is true of a pull
+request (its branch, its head, its deployment, its checks) is drawn on or behind that pull request's
+row, never repeated inside the instructions. A later card that wants one of those facts on the
+page asks for it **on the row**, as its own § 20 pass with its own argument — which is a different
+proposition from this one, and not something this section proposes.
+
+### What this RETIRES — so a later reader finds a decision, not an unexplained absence
+
+The per-repository facts look useful, were designed carefully, and nothing in the code will say why
+they went. So, explicitly:
+
+- **§ 20 Panels 12a–12h** — the sub-block they all carry (12a's single-repository box, 12b's headed
+  boxes, 12e's preview states, 12g's stale pill on the box, 12h's check list), and **12k** in full.
+  12l's awaiting-row box goes with them. **Still standing from § 20:** the placement inside the
+  Development card, the rich-text body and its copy control (12d, 12f), the record-missing callout
+  (12i), _Earlier versions_ (12j), the child pointer (12m), the narrow row (12n) and the frame
+  (12c, 12o).
+- **§ 20's _Decisions_ rows** _what Motir derives vs what the agent writes_, _order of the derived
+  facts_ and _a repository with a PR but no section_; its **Fields-read** rows for the preview URL,
+  the repository sub-heading, _In the preview_, _Locally_, _What CI proved_ and the no-section
+  derivation; and its **tone table** rows for preview, check and no-section values.
+- **§ 24, decision 8b's closing argument** — that a linked pull request is the better door because
+  _"it yields a section with a `git fetch`, a preview and CI checks"_. The conclusion stands (the
+  form has no repository control); that reason for it no longer exists, and the one that remains is
+  the first: `+ Link pull request` is the door for a pull request, and one door is enough.
+- **Shipped work:** [MOTIR-5333](motir:cmtzoqr5000cghvtxnaytfoe0) (the read's per-repository half —
+  fetch line, preview, checks) and [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw) (the block's
+  sub-blocks). Both were right for the premise they were built on; the premise is what changed.
+- **Narrows** [MOTIR-4906](motir:cmtt4ogi0000dhutx1ekfm43s): How to test is still the run's
+  deliverable, written onto the run target and rendered where the decision is made — it is simply
+  the instructions and no longer the instructions plus a derived delivery report.
+
+### _Stale_ — where it lives, and what it costs
+
+_"Written for `a1b2c3d` — `moooon/motir-core` is now at `e4f5a6b`"_ is the one signal the box
+carried that exists **nowhere else**: it is a relation between the RECORD and the pull request, not
+a fact of either alone. The three candidate homes:
+
+| home                                                   | verdict                | why                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **in the part, as ONE line**                           | **CHOSEN** (Panel 12g) | it qualifies the RECORD — _these steps were written against an earlier push_ — so it belongs with the record, and it costs one line. Placed directly under _Written by_ rather than after the body, so it is read **before** the steps it qualifies; it is the author line's second half, not a footnote                                                                                                                        |
+| on the pull-request row, beside the state and CI pills | rejected               | the row is `PullRequestRow`, **derived and unchanged** (§ 19) and shared with every surface that lists pull requests; a pill reading _Stale_ there says the PULL REQUEST is stale, which is false — the pull request is current, the instructions are not. It would also make a row depend on the How-to-test record, the coupling this section retires                                                                         |
+| dropped with the rest                                  | rejected               | defensible only if every body were prose about a feature. Agent bodies routinely name a migration, a seed or a flag from the head they were written at, and a moved head is the one case where the reader is owed a warning nothing else on the page gives. The approval gate is withdrawn by a push and raised again on green (§ 20, 12v), so the re-raised gate would otherwise show one-push-old evidence with no sign of it |
+
+**The line.** A peach _Stale_ `Pill` (severity warning, `history`) and the shipped `stale.title`
+sentence, in `--el-text-secondary`, one line per repository whose head moved. It **replaces** the
+peach callout and the sub-block's pill. `stale.body` — _"… The preview and CI follow the new head."_
+— names two of the retired facts and **is retired with them**; `stale.title` and `stale.pill` are
+kept, in both catalogs.
+
+**What it costs — said plainly.**
+
+- **It is an AGENT-record concept only.** A person's save names no repository and no commit
+  (`approval-gates.md` § 9, 2026-09-17 amendment, points 2–3; § 24 decision 8b), so there is nothing
+  for a head to have moved past. **A person's record can never be stale**, and 13f draws no line. A
+  home that implied otherwise — a slot or an empty state on every record — would draw a state that
+  cannot occur; the line therefore renders only when the read says so, and has no empty state.
+- **The read keeps a sliver of what [MOTIR-5691](motir:cmu6xvom400p3hvoi9vu64qis) deletes.** The
+  stored sections (`test_instructions_repo` — repository + `commitSha`) and each bound pull
+  request's live head are still needed to compute it. What the block needs from the DTO shrinks from
+  `repos[]` (with preview, fetch line and checks) to **one list of stale pairs** — repository name,
+  the record's commit, the head it moved to — derived by the rule `assemble.ts` already uses (an
+  abbreviated sha of the head is not stale). The deployment reads, the fetch composition and the
+  check listing go entirely.
+
+### The caption correction — Panel 13e
+
+13e's caption read _"legal, and the picker is where focus lands"_ — naming a control § 24's
+decision 8b removed, so the caption described a form the product does not have. It now reads **"no
+linked pull request — legal, and focus lands in the Body"**, the first control of the form as it
+actually is. Nothing else on the panel changed.
+
+### Panels, and the card that builds each
+
+| panel   | depicts                                                                                                     | built by                  |
+| ------- | ----------------------------------------------------------------------------------------------------------- | ------------------------- |
+| **12a** | a run's record — the head, the author line, the rendered body, _Earlier versions_ (collapsed). Nothing else | MOTIR-5691                |
+| **12g** | stale — ONE line under the author line                                                                      | MOTIR-5691                |
+| **12k** | RETIRED — two pull requests, a record that covers one: **nothing is added**; the rows speak for themselves  | MOTIR-5691                |
+| **13e** | the form with no linked pull request — caption corrected, form unchanged                                    | — (shipped by MOTIR-5455) |
+| **13f** | a person's saved record — no box, no stale line                                                             | MOTIR-5691                |
+| **13g** | ~400px — the form, and the saved record                                                                     | MOTIR-5691                |
+
+### Fields read — after this section
+
+| rendered element               | field(s) read                                                           | panel    |
+| ------------------------------ | ----------------------------------------------------------------------- | -------- |
+| which part renders             | `state` — unchanged                                                     | all      |
+| _Written by {run \| person}_   | `record.author` / `record.run`, `record.createdAt` — unchanged          | 12a, 13f |
+| the body                       | `record.bodyMd` — unchanged                                             | 12a, 13f |
+| the stale line                 | the stale pairs: `{ repoName, recordSha, headSha }[]` — empty ⇒ no line | 12g      |
+| _Earlier versions (n)_         | `history[]` — unchanged                                                 | 12a, 13f |
+| ~~everything under `repos[]`~~ | **RETIRED** — preview, fetch line, checks, sub-heading, no-section      | —        |
+
+### Copy — `en` + `zh`
+
+**Kept:** `github.development.howToTest.stale.title` and `stale.pill`, and every key the part head,
+body, callout, disclosure and child pointer already use. **Retired, in both catalogs:** `stale.body`,
+and the `preview.*`, `local.*`, `ci.*` and `noSection.*` namespaces. No key is added.
+
+### Primitives, tokens and accessibility
+
+Composed, not drawn: `PullRequestRow` and its caption (§ 19), the part grammar, `MarkdownView` with
+`CopyableCodeBlock`, the disclosure, the § 24 form and editor, and the shipped peach `Pill`. The one
+addition is the stale line's `.nrb-stale` rule, whose class string is quoted above it in the mock:
+`flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--el-text-secondary)`. It is a
+`role="status"` line, so a screen reader hears it once with the part. `--el-text-secondary` holds AA
+on the card's `--el-card` and on the approval port's `--el-surface`; `--el-text-muted` would not on
+the second (§ 20, _Tokens_).
+
+**Drawn against shipped reality.** Before a panel was drawn, `components/howToTest/HowToTestBlock.tsx`
+at `origin/main` `c6ba2709d` was bundled and rendered headless with a fresh and a stale run record:
+the part's head, body, copy control and disclosure on this sheet are that render's structure, and
+the stale callout and sub-block pill it showed are what 12g replaces.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' design/github/github--how-to-test-no-repo-blocks.mock.html | sort -u`.
+The keys beyond this section's are the form mock's stylesheet and sprite provenance, carried
+verbatim, and GIVE or TAKE nothing here.
+
+| key                                                                                           | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-5691](motir:cmu6xvom400p3hvoi9vu64qis)                                                 | **GIVES** every panel above and the Fields-read / Copy tables. **TAKES** a narrower deletion than its _What to delete_ reads on one point: **_stale_ HAS a home**, so the read keeps the stale pairs (stored sections + each bound pull request's live head) and the block keeps `stale.title` / `stale.pill`; the stale callout and `stale.body` go. Its AC 5 already defers to this section |
+| [MOTIR-5450](motir:cmu19273o0002i0txwqqo9t2a)                                                 | § 24's 13f / 13g drew the box on a person's record; **superseded here**. Nothing it builds changes — the form never had the box                                                                                                                                                                                                                                                               |
+| [MOTIR-5333](motir:cmtzoqr5000cghvtxnaytfoe0) / [MOTIR-5336](motir:cmtzoqrc900cmhvtxgr8ueqjw) | done; their per-repository half is **retired** (above). No criterion of theirs is reopened                                                                                                                                                                                                                                                                                                    |
+| [MOTIR-4906](motir:cmtt4ogi0000dhutx1ekfm43s)                                                 | **narrowed** — How to test is the instructions                                                                                                                                                                                                                                                                                                                                                |
+| [MOTIR-5690](motir:cmu6v9h2l00g0hvtxyly7d5v2)                                                 | nothing either way — the planning record of how the box outlived its premise                                                                                                                                                                                                                                                                                                                  |
+
+Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
