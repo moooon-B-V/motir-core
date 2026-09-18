@@ -41,14 +41,32 @@
 // ⚠️ IT DOES NOT RAISE THE HEAP, and it strips `--max-old-space-size` out of the
 // NODE_OPTIONS it hands each child. It measures the lane as the lane runs; a
 // measurement taken under a raised ceiling would answer a question nobody asked.
-// The one thing an operator's `--max-old-space-size` DOES change is this
-// script's own limit, which is the threshold it compares against — which is what
-// makes the tripwire demonstrable (see `--help`).
+// That sentence is about the NUMERATOR — the children's real heap. It says
+// nothing about what the percentage is a percentage OF, which is the next block.
+//
+// ── THE DENOMINATOR IS DECLARED, NOT READ OFF THE MACHINE (MOTIR-5696) ──────
+// This used to divide by `v8.getHeapStatistics().heap_size_limit` — node's
+// default old-space, which node derives from the machine's RAM. So the 90% line
+// was a property of the runner rather than a decision: the same tree read a
+// different percentage on a bigger box, and a runner-size change would have
+// moved the gate silently in either direction. It now divides by
+// DECLARED_HEAP_BUDGET_BYTES, so a reading means the same thing everywhere.
+//
+// ⚠️ A DECLARED BUDGET IS ONLY HONEST WHILE THE HEAP IT CLAIMS EXISTS, and that
+// is what the refusal is for. A budget LARGER than the heap the children really
+// get would read a comfortable percentage while a project sits at its actual
+// ceiling — the lane then dies with `Ineffective mark-compacts` and no file
+// named, the exact failure this tripwire was built to see coming. So before
+// building anything the script asks a child — spawned with the children's own
+// environment — for ITS `heap_size_limit`, and exits 2 naming both numbers when
+// the budget exceeds it. Not this process's limit: an operator's
+// `--max-old-space-size` raises that one and is stripped from every child, so it
+// is the wrong half of the ratio to check against. A budget BELOW the real heap
+// is allowed; it only makes the gate fire early.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import v8 from 'node:v8';
 import ts from 'typescript';
 
 /**
@@ -112,7 +130,38 @@ import ts from 'typescript';
  */
 const THRESHOLD = 0.9;
 
-/** A test hook, and ONLY that: the byte limit to compare against. */
+/**
+ * THE DENOMINATOR — the heap budget every `Memory used` reading is a fraction of
+ * (MOTIR-5696). Bytes.
+ *
+ * The value is the `heap_size_limit` the CI runner's children actually get: node
+ * 22 on the `ubuntu-latest` runner (ubuntu-24.04, image 20260907.300.1), read off
+ * the runner by this script's own `children's real heap` line and recorded in
+ * MOTIR-5696's pull request. It is node's 4096 MiB old-space cap plus its young
+ * generation, and it is the SAME number this box reports — node caps the default
+ * there on any machine with enough RAM — which is why the two looked identical and
+ * why the dependency on RAM went unnoticed: it only shows on a box below the cap.
+ *
+ * ⚠️ CHOSEN EQUAL TO THE HEAP EVERY HISTORICAL CI READING WAS DIVIDED BY, SO NO
+ * CI PERCENTAGE MOVES. Every figure quoted in this file, in `ci.yml` and in
+ * `tsconfig.base.json` was taken at a 4.05 GB heap, and they stay comparable. What
+ * changes is readings on OTHER machines: a box whose default heap differs used to
+ * report a different percentage of a different number, and now reports the lane's
+ * — or refuses, when its heap is smaller than this budget (see the header).
+ *
+ * ⚠️ RAISING THIS IS NOT RAISING THE HEAP, AND IT IS REFUSED WHEN IT OUTGROWS ONE.
+ * The children's heap is whatever node gives them; this only says what the 90% is
+ * of. If the runner's heap changes, re-read it on the runner and move this with a
+ * pull request that says so — and THRESHOLD is not moved in the same one, or
+ * nobody can tell which of the two changed the verdict.
+ */
+export const DECLARED_HEAP_BUDGET_BYTES = 4_345_298_944;
+
+/**
+ * A test hook, and ONLY that: a budget to use INSTEAD of the declared one. It is
+ * held to the same refusal — an override larger than the children's heap is the
+ * same lie as a declared budget that is.
+ */
 const LIMIT_OVERRIDE_ENV = 'MOTIR_TYPECHECK_HEAP_LIMIT_BYTES';
 
 const ROOT = process.cwd();
@@ -136,9 +185,17 @@ if (process.argv.includes('--help')) {
   node scripts/ci/assert-typecheck-headroom.mjs
   node scripts/ci/assert-typecheck-headroom.mjs --baseline
 
-Fails when any project's \`Memory used\` exceeds ${Math.round(THRESHOLD * 100)}% of the heap
-this process runs under, naming the project and both numbers. Prints the table
-either way, so a green run leaves the readings in the log.
+Fails when any project's \`Memory used\` exceeds ${Math.round(THRESHOLD * 100)}% of the DECLARED heap
+budget — ${DECLARED_HEAP_BUDGET_BYTES} bytes (${(DECLARED_HEAP_BUDGET_BYTES / 1024 ** 3).toFixed(2)} GB), the CI runner's heap —
+naming the project and both numbers. Prints the table either way, so a green run
+leaves the readings in the log.
+
+The denominator is a constant, not this machine's heap, so a percentage means the
+same thing on every box (MOTIR-5696). It is only honest while the children really
+have that much heap, so the script REFUSES (exit 2) before building anything when
+the budget exceeds the heap a child actually gets, naming both. On a box below the
+budget, pass a smaller one through ${LIMIT_OVERRIDE_ENV} — the gate then
+fires early, which is the safe direction.
 
 \`--baseline\` measures ${BASELINE_PROJECT} as well — the tests
 project's own options and references with ONE trivial test body instead of 1682.
@@ -152,14 +209,23 @@ points low on the app project, measured over four runs of an unchanged tree
 (MOTIR-4422). Take the MAXIMUM of several runs; a single reading can only
 understate.
 
-To watch it FIRE without touching the tree, lower the threshold's basis — the
-children still run at the default heap, so the readings are real:
+To watch it FIRE without touching the tree, lower the budget — the children still
+run at the default heap, so the readings are real:
 
-  NODE_OPTIONS=--max-old-space-size=1024 node scripts/ci/assert-typecheck-headroom.mjs
   ${LIMIT_OVERRIDE_ENV}=3221225472 node scripts/ci/assert-typecheck-headroom.mjs
+
+To watch it REFUSE, claim more heap than a child has:
+
+  ${LIMIT_OVERRIDE_ENV}=17179869184 node scripts/ci/assert-typecheck-headroom.mjs
+
+(\`NODE_OPTIONS=--max-old-space-size=…\` no longer moves anything: it is stripped
+from every child, and the denominator is declared rather than read from this
+process.)
 `);
   process.exit(0);
 }
+
+const gb = (bytes) => `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 
 // ── The parser, exported so its own guard can exercise it on a captured run ──
 
@@ -238,6 +304,34 @@ export function inDependencyOrder(roots, referencesOf) {
 }
 
 /**
+ * Why a heap budget cannot be used as the denominator, or `null` when it can.
+ *
+ * ⚠️ ONLY ONE DIRECTION IS REFUSED, deliberately. A budget at or under the
+ * children's real heap makes the gate fire early — conservative, and the way to
+ * run on a smaller box. A budget OVER it reports a percentage of heap the
+ * children do not have, which turns the tripwire into a rubber stamp: a silent
+ * green right up to an OOM with no file named. A budget that is not a positive
+ * number is refused too — `NaN` makes every fraction `NaN`, nothing compares
+ * greater than the line, and the gate passes everything.
+ *
+ * @param {number} budgetBytes     the denominator the gate would divide by
+ * @param {number} childHeapBytes  `heap_size_limit` as a child actually sees it
+ * @returns {string | null}
+ */
+export function budgetRefusal(budgetBytes, childHeapBytes) {
+  if (!Number.isFinite(budgetBytes) || budgetBytes <= 0) {
+    return `the heap budget is not a positive number of bytes (${budgetBytes})`;
+  }
+  if (budgetBytes <= childHeapBytes) return null;
+  return (
+    `the declared heap budget is ${budgetBytes} bytes (${gb(budgetBytes)}), but a child ` +
+    `type-check runs under ${childHeapBytes} bytes (${gb(childHeapBytes)}). Every percentage ` +
+    `would be of heap the children do not have, and a project at its real ceiling would ` +
+    `read green until it OOMs`
+  );
+}
+
+/**
  * Which readings breach the threshold.
  *
  * @param {{ project: string, memoryKb: number }[]} readings
@@ -250,8 +344,6 @@ export function overTheLine(readings, limitBytes, threshold) {
     .map((r) => ({ ...r, fraction: (r.memoryKb * 1024) / limitBytes }))
     .filter((r) => r.fraction > threshold);
 }
-
-const gb = (bytes) => `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 
 /** A solution reference may name a DIRECTORY (`packages/orchestrator`), which
  *  `tsc` resolves to its `tsconfig.json`. Reading the file needs the full path. */
@@ -273,19 +365,62 @@ function normaliseRelative(dir, ref) {
 
 // ── The run ──────────────────────────────────────────────────────────────────
 
-/** NODE_OPTIONS with any heap raise removed — the children measure the LANE. */
-function childEnv() {
-  const nodeOptions = (process.env['NODE_OPTIONS'] ?? '')
+/**
+ * NODE_OPTIONS with any heap raise removed — the children measure the LANE.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function childEnv(env = process.env) {
+  const nodeOptions = (env['NODE_OPTIONS'] ?? '')
     .split(/\s+/)
     .filter((flag) => flag !== '' && !flag.startsWith('--max-old-space-size'))
     .join(' ');
-  return { ...process.env, NODE_OPTIONS: nodeOptions };
+  return { ...env, NODE_OPTIONS: nodeOptions };
+}
+
+/**
+ * The heap a CHILD type-check really runs under — asked of a child spawned with
+ * the children's own environment, because that is the only process whose limit
+ * the readings are measured against. This process's own limit is not it: an
+ * operator's `--max-old-space-size` raises this one and `childEnv` strips it from
+ * every child.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {number}
+ */
+export function childHeapLimitBytes(env = process.env) {
+  const run = spawnSync(
+    process.execPath,
+    ['-p', "require('node:v8').getHeapStatistics().heap_size_limit"],
+    { encoding: 'utf8', env: childEnv(env) },
+  );
+  const bytes = Number((run.stdout ?? '').trim());
+  if (run.status !== 0 || !Number.isFinite(bytes) || bytes <= 0) {
+    throw new Error(
+      `could not read a child's heap_size_limit (exit ${run.status}): ${run.stderr ?? ''}`,
+    );
+  }
+  return bytes;
 }
 
 function main() {
-  const limitBytes = Number(
-    process.env[LIMIT_OVERRIDE_ENV] ?? v8.getHeapStatistics().heap_size_limit,
-  );
+  // The DENOMINATOR is declared (the header's MOTIR-5696 block); the override is
+  // the test hook. Either way it is checked against a child's real heap BEFORE the
+  // build, so a refusal costs seconds rather than a full type-check.
+  const limitBytes = Number(process.env[LIMIT_OVERRIDE_ENV] ?? DECLARED_HEAP_BUDGET_BYTES);
+  const childHeapBytes = childHeapLimitBytes();
+  const refusal = budgetRefusal(limitBytes, childHeapBytes);
+  if (refusal) {
+    console.error(
+      `✗ refusing to gate: ${refusal}.\n` +
+        `  On a box smaller than the CI runner, pass a budget at or under the child heap ` +
+        `through ${LIMIT_OVERRIDE_ENV} — the gate then fires early, never late. ` +
+        `If the RUNNER's heap changed, re-read it there and move DECLARED_HEAP_BUDGET_BYTES ` +
+        `in its own pull request.`,
+    );
+    process.exit(2);
+  }
   const declared = projectsOf(readFileSync(join(ROOT, SOLUTION), 'utf8'));
   const projects = inDependencyOrder(declared, (project) => {
     // A reference is relative to the config that declares it; the solution's are
@@ -343,8 +478,13 @@ function main() {
   }
 
   console.log(`\nTypeScript heap headroom — one process per project, at the default heap`);
-  console.log(`heap limit: ${gb(limitBytes)} · fail above ${Math.round(THRESHOLD * 100)}%\n`);
-  console.log(`  project                                   files      used     of heap`);
+  console.log(
+    `heap budget: ${gb(limitBytes)} (${limitBytes} bytes, ` +
+      `${process.env[LIMIT_OVERRIDE_ENV] === undefined ? 'declared' : `${LIMIT_OVERRIDE_ENV} override`}) · ` +
+      `children's real heap: ${gb(childHeapBytes)} (${childHeapBytes} bytes) · ` +
+      `fail above ${Math.round(THRESHOLD * 100)}%\n`,
+  );
+  console.log(`  project                                   files      used   of budget`);
   for (const r of readings) {
     const used = r.memoryKb * 1024;
     const pct = ((used / limitBytes) * 100).toFixed(1).padStart(6);
@@ -355,13 +495,13 @@ function main() {
 
   const breached = overTheLine(readings, limitBytes, THRESHOLD);
   if (breached.length === 0) {
-    console.log(`\n✓ every project is under ${Math.round(THRESHOLD * 100)}% of the heap`);
+    console.log(`\n✓ every project is under ${Math.round(THRESHOLD * 100)}% of the heap budget`);
     return;
   }
   const worst = breached[0];
   console.error(
     `\n✗ ${worst.project} used ${gb(worst.memoryKb * 1024)} — ${(worst.fraction * 100).toFixed(1)}% ` +
-      `of the ${gb(limitBytes)} heap, over the ${Math.round(THRESHOLD * 100)}% line.\n` +
+      `of the ${gb(limitBytes)} heap budget, over the ${Math.round(THRESHOLD * 100)}% line.\n` +
       `  There are TWO levers, and the cheap one is not the \`files\` column (MOTIR-5687).\n` +
       `  A bigger heap is neither of them: every bump moves the cliff by one story.\n\n` +
       `  1. TYPE INSTANTIATIONS — what the program costs PER FILE. Check this FIRST: it\n` +
