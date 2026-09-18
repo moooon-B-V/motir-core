@@ -96,6 +96,41 @@
   // ought to be. A boundary drawn over an inflated per-file cost buys a fraction of
   // what it should and leaves the inflation in place on both sides of the line.
   //
+  // ⚠️ AND THE TWO CLOSURE ARMS ARE PRICED — BOTH DECLINED ON THE NUMBER
+  // (MOTIR-5695). Bounding what a program LOADS, rather than where a project
+  // ends, was the one lever left described-but-unpriced. Two candidates, each
+  // applied as a real change and read four times over one unchanged tree
+  // (`c6ba2709d`, prisma 7.9.0, node 22, heap 4.05 GB = `v8` `heap_size_limit`):
+  //
+  //   configuration                         tests.json (files / min–max)    components.json (files / min–max)
+  //   baseline                              6894 / 66.2–70.2%  spread 4.0   2482 / 28.3–28.6%  spread 0.3
+  //   arm 1  57 enum-only importers         6894 / 66.2–70.5%               2482 / 28.4–28.4%
+  //          -> '@/generated/prisma/enums'
+  //   arm 2  tests/components/** stops      6895 / 66.3–70.5%               2480 / 28.4–28.5%
+  //          importing lib/{services,db}
+  //
+  // The bar, written before any reading: an arm ships only if the WORST reading of
+  // the project it targets improves by more than that project's measured spread.
+  // Arm 1 moved the tests ceiling −0.3 against a 4.0 spread and components +0.2
+  // against 0.3; arm 2 moved components +0.1 against 0.3. Neither is
+  // distinguishable from noise, and `files` barely moved in any project.
+  //
+  // **Why, and it is the reusable part: a closure arm is worth nothing while ONE
+  // importer is left.** The barrel `generated/prisma/client.ts` loads the whole
+  // `internal/prismaNamespace` + `models/` graph for its first importer and costs
+  // nothing more for its fifty-eighth. `--explainFiles` on the components program
+  // shows 58 distinct files importing it — test fixtures and helpers
+  // (`adminDb`, `workspaceFixtures`, `workItemFixtures`, `userFixtures`) and the
+  // app project's EMITTED declarations (`lib/dto/*.d.ts`, `lib/workspaces/context`,
+  // `lib/jobs/services`, …) — and the model/mixed importers that keep it loaded
+  // cannot move, because a per-model import re-enters the namespace. Arm 2 fails
+  // the same way one layer up: `lib/services/workItemsService.d.ts` stays in the
+  // components program without the test's own import, reached through
+  // `app/(authed)/items/[key]/_components/lateReads` and `lib/jobs/services`.
+  // So re-pointing SOME importers of a shared closure is not a lever; the unit of
+  // saving is the LAST edge into it. Price that edge set with `--explainFiles`
+  // before proposing a sweep.
+  //
   // **Price a boundary before you draw it, in one command**: the `files` column
   // `assert-typecheck-headroom.mjs` already prints IS the variable, so a candidate
   // config's file count answers what it would cost. Do not estimate a split from a
