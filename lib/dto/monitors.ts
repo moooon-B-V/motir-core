@@ -46,6 +46,23 @@ export interface MonitorConnectionDto {
   /** When a poll last came back `ok`, as ISO — so a FAILING row can still say
    *  when it last worked (the design delta, MOTIR-5575 §12). */
   lastPollSucceededAt: string | null;
+
+  // ── SYNC STATE (Story MOTIR-4931) ─────────────────────────────────────────────
+  // The two direction switches and the most recent FAILED resolve-back, read
+  // straight off the stored row (Subtask MOTIR-5706). No component derives any
+  // of it.
+
+  /** Motir → monitor: resolve the linked issue when its bug is done. */
+  resolveOnDone: boolean;
+  /** Monitor → Motir: take a provider-side assignment onto the bug. */
+  syncAssignee: boolean;
+  /** The provider's own words for the last failed resolve-back, unaltered;
+   *  `null` = nothing has failed since the last success. */
+  lastSyncError: string | null;
+  /** When that failure happened, as ISO. */
+  lastSyncErrorAt: string | null;
+  /** The `KEY-<n>` of the bug whose resolve failed, so the room can link it. */
+  lastSyncErrorWorkItemIdentifier: string | null;
 }
 
 /** A monitored project the actor could bind but has not — the picker's row. */
@@ -72,6 +89,13 @@ export interface MonitorConnectionViewDto {
    *  value read off `connections[0]` does not exist there. */
   healthCheckedAt: string | null;
   connections: MonitorConnectionDto[];
+}
+
+/** Set either direction switch (MOTIR-5706). Sparse: an omitted key is left
+ *  unchanged, and at least one must be present. */
+export interface SetMonitorSyncDirectionsInput {
+  resolveOnDone?: boolean;
+  syncAssignee?: boolean;
 }
 
 /** Change one binding's minimum level (MOTIR-5579). `null` = every level. */

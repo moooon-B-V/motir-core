@@ -181,3 +181,19 @@ export class MonitorIssueGoneError extends Error {
     this.name = 'MonitorIssueGoneError';
   }
 }
+
+/**
+ * A direction-switch write that carries no switch, or a non-boolean value
+ * (Story MOTIR-4931 · Subtask MOTIR-5706). Refused rather than coerced: a
+ * `"false"` string read as truthy would turn a switch ON that a person asked to
+ * turn OFF.
+ */
+export class InvalidMonitorSyncDirectionError extends Error {
+  readonly code = 'INVALID_MONITOR_SYNC_DIRECTION' as const;
+  constructor(readonly value: unknown) {
+    super(
+      'Set resolveOnDone and/or syncAssignee to true or false — at least one, and nothing else.',
+    );
+    this.name = 'InvalidMonitorSyncDirectionError';
+  }
+}

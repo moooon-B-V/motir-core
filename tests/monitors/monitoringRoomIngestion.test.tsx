@@ -52,6 +52,11 @@ function connection(
     lastPollError: null,
     lastPollFiledCount: null,
     lastPollSucceededAt: null,
+    resolveOnDone: true,
+    syncAssignee: true,
+    lastSyncError: null,
+    lastSyncErrorAt: null,
+    lastSyncErrorWorkItemIdentifier: null,
     ...overrides,
   };
 }
