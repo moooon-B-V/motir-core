@@ -292,7 +292,8 @@ describe('PATCH /api/projects/[key]/monitors/[connectionId] — its own refusals
   it('an error the monitor mapper does not know is rethrown, never flattened into a status', async () => {
     const { fx, connectionId } = await bind();
     session.ctx = fx.ctx;
-    vi.spyOn(monitorConnectionService, 'setMinimumLevel').mockRejectedValue(new Error('boom'));
+    // The PATCH's one service method since MOTIR-5706 (the level AND the switches).
+    vi.spyOn(monitorConnectionService, 'updateConnection').mockRejectedValue(new Error('boom'));
     await expect(patch(fx, connectionId, '{"minimumLevel":"error"}')).rejects.toThrow('boom');
   });
 });

@@ -372,9 +372,14 @@ describe('the DTO carries no credential — the five poll fields included', () =
         'lastPollStatus',
         'lastPollSucceededAt',
         'lastPolledAt',
+        'lastSyncError',
+        'lastSyncErrorAt',
+        'lastSyncErrorWorkItemIdentifier',
         'minimumLevel',
         'orgSlug',
         'provider',
+        'resolveOnDone',
+        'syncAssignee',
       ].sort(),
     );
     const serialized = JSON.stringify(view);
