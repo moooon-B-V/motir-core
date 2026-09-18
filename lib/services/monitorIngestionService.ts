@@ -1,19 +1,25 @@
 import type { MonitorIssue } from '@/generated/prisma/client';
-import { MonitorBinderUnavailableError } from '@/lib/monitors/errors';
-import type { NormalizedMonitorIssue } from '@/lib/monitors/types';
+import { getMonitorProvider } from '@/lib/monitors';
+import { MonitorBinderUnavailableError, MonitorProviderCallError } from '@/lib/monitors/errors';
+import { meetsMinimumLevel } from '@/lib/monitors/levels';
+import { SENTRY_ISSUES_PAGE_LIMIT } from '@/lib/monitors/providers/sentry';
+import type { NormalizedMonitorIssue, NormalizedMonitorIssuePage } from '@/lib/monitors/types';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   monitorIssueRepository,
   type MonitorIssueFacts,
 } from '@/lib/repositories/monitorIssueRepository';
+import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
+import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
+import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { DuplicateLinkError } from '@/lib/workItems/linkErrors';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
 import { ReporterNotInWorkspaceError } from '@/lib/workItems/errors';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 
 // The monitor-issue INGESTION service (Story MOTIR-4929) — the reconciler that
 // turns a production error into a `bug` work item and keeps it in agreement with
@@ -131,6 +137,53 @@ function isBinderRefusal(err: unknown): boolean {
     err instanceof ReporterNotInWorkspaceError ||
     err instanceof ProjectAccessDeniedError ||
     err instanceof ProjectNotFoundError
+  );
+}
+
+/**
+ * The most pages ONE poll reads before it stops and says so.
+ *
+ * A bound, not a budget: a connection that has accumulated more than this many
+ * pages of issues since its last check (a first poll on a noisy organisation, or
+ * the back-fill after a long outage) records a FAILED outcome naming the count
+ * and does NOT advance its watermark — loud, rather than silently reconciling a
+ * truncated prefix and moving on as if it had seen everything. Raising the
+ * connection's minimum level is the lever a person has.
+ */
+export const MONITOR_POLL_MAX_PAGES = 20;
+
+/** What one poll did — the per-connection run's ledger output. */
+export interface MonitorPollSummary {
+  status: 'ok' | 'failed';
+  filed: number;
+  updated: number;
+  refiled: number;
+  /** Issues below the connection's minimum level: counted, never reconciled. */
+  skipped: number;
+  pages: number;
+}
+
+/** A poll that never started: the connection is gone (deleted between the tick
+ *  and this run). Nothing to record ON, so it is reported as a no-op. */
+const NOTHING_POLLED: MonitorPollSummary = {
+  status: 'ok',
+  filed: 0,
+  updated: 0,
+  refiled: 0,
+  skipped: 0,
+  pages: 0,
+};
+
+async function recordOutcome(
+  connectionId: string,
+  outcome: { status: 'ok' | 'failed'; error: string | null; filedCount: number | null },
+): Promise<void> {
+  await withSystemContext((tx) =>
+    monitorConnectionRepository.recordPollOutcome(
+      connectionId,
+      { ...outcome, polledAt: new Date() },
+      tx,
+    ),
   );
 }
 
@@ -298,5 +351,153 @@ export const monitorIngestionService = {
       workItemId: settled.workItemId,
       identifier: settled.identifier,
     };
+  },
+
+  /**
+   * Run ONE reconcile pass for ONE binding, and record on that binding what
+   * happened (Story MOTIR-4929 · Subtask MOTIR-5580). The scheduled job calls
+   * it (MOTIR-5581) and nothing else does.
+   *
+   * 1. READ the binding in system context. The watermark in effect is
+   *    `lastSeenWatermark ?? createdAt` — the NEW-issue rule: nothing from before
+   *    the binding is back-filled. The minimum level read HERE is what the final
+   *    advance compares against.
+   * 2. LIST every page since the watermark through
+   *    `monitorCredentialService.withFreshCredential` — it refreshes an expired
+   *    token, retries once on a 401, and writes `degraded` with the provider's
+   *    reason on a second refusal. Stops at a `null` cursor or at
+   *    {@link MONITOR_POLL_MAX_PAGES}, which is a FAILED outcome with the
+   *    watermark left where it was — loud, never a silent truncation.
+   * 3. FILTER: an issue below the minimum level is counted as skipped.
+   * 4. RECONCILE each remaining issue through {@link reconcileIssue}. One issue
+   *    failing (a binder refusal included) does not stop the others.
+   * 5. RECORD: all reconciled ⇒ advance the watermark (compare-and-set on the
+   *    level read at 1, so a lowering that landed mid-poll is NOT undone), record
+   *    `ok`, and write the grant's health `connected` — a working poll is
+   *    evidence the credential works, so "checked N minutes ago" stays true. Any
+   *    failure ⇒ record `failed` naming it and do NOT advance, so the failed
+   *    issue is read again next time. A PROVIDER refusal records `failed` with
+   *    the provider's own reason and RETURNS rather than throws, so a revoked
+   *    credential does not burn the job's retries. Anything else is thrown for
+   *    the job's retry and terminal path.
+   *
+   * ⚠️ IT NEVER PROBES. `monitorCredentialService.probeHealth` is the settings
+   * room's door, and it asserts a person's permission; a job reaching for it is
+   * the boundary MOTIR-5261 drew. The poll's own success is its health signal.
+   */
+  async pollConnection(connectionId: string): Promise<MonitorPollSummary> {
+    const connection = await withSystemContext((tx) =>
+      monitorConnectionRepository.findById(connectionId, tx),
+    );
+    if (!connection) return NOTHING_POLLED;
+
+    const minimumLevelAtStart = connection.minimumLevel;
+    const lastSeenAfter = connection.lastSeenWatermark ?? connection.createdAt;
+
+    // ── 2. LIST ────────────────────────────────────────────────────────────────
+    const listed: NormalizedMonitorIssue[] = [];
+    let pages = 0;
+    let cursor: string | null = null;
+    try {
+      do {
+        if (pages === MONITOR_POLL_MAX_PAGES) {
+          const reason =
+            `More than ${MONITOR_POLL_MAX_PAGES * SENTRY_ISSUES_PAGE_LIMIT} issues ` +
+            `(${MONITOR_POLL_MAX_PAGES} pages) since the last check. Nothing was skipped silently: ` +
+            'raise the minimum level, or the next check reads them again.';
+          await recordOutcome(connection.id, { status: 'failed', error: reason, filedCount: null });
+          return { ...NOTHING_POLLED, status: 'failed', pages };
+        }
+        const pageCursor: string | null = cursor;
+        const page: NormalizedMonitorIssuePage = await monitorCredentialService.withFreshCredential(
+          connection.installationId,
+          (credential) =>
+            getMonitorProvider(credential.provider).listIssuesSince({
+              accessToken: credential.token,
+              orgSlug: credential.orgSlug ?? '',
+              externalProjectId: connection.externalProjectId,
+              lastSeenAfter,
+              cursor: pageCursor,
+            }),
+        );
+        pages += 1;
+        listed.push(...page.issues);
+        cursor = page.nextCursor;
+      } while (cursor !== null);
+    } catch (err) {
+      if (!(err instanceof MonitorProviderCallError)) throw err;
+      // `withFreshCredential` has already written `degraded` where the refusal
+      // was the credential's. Either way the reason is the PROVIDER's own words.
+      await recordOutcome(connection.id, {
+        status: 'failed',
+        error: err.providerReason,
+        filedCount: null,
+      });
+      return { ...NOTHING_POLLED, status: 'failed', pages };
+    }
+
+    // ── 3–4. FILTER + RECONCILE ──────────────────────────────────────────────
+    const summary: MonitorPollSummary = { ...NOTHING_POLLED, pages };
+    const failures: string[] = [];
+    const target: MonitorReconcileConnection = {
+      id: connection.id,
+      projectId: connection.projectId,
+      workspaceId: connection.workspaceId,
+      boundByUserId: connection.boundByUserId,
+      externalProjectSlug: connection.externalProjectSlug,
+    };
+    for (const issue of listed) {
+      if (!meetsMinimumLevel(issue.level, minimumLevelAtStart)) {
+        summary.skipped += 1;
+        continue;
+      }
+      try {
+        const result = await monitorIngestionService.reconcileIssue(target, issue);
+        summary[result.outcome] += 1;
+      } catch (err) {
+        const why =
+          err instanceof MonitorBinderUnavailableError
+            ? err.reason
+            : err instanceof Error
+              ? err.message
+              : String(err);
+        failures.push(`Issue ${issue.externalId} (“${issue.title}”) was not filed: ${why}`);
+      }
+    }
+
+    // ── 5. RECORD ─────────────────────────────────────────────────────────────
+    if (failures.length > 0) {
+      const error =
+        failures.length === 1
+          ? failures[0]!
+          : `${failures[0]!} (and ${failures.length - 1} more issue${failures.length === 2 ? '' : 's'})`;
+      await recordOutcome(connection.id, { status: 'failed', error, filedCount: null });
+      return { ...summary, status: 'failed' };
+    }
+
+    if (listed.length > 0) {
+      const newest = new Date(Math.max(...listed.map((issue) => issue.lastSeenAt.getTime())));
+      await withSystemContext((tx) =>
+        monitorConnectionRepository.advanceWatermark(
+          connection.id,
+          newest,
+          minimumLevelAtStart,
+          tx,
+        ),
+      );
+    }
+    await recordOutcome(connection.id, {
+      status: 'ok',
+      error: null,
+      filedCount: summary.filed + summary.refiled,
+    });
+    await withSystemContext((tx) =>
+      monitorInstallationRepository.updateHealth(
+        connection.installationId,
+        { health: 'connected', healthReason: null, healthCheckedAt: new Date() },
+        tx,
+      ),
+    );
+    return summary;
   },
 };
