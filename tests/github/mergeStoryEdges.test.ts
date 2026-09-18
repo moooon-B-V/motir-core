@@ -264,7 +264,8 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
       fx.ctx,
     );
     expect(door).toHaveBeenCalledWith(
-      { gateId: foreign.id, decision: 'approve', source: 'ui' },
+      // The stamp travels to the door unchanged (MOTIR-5234).
+      { gateId: foreign.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
       fx.ctx,
     );
   });
