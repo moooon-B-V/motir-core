@@ -37,6 +37,7 @@ function pr(over: Partial<RepairPullRequest> = {}): RepairPullRequest {
     baseRef: 'main',
     ci: 'failing',
     failingChecks: ['Vitest'],
+    queueExit: null,
     ...over,
   };
 }

@@ -360,6 +360,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
       baseRef: null,
       ci: 'failing',
       failingChecks: ['Vitest'],
+      queueExit: null,
     };
     server.scriptV1({
       'POST /api/v1/work-items/{key}/repair': {

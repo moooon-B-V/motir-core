@@ -637,9 +637,24 @@ export interface RepairPullRequest {
   /** The pull request's own branch — checked out, and pushed to. */
   headRef: string;
   baseRef: string | null;
+  /** The pull request's OWN verdict — may be `passing` when `queueExit` is set. */
   ci: 'passing' | 'failing' | 'running' | null;
   /** The checks failing at the verdict's commit, by name. */
   failingChecks: string[];
+  /** The standing merge-queue failure that makes this pull request failing, or
+   *  null (MOTIR-5719): the queue's reason and its failing check, both check fields
+   *  null for a conflict. */
+  queueExit: RepairQueueExit | null;
+}
+
+/** Why the merge queue threw a pull request out, as a repair is told it. */
+export interface RepairQueueExit {
+  /** GitHub's own reason — `CI_FAILURE`, `MERGE_CONFLICT`, … */
+  rawReason: string;
+  exitedAt: string;
+  headSha: string;
+  failingCheckName: string | null;
+  failingCheckUrl: string | null;
 }
 
 /** The result of a repair claim. A refusal is a 200, as on the keyed claim. */

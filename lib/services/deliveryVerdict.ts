@@ -1,4 +1,4 @@
-import type { GithubCheckRun, Prisma } from '@/generated/prisma/client';
+import type { GithubCheckRun, GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
 import { derivePrCiState, liveRowsAtLatestSha, type PrCiState } from '@/lib/github/prCiState';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
@@ -79,25 +79,28 @@ export async function collectDeliveries(
 
 /**
  * WHICH members of a delivery set a merge-queue failure still HOLDS (MOTIR-5717) —
- * by pull-request id, over ONE read of the set's latest exits.
+ * each held member's pull-request id mapped to the exit row that holds it, over ONE
+ * read of the set's latest exits.
  *
  * The rule itself is {@link queueExitHoldsAtHead}; this is only its transaction-
  * scoped wrapper, so the promotion hold, the card's fold and the repair claim read
- * the exits the same way as well as judging them the same way. A set with no exit
- * at all — nearly every card — costs one indexed read and returns an empty set.
+ * the exits the same way as well as judging them the same way. It returns the ROW,
+ * not only the id, because the repair claim hands the agent the exit's reason and
+ * failing check (MOTIR-5719). A set with no exit at all — nearly every card — costs
+ * one indexed read and returns an empty map.
  */
-export async function queueFailureMemberIds(
-  byId: ReadonlyMap<string, { checkRuns: GithubCheckRun[] }>,
+export async function standingQueueFailures(
+  byId: ReadonlyMap<string, { checkRuns: readonly GithubCheckRun[] }>,
   tx: Prisma.TransactionClient,
-): Promise<Set<string>> {
+): Promise<Map<string, GithubPullRequestQueueExit>> {
   const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
     [...byId.keys()],
     tx,
   );
-  const held = new Set<string>();
+  const held = new Map<string, GithubPullRequestQueueExit>();
   for (const [pullRequestId, exit] of exits) {
-    const head = liveRowsAtLatestSha(byId.get(pullRequestId)!.checkRuns)[0]?.commitSha;
-    if (queueExitHoldsAtHead(exit, head)) held.add(pullRequestId);
+    const head = liveRowsAtLatestSha([...byId.get(pullRequestId)!.checkRuns])[0]?.commitSha;
+    if (queueExitHoldsAtHead(exit, head)) held.set(pullRequestId, exit);
   }
   return held;
 }
@@ -112,7 +115,7 @@ export interface ClassifiedDelivery {
    *  "nothing has reported yet" (`repoCannotReportChecks`). */
   cannotReport: boolean;
   /** True when this member's latest merge-queue exit still holds it
-   *  ({@link queueFailureMemberIds}) — a failure the pull request's OWN `state`
+   *  ({@link standingQueueFailures}) — a failure the pull request's OWN `state`
    *  cannot show, because the queue failed on its merge group (MOTIR-5717). */
   queueFailure: boolean;
 }
@@ -148,7 +151,7 @@ export async function classifyDeliveries(
   const [reporting, mergedSilent, queueHeld] = await Promise.all([
     githubPullRequestRepository.listRepoIdsWithAnyCheckRun(silentRepoIds, tx),
     githubPullRequestRepository.listRepoIdsWithAWatchedMergeWithoutChecks(silentRepoIds, tx),
-    queueFailureMemberIds(byId, tx),
+    standingQueueFailures(byId, tx),
   ]);
   const hasReported = new Set(reporting);
   const hasMergedSilently = new Set(mergedSilent);

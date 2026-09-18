@@ -35,8 +35,18 @@ afterEach(() => {
 const fix = messages.github.development.fix;
 const copyAria = messages.github.development.howToTest.code.copyAria;
 const NOW = Date.parse('2026-09-16T14:06:00Z');
-const CORE = { repo: CORE_PR.repo, number: CORE_PR.number };
-const GATEWAY = { repo: GATEWAY_PR.repo, number: GATEWAY_PR.number };
+const CORE = {
+  repo: CORE_PR.repo,
+  number: CORE_PR.number,
+  ci: 'failing' as const,
+  queueExit: null,
+};
+const GATEWAY = {
+  repo: GATEWAY_PR.repo,
+  number: GATEWAY_PR.number,
+  ci: 'failing' as const,
+  queueExit: null,
+};
 
 function renderPart(repair: WorkItemRepairViewDto | null) {
   return render(

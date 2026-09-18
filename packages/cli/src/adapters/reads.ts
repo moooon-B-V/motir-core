@@ -645,6 +645,15 @@ export function toWorkItemRepairClaim(
       baseRef: pr.baseRef,
       ci: pr.ci,
       failingChecks: [...pr.failingChecks],
+      queueExit: pr.queueExit
+        ? {
+            rawReason: pr.queueExit.rawReason,
+            exitedAt: pr.queueExit.exitedAt,
+            headSha: pr.queueExit.headSha,
+            failingCheckName: pr.queueExit.failingCheckName,
+            failingCheckUrl: pr.queueExit.failingCheckUrl,
+          }
+        : null,
     })),
   };
 }

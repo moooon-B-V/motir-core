@@ -11,7 +11,7 @@ import {
   reconcileRecordedCheckSet,
 } from './checkSetReconcile';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
-import { collectDeliveries, classifyDeliveries, queueFailureMemberIds } from './deliveryVerdict';
+import { collectDeliveries, classifyDeliveries, standingQueueFailures } from './deliveryVerdict';
 import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -193,7 +193,7 @@ async function heldByQueueFailure(
 ): Promise<boolean> {
   // The rule is `queueExitHoldsAtHead` (MOTIR-5717), shared with the card's own
   // `ciState` fold — so the badge reads *failing* exactly while this hold refuses.
-  return (await queueFailureMemberIds(byId, tx)).size > 0;
+  return (await standingQueueFailures(byId, tx)).size > 0;
 }
 
 /**

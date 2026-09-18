@@ -98,6 +98,7 @@ describe('claimRepair — the claim', () => {
         baseRef: 'main',
         ci: 'failing',
         failingChecks: ['Vitest'],
+        queueExit: null,
       },
     ]);
 
@@ -411,7 +412,7 @@ describe('getRepairView — what the Development block draws', () => {
 
     expect(await view(fx, card.id)).toEqual({
       state: 'offer',
-      failing: [{ repo: `acme/${repo.name}`, number: pr.number }],
+      failing: [{ repo: `acme/${repo.name}`, number: pr.number, ci: 'failing', queueExit: null }],
       lastGaveUp: null,
     });
     expect(await fixRuns(card.id)).toHaveLength(0);
@@ -526,7 +527,7 @@ describe('getRepairView — what the Development block draws', () => {
 
     expect(await view(fx, red.id)).toEqual({
       state: 'pointer',
-      failing: [{ repo: 'acme/web', number: pr.number }],
+      failing: [{ repo: 'acme/web', number: pr.number, ci: 'failing', queueExit: null }],
       runTargetKey: story.identifier,
     });
     expect(await view(fx, quiet.id)).toEqual({ state: 'hidden' });
@@ -567,6 +568,172 @@ describe('getRepairView — what a malformed give-up record still says', () => {
     expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
       state: 'offer',
       lastGaveUp: { attempts: null, endedAt: run.startedAt.toISOString() },
+    });
+  });
+});
+
+// ── AN EJECTED CARD IS REPAIRABLE (Story MOTIR-5628 · MOTIR-5719) ───────────────
+//
+// The merge queue failed on the pull request's MERGE GROUP, so its own checks are
+// green; the claim refused it `not_failing` and `motir fix` could not take it. A
+// standing failure exit at the head now makes the member failing — through the
+// fold's own rule (`queueExitHoldsAtHead` via `standingQueueFailures`) — and the
+// claim names the queue's reason and check.
+
+describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
+  const HEAD = 'c'.repeat(40);
+
+  async function exitOn(
+    pullRequestId: string,
+    opts: {
+      rawReason?: string;
+      disposition?: 'failure' | 'neutral';
+      headSha?: string;
+      requeuedAt?: Date | null;
+      failingCheckName?: string | null;
+      failingCheckUrl?: string | null;
+    } = {},
+  ) {
+    return adminDb.githubPullRequestQueueExit.create({
+      data: {
+        pullRequestId,
+        deliveryId: `guid-${randomToken(8)}`,
+        rawReason: opts.rawReason ?? 'CI_FAILURE',
+        disposition: opts.disposition ?? 'failure',
+        headSha: opts.headSha ?? HEAD,
+        exitedAt: new Date('2026-09-18T10:00:00.000Z'),
+        requeuedAt: opts.requeuedAt ?? null,
+        failingCheckName:
+          opts.failingCheckName === undefined ? 'Merge queue / e2e' : opts.failingCheckName,
+        failingCheckUrl:
+          opts.failingCheckUrl === undefined
+            ? 'https://github.com/acme/web/runs/77'
+            : opts.failingCheckUrl,
+      },
+    });
+  }
+
+  /** An `implemented` card whose ONLY open pull request is GREEN on its own checks. */
+  async function greenCard(fx: WorkItemFixture) {
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'ejected card' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    const pr = await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/ejected',
+      checks: { Vitest: 'success' },
+    });
+    return { card, repo, pr };
+  }
+
+  it('claims an ejected card whose own checks are green, and names the exit', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await exitOn(pr.id);
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.outcome).toBe('claimed');
+    expect(result.pullRequests).toEqual([
+      expect.objectContaining({
+        number: pr.number,
+        ci: 'passing',
+        failingChecks: [],
+        queueExit: {
+          rawReason: 'CI_FAILURE',
+          exitedAt: '2026-09-18T10:00:00.000Z',
+          headSha: HEAD,
+          failingCheckName: 'Merge queue / e2e',
+          failingCheckUrl: 'https://github.com/acme/web/runs/77',
+        },
+      }),
+    ]);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).status).toBe(
+      'implemented',
+    );
+  });
+
+  it('a MERGE CONFLICT exit is claimed with both check fields null', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await exitOn(pr.id, {
+      rawReason: 'MERGE_CONFLICT',
+      failingCheckName: null,
+      failingCheckUrl: null,
+    });
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.outcome).toBe('claimed');
+    expect(result.pullRequests[0]?.queueExit).toMatchObject({
+      rawReason: 'MERGE_CONFLICT',
+      failingCheckName: null,
+      failingCheckUrl: null,
+    });
+  });
+
+  it.each([
+    ['re-queued', { requeuedAt: new Date() }],
+    ['neutral', { disposition: 'neutral' as const, rawReason: 'MANUAL' }],
+    ['at an OLD head', { headSha: 'a'.repeat(40) }],
+  ])('an exit that is %s does not hold — not_failing', async (_label, opts) => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await exitOn(pr.id, opts);
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result).toMatchObject({ outcome: 'not_repairable', reason: 'not_failing' });
+    expect(await fixRuns(card.id)).toHaveLength(0);
+  });
+
+  it('an exit that does not hold beside a RUNNING member is ci_running', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr } = await greenCard(fx);
+    await exitOn(pr.id, { requeuedAt: new Date() });
+    await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/running',
+      checks: { Vitest: 'pending' },
+    });
+
+    expect((await claim(fx, card.identifier)).reason).toBe('ci_running');
+  });
+
+  it('an own-failing and a queue-failing member are both handed over, each with its own queueExit', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo, pr: ejected } = await greenCard(fx);
+    await exitOn(ejected.id);
+    const red = await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/red',
+      checks: { Vitest: 'failure' },
+    });
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.outcome).toBe('claimed');
+    const byNumber = new Map(result.pullRequests.map((p) => [p.number, p]));
+    expect(byNumber.get(red.number)).toMatchObject({ ci: 'failing', queueExit: null });
+    expect(byNumber.get(ejected.number)).toMatchObject({
+      ci: 'passing',
+      queueExit: { rawReason: 'CI_FAILURE' },
+    });
+  });
+
+  it('the page’s repair view OFFERS the fix on an ejected card, naming the exit’s reason', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await exitOn(pr.id, { rawReason: 'CI_TIMEOUT' });
+
+    const view = await workItemRepairService.getRepairView(card.id, fx.ctx);
+
+    expect(view).toMatchObject({
+      state: 'offer',
+      failing: [
+        {
+          number: pr.number,
+          ci: 'passing',
+          queueExit: { rawReason: 'CI_TIMEOUT', failingCheckName: 'Merge queue / e2e' },
+        },
+      ],
     });
   });
 });
