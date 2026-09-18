@@ -37,6 +37,7 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `root-non-epic-rows.png`                  | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                                        |
 | `roadmap-arrival.mock.html`               | the **roadmap you come back to** (MOTIR-3834): the level-addressable URL, the full-fold frame, the collapsible Dependencies panel, and the ARRIVAL view |
 | `roadmap-arrival.png`                     | its full-page export (`scripts/render-design-mock.mjs`, light, `deviceScaleFactor 2`, 1200px)                                                           |
+| `roadmap--folder-node.mock.html`          | a **FOLDER on the canvas** (MOTIR-5713): the folder card, the folder level, and the navigable folder crumb — a delta                                    |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -1975,3 +1976,199 @@ type), at the four viewports above for the fold, reading `getBoundingClientRect(
    that a URL restore is an ARRIVAL — the level is addressable, the viewport is not. A per-level
    saved viewport would be its own story with its own storage decision, never a clause in the arrival
    rule.
+
+---
+
+## ⭐ A FOLDER on the canvas (MOTIR-5713 — `roadmap--folder-node.mock.html`)
+
+The card this unblocks is **MOTIR-5710**. Folders shipped in Epic MOTIR-5307: a project's tree can
+be tidied into nestable folders that hold any work item and carry no workflow. The roadmap never
+learned about them. `workItemsService.getProjectRoadmap` calls `findProjectTreeLevel` /
+`countProjectTreeLevel` **without** a `TreeFolderLevel` argument
+(`lib/repositories/workItemRepository.ts`, whose own comment says the roadmap omits it on purpose),
+so a filed root is still a root and no read returns a folder. Only the drilled breadcrumb shows a
+folder today, and only as TEXT (`crumbFolderPath`, MOTIR-5418). Two surfaces showing one project
+therefore disagree about its shape: `/items` shows two tidy folders, and the canvas shows 888 loose
+bugs.
+
+**This reverses one decision on the record.** Story MOTIR-5309 chose _"Guards, not features, for
+the roadmap … The roadmap is unchanged. Its root lists a filed epic exactly as it did before."_ That
+guard is what this design retires. The code card must **restate** MOTIR-5309's vitest guard for the
+roadmap (a filed row now leaves the root), not work around it. The public-project half of that guard
+stands (decision 8).
+
+**A delta, per the area's rule.** `roadmap--folder-node.mock.html` holds only the panels that
+change. It amends, without editing:
+
+| amended mock                                     | what changes                                                                                                   |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `roadmap.mock.html`                              | the canvas gains a new node kind (the folder card) and a new level kind (a folder level)                       |
+| `root-non-epic-rows.mock.html`                   | the root's loose band now leads with folders; **Not in an epic** holds only UNFILED parentless non-epics       |
+| `../ai-planning/plan-folder-placement.mock.html` | on the ROADMAP only, the folder crumb becomes a navigable `Crumb`; the plan-review canvas keeps its text crumb |
+
+**What it composes, and redraws nothing of.** The node box, kind tile, identifier and title slots,
+chevron, status pill, meter, grouped node, truncation tile and ghost anchor are
+`components/planning/WorkItemNode.tsx` (`WorkItemNode`, `LevelGroupNode`, `LevelTruncationTile`, the
+ghost anchor), mirrored class-role for class-role. The breadcrumb nav and `Crumb` are
+`components/planning/ProjectRoadmapCanvas.tsx`. The folder vocabulary is
+`components/planning/FolderPlacement.tsx` (the lucide `folder` glyph, `FolderPathLabel`,
+`collapseFolderPath`, the `▸` separator) and the `/items` folder rows of
+`design/work-items/folders.mock.html` (MOTIR-5311), which is the rung-1 precedent for every
+decision below. The canvas is a **per-level drill-down** fed one level per fetch
+(`getProjectRoadmap` → `findProjectTreeLevel`). The folder card is a new node kind INSIDE that
+canvas and that read, not a second canvas and not a whole-tree read.
+
+### Sheets
+
+| #   | sheet                  | what it settles                                                                                                                                              |
+| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **Today**              | The shipped defect: filed bugs still count against the root cap and still sit behind **Not in an epic**; no folder appears.                                  |
+| 2   | **The folder card**    | The shipped node box with the folder glyph tile, the direct-contents count, the name. No status, meter or readiness. At rest · selected · empty · long name. |
+| 3   | **The root level**     | Epics on the road; the loose band leads with the folders (position order), then **Not in an epic**.                                                          |
+| 4   | **Inside a folder**    | Its child folders first, then its filed work items, each unchanged. The shipped cap tile counts the folder's work items.                                     |
+| 5   | **The breadcrumb**     | Before/after: each folder is its own `Crumb` button led by the folder glyph; a deep path collapses from the middle.                                          |
+| 6   | **An empty folder**    | Still drawn, still a door; the drilled-empty slot gets folder copy.                                                                                          |
+| 7   | **Edges**              | A folder is never an edge end. A filed off-level blocker's ghost anchor names its folder path.                                                               |
+| 8   | **Decisions + scopes** | The eight decisions below, in one table.                                                                                                                     |
+| 9   | **Dark parity**        | A drilled folder level on `data-theme="dark"`; the "Toggle dark" button flips every sheet.                                                                   |
+
+### DECISION 1 — every FILED work item leaves the root read
+
+The roadmap passes the same `{ kind: 'excludeFiled' }` treatment the `/items` root read passes
+(MOTIR-5314), to both `findProjectTreeLevel` and `countProjectTreeLevel`, so a level's rows and its
+"Showing N of M" keep sharing one predicate. A filed epic leaves the road and appears inside its
+folder. A folder level reads `{ kind: 'folder', folderId }`. The level's address becomes a parent id
+**or** a folder id: the route `GET /api/projects/[key]/roadmap` and
+`lib/planning/roadmapClient.ts` `fetchRoadmapLevel` need a folder form, and the URL-addressable
+level (`?item=`, MOTIR-3836) needs one too, so a folder level survives reload and a shared link.
+
+### DECISION 2 — folders lead the loose band, at every level
+
+The epics stay on the road where `deterministicLayout` puts them. A folder takes part in no edge,
+so it already falls into the loose band below the flow. Within that band **the folders come first,
+in their own position order** (as `/items` keeps them under any column sort), and then:
+
+- at the ROOT, the **Not in an epic** node, last;
+- in a FOLDER, the loose work items.
+
+This is the `/items` root order (_epics, then folders, then the rest_, review of MOTIR-5540)
+expressed in the canvas's layout rather than as a list.
+
+**Not in an epic is ROOT-ONLY.** Inside a folder, the folder is already the drawer. Grouping its
+non-epics again would put a second door in front of the room the reader just opened.
+
+### DECISION 3 — the card counts DIRECT contents, folders and items named separately
+
+`794 items` · `1 item` · `2 folders · 5 items` · `3 folders` · `Empty`. Direct, as the `/items`
+delete confirmation counts (`folders.mock.html` panel 5): a filed epic counts once, however many
+stories it holds. It is **not** recursive and **not** a status tally. A folder is not a unit of work,
+and a done/open split on its face would be the progress claim decision 3 of the grouped node already
+refused. The count needs one aggregate per level (child-folder count + filed-row count per folder);
+it must not be computed by loading each folder's contents.
+
+### DECISION 4 — the 200-row cap is about WORK ITEMS; folders are never cut
+
+A level's folders are read whole, as `list_folders` / the `/items` folder tree are, and drawn before
+the cap tile. `levelTotal` and the tile's `Showing {shown} of {total}` count **work items only**, so
+the sentence stays true. This keeps the cap from ever hiding the doors to the work it did not show.
+
+### DECISION 5 — a folder is a CHOICE, not decoration
+
+Not `decorative`, for the grouped node's reason (its decision 5): a folder holds real work, so it
+counts toward `autoDescendSingleParent`'s "does this level offer a choice?". A root with one epic and
+one folder does **not** auto-descend into the epic. Not `viewable` either: it has no peek, because
+what it holds is the level behind it. Selecting it shows the shipped **Open ›** button and no
+**View**.
+
+### DECISION 6 — sprint scope ignores placement
+
+Under `scope=sprint` **no folder is drawn and placement is ignored**. A filed in-sprint row renders
+exactly where it would if it were unfiled. The sprint view exists to show committed work, and putting
+a committed bug behind a folder door would bury the thing the view is for. The level read therefore
+passes no folder treatment when `sprintId` is set.
+
+### DECISION 7 — edges: a folder is never an edge end; a filed blocker is named with its folder
+
+A folder blocks nothing, draws no arrow and never takes the cross-blocked chrome. Edges keep the rule
+the grouped level already follows (MOTIR-3557): **a level draws the edges whose BLOCKED end is one of
+its rows**. What changes is the **ghost anchor's location line**. For an off-level blocker that is
+FILED, the line reads its **folder path**, drawn with `FolderPathLabel` (glyph + path, `max` 2),
+where today it reads the parent or "elsewhere". The off-level blocker payload needs the blocker's
+effective folder path for that. The reader learns which door holds the blocker.
+
+### DECISION 8 — what stays out
+
+- **The run canvas** (`ids=` levels): a run's members are drawn as the run took them, and an explicit
+  id set already ignores `TreeFolderLevel` by construction.
+- **The public roadmap** (`publicProjectsService`): carries no folder field, per MOTIR-5309's
+  decision, which this card does not reverse.
+- **The plan-review canvas's folder crumb** (MOTIR-5418): there the path says where a PROPOSAL will
+  be filed. That canvas has no folder level to navigate to, so its text crumb stands.
+- **Search-to-locate inside an unopened folder**: a folder card's search text is its name. Locate
+  still searches the level in view, as today.
+
+### The breadcrumb (sheet 5)
+
+The roadmap's crumb chain becomes **root › folder › … › folder › work item › …**, and each folder
+is its own shipped `Crumb` button: `--el-text-secondary`, hover `--el-surface-soft` + `--el-text`,
+active `--el-text` 600 with `aria-current="page"`. A 14px lucide `folder` glyph leads the label, so a
+folder crumb reads as a folder without the reader reading it. Its accessible name is the shipped
+`folders.breadcrumbFolderLabel` ("Folder:") + the name. **More than three folders collapse from the
+middle** (`collapseFolderPath(path, 3)`), and the `…` is itself a `Crumb` that navigates to the
+folder just above the last one shown. It carries the full path as its `title`. Clicking a folder
+crumb navigates to that folder's level, exactly as a work-item crumb navigates to its level.
+
+### Elements — primitive and tokens
+
+| element                  | composes                                              | colour                                                                                                                  | shape                                                 |
+| ------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| folder card box          | `LevelGroupNode`'s box (`NODE_W × NODE_H`)            | `--el-surface`, border `--el-border`                                                                                    | `--radius-card`, `--shadow-card`, `p-3.5`             |
+| folder tile              | the kind-tile slot, `size-7`                          | fill `--el-muted`; lucide `folder` in `--el-text-secondary` (`aria-hidden`)                                             | `--radius-control`                                    |
+| count                    | the identifier slot, mono `text-xs`                   | `--el-text-secondary`                                                                                                   | —                                                     |
+| name                     | the title slot, `line-clamp-2`, 600                   | `--el-text`                                                                                                             | —                                                     |
+| drill chevron            | the shipped chevron, `data-testid="drill-affordance"` | `--el-text-muted` (decorative glyph, `aria-hidden`)                                                                     | `size-4`                                              |
+| Open ›                   | the shipped selected-node drill button                | `--el-accent` / `--el-accent-text`                                                                                      | `--radius-btn`, `--spacing-btn-x` / `--spacing-btn-y` |
+| folder crumb             | the shipped `Crumb` + a lucide `folder` glyph         | `--el-text-secondary`; hover `--el-surface-soft` + `--el-text`; active `--el-text`; separator `--el-text-faint` (glyph) | `--radius-control`, `max-w-[18rem]` truncate          |
+| empty folder level       | the canvas's drilled-empty slot                       | lucide `folder-open` + description `--el-text-secondary`; title `--el-text-strong`                                      | —                                                     |
+| ghost anchor folder line | `FolderPathLabel` inside the shipped anchor           | `--el-text-secondary`                                                                                                   | `size-3.5` glyph                                      |
+
+### Copy — English and Chinese
+
+Keys are suggestions for the code card; each needs its `messages/zh.json` twin in the same pull
+request. The ones under `roadmap.canvas.folder` sit beside the shipped `roadmap.canvas.group`.
+
+| key (suggested)                          | en                                                           | zh                                                 |
+| ---------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------- |
+| `roadmap.canvas.folder.items`            | {count} items                                                | {count} 项                                         |
+| `roadmap.canvas.folder.itemsOne`         | 1 item                                                       | 1 项                                               |
+| `roadmap.canvas.folder.folders`          | {count} folders                                              | {count} 个文件夹                                   |
+| `roadmap.canvas.folder.foldersOne`       | 1 folder                                                     | 1 个文件夹                                         |
+| `roadmap.canvas.folder.both`             | {folders} · {items}                                          | {folders} · {items}                                |
+| `roadmap.canvas.folder.empty`            | Empty                                                        | 空                                                 |
+| `roadmap.canvas.folder.aria`             | Folder {name}, {contents}. Open to see what is filed in it.  | 文件夹“{name}”，{contents}。打开以查看其中的内容。 |
+| `roadmap.canvas.folder.emptyTitle`       | This folder is empty                                         | 此文件夹为空                                       |
+| `roadmap.canvas.folder.emptyDescription` | Work items filed into {name} from Work items will show here. | 在“工作项”中归入“{name}”的工作项会显示在这里。     |
+
+The crumb's accessible prefix is the shipped `folders.breadcrumbFolderLabel`; the `…` crumb's
+accessible name is its full path. **No other new strings.**
+
+### Tokens & a11y
+
+Colour is `--el-*` only and shape is the element-semantic tokens. Every piece of text sits on
+`--el-text-secondary` or stronger, which clears AA on every surface in both themes.
+`--el-text-muted` and `--el-text-faint` appear only on decorative, `aria-hidden` glyphs (the
+chevron, the crumb separator), exactly as the shipped canvas uses them. The folder card is one
+focusable node whose `aria-label` carries name + contents, as `LevelGroupNode`'s does. The folder
+crumb is a real `<button>` in the breadcrumb `<nav>`'s ordered list.
+
+### Allocation — what this design GIVES and TAKES
+
+Swept over the tree, not only over the keys this asset names (`type-design.md`'s allocation rule):
+
+| key                             | gives / takes                                                                                                                         | disposition                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **MOTIR-5710**                  | GIVES the whole build: the folder read arm, the level address, the folder card, the folder level, the crumb, the anchor's folder line | the card is amended on the record in the same pass (acceptance criteria + a re-estimate) |
+| **MOTIR-5309**                  | TAKES a PREMISE: "the roadmap is unchanged" — its roadmap guard is retired                                                            | a `done` story; not reopened. MOTIR-5710's criteria carry the guard's restatement        |
+| **MOTIR-5418**                  | TAKES nothing: the plan-review text crumb stands (decision 8)                                                                         | none owed                                                                                |
+| **MOTIR-3493** / **MOTIR-3490** | TAKES a STRUCTURE on the ROOT: the grouped node now holds only unfiled rows, and the loose band leads with folders                    | both `done`; MOTIR-5710 carries the change                                               |
+| **MOTIR-5311** / **MOTIR-5314** | GIVES nothing, TAKES nothing: their vocabulary and level rule are composed as they stand                                              | none owed                                                                                |
