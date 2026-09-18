@@ -28,6 +28,7 @@ import type {
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeService';
+import { classifyProjectRepoUniqueViolation } from '@/lib/projectRepos/uniqueViolation';
 import {
   GithubRemovalHappensOnGithubError,
   MotirHostedRepoIsTakenOverError,
@@ -119,71 +120,6 @@ async function inProjectOrg<T>(
 }
 
 /**
- * The two shapes Prisma can put in a `P2002`'s `meta.target`: the COLUMN LIST
- * (`["project_id", "github_repo_id"]`) or the INDEX NAME
- * (`project_repository_project_id_github_repo_id_key`). Both are matched, and
- * both are matched POSITIVELY — see `translateLinkViolation`.
- */
-function targetFields(err: Prisma.PrismaClientKnownRequestError): string[] | null {
-  const target = err.meta?.['target'];
-  if (Array.isArray(target)) {
-    const fields = target.map(String).filter((f) => f.length > 0);
-    return fields.length > 0 ? fields : null;
-  }
-  if (typeof target === 'string' && target.length > 0) return [target];
-  return null;
-}
-
-/**
- * The constraint name out of the DRIVER's own error, when `meta.target` has none.
- *
- * ⚠️ THIS IS WHERE THE ANSWER ACTUALLY IS UNDER RLS, and it was worth finding:
- * Prisma drops the constraint name on its way to `meta.target` (the adapter builds
- * that from `DETAIL` alone), but it PRESERVES the driver's original error beneath
- * `meta.driverAdapterError`. Measured on a real lost race under the `motir_app`
- * role:
- *
- *   meta = { modelName: 'ProjectRepo', driverAdapterError: { cause: {
- *     originalCode: '23505',
- *     originalMessage: 'duplicate key value violates unique constraint
- *                       "project_repository_project_id_github_repo_id_key"' } } }
- *
- * So the index name survives, quoted, in a message PostgreSQL sends whether or not
- * it is willing to describe the conflicting VALUES — which is exactly the
- * distinction RLS draws. Reading it turns the ordinary case back into a local,
- * positive classification with no second query.
- *
- * It is read DEFENSIVELY and is never the only path: the message is
- * server-localized, so a `lc_messages` other than English changes the prose around
- * the name. Only the QUOTED identifier is taken, and a miss falls through to the
- * set re-read rather than guessing.
- */
-function driverConstraintName(err: Prisma.PrismaClientKnownRequestError): string | null {
-  const adapterError = err.meta?.['driverAdapterError'];
-  if (typeof adapterError !== 'object' || adapterError === null) return null;
-  const cause = (adapterError as { cause?: unknown }).cause;
-  if (typeof cause !== 'object' || cause === null) return null;
-  const message = (cause as { originalMessage?: unknown }).originalMessage;
-  if (typeof message !== 'string') return null;
-  return message.match(/"([^"]+)"/)?.[1] ?? null;
-}
-
-/** `@@unique([projectId, githubRepoId])`, in either shape. */
-function namesClaimConstraint(fields: string[]): boolean {
-  // One test covers both shapes: the column is `github_repo_id`, and the index
-  // name `project_repository_project_id_github_repo_id_key` contains it.
-  return fields.some((f) => f.includes('github_repo_id'));
-}
-
-/** `@@unique([projectId, name])`, in either shape. */
-function namesNameConstraint(fields: string[]): boolean {
-  // Two tests, because the index name does NOT contain the bare column: it is
-  // `project_repository_project_id_name_key`. Checked AFTER the claim constraint,
-  // so the ordering never has to arbitrate between them.
-  return fields.some((f) => f === 'name' || f.endsWith('_name_key'));
-}
-
-/**
  * Translate a unique-constraint violation on the set INSERT into its typed error,
  * so a raw P2002 never escapes (the concurrency-to-typed-error rule).
  *
@@ -216,7 +152,7 @@ function namesNameConstraint(fields: string[]): boolean {
  *
  * ⚠️ THE NAME IS NOT LOST, THOUGH — IT IS ONE LEVEL DOWN. Prisma preserves the
  * driver's original error under `meta.driverAdapterError`, whose `originalMessage`
- * quotes the constraint (`driverConstraintName`). So the ordinary case classifies
+ * quotes the constraint (`uniqueViolationConstraints`, `lib/prisma/uniqueViolation.ts`). So the ordinary case classifies
  * locally after all, and `resolveUnclassifiedLinkConflict` is the backstop for the
  * case where neither layer names a constraint rather than the common path.
  *
@@ -234,12 +170,13 @@ export function translateLinkViolation(
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
     // Most reliable first: the STRUCTURED target, when Prisma has one. Then the
     // constraint name out of the driver's own error, which survives RLS. Then, and
-    // only then, the remainder — resolved against the set by the caller.
-    const fields = targetFields(err) ?? [driverConstraintName(err)].filter((f) => f !== null);
-    if (fields.length > 0 && namesClaimConstraint(fields)) {
+    // only then, the remainder — resolved against the set by the caller. The
+    // classification is SHARED with `projectRepoSetService` (MOTIR-5273).
+    const violation = classifyProjectRepoUniqueViolation(err);
+    if (violation === 'claim') {
       throw new RealizedRepoAlreadyClaimedError(fallback.githubRepoId);
     }
-    if (fields.length > 0 && namesNameConstraint(fields)) {
+    if (violation === 'name') {
       throw new ProjectRepoNameTakenError(fallback.name, fallback.projectId);
     }
     // The instrument this defect cost an elimination argument to reach. One line
@@ -287,13 +224,17 @@ async function resolveUnclassifiedLinkConflict<T>(
     await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
       async (tx) => {
-        // The CLAIM is asked first because it is the one a rename cannot fix.
-        const claimed = await projectRepoRepository.findByProjectAndGithubRepoId(
-          projectId,
-          err.githubRepoId,
-          tx,
-        );
-        if (claimed) throw new RealizedRepoAlreadyClaimedError(err.githubRepoId);
+        // The CLAIM is asked first because it is the one a rename cannot fix. Every
+        // write on THIS path names a repository, so the id is always present here;
+        // the error type allows its absence for `projectRepoSetService`'s paths.
+        const { githubRepoId } = err;
+        const claimed =
+          githubRepoId === null
+            ? null
+            : await projectRepoRepository.findByProjectAndGithubRepoId(projectId, githubRepoId, tx);
+        if (claimed && githubRepoId !== null) {
+          throw new RealizedRepoAlreadyClaimedError(githubRepoId);
+        }
         const named = await projectRepoRepository.findByProjectAndNameInsensitive(
           projectId,
           err.repoName,

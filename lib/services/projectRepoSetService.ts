@@ -33,6 +33,7 @@ import {
   type ProjectRepoName,
 } from '@/lib/projectRepos/names';
 import { allowedTransitions, canTransition } from '@/lib/projectRepos/transitions';
+import { classifyProjectRepoUniqueViolation } from '@/lib/projectRepos/uniqueViolation';
 import {
   PROJECT_REPO_PROPOSAL_SIGNALS,
   defaultSeedSourceForRole,
@@ -40,6 +41,7 @@ import {
 } from '@/lib/projectRepos/vocabulary';
 import {
   ProjectRepoInvalidFieldError,
+  ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
   ProjectRepoStateTransitionError,
@@ -244,23 +246,47 @@ async function inLockedRow<T>(
   );
 }
 
-/** Translate the two unique-index races into their typed domain errors, so a raw
- *  P2002 never escapes the service (the concurrency-to-typed-error rule). */
-function translateUniqueViolation(
+/**
+ * Translate a unique-index race on the set into its typed domain error, so a raw
+ * P2002 never escapes the service (the concurrency-to-typed-error rule).
+ *
+ * ⚠️ THE CLASSIFICATION IS SHARED, AND THAT IS THE FIX (MOTIR-5273). This function
+ * used to read `meta.target` itself, which is ABSENT under this client (see
+ * `lib/prisma/uniqueViolation.ts`), so its claim arm was unreachable: the realize
+ * path — which passes no name — re-threw the raw Prisma error as a 500, and the
+ * append / rename paths reported every race as "that name is taken". MOTIR-4833
+ * had fixed the identical translator in `organizationRepoService` and not this
+ * one; both now ask `classifyProjectRepoUniqueViolation`, so there is one copy to
+ * be right or wrong.
+ *
+ * ⚠️ EVERY ARM THROWS A TYPED ERROR, including the remainder. A claim with no
+ * repository in hand cannot arise (an append writes no `github_repo_id`, a rename
+ * does not change it), so it falls to the remainder rather than to a guess, and
+ * the remainder is `ProjectRepoLinkConflictError` — a retryable 409 that says
+ * someone else wrote first — never the raw error and never a name collision.
+ *
+ * EXPORTED FOR ITS OWN UNIT TEST, for the reason `translateLinkViolation` is: a
+ * race decides which arm runs, so only driving it directly pins every arm.
+ */
+export function translateUniqueViolation(
   err: unknown,
-  fallback: { projectId: string; name?: string; githubRepoId?: string },
+  fallback: { projectId: string; name: string; githubRepoId: string | null },
 ): never {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-    const target = err.meta?.['target'];
-    const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
-    if (fields.some((f) => f.includes('github_repo_id')) && fallback.githubRepoId) {
-      throw new RealizedRepoAlreadyClaimedError(fallback.githubRepoId);
-    }
-    if (fallback.name !== undefined) {
-      throw new ProjectRepoNameTakenError(fallback.name, fallback.projectId);
-    }
+  const violation = classifyProjectRepoUniqueViolation(err);
+  if (violation === null) throw err;
+  if (violation === 'claim' && fallback.githubRepoId !== null) {
+    throw new RealizedRepoAlreadyClaimedError(fallback.githubRepoId);
   }
-  throw err;
+  if (violation === 'name') {
+    throw new ProjectRepoNameTakenError(fallback.name, fallback.projectId);
+  }
+  console.warn('[projectRepoSetService] unclassified P2002 on the repository set', {
+    violation,
+    meta: (err as { meta?: unknown }).meta,
+    projectId: fallback.projectId,
+    githubRepoId: fallback.githubRepoId,
+  });
+  throw new ProjectRepoLinkConflictError(fallback.projectId, fallback.name, fallback.githubRepoId);
 }
 
 export const projectRepoSetService = {
@@ -441,7 +467,7 @@ export const projectRepoSetService = {
           tx,
         );
       } catch (err) {
-        translateUniqueViolation(err, { projectId, name });
+        translateUniqueViolation(err, { projectId, name, githubRepoId: null });
       }
     });
     // A freshly-created row is `proposed`, so it is unrealized by construction.
@@ -510,7 +536,11 @@ export const projectRepoSetService = {
           collaborators: row.collaborators,
         });
       } catch (err) {
-        translateUniqueViolation(err, { projectId: row.projectId, name: name ?? row.name });
+        translateUniqueViolation(err, {
+          projectId: row.projectId,
+          name: name ?? row.name,
+          githubRepoId: row.githubRepoId,
+        });
       }
     });
   },
@@ -998,7 +1028,7 @@ export const projectRepoSetService = {
         const realized = await projectRepoRepository.findById(rowId, ctx.workspaceId, tx);
         return toProjectRepoDto(realized ?? { ...updated, githubRepo: null, collaborators: [] });
       } catch (err) {
-        translateUniqueViolation(err, { projectId: row.projectId, githubRepoId });
+        translateUniqueViolation(err, { projectId: row.projectId, name: row.name, githubRepoId });
       }
     });
   },

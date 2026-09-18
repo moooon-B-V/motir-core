@@ -1,5 +1,6 @@
 import { Prisma, type MonitorConnection } from '@/generated/prisma/client';
 import { MonitorConnectionAlreadyExistsError } from '@/lib/monitors/errors';
+import { PRISMA_UNIQUE_VIOLATION, uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 
 // Monitor-connection repository — single Prisma operations on the
 // `monitor_connection` table (Story MOTIR-4926 · MOTIR-5258): the BINDING
@@ -52,10 +53,6 @@ const GRANT_SELECT = {
   metadata: true,
 } as const;
 
-/** Prisma's unique-constraint violation code. Named rather than inlined so the
- *  one place that recognises it is greppable (the `publicAddresses` precedent). */
-const PRISMA_UNIQUE_VIOLATION = 'P2002';
-
 /**
  * The unique index behind the already-bound refusal, BY NAME.
  *
@@ -83,15 +80,13 @@ const BINDING_UNIQUE_INDEX = 'monitor_connection_project_id_installation_id_exte
  * collision.
  *
  * ⚠️ AND THE CONSTRAINT NAME IS NOT IN `meta.target` UNDER THIS CLIENT.
- * MEASURED on the live error (Prisma 7.8 + the driver adapter): `meta` carries
- * `{ modelName, driverAdapterError: { cause: { originalCode: '23505',
- * originalMessage: 'duplicate key value violates unique constraint "<name>"',
- * kind: 'UniqueConstraintViolation' } } }` and `meta.target` is UNDEFINED. A
- * guard written against `meta.target` alone therefore matches nothing and lets
- * the raw Prisma error cross the boundary — which is exactly what this
- * repository's first draft did, and what its own concurrency test caught. Both
- * places are read here, newest first, because the shape Prisma reports is not
- * part of its public typings and a client upgrade may move it back.
+ * MEASURED on the live error (Prisma 7.8 + the driver adapter): `meta.target` is
+ * UNDEFINED and the name survives only in the driver's own message. A guard
+ * written against `meta.target` alone matches nothing and lets the raw Prisma
+ * error cross the boundary — which is exactly what this repository's first draft
+ * did, and what its own concurrency test caught. Both places are read by the ONE
+ * shared reader, `uniqueViolationConstraints` (MOTIR-5273), rather than by a copy
+ * here, so a client that moves the name again breaks one place.
  *
  * The last arm falls back to TRUE for a `P2002` from this table with no readable
  * constraint, on the `publicAddresses` precedent's reasoning: the alternative
@@ -101,27 +96,11 @@ const BINDING_UNIQUE_INDEX = 'monitor_connection_project_id_installation_id_exte
 function isBindingUniqueViolation(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   if (error.code !== PRISMA_UNIQUE_VIOLATION) return false;
-
-  const meta = error.meta as
-    | {
-        target?: unknown;
-        driverAdapterError?: { cause?: { originalMessage?: unknown } };
-      }
-    | undefined;
-
-  // Prisma's older shape: `target` is the column list, or the index name.
-  const target = meta?.target;
-  const namesTheIndex = (value: string): boolean =>
-    value.includes(BINDING_UNIQUE_INDEX) || value.includes('external_project');
-  if (Array.isArray(target)) return target.some((t) => namesTheIndex(String(t)));
-  if (typeof target === 'string') return namesTheIndex(target);
-
-  // The driver-adapter shape (MEASURED on Prisma 7.8): the constraint name
-  // arrives inside Postgres's own message, under its TRUNCATED identifier.
-  const driverMessage = meta?.driverAdapterError?.cause?.originalMessage;
-  if (typeof driverMessage === 'string') return namesTheIndex(driverMessage);
-
-  return true;
+  const constraints = uniqueViolationConstraints(error);
+  if (constraints === null) return true;
+  return constraints.some(
+    (c) => c.includes(BINDING_UNIQUE_INDEX) || c.includes('external_project'),
+  );
 }
 
 export const monitorConnectionRepository = {
