@@ -150,9 +150,7 @@ test.describe('a person writes How to test', () => {
     await beat();
 
     await chapter('Saved — and it says who wrote it', async () => {
-      await howToTestForm(page)
-        .getByRole('button', { name: htt.form.save, exact: true })
-        .click();
+      await howToTestForm(page).getByRole('button', { name: htt.form.save, exact: true }).click();
       await expect(howToTestForm(page)).toHaveCount(0, { timeout: 30_000 });
 
       // The AUTHORITATIVE read: reload, and take it from the server.
