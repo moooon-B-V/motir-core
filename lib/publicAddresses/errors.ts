@@ -11,6 +11,7 @@
 // never escapes the service").
 
 import type { LabelRefusal } from '@/lib/publicAddresses/reservedNames';
+import { PRISMA_UNIQUE_VIOLATION, uniqueViolationConstraints } from '@/lib/prisma/uniqueViolation';
 
 /**
  * Somebody else already holds this hostname.
@@ -58,39 +59,37 @@ export class ReservedLabelError extends Error {
 }
 
 /**
- * Prisma's unique-constraint violation code. Named rather than inlined so the
- * one place that recognises it is greppable.
- */
-export const PRISMA_UNIQUE_VIOLATION = 'P2002';
-
-/**
  * Is this thrown error a unique-constraint violation on `public_address.hostname`?
  *
- * ⚠️ It checks the TARGET, not just the code. A `P2002` from this table could
+ * ⚠️ It checks the CONSTRAINT, not just the code. A `P2002` from this table could
  * only be the hostname index today — it is the only unique constraint on it —
  * but "today" is exactly the assumption that rots: adding a second unique index
  * later would silently start reporting its violations as HostnameTakenError, and
  * the customer would be told to pick another hostname for a collision that had
- * nothing to do with one. Reading the target costs one comparison and cannot
- * age.
+ * nothing to do with one.
  *
- * The shape Prisma reports is not part of its public typings, so this narrows
- * structurally rather than casting to `Prisma.PrismaClientKnownRequestError` —
- * which also keeps this module importable without a Prisma runtime.
+ * ⚠️ AND THE CONSTRAINT IS NOT IN `meta.target` UNDER THIS CLIENT (MOTIR-5273).
+ * This used to read `meta.target` alone and claim that doing so "costs one
+ * comparison and cannot age". It had already aged: measured on this table,
+ * `meta.target` is ABSENT, so every violation fell through to the last arm and
+ * the check above protected nothing. The name the database reported survives in
+ * the driver's own error, and `uniqueViolationConstraints` reads it from there
+ * (`public_address_hostname_key` contains `hostname`), so the check is live again.
+ *
+ * The last arm still falls back to TRUE for a `P2002` naming no constraint at
+ * all: the narrower reading would be to rethrow, but that trades a
+ * correct-in-every-observed-case answer for a raw error crossing the service
+ * boundary, which is the thing the rule is about.
+ *
+ * It narrows structurally rather than casting to
+ * `Prisma.PrismaClientKnownRequestError`, which keeps this module importable
+ * without a Prisma runtime.
  */
 export function isHostnameUniqueViolation(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) return false;
-  const code = (err as { code?: unknown }).code;
-  if (code !== PRISMA_UNIQUE_VIOLATION) return false;
-  const target = (err as { meta?: { target?: unknown } }).meta?.target;
-  if (Array.isArray(target)) return target.includes('hostname');
-  if (typeof target === 'string') return target.includes('hostname');
-  // A P2002 from this table with no readable target: treat it as the hostname
-  // race rather than letting a raw Prisma error escape. The narrower reading
-  // would be to rethrow, but that trades a correct-in-every-observed-case answer
-  // for a raw error crossing the service boundary, which is the thing the rule
-  // is about.
-  return true;
+  if ((err as { code?: unknown } | null)?.code !== PRISMA_UNIQUE_VIOLATION) return false;
+  const constraints = uniqueViolationConstraints(err);
+  if (constraints === null) return true;
+  return constraints.some((c) => c.includes('hostname'));
 }
 
 // ── The SERVICE tier's errors (MOTIR-4215) ─────────────────────────────────
