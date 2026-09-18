@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -190,7 +191,10 @@ async function ejectedManual(email: string, reason = 'CI_FAILURE') {
   await ci(11, 'sha-a');
   await ci(12, 'sha-b');
   const [gate] = await awaitingGates(item.id);
-  await approvalGatesService.decide({ gateId: gate!.id, decision: 'approve', source: 'ui' }, s.ctx);
+  await approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, decision: 'approve', source: 'ui' },
+    s.ctx,
+  );
   await markQueued(11, 'gate');
   await markQueued(12, 'gate');
   await eject(11, 'sha-a', reason);

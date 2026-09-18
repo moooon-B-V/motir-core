@@ -247,6 +247,9 @@ export const approvalGateRepository = {
     decidedById: string | null;
     decidedAt: Date | null;
     decidedByLabel: string | null;
+    /** The version the question was ASKED about — read for the stale check's
+     *  comparison under this lock (MOTIR-5234), never written from. */
+    subjectVersion: string | null;
     /** WHY it was withdrawn, for the refusal's sentence (MOTIR-5667). Read-only:
      *  nothing writes from this snapshot. */
     supersededCause: ApprovalGateSupersedeCause | null;
@@ -263,6 +266,7 @@ export const approvalGateRepository = {
         decidedById: string | null;
         decidedAt: Date | null;
         decidedByLabel: string | null;
+        subjectVersion: string | null;
         supersededCause: ApprovalGateSupersedeCause | null;
       }>
     >`
@@ -276,6 +280,9 @@ export const approvalGateRepository = {
              "decided_by_id" AS "decidedById",
              "decided_at"    AS "decidedAt",
              "superseded_cause" AS "supersededCause",
+             -- READ for the stale check (MOTIR-5234): what the question was asked
+             -- about, compared with the stamp the reader pressed with.
+             "subject_version" AS "subjectVersion",
              -- READ for the REFUSAL, never for a write. The narrow column list
              -- above exists so a caller cannot write from this snapshot; this
              -- one joins decided_by_id / decided_at, which are here for the same

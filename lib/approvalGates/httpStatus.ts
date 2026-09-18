@@ -39,6 +39,9 @@ export const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_NOT_AUTHORISED: 403,
   APPROVAL_GATE_ALREADY_DECIDED: 409,
   APPROVAL_GATE_SUPERSEDED: 409,
+  // The question is live and changed under the reader (MOTIR-5234) — a well-formed
+  // request against a resource no longer in the state it was read in.
+  APPROVAL_GATE_STALE_SUBJECT: 409,
   APPROVAL_GATE_ALREADY_AWAITING: 409,
   APPROVAL_GATE_KIND_UNREGISTERED: 501,
   APPROVAL_GATE_DECIDED_IMMUTABLE: 500,

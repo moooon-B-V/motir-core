@@ -178,6 +178,33 @@ export async function withdrawPullRequestApprovalGatesOnClose(
 }
 
 /**
+ * WITHDRAW on a DRAFT: a member was converted back to a draft (MOTIR-5699), so its author
+ * has taken the set out of review and the host will not merge it. Every card the pull
+ * request delivers loses its awaiting gate, and the re-ask raises no merge gate while the
+ * member stays a draft — `mergeCandidateHead` refuses one. Marking it ready again is what
+ * re-asks (`changeRequestStatusSync`'s ready-flip). A gate already decided is untouched.
+ */
+export async function withdrawPullRequestApprovalGatesOnDraft(
+  pullRequestId: string,
+  tx: Prisma.TransactionClient,
+): Promise<number> {
+  let withdrawn = 0;
+  for (const { workItemId } of await workItemDeliveryRepository.listByPullRequest(
+    pullRequestId,
+    tx,
+  )) {
+    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      KIND,
+      'member_drafted',
+      tx,
+    );
+    await reraiseAfterWithdrawal(workItemId, tx);
+  }
+  return withdrawn;
+}
+
+/**
  * WITHDRAW on a SET CHANGE: a delivery row joined or left this card, so the set its gate
  * asked about is not the set it now carries. Called by every writer of `work_item_delivery`
  * (`githubPullRequestService`'s two link arms and two unlink arms), only when the write

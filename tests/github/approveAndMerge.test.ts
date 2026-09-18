@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -163,7 +164,7 @@ describe('one press: the approval, then every member', () => {
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: approval.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -212,7 +213,10 @@ describe('one press: the approval, then every member', () => {
       },
     );
 
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
 
     expect(seenAtMerge).toEqual([
       { gate: 'approved', card: 'approved' },
@@ -228,7 +232,7 @@ describe('one press: the approval, then every member', () => {
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: approval.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -251,7 +255,7 @@ describe('partial success', () => {
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: approval.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -287,7 +291,7 @@ describe('partial success', () => {
     const seam = stubHost({ 12: { outcome: 'merged', commitSha: 'merge-api' } });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: approval.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -308,7 +312,7 @@ describe('partial success', () => {
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: approval.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -327,7 +331,10 @@ describe('partial success', () => {
       7: { outcome: 'merged', commitSha: 'merge-web' },
       12: { outcome: 'refused', refusal: { code: 'checks_not_green' } },
     });
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
     const decidedAt = (await gateRow(approval.id)).decidedAt!.toISOString();
     vi.restoreAllMocks();
     const seam = stubHost({ 12: { outcome: 'merged', commitSha: 'merge-api' } });
@@ -370,7 +377,10 @@ describe('the door’s refusals end the press before any host is called', () => 
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx),
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
     expect(seam).not.toHaveBeenCalled();
   });
@@ -378,13 +388,21 @@ describe('the door’s refusals end the press before any host is called', () => 
   it('an ALREADY-DECIDED approval gate is refused, and nothing is merged', async () => {
     const { approval } = await pressable();
     await approvalGatesService.decide(
-      { gateId: approval.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: approval.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       fx.ctx,
     );
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx),
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateAlreadyDecidedError);
     expect(seam).not.toHaveBeenCalled();
   });
@@ -427,7 +445,10 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
       7: { outcome: 'enqueued', entryId: 'MQE_9' },
       12: { outcome: 'refused', refusal: { code: 'conflict' } },
     });
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
 
     const members = await pullRequestMergeService.listApprovalMembers(
       { workItemId: item.id, approvalGateId: approval.id },
@@ -460,7 +481,10 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
       7: { outcome: 'enqueued', entryId: 'MQE_10' },
       12: { outcome: 'merged', commitSha: 'merge-api' },
     });
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
     await adminDb.githubPullRequest.update({
       where: { id: web.prId },
       data: { merged: true, state: 'closed' },
@@ -498,7 +522,10 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
       7: { outcome: 'enqueued', entryId: 'MQE_11' },
       12: { outcome: 'refused', refusal: { code: 'conflict' } },
     });
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
 
     const view = await peek(item.identifier);
     expect(view.mergeMembers).toEqual([
@@ -552,7 +579,7 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
       12: { outcome: 'merged', commitSha: 'merge-api' },
     });
     await pullRequestMergeService.approveAndMerge(
-      { gateId: fixture.approval.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: fixture.approval.id, source: 'ui' },
       fx.ctx,
     );
     vi.restoreAllMocks();
@@ -574,7 +601,10 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
       },
     });
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: foreign.id, source: 'ui' }, fx.ctx),
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: foreign.id, source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toThrow(/handed a decision_approval gate/);
     expect((await gateRow(foreign.id)).state).toBe('awaiting');
   });
@@ -671,7 +701,10 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
       7: { outcome: 'merged', commitSha: 'merge-web' },
       12: { outcome: 'enqueued', entryId: 'MQE_11' },
     });
-    await pullRequestMergeService.approveAndMerge({ gateId: approval.id, source: 'ui' }, fx.ctx);
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
     // #12's pull request row disappears after it was queued.
     await adminDb.workItemDelivery.deleteMany({ where: { githubPullRequestId: api.prId } });
     await adminDb.githubPullRequest.delete({ where: { id: api.prId } });
@@ -749,7 +782,7 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: design.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -779,7 +812,7 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: design.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -808,7 +841,7 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
     const host = stubHost({ 7: { outcome: 'merged', commitSha: 'merge-web' } });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: design.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
       fx.ctx,
     );
 
@@ -831,7 +864,7 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
     const host = stubHost({});
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: design.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
       fx.ctx,
     );
 

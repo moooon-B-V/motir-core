@@ -20,7 +20,11 @@ import {
   type DeliverySetShortfall,
 } from '@/lib/workItems/deliverySet';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { withdrawPullRequestApprovalGatesOnClose } from './pullRequestApprovalGates';
+import {
+  withdrawPullRequestApprovalGatesOnClose,
+  withdrawPullRequestApprovalGatesOnDraft,
+} from './pullRequestApprovalGates';
+import { promoteDeliveredCardsOnGreen } from './ciPromotion';
 import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
@@ -225,6 +229,46 @@ export async function syncChangeRequestStatus(
   lifecycle: ChangeRequestLifecycle | null,
   resolveContext: (tx: Prisma.TransactionClient) => Promise<ChangeRequestContextResolution>,
 ): Promise<ChangeRequestSyncResult> {
+  const effects: SyncEffects = { becameReady: null };
+  const result = await syncOnce(cr, lifecycle, resolveContext, effects);
+
+  // ⚠️ A DRAFT MARKED READY RE-ASKS THE MERGE QUESTION (MOTIR-5699). A draft is not a
+  // merge candidate, so a draft that went green raised no gate — and marking it ready
+  // brings no check event with it, because CI has already spoken for this head. So the
+  // flip is itself the green verdict arriving, and it goes through the SAME door a
+  // green check does: it promotes the delivered cards at `implemented` and re-raises
+  // for the ones already in review, running the post-raise review evaluation either
+  // way. Idempotent: a card the transition above already promoted holds its gate, and
+  // a non-green pull request is a no-op there.
+  //
+  // AFTER the sync, never inside it — the promotion opens its own transactions, and a
+  // failure in it must not turn a recorded delivery into one the host retries forever
+  // (`notes.html` #39, the rule every post-commit effect in this file follows).
+  if (effects.becameReady) {
+    const { changeRequestId, workspaceId, actorUserId } = effects.becameReady;
+    await promoteDeliveredCardsOnGreen({ changeRequestId, workspaceId, actorUserId }).catch(
+      (err: unknown) => {
+        console.error('[changeRequestStatusSync] re-ask on ready_for_review failed', {
+          changeRequestId,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      },
+    );
+  }
+  return result;
+}
+
+/** What {@link syncOnce} learned that the caller acts on after it has returned. */
+interface SyncEffects {
+  becameReady: { changeRequestId: string; workspaceId: string; actorUserId: string } | null;
+}
+
+async function syncOnce(
+  cr: NormalizedChangeRequest,
+  lifecycle: ChangeRequestLifecycle | null,
+  resolveContext: (tx: Prisma.TransactionClient) => Promise<ChangeRequestContextResolution>,
+  effects: SyncEffects,
+): Promise<ChangeRequestSyncResult> {
   // Phase 1 — resolve + persist under system context (one transaction): the
   // connection + repo (via the provider's resolver), the linked work item (from
   // the STORED link — MOTIR-3674 retired the head-ref / title parse), the
@@ -351,6 +395,13 @@ export async function syncChangeRequestStatus(
       // about (MOTIR-5482). The per-pull-request merge gate it used to withdraw
       // beside this retired with MOTIR-5611.
       await withdrawPullRequestApprovalGatesOnClose(prId, tx);
+    } else if (cr.draft === true) {
+      // An OPEN DRAFT is not a merge candidate (MOTIR-5699), so an awaiting
+      // approve-and-merge gate over it asks a question the host cannot act on —
+      // withdraw it, on `converted_to_draft` above all. Unconditional on the
+      // previous row, so a gate raised before candidacy knew about drafts is
+      // retired by the next delivery rather than living on.
+      await withdrawPullRequestApprovalGatesOnDraft(prId, tx);
     }
 
     // MOTIR-3007 · MOTIR-3721 — WHICH ITEMS does this delivery carry? A `motir
@@ -485,6 +536,16 @@ export async function syncChangeRequestStatus(
     }
 
     const owner = await workspaceMembershipRepository.findOwnerByWorkspace(repo.workspaceId, tx);
+    // A draft MARKED READY — read against the row as it stood BEFORE this delivery,
+    // under the lock above. `false` only: an unknown draft-ness is not a flip.
+    const actor = authorBoundUserId ?? owner?.userId ?? null;
+    if (cr.state === 'open' && cr.draft === false && existingPr?.draft === true && actor) {
+      effects.becameReady = {
+        changeRequestId: prId,
+        workspaceId: repo.workspaceId,
+        actorUserId: actor,
+      };
+    }
     return {
       kind: 'resolved' as const,
       workspaceId: repo.workspaceId,

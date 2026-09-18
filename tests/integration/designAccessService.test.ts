@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
@@ -132,7 +133,10 @@ async function awaitingGate(evidenceId: string) {
 /** Approve the design card's awaiting gate — terminal, so it writes `done`. */
 async function approve(evidenceId: string): Promise<void> {
   const gate = await awaitingGate(evidenceId);
-  await approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx);
+  await approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+    fx.ctx,
+  );
 }
 
 /** A card that waits on the given design cards, so a publish is never refused. */

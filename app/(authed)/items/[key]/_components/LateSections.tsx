@@ -285,6 +285,8 @@ export async function LateUpperSections({
                       gate: r.designGate.gate,
                       canDecide: r.designGate.canDecide,
                       routedToLabel: r.designGate.routedToLabel,
+                      // The DESIGN gate's stamp — it covers the pull requests beneath it too.
+                      stamp: r.designGate.stamp,
                       members: r.mergeGate.members,
                     }
                   : r.mergeGate.gate
@@ -292,6 +294,7 @@ export async function LateUpperSections({
                         gate: r.mergeGate.gate,
                         canDecide: r.mergeGate.canDecide,
                         routedToLabel: r.mergeGate.routedToLabel,
+                        stamp: r.mergeGate.stamp,
                         members: r.mergeGate.members,
                       }
                     : null

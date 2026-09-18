@@ -99,6 +99,7 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'withdrawn'
   | 'head_moved'
   | 'member_closed'
+  | 'member_drafted'
   | 'set_changed'
   | 'pulled_back'
   | 'unknown';
@@ -546,6 +547,12 @@ export interface ApprovalGateOverlayReadDTO {
   canDecide: boolean;
   /** Whose decision it is waiting on, as a name — the frame's state `B` line. */
   routedToLabel: string | null;
+  /**
+   * WHAT THIS READER IS BEING SHOWN — hand it back with the press (Story MOTIR-5232 ·
+   * Subtask MOTIR-5234; `WorkItemGateRead.stamp`). Opaque: compare nothing, parse
+   * nothing. Null when the gate is not `awaiting`.
+   */
+  stamp: string | null;
   subject: ApprovalGateOverlaySubjectDTO;
 }
 

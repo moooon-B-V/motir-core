@@ -100,8 +100,23 @@ const PROVIDER: GitProviderId = 'github';
  *  pull request opened as a draft now costs at most FOUR captures over its life
  *  (`opened`, `ready_for_review`, `closed`, and `reopened` if it happens) against
  *  three before, and a never-drafted pull request never fires `ready_for_review`
- *  at all and is unchanged. */
-const HANDLED_PR_ACTIONS = new Set(['opened', 'reopened', 'closed', 'ready_for_review']);
+ *  at all and is unchanged.
+ *
+ *  ⚠️ `converted_to_draft` IS one since MOTIR-5699, and it drives NO status — an
+ *  open draft resolves to no lifecycle, so the sync records the row and moves
+ *  nothing. It is here for what the ROW write does: `draft` flips to `true`, so a
+ *  later green cannot re-raise the approve-and-merge gate against it, and the sync
+ *  withdraws the gate already awaiting (`member_drafted`). Handled nowhere, the
+ *  row would keep asserting a ready-ness the author had retracted. The capture
+ *  cost is one more listing per round trip back to draft, which is rare and still
+ *  per pull request rather than per push. */
+const HANDLED_PR_ACTIONS = new Set([
+  'opened',
+  'reopened',
+  'closed',
+  'ready_for_review',
+  'converted_to_draft',
+]);
 
 export type GithubWebhookResult =
   | { event: 'ignored'; reason: string }

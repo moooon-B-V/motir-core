@@ -409,6 +409,8 @@ export function DevelopmentSectionBody({
   mergeGate = null,
   gateActions,
   gateLayout = 'flush',
+  onShowCurrentVersion,
+  gateKey,
   designResult = null,
   repair = null,
   autoQueueExits = null,
@@ -493,6 +495,11 @@ export function DevelopmentSectionBody({
    * this component rather than drawing a second one.
    */
   gateLayout?: 'flush' | 'fill';
+  /** The frame's *Show the current version* re-read, from a host that owns its read — the
+   *  approval overlay (MOTIR-5235). Omitted, the frame re-reads the page. */
+  onShowCurrentVersion?: () => void;
+  /** Which of that host's re-reads is on screen — the frame remounts on a new one. */
+  gateKey?: number;
   /**
    * The card's DESIGN RESULT, rendered by the host as the Development block's
    * slot (Story MOTIR-5488 · MOTIR-5498; `design-result.md` AMENDMENT 4 Q8,
@@ -660,6 +667,8 @@ export function DevelopmentSectionBody({
         currentHeads={currentHeads}
         actions={gateActions}
         layout={gateLayout}
+        onShowCurrentVersion={onShowCurrentVersion}
+        gateKey={gateKey}
       >
         {block}
       </DevelopmentGateFrame>

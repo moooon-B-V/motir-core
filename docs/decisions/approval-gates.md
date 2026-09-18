@@ -1081,7 +1081,8 @@ has several open pull requests and therefore several simultaneous awaiting gates
 >
 > **A `superseded` row now carries a CAUSE**, from a closed vocabulary with one
 > value per writing path and **no value meaning _unsaid_**: `republished` ·
-> `withdrawn` · `head_moved` · `member_closed` · `set_changed` · `pulled_back`.
+> `withdrawn` · `head_moved` · `member_closed` · `member_drafted` · `set_changed` ·
+> `pulled_back` (`member_drafted` added by MOTIR-5699).
 > The full table, with which path writes each, is `design-result.md`
 > AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
 > amendment was written and removed before it shipped — MOTIR-5661 found that a
@@ -1214,6 +1215,51 @@ mcp`. **A fourth value, `github`, is required**, because a pull request
 > legible, and not the same sentence as _"nobody"_. It is the same argument §7a
 > makes about `auto`: **an absence and an unattributable presence must not read
 > the same.**
+
+> ### §6b / §6c — AMENDMENT (MOTIR-5234, 2026-09-18): a press carries a STAMP of what the reader was shown
+>
+> **Story MOTIR-5232.** §6b's `superseded` refuses a WITHDRAWN question. It cannot refuse a
+> press from a page rendered an hour ago about a question that is still live but has CHANGED,
+> because the decide door recorded nothing about what the reader saw. Two changes were
+> uncaught: the card's **acceptance criteria** (the how-to-test a reviewer judges against)
+> belong to no subject, so editing them supersedes nothing; and since MOTIR-5652, one press on
+> a design with pull requests also decides the card's approve-to-merge gate and merges its
+> members, and that press did not check them.
+>
+> **Decided:**
+>
+> 1. **Every read that renders a gate returns a `stamp`** (`WorkItemGateRead.stamp`, and the
+>    overlay's `ApprovalGateOverlayReadDTO.stamp`). **The decide door REQUIRES it**
+>    (`DecideGateInput.stamp`, no default). A surface hands back what it was handed, and the
+>    REST route refuses a body without one with a `400`.
+> 2. **What it covers:** the pressed gate's `subjectVersion`; for a `design_result` gate, the
+>    `subjectVersion` of the card's awaiting `pull_request_approval` gate (the _companion_ the
+>    press also decides); and the work item's `descriptionMd`. **Nothing else.** The assignee,
+>    labels, status, watchers and `updatedAt` never make a decision stale. `lib/approvalGates/stamp.ts`
+>    is the only definition.
+> 3. **Derived, never stored.** No column, no migration, no backfill.
+> 4. **Opaque to the client, composite on the server.** One digest per component, so the door
+>    can say WHAT moved: `subject` · `pull_requests` · `criteria`. A pressed approve-to-merge
+>    gate reports its own subject as `pull_requests`, because that is what its reader was looking at.
+> 5. **It errs wide.** The whole `descriptionMd` is hashed, so a typo fix also invalidates. A
+>    false stale costs one re-read; a missed one applies an approval to a question that changed.
+> 6. **Checked UNDER THE LOCK, AFTER the state refusals** (`decide` step 3b), recomputed from the
+>    locked gate, the item read after it, and the companion as it stands. A mismatch raises
+>    `APPROVAL_GATE_STALE_SUBJECT` (`409`, carrying `moved`) and writes nothing: no state, no
+>    audit columns, no status, no pin. **It runs BESIDE §6b's supersede check and never replaces it.**
+>    `superseded` means _withdrawn, leave_; stale means _still yours, look again_.
+> 7. **The ONE bypass is a symbol, `DECIDED_WITHOUT_A_READER`**, for a decision nobody pressed:
+>    the GitHub review sync (§8's fourth amendment), and the companion gate inside
+>    `approveDesignAndMerge`, whose primary was already checked. A symbol cannot be serialised,
+>    so no request can carry it.
+> 8. **The two-gate press decides the companion only while its version is the one checked.**
+>    The door returns the companion version it read under its lock, and `approveDesignAndMerge`
+>    leaves a companion raised since then awaiting. Its commits are a new question.
+>
+> **The refusal is the mechanism.** A live _this changed while you were reading_ notice is
+> MOTIR-5243's (Story MOTIR-5238) and reads its own stream. It does not replace this check.
+> The refusal's copy and its one control are drawn in
+> `design/work-items/approval-control--stale-refusal.mock.html` (MOTIR-5233) and built by MOTIR-5235.
 
 #### 6c. Retention — only an approval keeps its bytes, and it PINS rather than FREEZES
 

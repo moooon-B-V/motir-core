@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItem } from '@/generated/prisma/client';
 
@@ -110,7 +111,10 @@ async function approve(evidenceId: string): Promise<void> {
   const gate = await adminDb.approvalGate.findFirstOrThrow({
     where: { subjectId: evidenceId, kind: 'design_result', state: 'awaiting' },
   });
-  await approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx);
+  await approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+    fx.ctx,
+  );
 }
 
 const promptFor = async (card: WorkItem): Promise<string> =>

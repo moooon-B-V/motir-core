@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shaFor } from './helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -145,7 +146,7 @@ describe('the frame reads a gate WHATEVER its state', () => {
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -169,7 +170,12 @@ describe('the frame reads a gate WHATEVER its state', () => {
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: v1Gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       fx.ctx,
     );
 
@@ -212,7 +218,12 @@ describe('the frame reads a gate WHATEVER its state', () => {
   it('a LIVE question outranks a decided one, however much older it is', async () => {
     const v1 = await publish('v1');
     await approvalGatesService.decide(
-      { gateId: (await gateFor(v1.id)).id, decision: 'approve', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: (await gateFor(v1.id)).id,
+        decision: 'approve',
+        source: 'ui',
+      },
       fx.ctx,
     );
     await reopen();
@@ -253,7 +264,7 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -261,7 +272,7 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     const v2 = await publish('v2');
     const v2Gate = await gateFor(v2.id);
     await approvalGatesService.decide(
-      { gateId: v2Gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: v2Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -289,7 +300,7 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     await reopen();
@@ -314,7 +325,12 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: v1Gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       fx.ctx,
     );
 

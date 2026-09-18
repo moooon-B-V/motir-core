@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { getGitProvider } from '@/lib/git';
@@ -171,7 +172,7 @@ describe('APPROVE MERGES THE SET — one gate decided, then each pull request', 
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       assignee.ctx,
     );
 
@@ -208,7 +209,7 @@ describe('APPROVE MERGES THE SET — one gate decided, then each pull request', 
     stubSeam({ outcome: 'enqueued', entryId: 'MQE_1' });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'api' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'api' },
       assignee.ctx,
     );
 
@@ -245,7 +246,7 @@ describe('a host REFUSAL writes nothing — and the APPROVAL still stands', () =
     });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       assignee.ctx,
     );
 
@@ -274,7 +275,7 @@ describe('a host REFUSAL writes nothing — and the APPROVAL still stands', () =
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       assignee.ctx,
     );
 
@@ -298,7 +299,7 @@ describe('a member the card no longer delivers at the approved head is NOT merge
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       assignee.ctx,
     );
 
@@ -317,7 +318,7 @@ describe('a member the card no longer delivers at the approved head is NOT merge
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       assignee.ctx,
     );
 
@@ -339,7 +340,7 @@ describe('a member the card no longer delivers at the approved head is NOT merge
     stubSeam({ outcome: 'refused', refusal: { code: 'subject_changed' } });
 
     const result = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       assignee.ctx,
     );
 
@@ -368,7 +369,10 @@ describe('the actor and the other verb', () => {
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, bystander.ctx),
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
+        bystander.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
     expect(seam).not.toHaveBeenCalled();
     expect((await gateRow(gate.id)).state).toBe('awaiting');
@@ -380,7 +384,13 @@ describe('the actor and the other verb', () => {
     const seam = vi.spyOn(github, 'mergeChangeRequest');
 
     const result = await pullRequestMergeService.decideGate(
-      { gateId: gate.id, decision: 'request_changes', noteMd: 'Not yet', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'request_changes',
+        noteMd: 'Not yet',
+        source: 'ui',
+      },
       assignee.ctx,
     );
 
@@ -399,7 +409,10 @@ describe('two presses at once', () => {
     );
 
     const press = () =>
-      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, assignee.ctx);
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
+        assignee.ctx,
+      );
     const outcomes = await Promise.allSettled([press(), press()]);
 
     const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');

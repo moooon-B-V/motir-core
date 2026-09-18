@@ -8374,6 +8374,7 @@
         "withdrawn": "设计结果已撤回，该问题随之撤回。",
         "head_moved": "推送改变了提交，因此该问题已撤回。",
         "member_closed": "一个 Pull Request 已关闭，因此该问题已撤回。",
+        "member_drafted": "一个 Pull Request 已转回草稿，因此该问题已撤回。",
         "set_changed": "Pull Request 集合发生变化，因此该问题已撤回。",
         "pulled_back": "工作已撤回评审，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
@@ -8388,6 +8389,19 @@
       "superseded": {
         "title": "该问题已被撤回。",
         "next": "无人对其做出决定。请重新加载以查看其去向。"
+      },
+      "stale": {
+        "subject": "你阅读期间，发布了更新的版本。",
+        "pullRequests": "你阅读期间，Pull Request 有了新的提交。",
+        "criteria": "你阅读期间，验收标准被修改了。",
+        "several": "你阅读期间有多处变化：{things}。",
+        "next": "你的决定未被记录。请查看当前版本，然后重新决定。",
+        "control": "查看当前版本",
+        "noun": {
+          "subject": "已发布的版本",
+          "pullRequests": "Pull Request",
+          "criteria": "验收标准"
+        }
       },
       "notAuthorised": {
         "title": "该决定不由你做出。",

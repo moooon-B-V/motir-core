@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
@@ -430,7 +431,8 @@ export const pullRequestMergeService = {
    * withdrawn question, refused with the door's own error rather than re-asked.
    */
   async retryApproveAndMergeMember(
-    input: Omit<DecideGateInput, 'decision' | 'gateId'> & {
+    // No `stamp`: a retry decides nothing — it carries out an approval already made.
+    input: Omit<DecideGateInput, 'decision' | 'gateId' | 'stamp'> & {
       approvalGateId: string;
       pullRequestId: string;
     },
@@ -648,9 +650,26 @@ async function approveDesignAndMerge(
     ),
   );
   if (!merge) return { approval, members: [] };
+  // ⚠️ ONLY THE MERGE GATE THE READER WAS SHOWN (Story MOTIR-5232 · MOTIR-5234). The
+  // design decision's stamp covered the companion's version AS THE DOOR READ IT UNDER
+  // ITS LOCK, and that transaction has committed. A push since then supersedes the
+  // gate and a green raises a NEW one over commits nobody saw — deciding that one here
+  // would merge them on the strength of a press about something else. So it is left
+  // awaiting: a new question about new commits, asked the ordinary way.
+  if (merge.subjectVersion !== approval.companionSubjectVersion) {
+    return { approval, members: [] };
+  }
 
   await approvalGatesService.decide(
-    { gateId: merge.id, decision: 'approve', source: input.source, noteMd: null },
+    {
+      gateId: merge.id,
+      decision: 'approve',
+      source: input.source,
+      noteMd: null,
+      // The companion of a press whose PRIMARY was just checked — its version is the
+      // one that check covered (above), so nobody's page is compared twice.
+      stamp: DECIDED_WITHOUT_A_READER,
+    },
     ctx,
     // The DTO carries an ISO string; the option wants the instant.
     { decidedAt: approval.gate.decidedAt ? new Date(approval.gate.decidedAt) : undefined },
