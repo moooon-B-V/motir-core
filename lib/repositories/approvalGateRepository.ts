@@ -7,6 +7,7 @@ import {
   type ApprovalGateState,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import {
   ApprovalGateAlreadyAwaitingError,
   ApprovalGateDecidedImmutableError,
@@ -880,7 +881,7 @@ export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
 export function translateApprovalGateWriteError(err: unknown): never {
   const message = extractMessage(err);
 
-  if (message.includes('AG_DECIDED_IMMUTABLE') || extractSqlState(err) === '23514') {
+  if (message.includes('AG_DECIDED_IMMUTABLE') || sqlStateOf(err) === '23514') {
     throw new ApprovalGateDecidedImmutableError();
   }
 
@@ -905,21 +906,6 @@ export function translateApprovalGateWriteError(err: unknown): never {
 }
 
 /** SQLSTATE from a pg driver-adapter error's `cause`, if present. */
-function extractSqlState(err: unknown): string | undefined {
-  if (err && typeof err === 'object' && 'cause' in err) {
-    const cause = (err as { cause?: unknown }).cause;
-    if (cause && typeof cause === 'object') {
-      const c = cause as { code?: unknown; originalCode?: unknown };
-      if (typeof c.code === 'string') return c.code;
-      // Defensive: `@prisma/adapter-pg` exposes `code`; `originalCode` is a
-      // fallback for a future driver shape, so no shipped adapter reaches it.
-      // Same re-spelling as above.
-      /* v8 ignore next */
-      if (typeof c.originalCode === 'string') return c.originalCode;
-    }
-  }
-  return undefined;
-}
 
 function extractMessage(err: unknown): string {
   if (err instanceof Error) return err.message;

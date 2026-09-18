@@ -1,4 +1,5 @@
 import { type Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -169,7 +170,7 @@ describe('ci_runner_provisioning_intent RLS', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 
   it('the system-admin hatch DOES span tenants — the webhook writer needs it', async () => {
