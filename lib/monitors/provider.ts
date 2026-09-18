@@ -18,11 +18,11 @@ import type {
 // BACKS, with the endpoint named on it. There is no speculative capability here
 // and no second provider.
 //
-// ⚠️ TWO METHODS SHIP WITH NO PRODUCTION CALLER, AND THAT IS A DECISION RATHER
-// THAN DEAD CODE. `listIssuesSince` is consumed by the reconciling poll in
-// MOTIR-4929, and `resolveIssue` by the resolve-back sync in MOTIR-4931 —
-// neither of which exists yet. Both are exercised here by this card's own tests
-// and by the fake. Defining the whole seam once, against one real
+// ⚠️ TWO METHODS SHIPPED WITH NO PRODUCTION CALLER, AND THAT WAS A DECISION
+// RATHER THAN DEAD CODE. `listIssuesSince` is consumed by the reconciling poll in
+// MOTIR-4929 (MOTIR-5580), and `resolveIssue` by the resolve-back sync in
+// MOTIR-4931 — which does not exist yet. Both are exercised here by this card's
+// own tests and by the fake. Defining the whole seam once, against one real
 // implementation, is cheaper and more honest than growing it a method at a time
 // across three stories; the two consuming stories are named so a later reader
 // does not delete them as unreachable.
@@ -196,21 +196,39 @@ export interface MonitorProvider {
   }): Promise<NormalizedMonitorProject[]>;
 
   /**
-   * One page of issues seen since a cursor.
+   * One page of the monitored project's UNRESOLVED issues last seen AFTER a
+   * watermark, newest-last-seen first.
    *
-   * `GET /api/0/projects/{orgSlug}/{projectSlug}/issues/` with the provider's
-   * own cursor parameter.
+   * `GET /api/0/organizations/{orgSlug}/issues/` with `project={externalProjectId}`,
+   * `query=is:unresolved`, `sort=date` (last seen, newest first), `limit=100` and
+   * the provider's own `cursor`. MOTIR-5577 moved it here from the per-project
+   * issues endpoint, which Sentry documents as DEPRECATED in favour of this one.
    *
-   * ⚠️ NO PRODUCTION CALLER YET — MOTIR-4929's reconciling poll is the consumer,
-   * and it owns the cursor's storage. This seam hands back the next cursor and
-   * remembers nothing.
+   * ⚠️ THE WATERMARK IS APPLIED CLIENT-SIDE, HERE. Sentry documents no absolute
+   * last-seen filter, so the adapter reads pages sorted by last seen and CUTS the
+   * page at the first row whose `lastSeen` is not strictly after `lastSeenAfter`
+   * — and then returns `nextCursor: null`, because every later row is older
+   * still. `lastSeenAfter: null` cuts nothing.
    *
-   * Bounded by {@link MONITOR_LIST_ISSUES_TIMEOUT_MS}.
+   * ⚠️ `is:unresolved` IS EXPLICIT, not left to the endpoint's default:
+   * MOTIR-4931's loop guard depends on a resolved issue NOT coming back.
+   *
+   * Every path and parameter here is a DOCUMENTED EXPECTATION (read 2026-09-15,
+   * https://docs.sentry.io/api/events/list-an-organizations-issues/) — the suite
+   * cannot reach sentry.io. MOTIR-4941 owns the deployed reading.
+   *
+   * Consumed by the reconciling poll (MOTIR-4929 · MOTIR-5580), which owns where
+   * the watermark and the cursor live; this seam remembers nothing and filters
+   * nothing but time. Bounded by {@link MONITOR_LIST_ISSUES_TIMEOUT_MS} per page.
    */
   listIssuesSince(input: {
     accessToken: string;
     orgSlug: string;
-    projectSlug: string;
+    /** The provider's own id for the monitored project — what the connection
+     *  row stores as `externalProjectId`. */
+    externalProjectId: string;
+    /** EXCLUSIVE: only issues last seen strictly after this. `null` = no cut. */
+    lastSeenAfter: Date | null;
     cursor: string | null;
   }): Promise<NormalizedMonitorIssuePage>;
 

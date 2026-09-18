@@ -60,6 +60,10 @@ function appCredentials(): { clientId: string; clientSecret: string } {
   return { clientId, clientSecret };
 }
 
+/** The page size asked of Sentry's issues list — its documented maximum. The
+ *  poll's page CAP (MOTIR-5580) is counted in these pages. */
+export const SENTRY_ISSUES_PAGE_LIMIT = 100;
+
 /**
  * One bounded request, with the provider's own failure text preserved.
  *
@@ -286,43 +290,52 @@ export const sentryMonitorProvider: MonitorProvider = {
   },
 
   /**
-   * `GET /projects/{orgSlug}/{projectSlug}/issues/` with Sentry's own `cursor`.
+   * `GET /organizations/{orgSlug}/issues/?project=…&query=is:unresolved&sort=date&limit=100`
+   * with Sentry's own `cursor` — see the interface for the contract.
    *
-   * ⚠️ NO PRODUCTION CALLER YET — MOTIR-4929's reconciling poll is the consumer,
-   * and it owns where the cursor is stored. The next cursor comes out of the
-   * `Link` header, which is Sentry's pagination carrier; this method hands it
-   * back and remembers nothing.
+   * Rows arrive newest-last-seen first (`sort=date`), so the page is CUT at the
+   * first row whose `lastSeen` is not strictly after `lastSeenAfter`, and the
+   * cursor is then dropped: every row after the cut, on this page or any later
+   * one, is older still. Only a page that lies ENTIRELY after the watermark hands
+   * back the `Link` header's next cursor.
    */
   async listIssuesSince({
     accessToken,
     orgSlug,
-    projectSlug,
+    externalProjectId,
+    lastSeenAfter,
     cursor,
   }): Promise<NormalizedMonitorIssuePage> {
-    const url = new URL(
-      `${apiBase()}/projects/${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectSlug)}/issues/`,
-    );
+    const url = new URL(`${apiBase()}/organizations/${encodeURIComponent(orgSlug)}/issues/`);
+    url.searchParams.set('project', externalProjectId);
+    url.searchParams.set('query', 'is:unresolved');
+    url.searchParams.set('sort', 'date');
+    url.searchParams.set('limit', String(SENTRY_ISSUES_PAGE_LIMIT));
     if (cursor) url.searchParams.set('cursor', cursor);
     const res = await call('listIssuesSince', MONITOR_LIST_ISSUES_TIMEOUT_MS, url.toString(), {
       method: 'GET',
       headers: jsonHeaders(accessToken),
     });
     const rows = (await res.json()) as Record<string, unknown>[];
-    return {
-      issues: rows
-        .filter((row) => typeof row['id'] === 'string')
-        .map((row) => ({
-          externalId: String(row['id']),
-          title: typeof row['title'] === 'string' ? row['title'] : String(row['id']),
-          culprit: typeof row['culprit'] === 'string' ? row['culprit'] : null,
-          level: typeof row['level'] === 'string' ? row['level'] : null,
-          eventCount: Number(row['count'] ?? 0) || 0,
-          firstSeenAt: readDate(row['firstSeen']),
-          lastSeenAt: readDate(row['lastSeen']),
-          permalink: typeof row['permalink'] === 'string' ? row['permalink'] : null,
-        })),
-      nextCursor: nextCursorFromLinkHeader(res.headers.get('link')),
-    };
+    const issues = rows
+      .filter((row) => typeof row['id'] === 'string')
+      .map((row) => ({
+        externalId: String(row['id']),
+        title: typeof row['title'] === 'string' ? row['title'] : String(row['id']),
+        culprit: typeof row['culprit'] === 'string' ? row['culprit'] : null,
+        level: typeof row['level'] === 'string' ? row['level'] : null,
+        eventCount: Number(row['count'] ?? 0) || 0,
+        firstSeenAt: readDate(row['firstSeen']),
+        lastSeenAt: readDate(row['lastSeen']),
+        permalink: typeof row['permalink'] === 'string' ? row['permalink'] : null,
+      }));
+
+    const cut =
+      lastSeenAfter === null
+        ? -1
+        : issues.findIndex((issue) => issue.lastSeenAt.getTime() <= lastSeenAfter.getTime());
+    if (cut >= 0) return { issues: issues.slice(0, cut), nextCursor: null };
+    return { issues, nextCursor: nextCursorFromLinkHeader(res.headers.get('link')) };
   },
 
   /** `PUT /issues/{issueId}/` with `{ status: 'resolved' }`.
