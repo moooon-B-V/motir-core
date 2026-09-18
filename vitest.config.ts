@@ -2571,10 +2571,26 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
-        // ⚠️ BRANCHES PINNED AT 85, WITH A REASON; the other three are 100.
-        // The five residual branches are the four reads' `tx ?? dbRead`
-        // fallbacks plus the driver-shape `originalCode` fallback. Every shipped
-        // caller passes a `tx`, so the `dbRead` side of each is unexercised.
+        // ⚠️ BRANCHES PINNED AT 84, WITH A REASON; the other three are 100.
+        // The residual branches are the four reads' `tx ?? dbRead` fallbacks.
+        // Every shipped caller passes a `tx`, so the `dbRead` side of each is
+        // unexercised.
+        //
+        // ⚠️ IT WAS 85 UNTIL MOTIR-5687, AND THE FILE DID NOT GET LESS COVERED.
+        // There were FIVE residual branches: these four, plus a driver-shape
+        // `originalCode` fallback inside this file's own SQLSTATE extractor. That
+        // extractor moved to `lib/prisma/sqlstate.ts` — three repositories each
+        // had a copy, and a Prisma upgrade relocated the SQLSTATE and retired the
+        // arm in all three at once — taking its FULLY COVERED branches with it.
+        // Numerator and denominator left together, so the ratio fell to 84.37%
+        // without one line of behaviour changing here. 84 is that measurement,
+        // not a concession.
+        //
+        // The moved code is pinned by `tests/prisma/sqlstate.test.ts` (every
+        // shape, as data, against a pure function) rather than by a threshold of
+        // its own; the honest way to raise THIS number back is to make `tx`
+        // required on these four reads, which deletes the branch instead of
+        // testing it.
         //
         // It is pinned rather than covered BECAUSE THE OBVIOUS TEST IS ONE THE
         // REPOSITORY FORBIDS. A test calling these reads unbound and asserting
@@ -2590,7 +2606,7 @@ export default defineConfig({
         'lib/repositories/approvalGateRepository.ts': {
           lines: 90,
           functions: 90,
-          branches: 85,
+          branches: 84,
           statements: 90,
         },
         // 95.83 / 93.02 / 100 / 100. The residual statements are the door's

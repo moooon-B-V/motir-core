@@ -1,4 +1,5 @@
 import type { Prisma, WorkItemKind } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from './helpers/sqlstate';
 import { seededBugsFolderIds } from './fixtures/projectFixtures';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
@@ -475,7 +476,7 @@ describe('folder — RLS under the non-bypass role', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 
   it('narrows reads to the bound project when app.project_id is set', async () => {

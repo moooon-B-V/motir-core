@@ -1,4 +1,11 @@
 import { Prisma, type WorkItemKind } from '@/generated/prisma/client';
+import {
+  CHECK_VIOLATION,
+  RLS_DENIAL,
+  isCheckViolation,
+  isRlsDenial,
+  isTriggerRefusal,
+} from './helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
@@ -495,7 +502,7 @@ describe('work_item RLS — write isolation (WITH CHECK)', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // Sanity (ADMIN client): nothing landed in W2. Read by a client no policy
     // hides rows from, so absent and invisible stay distinguishable.
@@ -514,7 +521,7 @@ describe('work_item RLS — write isolation (WITH CHECK)', () => {
           data: { workspaceId: fx.workspaceW2Id },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // Sanity (ADMIN client): the row still belongs to W1.
     const row = await adminDb.workItem.findUnique({ where: { id: fx.itemP1aId } });
@@ -549,7 +556,7 @@ describe('work_item_link RLS — write isolation (WITH CHECK)', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // Sanity (ADMIN client): no smuggled link in W2.
     const leaked = await adminDb.workItemLink.findFirst({
@@ -601,7 +608,7 @@ describe('PRODECT_FINDINGS #19 — work_item triggers fire under RLS', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    ).rejects.toSatisfy(isCheckViolation, CHECK_VIOLATION);
   });
 
   it('a structurally-valid same-workspace insert succeeds under RLS', async () => {
@@ -658,7 +665,7 @@ describe('PRODECT_FINDINGS #19 — work_item_link triggers fire under RLS', () =
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    ).rejects.toSatisfy(isCheckViolation, CHECK_VIOLATION);
   });
 
   it('self-link rejection still fires under RLS', async () => {
@@ -675,7 +682,7 @@ describe('PRODECT_FINDINGS #19 — work_item_link triggers fire under RLS', () =
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '23514' } });
+    ).rejects.toSatisfy(isCheckViolation, CHECK_VIOLATION);
   });
 
   it('workspace-consistency trigger still passes a valid same-workspace link under RLS', async () => {
@@ -740,9 +747,10 @@ describe('MOTIR-2884 — link workspace trigger refuses a cross-tenant write as 
           },
         }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_LINK_CROSS_WORKSPACE') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_LINK_CROSS_WORKSPACE'),
+      'the trigger must refuse this write with WI_LINK_CROSS_WORKSPACE',
+    );
 
     // And nothing was written — the assertion above would also pass if the
     // insert failed for some unrelated reason, so read the table back.
@@ -769,9 +777,10 @@ describe('MOTIR-2884 — link workspace trigger refuses a cross-tenant write as 
           },
         }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_LINK_WORKSPACE_MISMATCH') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_LINK_WORKSPACE_MISMATCH'),
+      'the trigger must refuse this write with WI_LINK_WORKSPACE_MISMATCH',
+    );
 
     // Scoped to W2 — the fixture already owns a legitimate W1 link out of
     // itemP1a, so an unscoped read here would match that and prove nothing.
@@ -802,9 +811,10 @@ describe('MOTIR-2884 — link workspace trigger refuses a cross-tenant write as 
             },
           }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_LINK_CROSS_WORKSPACE') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_LINK_CROSS_WORKSPACE'),
+      'the trigger must refuse this write with WI_LINK_CROSS_WORKSPACE',
+    );
   });
 
   it('still ACCEPTS a legal cross-PROJECT link with app.project_id bound (the widened reach does not over-reject)', async () => {
@@ -873,9 +883,10 @@ describe('MOTIR-2895 — parent tenancy is refused for a bound motir_app writer'
           },
         }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_WORKSPACE') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_PARENT_CROSS_WORKSPACE'),
+      'the trigger must refuse this write with WI_PARENT_CROSS_WORKSPACE',
+    );
 
     // The assertion above would also pass if the insert failed for an unrelated
     // reason, so read the table back as the owner.
@@ -906,9 +917,10 @@ describe('MOTIR-2895 — parent tenancy is refused for a bound motir_app writer'
             },
           }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_PROJECT') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_PARENT_CROSS_PROJECT'),
+      'the trigger must refuse this write with WI_PARENT_CROSS_PROJECT',
+    );
 
     const rows = await adminDb.workItem.findMany({
       where: { parentId: fx.itemP1b_otherProjectId },
@@ -938,9 +950,10 @@ describe('MOTIR-2895 — parent tenancy is refused for a bound motir_app writer'
           },
         }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_PROJECT') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_PARENT_CROSS_PROJECT'),
+      'the trigger must refuse this write with WI_PARENT_CROSS_PROJECT',
+    );
   });
 
   it('REFUSES a cross-project RE-PARENT (UPDATE), not only an INSERT', async () => {
@@ -963,9 +976,10 @@ describe('MOTIR-2895 — parent tenancy is refused for a bound motir_app writer'
             data: { parentId: fx.itemP1b_otherProjectId },
           }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_PROJECT') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_PARENT_CROSS_PROJECT'),
+      'the trigger must refuse this write with WI_PARENT_CROSS_PROJECT',
+    );
 
     const after = await adminDb.workItem.findUnique({ where: { id: story } });
     expect(after?.parentId).toBe(fx.itemP1aId);
@@ -1055,9 +1069,10 @@ describe('MOTIR-2895 — parent tenancy is refused for a bound motir_app writer'
           },
         }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_DEPTH_LIMIT_EXCEEDED') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_DEPTH_LIMIT_EXCEEDED'),
+      'the trigger must refuse this write with WI_DEPTH_LIMIT_EXCEEDED',
+    );
 
     // And the cycle walk: moving the story under its own grandchild. cycle sorts
     // before kind, so the cycle error is the one that surfaces (this re-parent is
@@ -1066,9 +1081,10 @@ describe('MOTIR-2895 — parent tenancy is refused for a bound motir_app writer'
       asAppRole(bound, (tx) =>
         tx.workItem.update({ where: { id: story }, data: { parentId: subtask.id } }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CYCLE') },
-    });
+    ).rejects.toSatisfy(
+      isTriggerRefusal('WI_PARENT_CYCLE'),
+      'the trigger must refuse this write with WI_PARENT_CYCLE',
+    );
   });
 
   it('the DEPTH walk is complete even when app.project_id names a DIFFERENT project than the row (the SECURITY DEFINER case)', async () => {
