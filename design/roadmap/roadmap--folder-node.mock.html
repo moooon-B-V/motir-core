@@ -1,0 +1,2496 @@
+<!doctype html>
+<!--
+  ROADMAP — a FOLDER on the roadmap canvas (MOTIR-5713, unblocking bug MOTIR-5710).
+
+  A DELTA mock (motir-core CLAUDE.md, "A change to an existing design is a NEW DELTA
+  MOCK"). It amends, and does not edit:
+    - design/roadmap/roadmap.mock.html             — the canvas and its breadcrumb
+    - design/roadmap/root-non-epic-rows.mock.html  — the root level's grouped node,
+                                                     the loose band and the cap tile
+    - design/ai-planning/plan-folder-placement.mock.html — the TEXT folder crumb,
+                                                     which becomes navigable here
+
+  COMPOSES the shipped canvas node and breadcrumb — it does NOT redraw them. The card
+  box, the kind tile, the identifier/title, the drill chevron, the status pill, the
+  progress meter, the grouped node and the truncation tile below are mirrored
+  class-role for class-role from components/planning/WorkItemNode.tsx
+  (WorkItemNode, LevelGroupNode, LevelTruncationTile) and
+  components/planning/ProjectRoadmapCanvas.tsx (the breadcrumb nav + Crumb). The only
+  NEW element is the FOLDER CARD (sheet 2); the only CHANGED element is the folder
+  crumb (sheet 5), which becomes a button.
+
+  The folder vocabulary is the shipped one: the lucide `folder` glyph and the " ▸ "
+  path separator of components/planning/FolderPlacement.tsx, and the folder rows of
+  design/work-items/folders.mock.html (MOTIR-5311).
+
+  Colour is --el-* only (Tier 3 below, mapped from the Tier-0 values of
+  packages/design-system/theme.css, light and [data-theme='dark']); shape is the
+  element-semantic shape tokens. The only raw values are non-semantic decoration:
+  the canvas dot grid and the review-board backdrop.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — a folder on the canvas (MOTIR-5713)</title>
+    <style>
+      /* ── Tier 0 — packages/design-system/theme.css, light ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+
+        /* shape — the [data-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 12px;
+        --spacing-btn-y: 6px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      /* ── Tier 0 — [data-theme='dark'] ── */
+      [data-theme='dark'] {
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+      }
+      /* ── Tier 3 — the --el-* layer. On :root AND every [data-theme] element, so
+         the nested dark stage (sheet 9) re-computes it against its own Tier 0. ── */
+      :root,
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --focus-ring-color: var(--color-primary);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9; /* review-board backdrop — decoration */
+        color: var(--el-text);
+        font: 14px/1.5 var(--font-sans);
+        padding: 30px 24px 64px;
+      }
+      [data-theme='dark'] body,
+      html[data-theme='dark'] body {
+        background: #070707; /* review-board backdrop — decoration */
+      }
+      .docbar {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin: 0 0 4px;
+      }
+      p.docsub {
+        margin: 0;
+        color: var(--el-text-secondary);
+        font-size: 13.5px;
+      }
+      .toggle {
+        margin-left: auto;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        padding: 6px 12px;
+        font: inherit;
+        font-size: 12.5px;
+        cursor: pointer;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-left: auto;
+      }
+      .body {
+        padding: 22px 20px 24px;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 4px;
+        color: var(--el-text-strong);
+      }
+
+      /* the recessed canvas board (the shipped --el-canvas; the dot grid is decoration) */
+      .canvas {
+        position: relative;
+        padding: 22px 18px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #8883 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow-x: auto;
+      }
+      .canvas.drilled {
+        padding-top: 70px;
+      }
+      .road {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: center;
+      }
+      .arrow {
+        flex: none;
+        width: 28px;
+        height: 2px;
+        background: var(--el-border-strong);
+        position: relative;
+      }
+      .arrow::after {
+        content: '';
+        position: absolute;
+        right: -1px;
+        top: -4px;
+        border: 5px solid transparent;
+        border-left-color: var(--el-border-strong);
+        border-right: 0;
+      }
+      .arrow.red,
+      .arrow.red::after {
+        background: var(--el-danger);
+      }
+      .arrow.red::after {
+        background: none;
+        border-left-color: var(--el-danger);
+      }
+      .band {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: flex-start;
+        margin-top: 26px;
+        padding-top: 22px;
+        border-top: 1px dashed var(--el-border-strong);
+      }
+      .band.first {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+      }
+      .bandlabel {
+        width: 100%;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin: 0 0 -6px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      /* ── WorkItemNode / LevelGroupNode box — NODE_W x NODE_H (280 x 124) ── */
+      .node {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        width: 280px;
+        height: 124px;
+        flex: none;
+        padding: 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+      }
+      .node.done {
+        background: var(--el-tint-sky);
+        box-shadow: var(--shadow-subtle);
+      }
+      .node.sel {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .noderow {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+        min-height: 20px;
+      }
+      .noderow .right {
+        margin-left: auto;
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 6px;
+      }
+      .chev {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .pill {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 6px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.prog {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+      .pill.done {
+        background: var(--el-text-secondary);
+        color: var(--el-text-inverted);
+      }
+      .nodebody {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        align-items: flex-start;
+        gap: 8px;
+        overflow: hidden;
+        margin-top: 6px;
+      }
+      .tile {
+        display: flex;
+        width: 28px;
+        height: 28px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+      }
+      .tile.epic {
+        background: var(--el-tint-rose);
+        color: var(--el-type-epic);
+      }
+      .tile.bug {
+        background: var(--el-tint-peach);
+        color: var(--el-type-bug);
+      }
+      .tile.story {
+        background: var(--el-tint-mint);
+        color: var(--el-type-story);
+      }
+      /* no kind backs a group or a folder, so neither takes an --el-type-* hue */
+      .tile.neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .nodemain {
+        min-width: 0;
+        flex: 1;
+      }
+      .ident {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .ttl {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-top: 2px;
+        font-size: 13.5px;
+        line-height: 1.35;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .meter {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .track {
+        height: 6px;
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+      .fill {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-success);
+      }
+      .count {
+        flex: none;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      /* the shipped selected-node "Open ›" drill button, below the card */
+      .openbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 10px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        padding: var(--spacing-btn-y) var(--spacing-btn-x);
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: var(--shadow-card);
+      }
+      .openbtn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 280px;
+        flex: none;
+      }
+
+      /* ── the shipped TRUNCATION tile (LevelTruncationTile) ── */
+      .moretile {
+        display: flex;
+        width: 280px;
+        height: 124px;
+        flex: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .moretile .n {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .moretile .of {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .showall {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        padding: 3px 12px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+
+      /* ── the shipped GHOST ANCHOR (an off-level blocker) ── */
+      .anchor {
+        width: 280px;
+        height: 124px;
+        flex: none;
+        overflow: hidden;
+        padding: 14px;
+        border: 1px dashed var(--el-danger);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .anchor .k {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-danger-on-surface);
+      }
+      .anchor .k svg {
+        width: 14px;
+        height: 14px;
+      }
+      .anchor .t {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .anchor .where {
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .anchor .where svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      /* ── the shipped canvas BREADCRUMB (ProjectRoadmapCanvas: nav + Crumb) ── */
+      .crumbnav {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        max-width: calc(100% - 24px);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+        padding: 4px 8px;
+        font-size: 14px;
+      }
+      .crumbnav .back {
+        display: inline-flex;
+        width: var(--height-control);
+        height: var(--height-control);
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+      }
+      .crumbnav .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .crumbnav ol {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .crumbnav li {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 4px;
+      }
+      .crumbnav .sepg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      .crumb {
+        max-width: 18rem;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        color: var(--el-text-secondary);
+      }
+      .crumb.hover {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+      }
+      .crumb.active {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* NEW — a folder crumb is a Crumb button led by the folder glyph */
+      .crumb.folder {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .crumb.folder svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .crumb.folder.active svg {
+        color: var(--el-text-secondary);
+      }
+      .crumb.ellip {
+        padding: 2px 4px;
+      }
+      /* SHIPPED (before) — the text-only folder crumb, for the comparison in sheet 5 */
+      .foldertext {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        color: var(--el-text-secondary);
+      }
+      .foldertext svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── the drilled-level EMPTY state (the canvas's emptyDrilled slot) ── */
+      .emptylevel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 180px;
+        text-align: center;
+      }
+      .emptylevel svg {
+        width: 28px;
+        height: 28px;
+        color: var(--el-text-secondary);
+      }
+      .emptylevel b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .emptylevel span {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* annotations */
+      .callout {
+        margin-top: 16px;
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .callout b {
+        color: var(--el-text-strong);
+      }
+      .lbl {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        text-align: center;
+        margin-top: 8px;
+      }
+      .lbl b {
+        color: var(--el-text-strong);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 22px;
+        align-items: flex-start;
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        margin-top: 18px;
+      }
+      table.spec th,
+      table.spec td {
+        border-bottom: 1px solid var(--el-border);
+        padding: 8px 10px;
+        text-align: left;
+        vertical-align: top;
+        color: var(--el-text-secondary);
+      }
+      table.spec th {
+        color: var(--el-text-strong);
+        font-weight: 600;
+        background: var(--el-surface-soft);
+      }
+      table.spec td b {
+        color: var(--el-text-strong);
+      }
+      /* utility shim — the Tailwind sr-only utility */
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+      }
+      .dark-stage {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- lucide icon geometry — copied from the installed lucide-react __iconNode -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="i-folder">
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g id="i-folder-open">
+          <path
+            d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"
+          />
+        </g>
+        <g id="i-layers">
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+          />
+          <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+          <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+        </g>
+        <g id="i-chevron-right"><path d="m9 18 6-6-6-6" /></g>
+        <g id="i-chevron-left"><path d="m15 18-6-6 6-6" /></g>
+        <g id="i-arrow-up-right">
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </g>
+        <g id="i-epic">
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g id="i-bug">
+          <path d="M12 20v-9" />
+          <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M21 21a4 4 0 0 0-3.81-4" />
+          <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+          <path d="M22 13h-4" />
+          <path d="M3 21a4 4 0 0 1 3.81-4" />
+          <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+          <path d="M6 13H2" />
+          <path d="m8 2 1.88 1.88" />
+          <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+        </g>
+        <g id="i-circle-dot">
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="1" />
+        </g>
+        <g id="i-circle"><circle cx="12" cy="12" r="10" /></g>
+        <g id="i-circle-check">
+          <circle cx="12" cy="12" r="10" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="docbar">
+      <div>
+        <h1 class="docttl">Roadmap — a folder on the canvas</h1>
+        <p class="docsub">
+          MOTIR-5713, unblocking bug MOTIR-5710. A delta over <code>roadmap.mock.html</code> and
+          <code>root-non-epic-rows.mock.html</code>: a folder becomes a card at its level that
+          drills into what is filed in it, and its crumb becomes a level you can go back to.
+          Composes the shipped <code>WorkItemNode</code> box and the shipped canvas breadcrumb.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ══════════════ SHEET 1 — TODAY ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>1 · Today — filing a work item changes nothing on the canvas</b>
+        <span class="cap">shipped behaviour at <code>origin/main</code> c1a7739a0</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="road">
+            <div class="node">
+              <div class="noderow">
+                <span class="pill prog"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle-dot" /></svg
+                  >In Progress</span
+                >
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-epic" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-653</span>
+                  <span class="ttl">Epic 8: Launch readiness</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 43%"></div></div>
+                <span class="count">41 / 96</span>
+              </div>
+            </div>
+            <span class="arrow" aria-hidden="true"></span>
+            <div class="node">
+              <div class="noderow">
+                <span class="pill todo"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle" /></svg
+                  >To Do</span
+                >
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-epic" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3413</span>
+                  <span class="ttl">Own the job substrate — a Postgres-backed queue</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 25%"></div></div>
+                <span class="count">6 / 24</span>
+              </div>
+            </div>
+          </div>
+          <div class="band">
+            <div class="node">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-layers" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">1,151 items</span>
+                  <span class="ttl">Not in an epic</span>
+                </div>
+              </div>
+            </div>
+            <div class="moretile">
+              <span class="n">+ 1,009 more</span>
+              <span class="of">Showing 200 of 1,209</span>
+              <span class="showall">Show all</span>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <b>What is wrong.</b> <code>getProjectRoadmap</code> reads each level by
+          <code>parentId</code> only and passes no folder treatment, so a filed root is still a
+          root. Its <b>folder</b> never appears on the canvas. The 794 bugs filed into
+          <b>Fixed bugs 2026-09-18</b> and the 94 in <b>Bugs</b> still count against the root's
+          200-row cap and still sit behind <b>Not in an epic</b>, next to the unfiled work they were
+          filed away from. The <code>/items</code> tree shows the same project as two tidy folders.
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 2 — THE FOLDER CARD ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>2 · The folder card — the shipped node box, slot by slot</b>
+        <span class="cap"
+          >NEW element · <code>FolderNode</code> beside <code>LevelGroupNode</code></span
+        >
+      </div>
+      <div class="body">
+        <div class="row">
+          <div class="stack">
+            <div class="node" role="group" aria-label="Folder Fixed bugs 2026-09-18, 794 items">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">794 items</span>
+                  <span class="ttl">Fixed bugs 2026-09-18</span>
+                </div>
+              </div>
+            </div>
+            <div class="lbl"><b>At rest</b> — work items only</div>
+          </div>
+
+          <div class="stack">
+            <div class="node sel" role="group" aria-label="Folder Parked, 2 folders and 5 items">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">2 folders · 5 items</span>
+                  <span class="ttl">Parked</span>
+                </div>
+              </div>
+            </div>
+            <span class="openbtn"
+              >Open<svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#i-chevron-right" /></svg
+            ></span>
+            <div class="lbl"><b>Selected</b> — the shipped “Open ›” button; no View</div>
+          </div>
+
+          <div class="stack">
+            <div class="node" role="group" aria-label="Folder Later, empty">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">Empty</span>
+                  <span class="ttl">Later</span>
+                </div>
+              </div>
+            </div>
+            <div class="lbl"><b>Empty</b> — still a door (sheet 6)</div>
+          </div>
+
+          <div class="stack">
+            <div class="node" role="group" aria-label="Folder with a long name, 1 item">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">1 item</span>
+                  <span class="ttl"
+                    >Research spikes and investigations we paused during the Q3 infrastructure
+                    migration</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="lbl"><b>A long name</b> — two lines, clamped as a title is</div>
+          </div>
+        </div>
+
+        <table class="spec">
+          <tr>
+            <th style="width: 18%">slot</th>
+            <th style="width: 34%">on a work item (shipped)</th>
+            <th>on a folder (this design)</th>
+          </tr>
+          <tr>
+            <td><b>box</b></td>
+            <td>
+              <code>NODE_W × NODE_H</code>, <code>--radius-card</code>, <code>--el-border</code>,
+              <code>--el-surface</code>, <code>--shadow-card</code>
+            </td>
+            <td><b>The same box.</b> It sits on the same grid and lines up with its neighbours.</td>
+          </tr>
+          <tr>
+            <td><b>kind tile</b></td>
+            <td>the kind's <code>--el-tint-*</code> behind its <code>--el-type-*</code> glyph</td>
+            <td>
+              Neutral <code>--el-muted</code> behind the lucide <b><code>folder</code></b> glyph in
+              <code>--el-text-secondary</code>. A folder is not a work-item kind, so it takes no
+              kind hue. This matches the folder row in
+              <code>/items</code> (<code>folders.mock.html</code>). The glyph, not a colour, is what
+              separates it from the grouped node's <code>layers</code> tile.
+            </td>
+          </tr>
+          <tr>
+            <td><b>identifier</b></td>
+            <td><code>MOTIR-653</code>, mono, <code>--el-text-secondary</code></td>
+            <td>
+              The <b>count of DIRECT contents</b>, in the same mono type: <code>794 items</code> ·
+              <code>1 item</code> · <code>2 folders · 5 items</code> · <code>3 folders</code> ·
+              <code>Empty</code>. A folder has no key; what identifies it is what it holds. Direct,
+              as the delete confirmation counts (<code>folders.mock.html</code> panel 5): a filed
+              epic counts once, however many stories it holds.
+            </td>
+          </tr>
+          <tr>
+            <td><b>title</b></td>
+            <td>the work item's title, two lines, <code>--el-text</code> 600</td>
+            <td>The folder's <b>name</b>, the same two-line clamp.</td>
+          </tr>
+          <tr>
+            <td><b>status pill</b></td>
+            <td>the workflow status</td>
+            <td><b>Absent.</b> A folder has no workflow (MOTIR-5307).</td>
+          </tr>
+          <tr>
+            <td><b>progress meter</b></td>
+            <td>the container's subtree done / total</td>
+            <td>
+              <b>Absent.</b> A meter says "this unit of work is N% done", and a folder is not a unit
+              of work. Its members are unrelated to each other.
+            </td>
+          </tr>
+          <tr>
+            <td><b>ready wash · cross-blocked chrome · you-are-here · not-in-sprint</b></td>
+            <td>readiness, dependency and position signals</td>
+            <td><b>None of them.</b> A folder blocks nothing and is never ready or in progress.</td>
+          </tr>
+          <tr>
+            <td><b>drill</b></td>
+            <td>chevron when <code>hasChildren</code>; the selected node's “Open ›”</td>
+            <td>
+              <b>Always drillable</b>, empty or not. It carries the chevron and, when selected, the
+              same “Open ›”. Not <code>viewable</code>: it has no peek, because what it holds is the
+              level behind it.
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 3 — THE ROOT LEVEL ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>3 · The root level — epics on the road, then the folders, then Not in an epic</b>
+        <span class="cap">project scope</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="road">
+            <div class="node">
+              <div class="noderow">
+                <span class="pill prog"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle-dot" /></svg
+                  >In Progress</span
+                >
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-epic" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-653</span>
+                  <span class="ttl">Epic 8: Launch readiness</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 43%"></div></div>
+                <span class="count">41 / 96</span>
+              </div>
+            </div>
+            <span class="arrow" aria-hidden="true"></span>
+            <div class="node">
+              <div class="noderow">
+                <span class="pill todo"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle" /></svg
+                  >To Do</span
+                >
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-epic" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3413</span>
+                  <span class="ttl">Own the job substrate — a Postgres-backed queue</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 25%"></div></div>
+                <span class="count">6 / 24</span>
+              </div>
+            </div>
+          </div>
+          <div class="band">
+            <div class="node">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">94 items</span>
+                  <span class="ttl">Bugs</span>
+                </div>
+              </div>
+            </div>
+            <div class="node">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">794 items</span>
+                  <span class="ttl">Fixed bugs 2026-09-18</span>
+                </div>
+              </div>
+            </div>
+            <div class="node">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-layers" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">263 items</span>
+                  <span class="ttl">Not in an epic</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <b>The order is the <code>/items</code> root order</b> (review of MOTIR-5540: epics, then
+          folders, then the rest), laid out the canvas's way. The epics stay on the road, where the
+          dependency layout puts them. A folder takes part in no edge, so
+          <code>deterministicLayout</code> already drops it into the loose band below the flow,
+          which is where it belongs. Within that band the
+          <b>folders lead, in their own order</b> (their position, as <code>/items</code> keeps them
+          under any sort), and <b>Not in an epic</b> comes last. The grouped node now holds only the
+          parentless non-epics that are <b>not</b> filed anywhere. The root's work-item read drops
+          every filed row, so the cap tile from sheet 1 is gone here. (Counts on these sheets are
+          illustrative.)
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 4 — A DRILLED FOLDER LEVEL ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>4 · Inside a folder — its folders first, then what is filed directly in it</b>
+        <span class="cap">drilled from sheet 3 · over the level cap</span>
+      </div>
+      <div class="body">
+        <div class="canvas drilled">
+          <nav class="crumbnav" aria-label="Breadcrumb">
+            <span class="back" aria-label="Back"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#i-chevron-left" /></svg
+            ></span>
+            <ol>
+              <li><span class="crumb">Motir</span></li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb folder active" aria-current="page"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-folder" /></svg
+                  >Fixed bugs 2026-09-18</span
+                >
+              </li>
+            </ol>
+          </nav>
+          <div class="band first">
+            <div class="node">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">12 items</span>
+                  <span class="ttl">Flakes</span>
+                </div>
+              </div>
+            </div>
+            <div class="node done">
+              <div class="noderow">
+                <span class="pill done"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle-check" /></svg
+                  >Done</span
+                >
+              </div>
+              <div class="nodebody">
+                <span class="tile bug" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-bug" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-149</span>
+                  <span class="ttl"
+                    >Workflow settings page has no nav entry point — orphaned route</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="node done">
+              <div class="noderow">
+                <span class="pill done"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle-check" /></svg
+                  >Done</span
+                >
+              </div>
+              <div class="nodebody">
+                <span class="tile bug" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-bug" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-150</span>
+                  <span class="ttl">Tree view: column values not aligned with their headers</span>
+                </div>
+              </div>
+            </div>
+            <div class="node done">
+              <div class="noderow">
+                <span class="pill done"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle-check" /></svg
+                  >Done</span
+                >
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile bug" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-bug" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-2116</span>
+                  <span class="ttl">A filed bug with subtasks drills as it always did</span>
+                </div>
+              </div>
+            </div>
+            <div class="moretile">
+              <span class="n">+ 594 more</span>
+              <span class="of">Showing 200 of 794</span>
+              <span class="showall">Show all</span>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <b>A folder level is its child folders, then its filed work items</b>, the MOTIR-5314 rule
+          <code>/items</code> already reads. The folders lead the loose band, as at the root, and
+          filed items with dependency edges between them lay out on a road above it as any level's
+          do. <b>Not in an epic</b> is a <b>root-only</b> grouping and is not applied here: the
+          folder is already the drawer, and a second drawer inside it would hide what the reader
+          just opened. Each member renders unchanged: its own status pill, kind tile, ready wash,
+          and a drill chevron where it has children. <b>The cap tile is the shipped one</b>,
+          counting this folder's <b>work items</b>. Folder cards are never cut by the cap (sheet 8,
+          decision 4).
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 5 — THE BREADCRUMB ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>5 · The breadcrumb — a folder crumb is a level you can go back to</b>
+        <span class="cap"
+          >CHANGED element · amends <code>plan-folder-placement.mock.html</code>'s text crumb on
+          this canvas</span
+        >
+      </div>
+      <div class="body">
+        <p class="lbl" style="text-align: left; margin: 0 0 8px">
+          <b>Shipped (before)</b> — deep-linked to <code>?item=MOTIR-812</code>, an epic filed in
+          Parked ▸ 2025. The folder path is TEXT and navigates nowhere.
+        </p>
+        <div class="canvas drilled" style="padding-bottom: 8px">
+          <nav class="crumbnav" aria-label="Breadcrumb">
+            <span class="back" aria-label="Back"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#i-chevron-left" /></svg
+            ></span>
+            <ol>
+              <li><span class="crumb">Motir</span></li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="foldertext"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-folder" /></svg
+                  >Parked ▸ 2025</span
+                >
+              </li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb active" aria-current="page">MOTIR-812 · Old import</span>
+              </li>
+            </ol>
+          </nav>
+        </div>
+
+        <p class="lbl" style="text-align: left; margin: 18px 0 8px">
+          <b>This design (after)</b> — each folder is its own crumb, a <code>Crumb</code> button led
+          by the folder glyph. Hover shown on <b>2025</b>.
+        </p>
+        <div class="canvas drilled" style="padding-bottom: 8px">
+          <nav class="crumbnav" aria-label="Breadcrumb">
+            <span class="back" aria-label="Back"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#i-chevron-left" /></svg
+            ></span>
+            <ol>
+              <li><span class="crumb">Motir</span></li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb folder"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-folder" /></svg
+                  >Parked</span
+                >
+              </li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb folder hover"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-folder" /></svg
+                  >2025</span
+                >
+              </li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb active" aria-current="page">MOTIR-812 · Old import</span>
+              </li>
+            </ol>
+          </nav>
+        </div>
+
+        <p class="lbl" style="text-align: left; margin: 18px 0 8px">
+          <b>A deep folder path</b> — more than three folders collapse from the middle, as
+          <code>collapseFolderPath(path, 3)</code> already does. The <b>…</b> is itself a button
+          that steps back one level past the last shown folder.
+        </p>
+        <div class="canvas drilled" style="padding-bottom: 8px">
+          <nav class="crumbnav" aria-label="Breadcrumb">
+            <span class="back" aria-label="Back"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#i-chevron-left" /></svg
+            ></span>
+            <ol>
+              <li><span class="crumb">Motir</span></li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb folder"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-folder" /></svg
+                  >Archive</span
+                >
+              </li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb ellip" title="Archive ▸ 2024 ▸ Q4 ▸ Imports">…</span>
+              </li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb folder active" aria-current="page"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-folder" /></svg
+                  >Imports</span
+                >
+              </li>
+            </ol>
+          </nav>
+        </div>
+        <div class="callout">
+          <b>Why a button, not text.</b> On the roadmap, a folder crumb now names a level the canvas
+          can show, so it behaves like every other crumb: <code>--el-text-secondary</code>, hover
+          <code>--el-surface-soft</code> + <code>--el-text</code>, the active crumb
+          <code>--el-text</code> 600 with <code>aria-current="page"</code>, the separator glyph
+          <code>--el-text-faint</code> (decorative). The folder glyph leads each folder crumb, so a
+          reader tells a folder from a work item in the trail without reading. Its screen-reader
+          label is the shipped <code>folders.breadcrumbFolderLabel</code> ("Folder:") + the name.
+          <b>The plan-review canvas keeps its text crumb.</b> There the path describes where a
+          <i>proposal</i> will be filed. No folder level exists on that canvas to navigate to, and
+          MOTIR-5418's design stands for it.
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 6 — AN EMPTY FOLDER ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>6 · An empty folder — a door to a room that says it is empty</b>
+        <span class="cap">the canvas's drilled-empty slot, with folder copy</span>
+      </div>
+      <div class="body">
+        <div class="canvas drilled">
+          <nav class="crumbnav" aria-label="Breadcrumb">
+            <span class="back" aria-label="Back"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <use href="#i-chevron-left" /></svg
+            ></span>
+            <ol>
+              <li><span class="crumb">Motir</span></li>
+              <li>
+                <svg
+                  class="sepg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-right" />
+                </svg>
+                <span class="crumb folder active" aria-current="page"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-folder" /></svg
+                  >Later</span
+                >
+              </li>
+            </ol>
+          </nav>
+          <div class="emptylevel">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <use href="#i-folder-open" />
+            </svg>
+            <b>This folder is empty</b>
+            <span>Work items filed into Later from Work items will show here.</span>
+          </div>
+        </div>
+        <div class="callout">
+          <b>An empty folder is still drawn, and still a door.</b> This departs from the grouped
+          node, which is emitted only when it holds something. A folder is a real, named record a
+          person made in <code>/items</code>. Hiding it here would make the two surfaces disagree
+          about the project's shape, which is exactly the defect in MOTIR-5710. Its card says
+          <code>Empty</code> (sheet 2), so nobody drills into it expecting work. The canvas's
+          generic <code>emptyDrilled</code> copy ("This node has no children to show") is wrong for
+          a folder, so it gets its own two lines.
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 7 — EDGES ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>7 · Edges — a folder draws none; a filed blocker is named with its folder</b>
+        <span class="cap">the shipped ghost anchor, one line richer</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="road">
+            <div class="anchor">
+              <span class="k"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-arrow-up-right" /></svg
+                >MOTIR-5710</span
+              >
+              <span class="t" style="display: block">The roadmap canvas never draws a FOLDER</span>
+              <span class="where"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-folder" /></svg
+                ><span class="sr-only">Folder:</span>Bugs</span
+              >
+            </div>
+            <span class="arrow red" aria-hidden="true"></span>
+            <div class="node">
+              <div class="noderow">
+                <span class="pill todo"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-circle" /></svg
+                  >To Do</span
+                >
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-epic" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-5307</span>
+                  <span class="ttl">An epic blocked by a bug that is filed in Bugs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="band">
+            <div class="node">
+              <div class="noderow">
+                <span class="right"
+                  ><svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" /></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile neutral" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#i-folder" /></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">94 items</span>
+                  <span class="ttl">Bugs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <b>A folder is never an edge end.</b> It blocks nothing, so no arrow starts or ends on a
+          folder card, and it never takes the cross-blocked chrome. An edge between a
+          <b>filed</b> row and a row at the level in view follows the rule the grouped level already
+          follows (root-non-epic-rows decision 4, MOTIR-3557): a level draws the edges whose
+          <b>blocked end is one of its rows</b>. So the epic above keeps its shipped
+          <b>ghost anchor</b> for the filed bug that blocks it. The one change is the anchor's
+          location line: where it reads the blocker's parent or "elsewhere" today, a
+          <b>filed</b> blocker's line reads its <b>folder path</b>, drawn with
+          <code>FolderPathLabel</code> (glyph + <code>▸</code> path, collapsed to 2). The reader
+          learns which door to open. On the folder level (sheet 4), the same edge draws from the
+          bug's side as an ordinary off-level blocker, if the bug is the blocked end.
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 8 — DECISIONS + SCOPES ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>8 · Decisions the code card would otherwise make silently</b>
+        <span class="cap">each with a disposition; full text in design-notes.md</span>
+      </div>
+      <div class="body">
+        <table class="spec" style="margin-top: 0">
+          <tr>
+            <th style="width: 4%">#</th>
+            <th style="width: 26%">question</th>
+            <th>decision</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td><b>What leaves the root read?</b></td>
+            <td>
+              Every <b>filed</b> work item. The roadmap passes the same
+              <code>excludeFiled</code> treatment the <code>/items</code> root does. A filed epic
+              leaves the road and appears inside its folder.
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><b>Where do folders sit?</b></td>
+            <td>
+              At the <b>head of the loose band</b>, in their own position order, after the road and
+              before <b>Not in an epic</b>. This is the same rule at every level.
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><b>What does the card count?</b></td>
+            <td>
+              <b>Direct</b> contents, folders and work items named separately:
+              <code>2 folders · 5 items</code>. It is never recursive and never a status tally.
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><b>Does the 200-row cap count folders?</b></td>
+            <td>
+              <b>No.</b> The cap and its tile are about <b>work items</b>. A level's folders are
+              read whole, like the folder tree <code>/items</code> reads, and drawn before the tile.
+              "Showing 200 of 794" stays a true sentence about work items.
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>
+              <b>Is a folder <code>decorative</code>?</b>
+            </td>
+            <td>
+              <b>No.</b> It holds real work, so it counts as a <b>choice</b>. A root with one epic
+              and one folder does not auto-descend into the epic, just as grouped-node decision 5
+              reads.
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td><b>Sprint scope</b> (<code>scope=sprint</code>)</td>
+            <td>
+              <b>Folders are not drawn, and placement is ignored.</b> The sprint view shows the work
+              the sprint committed to. Hiding a committed bug behind a folder door would bury
+              exactly what the view is for. A filed in-sprint row renders where it would if it were
+              unfiled.
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td><b>Search-to-locate</b></td>
+            <td>
+              A folder card's search text is its <b>name</b>. Locate still searches the
+              <b>level in view</b>, as today. Finding an item inside an unopened folder is
+              unchanged, and is <b>out of scope</b>.
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td><b>Out of scope</b></td>
+            <td>
+              The <b>run canvas</b> (<code>ids=</code> levels ignore placement by construction; a
+              run's members are drawn as the run took them). The <b>public roadmap</b> (<code
+                >publicProjectsService</code
+              >
+              carries no folder field, by MOTIR-5309's decision). The
+              <b>plan-review canvas</b> crumb (sheet 5).
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 9 — DARK PARITY ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>9 · Dark parity — a drilled folder on <code>data-theme="dark"</code></b>
+        <span class="cap">every sheet above also flips with “Toggle dark”</span>
+      </div>
+      <div class="body">
+        <div class="dark-stage" data-theme="dark">
+          <div class="canvas drilled">
+            <nav class="crumbnav" aria-label="Breadcrumb">
+              <span class="back" aria-label="Back"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <use href="#i-chevron-left" /></svg
+              ></span>
+              <ol>
+                <li><span class="crumb">Motir</span></li>
+                <li>
+                  <svg
+                    class="sepg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" />
+                  </svg>
+                  <span class="crumb folder"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <use href="#i-folder" /></svg
+                    >Parked</span
+                  >
+                </li>
+                <li>
+                  <svg
+                    class="sepg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <use href="#i-chevron-right" />
+                  </svg>
+                  <span class="crumb folder active" aria-current="page"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <use href="#i-folder" /></svg
+                    >2025</span
+                  >
+                </li>
+              </ol>
+            </nav>
+            <div class="band first">
+              <div class="node sel">
+                <div class="noderow">
+                  <span class="right"
+                    ><svg
+                      class="chev"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <use href="#i-chevron-right" /></svg
+                  ></span>
+                </div>
+                <div class="nodebody">
+                  <span class="tile neutral" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <use href="#i-folder" /></svg
+                  ></span>
+                  <div class="nodemain">
+                    <span class="ident">3 items</span><span class="ttl">Q4 imports</span>
+                  </div>
+                </div>
+              </div>
+              <div class="node">
+                <div class="noderow">
+                  <span class="right"
+                    ><svg
+                      class="chev"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <use href="#i-chevron-right" /></svg
+                  ></span>
+                </div>
+                <div class="nodebody">
+                  <span class="tile neutral" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <use href="#i-folder" /></svg
+                  ></span>
+                  <div class="nodemain">
+                    <span class="ident">Empty</span><span class="ttl">Later</span>
+                  </div>
+                </div>
+              </div>
+              <div class="node">
+                <div class="noderow">
+                  <span class="pill todo"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <use href="#i-circle" /></svg
+                    >To Do</span
+                  >
+                  <span class="right"
+                    ><svg
+                      class="chev"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <use href="#i-chevron-right" /></svg
+                  ></span>
+                </div>
+                <div class="nodebody">
+                  <span class="tile epic" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <use href="#i-epic" /></svg
+                  ></span>
+                  <div class="nodemain">
+                    <span class="ident">MOTIR-812</span><span class="ttl">Old import</span>
+                  </div>
+                </div>
+                <div class="meter">
+                  <div class="track"><div class="fill" style="width: 60%"></div></div>
+                  <span class="count">3 / 5</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
