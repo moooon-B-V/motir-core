@@ -82,6 +82,7 @@ const GATE: ApprovalGateDTO = {
   decidedById: null,
   decidedAt: null,
   noteMd: null,
+  supersededCause: null,
   subjectVersion: '9840d00ea1b2',
   decidedByLabel: null,
   routedToId: 'user-2',

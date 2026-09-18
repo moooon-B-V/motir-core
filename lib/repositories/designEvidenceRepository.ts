@@ -140,34 +140,17 @@ export const designEvidenceRepository = {
     return new Map(rows.map((row) => [row.workItemId, row]));
   },
 
-  /**
-   * The NEWEST PINNED, non-withdrawn row for MANY work items — arm (b) of
-   * AMENDMENT 5 Q2's ladder, batched (Subtask MOTIR-5557).
-   *
-   * ⚠️ NEWEST, because pins ACCUMULATE. §6d: a card approved, reopened and
-   * approved again holds two pinned rows, both fetchable, and the one a run
-   * should build against is the one the LATEST approval bought. `pinnedAt` is
-   * the first approval's timestamp on any one row ({@link pinById} does not
-   * re-stamp), so ordering on it orders the DECISIONS.
-   *
-   * One query for the whole set; the per-item head is taken in memory because
-   * the row count per card is the number of times it was approved — a handful,
-   * not a page.
-   */
-  async findNewestPinnedByWorkItems(
-    workItemIds: string[],
-    tx: Prisma.TransactionClient,
-  ): Promise<Map<string, DesignEvidenceWithAssets>> {
-    if (workItemIds.length === 0) return new Map();
-    const rows = await tx.designEvidence.findMany({
-      where: { workItemId: { in: workItemIds }, pinnedAt: { not: null }, withdrawnAt: null },
-      include: WITH_ASSETS,
-      orderBy: { pinnedAt: 'desc' },
-    });
-    const head = new Map<string, DesignEvidenceWithAssets>();
-    for (const row of rows) if (!head.has(row.workItemId)) head.set(row.workItemId, row);
-    return head;
-  },
+  // ⚠️ `findNewestPinnedByWorkItems` STOOD HERE AND IS RETIRED (Story MOTIR-5652 ·
+  // Subtask MOTIR-5665; `design-result.md` AMENDMENT 6 Q6). It was the only read
+  // of `pinnedAt`, and it served exactly one caller: arm (b) of AMENDMENT 5 Q2's
+  // ladder, the arm that existed because AMENDMENT 4 Q8 left a design card with an
+  // open pull request holding no `design_result` gate to read. That card raises a
+  // gate again, so the arm had no live input and went with it.
+  //
+  // ⚠️ THE COLUMN STAYS, and {@link pinById} still writes it: §6c's RETENTION is
+  // what reads a pin now — it is what keeps an approved version's files out of the
+  // orphan-GC's reach. The column has a writer and a purpose; what it lost is a
+  // reader.
 
   /**
    * WHICH of these work items have any `design_evidence` row at all — what

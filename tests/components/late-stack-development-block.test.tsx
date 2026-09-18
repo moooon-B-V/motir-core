@@ -221,12 +221,40 @@ describe('the late stack — a design result with open linked pull requests (Q8)
       'fetch',
       vi.fn(async () => ({ type: 'opaqueredirect', ok: false, status: 0 })),
     );
+    const base = reads();
     const ui = await LateUpperSections({
       reads: Promise.resolve({
-        ...reads(),
+        ...base,
         pullRequests,
         designEvidence: EVIDENCE,
         isDesignCard: true,
+        // ⚠️ THE CARD HOLDS ITS DESIGN GATE (MOTIR-5667, reversing AMENDMENT 4 Q8).
+        // These fixtures carried NO design gate because a card with an open pull
+        // request raised none — which is MOTIR-5652, and the state the product no
+        // longer produces. The placement is derived from the gate now, so a fixture
+        // without one is describing a card that cannot exist.
+        designGate: {
+          ...base.designGate,
+          gate: {
+            id: 'gate-design-1',
+            workItemId: 'wi-acme-12',
+            kind: 'design_result' as const,
+            subjectId: EVIDENCE.id,
+            state: 'awaiting' as const,
+            decidedById: null,
+            decidedAt: null,
+            noteMd: null,
+            supersededCause: null,
+            subjectVersion: EVIDENCE.commitSha,
+            decidedByLabel: null,
+            routedToId: 'u-viewer',
+            decidedUnderAuthority: null,
+            decisionSource: null,
+            outcomeRef: null,
+            createdAt: '2026-09-14T00:00:00.000Z',
+            updatedAt: '2026-09-14T00:00:00.000Z',
+          },
+        },
       }),
       itemId: 'wi-acme-12',
       itemIdentifier: 'ACME-12',

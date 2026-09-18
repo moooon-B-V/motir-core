@@ -8,7 +8,10 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { ApprovalGateError, ApprovalGateMergeRefusedError } from '@/lib/approvalGates/errors';
-import { ApprovalGateAlreadyDecidedError } from '@/lib/approvalGates/errors';
+import {
+  ApprovalGateAlreadyDecidedError,
+  ApprovalGateSupersededError,
+} from '@/lib/approvalGates/errors';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -144,7 +147,11 @@ function refusalOf(err: unknown): GateRefusal | null {
     // approved this a moment ago" instead of a generic conflict.
     const decidedByLabel =
       err instanceof ApprovalGateAlreadyDecidedError ? err.decidedByLabel : null;
-    return toGateRefusal(err.tag, { decidedByLabel });
+    // ⚠️ And the SUPERSEDED refusal is the one that can say WHY (MOTIR-5667),
+    // for the same reason: the door read the row under its lock, so the cause is
+    // known here and nowhere the frame could re-derive it.
+    const supersedeCause = err instanceof ApprovalGateSupersededError ? err.supersedeCause : null;
+    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause });
   }
   return null;
 }

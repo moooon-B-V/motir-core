@@ -9,6 +9,8 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
+import { gateSetFor } from '@/lib/services/gateSetFor';
+import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -325,9 +327,11 @@ async function assertSomethingWaits(
  * the same predicate readiness applies to a `blocked_by` edge, never by
  * comparing a key to `'done'`, so a renamed done status is closed too.
  *
- * ⚠️ It reads the CARD's status, never a gate. A design approved through its
- * pull request raises no `design_result` gate (AMENDMENT 4 Q8) and is closed
- * exactly the same.
+ * ⚠️ It reads the CARD's status, never a gate — and that is now a DIVISION OF
+ * LABOUR rather than the whole rule. It used to be the whole rule because a
+ * design card with an open pull request raised no gate to read (AMENDMENT 4 Q8);
+ * such a card raises one again (MOTIR-5662), and the gate-keyed half is
+ * {@link assertDesignSettled}, which runs beside this one.
  *
  * Without a `tx` it tests the status the caller already read — the courtesy
  * pre-check that stops a doomed publish uploading anything. With one it LOCKS
@@ -344,13 +348,18 @@ async function assertCardOpen(
   // it returns no statuses and raises nothing, so every card would read as open
   // and the refusal would never fire (`tests/rls/call-site-guard.test.ts`).
   if (!tx) {
-    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (bound) =>
-      assertStatusOpen(item, ctx, bound),
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (bound) => {
+        await assertStatusOpen(item, ctx, bound);
+        await assertDesignSettled(item, ctx, bound);
+      },
     );
   }
   await workItemRepository.lockById(item.id, tx);
   const current = (await workItemRepository.findById(item.id, tx)) ?? item;
-  return assertStatusOpen(current, ctx, tx);
+  await assertStatusOpen(current, ctx, tx);
+  return assertDesignSettled(current, ctx, tx);
 }
 
 async function assertStatusOpen(
@@ -366,6 +375,81 @@ async function assertStatusOpen(
   if (isTerminalStatus(item, terminalByProject)) {
     throw new DesignCardClosedError(item.identifier, item.status);
   }
+}
+
+/**
+ * Refuse any change to a design the card's reviewer has ALREADY APPROVED, while
+ * the card is still standing on that approval (Story MOTIR-5652 · Subtask
+ * MOTIR-5661; `docs/decisions/design-result.md` AMENDMENT 6 Q3).
+ *
+ * {@link assertStatusOpen} closes a `done` card, and in the two-gate model an
+ * approved design card is NOT yet `done` — the merge writes `done`. AMENDMENT 5
+ * Q2 named the window that leaves, in its own words: *"a card at `approved` with
+ * an open pull request is not yet `done`, so a publish in that window supersedes
+ * the approved version and the merge would leave `done` with a version nobody
+ * approved."* This is the second, earlier condition that closes it. The
+ * status-keyed refusal above is untouched; nothing is removed.
+ *
+ * **Three things decide it, and each one is load-bearing:**
+ *
+ * · **`approved`, NOT merely `decided`.** `changes_requested` is a decision too,
+ *   and it is the one that ASKS FOR A NEW VERSION — refusing a republish on it
+ *   would break the review loop the verb exists for. (AMENDMENT 6 Q3 said
+ *   "decided"; the correction is recorded on that Q.)
+ * · **Over the CARD'S CURRENT RESULT.** An approval of v1 says nothing about a
+ *   card whose current result is already v2, and an AWAITING gate closes nothing
+ *   at all — a question nobody has answered is exactly what a republish is for.
+ * · **WITH AN OPEN DELIVERY.** A merge is what would ship the unapproved version,
+ *   so an open pull request is what makes the window a window. Without one there
+ *   is nothing to ship and the approve → reopen → republish → approve cycle §6d
+ *   blesses is untouched (`tests/approval-gate-decided-read.test.ts` drives it).
+ * · **AT OR ABOVE `implemented`.** This is the door back, and the RUNG is the
+ *   decision. `implemented` is the rung that claims *the branch is pushed and the
+ *   pull request is open* — from there up the card is OFFERING commits, and the
+ *   design that ships with them is settled. Below it the work is being reworked,
+ *   which is exactly when a design may legitimately change. A person pulling the
+ *   card back to `in_progress` is therefore the deliberate re-open AMENDMENT 6 Q3
+ *   asks for, and the SAME move withdraws every awaiting question with the cause
+ *   `pulled_back`, so no merge gate survives it to carry an unapproved design to
+ *   `done`. Nothing mutates the approved gate itself: a decided row is frozen by
+ *   `trg_approval_gate_decided_immutable` (MOTIR-4912), and it is the record of
+ *   what somebody agreed to.
+ *
+ *   ⚠️ **IT WAS `in_review` AND THAT WAS WRONG — corrected by MOTIR-5666, which
+ *   found the falsifier rather than reasoning about it.** A merge-queue ejection
+ *   moves every card it delivers to `implemented` (§4's THIRD AMENDMENT), which
+ *   sat one rung BELOW the old band — so the ordinary shape this refusal was
+ *   written for, *the queue ejects the pull request and an agent comes back and
+ *   re-publishes the asset*, was the one shape it let through.
+ */
+async function assertDesignSettled(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const approved = (
+    await approvalGateRepository.findLatestApprovedByWorkItems([item.id], 'design_result', tx)
+  ).get(item.id);
+  if (!approved) return;
+
+  const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, tx);
+  if (!current || current.id !== approved.subjectId) return;
+
+  if ((await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) === 0) return;
+
+  const statuses = await workflowsService.listStatusesByProject(
+    item.projectId,
+    ctx.workspaceId,
+    tx,
+  );
+  const rank = rankOfStatus(item.status, statuses, {
+    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
+    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
+    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+  });
+  if (rank < RUNG_RANK.implemented) return;
+
+  throw DesignCardClosedError.becauseApproved(item.identifier, item.status);
 }
 
 /**
@@ -500,7 +584,15 @@ async function persistEvidence(
     // Unconditional rather than gated on `prior`: a first publish has no gate to
     // retire, so the predicate matches nothing, and a condition here would have
     // to be derived from the very read this statement must precede.
-    await approvalGateRepository.supersedeAwaitingByWorkItem(args.item.id, 'design_result', tx);
+    await approvalGateRepository.supersedeAwaitingByWorkItem(
+      args.item.id,
+      'design_result',
+      // A NEWER VERSION is the cause here, and it is the one cause the two
+      // surfaces MOTIR-5586 and MOTIR-5651 had to stop asserting because the row
+      // could not tell them apart (AMENDMENT 6 Q5). From this write on they can.
+      'republished',
+      tx,
+    );
 
     // Lock BEFORE reading what to supersede — the decision is read-derived, so
     // an unlocked read lets two publishes both target the same current row.
@@ -639,18 +731,23 @@ async function persistEvidence(
     // This is `routeTo`'s FIRST caller. It had none because its parameter type
     // demanded the gate row, which does not exist at the moment routing must be
     // answered; `GateRoutingArgs` is that knot untied.
-    // ⚠️ NO DESIGN GATE WHILE A PULL REQUEST IS OPEN (MOTIR-5534; AMENDMENT 4 Q8).
-    // A design card that has opened one or more pull requests — in any number of
-    // repositories — is decided by the approve-to-merge gate over its whole
-    // delivery set, and approving that merges them. A `design_result` gate beside
-    // it would ask the same person a second question about the same change, and
-    // answering it would move nothing. The evidence above is still recorded and
-    // the prior version still superseded; only the question is not asked. It is
-    // the same read `designResultHandler.approve` makes, so the two ends of the
-    // rule agree on what "open" means.
-    if ((await workItemDeliveryRepository.countOpenByWorkItem(args.item.id, tx)) > 0) {
-      return (await designEvidenceRepository.findById(evidence.id, tx))!;
-    }
+    // ⚠️ THE Q8 SUPPRESSION IS GONE (Story MOTIR-5652 · Subtask MOTIR-5662;
+    // AMENDMENT 6 Q1 reverses AMENDMENT 4 Q8). This block used to return early
+    // when the card had an open delivering pull request, on the reasoning that
+    // the approve-to-merge gate would carry the design decision. It did not: the
+    // merge gate then refused on the run target, so a design card with a
+    // published result and an open pull request had NO question at all — green
+    // CI, In Review, and nothing to press. Two locally-careful suppressions, and
+    // neither author could see the hole from their own card.
+    //
+    // ⚠️ AND THIS SITE NO LONGER DECIDES. It asks the predicate what the card
+    // should hold and creates the design gate it names — so the card can, and
+    // now does, hold TWO gates of different kinds, with the design one primary.
+    // MOTIR-5603's invariant is about ONE MERGE gate per card and is untouched.
+    const owed = (await gateSetFor(args.item, tx)).awaited.find(
+      (gate) => gate.kind === 'design_result',
+    );
+    if (!owed) return (await designEvidenceRepository.findById(evidence.id, tx))!;
 
     const routedToId = handlerFor('design_result').routeTo({ item: args.item, ctx, tx });
 
@@ -660,7 +757,13 @@ async function persistEvidence(
         projectId: args.item.projectId,
         workItemId: args.item.id,
         kind: 'design_result',
-        subjectId: evidence.id,
+        subjectId: owed.subjectId,
+        // ⚠️ WRITTEN FROM THE PREDICATE, and it used to be left null. A design
+        // gate's subject id already identifies it (an evidence row is
+        // immutable), so nothing READ this — but leaving it null made the row
+        // unable to say which commit the design was drawn at, which is the same
+        // silence MOTIR-5659 removed from a supersede.
+        subjectVersion: owed.subjectVersion,
         routedToId,
       },
       tx,
@@ -978,7 +1081,14 @@ export const designEvidenceService = {
         //
         // If there turns out to be no current result, the refusal below rolls
         // this back with everything else, so a refused withdrawal retires nothing.
-        await approvalGateRepository.supersedeAwaitingByWorkItem(item.id, 'design_result', tx);
+        await approvalGateRepository.supersedeAwaitingByWorkItem(
+          item.id,
+          'design_result',
+          // The result itself is going away — not being replaced. A reviewer asked
+          // about bytes that will not exist when they answer (AMENDMENT 6 Q5).
+          'withdrawn',
+          tx,
+        );
 
         // Lock BEFORE reading which row to withdraw — the decision is
         // read-derived exactly as the supersede's is, so an unlocked read lets a

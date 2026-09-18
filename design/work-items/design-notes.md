@@ -6566,7 +6566,17 @@ amendment adds one CASE to a drawn element; it draws no new element and no new s
 2. **`E` keeps showing the approved version** even after a newer design is published — which is what ADR §6c's pin is FOR. Without the port, `E` is a row of metadata about something nobody can look at any more, and the pin's purpose is invisible. **§6c's pin is keyed on the SUBJECT, not on the gate kind** (re-keyed by MOTIR-4911, because a design with a pull request is approved through `pull_request_approval` and a kind-keyed pin would simply stop firing for it, silently) — so `E` draws the pinned version for BOTH arms of §8.
 3. **`G` (`superseded`) is colourless and verb-less.** Written by the PRODUCT, not a person (ADR §6b); the audit must never read it as a decision somebody made.
 
-   > **⚠️ AMENDED 2026-09-17 (Bug [MOTIR-5586](motir:cmu30qjra00g6hvoiiu6ljuhv)) — `G`'s dead port NAMES NO CAUSE AND POINTS NOWHERE. The mocks quote the superseded wording and are records of their moment; this line is the copy of record.**
+   > **⚠️ AMENDED AGAIN 2026-09-17 (Bug [MOTIR-5652](motir:cmu5dutva002dhwtxwxlbty76) · Subtask MOTIR-5667) — `G`'s dead port NAMES ITS REAL CAUSE, one true sentence per value.**
+   >
+   > ~~_"This question was withdrawn." / "Nobody decided it."_~~ → the sentence for the row's own `superseded_cause` (`approvalGate.withdrawn.cause.*`, `en` + `zh`): _"A newer design was published…"_ · _"The design result was withdrawn…"_ · _"A push moved the commits…"_ · _"A pull request closed…"_ · _"The pull requests changed…"_ · _"The work was pulled back out of review…"_.
+   >
+   > **The amendment below could only make the sentence VAGUER, and said so.** Its reasoning was right about the row, not about the copy: `superseded` recorded `state` and nothing else, so the frame could not tell the writers apart and any named cause was false most of the time. MOTIR-5659 gave the row a CAUSE, from a closed vocabulary with one value per writing path — so the frame can say what happened instead of only that something did.
+   >
+   > **`unknown` says _the reason was not recorded_ and NEVER a real cause.** It is the backfill's value for rows that predate the column, and a null cause reads the same way. Inferring one from a row's shape would manufacture evidence, and this sentence is shown to a person as fact.
+   >
+   > The same sentence is now the `APPROVAL_GATE_SUPERSEDED` refusal's headline, because a reader who presses a withdrawn question and then looks at the frame is being told about ONE event.
+   >
+   > **⚠️ AMENDED 2026-09-17 (Bug [MOTIR-5586](motir:cmu30qjra00g6hvoiiu6ljuhv)) — SUPERSEDED BY THE AMENDMENT ABOVE; kept as the record of why the copy went vague first. `G`'s dead port NAMES NO CAUSE AND POINTS NOWHERE. The mocks quote the superseded wording and are records of their moment; this line is the copy of record.**
    >
    > ~~_"A newer design was published, so this question was withdrawn." / "Nobody decided it. The current version is above."_~~ → **_"This question was withdrawn." / "Nobody decided it."_** (`approvalGate.withdrawn.port` / `.portCite`, `en` + `zh`.)
    >

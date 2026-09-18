@@ -15,6 +15,7 @@ import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubP
 import { collectDeliveries, classifyDeliveries } from './deliveryVerdict';
 import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
@@ -453,11 +454,28 @@ async function settleMergesForCard(
   // The approve-and-merge gate over the same green set, on the same card, in the same
   // transaction and under the same row lock (MOTIR-5482) — `manual` projects only.
   //
-  // ⚠️ WHETHER IT RAISED IS RETURNED, because a gate raised NOW may already have its
-  // answer: reviews are recorded whether or not a gate exists (MOTIR-5597, decision 8),
-  // so an approval given while CI was still running is sitting in the database waiting
-  // for exactly this moment. The caller evaluates it AFTER this transaction commits.
-  const raisedApprovalGate = await raisePullRequestApprovalGate(item, tx);
+  // ⚠️ WHETHER THE CARD NOW HOLDS THE QUESTION IS RETURNED, because a gate that is
+  // awaiting NOW may already have its answer: reviews are recorded whether or not a
+  // gate exists (MOTIR-5597, decision 8), so an approval given while CI was still
+  // running is sitting in the database waiting for exactly this moment. The caller
+  // evaluates it AFTER this transaction commits.
+  //
+  // ⚠️ IT IS READ FROM THE ROWS, NOT FROM WHO CREATED THEM (Bug MOTIR-5652 · found by
+  // CI on MOTIR-5670). This used to be `raisePullRequestApprovalGate`'s own return —
+  // *did I just create it* — which was the same answer while this was the only path
+  // that could. It no longer is: a status transition into the review band reconciles
+  // the card's gates too, so the promotion's own `updateStatus` can raise the gate a
+  // statement before this line runs, leaving `false` here and skipping the post-commit
+  // evaluation entirely. A standing review then sat unapplied on a card whose gate
+  // existed — `githubReviewSyncStoryGate.test.ts` is the test that caught it.
+  //
+  // The question the caller is really asking is *does this card hold an unanswered
+  // merge question now*, and that is a property of the card rather than of this
+  // function's history.
+  await raisePullRequestApprovalGate(item, tx);
+  const raisedApprovalGate = (
+    await approvalGateRepository.findAwaitingByWorkItem(item.id, tx)
+  ).some((gate) => gate.kind === 'pull_request_approval');
   return { autoMerges, raisedApprovalGate };
 }
 

@@ -251,7 +251,15 @@ export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
 export class ApprovalGateSupersededError extends ApprovalGateError {
   readonly tag = 'APPROVAL_GATE_SUPERSEDED' as const;
   readonly code = 'APPROVAL_GATE_SUPERSEDED' as const;
-  constructor(readonly gateId: string) {
+  /**
+   * `supersedeCause` is WHY it was withdrawn, when the raising path read it under its lock
+   * (Story MOTIR-5652 · Subtask MOTIR-5667). Null where the caller had only the
+   * state — the refusal then says a true, vaguer sentence rather than guessing.
+   */
+  constructor(
+    readonly gateId: string,
+    readonly supersedeCause: string | null = null,
+  ) {
     super(
       `Approval gate ${gateId} was superseded — this question has been withdrawn and nobody decided it.`,
     );

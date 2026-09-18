@@ -189,7 +189,12 @@ describe('the frame reads a gate WHATEVER its state', () => {
     // is superseded — see this suite's next test, and the finding in the pull
     // request body.
     await withWorkspaceContext(fx.ctx, (tx) =>
-      approvalGateRepository.supersedeAwaitingByWorkItem(card.id, 'design_result', tx),
+      approvalGateRepository.supersedeAwaitingByWorkItem(
+        card.id,
+        'design_result',
+        'republished',
+        tx,
+      ),
     );
 
     const read = await approvalGatesService.getForWorkItem(
