@@ -674,6 +674,51 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
     expect(writeText).toHaveBeenLastCalledWith(GATEWAY_FETCH);
   });
 
+  it('a STALE Request changes re-reads through the SAME overlay read, and the fresh stamp lands (MOTIR-5235)', async () => {
+    decideApprovalGateAction
+      .mockResolvedValueOnce({
+        ok: false,
+        refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT', moved: ['pull_requests'] },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        gate: { ...PR_GATE, state: 'changes_requested', decidedAt: PR_GATE.updatedAt },
+        filesKept: null,
+      });
+    const dialog = await openPullRequestGate();
+    fetchApprovalGateOverlay.mockResolvedValue({
+      ...pullRequestRead(),
+      stamp: 'v1.the-current-pull-requests',
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: en.approvalGate.verb.requestChanges }),
+      );
+    });
+    const alert = within(dialog).getByRole('alert');
+    expect(within(alert).getByText(en.approvalGate.refusal.stale.pullRequests)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(
+        within(alert).getByRole('button', { name: en.approvalGate.refusal.stale.control }),
+      );
+    });
+    expect(fetchApprovalGateOverlay).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: en.approvalGate.verb.requestChanges,
+        }),
+      );
+    });
+    expect(decideApprovalGateAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({ stamp: 'v1.the-current-pull-requests' }),
+    );
+  });
+
   it('a reader who may SEE but not DECIDE gets the port and no verbs', async () => {
     const dialog = await openPullRequestGate({ canDecide: false });
 
