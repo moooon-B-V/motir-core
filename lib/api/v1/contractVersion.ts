@@ -497,5 +497,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.33.0` at `bbbe8d9b0`, so this claims `1.34.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.35.0` — MOTIR-5720 adds `queueExit` to `WorkItemDetail.deliveries[]`: a
+ *   delivering pull request whose latest merge-queue exit is a failure, not
+ *   re-queued, at its current head carries the exit's reason and failing check.
+ *   The server decides "standing"; `ci` keeps the pull request's own verdict. It
+ *   is what lets `motir fix` see an ejected pull request as red — its own checks
+ *   are green, so the watch loop used to call it green and never run the agent.
+ *
+ *   Additive: one new nullable field on an existing shape (§8's allowed list); no
+ *   declared field changes meaning. Read-only, on the same `project:browse` read.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.35.0` over
+ *   MOTIR-5719's `1.34.0` on the same parent branch. If the numbering has moved,
+ *   RENUMBER both entries.
  */
-export const V1_CONTRACT_VERSION = '1.34.0';
+export const V1_CONTRACT_VERSION = '1.35.0';

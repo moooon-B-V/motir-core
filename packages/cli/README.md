@@ -251,10 +251,20 @@ it out. The item page's Development block offers this command, ready to copy.
 3. **Runs the same fix loop `motir run` ends with**, using the same prompt and
    the same limit of five attempts. When the failing set spans several
    repositories, the prompt lists every checkout.
+
+   **A pull request the merge queue ejected counts as failing**, even when its
+   own checks are green (the queue failed on its merge commit, not on the branch
+   alone). The prompt says why it left the queue and names the queue's failing
+   check. A conflict is told to merge the base and resolve it. If the agent
+   pushes nothing, because there was nothing to change, the repair stops after
+   that ONE attempt and tells you to press **Queue again** on the card.
+
 4. **Closes the run** on every exit path:
    - green → completed, exit 0;
    - the sixth red → halted, exit 1, naming each failing check, its repository
-     and the attempt count;
+     and the attempt count (the queue's check, for an ejected pull request);
+   - an ejected pull request the agent pushed nothing to → failed, exit 1,
+     pointing at _Queue again_;
    - Ctrl-C → interrupted, exit 130.
 
    The page shows a repair as in progress for as long as its run is open.

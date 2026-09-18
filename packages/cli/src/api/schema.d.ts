@@ -1375,6 +1375,12 @@ export interface components {
                 ci: ("passing" | "failing" | "running") | null;
                 baseRef: string | null;
                 defaultBranch: string;
+                queueExit: {
+                    rawReason: string;
+                    headSha: string;
+                    failingCheckName: string | null;
+                    failingCheckUrl: string | null;
+                } | null;
             }[];
         };
         WorkItemLinkGroups: {

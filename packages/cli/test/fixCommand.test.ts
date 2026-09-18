@@ -643,4 +643,41 @@ describe('the pure renderers', () => {
       }),
     ).toContain('failing: unknown checks');
   });
+
+  it('a queue-failing pull request names the QUEUE’s check, or its reason in words (MOTIR-5720)', () => {
+    const exit = {
+      rawReason: 'CI_FAILURE',
+      exitedAt: '2026-09-18T10:00:00.000Z',
+      headSha: 'sha-a',
+      failingCheckName: 'Merge queue / e2e',
+      failingCheckUrl: 'https://github.com/acme/motir-core/runs/77',
+    };
+    const out = renderRepairGaveUp({
+      key: 'PROD-7',
+      watch: {
+        kind: 'fix_failed',
+        attempts: 1,
+        detail: 'nothing to change — use Queue again on the card',
+      },
+      pullRequests: [
+        pr({ ci: 'passing', failingChecks: [], queueExit: exit }),
+        pr({
+          number: 132,
+          ci: 'passing',
+          failingChecks: [],
+          queueExit: {
+            ...exit,
+            rawReason: 'MERGE_CONFLICT',
+            failingCheckName: null,
+            failingCheckUrl: null,
+          },
+        }),
+      ],
+    });
+    expect(out).toContain('failing: in the merge queue — Merge queue / e2e');
+    expect(out).toContain(
+      'failing: in the merge queue — it conflicts with work queued ahead of it',
+    );
+    expect(out).toContain('use Queue again on the card');
+  });
 });

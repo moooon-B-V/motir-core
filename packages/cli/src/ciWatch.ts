@@ -9,7 +9,14 @@ import type { MotirClient, WorkItemDelivery } from './client.js';
 //
 //   green   (every delivery `passing`)   → done
 //   pending (any `running` / unrecorded) → keep waiting; DOES NOT COUNT
-//   red     (any `failing`)              → count it, dispatch a fixing iteration
+//   red     (any `failing`, or any
+//            standing `queueExit`)       → count it, dispatch a fixing iteration
+//
+// ⚠️ A STANDING MERGE-QUEUE FAILURE IS RED (MOTIR-5720). The queue failed on the
+// pull request's MERGE GROUP, so its own `ci` is usually `passing` — and this
+// loop used to call an ejected pull request green on the first poll and never run
+// the agent. The server publishes the standing exit on the delivery; the loop
+// only has to read it.
 //
 // A red check does NOT change a card's status. `implemented` is exactly right
 // for code that is committed and whose build has not spoken; moving it back
@@ -83,18 +90,61 @@ export type CiVerdict =
  */
 export function ciVerdict(deliveries: readonly WorkItemDelivery[] | undefined): CiVerdict {
   if (deliveries === undefined || deliveries.length === 0) return 'nothing';
-  if (deliveries.some((d) => d.ci === 'failing')) return 'red';
-  if (deliveries.every((d) => d.ci === 'passing')) return 'green';
+  if (deliveries.some(isRed)) return 'red';
+  if (deliveries.every((d) => d.ci === 'passing' && !hasQueueExit(d))) return 'green';
   return 'pending';
 }
 
+/** A delivery the merge queue threw out, whose failure still stands at its head. */
+function hasQueueExit(d: WorkItemDelivery): boolean {
+  return d.queueExit !== undefined && d.queueExit !== null;
+}
+
+/** Red on its own checks, or red in the queue (MOTIR-5720). */
+function isRed(d: WorkItemDelivery): boolean {
+  return d.ci === 'failing' || hasQueueExit(d);
+}
+
 /** The deliveries a red verdict is about — what the fixing iteration is pointed
- *  at and what a give-up names. */
+ *  at and what a give-up names. A queue-failing one is among them. */
 export function failingDeliveries(
   deliveries: readonly WorkItemDelivery[] | undefined,
 ): WorkItemDelivery[] {
-  return (deliveries ?? []).filter((d) => d.ci === 'failing');
+  return (deliveries ?? []).filter(isRed);
 }
+
+/** What an ended-early repair tells the person: the fixing attempt pushed
+ *  nothing, so only a retry of the same commits is left (MOTIR-5720). */
+export const NOTHING_TO_CHANGE_DETAIL = 'nothing to change — use Queue again on the card';
+
+const deliveryId = (d: WorkItemDelivery) => `${d.repo}#${d.number}`;
+
+/**
+ * Is this red ONLY the queue's, at the SAME heads the last fixing attempt saw?
+ * Then the attempt pushed nothing: every failing delivery is red because of a
+ * standing `queueExit` alone (its own checks are not failing), and each exit
+ * still names the head it named before the attempt.
+ */
+function queueRedUnchanged(
+  failing: readonly WorkItemDelivery[],
+  headsAtAttempt: ReadonlyMap<string, string> | null,
+): boolean {
+  if (headsAtAttempt === null || failing.length === 0) return false;
+  return failing.every(
+    (d) =>
+      d.ci !== 'failing' &&
+      d.queueExit != null &&
+      headsAtAttempt.get(deliveryId(d)) === d.queueExit.headSha,
+  );
+}
+
+/**
+ * How many consecutive polls must show {@link queueRedUnchanged} before the watch
+ * ends. Two, not one: the server reads a pull request's head from its latest
+ * check rows, so for the few seconds between a push and its first pending check
+ * the exit still names the old head. One extra poll lets that check land.
+ */
+const UNCHANGED_POLLS_TO_STOP = 2;
 
 export type CiWatchOutcome =
   /** Every delivery went green — with or without fixes along the way. */
@@ -156,6 +206,10 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
   let reds = 0;
   let polls = 0;
   let lastReadError: string | null = null;
+  // The queue heads the LAST fixing attempt was handed (MOTIR-5720), and how many
+  // polls in a row since have shown them unchanged.
+  let headsAtAttempt: Map<string, string> | null = null;
+  let unchangedPolls = 0;
 
   for (;;) {
     if (polls >= maxPolls) {
@@ -201,6 +255,23 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
 
     // RED.
     const failing = failingDeliveries(deliveries);
+
+    // ⚠️ DO NOT BURN FIVE ATTEMPTS ON NOTHING (MOTIR-5720). A queue failure whose
+    // exit still names the head the last attempt saw means the agent pushed
+    // nothing — there was nothing to change, which is the flaky-queue case. Four
+    // more identical attempts would spend time and credits to learn the same
+    // thing; the person's move is *Queue again*, and the watch says so.
+    if (queueRedUnchanged(failing, headsAtAttempt)) {
+      unchangedPolls += 1;
+      if (unchangedPolls >= UNCHANGED_POLLS_TO_STOP) {
+        input.report(`${input.key}: ${NOTHING_TO_CHANGE_DETAIL}.`);
+        return { kind: 'fix_failed', attempts: reds, detail: NOTHING_TO_CHANGE_DETAIL };
+      }
+      await input.wait();
+      continue;
+    }
+    unchangedPolls = 0;
+
     if (reds >= CI_FIX_ATTEMPTS) {
       // THE SIXTH RED. The budget was spent on the five before it.
       input.report(
@@ -214,6 +285,9 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
     input.report(
       `${input.key}: CI is red in ${failing.map((d) => `${d.repo}#${d.number}`).join(', ')} — ` +
         `fixing attempt ${reds} of ${CI_FIX_ATTEMPTS}.`,
+    );
+    headsAtAttempt = new Map(
+      failing.flatMap((d) => (d.queueExit ? [[deliveryId(d), d.queueExit.headSha] as const] : [])),
     );
     const result = await input.fix(failing, reds);
     if (!result.ok) {
@@ -320,6 +394,38 @@ export function renderFixPrompt(input: {
     lines.push('');
     lines.push('Work in those checkouts, on those branches. Each push updates its');
     lines.push('existing pull request.');
+    lines.push('');
+  }
+  const ejected = input.failing.filter((d) => d.queueExit);
+  if (ejected.length > 0) {
+    lines.push('## Why it left the merge queue');
+    lines.push('');
+    lines.push('The merge queue tested these pull requests together with the work queued');
+    lines.push('ahead of them and threw them out. Their OWN checks may well be green — the');
+    lines.push('failure happened in the queue\u2019s merge commit, not on this branch alone.');
+    lines.push('');
+    for (const d of ejected) {
+      const exit = d.queueExit!;
+      const base = `origin/${d.baseRef ?? d.defaultBranch}`;
+      lines.push(`- **${d.repo}#${d.number}** — ${queueReasonInWords(exit.rawReason)}`);
+      if (exit.failingCheckName) {
+        lines.push(
+          `  - The queue\u2019s failing check: **${exit.failingCheckName}**` +
+            (exit.failingCheckUrl ? ` — ${exit.failingCheckUrl}` : ''),
+        );
+      }
+      if (exit.rawReason === 'MERGE_CONFLICT') {
+        lines.push(`  - **Merge \`${base}\` into the branch, resolve the conflicts, run the`);
+        lines.push('    checks the conflict touched, and push.** Only new commits clear a');
+        lines.push('    conflict; *Queue again* will fail the same way until it is resolved.');
+      } else if (exit.rawReason === 'CI_FAILURE' || exit.rawReason === 'CI_TIMEOUT') {
+        lines.push(`  - **Reproduce the named check against the branch merged with \`${base}\`,**`);
+        lines.push('    fix what it shows, and push.');
+      }
+      lines.push('  - **If nothing needs changing** (the queue\u2019s failure was flaky, or is');
+      lines.push('    already fixed on the base), make NO commit and say so. The person\u2019s');
+      lines.push('    move is then *Queue again* on the card, which retries the same commits.');
+    }
     lines.push('');
   }
   lines.push('## What to do');
@@ -444,4 +550,24 @@ export async function runCiWatchPhase(input: CiWatchPhaseInput): Promise<CiWatch
           };
     },
   });
+}
+
+/**
+ * A merge-queue reason in words (MOTIR-5720) — the spellings
+ * `lib/mergeQueue/queueExit.ts` recognises as failures, with the raw string as
+ * the fallback. A small map HERE rather than an import: the CLI ships on its own
+ * release train and cannot reach into the app's `lib/`, and a reason this build
+ * has never heard of must still read as something.
+ */
+const QUEUE_REASON_WORDS: Readonly<Record<string, string>> = {
+  CI_FAILURE: 'the queue\u2019s checks failed on the merge commit',
+  CI_TIMEOUT: 'the queue\u2019s checks did not finish in time',
+  MERGE_CONFLICT: 'it conflicts with work queued ahead of it',
+  INVALID_MERGE_COMMIT: 'the queue could not build a merge commit for it',
+  GIT_TREE_INVALID: 'the queue could not build a tree for it',
+  BRANCH_PROTECTIONS: 'a branch protection rule the queue could not satisfy',
+};
+
+export function queueReasonInWords(rawReason: string): string {
+  return QUEUE_REASON_WORDS[rawReason] ?? `the queue removed it (${rawReason})`;
 }

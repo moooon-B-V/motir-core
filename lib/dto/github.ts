@@ -178,6 +178,23 @@ export interface WorkItemDeliveryDto {
    *  the trunk cannot be told, and the remedy is an operator backfill rather
    *  than a merge. */
   baseRef: string | null;
+  /** The STANDING merge-queue failure on this pull request — its latest exit is a
+   *  failure, not re-queued, at its current head (`queueExitHoldsAtHead`) — or null
+   *  (Story MOTIR-5628 · MOTIR-5720). The SERVER decides "standing", so a reader
+   *  holds no head logic: `ci` stays the pull request's own checks, and a member
+   *  with `ci: 'passing'` and a set `queueExit` is failing in the queue. */
+  queueExit: DeliveryQueueExitDto | null;
+}
+
+/** Why the merge queue threw a delivering pull request out. */
+export interface DeliveryQueueExitDto {
+  /** GitHub's own reason — `CI_FAILURE`, `MERGE_CONFLICT`, … */
+  rawReason: string;
+  /** The head the queue tested, which is still the pull request's head. */
+  headSha: string;
+  /** The queue's failing check; both null when none is known (a conflict). */
+  failingCheckName: string | null;
+  failingCheckUrl: string | null;
 }
 
 /**

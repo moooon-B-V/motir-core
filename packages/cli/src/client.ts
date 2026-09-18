@@ -1157,6 +1157,25 @@ export interface WorkItemDelivery {
   ci: string | null;
   baseRef: string | null;
   defaultBranch: string;
+  /**
+   * The STANDING merge-queue failure on this pull request, or null (MOTIR-5720).
+   * The server decides "standing" — a failure, not re-queued, at the current head
+   * — so this build holds no head logic. `ci` stays the pull request's OWN checks:
+   * a delivery reading `ci: 'passing'` with a set `queueExit` is RED in the queue.
+   * Optional because an older Motir does not send it; absent reads as none.
+   */
+  queueExit?: DeliveryQueueExit | null;
+}
+
+/** Why the merge queue threw a delivering pull request out. */
+export interface DeliveryQueueExit {
+  /** GitHub's own reason — `CI_FAILURE`, `MERGE_CONFLICT`, … — open-typed. */
+  rawReason: string;
+  /** The head the queue tested. Unchanged after a fixing attempt ⇒ nothing was
+   *  pushed. */
+  headSha: string;
+  failingCheckName: string | null;
+  failingCheckUrl: string | null;
 }
 
 // ── the ACTIVITY stream (MOTIR-1999's tool · MOTIR-2000's consumer) ──────────

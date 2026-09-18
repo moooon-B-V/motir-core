@@ -369,6 +369,7 @@ function ciDelivery(ci: string, number = 1): Record<string, unknown> {
     ci,
     baseRef: 'main',
     defaultBranch: 'main',
+    queueExit: null,
   };
 }
 

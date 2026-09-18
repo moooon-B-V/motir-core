@@ -2,7 +2,13 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import type { AgentRunResult } from '../agentRun.js';
 import type { ParsedAgentCommand } from '../agentProfiles.js';
-import { pluralize, runCiWatchPhase, type CiWatchOutcome, type FixCheckout } from '../ciWatch.js';
+import {
+  pluralize,
+  queueReasonInWords,
+  runCiWatchPhase,
+  type CiWatchOutcome,
+  type FixCheckout,
+} from '../ciWatch.js';
 import type {
   DispatchStopReason,
   MotirClient,
@@ -214,7 +220,13 @@ export function renderRepairGaveUp(input: {
       : `${key}: the repair stopped after ${pluralize(watch.attempts, 'attempt')} — ${watch.detail}.`;
   const lines = [head];
   for (const pr of input.pullRequests) {
-    const checks = pr.failingChecks.length > 0 ? pr.failingChecks.join(', ') : 'unknown checks';
+    // A queue-failing pull request names the QUEUE's check (MOTIR-5720) — its own
+    // `failingChecks` are usually empty, because its own checks are green.
+    const checks = pr.queueExit
+      ? `in the merge queue — ${pr.queueExit.failingCheckName ?? queueReasonInWords(pr.queueExit.rawReason)}`
+      : pr.failingChecks.length > 0
+        ? pr.failingChecks.join(', ')
+        : 'unknown checks';
     lines.push(`  ${pr.repo}#${pr.number} — failing: ${checks} (${pr.url})`);
   }
   lines.push(
