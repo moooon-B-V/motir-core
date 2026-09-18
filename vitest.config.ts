@@ -2174,6 +2174,11 @@ export default defineConfig({
         // under it is the honest reading of that measurement.
         'lib/approvalGates/gateSet.ts',
         'lib/services/gateSetFor.ts',
+        // ── Story MOTIR-5232 · MOTIR-5234 / MOTIR-5236 — THE STAMP, the one definition of
+        // what a decision is about. Pure; covered by `tests/approvalGates/stamp.test.ts`,
+        // `tests/approval-gate-stale-subject.test.ts` and
+        // `tests/integration/approvals/stale-stamp-seam.test.ts`. Pinned below at the floor.
+        'lib/approvalGates/stamp.ts',
         'components/github/DevelopmentGateFrame.tsx',
         'components/github/MergeOutcomeSlot.tsx',
         // ── Story MOTIR-5460 · HAND A RED PULL REQUEST TO AN AGENT ────────────
@@ -2420,6 +2425,13 @@ export default defineConfig({
           statements: 90,
         },
         'lib/approvalGates/memberVersion.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-5236: measured 100 / 100 / 100 / 100, pinned at the repo floor, not the number.
+        'lib/approvalGates/stamp.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
