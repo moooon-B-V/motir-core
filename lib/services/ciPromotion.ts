@@ -4,15 +4,14 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
-import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { derivePrCiState } from '@/lib/github/prCiState';
 import {
   claimedCompleteSha,
   readReportedCheckSet,
   reconcileRecordedCheckSet,
 } from './checkSetReconcile';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
-import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
-import { collectDeliveries, classifyDeliveries } from './deliveryVerdict';
+import { collectDeliveries, classifyDeliveries, queueFailureMemberIds } from './deliveryVerdict';
 import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -192,16 +191,9 @@ async function heldByQueueFailure(
   byId: Map<string, { checkRuns: GithubCheckRun[] }>,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
-    [...byId.keys()],
-    tx,
-  );
-  for (const [pullRequestId, exit] of exits) {
-    if (exit.disposition !== 'failure' || exit.requeuedAt !== null) continue;
-    const head = liveRowsAtLatestSha(byId.get(pullRequestId)!.checkRuns)[0]?.commitSha;
-    if (head === exit.headSha) return true;
-  }
-  return false;
+  // The rule is `queueExitHoldsAtHead` (MOTIR-5717), shared with the card's own
+  // `ciState` fold — so the badge reads *failing* exactly while this hold refuses.
+  return (await queueFailureMemberIds(byId, tx)).size > 0;
 }
 
 /**

@@ -590,3 +590,64 @@ describe('auto mode — a person’s Queue again', () => {
     ).rejects.toBeInstanceOf(QueueAgainRefusedError);
   });
 });
+
+// ── QUEUE AGAIN CLEARS THE CARD'S RED (Story MOTIR-5628 · MOTIR-5717) ────────────
+//
+// The stamp lifts the queue failure, so every card the pull request delivers is
+// recomputed in the stamp's own transaction; a host that refuses releases the stamp,
+// and the release recomputes the red back.
+
+describe('the card’s ciState follows Queue again (MOTIR-5717)', () => {
+  const ciStateOf = async (id: string) =>
+    (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).ciState;
+
+  it('manual: an ejected card reads failing, and a successful press clears it', async () => {
+    const { s, item, approved, prId } = await ejectedManual('ci-manual-ok@example.com');
+    expect(await ciStateOf(item.id)).toBe('failing');
+    // The stamp commits BEFORE the host is asked, and the badge has already cleared.
+    let atHostCall: string | null | undefined;
+    stubHost({ outcome: 'enqueued', entryId: 'MQE_CI' }, async () => {
+      atHostCall = await ciStateOf(item.id);
+    });
+
+    await press(s, approved.id, prId);
+
+    expect(atHostCall).toBe('passing');
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('manual: a refused re-enqueue releases the stamp, and the card reads failing again', async () => {
+    const { s, item, approved, prId } = await ejectedManual('ci-manual-refused@example.com');
+    let atHostCall: string | null | undefined;
+    stubHost({ outcome: 'refused', refusal: { code: 'conflict' } }, async () => {
+      atHostCall = await ciStateOf(item.id);
+    });
+
+    const outcome = await press(s, approved.id, prId);
+
+    expect(outcome).toMatchObject({ outcome: 'refused' });
+    expect(atHostCall).toBe('passing');
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('manual: a conflict ejection reads failing too', async () => {
+    const { item } = await ejectedManual('ci-manual-conflict@example.com', 'MERGE_CONFLICT');
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('auto: a person’s Queue again clears the card’s red', async () => {
+    const s = await makeScenario('ci-auto@example.com', 'auto');
+    const item = await card(s, [21]);
+    await ci(21, 'sha-auto');
+    await markQueued(21, 'auto_mode');
+    await eject(21, 'sha-auto');
+    expect(await ciStateOf(item.id)).toBe('failing');
+
+    await pullRequestMergeService.requeueAutoMember(
+      { workItemId: item.id, pullRequestId: (await pr(21)).id },
+      s.ctx,
+    );
+
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+});

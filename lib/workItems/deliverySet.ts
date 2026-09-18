@@ -400,7 +400,19 @@ export function deliveryStateForPromotion(
  * That equivalence is asserted rather than assumed, because it is what lets the
  * badge promise *green CI has already moved this card to In Review*.
  */
-export function deliveryStateForCard(state: string | null, cannotReportChecks: boolean): PrCiState {
+export function deliveryStateForCard(
+  state: string | null,
+  cannotReportChecks: boolean,
+  queueFailure: boolean,
+): PrCiState {
+  // ⚠️ A STANDING MERGE-QUEUE FAILURE WINS OVER THE MEMBER'S OWN CHECKS (MOTIR-5717).
+  // The queue ejected this pull request on its MERGE GROUP's checks, so its own
+  // checks at the head are usually still green — and a card reading `passing` while
+  // the promotion refuses it is exactly the disagreement this fold exists to
+  // prevent. `derivePrCiState` is NOT amended (`approval-gates.md` §4 THIRD
+  // AMENDMENT, guard (a)): the pill and the promotion's green test keep reading the
+  // pull request's own checks; only the CARD's verdict counts the exit.
+  if (queueFailure) return 'failing';
   if (state !== null) return state as PrCiState;
   return cannotReportChecks ? 'passing' : 'running';
 }
@@ -436,4 +448,43 @@ export function foldCardCiState(states: readonly PrCiState[]): PrCiState {
   if (states.some((s) => s === 'running')) return 'running';
   if (states.some((s) => s === 'passing')) return 'passing';
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A MERGE-QUEUE FAILURE THAT STILL HOLDS (Story MOTIR-5628 · MOTIR-5717)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The fields of a pull request's LATEST queue exit this rule reads. */
+export interface QueueExitFacts {
+  disposition: string;
+  requeuedAt: Date | null;
+  headSha: string;
+}
+
+/**
+ * Does this pull request's latest merge-queue exit still HOLD it — a `failure`,
+ * not re-queued, recorded at the pull request's CURRENT head?
+ *
+ * ── ONE RULE, THREE READERS ───────────────────────────────────────────────
+ * The promotion hold (`ciPromotion.heldByQueueFailure`, MOTIR-5632), the card's
+ * `ciState` fold ({@link deliveryStateForCard}) and the repair claim all ask this
+ * question of the same member, and they must get the same answer: a card whose
+ * badge says *passing* while the promotion refuses it, or *failing* while it
+ * would promote, is a badge nobody can trust. So the rule is stated HERE, once,
+ * and every reader calls it.
+ *
+ * It lifts in exactly two ways: *Queue again* stamps `requeuedAt`, or a PUSH moves
+ * the head so the exit no longer names it. A `neutral` exit (a manual removal, a
+ * cleared queue) says nothing about the work and never holds.
+ *
+ * `headSha` is the member's current head — the first live check row's commit
+ * (`liveRowsAtLatestSha`), the rule the approval gate's `subjectVersion` is
+ * written with. A member with no check rows has no head, and holds nothing.
+ */
+export function queueExitHoldsAtHead(
+  exit: QueueExitFacts | null | undefined,
+  headSha: string | null | undefined,
+): boolean {
+  if (!exit || !headSha) return false;
+  return exit.disposition === 'failure' && exit.requeuedAt === null && exit.headSha === headSha;
 }
