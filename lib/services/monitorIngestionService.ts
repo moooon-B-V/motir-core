@@ -198,6 +198,8 @@ export const monitorIngestionService = {
    * |-------------------------------------------------|--------------------------------|
    * | no bug ever filed                               | `filed`                        |
    * | bug live (not done-category; ARCHIVED counts)   | `updated` — facts only         |
+   * | bug done, and MOTIR resolved the issue with no   | `updated` — facts only (the     |
+   * |   sighting since (MOTIR-5704's loop guard)       |   loop guard)                   |
    * | bug in a done-category status                   | `refiled`, `relates_to` the old |
    * | bug deleted (null pointer, key remembered)      | `refiled`, body names the key  |
    *
@@ -294,6 +296,42 @@ export const monitorIngestionService = {
           relatesTo: null,
         };
       }
+      // ── THE LOOP GUARD (Story MOTIR-4931 · Subtask MOTIR-5704) ──────────────
+      // A done bug whose issue MOTIR ITSELF resolved, and which nobody has seen
+      // since, is already reconciled — not a recurrence. Two orderings reach
+      // this branch with no recurrence at all: a STALE PAGE (fetched while the
+      // issue was unresolved, reconciled after the bug completed and the resolve
+      // landed) and an IN-FLIGHT resolve (claimed `pending`, provider call not
+      // yet returned). Both carry a resolve attempt and a `lastSeenAt` at or
+      // before Motir's write, so both take `updated` — facts only, no work item
+      // written. The guard reads MOTIR-side state only: on a shared credential
+      // "we resolved it" and "they resolved it" are one identity to the
+      // provider, so the provider's actor cannot tell them apart.
+      //
+      // ⚠️ THE ONE WINDOW IT ACCEPTS: the provider's `lastSeen` and Motir's clock
+      // are different clocks. A regression whose ONLY event lands within the
+      // clock skew of Motir's resolve reads as settled until its next event, and
+      // that event then re-files normally.
+      //
+      // `updated` rather than a new outcome member, deliberately: it already
+      // means "facts only, no card", and a new member would thread through the
+      // poll summary and the room's poll line for no difference a person sees.
+      if (bug && row.resolveAttemptedAt !== null) {
+        const motirWrite = Math.max(
+          row.resolveAttemptedAt.getTime(),
+          row.resolvedByMotirAt?.getTime() ?? 0,
+        );
+        if (issue.lastSeenAt.getTime() <= motirWrite) {
+          await monitorIssueRepository.updateFacts(row.id, facts, tx);
+          return {
+            outcome: 'updated' as const,
+            workItemId: bug.id,
+            identifier: bug.identifier,
+            relatesTo: null,
+          };
+        }
+      }
+
       const previous: PreviousBug | null = bug
         ? { identifier: bug.identifier, workItemId: bug.id, reason: 'completed' }
         : row.filedWorkItemIdentifier

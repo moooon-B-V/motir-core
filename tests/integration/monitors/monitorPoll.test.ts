@@ -333,3 +333,44 @@ describe('the poll never PROBES', () => {
     expect(summary).toMatchObject({ status: 'ok', pages: 0 });
   });
 });
+
+describe('the loop guard, through a REAL second poll (Story MOTIR-4931 · MOTIR-5704)', () => {
+  it('a done bug Motir resolved is not re-filed by a poll still serving the pre-resolve page', async () => {
+    const { fx, connectionId } = await seed();
+    const served = issue('loop', 5);
+    fakeMonitorState().issues = [served];
+    await monitorIngestionService.pollConnection(connectionId);
+    const bug = await adminDb.workItem.findFirstOrThrow({ where: { projectId: fx.projectId } });
+
+    // The bug completes and Motir resolves the issue — recorded Motir-side, AFTER
+    // the issue was last seen.
+    await adminDb.workItem.update({ where: { id: bug.id }, data: { status: 'done' } });
+    const resolvedAt = new Date(served.lastSeenAt.getTime() + 60_000);
+    await adminDb.monitorIssue.updateMany({
+      data: {
+        resolveState: 'resolved',
+        resolveAttemptedAt: resolvedAt,
+        resolvedByMotirAt: resolvedAt,
+      },
+    });
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: bug.id } });
+    const revisionsBefore = await adminDb.workItemRevision.count({ where: { workItemId: bug.id } });
+
+    // The STALE PAGE: the fake still serves the issue as it was before the
+    // resolve, and the watermark is rewound so the poll reads it again.
+    await adminDb.monitorConnection.update({
+      where: { id: connectionId },
+      data: { lastSeenWatermark: null },
+    });
+    const second = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(second).toMatchObject({ status: 'ok', filed: 0, refiled: 0, updated: 1 });
+    expect(await bugCount(fx.projectId)).toBe(1);
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: bug.id } });
+    expect(after.status).toBe('done');
+    expect(after.updatedAt.toISOString()).toBe(before.updatedAt.toISOString());
+    expect(await adminDb.workItemRevision.count({ where: { workItemId: bug.id } })).toBe(
+      revisionsBefore,
+    );
+  });
+});
