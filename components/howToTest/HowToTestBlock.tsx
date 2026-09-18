@@ -28,12 +28,19 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { repoNameKey } from '@/lib/workItems/repoName';
+import {
+  AddHowToTestDoor,
+  EditHowToTestDoor,
+  HowToTestForm,
+  useHowToTestWrite,
+} from './HowToTestWrite';
 import type {
   HowToTestCheckDto,
   HowToTestCiDto,
   HowToTestDeploymentState,
   HowToTestDto,
   HowToTestPreviewDto,
+  HowToTestAuthorDto,
   HowToTestRepoDto,
   HowToTestRunDto,
 } from '@/lib/dto/howToTest';
@@ -149,7 +156,14 @@ export function HowToTestBlock({ howToTest, pullRequestRows }: HowToTestBlockPro
   }
 }
 
-/** Panel 12i — no run has written one: a lavender callout at the head of the part. */
+/**
+ * Panel 12i — no run has written one: a lavender callout at the head of the
+ * part, and (13a) the **Add how to test** door under it.
+ *
+ * ⚠️ THE CALLOUT STAYS when the door is shown (§24, decision 2). A person
+ * writing one by hand does not make the run's omission untrue, and the *owed by*
+ * line is the only record of which run skipped it.
+ */
 function MissingPart({ owedBy }: { owedBy: HowToTestRunDto | null }) {
   const t = useTranslations('github.development.howToTest');
   return (
@@ -165,6 +179,8 @@ function MissingPart({ owedBy }: { owedBy: HowToTestRunDto | null }) {
           {owedBy ? t('missing.owedByRun', { run: owedBy.label }) : t('missing.noRun')}
         </span>
       </div>
+      <AddHowToTestDoor />
+      <HowToTestForm />
     </Part>
   );
 }
@@ -240,23 +256,32 @@ export function deriveSubBlocks(
 function RecordPart({ howToTest, pullRequestRows }: HowToTestBlockProps) {
   const t = useTranslations('github.development.howToTest');
   const record = howToTest.record!;
-  const runLabel = record.run?.label ?? '';
+  const write = useHowToTestWrite();
+  // A record written by a RUN names the run in the `no section` sub-block's
+  // sentence; a person's record has no run to name, and since MOTIR-5689 it has
+  // no sections either, so the sub-block cannot be reached from one.
+  const runLabel = record.author.kind === 'run' ? record.author.label : '';
   const blocks = deriveSubBlocks(howToTest.repos, pullRequestRows);
   const headed = blocks.length > 1;
   const stale = howToTest.repos.filter((r) => r.stale);
 
+  // Panel 13b: the form takes the part's body. The head stays — it is the part's
+  // name, not the record's — and the author line and Edit go with the record
+  // they describe.
+  if (write?.open) {
+    return (
+      <Part>
+        <PartHead />
+        <HowToTestForm />
+      </Part>
+    );
+  }
+
   return (
     <Part>
       <PartHead>
-        {record.run ? (
-          <span className="text-xs text-(--el-text-secondary)">
-            {t.rich('writtenBy', {
-              run: record.run.label,
-              time: formatRunInstant(record.createdAt),
-              b: bold,
-            })}
-          </span>
-        ) : null}
+        <AuthorLine author={record.author} createdAt={record.createdAt} />
+        <EditHowToTestDoor />
       </PartHead>
 
       {stale.map((repo) => (
@@ -313,8 +338,32 @@ function RecordPart({ howToTest, pullRequestRows }: HowToTestBlockProps) {
         </div>
       ) : null}
 
-      <EarlierRuns history={howToTest.history} />
+      <EarlierVersions history={howToTest.history} />
     </Part>
+  );
+}
+
+/**
+ * *Written by …* — the ONE line that differs between the two author kinds
+ * (§24's Fields-read table; MOTIR-5454 put `author` on the read for this).
+ *
+ * `run` renders the run's label exactly as §20 drew it; `person` renders the
+ * display name. A deleted publisher's label is the product's standing string for
+ * an attribution whose referent is gone — never blank, which is why this can be
+ * drawn with no empty-author state.
+ */
+function AuthorLine({ author, createdAt }: { author: HowToTestAuthorDto; createdAt: string }) {
+  const t = useTranslations('github.development.howToTest');
+  return (
+    <span className="text-xs text-(--el-text-secondary)">
+      {author.kind === 'run'
+        ? t.rich('writtenBy', { run: author.label, time: formatRunInstant(createdAt), b: bold })
+        : t.rich('writtenByPerson', {
+            name: author.label,
+            time: formatRunInstant(createdAt),
+            b: bold,
+          })}
+    </span>
   );
 }
 
@@ -669,7 +718,13 @@ function CiFact({ ci }: { ci: HowToTestCiDto }) {
 }
 
 /** Panel 12j — a collapsed disclosure at the foot of the part. */
-function EarlierRuns({ history }: { history: HowToTestDto['history'] }) {
+/**
+ * Panel 13f — *Earlier versions (n)*. The string REPLACES the shipped
+ * *Earlier runs (n)* rather than paralleling it (§24, decision 9): once a person
+ * can write one, *runs* is the wrong noun for the list, and two strings for one
+ * disclosure is how two author kinds start to look like two features.
+ */
+function EarlierVersions({ history }: { history: HowToTestDto['history'] }) {
   const t = useTranslations('github.development.howToTest');
   const [open, setOpen] = useState(false);
   if (history.length === 0) return null;
@@ -683,21 +738,15 @@ function EarlierRuns({ history }: { history: HowToTestDto['history'] }) {
         className="flex w-full items-center gap-1.5 rounded-(--radius-control) p-1 text-left text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <Chevron className="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" aria-hidden />
-        {t('earlier.toggle', { count: history.length })}
+        {t('earlier.versions', { count: history.length })}
       </button>
       {open ? (
         <ul className="mt-1 flex list-none flex-col gap-1 pl-6">
           {history.map((entry) => (
             <li key={entry.recordId} className="text-xs text-(--el-text-secondary)">
-              {entry.run ? (
-                t.rich('writtenBy', {
-                  run: entry.run.label,
-                  time: formatRunInstant(entry.createdAt),
-                  b: bold,
-                })
-              ) : (
-                <span>{formatRunInstant(entry.createdAt)}</span>
-              )}
+              {/* Both author kinds, in one list, drawn the same way — the record
+                  is one thing with two authors, not two things (13f). */}
+              <AuthorLine author={entry.author} createdAt={entry.createdAt} />
             </li>
           ))}
         </ul>

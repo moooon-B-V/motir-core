@@ -327,20 +327,22 @@ describe('record missing (Panel 12i)', () => {
   });
 });
 
-describe('earlier runs (Panel 12j)', () => {
-  it('is a collapsed disclosure that opens to the earlier records', () => {
+// ⚠️ *Earlier RUNS* became *Earlier VERSIONS* in MOTIR-5455 (§24, decision 9),
+// and the string was REPLACED rather than paralleled: once a person can write
+// one, *runs* is the wrong noun for a list that holds both kinds. The disclosure
+// below carries one of each, which is why the noun had to change.
+describe('earlier versions (Panel 12j · 13f)', () => {
+  it('is a collapsed disclosure that opens to the earlier records, of BOTH author kinds', () => {
     renderBlock(
       recordDto({
         history: [
           {
             recordId: 'rec-0',
-            run: { runId: 'run-301', label: 'Run #301' },
             author: { kind: 'run', runId: 'run-301', label: 'Run #301' },
             createdAt: '2026-09-11T09:00:00.000Z',
           },
           {
             recordId: 'rec-00',
-            run: null,
             // A record with no dispatch run is a PERSON's, under §9's
             // 2026-09-17 amendment — which is exactly the row `run: null`
             // could not describe.
@@ -350,17 +352,20 @@ describe('earlier runs (Panel 12j)', () => {
         ],
       }),
     );
-    const toggle = screen.getByRole('button', { name: 'Earlier runs (2)' });
+    const toggle = screen.getByRole('button', { name: 'Earlier versions (2)' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText(/Run #301/)).toBeNull();
     fireEvent.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(document.body.textContent).toContain('Written by Run #301 · 11 Sept, 09:00 UTC');
+    // A person's row is drawn the SAME way — one record with two author kinds,
+    // never two features.
+    expect(document.body.textContent).toContain('Written by Ada · 10 Sept, 09:00 UTC');
   });
 
   it('is absent when there are none', () => {
     renderBlock(recordDto());
-    expect(screen.queryByRole('button', { name: /Earlier runs/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Earlier versions/ })).toBeNull();
   });
 });
 
@@ -434,11 +439,26 @@ describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
     expect(screen.queryByRole('link')).toBeNull();
   });
 
-  it('a record written by no run, with a blank body and no sections, draws only its head', () => {
+  // ⚠️ THIS CASE CHANGED VERDICT IN MOTIR-5455, and it is the change worth
+  // stating. It used to assert `run: null` ⇒ NO author line, because `run` could
+  // name a dispatch run and nothing else. `author` is always present and never
+  // blank — a deleted publisher reads as the product's standing string — so the
+  // line is always drawn, and there is no empty-author state left to draw.
+  it('a record whose publisher was deleted still names one, with a blank body and no sections', () => {
     const dto = recordDto({ repos: [], history: [] });
-    renderBlock({ ...dto, record: { ...dto.record!, run: null, bodyMd: '   ' } }, []);
+    renderBlock(
+      {
+        ...dto,
+        record: {
+          ...dto.record!,
+          author: { kind: 'person', userId: null, label: 'Former member' },
+          bodyMd: '   ',
+        },
+      },
+      [],
+    );
     const part = screen.getByRole('group', { name: t.title });
-    expect(part.textContent).not.toContain('Written by');
+    expect(part.textContent).toContain('Written by Former member');
     expect(within(part).queryByRole('heading', { level: 2 })).toBeNull();
     expect(screen.queryByText(t.preview.title)).toBeNull();
   });

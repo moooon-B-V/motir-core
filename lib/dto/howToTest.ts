@@ -111,15 +111,15 @@ export type HowToTestAuthorDto =
 export interface HowToTestRecordDto {
   id: string;
   /**
-   * ⚠️ SUPERSEDED BY {@link HowToTestRecordDto.author}, and kept only until the
-   * block reads it. `run` can name a dispatch run and nothing else, so a
-   * person's record reads as `null` here — indistinguishable from an agent
-   * record whose run was pruned. `HowToTestBlock` still reads it today; the
-   * DOORS card (MOTIR-5455) moves the block onto `author` and DELETES this
-   * field. Do not add a new reader.
+   * WHO wrote it — a run or a person. Always present.
+   *
+   * ⚠️ IT REPLACED a `run: HowToTestRunDto | null` field, DELETED by MOTIR-5455.
+   * `run` could name a dispatch run and nothing else, so a person's record read
+   * as `null` there — indistinguishable from an agent record whose run was
+   * pruned. MOTIR-5454 added `author` and kept `run` alive so the block would
+   * not break mid-story; this is where it dies. Do not reintroduce it: the
+   * question it answered is `author.kind === 'run'`.
    */
-  run: HowToTestRunDto | null;
-  /** WHO wrote it — a run or a person. Always present. */
   author: HowToTestAuthorDto;
   createdAt: string;
   /** The rich-text How to test, as its author wrote it. */
@@ -130,9 +130,7 @@ export interface HowToTestRecordDto {
 /** An earlier record, for the "Earlier versions" disclosure. */
 export interface HowToTestHistoryEntryDto {
   recordId: string;
-  /** ⚠️ Superseded by {@link HowToTestHistoryEntryDto.author} — see the record's note. */
-  run: HowToTestRunDto | null;
-  /** WHO wrote it — a run or a person. Always present. */
+  /** WHO wrote it — a run or a person. Always present. See the record's note. */
   author: HowToTestAuthorDto;
   createdAt: string;
 }

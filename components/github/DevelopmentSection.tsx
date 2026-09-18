@@ -651,7 +651,12 @@ export function DevelopmentSectionBody({
       <DevelopmentGateFrame
         read={mergeGate}
         itemIdentifier={itemIdentifier}
-        runLabel={howToTest?.record?.run?.label ?? null}
+        // Band 1's meta names the RUN that delivered the pull requests, so it
+        // reads a run author and nothing else (MOTIR-5455, which deleted the
+        // record's `run` field). A person's record names no run — correctly:
+        // a person wrote the instructions, they did not deliver the set — and
+        // the band falls back to its count.
+        runLabel={howToTest?.record?.author.kind === 'run' ? howToTest.record.author.label : null}
         currentHeads={currentHeads}
         actions={gateActions}
         layout={gateLayout}

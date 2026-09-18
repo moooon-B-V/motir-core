@@ -10,7 +10,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import { assembleHowToTestRepo, liveHeadSha, pickPullRequest } from '@/lib/howToTest/assemble';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import type { HowToTestDto, HowToTestRunDto } from '@/lib/dto/howToTest';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
 import { authorOf, dispatchRunLabel } from '@/lib/howToTest/author';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveRunTarget } from './runTarget';
@@ -78,7 +78,6 @@ export const howToTestService = {
 
       const historyDto = earlier.map((row) => ({
         recordId: row.id,
-        run: runOf(row.dispatchRunId, row.dispatchRun),
         author: authorOf(row, nameById),
         createdAt: row.createdAt.toISOString(),
       }));
@@ -172,7 +171,6 @@ export const howToTestService = {
         owedBy: null,
         record: {
           id: record.id,
-          run: runOf(current.dispatchRunId, current.dispatchRun),
           author: authorOf(current, nameById),
           createdAt: record.createdAt,
           bodyMd: record.bodyMd,
@@ -192,11 +190,3 @@ export const howToTestService = {
     });
   },
 };
-
-function runOf(
-  runId: string | null,
-  run: { command: string; startedAt: Date } | null,
-): HowToTestRunDto | null {
-  if (!runId || !run) return null;
-  return { runId, label: dispatchRunLabel(run.command, run.startedAt) };
-}

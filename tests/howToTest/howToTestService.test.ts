@@ -460,7 +460,9 @@ describe('howToTestService.getForWorkItem', () => {
     const dto = await howToTestService.getForWorkItem(story.id, fx.ctx);
     expect(dto.state).toBe('record');
     expect(dto.record).toMatchObject({
-      run: null,
+      // No dispatch run published it, so the author is the PERSON who did — the
+      // case the deleted `run: null` could not tell apart from a pruned run.
+      author: { kind: 'person' },
       bodyMd: BODY,
       previewPath: '/items/ACME-1',
     });
@@ -629,9 +631,16 @@ describe('howToTestService.getForWorkItem', () => {
       await adminDb.dispatchRun.update({ where: { id: run.id }, data: { status: 'succeeded' } });
     }
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
-    expect(dto.record?.run).toEqual({ runId: runs[2], label: 'motir run · 2026-09-12 08:00 UTC' });
+    expect(dto.record?.author).toEqual({
+      kind: 'run',
+      runId: runs[2],
+      label: 'motir run · 2026-09-12 08:00 UTC',
+    });
     expect(dto.record?.bodyMd).toBe('## Run 3');
-    expect(dto.history.map((h) => h.run?.runId)).toEqual([runs[1], runs[0]]);
+    expect(dto.history.map((h) => (h.author.kind === 'run' ? h.author.runId : null))).toEqual([
+      runs[1],
+      runs[0],
+    ]);
   });
 
   it('refuses a reader who cannot browse the project, with the not-found the item page raises', async () => {
@@ -754,8 +763,9 @@ describe('howToTestService.getForWorkItem', () => {
 // RECORD, ONE WRITER. The cases are chosen so a plausible broken implementation
 // fails:
 //
-//   - the person case asserts `record.run` is STILL null beside a filled
-//     `author`, so an implementation that quietly repurposed `run` fails;
+//   - the person case asserts the record carries NO `run` property at all
+//     beside a filled `author` — MOTIR-5455 deleted the superseded field, so an
+//     implementation that reintroduced it, or repurposed it, fails;
 //   - the history case carries one row of EACH kind, so a mapper that reads the
 //     current record's author and reuses it fails;
 //   - the deleted-publisher case asserts a non-empty label with a null userId,
@@ -778,8 +788,10 @@ describe('howToTestService — the record carries its AUTHOR', () => {
       userId: fx.ctx.userId,
       label: actor.name,
     });
-    // The superseded field is untouched — the DOORS card removes it, not this one.
-    expect(dto.record?.run).toBeNull();
+    // ⚠️ `author` is the ONLY thing that names the writer now: MOTIR-5455 deleted
+    // the superseded `run` field, whose null was indistinguishable between a
+    // person's record and an agent record whose run was pruned.
+    expect(dto.record).not.toHaveProperty('run');
   });
 
   it("a RUN's record: kind run, the run id, and the label `run` already carried", async () => {
@@ -810,7 +822,7 @@ describe('howToTestService — the record carries its AUTHOR', () => {
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
     const label = dispatchRunLabel('run', startedAt);
     expect(dto.record?.author).toEqual({ kind: 'run', runId: run.id, label });
-    expect(dto.record?.run).toEqual({ runId: run.id, label });
+    expect(dto.record).not.toHaveProperty('run');
   });
 
   it('HISTORY carries an author per row — one of each kind, newest first', async () => {

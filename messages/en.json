@@ -6343,12 +6343,26 @@
           "noRun": "No run is recorded for this item."
         },
         "earlier": {
-          "toggle": "Earlier runs ({count})"
+          "versions": "Earlier versions ({count})"
         },
         "child": {
           "pointer": "Tested as part of <link>{key}</link>"
         },
-        "unknownState": "Unrecognised How to test state: {value}"
+        "unknownState": "Unrecognised How to test state: {value}",
+        "add": "Add how to test",
+        "edit": "Edit",
+        "writtenByPerson": "Written by <b>{name}</b> · {time}",
+        "form": {
+          "label": "How to test",
+          "body": "Body",
+          "previewPath": "Preview path",
+          "optional": "optional",
+          "previewPathHint": "a path such as /items/ACME-7",
+          "dirty": "Unsaved changes",
+          "saving": "Saving…",
+          "save": "Save",
+          "cancel": "Cancel"
+        }
       },
       "fix": {
         "title": "Fix the checks",
