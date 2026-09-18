@@ -55,9 +55,33 @@ const htt = en.github.development.howToTest;
 
 let seed: PersonHowToTestSeed;
 
+/** The Development card — the scope every locator below is rooted in.
+ *
+ *  ⚠️ NOT `page`. A page-rooted `getByTestId` can match React's OUTGOING or
+ *  streamed copy of a subtree, which throws strict mode on a tree nobody put
+ *  there — `tests/e2e-page-rooted-locators.test.ts` refuses new ones, because
+ *  the failure it prevents is a merge-queue EJECTION rather than a red check. */
+function developmentCard(page: Page) {
+  return page
+    .locator('[data-surface="card"]')
+    .filter({ has: page.getByRole('heading', { level: 2, name: 'Development', exact: true }) });
+}
+
 /** The How-to-test PART, inside the Development card — never a section of its own. */
 function howToTest(page: Page) {
-  return page.getByTestId('how-to-test');
+  return developmentCard(page).getByRole('group', { name: htt.title, exact: true });
+}
+
+/**
+ * The FORM, which REPLACES the record inside the part while it is open.
+ *
+ * ⚠️ Addressed by test id rather than by role, and scoped rather than
+ * page-rooted: §24's accessibility note labels the form *How to test* too, so
+ * while it is open the part and the form are two groups carrying one name.
+ * Every call below is made while exactly one form is open.
+ */
+function howToTestForm(page: Page) {
+  return developmentCard(page).getByTestId('how-to-test-form');
 }
 
 /** The editor's body surface — the component's own `aria-label` is the field label. */
@@ -100,7 +124,7 @@ test.describe('a person writes How to test', () => {
 
     await chapter('Two fields: the instructions, and where to open them', async () => {
       await howToTest(page).getByRole('button', { name: htt.add, exact: true }).click();
-      const form = page.getByTestId('how-to-test-form');
+      const form = howToTestForm(page);
       await expect(form).toBeVisible();
 
       // ⚠️ NOTHING IN THIS FORM NAMES A REPOSITORY OR A COMMIT (§24, decision 8b).
@@ -126,11 +150,10 @@ test.describe('a person writes How to test', () => {
     await beat();
 
     await chapter('Saved — and it says who wrote it', async () => {
-      await page
-        .getByTestId('how-to-test-form')
+      await howToTestForm(page)
         .getByRole('button', { name: htt.form.save, exact: true })
         .click();
-      await expect(page.getByTestId('how-to-test-form')).toHaveCount(0, { timeout: 30_000 });
+      await expect(howToTestForm(page)).toHaveCount(0, { timeout: 30_000 });
 
       // The AUTHORITATIVE read: reload, and take it from the server.
       await page.reload();
@@ -156,7 +179,7 @@ test.describe('a person writes How to test', () => {
 
     await chapter('Edit it: everything comes back, and the old version is kept', async () => {
       await howToTest(page).getByRole('button', { name: htt.edit, exact: true }).click();
-      const form = page.getByTestId('how-to-test-form');
+      const form = howToTestForm(page);
       await expect(form).toBeVisible();
       // The form opens FILLED IN, from the draft read — the body byte for byte,
       // the preview path, and the fence's language intact.
