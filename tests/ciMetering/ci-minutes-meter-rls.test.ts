@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -289,7 +290,7 @@ describe('ci_workflow_run_usage RLS — write isolation', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     const ciWorkflowRunUsageRow = await adminDb.ciWorkflowRunUsage.findFirst({
       where: { runId: 'smuggled' },
@@ -308,7 +309,7 @@ describe('ci_workflow_run_usage RLS — write isolation', () => {
           data: { workspaceId: fx.workspaceBId },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
     const a = await adminDb.ciWorkflowRunUsage.findUnique({ where: { id: fx.runAId } });
     expect(a?.workspaceId).toBe(fx.workspaceAId);
   });
@@ -344,6 +345,6 @@ describe('ci_period_usage RLS — write isolation', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 });

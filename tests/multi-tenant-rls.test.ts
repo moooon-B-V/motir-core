@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from './helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -163,11 +164,7 @@ describe('multi-tenant RLS — write isolation', () => {
           data: { userId: fx.userAId, workspaceId: fx.workspaceBId, role: 'member' },
         }),
       ),
-    ).rejects.toMatchObject({
-      // The pg DriverAdapterError carries the raw Postgres SQLSTATE on
-      // `cause.code` (42501 = insufficient_privilege, the RLS denial).
-      cause: { code: '42501' },
-    });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // Sanity: no cross-tenant membership leaked in — read through the ADMIN
     // client, so an ABSENT row and a row merely HIDDEN from A are not the same

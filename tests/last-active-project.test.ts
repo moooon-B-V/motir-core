@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { RLS_DENIAL, isRlsDenial } from './helpers/sqlstate';
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -264,7 +265,7 @@ describe('project_user_membership_read (the user-context arm)', () => {
           VALUES (${'smuggled-' + wsB.id}, ${wsB.id}, 'Smuggled', 'smuggled', 'SMG', 'private', now(), now())
         `,
       ),
-    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 });
 

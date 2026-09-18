@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@/generated/prisma/client';
@@ -623,7 +624,7 @@ describe('RLS on work_item_repository', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 });
 

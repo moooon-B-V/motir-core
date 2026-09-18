@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from './helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
@@ -196,9 +197,7 @@ describe('project RLS — write isolation', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({
-      cause: { code: '42501' },
-    });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // Sanity (through the ADMIN client): no smuggled row landed in B's
     // workspace. Read as a client no policy hides rows from — otherwise an
