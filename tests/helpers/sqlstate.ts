@@ -4,7 +4,9 @@ import { sqlStateOf } from '@/lib/prisma/sqlstate';
 //
 // These suites used to match the error's SHAPE —
 // `.rejects.toMatchObject({ cause: { code: '42501' } })` — and the shape moved
-// under them when the Prisma client went 7.8.0 -> 7.10.0:
+// under them when the Prisma client went 7.8.0 -> 7.9.0 (the version this repository
+// pins; the move was measured against 7.10.0 first, which is why an earlier draft of
+// this comment named it):
 //
 //   prisma <= 7.8.0   err.cause.code                            '42501'
 //   prisma >= 7.9.0   err.meta.driverAdapterError.cause.code    '42501'

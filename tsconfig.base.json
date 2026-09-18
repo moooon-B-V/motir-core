@@ -64,16 +64,32 @@
   // reusing cached instantiations, so every delegate re-instantiates the payload
   // graph. This repository was pinned at 7.8.0, inside the bad range.
   //
-  // ⚠️ IT IS ON `~7.9.0`, AND THE TILDE IS THE POINT. 7.9.0 is where the fix
-  // landed, and it is the LAST version that carries it without 7.10.0's changes to
-  // automatic batching and to parameter-chunked statements ("now executed
-  // atomically in a transaction"). On 7.10.0 the approve-to-merge door's
-  // `SELECT … FOR UPDATE` stopped serialising two concurrent webhook deliveries:
-  // `githubReviewSyncStoryGate`'s CONCURRENT-redelivery guard failed 2 of 4 CI runs,
-  // against 20 of 20 green on 7.8.0 — a ~50% race where a pre-existing one would
-  // have shown on main long ago. That is NOT root-caused, so 7.10.0 is held rather
-  // than blamed; a caret would let `pnpm update` walk back into it silently, which
-  // is the whole reason the range is a tilde and not a caret.
+  // ⚠️ IT IS ON `~7.9.0`, AND THE TILDE IS A PRECAUTION, NOT A VERDICT. 7.9.0 is
+  // where the fix landed, so it carries the whole headroom win; 7.10.0 adds changes
+  // to automatic batching and to parameter-chunked statements ("now executed
+  // atomically in a transaction") that this repository has never assessed. Nothing
+  // is lost by not taking them, and a caret would let `pnpm update` walk into them
+  // silently — that is the whole reason the range is a tilde.
+  //
+  // ⚠️ AND THE REASON ORIGINALLY RECORDED HERE WAS WRONG — CORRECTED, NOT DELETED,
+  // BECAUSE THE ERROR IS THE INSTRUCTIVE PART (MOTIR-5693). This block used to say
+  // that on 7.10.0 the approve-to-merge door's `SELECT … FOR UPDATE` stopped
+  // serialising two concurrent webhook deliveries, inferred from
+  // `githubReviewSyncStoryGate`'s concurrent-redelivery guard failing 2 of 4 CI runs
+  // against 20 of 20 green on 7.8.0. **The mechanism is a pre-existing defect in
+  // THIS repository and has nothing to do with the client version.**
+  // `githubPullRequestReviewRepository.upsertByGithubReviewId` catches the lost
+  // race's `P2002` and then reads the winner with the SAME `tx` — but a failed
+  // statement ABORTS a Postgres transaction, so that read raises `25P02` and the
+  // recovery arm is dead code. It was shipped at MOTIR-5594, it fails on branches
+  // that touch none of this, and MOTIR-5693 carries the reproduction.
+  //
+  // The inference that failed is worth more than the conclusion: it read 20/20 green
+  // as evidence of IMMUNITY, which only follows if the race lands at a FIXED rate.
+  // It does not — it lands when two creates genuinely collide, which is a function
+  // of LOAD, so a rare-under-light-load race and an absent one produce the same
+  // clean history. **A version comparison cannot distinguish them, and no number of
+  // green runs on one side turns a correlation into a mechanism.**
   //
   // **So `files` is a lower bound on the question, never the whole of it.** A
   // program can get dramatically cheaper or dearer without gaining or losing a
