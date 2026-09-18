@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { getGitProvider } from '@/lib/git';
@@ -166,7 +167,12 @@ const syncedDecide = (
   gateId: string,
   decision: 'approve' | 'request_changes',
   synced: { reviewerGithubUserId: string; reviewerLogin: string },
-) => approvalGatesService.decide({ gateId, decision, source: 'github' }, fx.ctx, { synced });
+) =>
+  approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId, decision, source: 'github' },
+    fx.ctx,
+    { synced },
+  );
 
 describe('a synced decision RESOLVES to a member (MOTIR-5596)', () => {
   it('records the member, their label with the login, github source and github_review authority', async () => {
@@ -259,7 +265,7 @@ describe('the SOURCE and the synced actor must arrive together (MOTIR-5596)', ()
     // The direction that matters: otherwise a Motir surface could claim to be GitHub.
     await expect(
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'approve', source: 'github' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'github' },
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(ApprovalGateSyncedActorMismatchError);
@@ -269,9 +275,13 @@ describe('the SOURCE and the synced actor must arrive together (MOTIR-5596)', ()
   it('refuses a synced reviewer with any other source, and writes nothing', async () => {
     const { gate } = await reviewable();
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx, {
-        synced: { reviewerGithubUserId: '4242', reviewerLogin: 'ada-l' },
-      }),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+        {
+          synced: { reviewerGithubUserId: '4242', reviewerLogin: 'ada-l' },
+        },
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateSyncedActorMismatchError);
     expect((await gateRow(gate.id)).state).toBe('awaiting');
   });
@@ -313,7 +323,10 @@ describe('FIRST DECISION STANDS, for a synced one too (MOTIR-5596)', () => {
 
     const results = await Promise.allSettled([
       syncedDecide(gate.id, 'approve', { reviewerGithubUserId: '4242', reviewerLogin: 'ada-l' }),
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');

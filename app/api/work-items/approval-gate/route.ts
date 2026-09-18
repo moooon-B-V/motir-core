@@ -194,6 +194,7 @@ export async function GET(req: Request): Promise<Response> {
       gate: read.gate,
       canDecide: read.canDecide,
       routedToLabel: read.routedToLabel,
+      stamp: read.stamp,
       subject: await readSubject(kind, read.gate, item, ctx),
     };
     return NextResponse.json(body, {

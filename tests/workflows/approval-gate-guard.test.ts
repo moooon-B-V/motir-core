@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -132,7 +133,7 @@ describe('the decide door is let through by NAME, and nothing else is', () => {
     const { itemId, gateId } = await gatedItem();
 
     const result = await approvalGatesService.decide(
-      { gateId, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -172,7 +173,10 @@ describe('the seam: approve, then reopen by hand', () => {
   it('approving writes Done through the deciding gate’s exemption, and a hand reopen `done → in_progress` then moves', async () => {
     const { itemId, gateId } = await gatedItem();
 
-    await approvalGatesService.decide({ gateId, decision: 'approve', source: 'ui' }, fx.ctx);
+    await approvalGatesService.decide(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
     expect(await statusOf(itemId)).toBe('done');
 
     // The gate is `approved` now, so it holds nothing — §6d's reopen path.

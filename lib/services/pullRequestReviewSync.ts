@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import {
   countingReviewNote,
   parseDeliverySetVersion,
@@ -195,7 +196,9 @@ async function evaluateOne(workItemId: string, workspaceId: string): Promise<Rev
 
   try {
     await approvalGatesService.decide(
-      { gateId: set.gateId, decision, source: 'github', noteMd },
+      // A reviewer on GitHub: no Motir page was rendered, so there is no stamp to
+      // hand back (MOTIR-5234). The door's state refusals still apply.
+      { gateId: set.gateId, decision, source: 'github', noteMd, stamp: DECIDED_WITHOUT_A_READER },
       ctx,
       {
         synced: {

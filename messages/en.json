@@ -8379,6 +8379,19 @@
         "title": "This question was withdrawn.",
         "next": "Nobody decided it. Reload to see where it went."
       },
+      "stale": {
+        "subject": "A newer version was published while you were reading.",
+        "pullRequests": "New commits reached the pull requests while you were reading.",
+        "criteria": "The acceptance criteria were edited while you were reading.",
+        "several": "Several things changed while you were reading: {things}.",
+        "next": "Your decision was not recorded. Look at the current version, then decide again.",
+        "control": "Show the current version",
+        "noun": {
+          "subject": "the published version",
+          "pullRequests": "the pull requests",
+          "criteria": "the acceptance criteria"
+        }
+      },
       "notAuthorised": {
         "title": "This decision is not yours to make.",
         "next": "It can be decided by the work item's assignee — or its reporter when it has no assignee — or a workspace admin."

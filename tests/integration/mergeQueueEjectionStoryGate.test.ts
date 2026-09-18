@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -266,7 +267,7 @@ async function approvedIntoTheQueue(email: string) {
   expect(more).toEqual([]);
   enqueueAll();
   const { members } = await pullRequestMergeService.approveAndMerge(
-    { gateId: gate!.id, source: 'ui' },
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, source: 'ui' },
     s.ctx,
   );
   expect(members.map((m) => m.outcome)).toEqual(['enqueued', 'enqueued']);

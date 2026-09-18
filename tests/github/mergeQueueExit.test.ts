@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -212,7 +213,10 @@ async function approvedAndQueued(email: string) {
   await ci(12, 'sha-b');
   expect(await statusOf(item.id)).toBe('in_review');
   const [gate] = await awaitingGates(item.id);
-  await approvalGatesService.decide({ gateId: gate!.id, decision: 'approve', source: 'ui' }, s.ctx);
+  await approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, decision: 'approve', source: 'ui' },
+    s.ctx,
+  );
   expect(await statusOf(item.id)).toBe('approved');
   await markQueued(11);
   await markQueued(12);
@@ -545,7 +549,7 @@ describe('a DESIGN card the queue ejects', () => {
       where: { workItemId: item.id, kind: 'design_result' },
     });
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       s.ctx,
     );
     return { gate: await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } }) };
@@ -570,7 +574,7 @@ describe('a DESIGN card the queue ejects', () => {
     const design = await approveDesign(s, item);
     const [merge] = await awaitingGates(item.id);
     await approvalGatesService.decide(
-      { gateId: merge!.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: merge!.id, decision: 'approve', source: 'ui' },
       s.ctx,
     );
     await markQueued(11);

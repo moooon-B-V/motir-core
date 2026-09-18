@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -557,7 +558,10 @@ describe('decide — the POST-LOCK tenant gate (MOTIR-4796)', () => {
     });
 
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
 
     // AND NOTHING WAS DECIDED — the refusal is a refusal, not a rollback of a

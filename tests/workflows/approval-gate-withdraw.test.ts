@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -181,7 +182,10 @@ describe('an approval and a pull-back RACING on one card (rule 8, the lock order
       // The barrier: both operations are created before either is awaited, so
       // their transactions open together on separate pooled connections.
       const [decided, moved] = await Promise.allSettled([
-        approvalGatesService.decide({ gateId, decision: 'approve', source: 'ui' }, fx.ctx),
+        approvalGatesService.decide(
+          { stamp: DECIDED_WITHOUT_A_READER, gateId, decision: 'approve', source: 'ui' },
+          fx.ctx,
+        ),
         workItemsService.updateStatus(itemId, 'in_progress', fx.ctx),
       ]);
 

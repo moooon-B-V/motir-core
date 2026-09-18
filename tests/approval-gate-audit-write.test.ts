@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shaFor } from './helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -153,7 +154,7 @@ describe('subject_version — the approved BYTES, resolved through the kind (ADR
     const gate = await gateFor(evidence.id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -172,7 +173,7 @@ describe('subject_version — the approved BYTES, resolved through the kind (ADR
 
     const gate = await gateFor(v2.id);
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -189,7 +190,7 @@ describe('subject_version — the approved BYTES, resolved through the kind (ADR
     const gate = await gateFor(evidence.id);
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -204,7 +205,7 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
     const gate = await gateFor(evidence.id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -233,7 +234,12 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
     const gate = await gateFor(evidence.id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       { userId: assignee.id, workspaceId: fx.workspaceId },
     );
     await adminDb.user.delete({ where: { id: assignee.id } });
@@ -259,7 +265,12 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
     const gate = await gateFor((await publish('frame')).id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       { userId: decider.id, workspaceId: fx.workspaceId },
     );
 
@@ -281,7 +292,7 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
     const gate = await gateFor((await publish('frame')).id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       { userId: assignee.id, workspaceId: fx.workspaceId },
     );
 
@@ -298,7 +309,7 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
     const gate = await gateFor((await publish('frame')).id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -311,7 +322,7 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
     const gate = await gateFor((await publish('frame')).id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       { userId: admin.id, workspaceId: fx.workspaceId },
     );
 
@@ -326,7 +337,7 @@ describe('decided_under_authority — WHICH RUNG authorised the press (ADR §2, 
     const gate = await gateFor((await publish('frame')).id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -368,7 +379,7 @@ describe('decision_source — THROUGH WHICH SURFACE (ADR §6a)', () => {
     const gate = await gateFor((await publish('frame')).id);
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'api' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'api' },
       fx.ctx,
     );
 
@@ -395,7 +406,7 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
     const gate = await gateFor((await publish('frame')).id);
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -460,7 +471,7 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
     });
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -485,6 +496,7 @@ describe('request_changes writes the decision-time columns too (ADR §6a exempts
 
     const result = await approvalGatesService.decide(
       {
+        stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
         noteMd: 'The port is too short.',

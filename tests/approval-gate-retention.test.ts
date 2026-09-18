@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shaFor } from './helpers/commitShaFixtures';
 import type { ApprovalGateKind, WorkItem } from '@/generated/prisma/client';
@@ -250,7 +251,7 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     const v1Gate = await gateFor(v1.id);
 
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     await reopen();
@@ -290,7 +291,7 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     const prGate = await gateOfKind('pull_request_approval', 'github-pull-request-1');
 
     await approvalGatesService.decide(
-      { gateId: prGate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: prGate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     await publish('v2');
@@ -311,7 +312,12 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
   it('re-approving the SAME version keeps the FIRST pin, and a second version pins separately (§6d)', async () => {
     const v1 = await publish('v1');
     await approvalGatesService.decide(
-      { gateId: (await gateFor(v1.id)).id, decision: 'approve', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: (await gateFor(v1.id)).id,
+        decision: 'approve',
+        source: 'ui',
+      },
       fx.ctx,
     );
     const firstPin = (await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } }))
@@ -321,7 +327,7 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     // than one gate at a time (ADR §4's amendment).
     const second = await gateOfKind('pull_request_approval', 'github-pull-request-1');
     await approvalGatesService.decide(
-      { gateId: second.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: second.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     const afterSecond = (await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } }))
@@ -333,7 +339,12 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     await reopen();
     const v2 = await publish('v2');
     await approvalGatesService.decide(
-      { gateId: (await gateFor(v2.id)).id, decision: 'approve', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: (await gateFor(v2.id)).id,
+        decision: 'approve',
+        source: 'ui',
+      },
       fx.ctx,
     );
     await reopen();
@@ -356,6 +367,7 @@ describe('an UNAPPROVED version still lets its bytes go — the intended loss (A
 
     await approvalGatesService.decide(
       {
+        stamp: DECIDED_WITHOUT_A_READER,
         gateId: v1Gate.id,
         decision: 'request_changes',
         source: 'ui',
@@ -462,7 +474,10 @@ describe('a SUPERSEDED subject retires its AWAITING gate (ADR §6b)', () => {
     await publish('v2');
 
     await expect(
-      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
 
     // The refusal wrote nothing: the state is still the product's, not a person's.
@@ -475,7 +490,7 @@ describe('a SUPERSEDED subject retires its AWAITING gate (ADR §6b)', () => {
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -511,7 +526,10 @@ describe('a publish RACING an approval cannot strand the approved bytes (ADR §6
     // every ordering of these two is safe even with the pin written AFTER the
     // decision's transaction — which is the bug §6c names.
     const [decided, published] = await Promise.allSettled([
-      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
       publish('v2'),
     ]);
 
@@ -568,7 +586,12 @@ describe('the decide response says whether THIS version’s files were kept (MOT
   it('an approval of the current version reports its files kept, matching the row', async () => {
     const v1 = await publish('v1');
     const result = await approvalGatesService.decide(
-      { gateId: (await gateFor(v1.id)).id, decision: 'approve', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: (await gateFor(v1.id)).id,
+        decision: 'approve',
+        source: 'ui',
+      },
       fx.ctx,
     );
     expect(result.filesKept).toBe(true);
@@ -579,7 +602,12 @@ describe('the decide response says whether THIS version’s files were kept (MOT
   it('a request for changes reports null — it pins nothing, so the question does not apply', async () => {
     const v1 = await publish('v1');
     const result = await approvalGatesService.decide(
-      { gateId: (await gateFor(v1.id)).id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: (await gateFor(v1.id)).id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       fx.ctx,
     );
     expect(result.filesKept).toBeNull();
@@ -598,7 +626,7 @@ describe('the decide response says whether THIS version’s files were kept (MOT
     });
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     expect(result.gate.state).toBe('approved');
@@ -609,7 +637,7 @@ describe('the decide response says whether THIS version’s files were kept (MOT
     const v1 = await publish('v1');
     const prGate = await gateOfKind('pull_request_approval', 'github-pull-request-1');
     const result = await approvalGatesService.decide(
-      { gateId: prGate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: prGate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     expect(result.filesKept).toBeNull();
@@ -684,7 +712,10 @@ describe('WITHDRAWING the current result retires its AWAITING gate (MOTIR-5574; 
 
     // And the decide door refuses it as a withdrawn question.
     await expect(
-      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
   });
 
@@ -692,7 +723,13 @@ describe('WITHDRAWING the current result retires its AWAITING gate (MOTIR-5574; 
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'request_changes', source: 'ui', noteMd: 'Too short.' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: v1Gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+        noteMd: 'Too short.',
+      },
       fx.ctx,
     );
 
@@ -734,7 +771,13 @@ describe('WITHDRAWING the current result retires its AWAITING gate (MOTIR-5574; 
     // would surface here as a rejected withdrawal.
     const [decided, withdrawn] = await Promise.allSettled([
       approvalGatesService.decide(
-        { gateId: v1Gate.id, decision: 'request_changes', source: 'ui', noteMd: 'Racing.' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: v1Gate.id,
+          decision: 'request_changes',
+          source: 'ui',
+          noteMd: 'Racing.',
+        },
         fx.ctx,
       ),
       withdraw(),

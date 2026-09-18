@@ -40,7 +40,9 @@ function renderBlock(mergeGate: { gate: ApprovalGateDTO; canDecide: boolean } | 
       itemIdentifier="ACME-12"
       manualLinkable
       howToTest={TWO_REPO_STORY}
-      mergeGate={mergeGate ? { ...mergeGate, routedToLabel: 'Mara S.' } : null}
+      mergeGate={
+        mergeGate ? { stamp: 'v1.stamp-on-screen', ...mergeGate, routedToLabel: 'Mara S.' } : null
+      }
     />,
   );
 }
@@ -181,7 +183,9 @@ describe('the design result inside the Development block (Q8)', () => {
         manualLinkable
         howToTest={TWO_REPO_STORY}
         designResult={SLOT}
-        mergeGate={mergeGate ? { ...mergeGate, routedToLabel: 'Mara S.' } : null}
+        mergeGate={
+          mergeGate ? { stamp: 'v1.stamp-on-screen', ...mergeGate, routedToLabel: 'Mara S.' } : null
+        }
       />,
     );
   }

@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
@@ -257,7 +258,7 @@ describe('§2 seam 1 — green → raise → press → approved', () => {
     expect(gate.subjectVersion).toBe('moooon/acme#11@sha-a,moooon/acme#12@sha-b');
 
     const { approval, members } = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       s.ctx,
     );
 
@@ -270,7 +271,10 @@ describe('§2 seam 1 — green → raise → press → approved', () => {
 describe('§2 seam 2 — press → merged → webhook → done', () => {
   it('the card reaches done through the merge webhook, never through a gate write', async () => {
     const { s, item, gate } = await greenCard('seam-2@example.com');
-    await pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, s.ctx);
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
+      s.ctx,
+    );
     expect(mergeCalls().filter((c) => c.method === 'PUT')).toHaveLength(2);
     // Both merged on the host, and the card has NOT moved past approved: no gate writes done.
     expect(await statusOf(item.id)).toBe('approved');
@@ -298,7 +302,7 @@ describe('§2 seam 3 — press → enqueued → approved → webhook → done', 
     host.rules = [[], [{ type: 'merge_queue' }]];
 
     const { members } = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       s.ctx,
     );
 
@@ -335,7 +339,7 @@ describe('§2 seam 4 — one refused', () => {
     host.reread = (n) => (n === 12 ? { mergeable_state: 'dirty' } : {});
 
     const { members } = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       s.ctx,
     );
 
@@ -404,7 +408,10 @@ describe('§3 races', () => {
     const { s, item, gate } = await greenCard('race-press@example.com');
 
     const [press] = await Promise.allSettled([
-      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, s.ctx),
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
+        s.ctx,
+      ),
       ci(null, 'sha-a2', 11),
     ]);
 
@@ -450,7 +457,10 @@ describe('§3 access', () => {
     );
     expect(read.canDecide).toBe(false);
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: gate.id, source: 'ui' }, asReporter),
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
+        asReporter,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
     expect(mergeCalls()).toEqual([]);
     expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
@@ -469,7 +479,7 @@ describe('§3 access', () => {
     );
     expect(read.canDecide).toBe(true);
     const { approval } = await pullRequestMergeService.approveAndMerge(
-      { gateId: gate.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, source: 'ui' },
       s.ctx,
     );
     expect(approval.gate.state).toBe('approved');

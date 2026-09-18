@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
@@ -32,6 +33,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { JobTestEngine } from '../helpers/jobs';
@@ -232,10 +234,17 @@ async function ci(conclusion: string | null, headSha: string, number: number) {
 }
 
 async function decide(gateId: string, decision = 'approve') {
+  // The route REQUIRES what the caller was shown (MOTIR-5234) — read it exactly as a
+  // surface does, through the frame's own read, as the signed-in person.
+  const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gateId } });
+  const { stamp } = await approvalGatesService.getForWorkItem(
+    { workItemId: row.workItemId, kind: row.kind },
+    signedIn.current!,
+  );
   const res = await decideRoute(
     new Request(`http://localhost/api/approval-gates/${gateId}/decide`, {
       method: 'POST',
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, stamp }),
     }),
     { params: Promise.resolve({ id: gateId }) },
   );
@@ -262,7 +271,10 @@ const gatesOn = (workItemId: string) =>
 
 /** *Approve and merge* — the press, through the same function the item page calls. */
 const press = (s: Scenario, gateId: string) =>
-  pullRequestMergeService.approveAndMerge({ gateId, source: 'ui' }, s.ctx);
+  pullRequestMergeService.approveAndMerge(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId, source: 'ui' },
+    s.ctx,
+  );
 
 beforeEach(async () => {
   await truncateAuthTables();

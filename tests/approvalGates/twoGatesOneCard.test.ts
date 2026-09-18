@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shaFor } from '../helpers/commitShaFixtures';
 import { db } from '@/lib/db';
@@ -391,7 +392,7 @@ describe('AMENDMENT 6 Q4 — a design approved BEFORE green: the merge is held, 
       where: { workItemId: item.id, kind: 'design_result' },
     });
     const pressed = await pullRequestMergeService.approveAndMerge(
-      { gateId: design.id, source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, source: 'ui' },
       s.ctx,
     );
     // The press is NOT refused, and it merges nothing yet — there is nothing green.

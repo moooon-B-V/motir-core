@@ -29,7 +29,15 @@ import {
   ApprovalGateSyncedActorMismatchError,
   ApprovalGateNotFoundError,
   ApprovalGateSupersededError,
+  ApprovalGateStaleSubjectError,
 } from '@/lib/approvalGates/errors';
+import {
+  DECIDED_WITHOUT_A_READER,
+  computeGateStamp,
+  movedAsReaderSees,
+  stampMoved,
+  type DecisionStamp,
+} from '@/lib/approvalGates/stamp';
 import {
   approvalGateRepository,
   type ApprovalRecordsScope,
@@ -103,6 +111,23 @@ export interface DecideGateInput {
    * token behind them.
    */
   source: ApprovalGateDecisionSourceDTO;
+  /**
+   * WHAT THE READER WAS SHOWN — the `stamp` the render read handed them
+   * (`WorkItemGateRead.stamp`), handed back with the press (Story MOTIR-5232 ·
+   * Subtask MOTIR-5234; ADR §6b's MOTIR-5234 amendment). The door recomputes it
+   * under the lock and refuses with `ApprovalGateStaleSubjectError` when anything
+   * it covers has moved.
+   *
+   * ⚠️ REQUIRED, AND IT HAS NO DEFAULT ON PURPOSE — for `source`'s reason. The
+   * convenient default (skip the check) is exactly the one that silently disables
+   * the guarantee on whichever surface forgot it. A caller that cannot supply it
+   * has not rendered a gate.
+   *
+   * `DECIDED_WITHOUT_A_READER` is the ONE bypass, for a decision nobody pressed —
+   * the GitHub review sync, and the companion gate inside a press whose primary
+   * was already checked. It is a symbol, so no request can carry it.
+   */
+  stamp: DecisionStamp;
 }
 
 /**
@@ -162,6 +187,19 @@ export interface DecideGateResult {
    * and a kind with no design result never had files to keep.
    */
   filesKept: boolean | null;
+  /**
+   * The `subjectVersion` of the card's awaiting approve-to-merge gate AS THE DOOR
+   * READ IT UNDER THE LOCK, when the decided gate is a design gate — the version
+   * the stamp was checked against (MOTIR-5234). Null for every other kind, and
+   * when the card has no such gate.
+   *
+   * ⚠️ IT IS WHAT MAKES THE TWO-GATE PRESS SAFE after the first commit.
+   * `approveDesignAndMerge` decides the companion in a SECOND transaction, and a
+   * push between the two would raise a new merge gate over commits the reader
+   * never saw. The press decides the companion only when its version is still
+   * this one.
+   */
+  companionSubjectVersion: string | null;
 }
 
 /**
@@ -208,6 +246,37 @@ export interface WorkItemGateRead {
    * handed, so this read is the ONLY place the door is gated.
    */
   settingsDoor: GateSettingsDoor | null;
+  /**
+   * WHAT THIS READER IS BEING SHOWN, as one opaque token (Story MOTIR-5232 ·
+   * Subtask MOTIR-5234) — hand it back as `DecideGateInput.stamp` with the press.
+   * Computed over the gate's `subjectVersion`, the companion approve-to-merge
+   * gate's version for a design gate, and the card's `descriptionMd`
+   * (`lib/approvalGates/stamp.ts`, the only definition).
+   *
+   * Null when there is no `awaiting` gate — a decided or withdrawn gate is not
+   * something anybody can press, so there is nothing to stamp.
+   */
+  stamp: string | null;
+}
+
+/**
+ * The `subjectVersion` of the card's AWAITING approve-to-merge gate, when the gate
+ * being read or decided is a DESIGN gate — the pull requests one press on a design
+ * also decides and merges (MOTIR-5652, `pullRequestMergeService.approveDesignAndMerge`).
+ * Null for every other kind, and when the card has no such gate.
+ *
+ * ⚠️ THE SAME LOOKUP THE PRESS MAKES — the card's awaiting gates, filtered to the
+ * approve-to-merge kind — so the stamp covers exactly the gate the press will decide.
+ */
+async function companionSubjectVersion(
+  gate: { kind: string; workItemId: string },
+  tx: Prisma.TransactionClient,
+): Promise<string | null> {
+  if (gate.kind !== 'design_result') return null;
+  const merge = (await approvalGateRepository.findAwaitingByWorkItem(gate.workItemId, tx)).find(
+    (row) => row.kind === 'pull_request_approval',
+  );
+  return merge?.subjectVersion ?? null;
 }
 
 /**
@@ -455,14 +524,27 @@ export const approvalGatesService = {
       // A cross-workspace row is indistinguishable from one that never existed,
       // exactly as the decide door has it — no existence leak through a read.
       if (!item || item.workspaceId !== ctx.workspaceId)
-        return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
+        return {
+          gate: null,
+          canDecide: false,
+          routedToLabel: null,
+          settingsDoor: null,
+          stamp: null,
+        };
 
       const row = await approvalGateRepository.findLatestByWorkItem(
         input.workItemId,
         input.kind,
         tx,
       );
-      if (!row) return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
+      if (!row)
+        return {
+          gate: null,
+          canDecide: false,
+          routedToLabel: null,
+          settingsDoor: null,
+          stamp: null,
+        };
 
       // ⚠️ THE SAME FUNCTION the decide door calls, not merely the same rule
       // written twice. `resolveGateAuthority` is the ONE statement of ADR §2's
@@ -504,9 +586,21 @@ export const approvalGatesService = {
         : routingTargetId(item);
       const routedTo = routedToId ? await userRepository.findById(routedToId, tx) : null;
 
+      // THE STAMP — only an `awaiting` gate can be pressed, so only one is stamped,
+      // and the companion read is skipped for every decided gate on this render path.
+      const stamp =
+        row.state === 'awaiting'
+          ? computeGateStamp({
+              subjectVersion: row.subjectVersion,
+              companionSubjectVersion: await companionSubjectVersion(row, tx),
+              descriptionMd: item.descriptionMd,
+            })
+          : null;
+
       return {
         gate: toApprovalGateDto(row),
         canDecide,
+        stamp,
         routedToLabel: routedToDisplayName(routedTo),
         settingsDoor: settingsDoorFor(
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
@@ -997,7 +1091,7 @@ export const approvalGatesService = {
     // non-awaiting answer here means this kind has no live question — never
     // that one was hidden behind a decided row.
     if (read.gate?.state !== 'awaiting')
-      return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null };
+      return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null, stamp: null };
     return read;
   },
 
@@ -1018,7 +1112,8 @@ export const approvalGatesService = {
    *      typed refusal, never a 404 and never a silent no-op.
    *   3. **Refuse a gate that is not `awaiting`**, naming who decided it and when,
    *      so the surface can say so in place rather than as a toast that scrolls
-   *      away.
+   *      away — and then **refuse a STALE press** (3b), one whose stamp no longer
+   *      matches what the gate, its companion and the card say now (MOTIR-5234).
    *   4. **PIN what was approved** (§6c) — an approval keeps the bytes it was
    *      given on. MOTIR-4913, and it is in the DOOR rather than in a handler on
    *      purpose: retention belongs to the SUBJECT that was decided, never to the
@@ -1249,6 +1344,38 @@ export const approvalGatesService = {
         );
       }
 
+      // 3b · REFUSE A STALE PRESS (Story MOTIR-5232 · Subtask MOTIR-5234; ADR §6b's
+      //      MOTIR-5234 amendment) — the question is live, and what the reader was
+      //      shown has moved since.
+      //
+      // ⚠️ AFTER THE STATE REFUSALS, ALWAYS. A withdrawn question must be reported
+      // as withdrawn, never as stale — the two tell the reader opposite things
+      // (leave, versus look again).
+      //
+      // ⚠️ RECOMPUTED HERE, UNDER THE LOCK, from the LOCKED gate and the item read
+      // after it — never from the pre-read, whose own note forbids carrying any
+      // field the decision turns on. A comparison against a value read before the
+      // lock would have exactly the race this check exists to close, and would be
+      // wrong only when two things happened close together.
+      //
+      // ⚠️ THE COMPANION IS READ EVEN FOR THE BYPASS, because the result reports it:
+      // `approveDesignAndMerge` decides the companion only while its version is still
+      // the one checked here.
+      const companionVersion = await companionSubjectVersion(locked, tx);
+      if (input.stamp !== DECIDED_WITHOUT_A_READER) {
+        const moved = stampMoved(input.stamp, {
+          subjectVersion: locked.subjectVersion,
+          companionSubjectVersion: companionVersion,
+          descriptionMd: item.descriptionMd,
+        });
+        if (moved.length > 0) {
+          throw new ApprovalGateStaleSubjectError(
+            input.gateId,
+            movedAsReaderSees(moved, locked.kind),
+          );
+        }
+      }
+
       // 4 · RETENTION — an APPROVAL PINS the version it was given on
       //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).
       //
@@ -1364,7 +1491,12 @@ export const approvalGatesService = {
         tx,
       );
 
-      return { gate: toApprovalGateDto(decided), effect, filesKept };
+      return {
+        gate: toApprovalGateDto(decided),
+        effect,
+        filesKept,
+        companionSubjectVersion: companionVersion,
+      };
     });
   },
 };
