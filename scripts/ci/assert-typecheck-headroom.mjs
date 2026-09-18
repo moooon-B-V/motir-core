@@ -66,6 +66,18 @@ import ts from 'typescript';
  *   e2e           934   17.2%    17.6%    0.4
  *   orch          773    4.0%     4.0%    0.0
  *
+ * ⚠️ THAT TABLE DESCRIBES A REGRESSED TREE, AND ITS SPREADS ARE NOT THE TREE'S
+ * NATURAL VARIANCE (MOTIR-5687). It was measured against prisma 7.8.0, which
+ * carried prisma/prisma#29011 — a `= undefined` generic default that stops the
+ * checker reusing cached instantiations. On ^7.10.0, four readings of one
+ * unchanged `origin/main` give: tests 66.2–69.1% (spread 2.9), app 48.2–49.1%
+ * (spread 0.9), scripts 20.2–20.4% (0.2). **The app project's 11.7 points
+ * collapsed to 0.9** — so most of what this comment taught as GC noise was the
+ * regression re-instantiating payload graphs. The tests project's own spread
+ * (2.9) is close to the 2.9 recorded above, which is why THRESHOLD is LEFT AT
+ * 90% here: the gate caught a real defect and is not moved while it is being
+ * paid down. Re-derive it from a post-fix distribution, or not at all.
+ *
  * 90% is 7.2 points clear of the observed maximum — 2.5x the tests project's
  * measured spread, and roughly seven to twelve stories at ~0.6–1 point each (50
  * new test files are 50 program files, and a program file costs 0.48 MB). It
@@ -345,14 +357,24 @@ function main() {
   console.error(
     `\n✗ ${worst.project} used ${gb(worst.memoryKb * 1024)} — ${(worst.fraction * 100).toFixed(1)}% ` +
       `of the ${gb(limitBytes)} heap, over the ${Math.round(THRESHOLD * 100)}% line.\n` +
-      `  The lever is the PROGRAM — the \`files\` column above, declarations included, at\n` +
-      `  ~0.48 MB each — not a bigger heap: every bump moves the cliff by one story and\n` +
-      `  none removes it. A project boundary is one way to shrink a program and is worth\n` +
-      `  exactly the files it removes from THIS project, which you can price before you\n` +
-      `  draw it (a candidate config's file count; \`--baseline\` for the floor). Read the\n` +
-      `  number twice before acting on it — a late GC reads LOW, never high.\n` +
+      `  There are TWO levers, and the cheap one is not the \`files\` column (MOTIR-5687).\n` +
+      `  A bigger heap is neither of them: every bump moves the cliff by one story.\n\n` +
+      `  1. TYPE INSTANTIATIONS — what the program costs PER FILE. Check this FIRST: it\n` +
+      `     is usually one declaration, it can be worth more than any boundary, and a\n` +
+      `     boundary drawn over an inflated per-file cost leaves the inflation on both\n` +
+      `     sides of the line. The tell is a reading that moved while \`files\` did not,\n` +
+      `     or a wide run-to-run spread. The instrument is \`--extendedDiagnostics\`'s\n` +
+      `     \`Instantiations\` / \`Types\`, and \`--generateTrace\` for where. Measured:\n` +
+      `     prisma 7.8.0 -> 7.10.0 took this project 90.8% -> 69.1% with \`files\`\n` +
+      `     UNCHANGED, against 5.5 points for the largest boundary available.\n` +
+      `  2. THE PROGRAM — the \`files\` column above, declarations included, ~0.48 MB\n` +
+      `     each. A project boundary is worth exactly the files it removes from THIS\n` +
+      `     project, which you can price before you draw it (a candidate config's file\n` +
+      `     count; \`--baseline\` for the floor).\n\n` +
+      `  Read the number twice before acting on it — a late GC reads LOW, never high.\n` +
       `  See tsconfig.base.json for the model and the readings, MOTIR-4294 for why this\n` +
-      `  number is 90% and MOTIR-4422 for the spread it was re-affirmed against.`,
+      `  number is 90%, MOTIR-4422 for the spread it was re-affirmed against and\n` +
+      `  MOTIR-5687 for why that spread was itself a symptom.`,
   );
   process.exit(1);
 }
