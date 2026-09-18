@@ -133,6 +133,27 @@ describe('GET /api/v1/work-items/{key}/how-to-test', () => {
     expect(JSON.stringify(body)).not.toContain(repo.id);
   });
 
+  // ⚠️ `repos: []` IS A RECORD (MOTIR-5689), not `record: null`. The contract's
+  // array has no minimum and never had one, so this is the arm that keeps it
+  // that way: a client reading the response must see the instructions, not a
+  // gap, when the team that wrote them links its pull requests nowhere.
+  it('answers a BODY-ONLY record with `repos: []` — never `record: null`', async () => {
+    const { fixture } = caller;
+    const item = await workItemsService.createWorkItem(
+      { projectId: fixture.projectId, kind: 'task', title: 'Body only' },
+      fixture.ctx,
+    );
+    await testInstructionsService.publish(
+      { workItemId: item.id, bodyMd: BODY, repos: [] },
+      fixture.ctx,
+    );
+
+    const res = await getHowToTest(caller, item.identifier);
+    expect(res.status).toBe(200);
+    const body = currentTestInstructionsSchema.parse(await res.json());
+    expect(body.record).toMatchObject({ bodyMd: BODY, repos: [] });
+  });
+
   it("names the AUTHOR: a person's record carries `kind: person`, their id and their display name", async () => {
     const { fixture } = caller;
     const item = await workItemsService.createWorkItem(

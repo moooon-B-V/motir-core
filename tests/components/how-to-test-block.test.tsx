@@ -99,6 +99,22 @@ describe('a single-repository record (Panel 12a)', () => {
   });
 });
 
+describe('a BODY-ONLY record — no repository sections (MOTIR-5689)', () => {
+  it('renders the body and NO repository sub-blocks when nothing is linked either', () => {
+    render(<HowToTestBlock howToTest={recordDto({ repos: [] })} pullRequestRows={[]} />);
+    const part = screen.getByRole('group', { name: t.title });
+    // The instructions are all of it — the body, through the one pipeline.
+    for (const name of ['Precondition', 'Set up', 'Click-path']) {
+      expect(within(part).getByRole('heading', { level: 2, name })).toBeTruthy();
+    }
+    // None of the three derived sub-blocks: a person names no repository, so
+    // there is no commit to show a preview, a fetch line or a check count for.
+    expect(screen.queryByText(t.preview.title)).toBeNull();
+    expect(screen.queryByText(t.local.title)).toBeNull();
+    expect(screen.queryByText(t.ci.title)).toBeNull();
+  });
+});
+
 describe('a two-repository record (Panel 12b)', () => {
   it('heads each sub-block with the SAME string its row meta line carries', () => {
     renderBlock(recordDto({ repos: [coreRepo(), gatewayRepo()] }), [ROW_CORE, ROW_GATEWAY]);

@@ -66,8 +66,14 @@ export interface PublishTestInstructionsInput {
   /** The run's HOW TO TEST as rich text (Markdown). Stored as written, trimmed. */
   bodyMd: string;
   previewPath?: string | null;
-  /** One entry per repository the run pushed to — at least one. */
-  repos: readonly PublishTestInstructionsRepoInput[];
+  /**
+   * One entry per repository the run pushed to. OPTIONAL since MOTIR-5689: a
+   * PERSON writing from the form names no repository (they are derived from the
+   * card's linked pull requests), so an absent or empty list is a legal record.
+   * An AGENT should still send one per repository it pushed to — its record is
+   * the evidence for a delivery set.
+   */
+  repos?: readonly PublishTestInstructionsRepoInput[];
   /**
    * Attribute the record to the newest RUNNING dispatch run targeting or
    * carrying this item (the MCP door sets it; MOTIR-5331). Never an id the
@@ -140,13 +146,20 @@ export function normalizeTestInstructionsContent(
     assertChars('previewPath', previewPath, TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS);
   }
 
+  // ⚠️ AN EMPTY SECTION LIST IS LEGAL (Subtask MOTIR-5689; `approval-gates.md`
+  // §9's 2026-09-17 amendment, point 3). This used to refuse `repos: []` with
+  // *at least one*, which was right while an agent was the only author: a run
+  // knows what it pushed to. A PERSON's form has no repository control — the
+  // repositories are DERIVED from the card's linked pull requests — so on a card
+  // with nothing linked there is nothing to put here, and the refusal made the
+  // form unsaveable for exactly the team the amendment protects: one that keeps
+  // its pull requests on the host and its work items in Motir.
+  //
+  // Every other refusal below stands. They govern the entries that ARE given,
+  // and an agent's contract is unchanged: the dispatch prompt still asks for one
+  // entry per repository it pushed to, because its record is the evidence for a
+  // delivery set.
   const rawRepos = input.repos ?? [];
-  if (rawRepos.length === 0) {
-    throw new TestInstructionsInvalidFieldError(
-      'repos',
-      'give one entry per repository the run pushed to — at least one.',
-    );
-  }
   if (rawRepos.length > TEST_INSTRUCTIONS_MAX_REPOS) {
     throw new TestInstructionsCapExceededError('repos', TEST_INSTRUCTIONS_MAX_REPOS, 'items');
   }

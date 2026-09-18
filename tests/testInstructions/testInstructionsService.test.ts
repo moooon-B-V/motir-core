@@ -463,6 +463,71 @@ describe('testInstructionsService.publish', () => {
   });
 });
 
+// ── A BODY-ONLY record (Subtask MOTIR-5689) ────────────────────────────────
+//
+// `approval-gates.md` §9's 2026-09-17 amendment, point 3: Motir does not decide
+// how a team works. A team that keeps its pull requests on the host and its work
+// items here links nothing, so a person's How to test has no repository to name —
+// and until this card `publish` refused the save outright.
+//
+// The cases are chosen so the refusal cannot come back unnoticed: the card is
+// given a CONNECTED repository and a LINKED pull request, so an implementation
+// that quietly filled `repos` from what it could find would answer with a
+// section and fail, rather than passing for the wrong reason.
+
+describe('publish accepts a BODY-ONLY record (MOTIR-5689)', () => {
+  it('writes the record with zero repository rows, and reads back `repos: []`', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Body only' });
+    const web = await connectRepo(fx, 'web');
+    await linkedPr(fx, card.id, web, 'subtask/MOTIR-5689-web', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+
+    const { record, created } = await testInstructionsService.publish(
+      input(card.id, web, { repos: [] }),
+      fx.ctx,
+    );
+    expect(created).toBe(true);
+    expect(record.bodyMd).toBe(BODY);
+    expect(record.repos).toEqual([]);
+
+    const rows = await rowsFor(card.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.repos).toEqual([]);
+  });
+
+  it('an identical re-save is still idempotent — two empty lists compare equal', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Saved twice' });
+    await connectRepo(fx, 'web');
+
+    const first = await testInstructionsService.publish(
+      input(card.id, 'unused', { repos: [] }),
+      fx.ctx,
+    );
+    const second = await testInstructionsService.publish(
+      input(card.id, 'unused', { repos: [] }),
+      fx.ctx,
+    );
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.record.id).toBe(first.record.id);
+    expect(await rowsFor(card.id)).toHaveLength(1);
+  });
+
+  it('the BODY is still required — a record with neither a body nor a section is nothing at all', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Empty' });
+    await expect(
+      testInstructionsService.publish(
+        input(card.id, 'unused', { bodyMd: '   ', repos: [] }),
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(TestInstructionsInvalidFieldError);
+  });
+});
+
 describe('normalizeTestInstructionsContent — every cap is a typed refusal naming the field', () => {
   const base = input('wi', 'repo');
   const long = (n: number) => 'x'.repeat(n);
@@ -517,9 +582,22 @@ describe('normalizeTestInstructionsContent — every cap is a typed refusal nami
     expect(out.bodyMd).toBe(body);
   });
 
+  // ⚠️ AN EMPTY SECTION LIST IS LEGAL (MOTIR-5689). It was a refusal — *at least
+  // one* — which was right while an agent was the only author. A person's form
+  // has no repository control, so on a card with nothing linked there is nothing
+  // to give, and the refusal made the form unsaveable. Both spellings of absent
+  // are covered: the list omitted, and the list present and empty.
+  it.each([
+    ['omitted', undefined],
+    ['present and empty', [] as const],
+  ])('accepts a body-only record — `repos` %s', (_name, repos) => {
+    const out = normalizeTestInstructionsContent({ ...base, repos });
+    expect(out.repos).toEqual([]);
+    expect(out.bodyMd).toBe(base.bodyMd.trim());
+  });
+
   it.each([
     ['a blank body', { bodyMd: '  \n ' }, 'bodyMd'],
-    ['no repository sections', { repos: [] }, 'repos'],
     [
       'a non-hex commit sha',
       { repos: [section('repo', { commitSha: 'not-a-sha' })] },
@@ -664,21 +742,28 @@ describe('toTestInstructionsDto', () => {
 });
 
 describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
-  it('an ABSENT body or repos list is the typed refusal naming the field, never a TypeError', () => {
+  // ⚠️ The repos half of this arm CHANGED VERDICT in MOTIR-5689, and the
+  // guarantee it was measuring did not. What MOTIR-5337 pinned is that an absent
+  // list is HANDLED — never a `Cannot read properties of undefined` escaping as a
+  // 500. It was handled by a typed refusal while a section was mandatory; it is
+  // handled by normalising to `[]` now that one is not. The body half is
+  // untouched: a record with no body is still nothing at all.
+  it('an ABSENT body is the typed refusal naming the field, and an absent repos list is [] — never a TypeError', () => {
     const base = input('wi', 'repo');
-    expect(() =>
-      normalizeTestInstructionsContent({ ...base, bodyMd: undefined as unknown as string }),
-    ).toThrow(TestInstructionsInvalidFieldError);
-    let err: unknown;
+    let bodyErr: unknown;
     try {
-      normalizeTestInstructionsContent({
-        ...base,
-        repos: undefined as unknown as PublishTestInstructionsRepoInput[],
-      });
+      normalizeTestInstructionsContent({ ...base, bodyMd: undefined as unknown as string });
     } catch (e) {
-      err = e;
+      bodyErr = e;
     }
-    expect((err as TestInstructionsInvalidFieldError).field).toBe('repos');
+    expect(bodyErr).toBeInstanceOf(TestInstructionsInvalidFieldError);
+    expect((bodyErr as TestInstructionsInvalidFieldError).field).toBe('bodyMd');
+
+    const out = normalizeTestInstructionsContent({
+      ...base,
+      repos: undefined as unknown as PublishTestInstructionsRepoInput[],
+    });
+    expect(out.repos).toEqual([]);
   });
 
   it('the current-record read of an item that does not exist is the typed not-found', async () => {

@@ -387,6 +387,30 @@ describe('howToTestService.getForWorkItem', () => {
     });
   });
 
+  // ⚠️ A BODY-ONLY RECORD IS A RECORD (MOTIR-5689), not a missing one. The read
+  // branches on whether a row EXISTS, never on how many sections it carries, and
+  // this pins that: the card is given a CONNECTED repository and a LINKED pull
+  // request, so an implementation that answered `record_missing` on an empty
+  // section list — or that filled the list from the deliveries — fails here.
+  it('a record with NO repository sections is `record`, with an empty `repos` — not `record_missing`', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Body only' });
+    const web = await connectRepo(fx, 'web');
+    await linkedPr(fx, card.id, web.id, 'subtask/body-only', [
+      { name: 'Vitest', conclusion: 'success', sha: HEAD },
+    ]);
+    await testInstructionsService.publish(
+      { workItemId: card.id, bodyMd: BODY, previewPath: '/items/ACME-1', repos: [] },
+      fx.ctx,
+    );
+
+    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
+    expect(dto.state).toBe('record');
+    expect(dto.repos).toEqual([]);
+    expect(dto.record?.bodyMd).toBe(BODY);
+    expect(dto.record?.previewPath).toBe('/items/ACME-1');
+  });
+
   it("a STORY run: two repository sections bound to the story's own session pull requests, with preview and checks", async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
