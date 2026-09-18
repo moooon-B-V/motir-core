@@ -3350,53 +3350,8 @@
          Repository name, the commit it was written for, and where the suggested
          value came from. The set is DERIVED from the linked pull requests and is
          Combobox over the project's repositories. */
-      .htf-repos {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .htf-repo-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 190px auto;
-        align-items: start;
-        gap: 10px;
-        padding: 10px;
-        background: var(--el-page-bg);
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-      }
-      .htf-repo-name {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        min-height: var(--height-input);
-        font-size: 13px;
-        color: var(--el-text);
-        min-width: 0;
-      }
-      .htf-repo-name svg {
-        width: 14px;
-        height: 14px;
-        flex: none;
-        color: var(--el-text-secondary);
-      }
-      .htf-repo-name span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .htf-repo-commit {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 0;
-      }
       /* WHERE the suggested commit came from — `from pull request #n` or
          `from the current version`. It is provenance, not a control. */
-      .htf-from {
-        font-size: 11.5px;
-        color: var(--el-text-secondary);
-      }
 
       /* An INLINE refusal, next to the field it is about. `publish`'s own
          message, verbatim. --el-danger-on-surface, never --el-danger-text
@@ -3434,21 +3389,10 @@
       }
 
       /* The ~400px column: the section rows stack, commit under repository. */
-      .htf-narrow .htf-repo-row {
-        grid-template-columns: minmax(0, 1fr) auto;
-      }
       /* Source order is name · commit · remove, so the two that share the first
          row are placed explicitly and the commit spans beneath them. Letting it
          flow puts Remove on a line of its own under the commit, which reads as a
          third field rather than as the row's own control. */
-      .htf-narrow .htf-repo-name {
-        grid-row: 1;
-        grid-column: 1;
-      }
-      .htf-narrow .htf-repo-commit {
-        grid-row: 2;
-        grid-column: 1 / -1;
-      }
     </style>
   </head>
   <body>
@@ -4875,39 +4819,6 @@
                     />
                     <p class="htf-hint">a path such as /items/ACME-7</p>
                   </div>
-                  <div class="htf-field">
-                    <span class="htf-label">Repositories</span>
-                    <div class="htf-repos">
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-core</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-core"
-                            value="3f2a91c"
-                          />
-                          <span class="htf-from">from pull request #131</span>
-                        </div>
-                      </div>
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-ai</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-ai"
-                            value="aa11bb2"
-                          />
-                          <span class="htf-from">from pull request #88</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
                     <button class="btn btn-primary btn-sm" type="button">Save</button>
@@ -4918,17 +4829,21 @@
           </div>
         </div>
         <p class="panel-note">
-          Every control here exists because one <span class="mono">publish</span> input needs a
-          door; &sect; 24&rsquo;s parity table maps them one to one. In order: the <b>body</b>, the
-          shipped <span class="mono">MarkdownEditor</span> at
-          <span class="mono">size=&quot;full&quot;</span> with its own toolbar, holding a heading, a
-          list and a focused code block whose
-          <b>language field reads <span class="mono">sh</span></b
-          >; the <b>preview path</b>, optional, with its hint; the <b>repository sections</b>, one
-          row each, every row carrying the repository, its commit and where the suggested value came
-          from. Opened on Add, the values are the draft read&rsquo;s (MOTIR-5453): a section per
-          repository with a linked pull request, at that pull request&rsquo;s live head.
-          <b>Suggested, never forced</b> — every one is editable and any row is removable.
+          <b>The whole form is two fields.</b> The <b>body</b> — the shipped
+          <span class="mono">MarkdownEditor</span> at
+          <span class="mono">size=&quot;full&quot;</span>
+          with its own toolbar, holding a heading, a list and a focused code block whose
+          <b>language field reads <span class="mono">sh</span></b> — and the <b>preview path</b>,
+          optional, with its hint. Then Save.
+          <b>⚠️ There is NO repository section in this form, in any form</b> (Yue, 2026-09-17:
+          <i
+            >&ldquo;they are simply not needed, link a PR shows the PR in the development
+            panel&rdquo;</i
+          >). The repositories and their commits are Motir&rsquo;s: it derives them from the linked
+          pull requests, which the rows <b>directly above this part already show</b>. Drawing them
+          again inside the form &mdash; editable or read-only &mdash; is the same fact a third time,
+          and a control for it is a second door onto <span class="mono">+ Link pull request</span>.
+          A person writes the instructions; Motir records what they are about.
         </p>
       </div>
       <div class="dvb-col">
@@ -5070,39 +4985,6 @@
                     />
                     <p class="htf-hint">a path such as /items/ACME-7</p>
                   </div>
-                  <div class="htf-field">
-                    <span class="htf-label">Repositories</span>
-                    <div class="htf-repos">
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-core</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-core"
-                            value="3f2a91c"
-                          />
-                          <span class="htf-from">from pull request #131</span>
-                        </div>
-                      </div>
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-ai</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-ai"
-                            value="aa11bb2"
-                          />
-                          <span class="htf-from">from pull request #88</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
                     <button class="btn btn-primary btn-sm" type="button">Save</button>
@@ -5117,110 +4999,6 @@
           <span class="mono">htf-</span> block names a Tier-0 <span class="mono">--color-*</span>,
           so the form re-inks from the element tokens alone. The code block&rsquo;s language field
           keeps its monospace and its <span class="mono">--el-input-*</span> chrome in both themes.
-        </p>
-      </div>
-      <div class="dvb-col">
-        <div class="panel-label">
-          Panel 13c · a section with <b>no known commit</b> — required, and it says why
-        </div>
-        <div class="panel">
-          <div class="card-body" style="padding-bottom: 0">
-            <div class="dvb-cap">ACME-12</div>
-            <div class="detail-title">Throttle the public API end to end</div>
-          </div>
-          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
-            <div class="card-head">
-              <div>
-                <h3>Development</h3>
-                <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
-              </div>
-              <button class="link-cta">
-                <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
-              </button>
-            </div>
-            <div class="card-body">
-              <div class="pr-row">
-                <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                <div class="pr-text">
-                  <div class="pr-title">Rate-limit the public API per key</div>
-                  <div class="pr-meta">moooon/motir-core · #131</div>
-                </div>
-                <span class="pr-states"
-                  ><span class="pill pill-sky"
-                    ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                  ><span class="pill pill-mint"
-                    ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passed</span
-                  ></span
-                >
-                <a class="ext" href="#" aria-label="Open on GitHub"
-                  ><svg aria-hidden="true"><use href="#i-external" /></svg
-                ></a>
-              </div>
-              <p class="dvb-caption">
-                Link with + Link pull request here, or with
-                <span class="dvb-mono">link_pull_request</span> over the MCP.
-              </p>
-              <div class="dvb-htt" role="group" aria-label="How to test">
-                <div class="dvb-htt-head">
-                  <h4 class="dvb-htt-title">How to test</h4>
-                </div>
-                <div class="htf-form" role="group" aria-label="How to test">
-                  <div class="htf-field">
-                    <span class="htf-label">Repositories</span>
-                    <div class="htf-repos">
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-core</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-core"
-                            value="3f2a91c"
-                          />
-                          <span class="htf-from">from pull request #131</span>
-                        </div>
-                      </div>
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-ai</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-ai"
-                            placeholder="paste the commit"
-                          />
-                          <span class="htf-from">from pull request #88</span>
-                          <p class="htf-error">
-                            <svg aria-hidden="true"><use href="#i-circle-alert" /></svg
-                            ><span
-                              >CI has not reported a head for this pull request yet — paste the
-                              commit you tested.</span
-                            >
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="form-actions">
-                    <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
-                    <button class="btn btn-primary btn-sm" type="button">Save</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="panel-note">
-          The draft read answers <span class="mono">commitSha: null</span> when the bound pull
-          request has no check row, because the head is only known once a check reports one. The
-          form does not invent one and does not block: it leaves the input empty, marks it required,
-          and says WHY in the row&rsquo;s own words. <span class="mono">publish</span> refuses an
-          empty commit, so this is the one suggested value that can arrive missing — and the hint is
-          what keeps a person from reading it as a bug.
         </p>
       </div>
       <div class="dvb-col">
@@ -5473,30 +5251,6 @@
                       >
                     </p>
                   </div>
-                  <div class="htf-field">
-                    <span class="htf-label">Repositories</span>
-                    <div class="htf-repos">
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-core</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-core"
-                            value="HEAD"
-                            data-invalid
-                          />
-                          <span class="htf-from">from pull request #131</span>
-                          <p class="htf-error">
-                            <svg aria-hidden="true"><use href="#i-circle-alert" /></svg
-                            ><span>expected a hex commit id of 7 to 64 characters.</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   <div class="form-actions">
                     <span class="htf-dirty">Unsaved changes</span>
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
@@ -5508,21 +5262,21 @@
           </div>
         </div>
         <p class="panel-note">
-          <b>Three</b> refusals, each drawn <b>beside the field it is about</b> and each in
-          <span class="mono">publish</span>&rsquo;s own words, not a re-worded human copy &mdash;
-          the same service refuses an agent, so a second phrasing would be a second contract.
-          <span class="mono">TestInstructionsInvalidFieldError</span>: an empty body &middot; a
-          preview path that is not a single-slash path &middot; a commit that is not 7&ndash;64 hex.
+          <b>Three</b> refusals, each beside the field it is about and each in
+          <span class="mono">publish</span>&rsquo;s own words &mdash; the same service refuses an
+          agent, so a second phrasing would be a second contract.
+          <span class="mono">TestInstructionsInvalidFieldError</span>: an empty body, and a preview
+          path that is not a single-slash path.
           <span class="mono">TestInstructionsCapExceededError</span>: the body over 32&nbsp;KiB
           (also <span class="mono">previewPath</span> over 500 characters).
           <b>The draft is kept</b> &mdash; a refusal never clears what was typed.
-          <b>⚠️ Three refusals this panel used to draw are GONE</b>, because the controls that
-          reached them are: <i>a repository not in the project</i> and
-          <i>the same repository twice</i> were only reachable through a picker a person no longer
-          has, and <i>no section at all</i> stops being a refusal once
-          <span class="mono">publish</span> accepts zero sections (&sect; 24, decision 8b&rsquo;s
-          build dependency). Removing a control removes its failure modes; that is most of the
-          argument for removing it.
+          <b>⚠️ The panel set used to draw SIX.</b> Three went with the controls that reached them:
+          <i>a repository not in the project</i> and <i>the same repository twice</i> needed a
+          picker, <i>a commit that is not hex</i> needed a commit field, and
+          <i>no section at all</i> stops being a refusal once
+          <span class="mono">publish</span> accepts zero sections.
+          <b>Removing a control removes its failure modes</b>, and that is most of the argument for
+          removing it.
         </p>
       </div>
       <div class="dvb-col">
@@ -5632,14 +5386,6 @@
                     <input class="htf-input htf-input-mono" id="htf-preview" value="" />
                     <p class="htf-hint">a path such as /items/ACME-7</p>
                   </div>
-                  <div class="htf-field">
-                    <span class="htf-label">Repositories</span>
-                    <div class="htf-repos"></div>
-                    <p class="htf-hint">
-                      No pull request is linked, so there is nothing to check out. Write the
-                      instructions &mdash; a repository appears here on its own if one is linked.
-                    </p>
-                  </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
                     <button class="btn btn-primary btn-sm" type="button">Save</button>
@@ -5650,17 +5396,17 @@
           </div>
         </div>
         <p class="panel-note">
-          <b>The case this whole part exists for</b> (Yue, 2026-09-17):
+          <b>The case this part exists for</b> (Yue, 2026-09-17):
           <i
             >&ldquo;a human developing team may not have the regulation to link the PR in the work
             item &mdash; they can manage the PR in github and manage the task in motir and add how
             to test in motir. We don&rsquo;t decide how they should work.&rdquo;</i
           >
-          So there is <b>no repository control at all</b>: a person writes the instructions and
-          saves. Repositories are Motir&rsquo;s to fill in when it knows them, never a form a person
-          is walked through. <b>This state is not an error and not a degraded mode</b> &mdash; it is
-          the ordinary way a team that keeps its pull requests on the host uses How to test. &sect;
-          24, decisions 8 and 8b.
+          <b>The form is IDENTICAL to Panel 13b</b> &mdash; body, preview path, Save &mdash; because
+          it never had a repository section to lose. The only difference is downstream: the saved
+          record carries no repository sub-blocks, so the block renders the instructions and nothing
+          derived. <b>Not an error and not a degraded mode.</b>
+          &sect; 24, decisions 8 and 8b.
           <b>⚠️ It needs <span class="mono">publish</span> to accept ZERO sections</b>, which it
           does not today (<span class="mono"
             >&apos;give one entry per repository the run pushed to — at least one.&apos;</span
@@ -6085,39 +5831,6 @@ git fetch origin &#x27;acme-31-rate-limit&#x27; &amp;&amp; git checkout &#x27;ac
                     />
                     <p class="htf-hint">a path such as /items/ACME-7</p>
                   </div>
-                  <div class="htf-field">
-                    <span class="htf-label">Repositories</span>
-                    <div class="htf-repos">
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-core</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-core"
-                            value="3f2a91c"
-                          />
-                          <span class="htf-from">from pull request #131</span>
-                        </div>
-                      </div>
-                      <div class="htf-repo-row">
-                        <span class="htf-repo-name"
-                          ><svg aria-hidden="true"><use href="#i-repo" /></svg
-                          ><span>moooon/motir-ai</span></span
-                        >
-                        <div class="htf-repo-commit">
-                          <input
-                            class="htf-input htf-input-mono"
-                            aria-label="Commit for moooon/motir-ai"
-                            value="aa11bb2"
-                          />
-                          <span class="htf-from">from pull request #88</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                   <div class="form-actions">
                     <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
                     <button class="btn btn-primary btn-sm" type="button">Save</button>
@@ -6128,13 +5841,13 @@ git fetch origin &#x27;acme-31-rate-limit&#x27; &amp;&amp; git checkout &#x27;ac
           </div>
         </div>
         <p class="panel-note">
-          Below ~30rem the form stacks and <b>the section rows wrap commit under repository</b>,
-          which is the only layout decision the width forces: the repository name and its commit are
-          one fact and must not be split across a scroll. The editor toolbar wraps on its own (<span
-            class="mono"
-            >flex-wrap</span
-          >, the component&rsquo;s own), and the code block&rsquo;s language field keeps its place
-          in the block&rsquo;s bar.
+          Below ~30rem the form stacks, and there is almost nothing to stack: two fields and an
+          action row. The editor toolbar wraps on its own (<span class="mono">flex-wrap</span>, the
+          component&rsquo;s own) and the code block&rsquo;s language field keeps its place in the
+          block&rsquo;s bar.
+          <b>The section-row wrapping this panel used to be about is gone with the rows</b>, which
+          is the width case answering itself: a form with no derived data in it has no layout
+          problem at this width.
         </p>
       </div>
       <div class="dvb-col-narrow">
