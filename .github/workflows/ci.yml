@@ -697,10 +697,13 @@ jobs:
       # ── AND THE NUMBER IS NOW READ, WHICH IS THE WHOLE POINT (MOTIR-4294) ────
       # `assert-typecheck-headroom.mjs` SUBSUMES `pnpm typecheck`: it builds every
       # project in the solution — one process each, dependencies first, at the
-      # DEFAULT heap — and fails when any reading exceeds **90%** of the heap it
-      # runs under, naming the project and both numbers. Its exit code is this
-      # step's, so a type error still fails the lane exactly as before, with the
-      # compiler's own output.
+      # DEFAULT heap — and fails when any reading exceeds **90%** of a DECLARED
+      # heap budget (`DECLARED_HEAP_BUDGET_BYTES`, this runner's 4.05 GB), naming
+      # the project and both numbers. The budget is a constant rather than the
+      # runner's own heap so a runner-size change cannot move the line silently,
+      # and the script REFUSES (exit 2) when the budget exceeds the heap a child
+      # really gets (MOTIR-5696). Its exit code is this step's, so a type error
+      # still fails the lane exactly as before, with the compiler's own output.
       #
       # ⚠️ 90%, RE-AFFIRMED ON A RE-MEASURED SPREAD (MOTIR-4422) — the derivation
       # it used to rest on was falsified, and the number survived it. That

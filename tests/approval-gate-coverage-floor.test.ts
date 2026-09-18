@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -82,7 +83,6 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
 
   it('passes each server tag through UNCHANGED', () => {
     for (const tag of [
-      'APPROVAL_GATE_SUPERSEDED',
       'APPROVAL_GATE_NOT_AUTHORISED',
       'APPROVAL_GATE_NOT_FOUND',
       'APPROVAL_GATE_KIND_UNREGISTERED',
@@ -94,6 +94,23 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
       'MERGE_ALREADY_REQUEUED',
     ] as const) {
       expect(toGateRefusal(tag)).toEqual({ tag });
+    }
+  });
+
+  it('SUPERSEDED carries the cause when the door read one, and null when it did not (MOTIR-5667)', () => {
+    // A FIELD on an existing member, not a new tag: `REFUSAL_TAGS_ARE_TOTAL` is
+    // unchanged, which is MOTIR-5232's deliberate compile-break to make.
+    expect(toGateRefusal('APPROVAL_GATE_SUPERSEDED', { supersedeCause: 'head_moved' })).toEqual({
+      tag: 'APPROVAL_GATE_SUPERSEDED',
+      supersedeCause: 'head_moved',
+    });
+    // Null is a real answer — the caller had only the state — and the copy then
+    // says the reason was not recorded rather than guessing one.
+    for (const extra of [undefined, {}, { supersedeCause: null }] as const) {
+      expect(toGateRefusal('APPROVAL_GATE_SUPERSEDED', extra)).toEqual({
+        tag: 'APPROVAL_GATE_SUPERSEDED',
+        supersedeCause: null,
+      });
     }
   });
 
@@ -125,7 +142,10 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
     // lost link SUPERSEDES the gate. A `MERGE_SUBJECT_CHANGED` would be the second
     // vocabulary `refusals.ts`'s header forbids, so the client must not know it.
     expect(toGateRefusal('MERGE_SUBJECT_CHANGED')).toEqual({ tag: 'UNEXPECTED' });
-    expect(toGateRefusal('APPROVAL_GATE_SUPERSEDED')).toEqual({ tag: 'APPROVAL_GATE_SUPERSEDED' });
+    expect(toGateRefusal('APPROVAL_GATE_SUPERSEDED')).toEqual({
+      tag: 'APPROVAL_GATE_SUPERSEDED',
+      supersedeCause: null,
+    });
   });
 
   it('carries the decider’s surviving label on ALREADY_DECIDED', () => {
@@ -538,7 +558,10 @@ describe('decide — the POST-LOCK tenant gate (MOTIR-4796)', () => {
     });
 
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
 
     // AND NOTHING WAS DECIDED — the refusal is a refusal, not a rollback of a

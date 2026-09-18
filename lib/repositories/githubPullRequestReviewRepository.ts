@@ -75,9 +75,17 @@ export const githubPullRequestReviewRepository = {
       const existing = await tx.githubPullRequestReview.findUnique({ where: { githubReviewId } });
       if (existing) return existing;
 
-      try {
-        return await tx.githubPullRequestReview.create({
-          data: {
+      // ⚠️ `ON CONFLICT DO NOTHING`, NEVER `create` + `catch (P2002)` (MOTIR-5693).
+      // A raised P2002 ABORTS the enclosing Postgres transaction: every later
+      // statement answers `25P02 current transaction is aborted`, so a recovery
+      // read inside the same `tx` cannot run — the arm written for the race was
+      // dead code that turned the race into a thrown error. `createManyAndReturn`
+      // + `skipDuplicates` lets Postgres absorb the violation and leaves the
+      // transaction healthy. `jobQueueRepository.createIfAbsent` and
+      // `workItemLinkRepository.createManyIfAbsent` record the same reasoning.
+      const inserted = await tx.githubPullRequestReview.createManyAndReturn({
+        data: [
+          {
             githubReviewId,
             githubPullRequestId,
             reviewerGithubUserId,
@@ -89,17 +97,19 @@ export const githubPullRequestReviewRepository = {
             submittedAt,
             htmlUrl,
           },
-        });
-      } catch (err) {
-        // A genuinely concurrent first write lost the unique race. The winner's row
-        // is the answer — neither caller throws, and exactly one row exists. P2002 is
-        // matched by code rather than by instanceof, so this does not import the
-        // Prisma namespace into a signature (the type-boundary rule).
-        if ((err as { code?: string }).code !== 'P2002') throw err;
-        const winner = await tx.githubPullRequestReview.findUnique({ where: { githubReviewId } });
-        if (!winner) throw err;
-        return winner;
+        ],
+        skipDuplicates: true,
+      });
+      if (inserted[0]) return inserted[0];
+
+      // Nothing was inserted, so a genuinely concurrent first write won the race.
+      // The winner's row is the answer — neither caller throws, and exactly one row
+      // exists. This read is on a HEALTHY transaction, which is the whole point.
+      const winner = await tx.githubPullRequestReview.findUnique({ where: { githubReviewId } });
+      if (!winner) {
+        throw new Error(`github review ${githubReviewId} was neither inserted nor found`);
       }
+      return winner;
     }
 
     const row = await tx.githubPullRequestReview.findUnique({ where: { githubReviewId } });

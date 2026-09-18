@@ -334,7 +334,8 @@ describe('the SENTRY adapter, against a stubbed HTTP layer', () => {
     const page = await sentryMonitorProvider.listIssuesSince({
       accessToken: 'access-1',
       orgSlug: 'motir',
-      projectSlug: 'web',
+      externalProjectId: '42',
+      lastSeenAfter: null,
       cursor: null,
     });
 
@@ -419,22 +420,12 @@ describe('the FULL interface, driven through the FAKE', () => {
     const page = await fakeMonitorProvider.listIssuesSince({
       accessToken: 'x',
       orgSlug: 'y',
-      projectSlug: 'web',
+      externalProjectId: 'fake-web',
+      lastSeenAfter: null,
       cursor: null,
     });
     expect(page.issues[0]!.externalId).toBe('fake-issue-1');
     expect(page.nextCursor).toBeNull();
-    // A cursor means "resume", and the fake's one page is then exhausted.
-    expect(
-      (
-        await fakeMonitorProvider.listIssuesSince({
-          accessToken: 'x',
-          orgSlug: 'y',
-          projectSlug: 'web',
-          cursor: 'anything',
-        })
-      ).issues,
-    ).toEqual([]);
 
     await fakeMonitorProvider.resolveIssue({ accessToken: 'x', externalIssueId: 'fake-issue-1' });
     expect(fakeMonitorState().resolvedIssues).toEqual(['fake-issue-1']);
@@ -480,5 +471,172 @@ describe('the FULL interface, driven through the FAKE', () => {
   it('is registered under its own id as well, so a test can resolve it explicitly', () => {
     registerMonitorProvider(fakeMonitorProvider);
     expect(getMonitorProvider('fake').id).toBe('fake');
+  });
+});
+
+describe('listIssuesSince reads SINCE a watermark (MOTIR-5577)', () => {
+  const row = (id: string, lastSeen: string) => ({
+    id,
+    title: `Issue ${id}`,
+    culprit: null,
+    level: 'error',
+    count: '1',
+    firstSeen: '2026-09-01T00:00:00.000Z',
+    lastSeen,
+    permalink: null,
+  });
+
+  it('asks the ORGANISATION issues endpoint for the project, unresolved, by last seen, 100 a page', async () => {
+    stubFetch([{ body: [] }]);
+    await sentryMonitorProvider.listIssuesSince({
+      accessToken: 'access-1',
+      orgSlug: 'motir org',
+      externalProjectId: '4501',
+      lastSeenAfter: null,
+      cursor: 'c-7',
+    });
+
+    expect(calls).toHaveLength(1);
+    const url = new URL(calls[0]!.url);
+    expect(url.pathname).toBe('/api/0/organizations/motir%20org/issues/');
+    expect(url.searchParams.get('project')).toBe('4501');
+    expect(url.searchParams.get('query')).toBe('is:unresolved');
+    expect(url.searchParams.get('sort')).toBe('date');
+    expect(url.searchParams.get('limit')).toBe('100');
+    expect(url.searchParams.get('cursor')).toBe('c-7');
+    expect(calls[0]!.method).toBe('GET');
+  });
+
+  it('sends no cursor on the first page', async () => {
+    stubFetch([{ body: [] }]);
+    await sentryMonitorProvider.listIssuesSince({
+      accessToken: 't',
+      orgSlug: 'motir',
+      externalProjectId: '1',
+      lastSeenAfter: null,
+      cursor: null,
+    });
+    expect(new URL(calls[0]!.url).searchParams.has('cursor')).toBe(false);
+  });
+
+  it('CUTS a page that straddles the watermark, and ends the list there', async () => {
+    stubFetch([
+      {
+        body: [
+          row('newest', '2026-09-18T12:00:00.000Z'),
+          row('newer', '2026-09-18T11:00:00.000Z'),
+          // Exactly AT the watermark: the bound is EXCLUSIVE, so it is cut.
+          row('at', '2026-09-18T10:00:00.000Z'),
+          row('older', '2026-09-18T09:00:00.000Z'),
+        ],
+        headers: {
+          link: '<https://monitor-stub.invalid/next>; rel="next"; results="true"; cursor="c2"',
+        },
+      },
+    ]);
+
+    const page = await sentryMonitorProvider.listIssuesSince({
+      accessToken: 't',
+      orgSlug: 'motir',
+      externalProjectId: '1',
+      lastSeenAfter: new Date('2026-09-18T10:00:00.000Z'),
+      cursor: null,
+    });
+
+    expect(page.issues.map((i) => i.externalId)).toEqual(['newest', 'newer']);
+    // Everything after the cut is older still — on this page and every later
+    // one — so the Link header's cursor is DROPPED.
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it('hands back the Link cursor when the WHOLE page is after the watermark', async () => {
+    stubFetch([
+      {
+        body: [row('a', '2026-09-18T12:00:00.000Z'), row('b', '2026-09-18T11:00:00.000Z')],
+        headers: {
+          link: '<https://monitor-stub.invalid/next>; rel="next"; results="true"; cursor="c2"',
+        },
+      },
+    ]);
+    const page = await sentryMonitorProvider.listIssuesSince({
+      accessToken: 't',
+      orgSlug: 'motir',
+      externalProjectId: '1',
+      lastSeenAfter: new Date('2026-09-18T10:00:00.000Z'),
+      cursor: null,
+    });
+    expect(page.issues.map((i) => i.externalId)).toEqual(['a', 'b']);
+    expect(page.nextCursor).toBe('c2');
+  });
+
+  it('the FAKE honours the same contract — after the watermark, newest first, paged', async () => {
+    const at = (h: number) => new Date(`2026-09-18T${String(h).padStart(2, '0')}:00:00.000Z`);
+    const issue = (externalId: string, lastSeenAt: Date) => ({
+      externalId,
+      title: externalId,
+      culprit: null,
+      level: 'error',
+      eventCount: 1,
+      firstSeenAt: at(1),
+      lastSeenAt,
+      permalink: null,
+    });
+    fakeMonitorState().issues = [
+      issue('old', at(8)),
+      issue('mid', at(11)),
+      issue('newest', at(13)),
+      issue('new', at(12)),
+    ];
+    fakeMonitorState().pageSize = 2;
+
+    const input = {
+      accessToken: 'x',
+      orgSlug: 'y',
+      externalProjectId: 'fake-web',
+      lastSeenAfter: at(10),
+    };
+    const first = await fakeMonitorProvider.listIssuesSince({ ...input, cursor: null });
+    expect(first.issues.map((i) => i.externalId)).toEqual(['newest', 'new']);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await fakeMonitorProvider.listIssuesSince({
+      ...input,
+      cursor: first.nextCursor,
+    });
+    expect(second.issues.map((i) => i.externalId)).toEqual(['mid']);
+    // The LAST page says so — a poll must not loop on it.
+    expect(second.nextCursor).toBeNull();
+
+    // `old` is not after the watermark and never appears; nothing hit the wire.
+    expect(calls).toEqual([]);
+  });
+
+  it('the fake can fail with a status OTHER than 401, carried on the typed error', async () => {
+    fakeMonitorState().failNextStatus.set('listIssuesSince', { status: 500 });
+    const err = await fakeMonitorProvider
+      .listIssuesSince({
+        accessToken: 'x',
+        orgSlug: 'y',
+        externalProjectId: 'fake-web',
+        lastSeenAfter: null,
+        cursor: null,
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MonitorProviderCallError);
+    expect((err as MonitorProviderCallError).status).toBe(500);
+    expect((err as MonitorProviderCallError).providerReason).toBe('The provider answered 500.');
+
+    // One-shot, and a plain `failNext` keeps the 401 default.
+    fakeMonitorState().failNext.add('listIssuesSince');
+    const revoked = await fakeMonitorProvider
+      .listIssuesSince({
+        accessToken: 'x',
+        orgSlug: 'y',
+        externalProjectId: 'fake-web',
+        lastSeenAfter: null,
+        cursor: null,
+      })
+      .catch((e: unknown) => e);
+    expect((revoked as MonitorProviderCallError).status).toBe(401);
   });
 });

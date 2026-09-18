@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -226,7 +227,7 @@ describe('github_repo RLS — a shared installation, two tenants', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 
   it('refuses to RE-TENANT one’s own row to another workspace (WITH CHECK)', async () => {
@@ -239,7 +240,7 @@ describe('github_repo RLS — a shared installation, two tenants', () => {
           data: { workspaceId: fx.workspaceBId },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 });
 

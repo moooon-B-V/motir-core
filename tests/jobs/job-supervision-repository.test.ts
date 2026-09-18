@@ -1,4 +1,5 @@
 import { Prisma, type JobQueueRun } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -581,7 +582,7 @@ describe('tenancy — the policy bites under the non-bypass role', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 
   it('a tenant cannot DELETE a foreign row', async () => {

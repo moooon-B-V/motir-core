@@ -41,6 +41,7 @@ const BASE: ApprovalGateDTO = {
   decidedById: null,
   decidedAt: null,
   noteMd: null,
+  supersededCause: null,
   subjectVersion: null,
   decidedByLabel: null,
   routedToId: 'user-2',
@@ -158,6 +159,42 @@ describe('state G — superseded', () => {
     const { container } = render({ gate: WITHDRAWN });
     expect(screen.getByText('Withdrawn')).toBeTruthy();
     expect(container.textContent).toContain('This question was withdrawn');
+  });
+
+  it('names its REAL cause, one true sentence per value (MOTIR-5667)', () => {
+    // ⚠️ THE OTHER SIDE OF MOTIR-5586, and the reason that bug could only make
+    // the sentence VAGUER: the row recorded `state` and nothing else, so the
+    // frame could not tell six writers apart and *a newer design was published*
+    // was true of one of them. MOTIR-5659 gave the row its cause; this renders it.
+    const sentences: Array<[ApprovalGateDTO['supersededCause'], string]> = [
+      ['republished', 'A newer design was published, so this question was withdrawn.'],
+      ['withdrawn', 'The design result was withdrawn, so this question went with it.'],
+      ['head_moved', 'A push moved the commits, so this question was withdrawn.'],
+      ['member_closed', 'A pull request closed, so this question was withdrawn.'],
+      ['member_drafted', 'A pull request went back to draft, so this question was withdrawn.'],
+      ['set_changed', 'The pull requests changed, so this question was withdrawn.'],
+      ['pulled_back', 'The work was pulled back out of review, so this question was withdrawn.'],
+    ];
+    for (const [cause, sentence] of sentences) {
+      cleanup();
+      const { container } = render({ gate: { ...WITHDRAWN, supersededCause: cause } });
+      expect(`${cause}: ${container.textContent?.includes(sentence)}`).toBe(`${cause}: true`);
+    }
+  });
+
+  it('a row that PREDATES the column says the reason was not recorded — and names no cause', () => {
+    // ⚠️ `unknown` IS NOT A FALLBACK TO THE REPUBLISH SENTENCE. Reconstructing a
+    // cause from a row's shape manufactures evidence, and this sentence is shown
+    // to a person as fact. A null cause reads the same way, for the same reason.
+    for (const cause of ['unknown', null] as const) {
+      cleanup();
+      const { container } = render({ gate: { ...WITHDRAWN, supersededCause: cause } });
+      expect(container.textContent).toContain(
+        'This question was withdrawn. The reason was not recorded.',
+      );
+      expect(container.textContent).not.toContain('A newer design was published');
+      expect(container.textContent).not.toContain('A push moved the commits');
+    }
   });
 
   it('claims NO cause and NO current version — four writers supersede, one publishes (Bug MOTIR-5586)', () => {

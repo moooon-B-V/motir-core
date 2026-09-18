@@ -510,6 +510,25 @@ export interface JobEventDataMap {
   'work-item/derivation.requested': WorkItemDerivationRequestedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
   'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
+  /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
+   *  triggered and cross-tenant: it discovers every binding and fans out. */
+  'system.monitor-issue-reconcile': SystemScheduledData;
+  /** ONE binding's poll, fanned out by the tick above (MOTIR-5581). */
+  'monitor/connection.poll-requested': MonitorConnectionPollRequestedData;
+}
+
+/**
+ * The `monitor/connection.poll-requested` event payload (Story MOTIR-4929 ·
+ * MOTIR-5581) — one per bound monitored project per tick.
+ */
+export interface MonitorConnectionPollRequestedData {
+  /** The binding's workspace — the run's tenant on its ledger row. */
+  workspaceId: string;
+  /** The `monitor_connection` row to poll; the run re-reads it for everything. */
+  connectionId: string;
+  /** `<connectionId>:<tick run id>` — so a retried tick enqueues ONE poll of a
+   *  binding per tick, never two. */
+  idempotencyKey: string;
 }
 
 /**

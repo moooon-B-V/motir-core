@@ -261,10 +261,23 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ discrepancies: Array<{ containerCount: number; containerMinutes: number; driftMinutes: number; exceedsTolerance: boolean; fleetJobCount: number; meteredMinutes: number; repoName: string }>; org: string; outcome: "reconciled"; periodStart: Date; repos: Array<{ containerCount: number; containerMinutes: number; driftMinutes: number; exceedsTolerance: boolean; fleetJobCount: number; meteredMinutes: number; repoName: string }> } | { outcome: "skipped"; reason: "metering_disabled" }',
   },
-  'reconcile-open-deliveries': {
+  'list-pollable-connections': {
+    file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
+    shape: 'Array<{ id: string; workspaceId: string }>',
+  },
+  'dispatch-polls': {
+    file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
+    shape: '{ dispatched: number }',
+  },
+  poll: {
+    file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
+    shape:
+      '{ filed: number; pages: number; refiled: number; skipped: number; status: "failed" | "ok"; updated: number }',
+  },
+  'reconcile-open-deliveries-v2': {
     file: 'lib/jobs/definitions/pullRequestReconcile.ts',
     shape:
-      '{ examined: number; failed: number; gone: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
+      '{ examined: number; failed: number; gatesRaised: number; gone: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
   },
   'reconcile-github-billed': {
     file: 'lib/jobs/definitions/ciMinutesReconcile.ts',
@@ -384,6 +397,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-open-deliveries': {
+    shape:
+      '{ examined: number; failed: number; gone: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
+    supersededBy: 'reconcile-open-deliveries-v2',
+    reason:
+      "MOTIR-5671 added `gatesRaised` to the reconcile summary — the sweep now repairs a card whose GATES are wrong as well as one whose merge was never heard about, and counts that separately because it is a different repair. A memo written under the old id carries the narrower shape. The step is a READ and an idempotent repair (`reconcileGatesFor` only raises what is missing, and the job is `retryPolicy: 'idempotent'`), so re-executing it under the new id on a resumed run is safe — which is why the answer is a bump rather than a boundary guard on the replayed value.",
+  },
   'roll-up-parent': {
     shape:
       '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',

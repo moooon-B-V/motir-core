@@ -9,6 +9,10 @@ import ts from 'typescript';
 // TypeScript reads its JSDoc and types these four — which is why every reading
 // below has to answer the `| null` the parser really returns.
 import {
+  budgetRefusal,
+  childEnv,
+  childHeapLimitBytes,
+  DECLARED_HEAP_BUDGET_BYTES,
   inDependencyOrder,
   overTheLine,
   parseDiagnostics,
@@ -162,8 +166,9 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
     const breached = overTheLine(readings, LIMIT_BYTES, 0.9);
     expect(breached.map((b) => b.project)).toEqual(['tsconfig.tests.json']);
     expect(breached[0]!.fraction).toBeGreaterThan(0.9);
-    // …and nothing is over the line when the heap is the real one.
-    expect(overTheLine(readings, 4.05 * 1024 ** 3, 0.9)).toEqual([]);
+    // …and nothing is over the line at the lane's DECLARED budget — 4345298944
+    // bytes, the 4.05 GB heap these captures were taken under (MOTIR-5696).
+    expect(overTheLine(readings, DECLARED_HEAP_BUDGET_BYTES, 0.9)).toEqual([]);
   });
 
   it('reads the solution’s projects and orders them dependencies-first', () => {
@@ -309,6 +314,60 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
     expect(src, 'the probe must be measured only under --baseline').toMatch(
       /if \(process\.argv\.includes\('--baseline'\)\) projects\.push\(BASELINE_PROJECT\);/,
     );
+  });
+
+  // ── The DECLARED denominator (MOTIR-5696) ────────────────────────────────
+  //
+  // The gate used to divide by `v8.getHeapStatistics().heap_size_limit`, which
+  // node derives from the machine's RAM — so the 90% line was a property of the
+  // runner. It now divides by a declared budget, and a declared budget is only
+  // honest while the children really have that much heap: one LARGER than their
+  // heap reads green right up to an OOM with no file named. These hold both halves.
+
+  it('divides by the DECLARED budget, never by the machine’s heap', () => {
+    const src = readFileSync(join(ROOT, SCRIPT), 'utf8');
+    const code = src
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\*)/.test(l))
+      .join('\n');
+    expect(code).toMatch(/process\.env\[LIMIT_OVERRIDE_ENV\] \?\? DECLARED_HEAP_BUDGET_BYTES/);
+    // The one `heap_size_limit` left in the code is the CHILD probe's, inside a
+    // string handed to a spawned node — never this process's own statistics.
+    expect(code).not.toMatch(/\bv8\.getHeapStatistics\(\)/);
+    expect(code).not.toMatch(/import v8 from/);
+    expect(DECLARED_HEAP_BUDGET_BYTES).toBe(4_345_298_944);
+  });
+
+  it('REFUSES a budget larger than the children’s real heap, naming both numbers', () => {
+    const child = 4_345_298_944;
+    expect(budgetRefusal(child, child), 'equal is honest').toBeNull();
+    expect(budgetRefusal(3 * 1024 ** 3, child), 'under fires early, which is allowed').toBeNull();
+    const refusal = budgetRefusal(8 * 1024 ** 3, child);
+    expect(refusal).not.toBeNull();
+    expect(refusal).toContain(String(8 * 1024 ** 3));
+    expect(refusal).toContain(String(child));
+  });
+
+  it('REFUSES a budget that is not a positive number — NaN would pass everything', () => {
+    // `Number('abc')` is NaN, every fraction is then NaN, and `NaN > 0.9` is
+    // false — so without this an override typo is a gate that passes the tree.
+    expect(overTheLine([{ project: 'p', memoryKb: 1e9 }], Number.NaN, 0.9)).toEqual([]);
+    expect(budgetRefusal(Number.NaN, 4e9)).not.toBeNull();
+    expect(budgetRefusal(0, 4e9)).not.toBeNull();
+    expect(budgetRefusal(-1, 4e9)).not.toBeNull();
+  });
+
+  it('checks the budget against the CHILD’s heap, which a parent bump does not raise', () => {
+    // The numerator is measured in a child spawned with `childEnv`, so the
+    // denominator's honesty is a property of THAT process. A parent run under
+    // `--max-old-space-size` has a bigger heap of its own and would wave a
+    // too-large budget through if it were the one asked.
+    const bumped = { ...process.env, NODE_OPTIONS: '--max-old-space-size=256' };
+    expect(childEnv(bumped).NODE_OPTIONS).toBe('');
+    const plain = childHeapLimitBytes({ ...process.env, NODE_OPTIONS: '' });
+    expect(plain).toBeGreaterThan(512 * 1024 ** 2);
+    // The 256 MB flag is stripped, so the child reports the machine default.
+    expect(childHeapLimitBytes(bumped)).toBe(plain);
   });
 
   it('parses a tsconfig whose include glob contains `/**/`', () => {

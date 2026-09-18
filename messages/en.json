@@ -8366,7 +8366,17 @@
       "port": "This question was withdrawn.",
       "portCite": "Nobody decided it.",
       "record": "No decision · no one to attribute",
-      "at": "withdrawn {when}"
+      "at": "withdrawn {when}",
+      "cause": {
+        "republished": "A newer design was published, so this question was withdrawn.",
+        "withdrawn": "The design result was withdrawn, so this question went with it.",
+        "head_moved": "A push moved the commits, so this question was withdrawn.",
+        "member_closed": "A pull request closed, so this question was withdrawn.",
+        "member_drafted": "A pull request went back to draft, so this question was withdrawn.",
+        "set_changed": "The pull requests changed, so this question was withdrawn.",
+        "pulled_back": "The work was pulled back out of review, so this question was withdrawn.",
+        "unknown": "This question was withdrawn. The reason was not recorded."
+      }
     },
     "refusal": {
       "alreadyDecided": {
@@ -8377,6 +8387,19 @@
       "superseded": {
         "title": "This question was withdrawn.",
         "next": "Nobody decided it. Reload to see where it went."
+      },
+      "stale": {
+        "subject": "A newer version was published while you were reading.",
+        "pullRequests": "New commits reached the pull requests while you were reading.",
+        "criteria": "The acceptance criteria were edited while you were reading.",
+        "several": "Several things changed while you were reading: {things}.",
+        "next": "Your decision was not recorded. Look at the current version, then decide again.",
+        "control": "Show the current version",
+        "noun": {
+          "subject": "the published version",
+          "pullRequests": "the pull requests",
+          "criteria": "the acceptance criteria"
+        }
       },
       "notAuthorised": {
         "title": "This decision is not yours to make.",
@@ -8700,7 +8723,22 @@
     },
     "row": {
       "bound": "Bound {when}",
-      "disconnect": "Stop monitoring {slug}"
+      "disconnect": "Stop monitoring {slug}",
+      "level": {
+        "label": "Minimum level",
+        "every": "Every level",
+        "helper": "Choosing a lower level also checks earlier issues since this project was first monitored.",
+        "saving": "Saving…",
+        "failed": "<b>Couldn't change level.</b> Nothing changed — try again."
+      },
+      "poll": {
+        "waiting": "Waiting for the first check",
+        "ok": "Checked for new errors {ago}",
+        "filed": "{count, plural, one {<b># bug filed</b>} other {<b># bugs filed</b>}}",
+        "overdue": "<b>No check since {since}.</b> Two scheduled checks were missed.",
+        "failed": "<b>Couldn't check for new errors:</b> {reason}",
+        "lastSuccess": "Last successful check {when}."
+      }
     },
     "confirm": {
       "cancel": "Cancel",

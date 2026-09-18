@@ -231,6 +231,18 @@ export const mergeQueueExitService = {
           });
           result.moved!.push(item.identifier);
         }
+        // ⚠️ AND NOTHING IS RE-RAISED HERE (Subtask MOTIR-5666). An ejection is
+        // news about the COMMITS, and the merge question comes back the way §4's
+        // THIRD AMENDMENT decision 6 already says: the card is HELD at
+        // `implemented` with no awaiting gate, and the routes back are *Queue
+        // again* — which reuses the decision that already stands — and a PUSH,
+        // whose new head is a new question. `design-result.md` AMENDMENT 6 Q2
+        // names that mechanism itself.
+        //
+        // The DESIGN gate is untouched, and cannot be worked around either:
+        // publish, upload and withdraw are refused while the design approval
+        // stands (MOTIR-5661), which is what makes *a failure is about the
+        // commits* true rather than merely intended.
       }
       return result;
     };

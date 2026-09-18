@@ -32,6 +32,11 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
     decidedById: row.decidedById,
     decidedAt: row.decidedAt?.toISOString() ?? null,
     noteMd: row.noteMd,
+    // WHY it was withdrawn, or null on every other state (AMENDMENT 6 Q5). It
+    // crosses the wire as it is stored: `unknown` is a real value meaning *the
+    // reason was not recorded*, and mapping it to null here would make a row that
+    // predates the column indistinguishable from an awaiting one.
+    supersededCause: row.supersededCause,
     // The audit set (ADR §6a). Every one is nullable on the row and stays
     // nullable on the wire — a null is "not decided yet", and collapsing one to
     // a placeholder here would be the mapper asserting something the record

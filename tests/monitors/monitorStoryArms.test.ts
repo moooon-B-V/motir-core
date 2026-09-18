@@ -157,6 +157,7 @@ describe('the binding write classifies a unique violation by the index it names'
     installationId: 'i1',
     externalProjectId: 'e1',
     externalProjectSlug: 'web',
+    boundByUserId: 'u1',
   };
   const txRejecting = (error: unknown) =>
     ({
@@ -389,7 +390,8 @@ describe('the Sentry adapter’s refusal and fallback arms', () => {
     const page = await sentryMonitorProvider.listIssuesSince({
       accessToken: 't',
       orgSlug: 'acme',
-      projectSlug: 'web',
+      externalProjectId: '7',
+      lastSeenAfter: null,
       cursor: 'c-1',
     });
     expect(new URL(requested[0]!).searchParams.get('cursor')).toBe('c-1');

@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,18 @@ vi.mock('@/lib/jobs/sendEvent', () => ({
   },
 }));
 
+/** The one external a design publish touches; mocked as a STORE so the publish's
+ *  authoritative size/type read answers what was put. */
+const blobs = new Map<string, { contentType: string; size: number }>();
+vi.mock('@/lib/blob/uploader', () => ({
+  putAttachment: vi.fn(),
+  putPrivateAttachment: vi.fn(),
+  signedDownloadUrl: vi.fn(),
+  deleteAttachmentBlob: vi.fn(),
+  headPrivateBlob: vi.fn(async (pathname: string) => blobs.get(pathname) ?? null),
+  mintPrivateUploadToken: vi.fn(async (pathname: string) => `token-for:${pathname}`),
+}));
+
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -17,6 +30,9 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { designEvidenceService, designPrefix } from '@/lib/services/designEvidenceService';
+import { makeWorkWaitOn } from '@/tests/helpers/designWaits';
+import { shaFor } from '../helpers/commitShaFixtures';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -197,7 +213,10 @@ async function approvedAndQueued(email: string) {
   await ci(12, 'sha-b');
   expect(await statusOf(item.id)).toBe('in_review');
   const [gate] = await awaitingGates(item.id);
-  await approvalGatesService.decide({ gateId: gate!.id, decision: 'approve', source: 'ui' }, s.ctx);
+  await approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, decision: 'approve', source: 'ui' },
+    s.ctx,
+  );
   expect(await statusOf(item.id)).toBe('approved');
   await markQueued(11);
   await markQueued(12);
@@ -206,6 +225,7 @@ async function approvedAndQueued(email: string) {
 }
 
 beforeEach(async () => {
+  blobs.clear();
   await truncateAuthTables();
   _resetInstallationTokenCache();
   sent.length = 0;
@@ -490,5 +510,166 @@ describe('NO SECOND GATE over approved commits (guard b)', () => {
 
     expect(await statusOf(item.id)).toBe('approved');
     expect(await awaitingGates(item.id)).toEqual([]);
+  });
+});
+
+// ── MOTIR-5666: the merge question comes back ALONE, and the design cannot be
+// swapped underneath it (`design-result.md` AMENDMENT 6 Q2 and Q3) ───────────────
+describe('a DESIGN card the queue ejects', () => {
+  /** Publish a design result onto `item`. */
+  async function designed(s: Scenario, item: { id: string }) {
+    await makeWorkWaitOn(item.id, { projectId: s.project.id, ctx: s.ctx });
+    const prefix = designPrefix(s.workspace.id, item.id);
+    blobs.set(`${prefix}v1.mock.html`, { contentType: 'text/html', size: 2048 });
+    blobs.set(`${prefix}v1.design-notes.md`, { contentType: 'text/markdown', size: 512 });
+    return designEvidenceService.recordFromPathnames(
+      {
+        workItemId: item.id,
+        assets: [
+          {
+            kind: 'mock',
+            sourcePath: 'design/work-items/v1.mock.html',
+            pathname: `${prefix}v1.mock.html`,
+          },
+          {
+            kind: 'note_file',
+            sourcePath: 'design/work-items/design-notes.md',
+            pathname: `${prefix}v1.design-notes.md`,
+          },
+        ],
+        commitSha: shaFor('v1'),
+      },
+      s.ctx,
+    );
+  }
+
+  /** Approve the card's design gate through the decide door. */
+  async function approveDesign(s: Scenario, item: { id: string }) {
+    const gate = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: item.id, kind: 'design_result' },
+    });
+    await approvalGatesService.decide(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+      s.ctx,
+    );
+    return { gate: await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } }) };
+  }
+
+  /**
+   * `approvedAndQueued`, with a published and APPROVED design on the card.
+   *
+   * ⚠️ THE ORDER IS GREEN FIRST, THEN BOTH DECISIONS. A design approved BEFORE the
+   * set goes green is held and carried by `settleGreenVerdict` (AMENDMENT 6 Q4), so
+   * no merge gate is ever raised and there is nothing to enqueue from — a true
+   * behaviour, and a different scenario from the one this block is about. Deciding
+   * each gate through the DOOR rather than through `approveAndMerge` keeps the host
+   * out of it: what is under test is the ejection, not the merge.
+   */
+  async function designedAndQueued(email: string) {
+    const s = await makeScenario(email);
+    const item = await card(s, 'A design that ships as code', [11, 12]);
+    await designed(s, item);
+    await ci(11, 'sha-a');
+    await ci(12, 'sha-b');
+    const design = await approveDesign(s, item);
+    const [merge] = await awaitingGates(item.id);
+    await approvalGatesService.decide(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: merge!.id, decision: 'approve', source: 'ui' },
+      s.ctx,
+    );
+    await markQueued(11);
+    await markQueued(12);
+    return { s, item, design };
+  }
+
+  it('leaves the DESIGN gate decided and holds the card with no awaiting gate', async () => {
+    const { item, design } = await designedAndQueued('mq-design-eject@example.com');
+
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d1');
+
+    // Decision 6's hold is UNCHANGED: the merge question comes back through Queue
+    // again and through a push, not as a second ask about commits already approved.
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+
+    // And the design decision is exactly as it was. Nobody is asked a second time
+    // whether the design is right, because nothing about the design changed.
+    const after = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: design.gate.id } });
+    expect(after).toMatchObject({ state: 'approved', supersededCause: null });
+    expect(after.decidedAt?.toISOString()).toBe(design.gate.decidedAt?.toISOString());
+    expect(
+      await adminDb.approvalGate.count({ where: { workItemId: item.id, kind: 'design_result' } }),
+    ).toBe(1);
+  });
+
+  it('REFUSES a republish and a withdrawal after the ejection — the failure is about the COMMITS', async () => {
+    // The shape MOTIR-5661 was written for, driven end to end here rather than in
+    // its unit context: the queue ejects, an agent comes back to the card, and
+    // re-publishing the asset is a reasonable-looking thing for it to do. It would
+    // turn a commits problem into a shipped design nobody approved.
+    const { s, item } = await designedAndQueued('mq-design-republish@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d2');
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    const prefix = designPrefix(s.workspace.id, item.id);
+    blobs.set(`${prefix}v2.mock.html`, { contentType: 'text/html', size: 2048 });
+    blobs.set(`${prefix}v2.design-notes.md`, { contentType: 'text/markdown', size: 512 });
+    await expect(
+      designEvidenceService.recordFromPathnames(
+        {
+          workItemId: item.id,
+          assets: [
+            {
+              kind: 'mock',
+              sourcePath: 'design/work-items/v2.mock.html',
+              pathname: `${prefix}v2.mock.html`,
+            },
+            {
+              kind: 'note_file',
+              sourcePath: 'design/work-items/design-notes.md',
+              pathname: `${prefix}v2.design-notes.md`,
+            },
+          ],
+          commitSha: shaFor('v2'),
+        },
+        s.ctx,
+      ),
+    ).rejects.toMatchObject({ code: 'DESIGN_CARD_CLOSED' });
+
+    await expect(
+      designEvidenceService.withdrawCurrentForWorkItem({ workItemId: item.id }, s.ctx),
+    ).rejects.toMatchObject({ code: 'DESIGN_CARD_CLOSED' });
+
+    await expect(
+      designEvidenceService.createUploadTokens(
+        {
+          workItemId: item.id,
+          files: [
+            {
+              kind: 'mock',
+              sourcePath: 'design/work-items/v2.mock.html',
+              contentType: 'text/html',
+            },
+          ],
+        },
+        s.ctx,
+      ),
+    ).rejects.toMatchObject({ code: 'DESIGN_CARD_CLOSED' });
+  });
+
+  it('a PUSH after the ejection re-arms the merge question and leaves the design alone', async () => {
+    const { item, design } = await designedAndQueued('mq-design-push@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d3');
+
+    await ci(11, 'sha-a2');
+
+    // A new head is a new question — exactly ONE fresh merge gate over it.
+    const fresh = await awaitingGates(item.id);
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0]!.subjectVersion).toBe('moooon/acme#11@sha-a2,moooon/acme#12@sha-b');
+    // …and the design gate is untouched by a push, as by an ejection.
+    expect(
+      await adminDb.approvalGate.findUniqueOrThrow({ where: { id: design.gate.id } }),
+    ).toMatchObject({ state: 'approved', supersededCause: null });
   });
 });

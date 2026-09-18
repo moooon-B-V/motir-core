@@ -27,6 +27,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Design result panel**                                             | **`design-result.mock.html`** + `design-result.png`                                   | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. BOTH the note and the frame MEASURED at 32rem with their own scroll in both axes — the note's bound is MOTIR-3510's amendment, and it renders through `MarkdownView` (`wmde-markdown motir-prose`). Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design), amended by MOTIR-3510. Gates MOTIR-2670. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **The UNIVERSAL APPROVAL FRAME (9 states)**                         | **`approval-control.mock.html`** + `approval-control.png`                             | The UNIVERSAL APPROVAL FRAME — a port that renders what is being decided, with the verbs below it. Gates MOTIR-4792 and, through it, every consumer. The Approvals TAB (MOTIR-4879) and the pull-request-merge subject body (MOTIR-4882) are NOT here. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **The item page hands the decision over — the call-to-action band** | **`approval-cta.mock.html`**                                                          | While the Design result section's gate is `awaiting` and the reader may decide it, the section's body is the version, how long it has waited, the state and ONE control, **Review & approve**, into the full-screen approval overlay. One container, one label: the frame never nests its own bordered card and _Design result_ heading inside the section; the kept states `B` / `E` / `F` / `G` render flush. No-gate unchanged. Narrow in `zh`. AMENDS the frame's item-page placement (dated 2026-09-15, revised on review). MOTIR-5228 (story MOTIR-5215) — gates MOTIR-5229. See § _The item page HANDS THE DECISION OVER_.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **The STALE refusal — what you were looking at changed**            | **`approval-control--stale-refusal.mock.html`** (DELTA)                               | A DELTA on the UNIVERSAL APPROVAL FRAME (MOTIR-5233, Story MOTIR-5232): the fourth refusal a reader can meet on a live gate — the question is still theirs and something it is about MOVED (the published version, the pull requests, the acceptance criteria). One sentence per component, one for more than one, en + zh; ONE control, _Show the current version_, that re-reads in place. See § _The STALE refusal_.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **The repository SET on the detail page**                           | **`repository-set.mock.html`** + `repository-set.png`                                 | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. **REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038):** every repository is now a LINK to the project's `project_repository` row, carrying its ROLE and — when it is not established — its establish STATE. TEN panels: the door · held · delivered · unrecorded branch · **the five delivery states** · **the destination** · one repo · none · **a `proposed` row** · editing. Story MOTIR-2725 · MOTIR-2413 (design), redrawn by MOTIR-3038. Gates MOTIR-2415 / MOTIR-3042; inherited by MOTIR-2414. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **The DELIVERY SET on the detail page**                             | **`delivery-set.mock.html`** + `delivery-set.png`                                     | The pull requests that DELIVER a card, many-to-many (MOTIR-3655). EXTENDS `repository-set.mock.html` and re-decides nothing it settled: the rail's glyph gains a truer PREDICATE (delivered = every delivery in that repository landed, not any linked pull request), and the caption's SUBJECT becomes whatever is outstanding — a repository, an open pull request, or one merged onto a base that is not its trunk. FOUR panels: the one-repository/two-pull-request card today's vocabulary reads as DELIVERED while the gate holds it · both merged · merged but not onto trunk · one delivery, unchanged. The ONE new element is a `Not on trunk` pill. Story MOTIR-3655 · MOTIR-3691 (design). Gates MOTIR-3660. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **The repository SET in the QUICK VIEW**                            | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png`           | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -6566,7 +6567,17 @@ amendment adds one CASE to a drawn element; it draws no new element and no new s
 2. **`E` keeps showing the approved version** even after a newer design is published — which is what ADR §6c's pin is FOR. Without the port, `E` is a row of metadata about something nobody can look at any more, and the pin's purpose is invisible. **§6c's pin is keyed on the SUBJECT, not on the gate kind** (re-keyed by MOTIR-4911, because a design with a pull request is approved through `pull_request_approval` and a kind-keyed pin would simply stop firing for it, silently) — so `E` draws the pinned version for BOTH arms of §8.
 3. **`G` (`superseded`) is colourless and verb-less.** Written by the PRODUCT, not a person (ADR §6b); the audit must never read it as a decision somebody made.
 
-   > **⚠️ AMENDED 2026-09-17 (Bug [MOTIR-5586](motir:cmu30qjra00g6hvoiiu6ljuhv)) — `G`'s dead port NAMES NO CAUSE AND POINTS NOWHERE. The mocks quote the superseded wording and are records of their moment; this line is the copy of record.**
+   > **⚠️ AMENDED AGAIN 2026-09-17 (Bug [MOTIR-5652](motir:cmu5dutva002dhwtxwxlbty76) · Subtask MOTIR-5667) — `G`'s dead port NAMES ITS REAL CAUSE, one true sentence per value.**
+   >
+   > ~~_"This question was withdrawn." / "Nobody decided it."_~~ → the sentence for the row's own `superseded_cause` (`approvalGate.withdrawn.cause.*`, `en` + `zh`): _"A newer design was published…"_ · _"The design result was withdrawn…"_ · _"A push moved the commits…"_ · _"A pull request closed…"_ · _"The pull requests changed…"_ · _"The work was pulled back out of review…"_.
+   >
+   > **The amendment below could only make the sentence VAGUER, and said so.** Its reasoning was right about the row, not about the copy: `superseded` recorded `state` and nothing else, so the frame could not tell the writers apart and any named cause was false most of the time. MOTIR-5659 gave the row a CAUSE, from a closed vocabulary with one value per writing path — so the frame can say what happened instead of only that something did.
+   >
+   > **`unknown` says _the reason was not recorded_ and NEVER a real cause.** It is the backfill's value for rows that predate the column, and a null cause reads the same way. Inferring one from a row's shape would manufacture evidence, and this sentence is shown to a person as fact.
+   >
+   > The same sentence is now the `APPROVAL_GATE_SUPERSEDED` refusal's headline, because a reader who presses a withdrawn question and then looks at the frame is being told about ONE event.
+   >
+   > **⚠️ AMENDED 2026-09-17 (Bug [MOTIR-5586](motir:cmu30qjra00g6hvoiiu6ljuhv)) — SUPERSEDED BY THE AMENDMENT ABOVE; kept as the record of why the copy went vague first. `G`'s dead port NAMES NO CAUSE AND POINTS NOWHERE. The mocks quote the superseded wording and are records of their moment; this line is the copy of record.**
    >
    > ~~_"A newer design was published, so this question was withdrawn." / "Nobody decided it. The current version is above."_~~ → **_"This question was withdrawn." / "Nobody decided it."_** (`approvalGate.withdrawn.port` / `.portCite`, `en` + `zh`.)
    >
@@ -8014,3 +8025,112 @@ and Tree alike.
   `failing` in ANY status, done included, and a person combines it with Status. That is deliberate — the
   badge's done-category rule is a DRAWING rule, and making the filter share it would make a saved view
   silently lossy.
+
+## ⭐ The STALE refusal — what you were looking at changed while you read it (Story MOTIR-5232 · MOTIR-5233 — `approval-control--stale-refusal.mock.html`, DATED 2026-09-18)
+
+**A DELTA, and what it amends:** `approval-control.mock.html` § _The UNIVERSAL APPROVAL FRAME_ above —
+its state **`H`**, the refusal drawn IN PLACE between the port and the verbs. That mock is unchanged;
+this section adds ONE member to the frame's drawn refusal set. The container it is drawn in at full
+bleed is `design/workbench/approval-overlay.mock.html` (§ 22 of `design/workbench/design-notes.md`),
+whose Panel 6 this delta composes class for class.
+
+### Why it is its own refusal
+
+A reader meets THREE refusals on a gate that is still `awaiting` when they open it, and they mean
+opposite things:
+
+| refusal                           | what happened                                       | what the reader should do                  | control                        |
+| --------------------------------- | --------------------------------------------------- | ------------------------------------------ | ------------------------------ |
+| `APPROVAL_GATE_ALREADY_DECIDED`   | somebody else answered it                           | nothing — read their answer                | none                           |
+| `APPROVAL_GATE_SUPERSEDED`        | the question was WITHDRAWN                          | leave                                      | none                           |
+| **`APPROVAL_GATE_STALE_SUBJECT`** | **still yours, and what you were looking at MOVED** | **take the current version, decide again** | **_Show the current version_** |
+
+**Only the third has a next action the reader wants**, so it is the only refusal that carries a
+control. Panel 1 draws the three side by side: the same band (`role="alert"`, between port and verbs,
+`--el-tint-peach`), told apart by the words, the glyph and the control — never by colour alone.
+
+### What it SAYS — settled copy
+
+The server names what moved (MOTIR-5234's stamp): any of `subject` · `pull_requests` · `criteria`.
+
+| moved                   | en                                                                              | zh                                               |
+| ----------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `[subject]`             | A newer version was published while you were reading.                           | 你阅读期间，发布了更新的版本。                   |
+| `[pull_requests]`       | New commits reached the pull requests while you were reading.                   | 你阅读期间，Pull Request 有了新的提交。          |
+| `[criteria]`            | The acceptance criteria were edited while you were reading.                     | 你阅读期间，验收标准被修改了。                   |
+| two or three            | Several things changed while you were reading: {things}.                        | 你阅读期间有多处变化：{things}。                 |
+| next action (every one) | Your decision was not recorded. Look at the current version, then decide again. | 你的决定未被记录。请查看当前版本，然后重新决定。 |
+| the control             | Show the current version                                                        | 查看当前版本                                     |
+
+- **`{things}`** is the moved components' NOUNS in this fixed order — _the published version_ · _the
+  pull requests_ · _the acceptance criteria_ (zh _已发布的版本_ · _Pull Request_ · _验收标准_) — joined by
+  the locale's own list format (`Intl.ListFormat`, `type: 'conjunction'`), so en reads _a, b, and c_
+  and zh _a、b和c_.
+- **_version_, not _design_**, on purpose: the frame is universal and the pressed gate's subject is not
+  always a design. **When the PRESSED gate is the merge gate, its subject IS the pull requests** — the
+  server reports `pull_requests` there, never `subject` (planning flag below).
+- The sentences keep the frame's refusal voice: the headline says what happened, the next action begins
+  _Your decision was not recorded._ exactly as `ALREADY_DECIDED`'s does, because in both cases nothing
+  was written.
+
+### The control — ONE, and it RE-READS IN PLACE (decided)
+
+**_Show the current version_ re-runs the frame's own read for the same (work item, kind)** — the address
+the overlay is already on — and nothing else. The port swaps to the current version, band 1 names it,
+a fresh stamp arrives with it, the refusal is removed, the verbs return live (state `A`), and focus moves
+to the port region so the reader starts again from the top of what changed. **It never re-opens the
+surface and never navigates**: the reader keeps the overlay, the page behind it, and their place. If the
+re-read finds the question since ANSWERED or WITHDRAWN, the frame shows that state (`E`, `F`, `G`) — the
+control promised the current version, and that is the current version.
+
+**The verbs are DISABLED while any refusal is shown**, this one included: a second press would post the
+same stale stamp and be refused again, so the refusal's own next action is the only live one.
+
+### Where it can appear — TWO pressing hosts
+
+- **The approval overlay** (Panels 2, 4, 6) — full bleed, the port at its expanded height.
+- **The item page's Development block** (Panel 5) — the frame `DevelopmentGateFrame` renders for a design
+  with pull requests, where ONE press decides the design gate and the merge gate (MOTIR-5652). This is
+  the case the `pull_requests` component exists for: without it the press would merge commits the reader
+  never saw.
+- **NOT the item page's call-to-action band** (`approval-cta.mock.html`). The card said _"the item page's
+  band"_; since MOTIR-5215 that band carries no verbs, so it can never meet a refusal. Corrected here
+  rather than drawn.
+
+### Token map — what the delta adds
+
+- **The band** — the shipped `RefusalAlert`, unchanged, plus `flex-wrap items-start gap-x-3 gap-y-2` so
+  the control sits at the trailing edge; the sentence is `flex-1 min-w-0`, and `basis-full` below `sm`
+  so the control drops under it (Panel 6).
+- **The glyph** — lucide `refresh-cw`, `h-4 w-4`, ink `--el-text-secondary`. Not
+  `--el-danger-on-surface`: nothing failed, and the triangle is what the two leave-refusals keep.
+- **The control** — the shipped `Button`, `variant="secondary"`, `size="sm"`, leading `refresh-cw` at
+  `h-3.5 w-3.5`. Secondary, because the frame's primary action stays _Approve_.
+- **Ink** — headline `--el-text-strong`, next action `--el-text-secondary`; no `--el-text-muted` or
+  `--el-text-faint` is painted.
+
+### GIVES / TAKES
+
+| work item                          | GIVES / TAKES                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5235** (the surfaces)      | **GIVES** every sentence in both locales, the list rule, the control's label and its re-read-in-place behaviour, the disabled verbs, the glyph and the two hosts. **TAKES** — ELEMENT: a control inside a refusal band, which no refusal had; PREMISE: the item page's CTA band is not a host (its card says it is). |
+| **MOTIR-5234** (the stamp)         | **GIVES** nothing drawn. **TAKES** — STRUCTURE: `moved` is a SET over `subject` · `pull_requests` · `criteria`, and a pressed MERGE gate reports `pull_requests`, not `subject`.                                                                                                                                     |
+| **MOTIR-5237** (the E2E)           | **GIVES** the exact strings its en + zh assertions read, and the control's accessible name.                                                                                                                                                                                                                          |
+| **MOTIR-5236** (the vitest gate)   | **neither** — no drawn element; its seams are the stamp's.                                                                                                                                                                                                                                                           |
+| **MOTIR-4789** (the frame)         | **neither** — `done`; composed. State `H`'s band is reused unchanged and gains one sibling member.                                                                                                                                                                                                                   |
+| **MOTIR-5222** (the overlay asset) | **neither** — `done`; Panel 6's container composed class for class.                                                                                                                                                                                                                                                  |
+| **MOTIR-5667** (withdrawn causes)  | **neither** — `done`; the SUPERSEDED refusal's headline in Panel 1 is its shipped `withdrawn.cause.republished` sentence, unchanged.                                                                                                                                                                                 |
+
+Grep over the story's SUBTREE (MOTIR-5233…5237) and the two hosts' files: no other card draws a refusal
+control, and MOTIR-5243 (the open overlay learning its subject moved, Story MOTIR-5238) draws a
+_non-refusing_ notice — a different element, and the stamp this refusal checks is what it reads.
+
+### ⚠️ Planning flags
+
+- **The server reports `pull_requests`, not `subject`, when the PRESSED gate is the merge gate** — its
+  own subject IS the pull requests. MOTIR-5234 owns the mapping.
+- **The disabled verbs are a BEHAVIOUR** — MOTIR-5235 keeps them disabled until the control has re-read,
+  or a second press posts the same stale stamp.
+- **MOTIR-5237's verification recipe names "the item page's band"** as a place to be refused; since
+  MOTIR-5215 the item-page press happens in the overlay or the Development block. Its E2E should drive
+  the overlay (and may drive the Development block for the pull-requests case).

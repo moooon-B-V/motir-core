@@ -5,9 +5,11 @@ import {
   type ReconcileCandidate,
 } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { githubWebhookService } from './githubWebhookService';
 import { workflowsService } from './workflowsService';
+import { reconcileGatesFor } from './gateSetFor';
 
 // THE OPEN-DELIVERY RECONCILE (MOTIR-5390) — the path that makes a lost
 // `pull_request` delivery recoverable instead of permanent.
@@ -102,6 +104,13 @@ export interface PullRequestReconcileSummary {
   gone: number;
   /** Rows whose reconcile threw (token mint, host read, replay) — due again next pass. */
   failed: number;
+  /**
+   * Gates RAISED while repairing a card whose set the predicate says is wrong
+   * (Story MOTIR-5652 · Subtask MOTIR-5671). Counted separately from `replayed`
+   * because it is a different repair: a replay fixes a delivery nobody heard,
+   * this fixes a card whose question is missing whatever the reason.
+   */
+  gatesRaised: number;
 }
 
 /** The sync outcomes that mean a card actually moved. */
@@ -124,6 +133,7 @@ export const pullRequestReconcileService = {
       transitioned: 0,
       gone: 0,
       failed: 0,
+      gatesRaised: 0,
     };
 
     const candidates = await withSystemContext((tx) =>
@@ -177,6 +187,18 @@ export const pullRequestReconcileService = {
 
         if (read.pullRequest['state'] !== 'closed') {
           summary.stillOpen += 1;
+          // ⚠️ STILL OPEN IS NOT NOTHING TO DO (Subtask MOTIR-5671). This sweep
+          // exists as the backstop for a delivery nobody heard, and a LOST EVENT
+          // costs a card its gate exactly as it costs it a merge: every raise in
+          // the product hangs off a delivery, so a check-suite delivery that never
+          // arrived leaves a green card with no question on it and nothing else
+          // ever asks again.
+          //
+          // It is the SAME predicate and the SAME helper every trigger uses, so
+          // this adds no rule of its own — it adds an occasion. And because
+          // `reconcileGatesFor` only raises what is missing and never supersedes,
+          // a sweep over a card that is already right writes nothing at all.
+          summary.gatesRaised += await reconcileGatesForDeliveredCards(candidate);
           await markReconciled(candidate);
           continue;
         }
@@ -238,6 +260,58 @@ async function deliversLiveCard(candidate: ReconcileCandidate): Promise<boolean>
     if (live) return true;
   }
   return false;
+}
+
+/**
+ * Re-derive the gate set of every card this pull request delivers, per workspace and
+ * with the workspace BOUND — never under the bare system flag, for the reason
+ * {@link deliversLiveCard} gives: `work_item` carries no system arm, so an unbound
+ * read returns nothing and every card would look like it had no gates owed.
+ *
+ * Each card takes the funnel's lock order — its awaiting gates, then the card — so a
+ * sweep and a press never contend in opposite directions.
+ *
+ * ⚠️ IT IS A BACKSTOP, AND NOTHING MAY BE DESIGNED TO RELY ON IT. A thirty-minute
+ * repair is the right cost for a rare lost event and the wrong mechanism for the
+ * normal path: **a card that routinely needs this sweep to get its gate means a
+ * TRIGGER IS MISSING, and the trigger is the bug to fix.** This warning is here
+ * rather than only in a pull request because a backstop that works is invisible,
+ * and an invisible repair is exactly how a missing trigger survives — cards keep
+ * getting their gates, half an hour late, and nobody asks why the fast path did
+ * not fire. If `gatesRaised` is routinely non-zero, read it as a defect report.
+ *
+ * ⚠️ A PER-CARD FAILURE IS COUNTED, NEVER THROWN, matching what the sweep already
+ * does per ROW: one card whose reconcile fails must not cost the other cards of
+ * the same pull request their repair, nor the rest of the pass.
+ */
+async function reconcileGatesForDeliveredCards(candidate: ReconcileCandidate): Promise<number> {
+  const byWorkspace = new Map<string, string[]>();
+  for (const d of candidate.deliveries) {
+    byWorkspace.set(d.workspaceId, [...(byWorkspace.get(d.workspaceId) ?? []), d.workItemId]);
+  }
+
+  let raised = 0;
+  for (const [workspaceId, workItemIds] of byWorkspace) {
+    raised += await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, workspaceId);
+      let count = 0;
+      for (const workItemId of workItemIds) {
+        try {
+          await approvalGateRepository.lockAwaitingByWorkItem(workItemId, tx);
+          await workItemRepository.lockById(workItemId, tx);
+          const item = await workItemRepository.findById(workItemId, tx);
+          if (item) count += (await reconcileGatesFor(item, tx)).length;
+        } catch (err) {
+          console.error('[pullRequestReconcile] could not re-derive a card’s gates', {
+            workItemId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      return count;
+    });
+  }
+  return raised;
 }
 
 /** Stamp the row as heard-from, under the tenant the sync itself writes it under. */

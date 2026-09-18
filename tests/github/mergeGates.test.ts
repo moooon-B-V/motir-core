@@ -25,6 +25,7 @@ import { githubPullRequestService } from '@/lib/services/githubPullRequestServic
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { promoteDeliveredCardsOnGreen } from '@/lib/services/ciPromotion';
+import { mergeCandidateHead } from '@/lib/services/mergeGates';
 import { raisePullRequestApprovalGate } from '@/lib/services/pullRequestApprovalGates';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -324,7 +325,19 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
     expect(await mergeGates(item.id)).toEqual([]);
   });
 
-  it('a CHILD a container run delivers holds no gate; its run target holds the one — and How to test names the same card', async () => {
+  // ⚠️ REVERSED — MOTIR-5662, one of MOTIR-5652's two root causes. This test
+  // pinned `raisePullRequestApprovalGate`'s run-target refusal: a card whose run
+  // target resolved to `{ kind: 'ancestor' }` raised nothing. `resolveRunTargetFor`
+  // answers *whose How to test is this*, which is true and useful; it was never an
+  // answer to *does this card have something to decide*. In a parent run the
+  // How-to-test record is written once onto the PARENT, so EVERY child resolved to
+  // `ancestor` and raised nothing — while the parent's own promotion was skipped by
+  // `ContainerHasOpenChildrenError`. No gate anywhere.
+  //
+  // The How-to-test half of the assertion is UNCHANGED and is why the test is kept
+  // rather than deleted: the two questions used to share one answer, and this is
+  // where they are shown to have come apart.
+  it('a CHILD a container run delivers raises its gate exactly as its run target does — and How to test still names the ancestor', async () => {
     const s = await makeScenario('mg-child@example.com');
     const story = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'story', title: 'The story' },
@@ -365,12 +378,13 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
       };
     });
 
-    expect(raised.child).toBe(false);
+    expect(raised.child).toBe(true);
     expect(raised.story).toBe(true);
-    expect(await gatesOf(child.id)).toEqual([]);
+    expect(await awaitingVersions(child.id)).toEqual(['moooon/acme#13@sha-p']);
     expect(await awaitingVersions(story.id)).toEqual(['moooon/acme#13@sha-p']);
 
-    // The raise and the How to test block resolve the SAME run target.
+    // The child's run target is still the STORY — naming the resolved kind, because
+    // the point is that a gate is now raised DESPITE it.
     expect(raised.target).toMatchObject({ kind: 'ancestor', holder: { id: story.id } });
     expect((await howToTestService.getForWorkItem(child.id, s.ctx)).runTarget).toEqual({
       key: story.identifier,
@@ -467,7 +481,13 @@ describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes'
     expect((await gatesOf(item.id)).map((g) => g.state)).toEqual(['superseded']);
   });
 
-  it('UNLINKING a member supersedes that card’s gate', async () => {
+  // ⚠️ AMENDED — MOTIR-5663. The withdrawal still happens and still records
+  // `set_changed`; what is new is that the site then ASKS what the card should hold
+  // now. The remaining member is green, so the answer is a gate over the SMALLER
+  // set — which is the structural half of this level: a question retired for an
+  // excellent reason used to leave the card with none (MOTIR-5604, paid for once at
+  // one site while six others behaved the same way).
+  it('UNLINKING a member supersedes that card’s gate and re-asks over the smaller set', async () => {
     const { s, item } = await reviewedWithOneGate('mg-unlink@example.com');
 
     const result = await githubPullRequestService.unlinkPullRequestByCoordinates(
@@ -476,7 +496,7 @@ describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes'
     );
 
     expect(result.removed).toBe(true);
-    expect(await awaitingVersions(item.id)).toEqual([]);
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a']);
   });
 });
 
@@ -543,5 +563,122 @@ describe('one transaction, ONE gate per card, however the events arrive', () => 
     });
     // The gate was committed before the event left.
     expect(transitioned[0]!.gatesAtSend).toBe(1);
+  });
+});
+
+// A DRAFT IS NOT A MERGE CANDIDATE (MOTIR-5699). A draft pull request is its author
+// saying *not ready*, and GitHub refuses to merge one — so a green draft must not put
+// an approve-and-merge question on anybody's To approve. `mergeCandidateHead` is the
+// one statement of candidacy both merge modes read, which is why the rule lives there;
+// the two draft EDGES (`ready_for_review`, `converted_to_draft`) are what keep an
+// already-green pull request's gate in step with the flag.
+describe('a DRAFT is not a merge candidate (MOTIR-5699)', () => {
+  const openGreen = {
+    state: 'open',
+    merged: false,
+    repo: { provider: 'github' },
+    checkRuns: [
+      {
+        id: 'c1',
+        pullRequestId: 'p1',
+        commitSha: 'sha-a',
+        checkName: 'ci / vitest',
+        conclusion: 'success',
+        status: 'completed',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ],
+  } as unknown as Parameters<typeof mergeCandidateHead>[0] & object;
+
+  it('a green DRAFT has no merge head; a ready one does, and an UNKNOWN draft-ness is not invented', () => {
+    expect(mergeCandidateHead({ ...openGreen, draft: true })).toBeNull();
+    expect(mergeCandidateHead({ ...openGreen, draft: false })).toBe('sha-a');
+    // Rows written before MOTIR-5002 do not know — they stay candidates.
+    expect(mergeCandidateHead({ ...openGreen, draft: null })).toBe('sha-a');
+  });
+
+  /** A card delivered by ONE pull request opened as a DRAFT — which, since MOTIR-4968,
+   *  leaves the card where it was rather than moving it to `implemented`. */
+  async function cardWithDraft(s: Scenario, title: string, number: number) {
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title },
+      s.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    const headRef = `subtask/${item.identifier}-${number}`;
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number,
+      headRef,
+    });
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('opened', number, headRef, { draft: true }),
+    );
+    expect(await statusOf(item.id)).toBe('in_progress');
+    return { item, headRef };
+  }
+
+  it('a DRAFT going green raises NO gate — through the CI delivery AND through a direct reconcile', async () => {
+    const s = await makeScenario('mg-draft-green@example.com');
+    const { item } = await cardWithDraft(s, 'Draft', 21);
+
+    await ci({ conclusion: 'success', headSha: 'sha-d', number: 21 });
+    expect(await gatesOf(item.id)).toEqual([]);
+
+    // The status-agnostic door every other raiser shares (the reconcile sweep, the
+    // status funnel, the withdrawers' re-ask) — the path the reported card took.
+    const raised = await withWorkspaceContext(s.ctx, async (tx) =>
+      raisePullRequestApprovalGate(
+        await tx.workItem.findUniqueOrThrow({ where: { id: item.id } }),
+        tx,
+      ),
+    );
+    expect(raised).toBe(false);
+    expect(await gatesOf(item.id)).toEqual([]);
+  });
+
+  it('marking an ALREADY-GREEN draft ready for review raises exactly ONE gate', async () => {
+    const s = await makeScenario('mg-draft-ready@example.com');
+    const { item, headRef } = await cardWithDraft(s, 'Draft then ready', 22);
+    await ci({ conclusion: 'success', headSha: 'sha-r', number: 22 });
+    expect(await gatesOf(item.id)).toEqual([]);
+
+    // No check event follows — CI has already spoken for this head.
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('ready_for_review', 22, headRef, { draft: false }),
+    );
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#22@sha-r']);
+    expect(await gatesOf(item.id)).toHaveLength(1);
+  });
+
+  it('converting a pull request back to a DRAFT withdraws its gate as `member_drafted`; ready again re-asks ONCE', async () => {
+    const s = await makeScenario('mg-redraft@example.com');
+    const item = await cardWithPrs(s, 'Redraft', [23]);
+    await ci({ conclusion: 'success', headSha: 'sha-x', number: 23 });
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#23@sha-x']);
+    const headRef = `subtask/${item.identifier}-23`;
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('converted_to_draft', 23, headRef, { draft: true }),
+    );
+    expect((await gatesOf(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'member_drafted'],
+    ]);
+    expect(await awaitingVersions(item.id)).toEqual([]);
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('ready_for_review', 23, headRef, { draft: false }),
+    );
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#23@sha-x']);
+    expect((await gatesOf(item.id)).filter((g) => g.state === 'awaiting')).toHaveLength(1);
   });
 });

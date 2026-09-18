@@ -83,7 +83,13 @@ function renderFrame(
       itemIdentifier="ACME-12"
       manualLinkable
       howToTest={TWO_REPO_STORY}
-      mergeGate={{ canDecide: true, routedToLabel: 'Mara S.', members: [], ...read }}
+      mergeGate={{
+        canDecide: true,
+        routedToLabel: 'Mara S.',
+        members: [],
+        stamp: 'v1.stamp-on-screen',
+        ...read,
+      }}
       gateActions={actions}
     />,
   );
@@ -169,6 +175,8 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
     expect(actions.approveAndMerge).toHaveBeenCalledWith({
       gateId: AWAITING.id,
       identifier: 'ACME-12',
+      // What the read handed this frame — the record of what is on screen (MOTIR-5235).
+      stamp: 'v1.stamp-on-screen',
     });
     expect(within(rowOf(CORE_PR.title)).getByText(pra.outcome.merged)).toBeTruthy();
     expect(within(rowOf(GATEWAY_PR.title)).getByText(pra.outcome.queued)).toBeTruthy();
@@ -390,6 +398,7 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
       gateId: AWAITING.id,
       decision: 'request_changes',
       identifier: 'ACME-12',
+      stamp: 'v1.stamp-on-screen',
     });
     expect(actions.approveAndMerge).not.toHaveBeenCalled();
     expect(refreshSpy).toHaveBeenCalled();
@@ -471,7 +480,13 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
         itemIdentifier="ACME-12"
         manualLinkable
         howToTest={TWO_REPO_STORY}
-        mergeGate={{ gate: AWAITING, canDecide: true, routedToLabel: 'Mara S.', members: [] }}
+        mergeGate={{
+          gate: AWAITING,
+          canDecide: true,
+          routedToLabel: 'Mara S.',
+          members: [],
+          stamp: 'v1.stamp-on-screen',
+        }}
         gateActions={actions}
       />,
     );
@@ -512,6 +527,67 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
   it('a withdrawal with no moved head says the set changed', () => {
     renderFrame({ gate: { ...AWAITING, state: 'superseded' } }, fakeActions());
     expect(screen.getByText(pra.withdrawn.portSet)).toBeTruthy();
+  });
+});
+
+describe('a STALE press on the item page (Story MOTIR-5232 · Subtask MOTIR-5235)', () => {
+  const stale = en.approvalGate.refusal.stale;
+
+  it('refuses in place naming the pull requests, and “Show the current version” re-reads the PAGE — nothing merged', async () => {
+    const actions = fakeActions({
+      approveAndMerge: vi.fn().mockResolvedValue({
+        ok: false,
+        refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT', moved: ['pull_requests'] },
+      }),
+    });
+    refreshSpy.mockClear();
+    renderFrame({ gate: AWAITING }, actions);
+    fireEvent.click(screen.getByRole('button', { name: pra.verb.approveAndMerge }));
+    fireEvent.click(screen.getByRole('button', { name: proceedLabel }));
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText(stale.pullRequests)).toBeTruthy();
+    // A refusal repaints nothing on its own…
+    expect(refreshSpy).not.toHaveBeenCalled();
+    // …and the reader's control re-runs the read this block came from: the page's.
+    fireEvent.click(within(alert).getByRole('button', { name: stale.control }));
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(actions.retryMember).not.toHaveBeenCalled();
+  });
+
+  it('a fresh stamp from that re-read is a fresh frame: the refusal clears and the verbs return', async () => {
+    const actions = fakeActions({
+      decide: vi.fn().mockResolvedValue({
+        ok: false,
+        refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT', moved: ['criteria'] },
+      }),
+    });
+    const { rerender } = renderFrame({ gate: AWAITING }, actions);
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    await screen.findByRole('alert');
+    rerender(
+      <DevelopmentSectionBody
+        pullRequests={[CORE_PR, GATEWAY_PR]}
+        itemIdentifier="ACME-12"
+        manualLinkable
+        howToTest={TWO_REPO_STORY}
+        mergeGate={{
+          gate: AWAITING,
+          canDecide: true,
+          routedToLabel: 'Mara S.',
+          members: [],
+          stamp: 'v1.the-current-version',
+        }}
+        gateActions={actions}
+      />,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(
+      (
+        screen.getByRole('button', {
+          name: en.approvalGate.verb.requestChanges,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
   });
 });
 
@@ -569,6 +645,7 @@ describe('the remaining frame arms (MOTIR-5486 coverage floor)', () => {
           canDecide: true,
           routedToLabel: null,
           members: [],
+          stamp: null,
         }}
       />,
     );

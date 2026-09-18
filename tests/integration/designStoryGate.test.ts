@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItem } from '@/generated/prisma/client';
 
@@ -144,7 +145,7 @@ async function approve(evidenceId: string): Promise<void> {
     where: { subjectId: evidenceId, kind: 'design_result', state: 'awaiting' },
   });
   await approvalGatesService.decide(
-    { gateId: gate.id, decision: 'approve', source: 'ui' },
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
     caller.ctx,
   );
 }
@@ -302,7 +303,13 @@ describe('(3) no door hands out a design that is not approved', () => {
         where: { subjectId: v1, kind: 'design_result', state: 'awaiting' },
       });
       await approvalGatesService.decide(
-        { gateId: gate.id, decision: 'request_changes', source: 'ui', noteMd: 'not yet' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: gate.id,
+          decision: 'request_changes',
+          source: 'ui',
+          noteMd: 'not yet',
+        },
         caller.ctx,
       );
     } else if (shape === 'cancelled') {

@@ -179,6 +179,28 @@ subject body. **No second vocabulary, no second control, no second decide door.*
 > is why a design with a pull request is approved through
 > `pull_request_approval` and still shows its mock: same gate, design port.
 >
+> > ### §1 — AMENDMENT (MOTIR-5658, 2026-09-17): the `design_result` row's _fires when_ is WRONG, and the rule is ONE GATE PER QUESTION
+> >
+> > **`design_result` fires on a design with a published result, WITH OR WITHOUT a
+> > pull request** — `design-result.md` AMENDMENT 6 Q1. The table's _a design with
+> > **no pull request**_ is superseded, and so is the reading of the paragraph
+> > above that a design with a pull request is approved through
+> > `pull_request_approval` INSTEAD. It is approved through **both**: the
+> > `design_result` gate is the PRIMARY question and the merge rides on the same
+> > press.
+> >
+> > **What the port paragraph gets right and keeps:** the PORT is chosen by what
+> > the card PRODUCED. A design card shows its mock. What changes is that the
+> > design card now also has its own gate to show it in.
+> >
+> > **⚠️ AND [MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37) DID NOT SETTLE "ONE GATE
+> > PER CARD".** It settled **one MERGE gate per card** — it was two merge gates,
+> > a per-pull-request `pull_request_merge` beside the per-card
+> > `pull_request_approval`. **The rule is one gate per QUESTION.** Two gates of
+> > DIFFERENT kinds on one card is the model, not the defect; misreading it as
+> > one-gate-per-card is what produced the suppression MOTIR-5652 was filed
+> > against.
+>
 > **THE SUBJECT IS A DOCUMENT WITH A RESOLVER.** ~~what is being decided — a
 > `DesignEvidence` id, a pull-request delivery id~~ **What a gate points at is a
 > document, and the handler supplies the RESOLVER that fetches it.** The gate row
@@ -1046,6 +1068,35 @@ kind)`.** For `design_result` there is one current design, so superseding frees
 the slot; for `pull_request_merge` a card carrying a repository SET legitimately
 has several open pull requests and therefore several simultaneous awaiting gates.
 
+> ### §6b — AMENDMENT (MOTIR-5658, 2026-09-17): a supersede records its CAUSE
+>
+> **A supersede writes `state` and nothing else, and that is why no surface can
+> say a true sentence about a withdrawn gate.** State `G` and the
+> `APPROVAL_GATE_SUPERSEDED` refusal both say _a newer design was published … the
+> current version is above_ — true for ONE of the writing paths and false for the
+> rest ([MOTIR-5586](motir:cmu30qjra00g6hvoiiu6ljuhv),
+> [MOTIR-5651](motir:cmu5aympl0020hvoik1mfccrg)). Both were repaired by making
+> the sentence vaguer, which is the only repair available while the row is
+> silent.
+>
+> **A `superseded` row now carries a CAUSE**, from a closed vocabulary with one
+> value per writing path and **no value meaning _unsaid_**: `republished` ·
+> `withdrawn` · `head_moved` · `member_closed` · `member_drafted` · `set_changed` ·
+> `pulled_back` (`member_drafted` added by MOTIR-5699).
+> The full table, with which path writes each, is `design-result.md`
+> AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
+> amendment was written and removed before it shipped — MOTIR-5661 found that a
+> decided gate cannot be updated at all, so nothing was left to write it.)
+>
+> **Rows superseded before this amendment carry an UNKNOWN value**, which a
+> surface renders as _the reason was not recorded_ — never as one of the real
+> causes. Inferring a cause from a row's shape manufactures evidence, and these
+> sentences are shown to a person as fact.
+>
+> **It is still a product write with NO actor, no authority and no note.** A
+> cause does not make a withdrawn question readable as a human decision, which is
+> what §6b's no-actor rule exists to guarantee.
+
 > ### §6b — SHIPPED (MOTIR-4913, 2026-09-10): what WRITES `superseded`, and when
 >
 > The state has been in the enum since MOTIR-4788 and the decide door has refused
@@ -1164,6 +1215,51 @@ mcp`. **A fourth value, `github`, is required**, because a pull request
 > legible, and not the same sentence as _"nobody"_. It is the same argument §7a
 > makes about `auto`: **an absence and an unattributable presence must not read
 > the same.**
+
+> ### §6b / §6c — AMENDMENT (MOTIR-5234, 2026-09-18): a press carries a STAMP of what the reader was shown
+>
+> **Story MOTIR-5232.** §6b's `superseded` refuses a WITHDRAWN question. It cannot refuse a
+> press from a page rendered an hour ago about a question that is still live but has CHANGED,
+> because the decide door recorded nothing about what the reader saw. Two changes were
+> uncaught: the card's **acceptance criteria** (the how-to-test a reviewer judges against)
+> belong to no subject, so editing them supersedes nothing; and since MOTIR-5652, one press on
+> a design with pull requests also decides the card's approve-to-merge gate and merges its
+> members, and that press did not check them.
+>
+> **Decided:**
+>
+> 1. **Every read that renders a gate returns a `stamp`** (`WorkItemGateRead.stamp`, and the
+>    overlay's `ApprovalGateOverlayReadDTO.stamp`). **The decide door REQUIRES it**
+>    (`DecideGateInput.stamp`, no default). A surface hands back what it was handed, and the
+>    REST route refuses a body without one with a `400`.
+> 2. **What it covers:** the pressed gate's `subjectVersion`; for a `design_result` gate, the
+>    `subjectVersion` of the card's awaiting `pull_request_approval` gate (the _companion_ the
+>    press also decides); and the work item's `descriptionMd`. **Nothing else.** The assignee,
+>    labels, status, watchers and `updatedAt` never make a decision stale. `lib/approvalGates/stamp.ts`
+>    is the only definition.
+> 3. **Derived, never stored.** No column, no migration, no backfill.
+> 4. **Opaque to the client, composite on the server.** One digest per component, so the door
+>    can say WHAT moved: `subject` · `pull_requests` · `criteria`. A pressed approve-to-merge
+>    gate reports its own subject as `pull_requests`, because that is what its reader was looking at.
+> 5. **It errs wide.** The whole `descriptionMd` is hashed, so a typo fix also invalidates. A
+>    false stale costs one re-read; a missed one applies an approval to a question that changed.
+> 6. **Checked UNDER THE LOCK, AFTER the state refusals** (`decide` step 3b), recomputed from the
+>    locked gate, the item read after it, and the companion as it stands. A mismatch raises
+>    `APPROVAL_GATE_STALE_SUBJECT` (`409`, carrying `moved`) and writes nothing: no state, no
+>    audit columns, no status, no pin. **It runs BESIDE §6b's supersede check and never replaces it.**
+>    `superseded` means _withdrawn, leave_; stale means _still yours, look again_.
+> 7. **The ONE bypass is a symbol, `DECIDED_WITHOUT_A_READER`**, for a decision nobody pressed:
+>    the GitHub review sync (§8's fourth amendment), and the companion gate inside
+>    `approveDesignAndMerge`, whose primary was already checked. A symbol cannot be serialised,
+>    so no request can carry it.
+> 8. **The two-gate press decides the companion only while its version is the one checked.**
+>    The door returns the companion version it read under its lock, and `approveDesignAndMerge`
+>    leaves a companion raised since then awaiting. Its commits are a new question.
+>
+> **The refusal is the mechanism.** A live _this changed while you were reading_ notice is
+> MOTIR-5243's (Story MOTIR-5238) and reads its own stream. It does not replace this check.
+> The refusal's copy and its one control are drawn in
+> `design/work-items/approval-control--stale-refusal.mock.html` (MOTIR-5233) and built by MOTIR-5235.
 
 #### 6c. Retention — only an approval keeps its bytes, and it PINS rather than FREEZES
 
@@ -1921,8 +2017,28 @@ it**, and that is why §3's rule is conditional rather than simply reversed.
 **Design and code take the SAME rows.** A design card that opened a pull request
 — one or many — is Workflow B; only its PORT differs: the Development block shows
 the design result once (the mock(s) with the note as a link), then How to test,
-then every pull-request row, and no `design_result` gate is raised for the card
-(`design-result.md` AMENDMENT 4 Q8).
+then every pull-request row, ~~and no `design_result` gate is raised for the card
+(`design-result.md` AMENDMENT 4 Q8)~~ **and the card ALSO holds its own
+`design_result` gate, which is the PRIMARY question the block is a port for**
+(`design-result.md` AMENDMENT 6 Q1, MOTIR-5658).
+
+> ### WORKFLOW B — AMENDMENT (MOTIR-5658, 2026-09-17): a DESIGN card in Workflow B holds TWO gates, and row 4a's press decides both
+>
+> The rows above are unchanged for a code card. **A design card with a published
+> result additionally holds a `design_result` gate, presented as the PRIMARY**,
+> with the pull requests beneath it as what the approval will merge. Row 4a's one
+> press decides both; rows 5 and 6 are unchanged.
+>
+> **Row 2 is not a precondition of the design half.** The `design_result` gate
+> rises at PUBLISH, so it can exist — and be pressed — before CI has spoken.
+> **The merge is then HELD until green** and follows on the next green verdict
+> with no second press (AMENDMENT 6 Q4). `done` still has exactly one writer.
+>
+> **And when a merge FAILS after row 4** — an ejection, a conflict, a failed
+> validation — **the merge gate re-opens ALONE and the design gate stays
+> decided** (AMENDMENT 6 Q2). A decided design gate also CLOSES the design:
+> publish, upload and withdraw are refused on that card whatever its status, so a
+> failure after approval can only be about the commits (AMENDMENT 6 Q3).
 
 ~~**Row 4b is WHY there are two gates rather than one.** A GitHub approval tells
 Motir the code was approved and **nothing else** — it is not a merge, and

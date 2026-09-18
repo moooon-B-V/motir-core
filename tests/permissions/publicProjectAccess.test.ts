@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -120,7 +121,7 @@ describe('the policies', () => {
           VALUES (${'ins-' + neighbour.projectId}, ${neighbour.workspaceId}, 'Smuggled', 'smuggled', 'SMG', 'public', now(), now())
         `,
       ),
-    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 
   it('leaves WITH CHECK untouched — a PUBLIC row cannot be UPDATEd into a foreign workspace', async () => {
@@ -136,7 +137,7 @@ describe('the policies', () => {
           UPDATE "project" SET "workspaceId" = ${neighbour.workspaceId} WHERE "id" = ${host.projectId}
         `,
       ),
-    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 
   it('does NOT let an unbound reader DELETE the public project it can now read', async () => {
@@ -247,7 +248,7 @@ describe('the vote arm (MOTIR-2811)', () => {
           VALUES (${'vote-smuggled'}, ${host.workItemId}, ${outsiderId}, now())
         `,
       ),
-    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 });
 
@@ -313,7 +314,7 @@ describe('the vote MEMBER arm (MOTIR-2864)', () => {
         `,
       ),
       'a member must not cast a vote as somebody else',
-    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // DELETE and UPDATE are governed by the same FOR-ALL policy's USING, which the
     // member does not satisfy — so they match no row rather than raising. Either
@@ -417,7 +418,7 @@ describe('the JOINED-table arms (MOTIR-2856)', () => {
              WHERE "id" = ${host.workflowStatusId}
           `,
         ),
-      ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+      ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
     });
   });
 

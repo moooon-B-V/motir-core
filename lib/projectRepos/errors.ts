@@ -88,7 +88,9 @@ export class ProjectRepoLinkConflictError extends Error {
   constructor(
     readonly projectId: string,
     readonly repoName: string,
-    readonly githubRepoId: string,
+    /** `null` when the write that lost carried no repository — an append or a
+     *  rename in `projectRepoSetService`, which touches only the name. */
+    readonly githubRepoId: string | null,
   ) {
     super(
       `Project ${projectId}'s repository set refused this write as a duplicate, and the ` +

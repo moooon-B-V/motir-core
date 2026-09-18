@@ -5,8 +5,10 @@ import {
   type ApprovalGateDecisionSource,
   type ApprovalGateKind,
   type ApprovalGateState,
+  type ApprovalGateSupersedeCause,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import {
   ApprovalGateAlreadyAwaitingError,
   ApprovalGateDecidedImmutableError,
@@ -46,6 +48,18 @@ import {
 // the pg driver adapter as an error whose `cause.code` is SQLSTATE `23514` and
 // whose message carries the `AG_DECIDED_IMMUTABLE` marker. Keying each on the
 // wrong one is how a raw Postgres error escapes.
+
+// The causes a LIVE path may write — every enum member EXCEPT `unknown`
+// (Story MOTIR-5652 · Subtask MOTIR-5659; docs/decisions/design-result.md
+// AMENDMENT 6 Q5).
+//
+// ⚠️ `unknown` is excluded BY THE COMPILER, not by a convention in a comment.
+// It means THIS ROW PREDATES THE COLUMN, and its only writer is the backfill in
+// `20260917200000_add_approval_gate_supersede_cause`. A live path reaching for
+// it would be recording that it does not know why it itself superseded a gate —
+// which is the same silence the required argument exists to end, just spelled
+// with a value instead of an omission.
+export type LiveSupersedeCause = Exclude<ApprovalGateSupersedeCause, 'unknown'>;
 
 export const approvalGateRepository = {
   /**
@@ -233,6 +247,12 @@ export const approvalGateRepository = {
     decidedById: string | null;
     decidedAt: Date | null;
     decidedByLabel: string | null;
+    /** The version the question was ASKED about — read for the stale check's
+     *  comparison under this lock (MOTIR-5234), never written from. */
+    subjectVersion: string | null;
+    /** WHY it was withdrawn, for the refusal's sentence (MOTIR-5667). Read-only:
+     *  nothing writes from this snapshot. */
+    supersededCause: ApprovalGateSupersedeCause | null;
   } | null> {
     const rows = await tx.$queryRaw<
       Array<{
@@ -246,6 +266,8 @@ export const approvalGateRepository = {
         decidedById: string | null;
         decidedAt: Date | null;
         decidedByLabel: string | null;
+        subjectVersion: string | null;
+        supersededCause: ApprovalGateSupersedeCause | null;
       }>
     >`
       SELECT "id",
@@ -257,6 +279,10 @@ export const approvalGateRepository = {
              "state",
              "decided_by_id" AS "decidedById",
              "decided_at"    AS "decidedAt",
+             "superseded_cause" AS "supersededCause",
+             -- READ for the stale check (MOTIR-5234): what the question was asked
+             -- about, compared with the stamp the reader pressed with.
+             "subject_version" AS "subjectVersion",
              -- READ for the REFUSAL, never for a write. The narrow column list
              -- above exists so a caller cannot write from this snapshot; this
              -- one joins decided_by_id / decided_at, which are here for the same
@@ -394,15 +420,27 @@ export const approvalGateRepository = {
    *
    * Returns the count, which is 0 on every publish that had no prior version —
    * the ordinary first publish.
+   *
+   * ⚠️ `cause` IS REQUIRED, AND DELIBERATELY NOT OPTIONAL (Story MOTIR-5652 ·
+   * Subtask MOTIR-5659; `docs/decisions/design-result.md` AMENDMENT 6 Q5). Six
+   * production paths reach this method and its sibling for six different
+   * reasons, and until now the row recorded none of them — which is why two
+   * surfaces (MOTIR-5586, MOTIR-5651) asserted *a newer design was published*
+   * over every one of them, true for one and false for the rest. An OPTIONAL
+   * parameter would let a seventh caller omit it in silence, reproducing exactly
+   * that defect one path at a time; a required one makes the omission a compile
+   * error. `unknown` is not in {@link LiveSupersedeCause} for the same reason —
+   * see the type.
    */
   async supersedeAwaitingByWorkItem(
     workItemId: string,
     kind: ApprovalGateKind,
+    cause: LiveSupersedeCause,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.approvalGate.updateMany({
       where: { workItemId, kind, state: 'awaiting' },
-      data: { state: 'superseded' },
+      data: { state: 'superseded', supersededCause: cause },
     });
     return result.count;
   },
@@ -453,18 +491,25 @@ export const approvalGateRepository = {
    * would have to enumerate the kinds, and a kind added later would silently stay
    * `awaiting` on a card nobody is offering for review.
    *
-   * Writes `state` and nothing else, exactly as the publish-path supersede does —
-   * no actor, no note, no `decided_at` — so the audit cannot read a withdrawn
-   * question as a decision. The `state: 'awaiting'` predicate is the whole guard:
-   * a decided gate is somebody's answer and is never touched.
+   * Writes `state` and its `cause` and nothing else, exactly as the publish-path
+   * supersede does — no actor, no note, no `decided_at` — so the audit cannot
+   * read a withdrawn question as a decision. **A cause is not an actor**: it says
+   * what happened to the subject, never who decided anything, so recording one
+   * leaves §6b's *product write with no actor* intact (AMENDMENT 6 Q5). The
+   * `state: 'awaiting'` predicate is the whole guard: a decided gate is somebody's
+   * answer and is never touched.
+   *
+   * ⚠️ `cause` is REQUIRED here for the reason spelled out on
+   * {@link supersedeAwaitingByWorkItem}.
    */
   async supersedeAllAwaitingByWorkItem(
     workItemId: string,
+    cause: LiveSupersedeCause,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.approvalGate.updateMany({
       where: { workItemId, state: 'awaiting' },
-      data: { state: 'superseded' },
+      data: { state: 'superseded', supersededCause: cause },
     });
     return result.count;
   },
@@ -913,7 +958,7 @@ export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
 export function translateApprovalGateWriteError(err: unknown): never {
   const message = extractMessage(err);
 
-  if (message.includes('AG_DECIDED_IMMUTABLE') || extractSqlState(err) === '23514') {
+  if (message.includes('AG_DECIDED_IMMUTABLE') || sqlStateOf(err) === '23514') {
     throw new ApprovalGateDecidedImmutableError();
   }
 
@@ -938,21 +983,6 @@ export function translateApprovalGateWriteError(err: unknown): never {
 }
 
 /** SQLSTATE from a pg driver-adapter error's `cause`, if present. */
-function extractSqlState(err: unknown): string | undefined {
-  if (err && typeof err === 'object' && 'cause' in err) {
-    const cause = (err as { cause?: unknown }).cause;
-    if (cause && typeof cause === 'object') {
-      const c = cause as { code?: unknown; originalCode?: unknown };
-      if (typeof c.code === 'string') return c.code;
-      // Defensive: `@prisma/adapter-pg` exposes `code`; `originalCode` is a
-      // fallback for a future driver shape, so no shipped adapter reaches it.
-      // Same re-spelling as above.
-      /* v8 ignore next */
-      if (typeof c.originalCode === 'string') return c.originalCode;
-    }
-  }
-  return undefined;
-}
 
 function extractMessage(err: unknown): string {
   if (err instanceof Error) return err.message;

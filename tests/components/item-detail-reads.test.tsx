@@ -205,7 +205,9 @@ vi.mock('@/lib/services/activityService', () => ({
 }));
 vi.mock('@/lib/mentions/workItemRefs', () => ({ parseWorkItemRefs: () => [] }));
 vi.mock('@/lib/utils/datetime', () => ({ formatDate: () => '' }));
-vi.mock('@/lib/workItems/errors', () => ({ WorkItemNotFoundError: class extends Error {} }));
+// The REAL error classes, not a stub (MOTIR-5699): the module imports nothing, and a
+// stub carrying one export broke the moment anything on this import graph read another
+// at LOAD time — `ciPromotion`'s `SKIPPABLE` list does.
 vi.mock('@/lib/projects/errors', () => ({ ProjectAccessDeniedError: class extends Error {} }));
 
 // The JSX tree: imported, never executed.

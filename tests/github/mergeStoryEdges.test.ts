@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { getGitProvider } from '@/lib/git';
@@ -233,31 +234,38 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
   });
 
   it('a gate of ANOTHER kind is a programming error for the press, and decideGate hands it to the door', async () => {
+    // ⚠️ `decision_approval`, not `design_result` — MOTIR-5664 ADMITS the design kind
+    // by name, because pressing the primary design gate is what merges the set. The
+    // guard is still the guard: a kind it does not know is still a programming error.
     const bare = await bareItem();
-    const design = await adminDb.approvalGate.create({
+    const foreign = await adminDb.approvalGate.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         workItemId: bare.id,
-        kind: 'design_result',
+        kind: 'decision_approval',
         subjectId: 'ev-1',
       },
     });
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: design.id, source: 'ui' }, fx.ctx),
-    ).rejects.toThrow(/handed a design_result gate/);
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: foreign.id, source: 'ui' },
+        fx.ctx,
+      ),
+    ).rejects.toThrow(/handed a decision_approval gate/);
     // …and a retry addressed at it is simply not a gate this path knows.
-    await expect(retry(design.id, 'no-such-pull-request')).rejects.toBeInstanceOf(
+    await expect(retry(foreign.id, 'no-such-pull-request')).rejects.toBeInstanceOf(
       ApprovalGateNotFoundError,
     );
 
     const door = vi.spyOn(approvalGatesService, 'decide').mockResolvedValue({} as never);
     await pullRequestMergeService.decideGate(
-      { gateId: design.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: foreign.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     expect(door).toHaveBeenCalledWith(
-      { gateId: design.id, decision: 'approve', source: 'ui' },
+      // The stamp travels to the door unchanged (MOTIR-5234).
+      { gateId: foreign.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
       fx.ctx,
     );
   });

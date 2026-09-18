@@ -15,6 +15,7 @@ import {
   E2E_GITLAB_WEBHOOK_SECRET,
 } from './tests/e2e/_helpers/gitlab-const';
 import { legTestMatch } from './tests/e2e/shard-plan';
+import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
 
 // Playwright doesn't pick up .env automatically the way Next.js does. The
 // spec files import @/lib/db (via _helpers/db-reset) for DB assertions,
@@ -312,7 +313,8 @@ export default defineConfig({
         'pnpm exec prisma generate',
         ...(REUSE_PREBUILT_NEXT ? [] : ['pnpm exec next build']),
         'pnpm run build:worker',
-        `pnpm exec next start --port ${PORT}`,
+        // MOTIR-5697: the server must outlive the runner's idle sockets — see the helper.
+        `pnpm exec next start --port ${PORT} ${NEXT_START_KEEP_ALIVE_FLAG}`,
       ].join(' && '),
       url: BASE_URL,
       // Reuse a running dev server locally for fast iteration — but NEVER when a

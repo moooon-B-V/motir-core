@@ -50,6 +50,7 @@ const DECIDED: ApprovalGateDTO = {
   decidedById: 'user-1',
   decidedAt: '2026-09-08T04:12:00.000Z',
   noteMd: null,
+  supersededCause: null,
   subjectVersion: '9840d00ea1b2c3d4',
   decidedByLabel: 'Ada Lovelace',
   routedToId: 'user-1',

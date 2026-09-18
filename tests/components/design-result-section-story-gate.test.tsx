@@ -83,6 +83,7 @@ function gate(state: ApprovalGateDTO['state'], id: string): ApprovalGateDTO {
     decidedById: decided ? 'user-2' : null,
     decidedAt: decided ? '2026-09-08T05:00:00.000Z' : null,
     noteMd: null,
+    supersededCause: null,
     subjectVersion: '9840d00ea1b2',
     decidedByLabel: decided ? 'Ada Lovelace' : null,
     routedToId: 'user-2',
@@ -121,7 +122,10 @@ const EXPECTED: Record<string, (canDecide: boolean) => void> = {
     expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
   },
   superseded: () => {
-    expect(screen.getByText(en.approvalGate.withdrawn.port)).toBeTruthy();
+    // ⚠️ MOTIR-5667: the port now says WHY. These fixtures carry no cause, which
+    // is a row that predates the column — so the sentence is the `unknown` one,
+    // *the reason was not recorded*, and never one of the real causes.
+    expect(screen.getByText(en.approvalGate.withdrawn.cause.unknown)).toBeTruthy();
     expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
   },
 };

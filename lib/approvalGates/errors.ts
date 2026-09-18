@@ -1,3 +1,5 @@
+import type { StampComponent } from '@/lib/approvalGates/stamp';
+
 // Typed errors for the approval-gate domain (Story MOTIR-4778 · Subtask
 // MOTIR-4788; ADR docs/decisions/approval-gates.md). Kept in their own file so
 // the service / route layers (the decide-door card MOTIR-4790, the Approvals
@@ -60,6 +62,9 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_NOT_AUTHORISED'
   | 'APPROVAL_GATE_KIND_UNREGISTERED'
   | 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH'
+  // The question is still live and what the reader was shown MOVED under them
+  // (Story MOTIR-5232 · MOTIR-5234) — the stamp they pressed with no longer matches.
+  | 'APPROVAL_GATE_STALE_SUBJECT'
   // MERGE tier — the HOST refused a merge the card's approve-to-merge gate
   // performs (Story MOTIR-4882 · MOTIR-5512; `approval-gates.md` §4, second
   // amendment decision 8, and §8's SECOND AMENDMENT, which keeps this union whole
@@ -251,11 +256,49 @@ export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
 export class ApprovalGateSupersededError extends ApprovalGateError {
   readonly tag = 'APPROVAL_GATE_SUPERSEDED' as const;
   readonly code = 'APPROVAL_GATE_SUPERSEDED' as const;
-  constructor(readonly gateId: string) {
+  /**
+   * `supersedeCause` is WHY it was withdrawn, when the raising path read it under its lock
+   * (Story MOTIR-5652 · Subtask MOTIR-5667). Null where the caller had only the
+   * state — the refusal then says a true, vaguer sentence rather than guessing.
+   */
+  constructor(
+    readonly gateId: string,
+    readonly supersedeCause: string | null = null,
+  ) {
     super(
       `Approval gate ${gateId} was superseded — this question has been withdrawn and nobody decided it.`,
     );
     this.name = 'ApprovalGateSupersededError';
+  }
+}
+
+/**
+ * The gate is still `awaiting` and still this reader's to decide — but what they
+ * were SHOWN has moved since the page rendered (Story MOTIR-5232 · Subtask
+ * MOTIR-5234; ADR §6b's MOTIR-5234 amendment). The stamp they pressed with no
+ * longer matches the one the door recomputes under the lock.
+ *
+ * ⚠️ NOT `ApprovalGateSupersededError`, and the two must never be collapsed. A
+ * superseded gate is a WITHDRAWN question — there is nothing to decide, and the
+ * reader should leave. A stale one is a LIVE question that changed — the reader
+ * should look at the current version and decide again. The door checks the state
+ * refusals FIRST, so a withdrawn question is never reported as a stale one.
+ *
+ * `moved` names WHAT changed — any of `subject` · `pull_requests` · `criteria`, in
+ * the reader's words (`movedAsReaderSees`) — so the frame can say which. Nothing
+ * was written when this is raised.
+ */
+export class ApprovalGateStaleSubjectError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_STALE_SUBJECT' as const;
+  readonly code = 'APPROVAL_GATE_STALE_SUBJECT' as const;
+  constructor(
+    readonly gateId: string,
+    readonly moved: readonly StampComponent[],
+  ) {
+    super(
+      `Approval gate ${gateId} changed while it was being read (${moved.join(', ')}) — nothing was recorded; read the current version and decide again.`,
+    );
+    this.name = 'ApprovalGateStaleSubjectError';
   }
 }
 

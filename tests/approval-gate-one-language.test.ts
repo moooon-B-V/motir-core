@@ -216,23 +216,29 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'awaiting',
       // MOTIR-5482: the approve-and-merge gate is the third kind to ASK — one per card over
       // its delivery set, raised by `pullRequestApprovalGates.ts` in the promotion.
-      callers: [
-        'lib/services/designEvidenceService.ts',
-        'lib/services/pullRequestApprovalGates.ts',
-      ],
+      // ⚠️ AMENDED ON THE RECORD — MOTIR-5663, 2026-09-17. The list SHRANK by one and
+      // gained one, and the trade is the point of the level: `gateSetFor.ts` is now the
+      // single place a gate row is created from the predicate's answer, and
+      // `pullRequestApprovalGates.ts` is a thin wrapper over it. `designEvidenceService`
+      // stays a declared caller because the publish creates the design gate inside its
+      // own evidence transaction, over the row it has just inserted.
+      callers: ['lib/services/designEvidenceService.ts', 'lib/services/gateSetFor.ts'],
     },
     {
       method: 'supersedeAwaitingByWorkItem',
       writes: 'superseded',
-      // The second caller is DECLARED (MOTIR-5534, `design-result.md` AMENDMENT 4
-      // Q8): linking an OPEN pull request withdraws an awaiting design question,
-      // because that card's pull requests now carry the decision. It writes
-      // `superseded` — a withdrawal with no actor — never a decision.
+      // ⚠️ AMENDED ON THE RECORD — MOTIR-5662, 2026-09-17. The declared second
+      // caller was `githubPullRequestService.ts` (MOTIR-5534, `design-result.md`
+      // AMENDMENT 4 Q8): linking an OPEN pull request withdrew an awaiting design
+      // question, because that card's pull requests were taken to carry the
+      // decision. They did not — the merge gate then refused on the run target,
+      // and the card held no question at all (MOTIR-5652). AMENDMENT 6 Q1/Q7
+      // retire the path, so the row is REMOVED from this list rather than left
+      // with a caller nobody calls.
       // MOTIR-5482: the approve-and-merge gate is withdrawn BY CARD, because its subject is
       // the card's whole delivery set — a moved head, a closed member or a set change.
       callers: [
         'lib/services/designEvidenceService.ts',
-        'lib/services/githubPullRequestService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },

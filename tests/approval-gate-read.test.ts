@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -182,7 +183,12 @@ describe('approvalGatesService.getAwaitingForWorkItem', () => {
   it('does not return a DECIDED gate — the awaiting set is what the verbs read', async () => {
     const { item, gate } = await designSubtaskWithGate();
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       fx.ctx,
     );
 
@@ -357,7 +363,7 @@ describe('canDecide AGREES WITH THE DOOR over the whole authority matrix (MOTIR-
         expect(read.canDecide).toBe(row.canDecide);
 
         const press = approvalGatesService.decide(
-          { gateId: gate.id, decision: verb, source: 'ui' },
+          { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
           ctx,
         );
 
@@ -564,7 +570,10 @@ describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR
     expect(read.canDecide).toBe(false);
 
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        ctx,
+      ),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 

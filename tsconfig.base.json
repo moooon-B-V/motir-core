@@ -45,6 +45,108 @@
   //      largest single subdirectory) takes the ceiling from 7013 files / 82.8% to
   //      6212 files / 77.3% — 801 files, 5.5 points.
   //
+  // ⚠️ AND THE MODEL PRICES FILES, NOT TYPE INSTANTIATIONS — WHICH IS WHY THIS
+  // CEILING WAS MISREAD TWICE (MOTIR-5687). Everything above is measured and still
+  // true; what it does not carry is a SECOND variable. Four readings of one
+  // unchanged `origin/main` put the tests project at 89.1–90.8% — over the line in
+  // two runs of four, so the lane was passing on GC timing rather than on the tree.
+  // Four more readings of THE SAME TREE put it at 66.3–72.7%. The whole of the
+  // difference is one line in a generated declaration, and `files` is 6891 on both
+  // sides, unchanged:
+  //
+  //     generated/prisma/internal/class.ts
+  //     -  in out OmitOpts extends Prisma.PrismaClientOptions['omit'] = undefined,
+  //     +  in out OmitOpts extends Prisma.PrismaClientOptions['omit'] = Prisma.PrismaClientOptions['omit'],
+  //
+  // That is prisma/prisma#29592, fixing a regression shipped in prisma 7.2.0 and
+  // measured upstream at types +221%, instantiations +164%, memory +32%
+  // (prisma/prisma#29011). A `= undefined` generic default stops the checker
+  // reusing cached instantiations, so every delegate re-instantiates the payload
+  // graph. This repository was pinned at 7.8.0, inside the bad range.
+  //
+  // ⚠️ IT IS ON `~7.9.0`, AND THE TILDE IS A PRECAUTION, NOT A VERDICT. 7.9.0 is
+  // where the fix landed, so it carries the whole headroom win; 7.10.0 adds changes
+  // to automatic batching and to parameter-chunked statements ("now executed
+  // atomically in a transaction") that this repository has never assessed. Nothing
+  // is lost by not taking them, and a caret would let `pnpm update` walk into them
+  // silently — that is the whole reason the range is a tilde.
+  //
+  // ⚠️ AND THE REASON ORIGINALLY RECORDED HERE WAS WRONG — CORRECTED, NOT DELETED,
+  // BECAUSE THE ERROR IS THE INSTRUCTIVE PART (MOTIR-5693). This block used to say
+  // that on 7.10.0 the approve-to-merge door's `SELECT … FOR UPDATE` stopped
+  // serialising two concurrent webhook deliveries, inferred from
+  // `githubReviewSyncStoryGate`'s concurrent-redelivery guard failing 2 of 4 CI runs
+  // against 20 of 20 green on 7.8.0. **The mechanism is a pre-existing defect in
+  // THIS repository and has nothing to do with the client version.**
+  // `githubPullRequestReviewRepository.upsertByGithubReviewId` catches the lost
+  // race's `P2002` and then reads the winner with the SAME `tx` — but a failed
+  // statement ABORTS a Postgres transaction, so that read raises `25P02` and the
+  // recovery arm is dead code. It was shipped at MOTIR-5594, it fails on branches
+  // that touch none of this, and MOTIR-5693 carries the reproduction.
+  //
+  // The inference that failed is worth more than the conclusion: it read 20/20 green
+  // as evidence of IMMUNITY, which only follows if the race lands at a FIXED rate.
+  // It does not — it lands when two creates genuinely collide, which is a function
+  // of LOAD, so a rare-under-light-load race and an absent one produce the same
+  // clean history. **A version comparison cannot distinguish them, and no number of
+  // green runs on one side turns a correlation into a mechanism.**
+  //
+  // **So `files` is a lower bound on the question, never the whole of it.** A
+  // program can get dramatically cheaper or dearer without gaining or losing a
+  // single file. Two consequences for anyone reading this with a red gate in front
+  // of them:
+  //
+  //   · **A reading that moved while the file count did not is evidence about
+  //     TYPES**, and the instrument for that is `--extendedDiagnostics`'s
+  //     `Instantiations` / `Types` lines, with `--generateTrace` for where — not
+  //     the `files` column. MOTIR-4295 had already measured one instance of this
+  //     (a two-constituent union costing 9.6 s in a single method) and the lesson
+  //     never reached this model.
+  //   · **A wide run-to-run SPREAD is a symptom, not just noise.** The app
+  //     project's 11.7-point spread — which MOTIR-4422 recorded as the tree's
+  //     natural variance, and which this file taught as such — collapsed to 0.4
+  //     points on the same fix. Variance that large was the regression, not the GC.
+  //
+  // The order to work in follows: read `Instantiations` against a known-good tree
+  // FIRST, and reach for a boundary only once the per-file cost is the cost it
+  // ought to be. A boundary drawn over an inflated per-file cost buys a fraction of
+  // what it should and leaves the inflation in place on both sides of the line.
+  //
+  // ⚠️ AND THE TWO CLOSURE ARMS ARE PRICED — BOTH DECLINED ON THE NUMBER
+  // (MOTIR-5695). Bounding what a program LOADS, rather than where a project
+  // ends, was the one lever left described-but-unpriced. Two candidates, each
+  // applied as a real change and read four times over one unchanged tree
+  // (`c6ba2709d`, prisma 7.9.0, node 22, heap 4.05 GB = `v8` `heap_size_limit`):
+  //
+  //   configuration                         tests.json (files / min–max)    components.json (files / min–max)
+  //   baseline                              6894 / 66.2–70.2%  spread 4.0   2482 / 28.3–28.6%  spread 0.3
+  //   arm 1  57 enum-only importers         6894 / 66.2–70.5%               2482 / 28.4–28.4%
+  //          -> '@/generated/prisma/enums'
+  //   arm 2  tests/components/** stops      6895 / 66.3–70.5%               2480 / 28.4–28.5%
+  //          importing lib/{services,db}
+  //
+  // The bar, written before any reading: an arm ships only if the WORST reading of
+  // the project it targets improves by more than that project's measured spread.
+  // Arm 1 moved the tests ceiling −0.3 against a 4.0 spread and components +0.2
+  // against 0.3; arm 2 moved components +0.1 against 0.3. Neither is
+  // distinguishable from noise, and `files` barely moved in any project.
+  //
+  // **Why, and it is the reusable part: a closure arm is worth nothing while ONE
+  // importer is left.** The barrel `generated/prisma/client.ts` loads the whole
+  // `internal/prismaNamespace` + `models/` graph for its first importer and costs
+  // nothing more for its fifty-eighth. `--explainFiles` on the components program
+  // shows 58 distinct files importing it — test fixtures and helpers
+  // (`adminDb`, `workspaceFixtures`, `workItemFixtures`, `userFixtures`) and the
+  // app project's EMITTED declarations (`lib/dto/*.d.ts`, `lib/workspaces/context`,
+  // `lib/jobs/services`, …) — and the model/mixed importers that keep it loaded
+  // cannot move, because a per-model import re-enters the namespace. Arm 2 fails
+  // the same way one layer up: `lib/services/workItemsService.d.ts` stays in the
+  // components program without the test's own import, reached through
+  // `app/(authed)/items/[key]/_components/lateReads` and `lib/jobs/services`.
+  // So re-pointing SOME importers of a shared closure is not a lever; the unit of
+  // saving is the LAST edge into it. Price that edge set with `--explainFiles`
+  // before proposing a sweep.
+  //
   // **Price a boundary before you draw it, in one command**: the `files` column
   // `assert-typecheck-headroom.mjs` already prints IS the variable, so a candidate
   // config's file count answers what it would cost. Do not estimate a split from a

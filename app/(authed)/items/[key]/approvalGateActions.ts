@@ -8,7 +8,11 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { ApprovalGateError, ApprovalGateMergeRefusedError } from '@/lib/approvalGates/errors';
-import { ApprovalGateAlreadyDecidedError } from '@/lib/approvalGates/errors';
+import {
+  ApprovalGateAlreadyDecidedError,
+  ApprovalGateSupersededError,
+  ApprovalGateStaleSubjectError,
+} from '@/lib/approvalGates/errors';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -89,8 +93,13 @@ export async function decideApprovalGateAction(input: {
   /** The card whose page the frame is on — the path revalidated on success. */
   identifier: string;
   noteMd?: string | null;
+  /**
+   * The `stamp` the frame's read handed this reader (MOTIR-5234) — what they were
+   * shown. REQUIRED: a press that cannot say what it saw has not rendered a gate.
+   */
+  stamp: string;
 }): Promise<DecideGateActionResult> {
-  const { gateId, decision, identifier, noteMd } = input;
+  const { gateId, decision, identifier, noteMd, stamp } = input;
   const ctx = await requireContext();
   try {
     // Through the merge entry point (MOTIR-5517 · MOTIR-5624): an approve on the card's
@@ -101,7 +110,7 @@ export async function decideApprovalGateAction(input: {
       // the audit's strongest claim (ADR §6a: *"a human click must be
       // distinguishable from a programmatic call"*), so it is stated at the one
       // call site that actually knows it rather than defaulted in the door.
-      { gateId, decision, noteMd, source: 'ui' },
+      { gateId, decision, noteMd, source: 'ui', stamp },
       ctx,
     );
     // The server half, on the action's own response. A REFUSAL revalidates
@@ -144,7 +153,14 @@ function refusalOf(err: unknown): GateRefusal | null {
     // approved this a moment ago" instead of a generic conflict.
     const decidedByLabel =
       err instanceof ApprovalGateAlreadyDecidedError ? err.decidedByLabel : null;
-    return toGateRefusal(err.tag, { decidedByLabel });
+    // ⚠️ And the SUPERSEDED refusal is the one that can say WHY (MOTIR-5667),
+    // for the same reason: the door read the row under its lock, so the cause is
+    // known here and nowhere the frame could re-derive it.
+    const supersedeCause = err instanceof ApprovalGateSupersededError ? err.supersedeCause : null;
+    // ⚠️ And the STALE refusal is the one that can say WHAT MOVED (MOTIR-5234),
+    // because the door compared component by component under its lock.
+    const moved = err instanceof ApprovalGateStaleSubjectError ? err.moved : null;
+    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved });
   }
   return null;
 }
@@ -169,11 +185,13 @@ export type ApproveAndMergeActionResult =
 export async function approveAndMergeAction(input: {
   gateId: string;
   identifier: string;
+  /** What this reader was shown (MOTIR-5234) — see {@link decideApprovalGateAction}. */
+  stamp: string;
 }): Promise<ApproveAndMergeActionResult> {
   const ctx = await requireContext();
   try {
     const { approval, members } = await pullRequestMergeService.approveAndMerge(
-      { gateId: input.gateId, noteMd: null, source: 'ui' },
+      { gateId: input.gateId, noteMd: null, source: 'ui', stamp: input.stamp },
       ctx,
     );
     revalidatePath(`/items/${input.identifier}`);

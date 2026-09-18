@@ -43,7 +43,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 interface LadderHit {
   row: DesignEvidenceWithAssets;
   /** Which arm answered — carried for tests and for the prompt's provenance. */
-  arm: 'gate_subject' | 'pin' | 'current';
+  arm: 'gate_subject' | 'current';
 }
 
 /**
@@ -56,17 +56,27 @@ interface LadderHit {
  *    of what a person actually decided. `designResultHandler.resolveSubject`
  *    refuses to re-point a gate at a newer version; this refuses for the same
  *    reason, one read further out.
- * 2. **the newest pinned row** — AMENDMENT 4 Q8's path, where a design card with
- *    an open delivering pull request raises NO `design_result` gate at all
- *    (`currentSubject` returns null on it) and the approve-to-merge gate decides
- *    it instead. `approvalGatesService.decide` pins the current row on EVERY
- *    approving kind, so the pin is what that decision left behind.
- * 3. **the current row** — a `done` design card no gate ever decided.
+ * 2. **the current row** — a `done` design card no gate ever decided.
+ *
+ * ⚠️ A THIRD ARM STOOD BETWEEN THEM AND IS RETIRED — *the newest pinned row*
+ * (Story MOTIR-5652 · Subtask MOTIR-5665; `design-result.md` AMENDMENT 6 Q6,
+ * retiring AMENDMENT 5 Q2's arm (b)). It existed for ONE path and its own
+ * justification said so: a design card with an open delivering pull request
+ * raised NO `design_result` gate at all (AMENDMENT 4 Q8), so there was no gate
+ * to read and the pin was all the decision left behind. Under AMENDMENT 6 Q1
+ * such a card raises a design gate again, so every approval on it leaves arm 1's
+ * evidence and the pinned arm had no live input.
+ *
+ * ⚠️ AND THE `pinnedAt` WRITE STAYS. This retires a READER of that column, not
+ * the column: `approvalGatesService.decide` still pins the approved row on every
+ * approving kind, and §6c's RETENTION is what reads it — that is what keeps an
+ * approved version's files out of the orphan-GC's reach. A pin that looks unused
+ * is the thing this note exists to prevent.
  *
  * ⚠️ ARM 1 DOES NOT FALL THROUGH WHEN ITS ROW'S BYTES ARE GONE. `decide` pins
  * the row that is CURRENT at decision time rather than the row the gate asked
  * about, and reports the difference as `filesKept: false`; the orphan-GC then
- * reclaims the approved row's attachments. Falling to arm 2 there would hand a
+ * reclaims the approved row's attachments. Falling through there would hand a
  * run a version nobody approved — the failure Q2 exists to prevent — so the
  * approved version is returned with its assets `unavailable` instead (Q6).
  */
@@ -76,9 +86,8 @@ async function resolveLadder(
 ): Promise<Map<string, LadderHit>> {
   if (designCardIds.length === 0) return new Map();
 
-  const [gates, pinned, current] = await Promise.all([
+  const [gates, current] = await Promise.all([
     approvalGateRepository.findLatestApprovedByWorkItems(designCardIds, 'design_result', tx),
-    designEvidenceRepository.findNewestPinnedByWorkItems(designCardIds, tx),
     designEvidenceRepository.findCurrentByWorkItems(designCardIds, tx),
   ]);
 
@@ -98,11 +107,6 @@ async function resolveLadder(
     // this card's approved design.
     if (subject && subject.workItemId === id) {
       hits.set(id, { row: subject, arm: 'gate_subject' });
-      continue;
-    }
-    const pin = pinned.get(id);
-    if (pin) {
-      hits.set(id, { row: pin, arm: 'pin' });
       continue;
     }
     const head = current.get(id);

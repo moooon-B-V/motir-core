@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shaFor } from '../helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -187,7 +188,7 @@ describe('(2) the assembled seam — approve → Done → refused → reopen →
 
     // Approve — no pull request, so the approval is TERMINAL and writes done.
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: v1Gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     const approved = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
@@ -358,7 +359,7 @@ describe('(4) the race — an approval that closes the card against a publish of
       const approve = async () => {
         if (!approveFirst) await delay(STAGGER_MS);
         return approvalGatesService.decide(
-          { gateId: gate.id, decision: 'approve', source: 'ui' },
+          { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
           fx.ctx,
         );
       };

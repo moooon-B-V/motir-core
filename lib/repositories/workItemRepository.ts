@@ -14,6 +14,7 @@ import {
   type WorkItemType,
 } from '@/generated/prisma/client';
 import { db, dbRead } from '@/lib/db';
+import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import { PUBLIC_NOT_SHIPPED_DONE_KEY } from '@/lib/publicProjects/shippedStatus';
 import type { BuiltInFilterFieldId, FilterAst, FilterCondition } from '@/lib/filters/ast';
 import {
@@ -6056,7 +6057,7 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
 
 function translateWriteError(err: unknown, ctx?: { id?: string }): never {
   const message = extractMessage(err);
-  const sqlState = extractSqlState(err);
+  const sqlState = sqlStateOf(err);
 
   if (sqlState === '23514' || isTriggerMarker(message)) {
     // Both tenancy markers (MOTIR-2895) land on the SAME typed error the service
@@ -6114,18 +6115,6 @@ function isTriggerMarker(message: string): boolean {
 }
 
 /** SQLSTATE from a pg driver-adapter error's `cause`, if present. */
-function extractSqlState(err: unknown): string | undefined {
-  if (err && typeof err === 'object' && 'cause' in err) {
-    const cause = (err as { cause?: unknown }).cause;
-    if (cause && typeof cause === 'object') {
-      const c = cause as { code?: unknown; originalCode?: unknown };
-      if (typeof c.code === 'string') return c.code;
-      /* istanbul ignore next -- defensive: the @prisma/adapter-pg error exposes `code`; `originalCode` is a fallback for a future driver shape */
-      if (typeof c.originalCode === 'string') return c.originalCode;
-    }
-  }
-  return undefined;
-}
 
 function extractMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
