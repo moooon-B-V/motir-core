@@ -158,3 +158,26 @@ export class InvalidMonitorLevelError extends Error {
     this.name = 'InvalidMonitorLevelError';
   }
 }
+
+/**
+ * The provider NO LONGER HAS the issue (Story MOTIR-4931 · Subtask MOTIR-5702) —
+ * a 404 on a write addressed to one issue.
+ *
+ * A distinct type from {@link MonitorProviderCallError} because the remedy is
+ * OPPOSITE: a refusal is a failure to show and retry, a deleted issue is a fact
+ * to state ONCE, on the card, and never retry. Collapsing the two would force the
+ * resolve-back to guess from a status code, which is how a deleted issue ends up
+ * retried every half hour for ever.
+ */
+export class MonitorIssueGoneError extends Error {
+  readonly code = 'MONITOR_ISSUE_GONE' as const;
+  constructor(
+    readonly operation: string,
+    readonly externalIssueId: string,
+    /** The provider's OWN words for the 404, passed through unaltered. */
+    readonly providerReason: string,
+  ) {
+    super(`Monitor issue ${externalIssueId} no longer exists at the provider: ${providerReason}`);
+    this.name = 'MonitorIssueGoneError';
+  }
+}

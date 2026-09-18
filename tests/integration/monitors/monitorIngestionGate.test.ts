@@ -107,6 +107,7 @@ function issue(
     firstSeenAt: new Date('2026-09-18T08:00:00.000Z'),
     lastSeenAt: new Date(Date.now() + 5 * 60_000),
     permalink: null,
+    assignee: null,
     ...overrides,
   };
 }

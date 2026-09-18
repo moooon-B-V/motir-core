@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MonitorProviderCallError, UnknownMonitorProviderError } from '@/lib/monitors/errors';
 import {
+  MonitorIssueGoneError,
+  MonitorProviderCallError,
+  UnknownMonitorProviderError,
+} from '@/lib/monitors/errors';
+import {
+  MONITOR_GET_ISSUE_TIMEOUT_MS,
   MONITOR_GRANT_EXCHANGE_TIMEOUT_MS,
   MONITOR_HEALTH_TIMEOUT_MS,
   MONITOR_LIST_ISSUES_TIMEOUT_MS,
@@ -15,7 +20,11 @@ import {
   fakeMonitorState,
   resetFakeMonitorProvider,
 } from '@/lib/monitors/providers/fake';
-import { nextCursorFromLinkHeader, sentryMonitorProvider } from '@/lib/monitors/providers/sentry';
+import {
+  nextCursorFromLinkHeader,
+  normalizeIssue,
+  sentryMonitorProvider,
+} from '@/lib/monitors/providers/sentry';
 import {
   getMonitorProvider,
   registerMonitorProvider,
@@ -101,6 +110,7 @@ describe('the seam is ONE interface, and every network method bounds itself', ()
       listProjects: MONITOR_LIST_PROJECTS_TIMEOUT_MS,
       listIssuesSince: MONITOR_LIST_ISSUES_TIMEOUT_MS,
       resolveIssue: MONITOR_RESOLVE_ISSUE_TIMEOUT_MS,
+      getIssue: MONITOR_GET_ISSUE_TIMEOUT_MS,
     };
     for (const [operation, ms] of Object.entries(bounds)) {
       expect(ms, operation).toBeGreaterThan(0);
@@ -121,6 +131,7 @@ describe('the seam is ONE interface, and every network method bounds itself', ()
       'listProjects',
       'listIssuesSince',
       'resolveIssue',
+      'getIssue',
     ];
     for (const method of methods) {
       expect(typeof sentryMonitorProvider[method], `sentry.${method}`).toBe('function');
@@ -580,6 +591,7 @@ describe('listIssuesSince reads SINCE a watermark (MOTIR-5577)', () => {
       firstSeenAt: at(1),
       lastSeenAt,
       permalink: null,
+      assignee: null,
     });
     fakeMonitorState().issues = [
       issue('old', at(8)),
@@ -638,5 +650,187 @@ describe('listIssuesSince reads SINCE a watermark (MOTIR-5577)', () => {
       })
       .catch((e: unknown) => e);
     expect((revoked as MonitorProviderCallError).status).toBe(401);
+  });
+});
+
+describe('the ASSIGNEE, ONE-issue read and GONE answer (MOTIR-4931 · MOTIR-5702)', () => {
+  const payload = (assignedTo: unknown) => ({
+    id: 'issue-9',
+    title: 'Boom',
+    culprit: null,
+    level: 'error',
+    count: '2',
+    firstSeen: '2026-09-01T00:00:00.000Z',
+    lastSeen: '2026-09-10T00:00:00.000Z',
+    permalink: null,
+    assignedTo,
+  });
+
+  it('normalizes a user, a team and an unassigned issue through ONE mapping', () => {
+    expect(
+      normalizeIssue(payload({ type: 'user', id: '17', name: 'Ada', email: 'ada@example.com' }))
+        .assignee,
+    ).toEqual({ kind: 'user', externalId: '17', email: 'ada@example.com', name: 'Ada' });
+    // A team carries no email, whatever the payload says.
+    expect(
+      normalizeIssue(payload({ type: 'team', id: 4, name: 'Backend', email: 'x@y' })).assignee,
+    ).toEqual({ kind: 'team', externalId: '4', email: null, name: 'Backend' });
+    expect(normalizeIssue(payload(null)).assignee).toBeNull();
+    // Anything without a usable type and id is UNASSIGNED, never a guess.
+    expect(normalizeIssue(payload({ type: 'robot', id: '1' })).assignee).toBeNull();
+    expect(normalizeIssue(payload({ type: 'user' })).assignee).toBeNull();
+    expect(normalizeIssue(payload('user:17')).assignee).toBeNull();
+    // A user with no email stays a user — the sync records it as unmatched.
+    expect(normalizeIssue(payload({ type: 'user', id: '8', name: '' })).assignee).toEqual({
+      kind: 'user',
+      externalId: '8',
+      email: null,
+      name: null,
+    });
+  });
+
+  it('listIssuesSince and getIssue populate the SAME assignee', async () => {
+    const assignedTo = { type: 'user', id: '17', name: 'Ada', email: 'ada@example.com' };
+    stubFetch([{ body: [payload(assignedTo)] }, { body: payload(assignedTo) }]);
+    const page = await sentryMonitorProvider.listIssuesSince({
+      accessToken: 't',
+      orgSlug: 'motir',
+      externalProjectId: '42',
+      lastSeenAfter: null,
+      cursor: null,
+    });
+    const one = await sentryMonitorProvider.getIssue({
+      accessToken: 't',
+      orgSlug: 'motir',
+      externalIssueId: 'issue-9',
+    });
+    expect(one).toEqual(page.issues[0]);
+    expect(one?.assignee?.email).toBe('ada@example.com');
+    expect(calls[1]!.method).toBe('GET');
+    expect(calls[1]!.url).toBe(
+      'https://monitor-stub.invalid/api/0/organizations/motir/issues/issue-9/',
+    );
+  });
+
+  it('getIssue answers NULL on a 404 — gone is not an error', async () => {
+    stubFetch([{ status: 404, body: { detail: 'The requested resource does not exist' } }]);
+    await expect(
+      sentryMonitorProvider.getIssue({ accessToken: 't', orgSlug: 'm', externalIssueId: 'x' }),
+    ).resolves.toBeNull();
+  });
+
+  it('getIssue throws the provider’s own reason on 401 and 500, keeping the status', async () => {
+    stubFetch([{ status: 401, body: { detail: 'Invalid token' } }]);
+    await expect(
+      sentryMonitorProvider.getIssue({ accessToken: 't', orgSlug: 'm', externalIssueId: 'x' }),
+    ).rejects.toMatchObject({
+      name: 'MonitorProviderCallError',
+      status: 401,
+      providerReason: 'Invalid token',
+    });
+    stubFetch([{ status: 500, body: { detail: 'Internal error' } }]);
+    await expect(
+      sentryMonitorProvider.getIssue({ accessToken: 't', orgSlug: 'm', externalIssueId: 'x' }),
+    ).rejects.toMatchObject({ status: 500, providerReason: 'Internal error' });
+  });
+
+  it('getIssue keeps the asked id when the payload omits one', async () => {
+    stubFetch([{ body: { title: 'No id here' } }]);
+    const one = await sentryMonitorProvider.getIssue({
+      accessToken: 't',
+      orgSlug: 'm',
+      externalIssueId: 'asked-id',
+    });
+    expect(one?.externalId).toBe('asked-id');
+    expect(one?.assignee).toBeNull();
+  });
+
+  it('resolveIssue throws MonitorIssueGoneError on 404 and MonitorProviderCallError otherwise', async () => {
+    stubFetch([{ status: 404, body: { detail: 'The requested resource does not exist' } }]);
+    const gone = sentryMonitorProvider.resolveIssue({ accessToken: 't', externalIssueId: 'i-1' });
+    await expect(gone).rejects.toBeInstanceOf(MonitorIssueGoneError);
+    await expect(gone).rejects.toMatchObject({
+      externalIssueId: 'i-1',
+      providerReason: 'The requested resource does not exist',
+    });
+
+    for (const status of [401, 500]) {
+      stubFetch([{ status, body: { detail: `answered ${status}` } }]);
+      const refused = sentryMonitorProvider.resolveIssue({
+        accessToken: 't',
+        externalIssueId: 'i-1',
+      });
+      await expect(refused).rejects.toBeInstanceOf(MonitorProviderCallError);
+      await expect(refused).rejects.toMatchObject({ status });
+    }
+  });
+
+  it('a getIssue past its bound surfaces as the adapter’s timeout, not a hang', async () => {
+    vi.useFakeTimers();
+    try {
+      globalThis.fetch = vi.fn(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      ) as unknown as typeof fetch;
+      const pending = sentryMonitorProvider.getIssue({
+        accessToken: 't',
+        orgSlug: 'm',
+        externalIssueId: 'slow',
+      });
+      const settled = expect(pending).rejects.toMatchObject({
+        status: null,
+        providerReason: `No response within ${MONITOR_GET_ISSUE_TIMEOUT_MS}ms.`,
+      });
+      await vi.advanceTimersByTimeAsync(MONITOR_GET_ISSUE_TIMEOUT_MS + 1);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the FAKE honours a seeded assignee, a CHANGED assignee, a deleted id and failNext', async () => {
+    const state = fakeMonitorState();
+    state.issues[0]!.assignee = {
+      kind: 'user',
+      externalId: 'u1',
+      email: 'ada@example.com',
+      name: 'Ada',
+    };
+    const read = () =>
+      fakeMonitorProvider.getIssue({
+        accessToken: 'x',
+        orgSlug: 'y',
+        externalIssueId: 'fake-issue-1',
+      });
+
+    expect((await read())?.assignee?.externalId).toBe('u1');
+    // A test may change it between two reads — the second read sees the change.
+    state.issues[0]!.assignee = { kind: 'team', externalId: 't1', email: null, name: 'Ops' };
+    expect((await read())?.assignee).toMatchObject({ kind: 'team', externalId: 't1' });
+    expect(state.readIssues).toEqual(['fake-issue-1', 'fake-issue-1']);
+
+    expect(
+      await fakeMonitorProvider.getIssue({
+        accessToken: 'x',
+        orgSlug: 'y',
+        externalIssueId: 'nope',
+      }),
+    ).toBeNull();
+
+    state.failNextStatus.set('getIssue', { status: 500, reason: 'down' });
+    await expect(read()).rejects.toMatchObject({ status: 500, providerReason: 'down' });
+    state.failNext.add('getIssue');
+    await expect(read()).rejects.toMatchObject({ status: 401 });
+    expect((await read())?.externalId).toBe('fake-issue-1');
+
+    state.deletedIssues.add('fake-issue-1');
+    expect(await read()).toBeNull();
+    await expect(
+      fakeMonitorProvider.resolveIssue({ accessToken: 'x', externalIssueId: 'fake-issue-1' }),
+    ).rejects.toBeInstanceOf(MonitorIssueGoneError);
+    // EVERY resolve call is recorded, a gone one included, so a test can count.
+    expect(state.resolvedIssues).toEqual(['fake-issue-1']);
   });
 });

@@ -1,5 +1,6 @@
-import { MonitorProviderCallError } from '../errors';
+import { MonitorIssueGoneError, MonitorProviderCallError } from '../errors';
 import {
+  MONITOR_GET_ISSUE_TIMEOUT_MS,
   MONITOR_GRANT_EXCHANGE_TIMEOUT_MS,
   MONITOR_HEALTH_TIMEOUT_MS,
   MONITOR_ISSUES_PAGE_LIMIT,
@@ -13,7 +14,9 @@ import {
 import { registerMonitorProvider } from '../registry';
 import type {
   MonitorCredential,
+  NormalizedMonitorAssignee,
   NormalizedMonitorHealth,
+  NormalizedMonitorIssue,
   NormalizedMonitorIssuePage,
   NormalizedMonitorProject,
 } from '../types';
@@ -314,18 +317,7 @@ export const sentryMonitorProvider: MonitorProvider = {
       headers: jsonHeaders(accessToken),
     });
     const rows = (await res.json()) as Record<string, unknown>[];
-    const issues = rows
-      .filter((row) => typeof row['id'] === 'string')
-      .map((row) => ({
-        externalId: String(row['id']),
-        title: typeof row['title'] === 'string' ? row['title'] : String(row['id']),
-        culprit: typeof row['culprit'] === 'string' ? row['culprit'] : null,
-        level: typeof row['level'] === 'string' ? row['level'] : null,
-        eventCount: Number(row['count'] ?? 0) || 0,
-        firstSeenAt: readDate(row['firstSeen']),
-        lastSeenAt: readDate(row['lastSeen']),
-        permalink: typeof row['permalink'] === 'string' ? row['permalink'] : null,
-      }));
+    const issues = rows.filter((row) => typeof row['id'] === 'string').map(normalizeIssue);
 
     const cut =
       lastSeenAfter === null
@@ -335,22 +327,97 @@ export const sentryMonitorProvider: MonitorProvider = {
     return { issues, nextCursor: nextCursorFromLinkHeader(res.headers.get('link')) };
   },
 
-  /** `PUT /issues/{issueId}/` with `{ status: 'resolved' }`.
-   *
-   *  ⚠️ NO PRODUCTION CALLER YET — MOTIR-4931's resolve-back sync is the consumer. */
+  /** `PUT /issues/{issueId}/` with `{ status: 'resolved' }`. A 404 is the
+   *  typed {@link MonitorIssueGoneError}; everything else is `call()`'s refusal.
+   *  Consumed by RESOLVE BACK (MOTIR-5703). */
   async resolveIssue({ accessToken, externalIssueId }): Promise<void> {
-    await call(
-      'resolveIssue',
-      MONITOR_RESOLVE_ISSUE_TIMEOUT_MS,
-      `${apiBase()}/issues/${encodeURIComponent(externalIssueId)}/`,
-      {
-        method: 'PUT',
-        headers: jsonHeaders(accessToken),
-        body: JSON.stringify({ status: 'resolved' }),
-      },
-    );
+    try {
+      await call(
+        'resolveIssue',
+        MONITOR_RESOLVE_ISSUE_TIMEOUT_MS,
+        `${apiBase()}/issues/${encodeURIComponent(externalIssueId)}/`,
+        {
+          method: 'PUT',
+          headers: jsonHeaders(accessToken),
+          body: JSON.stringify({ status: 'resolved' }),
+        },
+      );
+    } catch (err) {
+      if (err instanceof MonitorProviderCallError && err.status === 404) {
+        throw new MonitorIssueGoneError('resolveIssue', externalIssueId, err.providerReason);
+      }
+      throw err;
+    }
+  },
+
+  /** `GET /organizations/{orgSlug}/issues/{issueId}/` — "Retrieve an Issue". A
+   *  404 is `null` (the issue is gone), never an error. Consumed by ASSIGNEE FROM
+   *  THE MONITOR (MOTIR-5705). */
+  async getIssue({
+    accessToken,
+    orgSlug,
+    externalIssueId,
+  }): Promise<NormalizedMonitorIssue | null> {
+    let res: Response;
+    try {
+      res = await call(
+        'getIssue',
+        MONITOR_GET_ISSUE_TIMEOUT_MS,
+        `${apiBase()}/organizations/${encodeURIComponent(orgSlug)}/issues/${encodeURIComponent(externalIssueId)}/`,
+        { method: 'GET', headers: jsonHeaders(accessToken) },
+      );
+    } catch (err) {
+      if (err instanceof MonitorProviderCallError && err.status === 404) return null;
+      throw err;
+    }
+    const row = (await res.json()) as Record<string, unknown>;
+    return normalizeIssue({
+      ...row,
+      id: typeof row['id'] === 'string' ? row['id'] : externalIssueId,
+    });
   },
 };
+
+/**
+ * ONE Sentry issue payload → the normalized issue. The ONLY place a normalized
+ * issue is built, so `listIssuesSince` and `getIssue` cannot disagree about any
+ * field — the assignee above all (MOTIR-5702).
+ */
+export function normalizeIssue(row: Record<string, unknown>): NormalizedMonitorIssue {
+  return {
+    externalId: String(row['id']),
+    title: typeof row['title'] === 'string' ? row['title'] : String(row['id']),
+    culprit: typeof row['culprit'] === 'string' ? row['culprit'] : null,
+    level: typeof row['level'] === 'string' ? row['level'] : null,
+    eventCount: Number(row['count'] ?? 0) || 0,
+    firstSeenAt: readDate(row['firstSeen']),
+    lastSeenAt: readDate(row['lastSeen']),
+    permalink: typeof row['permalink'] === 'string' ? row['permalink'] : null,
+    assignee: readAssignee(row['assignedTo']),
+  };
+}
+
+/**
+ * Sentry's `assignedTo` — `{ type, id, name, email }` per its list-issues
+ * documentation (read 2026-09-18,
+ * https://docs.sentry.io/api/events/list-an-organizations-issues/), a DOCUMENTED
+ * EXPECTATION like every field here. `null`, or anything without a usable type
+ * and id, is UNASSIGNED rather than a guess. A team never carries an email.
+ */
+function readAssignee(value: unknown): NormalizedMonitorAssignee | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as { type?: unknown; id?: unknown; name?: unknown; email?: unknown };
+  const kind = raw.type === 'user' || raw.type === 'team' ? raw.type : null;
+  const externalId =
+    typeof raw.id === 'string' || typeof raw.id === 'number' ? String(raw.id) : null;
+  if (kind === null || externalId === null) return null;
+  return {
+    kind,
+    externalId,
+    email: kind === 'user' && typeof raw.email === 'string' && raw.email ? raw.email : null,
+    name: typeof raw.name === 'string' && raw.name ? raw.name : null,
+  };
+}
 
 /** A date the provider stated, or now — never an invalid `Date`, which reads as
  *  a value everywhere downstream and compares false against everything. */

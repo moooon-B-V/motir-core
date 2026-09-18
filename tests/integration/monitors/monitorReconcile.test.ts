@@ -81,6 +81,7 @@ function issue(overrides: Partial<NormalizedMonitorIssue> = {}): NormalizedMonit
     firstSeenAt: new Date('2026-09-18T08:00:00.000Z'),
     lastSeenAt: new Date('2026-09-18T09:00:00.000Z'),
     permalink: 'https://sentry.example/issues/1/',
+    assignee: null,
     ...overrides,
   };
 }

@@ -89,6 +89,7 @@ function issue(
     firstSeenAt: new Date(),
     lastSeenAt: new Date(Date.now() + minutesAfterNow * 60_000),
     permalink: null,
+    assignee: null,
     ...overrides,
   };
 }

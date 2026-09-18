@@ -2,6 +2,7 @@ import type {
   MonitorCredential,
   MonitorProviderId,
   NormalizedMonitorHealth,
+  NormalizedMonitorIssue,
   NormalizedMonitorIssuePage,
   NormalizedMonitorProject,
 } from './types';
@@ -18,14 +19,12 @@ import type {
 // BACKS, with the endpoint named on it. There is no speculative capability here
 // and no second provider.
 //
-// ⚠️ TWO METHODS SHIPPED WITH NO PRODUCTION CALLER, AND THAT WAS A DECISION
-// RATHER THAN DEAD CODE. `listIssuesSince` is consumed by the reconciling poll in
-// MOTIR-4929 (MOTIR-5580), and `resolveIssue` by the resolve-back sync in
-// MOTIR-4931 — which does not exist yet. Both are exercised here by this card's
-// own tests and by the fake. Defining the whole seam once, against one real
-// implementation, is cheaper and more honest than growing it a method at a time
-// across three stories; the two consuming stories are named so a later reader
-// does not delete them as unreachable.
+// ⚠️ EVERY METHOD NAMES ITS CONSUMER. Two shipped before theirs existed, and
+// that was a decision rather than dead code: `listIssuesSince` is consumed by the
+// reconciling poll (MOTIR-4929 · MOTIR-5580), and `resolveIssue` by the
+// resolve-back (MOTIR-4931 · MOTIR-5703). `getIssue` arrived WITH its consumer,
+// the assignee refresh (MOTIR-4931 · MOTIR-5705). A method whose consumer is not
+// named is one a later reader deletes as unreachable.
 //
 // ⚠️ AND EVERY ENDPOINT NAMED BELOW IS A DOCUMENTED EXPECTATION, NOT A READ.
 // This code cannot reach sentry.io — the suite is required not to — so each
@@ -88,6 +87,10 @@ export const MONITOR_ISSUES_PAGE_LIMIT = 100;
 
 /** Deadline for a resolve-back write, in ms (MOTIR-4931's consumer). */
 export const MONITOR_RESOLVE_ISSUE_TIMEOUT_MS = 10_000;
+
+/** Deadline for a read of ONE issue, in ms — the assignee refresh (MOTIR-5705)
+ *  makes a bounded number of these per poll, so each is bounded like a page. */
+export const MONITOR_GET_ISSUE_TIMEOUT_MS = 10_000;
 
 /**
  * ONE error monitor, as Motir talks to it.
@@ -244,9 +247,37 @@ export interface MonitorProvider {
    *
    * `PUT /api/0/issues/{issueId}/` with `{ status: 'resolved' }`.
    *
-   * ⚠️ NO PRODUCTION CALLER YET — MOTIR-4931's resolve-back sync is the consumer.
+   * ⚠️ A 404 IS A TYPED ANSWER — `MonitorIssueGoneError` — NOT a generic
+   * refusal: the provider no longer has the issue, which the caller states once
+   * and never retries. Every other non-2xx (a 401 included, so the credential
+   * service's refresh-and-retry is unchanged) is a `MonitorProviderCallError`.
    *
-   * Bounded by {@link MONITOR_RESOLVE_ISSUE_TIMEOUT_MS}.
+   * Consumed by RESOLVE BACK (MOTIR-4931 · MOTIR-5703). Bounded by
+   * {@link MONITOR_RESOLVE_ISSUE_TIMEOUT_MS}.
    */
   resolveIssue(input: { accessToken: string; externalIssueId: string }): Promise<void>;
+
+  /**
+   * Read ONE issue by the provider's own id — `null` when the provider no longer
+   * has it.
+   *
+   * `GET /api/0/organizations/{orgSlug}/issues/{issueId}/`, the documented
+   * "Retrieve an Issue". It exists because Sentry documents NO batch-by-id read on
+   * the list endpoint, and the poll's watermark read cannot see an assignment
+   * made on an issue whose last-seen did not move.
+   *
+   * ⚠️ A 404 RETURNS `null` AND IS NOT AN ERROR. Every other non-2xx throws
+   * `MonitorProviderCallError` carrying the provider's reason; a 401 keeps
+   * `status: 401` so the credential service's refresh-and-retry applies.
+   *
+   * A DOCUMENTED EXPECTATION like every path here (read 2026-09-18,
+   * https://docs.sentry.io/api/events/retrieve-an-issue/); MOTIR-4941 owns the
+   * deployed reading. Consumed by ASSIGNEE FROM THE MONITOR (MOTIR-4931 ·
+   * MOTIR-5705). Bounded by {@link MONITOR_GET_ISSUE_TIMEOUT_MS}.
+   */
+  getIssue(input: {
+    accessToken: string;
+    orgSlug: string;
+    externalIssueId: string;
+  }): Promise<NormalizedMonitorIssue | null>;
 }
