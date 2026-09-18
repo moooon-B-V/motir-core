@@ -1,7 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import {
   testInstructionsRepository,
@@ -12,15 +11,12 @@ import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository'
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { normalizeCommitSha } from '@/lib/git/commitSha';
-import { liveHeadSha, pickPullRequest } from '@/lib/howToTest/assemble';
 import { authorOf } from '@/lib/howToTest/author';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import type {
   CurrentTestInstructionsDTO,
   HowToTestDraftDTO,
-  HowToTestDraftProjectRepoDTO,
-  HowToTestDraftSectionDTO,
   PublishTestInstructionsResultDTO,
   TestInstructionsDTO,
 } from '@/lib/dto/testInstructions';
@@ -349,43 +345,26 @@ export const testInstructionsService = {
 
   /**
    * The DRAFT a PERSON's How-to-test form opens on (Story MOTIR-5450 · Subtask
-   * MOTIR-5453; `approval-gates.md` §9's 2026-09-17 amendment, point 3).
+   * MOTIR-5453; `approval-gates.md` §9's 2026-09-17 amendment, point 2).
    *
    * `publish` above is already the one writer for both author kinds — a person
    * calls it with `attributeToRunningDispatch` left false, which is what records
    * `dispatchRunId: null` and `publishedById` the person. What a person is
    * missing is not a write path, it is a FILLED-IN FORM, and that is all this is.
    *
-   * SUGGESTED, NEVER FORCED. It offers what Motir already knows:
+   * On **Edit** it returns the current record's body and preview path; on **Add**
+   * there is no record, so it returns `''` and `null`.
    *
-   * - **Editing** (a current record exists) — that record's body, preview path
-   *   and sections, each `source: 'record'`.
-   * - **Adding** (no record) — an empty body and one section per repository that
-   *   has a LINKED pull request, the item's own before its descendants' (the
-   *   read's own `pickPullRequest` tiering, so the form and the block bind the
-   *   same pull request), with that pull request's live head as the commit and
-   *   `source: 'pull_request'`.
-   *
-   * `commitSha` is NULL when the bound pull request has no check row yet: the
-   * head is only known once a check reports one, and inventing a commit for a
-   * field `publish` validates would be worse than asking for it.
-   *
-   * ⚠️ IT VALIDATES NOTHING, deliberately. Every value here is re-checked by
-   * `publish` — the 7-to-64-hex commit, the repository being one of the
-   * project's, the same repository not appearing twice, both caps. A draft that
-   * suggests nothing at all is still savable, because an agent does not need a
-   * linked pull request either, and the form's refusals must be `publish`'s or
-   * the two authors have drifted apart.
+   * ⚠️ IT READS NO REPOSITORY DATA. The form has no repository control — a
+   * repository enters a record by having its pull request LINKED
+   * (`design-notes.md` §24, decisions 8 and 8b) — so there is no section list to
+   * suggest and no project-repository set to offer. That is why this is ONE
+   * query: an earlier shape walked the subtree, the deliveries with their check
+   * rows and the project's repositories to fill a picker that no longer exists.
    *
    * Asserts **`work_item:edit`** rather than `project:browse`: the draft exists
    * only for somebody who may save it, and it is the permission `publish` and
    * the explicit pull-request link both assert.
-   *
-   * ⚠️ BOUNDED QUERIES, independent of how many repositories, pull requests or
-   * descendants the item has: the current record (1), the subtree (1), the
-   * project's repositories (1), and the subtree's deliveries with their check
-   * rows (1) — four, always. The deliveries read is the one that cannot join the
-   * others, because its key set is what the subtree returns.
    */
   async getDraftForWorkItem(workItemId: string, ctx: ServiceContext): Promise<HowToTestDraftDTO> {
     const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
@@ -396,84 +375,13 @@ export const testInstructionsService = {
     if (!item) throw new TestInstructionsWorkItemNotFoundError(workItemId);
     await projectAccessService.assertPermission(item.projectId, ctx, 'work_item:edit');
 
-    return withWorkspaceContext(binding, async (tx) => {
-      const [current, subtree, projectRepos] = await Promise.all([
-        testInstructionsRepository.findCurrentForWorkItem(item.id, tx),
-        workItemRepository.findSubtree(item.id, tx),
-        projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
-      ]);
-      const descendantIds = subtree.filter((row) => row.id !== item.id).map((row) => row.id);
-      const deliveries = await workItemDeliveryRepository.listByWorkItemsWithChecks(
-        [item.id, ...descendantIds],
-        tx,
-      );
+    const current = await withWorkspaceContext(binding, (tx) =>
+      testInstructionsRepository.findCurrentForWorkItem(item.id, tx),
+    );
+    if (!current) return { bodyMd: '', previewPath: null };
 
-      // `owner/name` for anything either read can name. A record's section whose
-      // repository has since been unlinked from the project keeps the same
-      // repoId fallback the block uses (`howToTestService.getForWorkItem`), so
-      // the form and the block never disagree about one repository.
-      const nameOf = new Map<string, string>();
-      for (const row of projectRepos) {
-        if (row.githubRepo)
-          nameOf.set(row.githubRepo.id, `${row.githubRepo.owner}/${row.githubRepo.name}`);
-      }
-      for (const delivery of deliveries)
-        nameOf.set(delivery.repo.id, `${delivery.repo.owner}/${delivery.repo.name}`);
-
-      const projectRepoDtos: HowToTestDraftProjectRepoDTO[] = projectRepos.flatMap((row) =>
-        row.githubRepo
-          ? [
-              {
-                repoId: row.githubRepo.id,
-                repoName: `${row.githubRepo.owner}/${row.githubRepo.name}`,
-              },
-            ]
-          : [],
-      );
-
-      if (current) {
-        const record = toTestInstructionsDto(current);
-        return {
-          bodyMd: record.bodyMd,
-          previewPath: record.previewPath,
-          sections: record.repos.map((section) => ({
-            repoId: section.repoId,
-            repoName: nameOf.get(section.repoId) ?? section.repoId,
-            commitSha: section.commitSha,
-            source: 'record' as const,
-          })),
-          projectRepos: projectRepoDtos,
-        };
-      }
-
-      const toPr = (delivery: (typeof deliveries)[number]) => ({
-        id: delivery.pullRequest.id,
-        repoId: delivery.pullRequest.repoId,
-        state: delivery.pullRequest.state,
-        checkRuns: delivery.pullRequest.checkRuns,
-      });
-      const own = deliveries.filter((d) => d.workItemId === item.id).map(toPr);
-      const descendants = deliveries.filter((d) => d.workItemId !== item.id).map(toPr);
-
-      // One section per repository, the item's OWN repositories first — the same
-      // tiering `pickPullRequest` applies within a repository, applied to the
-      // ORDER the rows are offered in.
-      const repoIds: string[] = [];
-      for (const tier of [own, descendants]) {
-        for (const pr of tier) if (!repoIds.includes(pr.repoId)) repoIds.push(pr.repoId);
-      }
-      const sections: HowToTestDraftSectionDTO[] = repoIds.map((repoId) => {
-        const bound = pickPullRequest(repoId, own, descendants);
-        return {
-          repoId,
-          repoName: nameOf.get(repoId) ?? repoId,
-          commitSha: bound ? liveHeadSha(bound.checkRuns) : null,
-          source: 'pull_request' as const,
-        };
-      });
-
-      return { bodyMd: '', previewPath: null, sections, projectRepos: projectRepoDtos };
-    });
+    const record = toTestInstructionsDto(current);
+    return { bodyMd: record.bodyMd, previewPath: record.previewPath };
   },
 
   /**

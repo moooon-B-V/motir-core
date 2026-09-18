@@ -704,30 +704,31 @@ describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
 
 // ── the DRAFT a person's form opens on (Story MOTIR-5450 · Subtask MOTIR-5453) ──
 //
-// `approval-gates.md` §9's 2026-09-17 amendment, point 3: SUGGESTED, NEVER
-// FORCED. The cases are chosen so a plausible broken implementation fails:
+// `approval-gates.md` §9's 2026-09-17 amendment, point 2: what a person writes
+// is the INSTRUCTIONS, and the repository sections are DERIVED from the card's
+// linked pull requests — a person never sets them. So the draft is the two
+// fields the form has, and the cases are chosen so a draft that still reaches
+// for repository data fails rather than merely carrying a spare key:
 //
-//   - the no-checks case asserts a NULL commit, so an implementation that
-//     reaches for the pull request's `headRef` — or for any non-head sha lying
-//     around — fails rather than suggesting a commit nobody reported;
-//   - the descendant case gives the STORY no delivery of its own, so an
-//     implementation reading only the item's own deliveries returns no sections;
-//   - the own-before-descendant case puts a pull request in the SAME repository
-//     on both tiers, so a flat scan picks the child's and fails;
-//   - the record case asserts `source: 'record'` on a section whose repository
-//     ALSO has a linked pull request, so an implementation that prefers the
-//     live head over the stored commit fails;
+//   - both cases assert the draft's KEY SET exactly, so a `sections` or
+//     `projectRepos` left on it is a failure and not an unnoticed extra;
+//   - the ADDING case is given a linked pull request WITH a green check AND two
+//     connected project repositories — every input the retired picker read — so
+//     an implementation still walking them has something to find and still must
+//     return nothing but `''` and `null`;
+//   - the EDITING case's record is published over a repository whose live head
+//     DIFFERS from the stored commit, so nothing about the record's body or
+//     preview can come from the pull request;
 //   - the permission case uses a CUSTOM role that can browse but not edit, and
 //     asserts the same actor CAN read — so a `project:browse` gate would pass it.
 
 describe('testInstructionsService.getDraftForWorkItem', () => {
-  it('EDITING: the current record fills the form, every section `source: record`, even where the repository has a live pull request', async () => {
+  it('EDITING: the current record fills the form — the body and the preview path, and NOTHING else', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'A story run' });
     const web = await connectRepo(fx, 'web');
     const api = await connectRepo(fx, 'api');
-    // A live pull request whose head DIFFERS from the record's stored commit:
-    // the draft must offer the record's, because Edit re-opens what was saved.
+    // A live pull request whose head DIFFERS from the record's stored commit.
     await linkedPr(fx, story.id, web, 'parent/MOTIR-1-web', [
       { name: 'Vitest', conclusion: 'success', sha: SHA_B },
     ]);
@@ -739,16 +740,14 @@ describe('testInstructionsService.getDraftForWorkItem', () => {
     const draft = await testInstructionsService.getDraftForWorkItem(story.id, fx.ctx);
     expect(draft.bodyMd).toBe(BODY);
     expect(draft.previewPath).toBe('/items/ACME-7');
-    expect(draft.sections).toEqual([
-      { repoId: web, repoName: 'moooon/web', commitSha: SHA_A, source: 'record' },
-      { repoId: api, repoName: 'moooon/api', commitSha: SHA_B, source: 'record' },
-    ]);
+    expect(Object.keys(draft).sort()).toEqual(['bodyMd', 'previewPath']);
   });
 
-  it("ADDING: no record, one section per linked pull request with that pull request's live head", async () => {
+  it('ADDING: no record — an EMPTY form, even with a linked pull request and connected repositories to walk', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'No record yet' });
     const web = await connectRepo(fx, 'web');
+    await connectRepo(fx, 'api');
     await linkedPr(fx, card.id, web, 'subtask/MOTIR-2-web', [
       { name: 'Vitest', conclusion: 'success', sha: SHA_B },
     ]);
@@ -756,82 +755,7 @@ describe('testInstructionsService.getDraftForWorkItem', () => {
     const draft = await testInstructionsService.getDraftForWorkItem(card.id, fx.ctx);
     expect(draft.bodyMd).toBe('');
     expect(draft.previewPath).toBeNull();
-    expect(draft.sections).toEqual([
-      { repoId: web, repoName: 'moooon/web', commitSha: SHA_B, source: 'pull_request' },
-    ]);
-  });
-
-  it('ADDING: a pull request with NO check row suggests a NULL commit — the form asks, because `publish` requires one', async () => {
-    const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'No checks yet' });
-    const web = await connectRepo(fx, 'web');
-    await linkedPr(fx, card.id, web, 'subtask/MOTIR-3-web');
-
-    const draft = await testInstructionsService.getDraftForWorkItem(card.id, fx.ctx);
-    expect(draft.sections).toEqual([
-      { repoId: web, repoName: 'moooon/web', commitSha: null, source: 'pull_request' },
-    ]);
-  });
-
-  it("ADDING: a story with no delivery of its own takes its section from a CHILD's pull request", async () => {
-    const fx = await makeWorkItemFixture();
-    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
-    const child = await createTestWorkItem(fx, {
-      kind: 'subtask',
-      title: 'A child',
-      parentId: story.id,
-    });
-    const web = await connectRepo(fx, 'web');
-    await linkedPr(fx, child.id, web, 'subtask/MOTIR-4-child', [
-      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
-    ]);
-
-    const draft = await testInstructionsService.getDraftForWorkItem(story.id, fx.ctx);
-    expect(draft.sections).toEqual([
-      { repoId: web, repoName: 'moooon/web', commitSha: SHA_B, source: 'pull_request' },
-    ]);
-  });
-
-  it("ADDING: the item's OWN pull request wins over a child's in the SAME repository", async () => {
-    const fx = await makeWorkItemFixture();
-    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
-    const child = await createTestWorkItem(fx, {
-      kind: 'subtask',
-      title: 'A child',
-      parentId: story.id,
-    });
-    const web = await connectRepo(fx, 'web');
-    // The child's first, so a flat scan in link order would take it.
-    await linkedPr(fx, child.id, web, 'subtask/MOTIR-5-child', [
-      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
-    ]);
-    await linkedPr(fx, story.id, web, 'parent/MOTIR-5-story', [
-      { name: 'Vitest', conclusion: 'success', sha: SHA_A },
-    ]);
-
-    const draft = await testInstructionsService.getDraftForWorkItem(story.id, fx.ctx);
-    expect(draft.sections).toEqual([
-      { repoId: web, repoName: 'moooon/web', commitSha: SHA_A, source: 'pull_request' },
-    ]);
-  });
-
-  it('ADDING: neither a record nor a linked pull request is LEGAL — no sections, and the project repositories to choose from', async () => {
-    const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Bare' });
-    const web = await connectRepo(fx, 'web');
-    const api = await connectRepo(fx, 'api');
-    // A repository connected but NOT linked to the project: not offerable.
-    await connectRepo(fx, 'unlinked', false);
-
-    const draft = await testInstructionsService.getDraftForWorkItem(card.id, fx.ctx);
-    expect(draft.sections).toEqual([]);
-    expect(draft.projectRepos).toEqual(
-      expect.arrayContaining([
-        { repoId: web, repoName: 'moooon/web' },
-        { repoId: api, repoName: 'moooon/api' },
-      ]),
-    );
-    expect(draft.projectRepos).toHaveLength(2);
+    expect(Object.keys(draft).sort()).toEqual(['bodyMd', 'previewPath']);
   });
 
   it('refuses an actor whose CUSTOM role can browse but lacks work_item:edit — the draft exists only for someone who may SAVE it', async () => {

@@ -64,43 +64,21 @@ export interface CurrentTestInstructionsDTO {
 
 // ── The DRAFT a person's form opens on (Story MOTIR-5450 · Subtask MOTIR-5453) ──
 //
-// `approval-gates.md` §9's 2026-09-17 amendment, point 3: SUGGESTED, NEVER
-// FORCED. The draft is what Motir already knows — the current record, or the
-// linked pull requests' live heads — offered as starting values a person may
-// change, remove or ignore. It is NOT a validation contract: every field here is
-// re-validated by `testInstructionsService.publish`, which is the one writer for
-// both author kinds, so a draft that suggests nothing is still savable and a
-// draft a person empties is refused by `publish` rather than by this shape.
-
-/** Where a suggested section's values came from — the form says so per row. */
-export type HowToTestDraftSectionSource = 'record' | 'pull_request';
-
-/** One suggested repository section of a person's How to test. */
-export interface HowToTestDraftSectionDTO {
-  /** The `GithubRepo` id the section is keyed on. */
-  repoId: string;
-  /**
-   * `owner/name`. Falls back to the `repoId` when the repository is no longer
-   * one of the project's — the same fallback the read uses
-   * (`howToTestService.getForWorkItem`), so the two surfaces never disagree
-   * about a repository that was unlinked after a record was written.
-   */
-  repoName: string;
-  /**
-   * The commit to offer. NULL when the bound pull request has no check row yet,
-   * so no head has been reported — the form then asks the person for one,
-   * because `publish` requires a commit on every section.
-   */
-  commitSha: string | null;
-  source: HowToTestDraftSectionSource;
-}
-
-/** One repository a person may add a section for. */
-export interface HowToTestDraftProjectRepoDTO {
-  repoId: string;
-  /** `owner/name`. */
-  repoName: string;
-}
+// `approval-gates.md` §9's 2026-09-17 amendment, point 2: a person writes the
+// INSTRUCTIONS and Motir derives the DELIVERY. So the draft is the two fields a
+// person actually edits, and nothing else.
+//
+// ⚠️ IT CARRIES NO REPOSITORY DATA, AND THAT IS THE POINT (design-notes.md §24,
+// decisions 8 and 8b). An earlier shape returned `sections[]` — each with a
+// `source` and a nullable `commitSha` — plus `projectRepos[]`, to fill a picker
+// and its commit inputs. The form has no such control: a repository enters a
+// record by having its pull request LINKED, which the Development rows directly
+// above the part already show. Re-adding either field here is how that control
+// comes back.
+//
+// It is NOT a validation contract either: both fields are re-checked by
+// `testInstructionsService.publish`, which is the one writer for both author
+// kinds, so a draft that suggests nothing is still savable.
 
 /** The filled-in form a person opens Add or Edit onto. */
 export interface HowToTestDraftDTO {
@@ -108,16 +86,4 @@ export interface HowToTestDraftDTO {
   bodyMd: string;
   /** The current record's preview path, or `null` when there is none. */
   previewPath: string | null;
-  /**
-   * With a current record: its sections, `source: 'record'`. Without one: one
-   * section per repository that has a linked pull request — the item's own
-   * first, then its descendants' — `source: 'pull_request'`. Empty when neither
-   * exists, which is legal: an agent does not need a pull request either.
-   */
-  sections: HowToTestDraftSectionDTO[];
-  /**
-   * Every REALIZED repository of the project — the set `+ Add repository` offers
-   * and the same set `resolveProjectRepoSections` validates a save against.
-   */
-  projectRepos: HowToTestDraftProjectRepoDTO[];
 }
