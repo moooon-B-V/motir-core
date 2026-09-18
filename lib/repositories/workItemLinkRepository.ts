@@ -1,4 +1,5 @@
 import { Prisma, type WorkItemLink, type WorkItemLinkKind } from '@/generated/prisma/client';
+import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import { dbRead } from '@/lib/db';
 import {
   CrossWorkspaceLinkError,
@@ -607,7 +608,7 @@ function translateWriteError(
   attempted: { fromId: string; toId: string; kind: string },
 ): never {
   const message = extractMessage(err);
-  const sqlState = extractSqlState(err);
+  const sqlState = sqlStateOf(err);
 
   if (sqlState === '23514' || isLinkTriggerMarker(message)) {
     if (message.includes('WI_LINK_CYCLE')) {
@@ -645,18 +646,6 @@ function isLinkTriggerMarker(message: string): boolean {
 }
 
 /** SQLSTATE from a pg driver-adapter error's `cause`, if present. */
-function extractSqlState(err: unknown): string | undefined {
-  if (err && typeof err === 'object' && 'cause' in err) {
-    const cause = (err as { cause?: unknown }).cause;
-    if (cause && typeof cause === 'object') {
-      const c = cause as { code?: unknown; originalCode?: unknown };
-      if (typeof c.code === 'string') return c.code;
-      /* istanbul ignore next -- defensive: the @prisma/adapter-pg error exposes `code`; `originalCode` is a fallback for a future driver shape */
-      if (typeof c.originalCode === 'string') return c.originalCode;
-    }
-  }
-  return undefined;
-}
 
 function extractMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
